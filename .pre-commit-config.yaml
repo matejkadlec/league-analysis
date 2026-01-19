@@ -1,0 +1,77 @@
+# Pre-commit hooks configuration for League Analysis
+# See https://pre-commit.com for more information
+
+repos:
+  # Built-in hooks for basic file checks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+      - id: check-added-large-files
+      - id: check-merge-conflict
+      - id: debug-statements
+
+  # Ruff - Fast Python linter and formatter (replaces black, isort, flake8)
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.14.1
+    hooks:
+      # Run the linter
+      - id: ruff
+        args: ["--fix"]
+      # Run the formatter
+      - id: ruff-format
+
+  # Frontend linting with Next.js (local hook for better compatibility)
+  - repo: local
+    hooks:
+      - id: frontend-lint
+        name: Frontend ESLint
+        entry: >
+          bash -c 'export LC_ALL=C.UTF-8 && cd frontend &&
+          if [ ! -d node_modules ]; then
+          echo "❌ ERROR: Frontend dependencies not installed! Run: cd frontend && npm install";
+          exit 1;
+          fi &&
+          npm run lint -- --max-warnings 0 ||
+          (echo "❌ Frontend linting failed! Fix errors before committing." && exit 1)'
+        language: system
+        files: ^frontend/.*\.(ts|tsx|js|jsx)$
+        exclude: ^frontend/node_modules/
+        pass_filenames: false
+
+  # Frontend TypeScript type checking
+  - repo: local
+    hooks:
+      - id: frontend-typecheck
+        name: TypeScript Type Check
+        entry: >
+          bash -c 'export LC_ALL=C.UTF-8 && cd frontend &&
+          if [ ! -d node_modules ]; then
+          echo "❌ ERROR: Frontend dependencies not installed! Run: cd frontend && npm install";
+          exit 1;
+          fi &&
+          npx tsc --noEmit ||
+          (echo "❌ TypeScript type checking failed! Fix type errors before committing." && exit 1)'
+        language: system
+        files: ^frontend/.*\.(ts|tsx)$
+        exclude: ^frontend/node_modules/
+        pass_filenames: false
+
+# Configuration for pre-commit
+default_stages: [pre-commit]
+fail_fast: false
+
+# Exclude certain paths from all hooks
+exclude: |
+  (?x)^(
+    \.git/.*|
+    \.tox/.*|
+    build/.*|
+    dist/.*|
+    .*\.min\.(js|css)$|
+    __pycache__/.*|
+    frontend/node_modules/.*
+  )$

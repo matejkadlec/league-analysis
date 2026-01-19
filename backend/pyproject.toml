@@ -1,0 +1,43 @@
+[project]
+name = "league-analysis"
+version = "0.1.0"
+description = "Web app for comprehensive analysis of League of Legends players, matches and more."
+authors = [
+    {name = "Matěj Kadlec", email = "mat.kadlec@email.cz"},
+]
+dependencies = [
+    "apscheduler>=3.10.4",
+    "asyncpg>=0.30.0",
+    "email-validator>=2.1.0",
+    "fastapi>=0.118.2",
+    "httpx>=0.28.1",
+    "passlib[argon2]>=1.7.4",
+    "psycopg2-binary>=2.9.9",
+    "pydantic>=2.12.0",
+    "pydantic-settings>=2.7.0",
+    "python-dotenv>=1.1.1",
+    "python-jose[cryptography]>=3.3.0",
+    "python-Levenshtein>=0.25.1",
+    "python-multipart>=0.0.6",
+    "slowapi>=0.1.9",
+    "sqlalchemy>=2.0.43",
+    "structlog>=25.4.0",
+    "uvicorn[standard]>=0.37.0",
+]
+requires-python = ">=3.13"
+license = {text = "MIT"}
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[tool.pyright]
+pythonVersion = "3.13"
+typeCheckingMode = "standard"
+include = ["app"]
+exclude = ["**/__pycache__", "**/.pytest_cache", "**/tests", ".venv"]
+reportMissingImports = true
+reportMissingTypeStubs = "none"

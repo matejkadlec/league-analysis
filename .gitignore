@@ -1,0 +1,54 @@
+# Environment variables
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+backend/.venv/
+backend/venv/
+*.egg-info/
+dist/
+build/
+
+# Node.js / Next.js
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/.cache/
+frontend/tsconfig.tsbuildinfo
+
+# Logs
+logs/*.log
+*.log
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+backend/init_database.sql
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+frontend/.turbo/
+frontend/coverage/
+
+# Build artifacts
+backend/dist/
+backend/build/
+frontend/build/

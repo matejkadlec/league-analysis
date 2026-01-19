@@ -1,0 +1,234 @@
+@import "tailwindcss";
+
+/* Configure dark mode variant to work with class strategy */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Define theme tokens as CSS custom properties */
+@theme {
+  /* League Analysis Custom Colors */
+  --color-navy-darkest: #03005b;
+  --color-navy-dark: #00017a;
+  --color-navy-base: #0a1428;
+  --color-navy-light: #2c3e6f;
+  --color-gold-dark: #fed701;
+  --color-gold-base: #cfa93a;
+  --color-gold-light: #fcb305;
+
+  /* Light mode colors (default) */
+  --color-background: oklch(100% 0 0);
+  --color-foreground: oklch(9.8% 0.038 285.88);
+  --color-card: oklch(100% 0 0);
+  --color-card-foreground: oklch(9.8% 0.038 285.88);
+  --color-popover: oklch(100% 0 0);
+  --color-popover-foreground: oklch(9.8% 0.038 285.88);
+  --color-primary: oklch(53.3% 0.237 263.53);
+  --color-primary-foreground: oklch(98% 0 0);
+  --color-secondary: oklch(96.1% 0 0);
+  --color-secondary-foreground: oklch(11.2% 0.045 285.88);
+  --color-muted: oklch(96.1% 0 0);
+  --color-muted-foreground: oklch(46.9% 0.022 256.26);
+  --color-accent: oklch(96.1% 0 0);
+  --color-accent-foreground: oklch(11.2% 0.045 285.88);
+  --color-destructive: oklch(60.2% 0.177 29.23);
+  --color-destructive-foreground: oklch(98% 0 0);
+  --color-border: oklch(91.4% 0.009 256.26);
+  --color-input: oklch(91.4% 0.009 256.26);
+  --color-ring: oklch(53.3% 0.237 263.53);
+  --radius: 0.5rem;
+}
+
+/* Dark mode color overrides */
+@layer base {
+  .dark {
+    --color-background: #00091a;
+    --color-foreground: oklch(98% 0 0);
+    --color-card: #0a1428;
+    --color-card-foreground: oklch(98% 0 0);
+    --color-popover: oklch(9.8% 0.038 285.88);
+    --color-popover-foreground: oklch(98% 0 0);
+    --color-primary: #cfa93a;
+    --color-primary-foreground: oklch(11.2% 0.045 285.88);
+    --color-secondary: oklch(17.5% 0.035 265.99);
+    --color-secondary-foreground: oklch(98% 0 0);
+    --color-muted: oklch(17.5% 0.035 265.99);
+    --color-muted-foreground: oklch(65.1% 0.017 256.26);
+    --color-accent: oklch(17.5% 0.035 265.99);
+    --color-accent-foreground: oklch(98% 0 0);
+    --color-destructive: oklch(59.993% 0.2355 29.756);
+    --color-destructive-foreground: oklch(98% 0 0);
+    --color-border: oklch(17.5% 0.035 265.99);
+    --color-input: oklch(17.5% 0.035 265.99);
+    --color-ring: oklch(48% 0.188 275.75);
+  }
+
+  /* Dark mode input background */
+  .dark input,
+  .dark input[type="text"],
+  .dark input[type="search"] {
+    background-color: #00091a !important;
+  }
+
+  /* Dark mode select trigger (dropdown button) background */
+  .dark button[role="combobox"] {
+    background-color: #00091a !important;
+  }
+
+  /* Dark mode dropdown select hover */
+  .dark [role="option"]:hover,
+  .dark [data-radix-collection-item]:hover {
+    background-color: #0a1428 !important;
+  }
+}
+
+/* Base styles - no @apply here, direct CSS only */
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+  }
+
+  #content {
+    position: relative;
+    background-image:
+      linear-gradient(rgba(0, 9, 26, 0.6), rgba(0, 9, 26, 0.6)),
+      url(/background.jpg);
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-attachment: fixed;
+  }
+
+  /* Header card background gradient */
+  #header-card {
+    background: linear-gradient(180deg, #233d72 0%, #152b56 100%) !important;
+  }
+  .dark #header-card {
+    background: linear-gradient(180deg, #0f1f3a 0%, #0a1428 100%) !important;
+  }
+
+  /* Header card h1 text gradient */
+  #header-card h1 {
+    background-image: linear-gradient(
+      180deg,
+      #f2d777 0%,
+      #cfa93a 60%,
+      #9d7d22 100%
+    );
+    background-clip: text;
+    -webkit-background-clip: text;
+    color: transparent;
+  }
+
+  /* Dark mode submit button gradient */
+  .dark button[type="submit"] {
+    background: linear-gradient(105deg, #f2d777 0%, #cfa93a 10%, #9d7d22 90%);
+    color: #03005b;
+    cursor: pointer;
+  }
+
+  .dark button[type="submit"]:hover {
+    opacity: 0.9;
+  }
+
+  /* Matchmaking analysis start button (gold gradient) */
+  .dark .matchmaking-start-btn {
+    background: linear-gradient(
+      105deg,
+      #f2d777 0%,
+      #cfa93a 10%,
+      #9d7d22 90%
+    ) !important;
+    color: #03005b !important;
+    cursor: pointer;
+    border: none;
+  }
+
+  .dark .matchmaking-start-btn:hover:not(:disabled) {
+    opacity: 0.9;
+  }
+
+  /* Matchmaking analysis cancel button (red gradient) */
+  .dark .matchmaking-cancel-btn {
+    background: linear-gradient(
+      105deg,
+      #ff6b6b 0%,
+      #ee5a6f 10%,
+      #c92a2a 90%
+    ) !important;
+    color: #ffffff !important;
+    cursor: pointer;
+    border: none;
+  }
+
+  .dark .matchmaking-cancel-btn:hover:not(:disabled) {
+    opacity: 0.9;
+  }
+
+  div[role="alert"] > div {
+    margin-top: 1px;
+    translate: none !important;
+  }
+
+  /* Left sidebar gradient (both light and dark themes) */
+  aside > div {
+    border-right: 1.5px solid #00091a;
+    background: linear-gradient(
+      180deg,
+      #0f1f3a 0%,
+      #0a1428 20%,
+      #0a1428 80%,
+      #060d1a 100%
+    ) !important;
+  }
+
+  /* Remove nav background to let sidebar gradient show through */
+  aside nav {
+    background: transparent !important;
+  }
+
+  /* Ensure nav links have transparent background by default */
+  aside nav a {
+    background: transparent;
+  }
+
+  /* Disabled button styles */
+  button:disabled {
+    cursor: not-allowed !important;
+    opacity: 0.5 !important;
+    /* This should be done via JS instead, as it disabled the not-allowed cursor */
+    /* pointer-events: none !important; */
+  }
+
+  button:disabled:hover {
+    transform: none !important;
+    opacity: 0.6 !important;
+  }
+
+  /* Override browser autofill styles */
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus,
+  input:-webkit-autofill:active {
+    -webkit-box-shadow: 0 0 0 30px #e5e7eb inset !important;
+    -webkit-text-fill-color: #111827 !important;
+    transition: background-color 5000s ease-in-out 0s;
+  }
+
+  /* Force light grey background for sign-in form inputs even in dark mode */
+  #sign-in-form input,
+  #sign-in-form input[type="email"],
+  #sign-in-form input[type="password"] {
+    background-color: #e5e7eb !important;
+  }
+
+  .dark #sign-in-form input,
+  .dark #sign-in-form input[type="email"],
+  .dark #sign-in-form input[type="password"] {
+    background-color: #e5e7eb !important;
+  }
+}
