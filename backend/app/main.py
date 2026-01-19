@@ -140,8 +140,8 @@ app = FastAPI(
         "url": "https://github.com/matejkadlec/league-analysis",
     },
     license_info={
-        "name": "MIT",
-        "url": "https://opensource.org/licenses/MIT",
+        "name": "All Rights Reserved",
+        "url": "https://github.com/matejkadlec/league-analysis/blob/master/LICENSE",
     },
     docs_url="/api",
     redoc_url="/redoc",

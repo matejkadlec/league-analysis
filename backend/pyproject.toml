@@ -2,9 +2,7 @@
 name = "league-analysis"
 version = "0.1.0"
 description = "Web app for comprehensive analysis of League of Legends players, matches and more."
-authors = [
-    {name = "Matěj Kadlec", email = "mat.kadlec@email.cz"},
-]
+authors = [{ name = "Matěj Kadlec", email = "mat.kadlec@email.cz" }]
 dependencies = [
     "apscheduler>=3.10.4",
     "asyncpg>=0.30.0",
@@ -25,7 +23,7 @@ dependencies = [
     "uvicorn[standard]>=0.37.0",
 ]
 requires-python = ">=3.13"
-license = {text = "MIT"}
+license = { text = "All Rights Reserved" }
 
 [build-system]
 requires = ["hatchling"]

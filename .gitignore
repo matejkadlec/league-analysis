@@ -52,3 +52,6 @@ frontend/coverage/
 backend/dist/
 backend/build/
 frontend/build/
+
+# Private docs
+docs/
