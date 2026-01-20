@@ -1,10 +1,15 @@
 # Quick Start
 
-**Environment**: WSL, PostgreSQL 18 on localhost:5432, database `league-analysis`, user `admin`**Environment**: WSL (Windows Subsystem for Linux), PostgreSQL 18 on localhost:5432
+**Environment**: WSL (Windows Subsystem for Linux), PostgreSQL 18 on localhost:5432
+**Database**: `league-analysis` (user: `admin`, password in .env)
 
-```bash**Database**: `league-analysis`(user:`admin`, password in .env)
+> **SYSTEM STATE (2026-01-20): REDEVELOPMENT PHASE**
+> **Context**: Project recently underwent a major purge of unreliable legacy data and code. Old jobs and data wrappers were deleted.
+> **Current Status**: "Clean Slate". We are incrementally re-implementing background jobs and feature logic on a sanitized base.
+> **Database Warning**: The schema is **VOLATILE**. Columns, types, nullability, and constraints are subject to change. Do NOT assume schema stability. Always verify `backend/init_database.sql` serves as the source of truth, but cross-reference it with active `models.py`.
+> **Instruction**: Assume legacy job logic was flawed. When implementing new features, prioritize architectural correctness and data validation (e.g. distinction between Game Name/Tag vs Summoner Name).
 
-./run.sh # Start backend + frontend (hot reload)
+**Start development**:
 
 tail -f logs/backend.log # View logs**Start development**:
 

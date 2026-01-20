@@ -28,7 +28,7 @@ export default function TrackedPlayersPage() {
 
           {/* Two Column Layout */}
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            {/* Left Column - Add Tracked Player Form */}
+            {/* Left Column - Add Player For Tracking Form */}
             <div className="space-y-6">
               <AddTrackedPlayer />
             </div>

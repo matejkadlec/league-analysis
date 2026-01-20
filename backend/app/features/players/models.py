@@ -32,36 +32,70 @@ class Player(Base):
         comment="Player's universally unique identifier from Riot API",
     )
 
-    # Riot ID information
-    riot_id: Mapped[Optional[str]] = mapped_column(
-        String(128), nullable=True, index=True, comment="Player's Riot ID (game name)"
+    # Riot ID information (Replaces old riot_id/summoner_name)
+    game_name: Mapped[Optional[str]] = mapped_column(
+        String(64), nullable=True, index=True, comment="Riot ID game name"
     )
 
     tag_line: Mapped[Optional[str]] = mapped_column(
-        String(32), nullable=True, comment="Player's tag line (region identifier)"
+        String(8), nullable=True, comment="Riot ID tag line"
     )
 
-    # Summoner information (may change over time)
-    summoner_name: Mapped[Optional[str]] = mapped_column(
-        String(32),
-        nullable=True,
-        index=True,
-        comment="Current summoner name (can change)",
-    )
-
-    platform: Mapped[str] = mapped_column(
-        String(8),
+    # Region (formerly platform)
+    region: Mapped[str] = mapped_column(
+        String(16),
         nullable=False,
         index=True,
-        comment="Platform where the player was last seen (e.g., EUW1, EUN1)",
+        comment="Region/Platform (e.g., EUW1, EUROPE)",
     )
 
     # Player statistics
-    account_level: Mapped[Optional[int]] = mapped_column(
-        Integer, nullable=True, comment="Player's account level"
+    profile_icon_id: Mapped[Optional[int]] = mapped_column(
+        Integer, nullable=True, comment="Profile icon ID"
+    )
+
+    summoner_level: Mapped[Optional[int]] = mapped_column(
+        Integer, nullable=True, comment="Summoner/Account level"
+    )
+
+    # Tracking & Analysis flags
+    is_tracked: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        index=True,
+        comment="Whether this player is being actively tracked for continuous updates",
+    )
+
+    matches_analyzed: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default=sa.text("0"),
+        comment="Total number of matches analyzed since player was added",
+    )
+
+    fully_analyzed: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default=sa.text("false"),
+        comment="Whether all available player's matches was analyzed or not",
     )
 
     # Timestamps
+    last_player_analysis: Mapped[Optional[datetime]] = mapped_column(
+        SQLDateTime(timezone=True),
+        nullable=True,
+        comment="Time of the last player analysis",
+    )
+
+    last_matchmaking_analysis: Mapped[Optional[datetime]] = mapped_column(
+        SQLDateTime(timezone=True),
+        nullable=True,
+        comment="Time of the last matchmaking analysis",
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         SQLDateTime(timezone=True),
         nullable=False,
@@ -77,71 +111,9 @@ class Player(Base):
         comment="When this player record was last updated",
     )
 
-    last_seen: Mapped[datetime] = mapped_column(
-        SQLDateTime(timezone=True),
-        nullable=False,
-        server_default=func.now(),
-        index=True,
-        comment="When this player was last seen in a match",
-    )
-
-    # Soft deletion flag
-    is_active: Mapped[bool] = mapped_column(
-        Boolean,
-        nullable=False,
-        default=True,
-        index=True,
-        comment="Whether this player record is active (not deleted)",
-    )
-
-    # Tracking flags for automated jobs
-    is_tracked: Mapped[bool] = mapped_column(
-        Boolean,
-        nullable=False,
-        default=False,
-        index=True,
-        comment="Whether this player is being actively tracked for continuous updates",
-    )
-
-    is_analyzed: Mapped[bool] = mapped_column(
-        Boolean,
-        nullable=False,
-        default=False,
-        index=True,
-        comment="Whether this player has been analyzed for smurf/boosted detection",
-    )
-
-    matches_exhausted: Mapped[bool] = mapped_column(
-        Boolean,
-        nullable=False,
-        default=False,
-        server_default=sa.text("false"),
-        index=True,
-        comment="True when all available matches have been fetched from Riot API",
-    )
-
-    last_ban_check: Mapped[Optional[datetime]] = mapped_column(
-        SQLDateTime(timezone=True),
-        nullable=True,
-        index=True,
-        comment="When this player was last checked for ban status",
-    )
-
-    # Additional metadata fields
-    profile_icon_id: Mapped[Optional[int]] = mapped_column(
-        Integer, nullable=True, comment="Profile icon ID"
-    )
-
-    summoner_id: Mapped[Optional[str]] = mapped_column(
-        String(64),
-        nullable=True,
-        index=True,
-        comment="Encrypted summoner ID (used for some Riot API endpoints)",
-    )
-
     def __repr__(self) -> str:
         """Return string representation of the player."""
-        return f"<Player(puuid='{self.puuid}', summoner_name='{self.summoner_name}', platform='{self.platform}')>"
+        return f"<Player(puuid='{self.puuid}', game_name='{self.game_name}#{self.tag_line}', region='{self.region}')>"
 
     # Database-only relationships - used by SQLAlchemy ORM but not directly referenced in Python code
     # These relationships enable database queries and cascade operations
@@ -157,8 +129,4 @@ class Player(Base):
 
 
 # Create composite indexes for common queries
-Index("idx_players_summoner_platform", Player.summoner_name, Player.platform)
-
-Index("idx_players_riot_tag", Player.riot_id, Player.tag_line)
-
-Index("idx_players_last_seen_active", Player.last_seen, Player.is_active)
+Index("idx_players_riot_id", Player.game_name, Player.tag_line)

@@ -100,7 +100,7 @@ export function AddTrackedPlayer() {
       <CardHeader>
         <div className="flex items-center space-x-2">
           <UserPlus className="h-5 w-5 text-primary" />
-          <CardTitle>Add Tracked Player</CardTitle>
+          <CardTitle>Add Player For Tracking</CardTitle>
         </div>
       </CardHeader>
       <CardContent>

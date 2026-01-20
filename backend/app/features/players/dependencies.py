@@ -5,7 +5,7 @@ from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import get_db
-from app.core.dependencies import RiotDataManagerDep
+# from app.core.dependencies import RiotDataManagerDep # DELETED
 from .service import PlayerService
 
 
@@ -19,4 +19,4 @@ async def get_player_service(
 # Type aliases for cleaner dependency injection
 PlayerServiceDep = Annotated[PlayerService, Depends(get_player_service)]
 
-__all__ = ["get_player_service", "PlayerServiceDep", "RiotDataManagerDep"]
+__all__ = ["get_player_service", "PlayerServiceDep"]

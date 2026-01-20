@@ -24,16 +24,16 @@ _JOB_REGISTRY: Optional[Dict[JobType, Type[BaseJob]]] = None
 def _get_job_registry() -> Dict[JobType, Type[BaseJob]]:
     global _JOB_REGISTRY
     if _JOB_REGISTRY is None:
-        from .implementations.tracked_player_updater import TrackedPlayerUpdaterJob
-        from .implementations.match_fetcher import MatchFetcherJob
-        from .implementations.player_analyzer import PlayerAnalyzerJob
-        from .implementations.ban_checker import BanCheckerJob
+        # from .implementations.tracked_player_updater import TrackedPlayerUpdaterJob
+        # from .implementations.match_fetcher import MatchFetcherJob
+        # from .implementations.player_analyzer import PlayerAnalyzerJob
+        # from .implementations.ban_checker import BanCheckerJob
 
         _JOB_REGISTRY = {
-            JobType.TRACKED_PLAYER_UPDATER: TrackedPlayerUpdaterJob,
-            JobType.MATCH_FETCHER: MatchFetcherJob,
-            JobType.PLAYER_ANALYZER: PlayerAnalyzerJob,
-            JobType.BAN_CHECKER: BanCheckerJob,
+            # JobType.TRACKED_PLAYER_UPDATER: TrackedPlayerUpdaterJob,
+            # JobType.MATCH_FETCHER: MatchFetcherJob,
+            # JobType.PLAYER_ANALYZER: PlayerAnalyzerJob,
+            # JobType.BAN_CHECKER: BanCheckerJob,
         }
 
     return _JOB_REGISTRY

@@ -6,7 +6,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Annotated
 
 from . import get_db, get_riot_api_key
-from .riot_api import RiotAPIClient, RiotDataManager
+from .riot_api import RiotAPIClient
+# from .riot_api import RiotDataManager # DELETED
 from .riot_api.constants import Platform, Region
 
 
@@ -31,16 +32,16 @@ async def get_riot_client(
     finally:
         await client.close()
 
-
-async def get_riot_data_manager(
-    db: Annotated[AsyncSession, Depends(get_db)],
-    riot_client: Annotated[RiotAPIClient, Depends(get_riot_client)],
-) -> RiotDataManager:
-    """Get Riot data manager instance."""
-    return RiotDataManager(db, riot_client)
+# Removed RiotDataManager dependency
+# async def get_riot_data_manager(
+#     db: Annotated[AsyncSession, Depends(get_db)],
+#     riot_client: Annotated[RiotAPIClient, Depends(get_riot_client)],
+# ) -> RiotDataManager:
+#     """Get Riot data manager instance."""
+#     return RiotDataManager(db, riot_client)
 
 
 # Type aliases for cleaner dependency injection
-RiotDataManagerDep = Annotated[RiotDataManager, Depends(get_riot_data_manager)]
+# RiotDataManagerDep = Annotated[RiotDataManager, Depends(get_riot_data_manager)]
 
-__all__ = ["get_riot_client", "get_riot_data_manager", "RiotDataManagerDep"]
+__all__ = ["get_riot_client"]
