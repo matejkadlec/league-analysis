@@ -717,10 +717,7 @@ class PlayerService:
             List of tracked players.
         """
         query = (
-            select(Player)
-            .where(Player.is_tracked)
-            .where(Player.is_active)
-            .order_by(Player.summoner_name)
+            select(Player).where(Player.is_tracked == True).order_by(Player.game_name)
         )
 
         result = await self.db.execute(query)

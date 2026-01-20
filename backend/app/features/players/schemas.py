@@ -10,13 +10,16 @@ class PlayerBase(BaseModel):
     """Base player schema with common fields."""
 
     puuid: str = Field(..., min_length=78, max_length=78, description="Player's PUUID")
-    riot_id: Optional[str] = Field(None, description="Riot ID in format name#tag")
+    game_name: Optional[str] = Field(None, description="Riot ID game name")
     tag_line: Optional[str] = Field(None, description="Riot tag line")
-    summoner_name: str = Field(..., description="Current summoner name")
-    platform: str = Field(..., description="Platform region")
-    account_level: Optional[int] = Field(None, description="Account level")
+    region: str = Field(..., description="Region/Platform (e.g. EUW1)")
+    summoner_level: Optional[int] = Field(None, description="Account/Summoner level")
     profile_icon_id: Optional[int] = Field(None, description="Profile icon ID")
-    summoner_id: Optional[str] = Field(None, description="Encrypted summoner ID")
+
+    # Deprecated fields (maintained for some compat or removed?)
+    # summoner_name removed in favor of game_name
+    # platform removed in favor of region
+    # riot_id: Optional[str] = Field(None, description="Riot ID in format name#tag")
 
 
 class PlayerCreate(PlayerBase):
@@ -28,28 +31,32 @@ class PlayerCreate(PlayerBase):
 class PlayerUpdate(BaseModel):
     """Schema for updating an existing player."""
 
-    summoner_name: Optional[str] = None
-    account_level: Optional[int] = None
-    last_seen: Optional[datetime] = None
+    game_name: Optional[str] = None
+    tag_line: Optional[str] = None
+    summoner_level: Optional[int] = None
+    profile_icon_id: Optional[int] = None
 
 
 class PlayerResponse(PlayerBase):
     """Schema for player response data."""
 
-    id: Optional[int] = Field(None, description="Database ID")
+    # id: Optional[int] = Field(None, description="Database ID") # ID is internal, usually PUUID is public key
     created_at: datetime
     updated_at: datetime
-    last_seen: datetime
+
     is_tracked: bool = Field(
         default=False,
         description="Whether this player is being tracked for automated updates",
     )
-    is_analyzed: bool = Field(
+    fully_analyzed: bool = Field(
         default=False,
-        description="Whether this player has been analyzed for smurf/boosted detection",
+        description="Whether this player has been completely analyzed",
     )
-    last_ban_check: Optional[datetime] = Field(
-        None, description="When this player was last checked for ban status"
+    last_player_analysis: Optional[datetime] = Field(
+        None, description="Time of last player analysis"
+    )
+    last_matchmaking_analysis: Optional[datetime] = Field(
+        None, description="Time of last matchmaking analysis"
     )
 
     model_config = ConfigDict(from_attributes=True)

@@ -12,7 +12,6 @@ from .schemas import (
 from .ranks_schemas import PlayerRankResponse
 from .dependencies import (
     PlayerServiceDep,
-    RiotDataManagerDep,
     get_player_service,
 )
 from app.core.riot_api.constants import Platform
@@ -341,7 +340,6 @@ async def _process_summoner_name_tracking(
 @router.post("/add-tracked", response_model=PlayerResponse)
 async def add_tracked_player(
     player_service: PlayerServiceDep,
-    riot_data_manager: RiotDataManagerDep,
     riot_id: str | None = Query(None, description="Riot ID in format name#tag"),
     summoner_name: str | None = Query(None, description="Summoner name"),
     platform: str = Query("eun1", description="Platform region"),
@@ -374,25 +372,28 @@ async def add_tracked_player(
                 detail="Either riot_id or summoner_name must be provided",
             )
 
-    try:
-        if riot_id:
-            return await _process_riot_id_tracking(
-                player_service, riot_data_manager, riot_id, platform
-            )
+    raise HTTPException(
+        status_code=501, detail="Riot Data Manager refactoring in progress"
+    )
+    # try:
+    #     if riot_id:
+    #         return await _process_riot_id_tracking(
+    #             player_service, riot_data_manager, riot_id, platform
+    #         )
 
-        # summoner_name is guaranteed to be not None here due to validation above
-        return await _process_summoner_name_tracking(
-            player_service,
-            summoner_name,  # type: ignore[arg-type]
-            platform,
-        )
+    #     # summoner_name is guaranteed to be not None here due to validation above
+    #     return await _process_summoner_name_tracking(
+    #         player_service,
+    #         summoner_name,  # type: ignore[arg-type]
+    #         platform,
+    #     )
 
-    except ValueError as e:
-        _handle_tracking_value_error(e)
-    except HTTPException:
-        raise
-    except Exception as e:
-        _handle_tracking_unexpected_error(e, riot_id, summoner_name, platform)
+    # except ValueError as e:
+    #     _handle_tracking_value_error(e)
+    # except HTTPException:
+    #     raise
+    # except Exception as e:
+    #     _handle_tracking_unexpected_error(e, riot_id, summoner_name, platform)
 
 
 def _handle_tracking_value_error(e: ValueError) -> None:

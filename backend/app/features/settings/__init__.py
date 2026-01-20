@@ -6,7 +6,8 @@ including runtime configuration and Riot API key management.
 
 from .router import router as settings_router
 from .service import SettingsService
-from .models import SystemSetting
+
+# from .models import SystemSetting
 from .schemas import (
     SettingResponse,
     SettingUpdate,
@@ -21,7 +22,7 @@ __all__ = [
     # Service
     "SettingsService",
     # Models
-    "SystemSetting",
+    # "SystemSetting",
     # Schemas
     "SettingResponse",
     "SettingUpdate",

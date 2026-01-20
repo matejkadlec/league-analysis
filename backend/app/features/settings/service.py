@@ -73,21 +73,48 @@ class SettingsService:
             )
             raise ValueError(f"Invalid Riot API key: {validation.message}")
 
-        # Deactivate old keys?
-        # Ideally yes, but maybe user wants multiple. For now, let's just add new one.
-        # Strict "single active key" logic:
-        # Update old active keys to inactive?
-        # await self.db.execute(update(RiotAPIKey).where(RiotAPIKey.is_active==True).values(is_active=False))
+        # Check if this exact key value already exists
+        stmt = select(RiotAPIKey).where(RiotAPIKey.key_value == update.value)
+        result = await self.db.execute(stmt)
+        existing_key_entry = result.scalar_one_or_none()
 
-        new_key = RiotAPIKey(
-            key_value=update.value,
-            is_active=True,
-        )
-        self.db.add(new_key)
+        if existing_key_entry and existing_key_entry.is_active:
+            # No-op: The key is already active and the same
+            val = existing_key_entry.key_value
+            masked = f"{val[:6]}...{val[-4:]}"
+            return SettingResponse(
+                key="riot_api_key",
+                masked_value=masked,
+                category="riot_api",
+                is_sensitive=True,
+                created_at=existing_key_entry.added_at,
+                updated_at=existing_key_entry.added_at,
+            )
+
+        # Deactivate all currently active keys
+        stmt_active = select(RiotAPIKey).where(RiotAPIKey.is_active == True)
+        result_active = await self.db.execute(stmt_active)
+        active_keys = result_active.scalars().all()
+        for k in active_keys:
+            k.is_active = False
+
+        if existing_key_entry:
+            # Reactivate existing key
+            existing_key_entry.is_active = True
+            target_key = existing_key_entry
+        else:
+            # Create new key
+            new_key = RiotAPIKey(
+                key_value=update.value,
+                is_active=True,
+            )
+            self.db.add(new_key)
+            target_key = new_key
+
         await self.db.commit()
-        await self.db.refresh(new_key)
+        await self.db.refresh(target_key)
 
-        val = new_key.key_value
+        val = target_key.key_value
         masked = f"{val[:6]}...{val[-4:]}"
 
         return SettingResponse(
@@ -95,47 +122,20 @@ class SettingsService:
             masked_value=masked,
             category="riot_api",
             is_sensitive=True,
-            created_at=new_key.added_at,
-            updated_at=new_key.added_at,
+            created_at=target_key.added_at,
+            updated_at=target_key.added_at,
         )
 
     async def create_or_update_setting(
         self, key: str, value: str, category: str, is_sensitive: bool = False
     ) -> SettingResponse:
-        """Create or update a setting."""
-        # Check if setting exists
-        stmt = select(SystemSetting).where(SystemSetting.key == key)
-        result = await self.db.execute(stmt)
-        setting = result.scalar_one_or_none()
+        """Create or update a setting.
 
-        if setting:
-            # Update existing
-            setting.value = value
-            setting.category = category
-            setting.is_sensitive = is_sensitive
-            logger.info("setting_updated", key=key)
-        else:
-            # Create new
-            setting = SystemSetting(
-                key=key,
-                value=value,
-                category=category,
-                is_sensitive=is_sensitive,
-            )
-            self.db.add(setting)
-            logger.info("setting_created", key=key, category=category)
-
-        await self.db.commit()
-        await self.db.refresh(setting)
-
-        return SettingResponse(
-            key=setting.key,
-            masked_value=setting.mask_value(),
-            category=setting.category,
-            is_sensitive=setting.is_sensitive,
-            created_at=setting.created_at,
-            updated_at=setting.updated_at,
-        )
+        Wrapper around update_setting for compatibility with older interface.
+        """
+        # Create a SettingUpdate object
+        update_obj = SettingUpdate(value=value)
+        return await self.update_setting(key, update_obj)
 
     def _check_api_key_format(self, api_key: str) -> SettingValidationResponse | None:
         """Check API key format. Returns error response if invalid, None if valid."""
