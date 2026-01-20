@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
 import structlog
 
-from .models import SystemSetting
+from .models import RiotAPIKey
 from .schemas import (
     SettingResponse,
     SettingUpdate,
@@ -28,70 +28,75 @@ class SettingsService:
 
     async def get_setting(self, key: str) -> Optional[SettingResponse]:
         """Get a setting by key."""
-        stmt = select(SystemSetting).where(SystemSetting.key == key)
-        result = await self.db.execute(stmt)
-        setting = result.scalar_one_or_none()
+        if key == "riot_api_key":
+            # Determine most recent added key, regardless of active status? Or just active?
+            # Usually we want the active one.
+            stmt = (
+                select(RiotAPIKey)
+                .where(RiotAPIKey.is_active == True)
+                .order_by(RiotAPIKey.added_at.desc())
+                .limit(1)
+            )
+            result = await self.db.execute(stmt)
+            setting = result.scalar_one_or_none()
 
-        if not setting:
-            logger.info("setting_not_found", key=key)
-            return None
+            if not setting:
+                return None
 
-        # Create response with masked value (never send full value to frontend)
-        response = SettingResponse(
-            key=setting.key,
-            masked_value=setting.mask_value(),
-            category=setting.category,
-            is_sensitive=setting.is_sensitive,
-            created_at=setting.created_at,
-            updated_at=setting.updated_at,
-        )
+            # Masking
+            val = setting.key_value
+            masked = f"{val[:6]}...{val[-4:]}" if len(val) > 10 else "***"
 
-        logger.info("setting_retrieved", key=key, category=setting.category)
-        return response
+            return SettingResponse(
+                key="riot_api_key",
+                masked_value=masked,
+                category="riot_api",
+                is_sensitive=True,
+                created_at=setting.added_at,
+                updated_at=setting.added_at,  # fallback
+            )
+
+        return None
 
     async def update_setting(self, key: str, update: SettingUpdate) -> SettingResponse:
         """Update a setting value."""
-        # Get existing setting
-        stmt = select(SystemSetting).where(SystemSetting.key == key)
-        result = await self.db.execute(stmt)
-        setting = result.scalar_one_or_none()
-
-        if not setting:
-            raise ValueError(f"Setting '{key}' not found")
+        if key != "riot_api_key":
+            raise ValueError(f"Setting '{key}' not supported")
 
         # Validate the new value before saving
-        if key == "riot_api_key":
-            validation = await self.validate_riot_api_key(update.value)
-            if not validation.valid:
-                logger.warning(
-                    "setting_validation_failed",
-                    key=key,
-                    message=validation.message,
-                )
-                raise ValueError(f"Invalid Riot API key: {validation.message}")
+        validation = await self.validate_riot_api_key(update.value)
+        if not validation.valid:
+            logger.warning(
+                "setting_validation_failed",
+                key=key,
+                message=validation.message,
+            )
+            raise ValueError(f"Invalid Riot API key: {validation.message}")
 
-        # Update the value
-        old_value_masked = setting.mask_value()
-        setting.value = update.value
+        # Deactivate old keys?
+        # Ideally yes, but maybe user wants multiple. For now, let's just add new one.
+        # Strict "single active key" logic:
+        # Update old active keys to inactive?
+        # await self.db.execute(update(RiotAPIKey).where(RiotAPIKey.is_active==True).values(is_active=False))
 
-        await self.db.commit()
-        await self.db.refresh(setting)
-
-        logger.info(
-            "setting_updated",
-            key=key,
-            old_value=old_value_masked,
-            new_value=setting.mask_value(),
+        new_key = RiotAPIKey(
+            key_value=update.value,
+            is_active=True,
         )
+        self.db.add(new_key)
+        await self.db.commit()
+        await self.db.refresh(new_key)
 
-        # Return updated setting (masked value only for security)
+        val = new_key.key_value
+        masked = f"{val[:6]}...{val[-4:]}"
+
         return SettingResponse(
-            key=setting.key,
-            masked_value=setting.mask_value(),
-            category=setting.category,
-            is_sensitive=setting.is_sensitive,
-            created_at=setting.created_at,
-            updated_at=setting.updated_at,
+            key="riot_api_key",
+            masked_value=masked,
+            category="riot_api",
+            is_sensitive=True,
+            created_at=new_key.added_at,
+            updated_at=new_key.added_at,
         )
 
     async def create_or_update_setting(
@@ -246,7 +251,9 @@ class SettingsService:
         return SettingTestResponse(
             success=validation.valid,
             message=validation.message,
-            details={"validation_details": validation.details}
-            if validation.details
-            else None,
+            details=(
+                {"validation_details": validation.details}
+                if validation.details
+                else None
+            ),
         )

@@ -39,7 +39,6 @@ Thumbs.db
 *.db
 *.sqlite
 *.sqlite3
-backend/init_database.sql
 
 # Testing
 .pytest_cache/

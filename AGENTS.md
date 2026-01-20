@@ -7,7 +7,12 @@
 > **Context**: Project recently underwent a major purge of unreliable legacy data and code. Old jobs and data wrappers were deleted.
 > **Current Status**: "Clean Slate". We are incrementally re-implementing background jobs and feature logic on a sanitized base.
 > **Database Warning**: The schema is **VOLATILE**. Columns, types, nullability, and constraints are subject to change. Do NOT assume schema stability. Always verify `backend/init_database.sql` serves as the source of truth, but cross-reference it with active `models.py`.
-> **Instruction**: Assume legacy job logic was flawed. When implementing new features, prioritize architectural correctness and data validation (e.g. distinction between Game Name/Tag vs Summoner Name).
+> **No Migrations Policy**: We do NOT use migration tools (Alembic etc.). The `backend/init_database.sql` file is the Single Source of Truth. When you make schema changes:
+>
+> 1. Update SQLAlchemy models in code.
+> 2. Update `backend/init_database.sql`.
+> 3. Apply schema changes manually to the database (using `psql`, DbVisualizer, etc.).
+>    **Instruction**: Assume legacy job logic was flawed. When implementing new features, prioritize architectural correctness and data validation (e.g. distinction between Game Name/Tag vs Summoner Name).
 
 **Start development**:
 

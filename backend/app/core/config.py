@@ -149,27 +149,28 @@ def get_global_settings() -> Settings:
 
 
 async def get_riot_api_key(db: AsyncSession) -> str:
-    """Get Riot API key from database only.
-
-    NOTE: RIOT_API_KEY environment variable is no longer supported.
-    Set API key via web UI at /settings or directly in database.
+    """Get an active Riot API key from database.
 
     :param db: Database session
-    :returns: Riot API key from database
-    :raises ValueError: If API key not configured in database
+    :returns: Active Riot API key
+    :raises ValueError: If no active API key found
     """
     from sqlalchemy import select
-    from app.features.settings.models import SystemSetting
+    from app.features.settings.models import RiotAPIKey
 
-    stmt = select(SystemSetting).where(SystemSetting.key == "riot_api_key")
+    # Get the latest active key
+    stmt = (
+        select(RiotAPIKey)
+        .where(RiotAPIKey.is_active == True)
+        .order_by(RiotAPIKey.added_at.desc())
+        .limit(1)
+    )
     result = await db.execute(stmt)
-    setting = result.scalar_one_or_none()
+    key_record = result.scalar_one_or_none()
 
-    if not setting or not setting.value:
+    if not key_record:
         raise ValueError(
-            "Riot API key not configured! Set it via web UI at /settings or database:\n"
-            "INSERT INTO jobs.system_settings (key, value, category, is_sensitive) "
-            "VALUES ('riot_api_key', 'YOUR_KEY', 'riot_api', true);"
+            "No active Riot API key found! Insert a key into core.riot_api_keys table."
         )
 
-    return setting.value
+    return key_record.key_value

@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, desc
 import structlog
 
-from app.core.riot_api.data_manager import RiotDataManager
+from app.core.riot_api.client import RiotAPIClient
 from app.features.players.models import Player
 from .models import PlayerAnalysis
 from app.features.players.ranks import PlayerRank
@@ -36,14 +36,14 @@ logger = structlog.get_logger(__name__)
 class PlayerAnalysisService:
     """Service for comprehensive player analysis using modular factor analyzers."""
 
-    def __init__(self, db: AsyncSession, data_manager: RiotDataManager):
+    def __init__(self, db: AsyncSession, data_manager: RiotAPIClient):
         """
         Initialize player analysis service.
 
         :param db: Database session
         :type db: AsyncSession
-        :param data_manager: Riot API data manager
-        :type data_manager: RiotDataManager
+        :param data_manager: Riot API client
+        :type data_manager: RiotAPIClient
         """
         self.db = db
         self.data_manager = data_manager

@@ -6,7 +6,6 @@ including proper rate limiting, error handling, and authentication.
 """
 
 from .client import RiotAPIClient
-from .data_manager import RiotDataManager
 from .rate_limiter import RateLimiter
 from .errors import (
     RiotAPIError,
