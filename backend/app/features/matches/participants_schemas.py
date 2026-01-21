@@ -17,8 +17,11 @@ class MatchParticipantBase(BaseModel):
         description="Reference to the match this participant belongs to",
     )
     puuid: uuid.UUID = Field(..., description="Reference to the player")
-    summoner_name: str = Field(
-        ..., max_length=32, description="Summoner name at the time of the match"
+    game_name: str = Field(
+        ..., max_length=32, description="Game name at the time of the match"
+    )
+    tag_line: Optional[str] = Field(
+        None, max_length=8, description="Tag line at the time of the match"
     )
     team_id: int = Field(
         ..., description="Team ID (100 for blue side, 200 for red side)"
@@ -66,8 +69,11 @@ class MatchParticipantCreate(MatchParticipantBase):
 class MatchParticipantUpdate(BaseModel):
     """Schema for updating a MatchParticipant - minimal fields for corrections only."""
 
-    summoner_name: Optional[str] = Field(
-        None, max_length=32, description="Summoner name at the time of the match"
+    game_name: Optional[str] = Field(
+        None, max_length=32, description="Game name at the time of the match"
+    )
+    tag_line: Optional[str] = Field(
+        None, max_length=8, description="Tag line at the time of the match"
     )
     individual_position: Optional[str] = Field(
         None, max_length=16, description="Individual position"

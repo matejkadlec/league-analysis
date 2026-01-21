@@ -465,18 +465,26 @@ class MatchService:
         result = await self.db.execute(query)
         return result.scalar_one()
 
-    def _get_summoner_name_for_puuid(
+    def _get_player_info_for_puuid(
         self, puuid: str, participants: List[Dict[str, Any]]
-    ) -> str:
-        """Extract summoner name for a PUUID from participant data."""
-        summoner_name = next(
-            (p["summoner_name"] for p in participants if p["puuid"] == puuid),
+    ) -> Dict[str, Any]:
+        """Extract player info for a PUUID from participant data."""
+        participant = next(
+            (p for p in participants if p["puuid"] == puuid),
             None,
         )
-        # Ensure summoner_name is never null or empty
-        if not summoner_name or summoner_name.strip() == "":
-            return "Unknown Player"
-        return summoner_name
+        if not participant:
+            return {
+                "game_name": "Unknown Player",
+                "tag_line": None,
+                "summoner_level": 1,
+            }
+
+        return {
+            "game_name": participant.get("game_name") or "Unknown Player",
+            "tag_line": participant.get("tag_line"),
+            "summoner_level": participant.get("summoner_level", 1),
+        }
 
     async def _ensure_players_exist(
         self,
@@ -496,15 +504,19 @@ class MatchService:
         if not missing_puuids:
             return
 
-        new_players = [
-            Player(
-                puuid=puuid,
-                summoner_name=self._get_summoner_name_for_puuid(puuid, participants),
-                platform=platform_id.lower(),
-                is_active=False,
+        new_players = []
+        for puuid in missing_puuids:
+            info = self._get_player_info_for_puuid(puuid, participants)
+            new_players.append(
+                Player(
+                    puuid=puuid,
+                    game_name=info["game_name"],
+                    tag_line=info["tag_line"],
+                    summoner_level=info["summoner_level"],
+                    region=platform_id.upper(),
+                    is_tracked=False,
+                )
             )
-            for puuid in missing_puuids
-        ]
 
         self.db.add_all(new_players)
         logger.debug("Created minimal player records", count=len(new_players))

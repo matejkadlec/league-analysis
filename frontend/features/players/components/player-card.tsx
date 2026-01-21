@@ -141,7 +141,7 @@ export function PlayerCard({ player }: PlayerCardProps) {
     queryFn: async () => {
       const result = await validatedGet(
         PlayerRankSchema.nullable(),
-        `/players/${player.puuid}/rank`
+        `/players/${player.puuid}/rank`,
       );
       if (!result.success) {
         return null;
@@ -163,14 +163,13 @@ export function PlayerCard({ player }: PlayerCardProps) {
             <div className="flex items-center justify-between">
               <div>
                 <CardTitle className="text-xl">
-                  {player.riot_id && player.tag_line
-                    ? `${player.riot_id}#${player.tag_line}`
-                    : player.summoner_name}
+                  {player.game_name}
+                  {player.tag_line && `#${player.tag_line}`}
                 </CardTitle>
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <span>{player.platform.toUpperCase()}</span>
+                  <span>{player.region.toUpperCase()}</span>
                   <Badge variant="secondary">
-                    Level {player.account_level}
+                    Level {player.summoner_level}
                   </Badge>
                   {player.is_tracked && (
                     <Badge variant="default" className="bg-yellow-600">
@@ -182,9 +181,8 @@ export function PlayerCard({ player }: PlayerCardProps) {
               <TrackPlayerButton
                 puuid={player.puuid}
                 playerName={
-                  player.riot_id && player.tag_line
-                    ? `${player.riot_id}#${player.tag_line}`
-                    : player.summoner_name
+                  player.game_name +
+                  (player.tag_line ? `#${player.tag_line}` : "")
                 }
                 variant="outline"
                 size="default"
@@ -246,7 +244,7 @@ export function PlayerCard({ player }: PlayerCardProps) {
             </div>
             <div>
               <p className="font-medium text-muted-foreground">Last Seen</p>
-              <p>{formatDate(player.last_seen)}</p>
+              <p>{formatDate(player.updated_at)}</p>
             </div>
             <div>
               <p className="font-medium text-muted-foreground">
@@ -255,8 +253,8 @@ export function PlayerCard({ player }: PlayerCardProps) {
               <p>{formatDate(player.created_at)}</p>
             </div>
             <div>
-              <p className="font-medium text-muted-foreground">Platform</p>
-              <p className="uppercase">{player.platform}</p>
+              <p className="font-medium text-muted-foreground">Region</p>
+              <p className="uppercase">{player.region}</p>
             </div>
           </div>
         </div>

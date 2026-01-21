@@ -75,7 +75,7 @@ async def search_player(
         max_length=30,
         description="Search query (name, tag, or riot_id)",
     ),
-    platform: Platform = Query(Platform.EUN1, description="Platform region"),
+    region: Platform = Query(Platform.EUN1, description="Platform region"),
 ):
     """
     Fuzzy search for players by name, tag, or Riot ID.
@@ -83,18 +83,16 @@ async def search_player(
     Returns array of matches (empty if none found). Search patterns:
     - "Name#TAG" → Riot ID (exact match prioritized)
     - "#TAG" → Tag only
-    - "Name" → Summoner name
+    - "Name" → Game name
     """
     try:
         results = await player_service.fuzzy_search_players(
             query=query,
-            platform=platform.value,
+            region=region.value,
             limit=10,
         )
         if not results:
-            logger.debug(
-                f"No results found for query: {query}, platform: {platform.value}"
-            )
+            logger.debug(f"No results found for query: {query}, region: {region.value}")
         return results
 
     except Exception as e:
@@ -103,7 +101,7 @@ async def search_player(
             "player_search_failed",
             error=str(e),
             query=query,
-            platform=platform.value,
+            region=region.value,
             exc_info=True,
         )
         raise HTTPException(
@@ -122,7 +120,7 @@ async def get_player_suggestions(
         max_length=30,
         description="Search query (name, tag, or riot_id)",
     ),
-    platform: Platform = Query(..., description="Platform region (required)"),
+    region: Platform = Query(..., description="Platform region (required)"),
     limit: int = Query(
         5,
         ge=1,
@@ -139,11 +137,11 @@ async def get_player_suggestions(
     Search patterns:
     - "Name#TAG" → Search for Riot ID (exact match gets highest priority)
     - "#TAG" → Search for tag only
-    - "Name" → Search for summoner name
+    - "Name" → Search for game name
 
     Args:
         q: Search string (0-100 characters)
-        platform: Platform region (e.g., "eun1", "euw1", "na1") - required
+        region: Platform region (e.g., "eun1", "euw1", "na1") - required
         limit: Maximum number of suggestions to return (default: 5, max: 10)
 
     Returns:
@@ -151,20 +149,18 @@ async def get_player_suggestions(
                               sorted by relevance (empty array if none found)
 
     Examples:
-        GET /players/suggestions?q=Danger&platform=eun1
-        GET /players/suggestions?q=DangerousDan#EUW&platform=eun1&limit=3
-        GET /players/suggestions?q=#EUW&platform=eun1&limit=10
+        GET /players/suggestions?q=Danger&region=eun1
+        GET /players/suggestions?q=DangerousDan#EUW&region=eun1&limit=3
+        GET /players/suggestions?q=#EUW&region=eun1&limit=10
     """
     try:
         results = await player_service.fuzzy_search_players(
             query=q,
-            platform=platform.value,
+            region=region.value,
             limit=limit,
         )
         if not results:
-            logger.debug(
-                f"No suggestions found for query: {q}, platform: {platform.value}"
-            )
+            logger.debug(f"No suggestions found for query: {q}, region: {region.value}")
         return results
 
     except Exception as e:
@@ -172,7 +168,7 @@ async def get_player_suggestions(
         logger.error(
             "player_suggestions_failed",
             error=str(e),
-            platform=platform.value,
+            region=region.value,
             exc_info=True,
         )
         raise HTTPException(
@@ -309,7 +305,7 @@ async def get_tracked_players(player_service: PlayerServiceDep):
 
 
 async def _process_riot_id_tracking(
-    player_service, riot_data_manager, riot_id: str, platform: str
+    player_service, riot_data_manager, riot_id: str, region: str
 ):
     """Process tracking request with Riot ID."""
     game_name, tag_line = validate_riot_id(riot_id)
@@ -317,44 +313,38 @@ async def _process_riot_id_tracking(
         riot_data_manager=riot_data_manager,
         game_name=game_name,
         tag_line=tag_line,
-        platform=platform,
+        region=region,
     )
 
 
-async def _process_summoner_name_tracking(
-    player_service, summoner_name: str, platform: str
-):
-    """Process tracking request with summoner name."""
+async def _process_game_name_tracking(player_service, game_name: str, region: str):
+    """Process tracking request with game name."""
     try:
-        player_response = await player_service.get_player_by_summoner_name(
-            summoner_name, platform
+        player_response = await player_service.get_player_by_game_name(
+            game_name, region
         )
         return await player_service.track_player(player_response.puuid)
     except ValueError:
         raise HTTPException(
             status_code=400,
-            detail=f"Player '{summoner_name}' not found in database. Please use Riot ID (name#tag) format to add new players.",
+            detail=f"Player '{game_name}' not found in database. Please use Riot ID (name#tag) format to add new players.",
         )
 
 
 @router.post("/add-tracked", response_model=PlayerResponse)
 async def add_tracked_player(
     player_service: PlayerServiceDep,
-    riot_id: str | None = Query(None, description="Riot ID in format name#tag"),
-    summoner_name: str | None = Query(None, description="Summoner name"),
-    platform: str = Query("eun1", description="Platform region"),
+    game_name: str = Query(..., description="Game name"),
+    tag_line: str = Query(..., description="Tag line (without #)"),
+    region: str = Query("eun1", description="Platform region"),
 ):
     """
     Search for a player in Riot API and add them with is_tracked=true.
 
-    Accepts either riot_id (name#tag) or summoner_name.
-    If the player is already in the database, marks them as tracked.
-    If not found in database, fetches from Riot API and tracks them.
-
     Args:
-        riot_id: Riot ID in format name#tag
-        summoner_name: Summoner name (legacy search)
-        platform: Platform region (default: eun1)
+        game_name: Game name
+        tag_line: Tag line
+        region: Platform region (default: eun1)
 
     Returns:
         Player data with is_tracked=True
@@ -364,28 +354,20 @@ async def add_tracked_player(
         404: Player not found in Riot API
         500: Unexpected error
     """
-    # Early return if neither identifier provided
-    if not riot_id:
-        if not summoner_name:
-            raise HTTPException(
-                status_code=400,
-                detail="Either riot_id or summoner_name must be provided",
-            )
-
     raise HTTPException(
         status_code=501, detail="Riot Data Manager refactoring in progress"
     )
     # try:
     #     if riot_id:
     #         return await _process_riot_id_tracking(
-    #             player_service, riot_data_manager, riot_id, platform
+    #             player_service, riot_data_manager, riot_id, region
     #         )
 
-    #     # summoner_name is guaranteed to be not None here due to validation above
-    #     return await _process_summoner_name_tracking(
+    #     # game_name is guaranteed to be not None here due to validation above
+    #     return await _process_game_name_tracking(
     #         player_service,
-    #         summoner_name,  # type: ignore[arg-type]
-    #         platform,
+    #         game_name,  # type: ignore[arg-type]
+    #         region,
     #     )
 
     # except ValueError as e:
@@ -393,7 +375,7 @@ async def add_tracked_player(
     # except HTTPException:
     #     raise
     # except Exception as e:
-    #     _handle_tracking_unexpected_error(e, riot_id, summoner_name, platform)
+    #     _handle_tracking_unexpected_error(e, riot_id, game_name, region)
 
 
 def _handle_tracking_value_error(e: ValueError) -> None:
@@ -406,15 +388,15 @@ def _handle_tracking_value_error(e: ValueError) -> None:
 
 
 def _handle_tracking_unexpected_error(
-    e: Exception, riot_id: str | None, summoner_name: str | None, platform: str
+    e: Exception, riot_id: str | None, game_name: str | None, region: str
 ) -> None:
     """Handle unexpected errors during player tracking."""
     logger.error(
         "add_tracked_player_failed",
         error=str(e),
         riot_id=riot_id,
-        summoner_name=summoner_name,
-        platform=platform,
+        game_name=game_name,
+        region=region,
         exc_info=True,
     )
     raise HTTPException(

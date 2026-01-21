@@ -100,6 +100,16 @@ echo -e "${BLUE}=============================================${NC}"
 npm run dev > "$SCRIPT_DIR/logs/frontend.log" 2>&1 &
 FRONTEND_PID=$!
 echo -e "${GREEN}✓ Frontend started (PID: $FRONTEND_PID)${NC}"
+
+# Check if frontend is still running after a few seconds
+sleep 3
+if ! ps -p $FRONTEND_PID > /dev/null; then
+    echo -e "${RED}ERROR: Frontend failed to start (process exited). Check logs/frontend.log${NC}"
+    echo -e "${YELLOW}Last 10 lines of frontend log:${NC}"
+    tail -n 10 "$SCRIPT_DIR/logs/frontend.log"
+    cleanup
+fi
+
 echo -e "${GREEN}  App: http://localhost:3000${NC}"
 echo -e "${GREEN}  Logs: logs/frontend.log${NC}"
 echo ""

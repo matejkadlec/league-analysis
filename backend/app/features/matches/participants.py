@@ -50,10 +50,16 @@ class MatchParticipant(Base):
 
     # Participant information
 
-    summoner_name: Mapped[Optional[str]] = mapped_column(
+    game_name: Mapped[Optional[str]] = mapped_column(
         String(32),
         nullable=True,
-        comment="Summoner name at the time of the match (may be NULL if Riot API returns empty string)",
+        comment="Game name at the time of the match (Riot ID name)",
+    )
+
+    tag_line: Mapped[Optional[str]] = mapped_column(
+        String(8),
+        nullable=True,
+        comment="Tag line at the time of the match (Riot ID tag)",
     )
 
     summoner_level: Mapped[int] = mapped_column(
@@ -181,17 +187,7 @@ class MatchParticipant(Base):
 
     def __repr__(self) -> str:
         """Return string representation of the match participant."""
-        return f"<MatchParticipant(match_id='{self.match_id}', summoner_name='{self.summoner_name}', champion='{self.champion_name}')>"
-
-    # Player identity fields at time of match (from Riot API)
-    # Used by transformers and player services for historical player identification
-    riot_id_name: Mapped[Optional[str]] = mapped_column(
-        String(128), nullable=True, comment="Riot ID game name at the time of the match"
-    )
-
-    riot_id_tagline: Mapped[Optional[str]] = mapped_column(
-        String(32), nullable=True, comment="Riot ID tagline at the time of the match"
-    )
+        return f"<MatchParticipant(match_id='{self.match_id}', game_name='{self.game_name}', champion='{self.champion_name}')>"
 
 
 # Create composite indexes for common queries

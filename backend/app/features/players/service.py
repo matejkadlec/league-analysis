@@ -30,10 +30,10 @@ class PlayerService:
 
     @service_error_handler("PlayerService")
     @input_validation(
-        validate_non_empty=["game_name", "platform"],
+        validate_non_empty=["game_name", "region"],
     )
     async def get_player_by_riot_id(
-        self, game_name: str, tag_line: str, platform: str
+        self, game_name: str, tag_line: str, region: str
     ) -> PlayerResponse:
         """
         Get player by Riot ID from database only.
@@ -44,7 +44,7 @@ class PlayerService:
         Args:
             game_name: Riot ID game name of the player
             tag_line: Riot ID tag line of the player
-            platform: Riot API platform code (e.g., "NA1", "EUW1")
+            region: Riot API platform/region code (e.g., "NA1", "EUW1")
 
         Returns:
             Player response object with player data
@@ -56,28 +56,27 @@ class PlayerService:
         # Normalize inputs
         safe_game_name = game_name.strip()
         safe_tag_line = tag_line.strip() if tag_line else None
-        normalized_platform = platform.strip().upper()
+        normalized_region = region.strip().upper()
 
         # Query database only
         result = await self.db.execute(
             select(Player).where(
-                Player.riot_id == safe_game_name,
+                Player.game_name == safe_game_name,
                 Player.tag_line == safe_tag_line,
-                Player.platform == normalized_platform,
-                Player.is_active,
+                Player.region == normalized_region,
             )
         )
         player = result.scalar_one_or_none()
 
         if not player:
             raise PlayerServiceError(
-                message=f"Player not found in database: {safe_game_name}#{safe_tag_line} on {normalized_platform}. "
+                message=f"Player not found in database: {safe_game_name}#{safe_tag_line} on {normalized_region}. "
                 f"Please track this player first.",
                 operation="get_player_by_riot_id",
                 context={
                     "game_name": safe_game_name,
                     "tag_line": safe_tag_line,
-                    "platform": normalized_platform,
+                    "region": normalized_region,
                 },
             )
 
@@ -85,55 +84,52 @@ class PlayerService:
             "Player data retrieved from database",
             game_name=safe_game_name,
             tag_line=safe_tag_line,
-            platform=normalized_platform,
+            region=normalized_region,
             puuid=player.puuid,
         )
 
         return PlayerResponse.model_validate(player)
 
-    def _find_exact_summoner_match(
-        self, players: list[Player], safe_summoner_name: str
+    def _find_exact_game_name_match(
+        self, players: list[Player], safe_game_name: str
     ) -> Player | None:
-        """Find exact summoner name match from list of players."""
+        """Find exact game name match from list of players."""
         for player in players:
-            if (
-                player.summoner_name
-                and player.summoner_name.lower() == safe_summoner_name.lower()
-            ):
+            if player.game_name and player.game_name.lower() == safe_game_name.lower():
                 return player
         return None
 
-    def _handle_no_summoner_matches(
-        self, safe_summoner_name: str, normalized_platform: str
+    def _handle_no_game_name_matches(
+        self, safe_game_name: str, normalized_region: str
     ) -> None:
-        """Raise error when no summoner name matches found."""
+        """Raise error when no game name matches found."""
         logger.info(
-            "No player found in database for summoner name",
-            summoner_name=safe_summoner_name,
-            platform=normalized_platform,
+            "No player found in database for game name",
+            game_name=safe_game_name,
+            region=normalized_region,
         )
         raise PlayerServiceError(
-            message=f"No players found matching '{safe_summoner_name}' on {normalized_platform}. "
-            f"Please check the summoner name and platform, or track this player first.",
-            operation="get_player_by_summoner_name",
+            message=f"No players found matching '{safe_game_name}' on {normalized_region}. "
+            f"Please check the game name and region, or track this player first.",
+            operation="get_player_by_game_name",
             context={
-                "summoner_name": safe_summoner_name,
-                "platform": normalized_platform,
+                "game_name": safe_game_name,
+                "region": normalized_region,
             },
         )
 
-    async def get_player_by_summoner_name(
-        self, summoner_name: str, platform: str
+    async def get_player_by_game_name(
+        self, game_name: str, region: str
     ) -> PlayerResponse:
         """
-        Get player by summoner name from database only.
+        Get player by game name from database only.
 
         This searches only the local database for players already being tracked.
         To add new players from Riot API, use a separate add/import feature.
 
         Args:
-            summoner_name: Summoner name to search for
-            platform: Riot API platform code
+            game_name: Game name (formerly summoner name) to search for
+            region: Riot API region code
 
         Returns:
             Player response object with player data
@@ -143,26 +139,25 @@ class PlayerService:
             ValidationError: If input parameters are invalid
         """
         # Normalize inputs
-        safe_summoner_name = summoner_name.strip()
-        normalized_platform = platform.strip().upper()
+        safe_game_name = game_name.strip()
+        normalized_region = region.strip().upper()
 
         # Search database for exact match or partial match
         result = await self.db.execute(
             select(Player).where(
-                Player.summoner_name.ilike(f"%{safe_summoner_name}%"),
-                Player.platform == normalized_platform,
-                Player.is_active,
+                Player.game_name.ilike(f"%{safe_game_name}%"),
+                Player.region == normalized_region,
             )
         )
         players = result.scalars().all()
 
         # Try to find exact match first
-        exact_match = self._find_exact_summoner_match(players, safe_summoner_name)
+        exact_match = self._find_exact_game_name_match(players, safe_game_name)
         if exact_match:
             logger.info(
-                "Found exact match for summoner name",
-                summoner_name=safe_summoner_name,
-                platform=normalized_platform,
+                "Found exact match for game name",
+                game_name=safe_game_name,
+                region=normalized_region,
                 puuid=exact_match.puuid,
             )
             return PlayerResponse.model_validate(exact_match)
@@ -170,44 +165,42 @@ class PlayerService:
         # If only one partial match, return it
         if len(players) == 1:
             logger.info(
-                "Found single partial match for summoner name",
-                summoner_name=safe_summoner_name,
-                platform=normalized_platform,
-                matched_name=players[0].summoner_name,
+                "Found single partial match for game name",
+                game_name=safe_game_name,
+                region=normalized_region,
+                matched_name=players[0].game_name,
             )
             return PlayerResponse.model_validate(players[0])
 
         # If multiple partial matches, return error with suggestions
         if len(players) > 1:
-            matched_names = [p.summoner_name for p in players if p.summoner_name]
+            matched_names = [p.game_name for p in players if p.game_name]
             logger.info(
-                "Found multiple matches for summoner name",
-                summoner_name=safe_summoner_name,
-                platform=normalized_platform,
+                "Found multiple matches for game name",
+                game_name=safe_game_name,
+                region=normalized_region,
                 matches=matched_names,
             )
             raise PlayerServiceError(
-                message=f"Multiple players found matching '{safe_summoner_name}': {', '.join(matched_names)}. "
+                message=f"Multiple players found matching '{safe_game_name}': {', '.join(matched_names)}. "
                 f"Please be more specific.",
-                operation="get_player_by_summoner_name",
+                operation="get_player_by_game_name",
                 context={
-                    "summoner_name": safe_summoner_name,
-                    "platform": normalized_platform,
+                    "game_name": safe_game_name,
+                    "region": normalized_region,
                     "matches": matched_names,
                 },
             )
 
         # No matches found
-        self._handle_no_summoner_matches(safe_summoner_name, normalized_platform)
+        self._handle_no_game_name_matches(safe_game_name, normalized_region)
 
     async def get_player_by_puuid(
-        self, puuid: str, platform: str = "eun1"
+        self, puuid: str, region: str = "eun1"
     ) -> PlayerResponse:
         """Get player by PUUID from database only. Never calls Riot API."""
         # Query database only
-        result = await self.db.execute(
-            select(Player).where(Player.puuid == puuid, Player.is_active)
-        )
+        result = await self.db.execute(select(Player).where(Player.puuid == puuid))
         player = result.scalar_one_or_none()
 
         if not player:
@@ -215,13 +208,13 @@ class PlayerService:
                 message=f"Player not found in database: {puuid}. "
                 f"Please track this player first.",
                 operation="get_player_by_puuid",
-                context={"puuid": puuid, "platform": platform},
+                context={"puuid": puuid, "region": region},
             )
 
         logger.info(
             "Player data retrieved by PUUID from database",
             puuid=puuid,
-            platform=platform,
+            region=region,
         )
 
         return PlayerResponse.model_validate(player)
@@ -252,7 +245,7 @@ class PlayerService:
 
     @staticmethod
     def _build_player_search_query(
-        platform: str,
+        region: str,
         search_type: str,
         query_lower: str,
         game_name: str | None,
@@ -260,19 +253,18 @@ class PlayerService:
     ):
         """Build SQLAlchemy query based on search type."""
         if search_type == "riot_id" and game_name and tag_line:
-            # Search for exact or partial Riot ID
+            # Search for exact or partial Riot ID (GameName # TagLine)
             return select(Player).where(
                 and_(
-                    Player.platform == platform,
-                    Player.is_active,
+                    Player.region == region,
                     or_(
                         # Exact match
                         and_(
-                            Player.riot_id.ilike(game_name),
+                            Player.game_name.ilike(game_name),
                             Player.tag_line.ilike(tag_line),
                         ),
                         # Partial matches
-                        Player.riot_id.ilike(f"%{game_name}%"),
+                        Player.game_name.ilike(f"%{game_name}%"),
                         Player.tag_line.ilike(f"%{tag_line}%"),
                     ),
                 )
@@ -282,22 +274,17 @@ class PlayerService:
             # Search tags only
             return select(Player).where(
                 and_(
-                    Player.platform == platform,
-                    Player.is_active,
+                    Player.region == region,
                     Player.tag_line.ilike(f"%{tag_line}%"),
                 )
             )
 
-        # name or all - search summoner names and riot_id
+        # name or all - search game names (which includes what was riot_id name part)
         search_term = game_name if game_name else query_lower
         return select(Player).where(
             and_(
-                Player.platform == platform,
-                Player.is_active,
-                or_(
-                    Player.summoner_name.ilike(f"%{search_term}%"),
-                    Player.riot_id.ilike(f"%{search_term}%"),
-                ),
+                Player.region == region,
+                Player.game_name.ilike(f"%{search_term}%"),
             )
         )
 
@@ -307,31 +294,31 @@ class PlayerService:
     ) -> bool:
         """Check if player is an exact Riot ID match."""
         return (
-            player.riot_id
-            and player.riot_id.lower() == game_name.lower()
+            player.game_name
+            and player.game_name.lower() == game_name.lower()
             and player.tag_line
             and player.tag_line.lower() == tag_line.lower()
         )
 
     @staticmethod
-    def _score_summoner_name(
+    def _score_game_name(
         player: Player, search_type: str, query_lower: str
     ) -> int | None:
-        """Calculate distance for summoner name if applicable."""
-        if player.summoner_name and (search_type in ["name", "all"]):
-            return levenshtein_distance(query_lower, player.summoner_name.lower())
+        """Calculate distance for game name if applicable."""
+        if player.game_name and (search_type in ["name", "all"]):
+            return levenshtein_distance(query_lower, player.game_name.lower())
         return None
 
     @staticmethod
     def _score_riot_id(
         player: Player, search_type: str, query_lower: str
     ) -> int | None:
-        """Calculate distance for riot_id if applicable."""
-        if player.riot_id and (search_type in ["name", "riot_id", "all"]):
+        """Calculate distance for riot_id (game_name + tag) if applicable."""
+        if player.game_name and (search_type in ["name", "riot_id", "all"]):
             target = (
-                (f"{player.riot_id}#{player.tag_line}").lower()
+                (f"{player.game_name}#{player.tag_line}").lower()
                 if player.tag_line
-                else player.riot_id.lower()
+                else player.game_name.lower()
             )
             return levenshtein_distance(query_lower, target)
         return None
@@ -356,14 +343,12 @@ class PlayerService:
         """Calculate Levenshtein distances for all relevant fields."""
         distances = []
 
-        # Score summoner name
-        summoner_dist = PlayerService._score_summoner_name(
-            player, search_type, query_lower
-        )
-        if summoner_dist is not None:
-            distances.append(summoner_dist)
+        # Score game name
+        name_dist = PlayerService._score_game_name(player, search_type, query_lower)
+        if name_dist is not None:
+            distances.append(name_dist)
 
-        # Score riot_id
+        # Score riot_id composite
         riot_id_dist = PlayerService._score_riot_id(player, search_type, query_lower)
         if riot_id_dist is not None:
             distances.append(riot_id_dist)
@@ -446,7 +431,7 @@ class PlayerService:
                 "score": self._score_player_match(
                     player, search_type, query_lower, game_name, tag_line
                 ),
-                "name": player.summoner_name or player.riot_id or "",
+                "name": player.game_name or "",
             }
             for player in players
         ]
@@ -455,7 +440,7 @@ class PlayerService:
         return scored_players[:limit]
 
     async def fuzzy_search_players(
-        self, query: str, platform: str, limit: int = 10
+        self, query: str, region: str, limit: int = 10
     ) -> List[PlayerResponse]:
         """
         Search for players using fuzzy matching with Levenshtein distance.
@@ -463,17 +448,17 @@ class PlayerService:
         Auto-detects search type:
         - Contains '#' → Search Riot ID (game_name#tag_line)
         - Starts with '#' → Search tags only
-        - Otherwise → Search both summoner_name and riot_id
+        - Otherwise → Search game_name
 
         Returns up to `limit` results sorted by relevance:
         1. Exact Riot ID match (highest priority)
-        2. Best summoner name matches (by Levenshtein distance)
+        2. Best game name matches (by Levenshtein distance)
         3. Best tag matches (by Levenshtein distance)
         4. Alphabetical as tiebreaker
 
         Args:
             query: Search query string
-            platform: Platform region
+            region: Region code
             limit: Maximum results to return (default: 10)
 
         Returns:
@@ -489,7 +474,7 @@ class PlayerService:
         # Build and execute database query
         query_lower = query.lower().strip()
         stmt = self._build_player_search_query(
-            platform, search_type, query_lower, game_name, tag_line
+            region, search_type, query_lower, game_name, tag_line
         )
         stmt = stmt.limit(100)  # Prevent excessive result sets
 
@@ -504,7 +489,7 @@ class PlayerService:
         logger.info(
             "Fuzzy search completed",
             query=query,
-            platform=platform,
+            region=region,
             search_type=search_type,
             total_candidates=len(players),
             results_returned=len(top_players),
@@ -520,7 +505,7 @@ class PlayerService:
         """
         Get recent opponents for a player with their details from database only.
 
-        Only returns players that exist in our database with summoner_name populated.
+        Only returns players that exist in our database with game_name populated.
         Does NOT make any Riot API calls.
 
         Args:
@@ -549,9 +534,8 @@ class PlayerService:
                 and_(
                     MatchParticipant.match_id.in_(recent_matches_subq),
                     MatchParticipant.puuid != puuid,
-                    Player.is_active,
-                    Player.summoner_name.isnot(None),
-                    Player.summoner_name != "",
+                    Player.game_name.isnot(None),
+                    Player.game_name != "",
                 )
             )
             .distinct()
@@ -577,8 +561,7 @@ class PlayerService:
         riot_data_manager,
         game_name: str | None = None,
         tag_line: str | None = None,
-        summoner_name: str | None = None,
-        platform: str = "eun1",
+        region: str = "eun1",
     ) -> PlayerResponse:
         """
         Fetch player from Riot API and immediately track them.
@@ -587,10 +570,9 @@ class PlayerService:
 
         Args:
             riot_data_manager: RiotDataManager instance for Riot API calls
-            game_name: Riot game name (for Riot ID search)
-            tag_line: Riot tag line (for Riot ID search)
-            summoner_name: Summoner name (legacy, database-only search)
-            platform: Platform region (default: eun1)
+            game_name: Riot game name
+            tag_line: Riot tag line
+            region: Region code (default: eun1)
 
         Returns:
             PlayerResponse with is_tracked=True
@@ -602,26 +584,21 @@ class PlayerService:
         if game_name and tag_line:
             # Use RiotDataManager to fetch from API
             player_response = await riot_data_manager.get_player_by_riot_id(
-                game_name, tag_line, platform
+                game_name, tag_line, region
             )
 
             if not player_response:
                 raise ValueError(f"Player not found: {game_name}#{tag_line}")
 
-        elif summoner_name:
-            # For summoner name, try database first
-            player_response = await self.get_player_by_summoner_name(
-                summoner_name, platform
-            )
         else:
-            raise ValueError("Either game_name+tag_line or summoner_name required")
+            raise ValueError("game_name and tag_line required")
 
         # Check if already tracked
         if player_response.is_tracked:
             logger.info(
                 "Player is already tracked",
                 puuid=player_response.puuid,
-                summoner_name=player_response.summoner_name,
+                game_name=player_response.game_name,
             )
             return player_response
 
@@ -631,8 +608,8 @@ class PlayerService:
         logger.info(
             "Player added and tracked successfully",
             puuid=tracked_player.puuid,
-            summoner_name=tracked_player.summoner_name,
-            platform=platform,
+            game_name=tracked_player.game_name,
+            region=region,
         )
 
         return tracked_player
@@ -653,7 +630,6 @@ class PlayerService:
         stmt = (
             update(Player)
             .where(Player.puuid == puuid)
-            .where(Player.is_active)
             .values(is_tracked=True, updated_at=datetime.now(timezone.utc))
             .returning(Player)
         )
@@ -669,7 +645,7 @@ class PlayerService:
         logger.info(
             "Player marked as tracked",
             puuid=puuid,
-            summoner_name=player.summoner_name,
+            game_name=player.game_name,
         )
 
         return PlayerResponse.model_validate(player)
@@ -689,7 +665,6 @@ class PlayerService:
         stmt = (
             update(Player)
             .where(Player.puuid == puuid)
-            .where(Player.is_active)
             .values(is_tracked=False, updated_at=datetime.now(timezone.utc))
             .returning(Player)
         )
@@ -731,11 +706,7 @@ class PlayerService:
         Returns:
             Number of tracked players.
         """
-        query = (
-            select(func.count())
-            .select_from(Player)
-            .where(Player.is_tracked, Player.is_active)
-        )
+        query = select(func.count()).select_from(Player).where(Player.is_tracked)
 
         result = await self.db.execute(query)
         return result.scalar() or 0
@@ -766,8 +737,6 @@ class PlayerService:
                 MatchParticipant, Player.puuid == MatchParticipant.puuid, isouter=True
             )
             .where(Player.is_tracked.is_(False))
-            .where(Player.is_active.is_(True))
-            .where(Player.matches_exhausted.is_(False))
             .group_by(Player.puuid)
             .having(func.count(MatchParticipant.match_id) < target_matches)
             .limit(limit)
@@ -791,7 +760,7 @@ class PlayerService:
                 puuid=player.puuid,
                 current_matches=match_count,
                 target_matches=target_matches,
-                is_analyzed=player.is_analyzed,
+                matches_analyzed=player.matches_analyzed,
                 is_tracked=player.is_tracked,
             )
 
@@ -805,10 +774,6 @@ class PlayerService:
 
         This is used by the player analyzer job to find players ready for
         player analysis.
-
-        Note: We check the player_analysis table directly instead of using
-        the is_analyzed flag, as the flag can be unreliable (set to True
-        even when analysis fails to create a detection record).
 
         Args:
             limit: Maximum number of players to return
@@ -825,7 +790,6 @@ class PlayerService:
             .join(MatchParticipant, Player.puuid == MatchParticipant.puuid)
             .outerjoin(PlayerAnalysis, Player.puuid == PlayerAnalysis.puuid)
             .where(Player.is_tracked.is_(False))
-            .where(Player.is_active.is_(True))
             .where(PlayerAnalysis.puuid.is_(None))
             .group_by(Player.puuid)
             .having(func.count(MatchParticipant.match_id) >= min_matches)
@@ -850,7 +814,7 @@ class PlayerService:
                 puuid=player.puuid,
                 current_matches=match_count,
                 min_matches=min_matches,
-                is_analyzed=player.is_analyzed,
+                matches_analyzed=player.matches_analyzed,
                 is_tracked=player.is_tracked,
             )
 
@@ -862,40 +826,10 @@ class PlayerService:
         """
         Get detected smurfs that need ban status checking.
 
-        This is used by the player analyzer job to find players that were
-        previously detected as smurfs and haven't had their ban status checked
-        recently.
-
-        Args:
-            days: Number of days since last ban check
-            limit: Maximum number of players to return
-
-        Returns:
-            List of Player objects needing ban check
+        Note: Method deprecated/disabled due to schema changes (removal of last_ban_check).
         """
-        from app.features.player_analysis.models import PlayerAnalysis
-        from datetime import datetime, timedelta
-
-        cutoff = datetime.now() - timedelta(days=days)
-
-        stmt = (
-            select(Player)
-            .join(PlayerAnalysis, Player.puuid == PlayerAnalysis.puuid)
-            .where(PlayerAnalysis.is_smurf.is_(True))
-            .where(or_(Player.last_ban_check.is_(None), Player.last_ban_check < cutoff))
-            .limit(limit)
-        )
-
-        result = await self.db.execute(stmt)
-        players = list(result.scalars().all())
-
-        logger.debug(
-            "Found players needing ban check",
-            count=len(players),
-            days_since_last_check=days,
-        )
-
-        return players
+        # Feature disabled temporarily until schema is updated to support ban checks again
+        return []
 
     async def check_ban_status(
         self, player: Player, riot_api_client: "RiotAPIClient"
@@ -903,29 +837,9 @@ class PlayerService:
         """
         Check if a player is banned by attempting to fetch their summoner data.
 
-        A 404 response from the Riot API typically indicates the player is banned
-        or has changed their name.
-
-        Args:
-            player: Player object to check
-            riot_api_client: RiotAPIClient instance (from jobs)
-
-        Returns:
-            True if player is likely banned, False if player is active
+        Note: Feature temporarily disabled.
         """
-        from app.core.riot_api.constants import Platform
-        from datetime import datetime
-
-        platform = Platform(player.platform.lower())
-
-        # Attempt to fetch summoner data
-        await riot_api_client.get_summoner_by_puuid(player.puuid, platform)
-
-        # Player found = not banned
-        player.last_ban_check = datetime.now()
-        await self.db.commit()
-
-        logger.debug("Player is active (not banned)", puuid=player.puuid)
+        # Feature disabled
         return False
 
     # ============================================
@@ -934,9 +848,9 @@ class PlayerService:
 
     @service_error_handler("PlayerService")
     @input_validation(
-        validate_non_empty=["platform"],
+        validate_non_empty=["region"],
     )
-    async def discover_players_from_match(self, match_dto: Any, platform: str) -> int:
+    async def discover_players_from_match(self, match_dto: Any, region: str) -> int:
         """
         Discover and create player records from match participants.
 
@@ -949,7 +863,7 @@ class PlayerService:
 
         Args:
             match_dto: Match DTO from Riot API
-            platform: Platform for the players
+            region: Region for the players
 
         Returns:
             Number of newly discovered players
@@ -961,7 +875,7 @@ class PlayerService:
         """
         from app.features.matches.transformers import PlayerDataSanitizer
 
-        normalized_platform = platform.strip().upper()
+        normalized_region = region.strip().upper()
         discovered_count = 0
 
         for participant in match_dto.info.participants:
@@ -974,23 +888,27 @@ class PlayerService:
             if not existing_player:
                 # Sanitize player data
                 player_data = {
-                    "riot_id": participant.riot_id_game_name,
+                    "game_name": participant.riot_id_game_name,
                     "tag_line": participant.riot_id_tagline,
-                    "summoner_name": participant.summoner_name,
                 }
                 player_data = PlayerDataSanitizer.sanitize_player_fields(player_data)
 
                 # Create new player record marked for analysis
                 new_player = Player(
                     puuid=participant.puuid,
-                    riot_id=player_data["riot_id"],
+                    game_name=player_data["game_name"],
                     tag_line=player_data["tag_line"],
-                    summoner_name=player_data["summoner_name"],
-                    platform=normalized_platform,
-                    account_level=participant.summoner_level,
+                    # summoner_name=player_data["summoner_name"], # Logic merge?
+                    # The participant.riot_id_game_name is the game_name.
+                    # participant.summoner_name might be empty or old.
+                    # We should prioritize game_name if available.
+                    region=normalized_region,
+                    summoner_level=participant.summoner_level,
                     is_tracked=False,  # Discovered, not tracked
-                    is_analyzed=False,  # Needs analysis
-                    is_active=True,
+                    # is_analyzed=False,  # Deleted
+                    # is_active=True, # Deleted
+                    fully_analyzed=False,
+                    matches_analyzed=0,
                 )
                 self.db.add(new_player)
                 discovered_count += 1
@@ -998,11 +916,7 @@ class PlayerService:
                 logger.debug(
                     "Marked new discovered player",
                     puuid=participant.puuid,
-                    riot_id=(
-                        f"{player_data['riot_id']}#{player_data['tag_line']}"
-                        if player_data.get("riot_id") and player_data.get("tag_line")
-                        else player_data.get("riot_id")
-                    ),
+                    game_name=player_data["riot_id"] or player_data["summoner_name"],
                 )
 
         # Commit transaction for all discovered players
@@ -1012,13 +926,13 @@ class PlayerService:
                 "Discovered players from match",
                 match_id=match_dto.metadata.match_id,
                 discovered_count=discovered_count,
-                platform=normalized_platform,
+                region=normalized_region,
             )
         else:
             logger.debug(
                 "No new players discovered in match",
                 match_id=match_dto.metadata.match_id,
-                platform=normalized_platform,
+                region=normalized_region,
             )
 
         return discovered_count
@@ -1040,15 +954,15 @@ class PlayerService:
             True if rank was updated, False if no rank data found or error occurred
 
         Raises:
-            ValueError: If player has invalid platform
+            ValueError: If player has invalid region
         """
         from app.core.riot_api.constants import Platform
         from .ranks import PlayerRank
 
         logger.debug("Updating player rank", puuid=player.puuid)
 
-        # Convert platform string to Platform enum
-        platform_enum = Platform(player.platform.lower())
+        # Convert region string to Platform enum
+        platform_enum = Platform(player.region.lower())
 
         # Fetch rank data from Riot API using PUUID-based endpoint
         league_entries = await riot_api_client.get_league_entries_by_puuid(

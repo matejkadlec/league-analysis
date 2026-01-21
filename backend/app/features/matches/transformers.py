@@ -63,11 +63,11 @@ class MatchDTOTransformer:
             Sanitized participant data with None instead of empty strings
 
         Example:
-            >>> data = {'summoner_name': '', 'riot_id_name': 'Player'}
+            >>> data = {'game_name': '', 'tag_line': 'EUW'}
             >>> MatchDTOTransformer.sanitize_participant_names(data)
-            {'summoner_name': None, 'riot_id_name': 'Player'}
+            {'game_name': None, 'tag_line': 'EUW'}
         """
-        name_fields = ["riot_id_name", "riot_id_tagline", "summoner_name"]
+        name_fields = ["game_name", "tag_line"]
 
         for field in name_fields:
             if field in participant_data:
@@ -88,9 +88,8 @@ class MatchDTOTransformer:
         """
         data = {
             "puuid": participant_dto.puuid,
-            "riot_id_name": participant_dto.riot_id_game_name or None,
-            "riot_id_tagline": participant_dto.riot_id_tagline or None,
-            "summoner_name": participant_dto.summoner_name or None,
+            "game_name": participant_dto.riot_id_game_name or None,
+            "tag_line": participant_dto.riot_id_tagline or None,
             "summoner_level": participant_dto.summoner_level,
             "champion_id": participant_dto.champion_id,
             "champion_name": participant_dto.champion_name,
@@ -115,26 +114,26 @@ class PlayerDataSanitizer:
     """Utility for sanitizing player data."""
 
     @staticmethod
-    def ensure_summoner_name(summoner_name: Optional[str]) -> str:
-        """Ensure summoner name is never null or empty string.
+    def ensure_game_name(game_name: Optional[str]) -> str:
+        """Ensure game name is never null or empty string.
 
         Args:
-            summoner_name: Summoner name from API (may be None or empty)
+            game_name: Game name from API (may be None or empty)
 
         Returns:
-            Valid summoner name or fallback value
+            Valid game name or fallback value
 
         Example:
-            >>> PlayerDataSanitizer.ensure_summoner_name(None)
+            >>> PlayerDataSanitizer.ensure_game_name(None)
             'Unknown Player'
-            >>> PlayerDataSanitizer.ensure_summoner_name('')
+            >>> PlayerDataSanitizer.ensure_game_name('')
             'Unknown Player'
-            >>> PlayerDataSanitizer.ensure_summoner_name('Player1')
+            >>> PlayerDataSanitizer.ensure_game_name('Player1')
             'Player1'
         """
-        if not summoner_name or summoner_name.strip() == "":
+        if not game_name or game_name.strip() == "":
             return "Unknown Player"
-        return summoner_name
+        return game_name
 
     @staticmethod
     def sanitize_player_fields(player_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -142,8 +141,8 @@ class PlayerDataSanitizer:
 
         Ensures:
         - Empty strings converted to None
-        - Summoner name has fallback value
-        - Platform is lowercase
+        - Game name has fallback value
+        - Region is uppercase
 
         Args:
             player_data: Player data dictionary
@@ -152,20 +151,20 @@ class PlayerDataSanitizer:
             Sanitized player data
         """
         # Convert empty strings to None
-        name_fields = ["riot_id", "tag_line", "summoner_name"]
+        name_fields = ["game_name", "tag_line"]
         for field in name_fields:
             if field in player_data:
                 if player_data[field] == "":
                     player_data[field] = None
 
-        # Ensure summoner name has a value
-        if "summoner_name" in player_data:
-            player_data["summoner_name"] = PlayerDataSanitizer.ensure_summoner_name(
-                player_data.get("summoner_name")
+        # Ensure game name has a value
+        if "game_name" in player_data:
+            player_data["game_name"] = PlayerDataSanitizer.ensure_game_name(
+                player_data.get("game_name")
             )
 
-        # Normalize platform to lowercase
-        if "platform" in player_data and player_data["platform"]:
-            player_data["platform"] = player_data["platform"].upper()
+        # Normalize region to uppercase
+        if "region" in player_data and player_data["region"]:
+            player_data["region"] = player_data["region"].upper()
 
         return player_data

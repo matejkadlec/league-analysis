@@ -52,7 +52,7 @@ export function TrackedPlayersList({ onViewPlayer }: TrackedPlayersListProps) {
       const player = data?.find((p) => p.puuid === puuid);
       toast.success(
         `Successfully removed ${
-          player?.summoner_name || "player"
+          player?.game_name || "player"
         } from tracked players`,
       );
     },
@@ -64,7 +64,7 @@ export function TrackedPlayersList({ onViewPlayer }: TrackedPlayersListProps) {
   const handleUntrack = (player: Player) => {
     if (
       window.confirm(
-        `Are you sure you want to stop tracking ${player.summoner_name}?`,
+        `Are you sure you want to stop tracking ${player.game_name}?`,
       )
     ) {
       untrackMutation.mutate(player.puuid);
@@ -171,20 +171,21 @@ export function TrackedPlayersList({ onViewPlayer }: TrackedPlayersListProps) {
             >
               <div className="flex-1">
                 <div className="flex items-center gap-2">
-                  <h3 className="font-semibold">{player.summoner_name}</h3>
-                  {player.riot_id && player.tag_line && (
+                  <h3 className="font-semibold">{player.game_name}</h3>
+                  {player.tag_line && (
                     <span className="text-sm text-muted-foreground">
                       #{player.tag_line}
                     </span>
                   )}
                 </div>
                 <div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground">
-                  <span className="uppercase">{player.platform}</span>
-                  {player.account_level && (
-                    <span>Level {player.account_level}</span>
+                  <span className="uppercase">{player.region}</span>
+                  {player.summoner_level && (
+                    <span>Level {player.summoner_level}</span>
                   )}
                   <span>
-                    Last seen: {new Date(player.last_seen).toLocaleDateString()}
+                    Last seen:{" "}
+                    {new Date(player.updated_at).toLocaleDateString()}
                   </span>
                 </div>
               </div>

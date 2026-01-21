@@ -3,21 +3,22 @@ import { z } from "zod";
 // Player Schema
 export const PlayerSchema = z.object({
   puuid: z.string(),
-  riot_id: z.string().optional().nullable(),
+  game_name: z.string().optional().nullable(),
   tag_line: z.string().optional().nullable(),
-  summoner_name: z.string(),
-  platform: z.string(),
-  account_level: z.number().int().optional().nullable(),
+  region: z.string(),
+  summoner_level: z.number().int().optional().nullable(),
   profile_icon_id: z.number().optional().nullable(),
-  summoner_id: z.string().optional().nullable(),
-  id: z.number().optional().nullable(),
+  id: z.coerce.number().optional().nullable(),
   is_tracked: z.boolean().optional().default(false),
-  is_analyzed: z.boolean().optional().default(false),
-  last_ban_check: z.string().optional().nullable(),
+  matches_analyzed: z.number().int().optional().default(0),
+  fully_analyzed: z.boolean().optional().default(false),
+  last_player_analysis: z.string().optional().nullable(),
+  last_matchmaking_analysis: z.string().optional().nullable(),
   created_at: z.string(),
   updated_at: z.string(),
-  last_seen: z.string(),
 });
+
+export type Player = z.infer<typeof PlayerSchema>;
 
 // Match Schema
 export const MatchSchema = z.object({
@@ -72,7 +73,8 @@ export const MatchParticipantSchema = z.object({
   id: z.number(),
   match_id: z.string(),
   puuid: z.string(),
-  summoner_name: z.string(),
+  game_name: z.string(),
+  tag_line: z.string().optional().nullable(),
   team_id: z.number(),
   champion_name: z.string(),
   kills: z.number(),
@@ -136,7 +138,6 @@ export const DetectionRequestSchema = z.object({
 });
 
 // Infer TypeScript types from schemas
-export type Player = z.infer<typeof PlayerSchema>;
 export type Match = z.infer<typeof MatchSchema>;
 export type MatchListResponse = z.infer<typeof MatchListResponseSchema>;
 export type MatchStatsResponse = z.infer<typeof MatchStatsResponseSchema>;
@@ -236,7 +237,8 @@ export type JobExecutionListResponse = z.infer<
 // Encounter Match Schema
 export const EncounterMatchSchema = z.object({
   match_id: z.string(),
-  summoner_name: z.string(),
+  game_name: z.string(),
+  tag_line: z.string().optional().nullable(),
   champion_name: z.string(),
   team_id: z.number(),
   is_teammate: z.boolean(),

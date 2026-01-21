@@ -34,7 +34,7 @@ api.interceptors.response.use(
     // Just pass through errors without logging
     // Error details are handled by individual request handlers
     return Promise.reject(error);
-  }
+  },
 );
 function formatError(error: unknown): ApiError {
   if (axios.isAxiosError(error)) {
@@ -55,8 +55,8 @@ function formatError(error: unknown): ApiError {
       typeof detail === "string"
         ? detail
         : data?.message
-        ? data.message
-        : error.message || "An unknown API error occurred";
+          ? data.message
+          : error.message || "An unknown API error occurred";
 
     return {
       message,
@@ -91,7 +91,7 @@ function logValidationError(url: string, data: unknown, error: z.ZodError) {
 async function validateResponse<T>(
   schema: z.ZodType<T>,
   url: string,
-  responseData: unknown
+  responseData: unknown,
 ): Promise<ApiResponse<T>> {
   const parsed = schema.safeParse(responseData);
 
@@ -106,7 +106,7 @@ async function validateResponse<T>(
 export async function validatedGet<T>(
   schema: z.ZodType<T>,
   url: string,
-  params?: Record<string, unknown>
+  params?: Record<string, unknown>,
 ): Promise<ApiResponse<T>> {
   try {
     const response = await api.get(url, { params });
@@ -119,7 +119,7 @@ export async function validatedGet<T>(
 export async function validatedPost<T>(
   schema: z.ZodType<T>,
   url: string,
-  data?: unknown
+  data?: unknown,
 ): Promise<ApiResponse<T>> {
   try {
     const response = await api.post(url, data);
@@ -132,7 +132,7 @@ export async function validatedPost<T>(
 export async function validatedPut<T>(
   schema: z.ZodType<T>,
   url: string,
-  data?: unknown
+  data?: unknown,
 ): Promise<ApiResponse<T>> {
   try {
     const response = await api.put(url, data);
@@ -144,7 +144,7 @@ export async function validatedPut<T>(
 
 export async function validatedDelete<T>(
   schema: z.ZodType<T>,
-  url: string
+  url: string,
 ): Promise<ApiResponse<T>> {
   try {
     const response = await api.delete(url);
@@ -156,14 +156,14 @@ export async function validatedDelete<T>(
 
 // Player API Functions
 export async function getPlayerByPuuid(
-  puuid: string
+  puuid: string,
 ): Promise<ApiResponse<Player>> {
   return validatedGet(PlayerSchema, `/players/${puuid}`);
 }
 
 // Player Tracking API Functions
 export async function trackPlayer(
-  puuid: string
+  puuid: string,
 ): Promise<ApiResponse<{ message: string }>> {
   try {
     const response = await api.post(`/players/${puuid}/track`);
@@ -180,7 +180,7 @@ export async function trackPlayer(
 }
 
 export async function untrackPlayer(
-  puuid: string
+  puuid: string,
 ): Promise<ApiResponse<{ message: string }>> {
   try {
     const response = await api.delete(`/players/${puuid}/track`);
@@ -197,7 +197,7 @@ export async function untrackPlayer(
 }
 
 export async function getTrackingStatus(
-  puuid: string
+  puuid: string,
 ): Promise<ApiResponse<{ is_tracked: boolean }>> {
   try {
     const response = await api.get(`/players/${puuid}/tracking-status`);
@@ -231,13 +231,13 @@ export async function getTrackedPlayers(): Promise<
 }
 
 export interface AddTrackedPlayerParams {
-  riot_id?: string;
-  summoner_name?: string;
-  platform: string;
+  game_name: string;
+  tag_line: string;
+  region: string;
 }
 
 export async function addTrackedPlayer(
-  params: AddTrackedPlayerParams
+  params: AddTrackedPlayerParams,
 ): Promise<ApiResponse<unknown>> {
   try {
     const response = await api.post(`/players/add-tracked`, null, { params });
@@ -255,54 +255,54 @@ export async function addTrackedPlayer(
 
 export interface SearchSuggestionsParams {
   q: string;
-  platform: string;
+  region: string;
   limit?: number;
 }
 
 export async function searchPlayerSuggestions(
-  params: SearchSuggestionsParams
+  params: SearchSuggestionsParams,
 ): Promise<ApiResponse<Player[]>> {
   const PlayerArraySchema = z.array(PlayerSchema);
   return validatedGet(PlayerArraySchema, "/players/suggestions", {
     q: params.q,
-    platform: params.platform,
+    region: params.region,
     ...(params.limit !== undefined && { limit: params.limit }),
   });
 }
 
 // Matchmaking Analysis API Functions
 export async function startMatchmakingAnalysis(
-  puuid: string
+  puuid: string,
 ): Promise<ApiResponse<MatchmakingAnalysisResponse>> {
   return validatedPost(
     MatchmakingAnalysisResponseSchema,
     "/matchmaking-analysis/start",
     {
       puuid,
-    }
+    },
   );
 }
 
 export async function getMatchmakingAnalysisStatus(
-  analysisId: number
+  analysisId: number,
 ): Promise<ApiResponse<MatchmakingAnalysisStatusResponse>> {
   return validatedGet(
     MatchmakingAnalysisStatusResponseSchema,
-    `/matchmaking-analysis/${analysisId}`
+    `/matchmaking-analysis/${analysisId}`,
   );
 }
 
 export async function getLatestMatchmakingAnalysis(
-  puuid: string
+  puuid: string,
 ): Promise<ApiResponse<MatchmakingAnalysisResponse>> {
   return validatedGet(
     MatchmakingAnalysisResponseSchema,
-    `/matchmaking-analysis/player/${puuid}`
+    `/matchmaking-analysis/player/${puuid}`,
   );
 }
 
 export async function cancelMatchmakingAnalysis(
-  analysisId: number
+  analysisId: number,
 ): Promise<ApiResponse<{ message: string }>> {
   try {
     const response = await api.post(
@@ -310,7 +310,7 @@ export async function cancelMatchmakingAnalysis(
       {},
       {
         timeout: 5000, // 5 second timeout for cancellation
-      }
+      },
     );
     return {
       success: true,

@@ -144,8 +144,8 @@ class PlayerAnalysis(Base):
     )
 
     # Additional signals
-    account_level: Mapped[Optional[int]] = mapped_column(
-        Integer, nullable=True, comment="Account level at time of analysis"
+    summoner_level: Mapped[Optional[int]] = mapped_column(
+        Integer, nullable=True, comment="Summoner level at time of analysis"
     )
 
     current_tier: Mapped[Optional[str]] = mapped_column(

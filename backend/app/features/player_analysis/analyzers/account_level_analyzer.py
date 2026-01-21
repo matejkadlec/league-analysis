@@ -53,7 +53,7 @@ class AccountLevelFactorAnalyzer(BaseFactorAnalyzer):
         self._log_analysis_start(puuid)
 
         try:
-            account_level = player.account_level or 0
+            account_level = player.summoner_level or 0
             low_account_level_threshold = self._get_threshold("low_account_level")
 
             # Check if account level is suspiciously low

@@ -412,7 +412,8 @@ class MatchmakingAnalysisService:
                     "participants": [
                         {
                             "puuid": p.puuid,
-                            "summonerName": p.summoner_name,
+                            "gameName": p.game_name,
+                            "tagLine": p.tag_line,
                             "teamId": p.team_id,
                             "championId": p.champion_id,
                             "championName": p.champion_name,

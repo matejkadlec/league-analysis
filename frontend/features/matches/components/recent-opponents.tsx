@@ -117,7 +117,12 @@ export function RecentOpponents({
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <p className="truncate font-semibold">
-                        {player.riot_id || player.summoner_name}
+                        {player.game_name}
+                        {player.tag_line && (
+                          <span className="text-muted-foreground text-xs font-normal">
+                            #{player.tag_line}
+                          </span>
+                        )}
                       </p>
                       {player.is_tracked && (
                         <Badge variant="outline" className="text-xs">
@@ -126,11 +131,11 @@ export function RecentOpponents({
                       )}
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      {player.platform.toUpperCase()}
+                      {player.region.toUpperCase()}
                     </p>
-                    {player.account_level && (
+                    {player.summoner_level && (
                       <p className="text-xs text-muted-foreground">
-                        Level {player.account_level}
+                        Level {player.summoner_level}
                       </p>
                     )}
                   </div>

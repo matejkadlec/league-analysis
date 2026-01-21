@@ -81,13 +81,13 @@ export function PlayerSearch({ onPlayerFound }: PlayerSearchProps) {
     resolver: zodResolver(playerSearchSchema),
     defaultValues: {
       searchValue: "",
-      platform: "eun1",
+      region: "eun1",
     },
   });
 
   // eslint-disable-next-line react-hooks/incompatible-library -- React Hook Form watch() is intentionally not memoizable
   const searchValue = form.watch("searchValue");
-  const platform = form.watch("platform");
+  const region = form.watch("region");
 
   // Debounce search value for autocomplete
   useEffect(() => {
@@ -100,7 +100,7 @@ export function PlayerSearch({ onPlayerFound }: PlayerSearchProps) {
 
   // Fetch suggestions when debounced value changes
   const { data: suggestionsResult, isLoading: suggestionsLoading } = useQuery({
-    queryKey: ["player-suggestions", debouncedSearchValue, platform],
+    queryKey: ["player-suggestions", debouncedSearchValue, region],
     queryFn: async () => {
       if (debouncedSearchValue.length < MIN_SEARCH_LENGTH) {
         return { success: true as const, data: [] };
@@ -108,7 +108,7 @@ export function PlayerSearch({ onPlayerFound }: PlayerSearchProps) {
 
       const result = await searchPlayerSuggestions({
         q: debouncedSearchValue,
-        platform: platform,
+        region: region,
         limit: 5,
       });
 
@@ -141,7 +141,7 @@ export function PlayerSearch({ onPlayerFound }: PlayerSearchProps) {
       onPlayerFound(player);
       form.reset({
         searchValue: "",
-        platform: form.getValues("platform"),
+        region: form.getValues("region"),
       });
     },
     [form, onPlayerFound],
@@ -186,7 +186,7 @@ export function PlayerSearch({ onPlayerFound }: PlayerSearchProps) {
       // Use single query parameter for fuzzy search
       const params = {
         query: data.searchValue,
-        platform: data.platform,
+        region: data.region,
       };
 
       const result = await validatedGet(
@@ -213,7 +213,7 @@ export function PlayerSearch({ onPlayerFound }: PlayerSearchProps) {
       onPlayerFound(player);
       form.reset({
         searchValue: "",
-        platform: form.getValues("platform"),
+        region: form.getValues("region"),
       });
     },
   });
@@ -222,17 +222,21 @@ export function PlayerSearch({ onPlayerFound }: PlayerSearchProps) {
     mutationFn: async (): Promise<Player | null> => {
       if (!lastSearchParams) return null;
 
-      // Use the same logic for addTrackedPlayer (uses riot_id or summoner_name)
-      const isRiotId = lastSearchParams.searchValue.includes("#");
-      const params = isRiotId
-        ? {
-            riot_id: lastSearchParams.searchValue,
-            platform: lastSearchParams.platform,
-          }
-        : {
-            summoner_name: lastSearchParams.searchValue,
-            platform: lastSearchParams.platform,
-          };
+      // Use the same logic for addTrackedPlayer (uses game_name and tag_line)
+      let game_name = lastSearchParams.searchValue;
+      let tag_line = "";
+
+      if (lastSearchParams.searchValue.includes("#")) {
+        const parts = lastSearchParams.searchValue.split("#");
+        game_name = parts[0];
+        tag_line = parts.slice(1).join("#");
+      }
+
+      const params = {
+        game_name,
+        tag_line,
+        region: lastSearchParams.region,
+      };
 
       const result = await addTrackedPlayer(params);
       if (!result.success) {
@@ -246,7 +250,7 @@ export function PlayerSearch({ onPlayerFound }: PlayerSearchProps) {
         onPlayerFound(player);
         form.reset({
           searchValue: "",
-          platform: form.getValues("platform"),
+          region: form.getValues("region"),
         });
       }
     },
@@ -352,18 +356,10 @@ export function PlayerSearch({ onPlayerFound }: PlayerSearchProps) {
                                     >
                                       <div className="flex flex-col">
                                         <span className="font-medium">
-                                          {suggestion.riot_id &&
-                                          suggestion.tag_line
-                                            ? `${suggestion.riot_id}#${suggestion.tag_line}`
-                                            : suggestion.summoner_name}
+                                          {suggestion.game_name}
+                                          {suggestion.tag_line &&
+                                            `#${suggestion.tag_line}`}
                                         </span>
-                                        {suggestion.riot_id &&
-                                          suggestion.tag_line &&
-                                          suggestion.summoner_name && (
-                                            <span className="text-xs text-muted-foreground">
-                                              {suggestion.summoner_name}
-                                            </span>
-                                          )}
                                       </div>
                                     </button>
                                   ))}
@@ -386,7 +382,7 @@ export function PlayerSearch({ onPlayerFound }: PlayerSearchProps) {
               <div className="col-span-12 lg:col-span-3">
                 <FormField
                   control={form.control}
-                  name="platform"
+                  name="region"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Server</FormLabel>

@@ -38,19 +38,27 @@ export function AddTrackedPlayer() {
     resolver: zodResolver(addTrackedPlayerSchema),
     defaultValues: {
       searchValue: "",
-      platform: "eun1",
+      region: "eun1",
     },
   });
 
   const { mutate, isPending, error, reset } = useMutation({
     mutationFn: async (data: AddTrackedPlayerForm) => {
       // Smart format detection
-      const isRiotId = data.searchValue.includes("#");
-      const params = isRiotId
-        ? { riot_id: data.searchValue, platform: data.platform }
-        : { summoner_name: data.searchValue, platform: data.platform };
+      let game_name = data.searchValue;
+      let tag_line = "";
 
-      const result = await addTrackedPlayer(params);
+      if (data.searchValue.includes("#")) {
+        const parts = data.searchValue.split("#");
+        game_name = parts[0];
+        tag_line = parts.slice(1).join("#");
+      }
+
+      const result = await addTrackedPlayer({
+        game_name,
+        tag_line,
+        region: data.region,
+      });
 
       if (!result.success) {
         throw new Error(result.error.message);
@@ -70,13 +78,13 @@ export function AddTrackedPlayer() {
 
       // Show success toast
       toast.success(
-        `Successfully added ${player.summoner_name} to tracked players!`,
+        `Successfully added ${player.game_name} to tracked players!`,
       );
 
       // Reset form
       form.reset({
         searchValue: "",
-        platform: form.getValues("platform"),
+        region: form.getValues("region"),
       });
 
       // Clear error state
@@ -129,10 +137,10 @@ export function AddTrackedPlayer() {
 
             <FormField
               control={form.control}
-              name="platform"
+              name="region"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Platform</FormLabel>
+                  <FormLabel>Server</FormLabel>
                   <Select
                     onValueChange={field.onChange}
                     defaultValue={field.value}
@@ -140,7 +148,7 @@ export function AddTrackedPlayer() {
                   >
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue placeholder="Select a platform" />
+                        <SelectValue placeholder="Select a server" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
