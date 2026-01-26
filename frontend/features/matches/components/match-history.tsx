@@ -303,7 +303,9 @@ export function MatchHistory({ puuid, queueFilter = 420 }: MatchHistoryProps) {
                   <TableCell className="font-medium">
                     {getQueueName(match.queue_id)}
                   </TableCell>
-                  <TableCell>{formatDate(match.game_creation)}</TableCell>
+                  <TableCell>
+                    {formatDate(match.game_start_timestamp)}
+                  </TableCell>
                   <TableCell>{formatDuration(match.game_duration)}</TableCell>
                   <TableCell>
                     <span className="font-mono text-xs">
@@ -312,8 +314,8 @@ export function MatchHistory({ puuid, queueFilter = 420 }: MatchHistoryProps) {
                     </span>
                   </TableCell>
                   <TableCell>
-                    {match.is_processed ? (
-                      <Badge variant="default">Processed</Badge>
+                    {match.fully_analyzed ? (
+                      <Badge variant="default">Analyzed</Badge>
                     ) : (
                       <Badge variant="secondary">Pending</Badge>
                     )}

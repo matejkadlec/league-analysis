@@ -41,39 +41,91 @@ class MatchListDTO(BaseModel):
 class ParticipantDTO(BaseModel):
     """Match participant information."""
 
+    # Core IDs
+    participant_id: int = Field(..., alias="participantId")
     puuid: str
     summoner_name: str = Field(..., alias="summonerName")
     summoner_id: Optional[str] = Field(None, alias="summonerId")
     summoner_level: int = Field(..., alias="summonerLevel")
 
-    # Riot ID fields (newer API format)
+    # Riot ID fields
     riot_id_game_name: Optional[str] = Field(None, alias="riotIdGameName")
     riot_id_tagline: Optional[str] = Field(None, alias="riotIdTagline")
 
+    # Team & Position
     team_id: int = Field(..., alias="teamId")
-    win: bool
+    team_position: Optional[str] = Field(None, alias="teamPosition")
+
+    # Champion
     champion_id: int = Field(..., alias="championId")
     champion_name: str = Field(..., alias="championName")
+    champ_level: int = Field(..., alias="champLevel")
+
+    # KDA & Perf
+    win: bool
     kills: int
     deaths: int
     assists: int
-    champ_level: int = Field(..., alias="champLevel")
-    vision_score: Optional[float] = Field(None, alias="visionScore")
+    kda: float = Field(
+        0.0
+    )  # Calculated property in API, but explicit here for validation
+
+    # Economy & Vision
     gold_earned: int = Field(..., alias="goldEarned")
+    gold_spent: int = Field(0, alias="goldSpent")
+    vision_score: Optional[float] = Field(None, alias="visionScore")
+    detector_wards_placed: int = Field(0, alias="detectorWardsPlaced")
+    vision_wards_bought_in_game: int = Field(0, alias="visionWardsBoughtInGame")
+    wards_placed: int = Field(0, alias="wardsPlaced")
+    wards_killed: int = Field(0, alias="wardsKilled")
+
+    # Farming
     total_minions_killed: int = Field(..., alias="totalMinionsKilled")
     neutral_minions_killed: int = Field(..., alias="neutralMinionsKilled")
 
-    # Damage stats
+    # Damage
+    total_damage_dealt: int = Field(0, alias="totalDamageDealt")
     total_damage_dealt_to_champions: int = Field(
         ..., alias="totalDamageDealtToChampions"
     )
     total_damage_taken: int = Field(..., alias="totalDamageTaken")
+
+    # Healing & Shielding
+    total_heal: int = Field(0, alias="totalHeal")
+    total_heals_on_teammates: int = Field(0, alias="totalHealsOnTeammates")
+    total_damage_shielded_on_teammates: int = Field(
+        0, alias="totalDamageShieldedOnTeammates"
+    )
+    total_self_mitigated: int = Field(0, alias="damageSelfMitigated")
+
+    # Items
+    item0: int = Field(0)
+    item1: int = Field(0)
+    item2: int = Field(0)
+    item3: int = Field(0)
+    item4: int = Field(0)
+    item5: int = Field(0)
+    item6: int = Field(0)
+    items_purchased: int = Field(0, alias="itemsPurchased")
+    consumables_purchased: int = Field(0, alias="consumablesPurchased")
+
+    # Flags
+    eligible_for_progression: bool = Field(True, alias="eligibleForProgression")
+    game_ended_in_early_surrender: Optional[bool] = Field(
+        None, alias="gameEndedInEarlySurrender"
+    )
+    game_ended_in_surrender: Optional[bool] = Field(None, alias="gameEndedInSurrender")
+
+    # Advanced
+    perks: dict = Field(default_factory=dict, alias="perks")
+    challenges: dict = Field(default_factory=dict, alias="challenges")
+
+    # Legacy / Unused in new schema but kept for completeness or other uses
     role: Optional[str] = None
     individual_position: Optional[str] = Field(None, alias="individualPosition")
-    team_position: Optional[str] = Field(None, alias="teamPosition")
 
     @property
-    def kda(self) -> float:
+    def calculated_kda(self) -> float:
         """Calculate KDA (kills + assists) / deaths."""
         if self.deaths == 0:
             return self.kills + self.assists
@@ -85,15 +137,17 @@ class ParticipantDTO(BaseModel):
 class MatchInfoDTO(BaseModel):
     """Match information."""
 
-    game_creation: int = Field(..., alias="gameCreation")
+    game_start_timestamp: int = Field(..., alias="gameCreation")
     game_duration: int = Field(..., alias="gameDuration")
     queue_id: int = Field(..., alias="queueId")
     map_id: int = Field(..., alias="mapId")
     game_version: str = Field(..., alias="gameVersion")
     game_mode: str = Field(..., alias="gameMode")
     game_type: str = Field(..., alias="gameType")
+    game_end_timestamp: Optional[int] = Field(None, alias="gameEndTimestamp")
+    game_result: Optional[str] = Field(None, alias="endOfGameResult")
     participants: List[ParticipantDTO]
-    platform_id: str = Field(..., alias="platformId")
+    region: str = Field(..., alias="platformId")
 
     model_config = ConfigDict(populate_by_name=True)
 

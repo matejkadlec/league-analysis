@@ -330,7 +330,7 @@ class PlayerAnalysisService:
             select(Match, MatchParticipant)
             .join(MatchParticipant, Match.match_id == MatchParticipant.match_id)
             .where(MatchParticipant.puuid == puuid)
-            .order_by(desc(Match.game_creation))
+            .order_by(desc(Match.game_start_timestamp))
             .limit(effective_min_games * 2)
         )  # Get more to filter
 
@@ -344,7 +344,7 @@ class PlayerAnalysisService:
                 ).timestamp()
                 * 1000
             )
-            query = query.where(Match.game_creation >= cutoff_time)
+            query = query.where(Match.game_start_timestamp >= cutoff_time)
 
         result = await self.db.execute(query)
         matches_data: List[Dict[str, Any]] = []
@@ -353,7 +353,7 @@ class PlayerAnalysisService:
         for match, participant in result:
             match_dict = {
                 "match_id": match.match_id,
-                "game_creation": match.game_creation,
+                "game_start_timestamp": match.game_start_timestamp,
                 "queue_id": match.queue_id,
                 "win": participant.win,
                 "kills": participant.kills,
@@ -479,7 +479,7 @@ class PlayerAnalysisService:
             stmt = (
                 update(Match)
                 .where(Match.match_id.in_(match_ids))
-                .values(is_processed=True)
+                .values(fully_analyzed=True)
             )
             await self.db.execute(stmt)
             await self.db.commit()

@@ -1,9 +1,7 @@
 """Pydantic schemas for MatchParticipant model."""
 
-import uuid
-from datetime import datetime
 from decimal import Decimal
-from typing import Optional
+from typing import Optional, Dict, Any
 
 from pydantic import BaseModel, Field, ConfigDict
 
@@ -11,53 +9,118 @@ from pydantic import BaseModel, Field, ConfigDict
 class MatchParticipantBase(BaseModel):
     """Base MatchParticipant schema with common attributes."""
 
-    match_id: str = Field(
-        ...,
-        max_length=64,
-        description="Reference to the match this participant belongs to",
+    # Identity
+    match_id: str = Field(..., max_length=64, description="Reference to the match")
+    participant_id: int = Field(..., ge=1, le=10, description="Participant ID (1-10)")
+    puuid: str = Field(
+        ..., max_length=78, description="Reference to the player (Riot PUUID)"
     )
-    puuid: uuid.UUID = Field(..., description="Reference to the player")
-    game_name: str = Field(
-        ..., max_length=32, description="Game name at the time of the match"
+
+    game_name: Optional[str] = Field(None, max_length=64, description="Riot ID Name")
+    tag_line: Optional[str] = Field(None, max_length=8, description="Riot ID Tag")
+    summoner_id: Optional[str] = Field(
+        None, max_length=63, description="Legacy Summoner ID"
     )
-    tag_line: Optional[str] = Field(
-        None, max_length=8, description="Tag line at the time of the match"
-    )
-    team_id: int = Field(
-        ..., description="Team ID (100 for blue side, 200 for red side)"
-    )
-    champion_id: int = Field(..., description="Champion ID played by the participant")
-    champion_name: str = Field(
-        ..., max_length=32, description="Champion name played by the participant"
-    )
-    kills: int = Field(0, ge=0, description="Number of kills")
-    deaths: int = Field(0, ge=0, description="Number of deaths")
-    assists: int = Field(0, ge=0, description="Number of assists")
-    win: bool = Field(..., description="Whether the participant won the match")
-    gold_earned: int = Field(0, ge=0, description="Total gold earned")
-    vision_score: int = Field(0, ge=0, description="Vision score")
-    cs: int = Field(0, ge=0, description="Total creep score")
-    kda: Optional[Decimal] = Field(
-        None,
-        ge=0,
-        max_digits=5,
-        decimal_places=2,
-        description="Kill-death-assist ratio",
-    )
-    champ_level: int = Field(1, ge=1, description="Champion level achieved")
-    total_damage_dealt: int = Field(0, ge=0, description="Total damage dealt")
-    total_damage_dealt_to_champions: int = Field(
-        0, ge=0, description="Total damage dealt to champions"
-    )
-    total_damage_taken: int = Field(0, ge=0, description="Total damage taken")
-    total_heal: int = Field(0, ge=0, description="Total healing done")
-    individual_position: Optional[str] = Field(
-        None, max_length=16, description="Individual position"
-    )
+    profile_icon: int = Field(0, description="Profile Icon ID")
+    summoner_level: int = Field(1, description="Summoner Level")
+
+    # Team & Context
+    team_id: int = Field(..., description="100 (Blue) or 200 (Red)")
     team_position: Optional[str] = Field(
-        None, max_length=16, description="Team position"
+        None, max_length=16, description="TOP, JUNGLE, MIDDLE, BOTTOM, UTILITY"
     )
-    role: Optional[str] = Field(None, max_length=16, description="Role")
+
+    # Champion
+    champion_id: int = Field(..., description="Champion ID")
+    champion_name: str = Field(..., max_length=32, description="Champion Name")
+    champion_level: int = Field(1, ge=1, description="Champion Level")
+    champion_transform: int = Field(0, description="Kayn Transform etc.")
+
+    # Results
+    win: bool = Field(..., description="Did the team win?")
+    remake: bool = Field(
+        False, description="Was the game a remake (inverted eligibleForProgression)?"
+    )
+
+    # KDA
+    kills: int = Field(0, ge=0)
+    deaths: int = Field(0, ge=0)
+    assists: int = Field(0, ge=0)
+    kda: Optional[Decimal] = Field(
+        None, max_digits=5, decimal_places=2, description="Calculated KDA"
+    )
+
+    largest_multi_kill: int = Field(0)
+    largest_killing_spree: int = Field(0)
+    first_blood_kill: bool = Field(False)
+    first_tower_kill: bool = Field(False)
+
+    # Damage
+    total_damage_dealt: int = Field(0)
+    total_damage_dealt_to_champions: int = Field(0)
+    physical_damage_dealt_to_champions: int = Field(0)
+    magic_damage_dealt_to_champions: int = Field(0)
+    true_damage_dealt_to_champions: int = Field(0)
+    damage_dealt_to_objectives: int = Field(0)
+    damage_dealt_to_turrets: int = Field(0)
+
+    # Taking Damage
+    total_damage_taken: int = Field(0)
+    physical_damage_taken: int = Field(0)
+    magic_damage_taken: int = Field(0)
+    true_damage_taken: int = Field(0)
+    damage_self_mitigated: int = Field(0)
+
+    # Support
+    total_self_healing: int = Field(0)
+    total_healing: int = Field(0)
+    total_shielding: int = Field(0)
+
+    # Vision
+    vision_score: int = Field(0)
+    wards_placed: int = Field(0)
+    wards_killed: int = Field(0)
+    vision_wards_placed: int = Field(0)
+    vision_wards_bought: int = Field(0)
+
+    # Farming & Economy
+    total_minions_killed: int = Field(0)
+    neutral_minions_killed: int = Field(0)
+    gold_earned: int = Field(0)
+    gold_spent: int = Field(0)
+
+    # Items
+    item0: int = Field(0)
+    item1: int = Field(0)
+    item2: int = Field(0)
+    item3: int = Field(0)
+    item4: int = Field(0)
+    item5: int = Field(0)
+    trinket: int = Field(0)
+    items_purchased: int = Field(0)
+    consumables_purchased: int = Field(0)
+    role_bound_item: int = Field(0)
+
+    # Spells
+    summoner1_id: Optional[int] = Field(None)
+    summoner1_casts: int = Field(0)
+    summoner2_id: Optional[int] = Field(None)
+    summoner2_casts: int = Field(0)
+
+    # Objectives
+    turret_kills: int = Field(0)
+    inhibitor_kills: int = Field(0)
+    objectives_stolen: int = Field(0)
+
+    # Time
+    time_spent_dead: int = Field(0)
+    time_played: int = Field(0)
+
+    # JSON Data
+    runes: Optional[Dict[str, Any]] = Field(None, description="Full Runes JSON")
+    advanced_stats: Optional[Dict[str, Any]] = Field(
+        None, description="Full Challenges JSON"
+    )
 
 
 class MatchParticipantCreate(MatchParticipantBase):
@@ -67,44 +130,14 @@ class MatchParticipantCreate(MatchParticipantBase):
 
 
 class MatchParticipantUpdate(BaseModel):
-    """Schema for updating a MatchParticipant - minimal fields for corrections only."""
+    """Schema for updating a MatchParticipant."""
 
-    game_name: Optional[str] = Field(
-        None, max_length=32, description="Game name at the time of the match"
-    )
-    tag_line: Optional[str] = Field(
-        None, max_length=8, description="Tag line at the time of the match"
-    )
-    individual_position: Optional[str] = Field(
-        None, max_length=16, description="Individual position"
-    )
-    team_position: Optional[str] = Field(
-        None, max_length=16, description="Team position"
-    )
-    role: Optional[str] = Field(None, max_length=16, description="Role")
+    game_name: Optional[str] = None
+    tag_line: Optional[str] = None
+    # Add other updatable fields if necessary
 
 
 class MatchParticipantResponse(MatchParticipantBase):
     """Schema for MatchParticipant response."""
-
-    id: int = Field(..., description="Auto-incrementing primary key")
-    created_at: datetime = Field(
-        ..., description="When this participant record was created"
-    )
-    updated_at: datetime = Field(
-        ..., description="When this participant record was last updated"
-    )
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class MatchParticipantListResponse(BaseModel):
-    """Schema for paginated MatchParticipant list response."""
-
-    participants: list[MatchParticipantResponse]
-    total: int
-    page: int
-    size: int
-    pages: int
 
     model_config = ConfigDict(from_attributes=True)

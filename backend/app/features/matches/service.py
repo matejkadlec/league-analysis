@@ -299,15 +299,21 @@ class MatchService:
         try:
             match_dto = await riot_api_client.get_match(match_id)
             if match_dto:
-                match_data = match_dto.model_dump(by_alias=True, mode="json")
-                await self._store_match_detail(match_data)
+                # Use new storage method via DTO directly
+                await self.store_match_from_dto(match_dto)
+                # Commit is required as store_match_from_dto doesn't commit
+                await self.db.commit()
                 return True
             return False
         except RateLimitError:
             logger.warning("Rate limit hit fetching match", match_id=match_id)
             raise
         except Exception as e:
-            logger.warning("Failed to fetch match", match_id=match_id, error=str(e))
+            # Rollback in case of error during storage
+            await self.db.rollback()
+            logger.warning(
+                "Failed to fetch/store match", match_id=match_id, error=str(e)
+            )
             return False
 
     def _validate_platform_code(self, platform: str, puuid: str) -> bool:
@@ -426,7 +432,7 @@ class MatchService:
             select(Match)
             .join(MatchParticipant)
             .where(MatchParticipant.puuid == puuid)
-            .order_by(desc(Match.game_creation))
+            .order_by(desc(Match.game_start_timestamp))
             .offset(start)
             .limit(count)
         )
@@ -434,9 +440,9 @@ class MatchService:
         if queue:
             query = query.where(Match.queue_id == queue)
         if start_time:
-            query = query.where(Match.game_creation >= start_time)
+            query = query.where(Match.game_start_timestamp >= start_time)
         if end_time:
-            query = query.where(Match.game_creation <= end_time)
+            query = query.where(Match.game_start_timestamp <= end_time)
 
         result = await self.db.execute(query)
         return list(result.scalars().all())
@@ -458,9 +464,9 @@ class MatchService:
         if queue:
             query = query.where(Match.queue_id == queue)
         if start_time:
-            query = query.where(Match.game_creation >= start_time)
+            query = query.where(Match.game_start_timestamp >= start_time)
         if end_time:
-            query = query.where(Match.game_creation <= end_time)
+            query = query.where(Match.game_start_timestamp <= end_time)
 
         result = await self.db.execute(query)
         return result.scalar_one()
@@ -529,7 +535,7 @@ class MatchService:
                 raise ValueError("Invalid match data")
 
             transformed = self.transformer.transform_match_data(match_data)
-            platform_id = transformed["match"].get("platform_id", "EUN1")
+            platform_id = transformed["match"].get("region", "EUN1")
 
             # Ensure all participant players exist
             await self._ensure_players_exist(transformed["participants"], platform_id)
@@ -591,19 +597,31 @@ class MatchService:
 
         try:
             # Extract platform
-            platform_id = match_dto.info.platform_id or default_platform
+            platform_id = match_dto.info.region or default_platform
+
+            # Calculate flags
+            early_surrender = any(
+                p.game_ended_in_early_surrender for p in match_dto.info.participants
+            )
+            surrender = any(
+                p.game_ended_in_surrender for p in match_dto.info.participants
+            )
 
             # Create Match record
             match = Match(
                 match_id=match_dto.metadata.match_id,
-                platform_id=platform_id.upper(),
-                game_creation=match_dto.info.game_creation,
+                region=platform_id.upper(),
+                game_start_timestamp=match_dto.info.game_start_timestamp,
+                game_end_timestamp=match_dto.info.game_end_timestamp,
                 game_duration=match_dto.info.game_duration,
                 game_mode=match_dto.info.game_mode,
                 game_type=match_dto.info.game_type,
                 game_version=match_dto.info.game_version,
                 map_id=match_dto.info.map_id,
                 queue_id=match_dto.info.queue_id,
+                early_surrender=early_surrender,
+                surrender=surrender,
+                game_result=match_dto.info.game_result,
             )
 
             self.db.add(match)
@@ -666,10 +684,10 @@ class MatchService:
             Timestamp in milliseconds, or None if no matches
         """
         stmt = (
-            select(Match.game_creation)
+            select(Match.game_start_timestamp)
             .join(MatchParticipant, Match.match_id == MatchParticipant.match_id)
             .where(MatchParticipant.puuid == puuid)
-            .order_by(Match.game_creation.desc())
+            .order_by(Match.game_start_timestamp.desc())
             .limit(1)
         )
         result = await self.db.execute(stmt)

@@ -1,6 +1,6 @@
 # Tech Stack
 
-Next.js 15 (App Router), React 19, TypeScript, Tailwind CSS 4, shadcn/ui (New York), TanStack Query v5, Zod v4, react-hook-form, Axios, next-themes, sonner, lucide-react
+Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS 4, shadcn/ui (New York), TanStack Query v5, Zod v4, react-hook-form, Axios, next-themes, sonner, lucide-react
 
 # Structure
 

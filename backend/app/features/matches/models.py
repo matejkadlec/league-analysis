@@ -32,7 +32,7 @@ class Match(Base):
     )
 
     # Platform and routing information
-    platform_id: Mapped[str] = mapped_column(
+    region: Mapped[str] = mapped_column(
         String(8),
         nullable=False,
         index=True,
@@ -40,11 +40,17 @@ class Match(Base):
     )
 
     # Game information
-    game_creation: Mapped[int] = mapped_column(
+    game_start_timestamp: Mapped[int] = mapped_column(
         BigInteger,
         nullable=False,
         index=True,
         comment="Game creation timestamp in milliseconds since epoch",
+    )
+
+    game_end_timestamp: Mapped[Optional[int]] = mapped_column(
+        BigInteger,
+        nullable=True,
+        comment="Game end timestamp in milliseconds since epoch",
     )
 
     game_duration: Mapped[int] = mapped_column(
@@ -85,10 +91,22 @@ class Match(Base):
     )
 
     # Match result
-    game_end_timestamp: Mapped[Optional[int]] = mapped_column(
-        BigInteger,
+    early_surrender: Mapped[Optional[bool]] = mapped_column(
+        Boolean,
         nullable=True,
-        comment="Game end timestamp in milliseconds since epoch",
+        comment="Whether the game ended in early surrender",
+    )
+
+    surrender: Mapped[Optional[bool]] = mapped_column(
+        Boolean,
+        nullable=True,
+        comment="Whether the game ended in surrender",
+    )
+
+    game_result: Mapped[Optional[str]] = mapped_column(
+        String(32),
+        nullable=True,
+        comment="End of game result",
     )
 
     # Timestamps
@@ -116,7 +134,7 @@ class Match(Base):
     )
 
     # Processing flags
-    is_processed: Mapped[bool] = mapped_column(
+    fully_analyzed: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,
         default=False,
@@ -135,19 +153,21 @@ class Match(Base):
 
     def __repr__(self) -> str:
         """Return string representation of the match."""
-        return f"<Match(match_id='{self.match_id}', queue_id={self.queue_id}, game_creation={self.game_creation})>"
+        return f"<Match(match_id='{self.match_id}', queue_id={self.queue_id}, game_start_timestamp={self.game_start_timestamp})>"
 
 
 # Create indexes for common queries
-Index("idx_matches_platform_creation", Match.platform_id, Match.game_creation)
+Index("idx_matches_region_timestamp", Match.region, Match.game_start_timestamp)
 
-Index("idx_matches_queue_creation", Match.queue_id, Match.game_creation)
+Index("idx_matches_queue_timestamp", Match.queue_id, Match.game_start_timestamp)
 
-Index("idx_matches_version_creation", Match.game_version, Match.game_creation)
+Index("idx_matches_version_timestamp", Match.game_version, Match.game_start_timestamp)
 
-Index("idx_matches_processed_error", Match.is_processed, Match.processing_error)
+Index("idx_matches_analyzed_error", Match.fully_analyzed, Match.processing_error)
 
 # Additional performance indexes for common query patterns
-Index("idx_matches_creation_queue", Match.game_creation, Match.queue_id)
+Index("idx_matches_timestamp_queue", Match.game_start_timestamp, Match.queue_id)
 
-Index("idx_matches_processed_creation", Match.is_processed, Match.game_creation)
+Index(
+    "idx_matches_analyzed_timestamp", Match.fully_analyzed, Match.game_start_timestamp
+)

@@ -1,6 +1,6 @@
 -- League Analysis Database Schema
 -- Single Source of Truth
--- Generated: 2026-01-20
+-- Generated: 2026-01-22
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -93,15 +93,7 @@ CREATE INDEX ix_users_last_login ON auth.users USING btree (last_login);
 
 -- [table] core.players
 
-CREATE SEQUENCE core.players_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
 CREATE TABLE core.players (
-    id bigint DEFAULT nextval('core.players_id_seq'::regclass) NOT NULL,
     puuid character varying(78) NOT NULL,
     game_name character varying(64),
     tag_line character varying(8),
@@ -117,112 +109,131 @@ CREATE TABLE core.players (
     updated_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
-ALTER SEQUENCE core.players_id_seq OWNED BY core.players.id;
-
--- PK is on puuid as per schema design (natural key)
 ALTER TABLE ONLY core.players
     ADD CONSTRAINT pk_players PRIMARY KEY (puuid);
 
 -- [table] core.matches
 
 CREATE TABLE core.matches (
-    match_id character varying(64) NOT NULL,
-    platform_id character varying(8) NOT NULL,
-    game_creation bigint NOT NULL,
-    game_duration integer NOT NULL,
+    match_id character varying(20) NOT NULL,
+    game_mode character varying(32) NOT NULL,
+    game_type character varying(32) NOT NULL,
     queue_id integer NOT NULL,
     game_version character varying(32) NOT NULL,
     map_id integer NOT NULL,
-    game_mode character varying(32),
-    game_type character varying(32),
-    game_end_timestamp bigint,
+    region character varying(16) NOT NULL,
+    game_start_timestamp bigint NOT NULL,
+    game_end_timestamp bigint NOT NULL,
+    game_duration integer NOT NULL,
+    early_surrender boolean DEFAULT false NOT NULL,
+    surrender boolean DEFAULT false NOT NULL,
+    game_result character varying(32),
+    fully_analyzed boolean DEFAULT false NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    tournament_id character varying(64),
-    is_processed boolean NOT NULL,
-    processing_error character varying(256)
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
 ALTER TABLE ONLY core.matches
     ADD CONSTRAINT pk_matches PRIMARY KEY (match_id);
 
-CREATE INDEX idx_matches_creation_queue ON core.matches USING btree (game_creation, queue_id);
-CREATE INDEX idx_matches_match_id ON core.matches USING btree (match_id);
-CREATE INDEX idx_matches_platform_creation ON core.matches USING btree (platform_id, game_creation);
-CREATE INDEX idx_matches_processed_creation ON core.matches USING btree (is_processed, game_creation);
-CREATE INDEX idx_matches_processed_error ON core.matches USING btree (is_processed, processing_error);
-CREATE INDEX idx_matches_queue_creation ON core.matches USING btree (queue_id, game_creation);
-CREATE INDEX idx_matches_version_creation ON core.matches USING btree (game_version, game_creation);
-CREATE INDEX ix_app_matches_game_creation ON core.matches USING btree (game_creation);
-CREATE INDEX ix_app_matches_game_mode ON core.matches USING btree (game_mode);
-CREATE INDEX ix_app_matches_game_type ON core.matches USING btree (game_type);
-CREATE INDEX ix_app_matches_game_version ON core.matches USING btree (game_version);
-CREATE INDEX ix_app_matches_is_processed ON core.matches USING btree (is_processed);
-CREATE INDEX ix_app_matches_match_id ON core.matches USING btree (match_id);
-CREATE INDEX ix_app_matches_platform_id ON core.matches USING btree (platform_id);
-CREATE INDEX ix_app_matches_queue_id ON core.matches USING btree (queue_id);
-CREATE INDEX ix_app_matches_tournament_id ON core.matches USING btree (tournament_id);
+CREATE INDEX idx_matches_start_timestamp ON core.matches USING btree (game_start_timestamp DESC);
+CREATE INDEX idx_matches_processed ON core.matches USING btree (fully_analyzed) WHERE fully_analyzed = FALSE;
 
 -- [table] core.match_participants
 
-CREATE SEQUENCE core.match_participants_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
 CREATE TABLE core.match_participants (
-    id bigint DEFAULT nextval('core.match_participants_id_seq'::regclass) NOT NULL,
-    match_id character varying(64) NOT NULL,
+    match_id character varying(20) NOT NULL,
+    participant_id integer NOT NULL,
     puuid character varying(78) NOT NULL,
-    summoner_name character varying(32),
+    game_name character varying(64),
+    tag_line character varying(8),
+    summoner_id character varying(63),
+    profile_icon integer NOT NULL,
     summoner_level integer NOT NULL,
     team_id integer NOT NULL,
+    team_position character varying(16),
     champion_id integer NOT NULL,
     champion_name character varying(32) NOT NULL,
-    kills integer NOT NULL,
-    deaths integer NOT NULL,
-    assists integer NOT NULL,
+    champion_level integer NOT NULL,
+    champion_transform integer DEFAULT 0,
     win boolean NOT NULL,
-    gold_earned integer NOT NULL,
-    vision_score integer NOT NULL,
-    cs integer NOT NULL,
-    kda numeric(5,2),
-    champ_level integer NOT NULL,
-    total_damage_dealt bigint NOT NULL,
-    total_damage_dealt_to_champions bigint NOT NULL,
-    total_damage_taken bigint NOT NULL,
-    total_heal bigint NOT NULL,
-    individual_position character varying(16),
-    team_position character varying(16),
-    role character varying(16),
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    riot_id_name character varying(128),
-    riot_id_tagline character varying(32)
+    remake boolean DEFAULT false NOT NULL,
+    kills integer DEFAULT 0 NOT NULL,
+    deaths integer DEFAULT 0 NOT NULL,
+    assists integer DEFAULT 0 NOT NULL,
+    kda numeric(5,2) GENERATED ALWAYS AS (
+        CASE WHEN deaths = 0 THEN (kills + assists)::numeric 
+             ELSE ROUND((kills + assists)::numeric / deaths, 2) 
+        END
+    ) STORED,
+    largest_multi_kill integer DEFAULT 0,
+    largest_killing_spree integer DEFAULT 0,
+    first_blood_kill boolean DEFAULT false,
+    first_tower_kill boolean DEFAULT false,
+    total_damage_dealt integer DEFAULT 0,
+    total_damage_dealt_to_champions integer DEFAULT 0,
+    physical_damage_dealt_to_champions integer DEFAULT 0,
+    magic_damage_dealt_to_champions integer DEFAULT 0,
+    true_damage_dealt_to_champions integer DEFAULT 0,
+    damage_dealt_to_objectives integer DEFAULT 0,
+    damage_dealt_to_turrets integer DEFAULT 0,
+    total_damage_taken integer DEFAULT 0,
+    physical_damage_taken integer DEFAULT 0,
+    magic_damage_taken integer DEFAULT 0,
+    true_damage_taken integer DEFAULT 0,
+    damage_self_mitigated integer DEFAULT 0,
+    total_self_healing integer DEFAULT 0,
+    total_healing integer DEFAULT 0,
+    total_shielding integer DEFAULT 0,
+    vision_score integer DEFAULT 0,
+    wards_placed integer DEFAULT 0,
+    wards_killed integer DEFAULT 0,
+    vision_wards_placed integer DEFAULT 0,
+    vision_wards_bought integer DEFAULT 0,
+    total_minions_killed integer DEFAULT 0,
+    neutral_minions_killed integer DEFAULT 0,
+    gold_earned integer DEFAULT 0,
+    gold_spent integer DEFAULT 0,
+    item0 integer DEFAULT 0 NOT NULL,
+    item1 integer DEFAULT 0 NOT NULL,
+    item2 integer DEFAULT 0 NOT NULL,
+    item3 integer DEFAULT 0 NOT NULL,
+    item4 integer DEFAULT 0 NOT NULL,
+    item5 integer DEFAULT 0 NOT NULL,
+    trinket integer DEFAULT 0 NOT NULL,
+    items_purchased integer DEFAULT 0,
+    consumables_purchased integer DEFAULT 0,
+    role_bound_item integer DEFAULT 0,
+    summoner1_id integer,
+    summoner1_casts integer DEFAULT 0,
+    summoner2_id integer,
+    summoner2_casts integer DEFAULT 0,
+    turret_kills integer DEFAULT 0,
+    inhibitor_kills integer DEFAULT 0,
+    objectives_stolen integer DEFAULT 0,
+    time_spent_dead integer DEFAULT 0,
+    time_played integer DEFAULT 0,
+    runes jsonb,
+    advanced_stats jsonb
 );
 
-ALTER SEQUENCE core.match_participants_id_seq OWNED BY core.match_participants.id;
+ALTER TABLE ONLY core.match_participants
+    ADD CONSTRAINT pk_match_participants PRIMARY KEY (match_id, participant_id);
 
 ALTER TABLE ONLY core.match_participants
-    ADD CONSTRAINT pk_match_participants PRIMARY KEY (id);
+    ADD CONSTRAINT uq_match_participants_puuid_match UNIQUE (match_id, puuid);
 
-CREATE INDEX idx_match_participants_match_id ON core.match_participants USING btree (match_id);
 CREATE INDEX idx_match_participants_puuid ON core.match_participants USING btree (puuid);
-CREATE INDEX idx_participants_champion_win ON core.match_participants USING btree (champion_id, win);
-CREATE INDEX idx_participants_kills_deaths ON core.match_participants USING btree (kills, deaths);
-CREATE INDEX idx_participants_match_puuid ON core.match_participants USING btree (match_id, puuid);
-CREATE INDEX idx_participants_position_champion ON core.match_participants USING btree (individual_position, champion_id);
-CREATE INDEX idx_participants_team_win ON core.match_participants USING btree (team_id, win);
-CREATE INDEX ix_app_match_participants_champion_id ON core.match_participants USING btree (champion_id);
-CREATE INDEX ix_app_match_participants_champion_name ON core.match_participants USING btree (champion_name);
-CREATE INDEX ix_app_match_participants_individual_position ON core.match_participants USING btree (individual_position);
-CREATE INDEX ix_app_match_participants_match_id ON core.match_participants USING btree (match_id);
-CREATE INDEX ix_app_match_participants_puuid ON core.match_participants USING btree (puuid);
-CREATE INDEX ix_app_match_participants_role ON core.match_participants USING btree (role);
-CREATE INDEX ix_app_match_participants_team_id ON core.match_participants USING btree (team_id);
-CREATE INDEX ix_app_match_participants_team_position ON core.match_participants USING btree (team_position);
+CREATE INDEX idx_match_participants_champion_id ON core.match_participants USING btree (champion_id);
+
+COMMENT ON COLUMN core.match_participants.runes IS 'Full Perks/Runes JSON data structure.
+Contains style selections, perks, var1-3 values.
+Stored as JSONB to preserve the tree structure:
+{ "primaryStyle": 8000, "subStyle": 8300, "statPerks": {...}, "styles": [...] }';
+
+COMMENT ON COLUMN core.match_participants.advanced_stats IS 'Full Challenges JSON data structure from Riot API.
+Contains granular stats like damagePerMinute, healFromMapSources, skillshotsDodged, etc.
+Kept as full JSON to avoid frequent schema migrations when Riot adds new challenges.';
 
 -- [table] core.matchmaking_analyses
 

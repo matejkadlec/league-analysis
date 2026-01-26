@@ -1,7 +1,7 @@
 """Match participant model for storing individual player performance in matches."""
 
 from decimal import Decimal
-from typing import Optional
+from typing import Optional, Dict, Any
 from datetime import datetime
 
 from sqlalchemy import (
@@ -12,8 +12,10 @@ from sqlalchemy import (
     ForeignKey,
     Integer,
     String,
+    Computed,
     Index,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
@@ -26,18 +28,21 @@ class MatchParticipant(Base):
     __tablename__ = "match_participants"
     __table_args__ = {"schema": "core"}
 
-    # Primary key
-    id: Mapped[int] = mapped_column(
-        BigInteger, primary_key=True, comment="Auto-incrementing primary key"
-    )
-
-    # Foreign keys
+    # Composite Primary Key
     match_id: Mapped[str] = mapped_column(
         String(64),
         ForeignKey("core.matches.match_id", ondelete="CASCADE"),
+        primary_key=True,
         nullable=False,
         index=True,
-        comment="Reference to the match this participant belongs to",
+        comment="Reference to the match",
+    )
+
+    participant_id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        nullable=False,
+        comment="Participant ID (1-10)",
     )
 
     puuid: Mapped[str] = mapped_column(
@@ -48,137 +53,143 @@ class MatchParticipant(Base):
         comment="Reference to the player (Riot PUUID)",
     )
 
-    # Participant information
-
+    # Identity
     game_name: Mapped[Optional[str]] = mapped_column(
-        String(32),
-        nullable=True,
-        comment="Game name at the time of the match (Riot ID name)",
+        String(64), nullable=True, comment="Riot ID Name"
     )
 
     tag_line: Mapped[Optional[str]] = mapped_column(
-        String(8),
-        nullable=True,
-        comment="Tag line at the time of the match (Riot ID tag)",
+        String(8), nullable=True, comment="Riot ID Tag"
     )
 
-    summoner_level: Mapped[int] = mapped_column(
-        Integer,
-        nullable=False,
-        default=1,
-        comment="Summoner level at the time of the match",
+    summoner_id: Mapped[Optional[str]] = mapped_column(
+        String(63), nullable=True, comment="Legacy Summoner ID"
     )
 
+    profile_icon: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    summoner_level: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+
+    # Team & Context
     team_id: Mapped[int] = mapped_column(
         Integer,
         nullable=False,
         index=True,
-        comment="Team ID (100 for blue side, 200 for red side)",
-    )
-
-    # Champion information
-    champion_id: Mapped[int] = mapped_column(
-        Integer,
-        nullable=False,
-        index=True,
-        comment="Champion ID played by the participant",
-    )
-
-    champion_name: Mapped[str] = mapped_column(
-        String(32),
-        nullable=False,
-        index=True,
-        comment="Champion name played by the participant",
-    )
-
-    # Performance statistics
-    kills: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=0, comment="Number of kills"
-    )
-
-    deaths: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=0, comment="Number of deaths"
-    )
-
-    assists: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=0, comment="Number of assists"
-    )
-
-    win: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, comment="Whether the participant won the match"
-    )
-
-    gold_earned: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=0, comment="Total gold earned"
-    )
-
-    vision_score: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=0, comment="Vision score"
-    )
-
-    cs: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=0, comment="Total creep score (minions killed)"
-    )
-
-    kda: Mapped[Optional[Decimal]] = mapped_column(
-        SQLDecimal(5, 2), nullable=True, comment="Kill-death-assist ratio"
-    )
-
-    # Additional performance metrics
-    champ_level: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=1, comment="Champion level achieved"
-    )
-
-    total_damage_dealt: Mapped[int] = mapped_column(
-        BigInteger, nullable=False, default=0, comment="Total damage dealt"
-    )
-
-    total_damage_dealt_to_champions: Mapped[int] = mapped_column(
-        BigInteger, nullable=False, default=0, comment="Total damage dealt to champions"
-    )
-
-    total_damage_taken: Mapped[int] = mapped_column(
-        BigInteger, nullable=False, default=0, comment="Total damage taken"
-    )
-
-    total_heal: Mapped[int] = mapped_column(
-        BigInteger, nullable=False, default=0, comment="Total healing done"
-    )
-
-    # Position information
-    individual_position: Mapped[Optional[str]] = mapped_column(
-        String(16),
-        nullable=True,
-        index=True,
-        comment="Individual position (e.g., 'TOP', 'JUNGLE', 'MIDDLE', 'BOTTOM', 'UTILITY')",
+        comment="100 (Blue) or 200 (Red)",
     )
 
     team_position: Mapped[Optional[str]] = mapped_column(
-        String(16), nullable=True, index=True, comment="Team position"
+        String(16), nullable=True, comment="TOP, JUNGLE, MIDDLE, BOTTOM, UTILITY"
     )
 
-    # Role information
-    role: Mapped[Optional[str]] = mapped_column(
-        String(16),
+    # Champion
+    champion_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+
+    champion_name: Mapped[str] = mapped_column(String(32), nullable=False)
+
+    champion_level: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+
+    champion_transform: Mapped[Optional[int]] = mapped_column(
+        Integer, default=0, nullable=True
+    )
+
+    # Results
+    win: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    remake: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        comment="Inverted eligibleForProgression",
+    )
+
+    # KDA
+    kills: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    deaths: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    assists: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    # Computed KDA column
+    kda: Mapped[Optional[Decimal]] = mapped_column(
+        SQLDecimal(5, 2),
+        Computed(
+            "CASE WHEN deaths = 0 THEN (kills + assists) ELSE ROUND((kills + assists)::numeric / deaths, 2) END",
+            persisted=True,
+        ),
         nullable=True,
-        index=True,
-        comment="Role (e.g., 'DUO', 'DUO_CARRY', 'DUO_SUPPORT', 'SUPPORT')",
     )
 
-    # Timestamps
-    created_at: Mapped[datetime] = mapped_column(
-        SQLDateTime(timezone=True),
-        nullable=False,
-        server_default=func.now(),
-        comment="When this participant record was created",
-    )
+    largest_multi_kill: Mapped[Optional[int]] = mapped_column(Integer, default=0)
+    largest_killing_spree: Mapped[Optional[int]] = mapped_column(Integer, default=0)
+    first_blood_kill: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
+    first_tower_kill: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
 
-    updated_at: Mapped[datetime] = mapped_column(
-        SQLDateTime(timezone=True),
-        nullable=False,
-        server_default=func.now(),
-        onupdate=func.now(),
-        comment="When this participant record was last updated",
+    # Damage
+    total_damage_dealt: Mapped[int] = mapped_column(Integer, default=0)
+    total_damage_dealt_to_champions: Mapped[int] = mapped_column(Integer, default=0)
+    physical_damage_dealt_to_champions: Mapped[int] = mapped_column(Integer, default=0)
+    magic_damage_dealt_to_champions: Mapped[int] = mapped_column(Integer, default=0)
+    true_damage_dealt_to_champions: Mapped[int] = mapped_column(Integer, default=0)
+    damage_dealt_to_objectives: Mapped[int] = mapped_column(Integer, default=0)
+    damage_dealt_to_turrets: Mapped[int] = mapped_column(Integer, default=0)
+
+    # Taking Damage
+    total_damage_taken: Mapped[int] = mapped_column(Integer, default=0)
+    physical_damage_taken: Mapped[int] = mapped_column(Integer, default=0)
+    magic_damage_taken: Mapped[int] = mapped_column(Integer, default=0)
+    true_damage_taken: Mapped[int] = mapped_column(Integer, default=0)
+    damage_self_mitigated: Mapped[int] = mapped_column(Integer, default=0)
+
+    # Support
+    total_self_healing: Mapped[int] = mapped_column(Integer, default=0)
+    total_healing: Mapped[int] = mapped_column(Integer, default=0)
+    total_shielding: Mapped[int] = mapped_column(Integer, default=0)
+
+    # Vision
+    vision_score: Mapped[int] = mapped_column(Integer, default=0)
+    wards_placed: Mapped[int] = mapped_column(Integer, default=0)
+    wards_killed: Mapped[int] = mapped_column(Integer, default=0)
+    vision_wards_placed: Mapped[int] = mapped_column(Integer, default=0)
+    vision_wards_bought: Mapped[int] = mapped_column(Integer, default=0)
+
+    # Farming & Economy
+    total_minions_killed: Mapped[int] = mapped_column(Integer, default=0)
+    neutral_minions_killed: Mapped[int] = mapped_column(Integer, default=0)
+    gold_earned: Mapped[int] = mapped_column(Integer, default=0)
+    gold_spent: Mapped[int] = mapped_column(Integer, default=0)
+
+    # Items
+    item0: Mapped[int] = mapped_column(Integer, default=0)
+    item1: Mapped[int] = mapped_column(Integer, default=0)
+    item2: Mapped[int] = mapped_column(Integer, default=0)
+    item3: Mapped[int] = mapped_column(Integer, default=0)
+    item4: Mapped[int] = mapped_column(Integer, default=0)
+    item5: Mapped[int] = mapped_column(Integer, default=0)
+    trinket: Mapped[int] = mapped_column(Integer, default=0)
+
+    items_purchased: Mapped[Optional[int]] = mapped_column(Integer, default=0)
+    consumables_purchased: Mapped[Optional[int]] = mapped_column(Integer, default=0)
+    role_bound_item: Mapped[Optional[int]] = mapped_column(Integer, default=0)
+
+    # Spells (Summoners)
+    summoner1_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    summoner1_casts: Mapped[Optional[int]] = mapped_column(Integer, default=0)
+    summoner2_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    summoner2_casts: Mapped[Optional[int]] = mapped_column(Integer, default=0)
+
+    # Objectives (Kill/Stolen)
+    turret_kills: Mapped[Optional[int]] = mapped_column(Integer, default=0)
+    inhibitor_kills: Mapped[Optional[int]] = mapped_column(Integer, default=0)
+    objectives_stolen: Mapped[Optional[int]] = mapped_column(Integer, default=0)
+
+    # Time
+    time_spent_dead: Mapped[Optional[int]] = mapped_column(Integer, default=0)
+    time_played: Mapped[Optional[int]] = mapped_column(Integer, default=0)
+
+    # JSON Data
+    runes: Mapped[Optional[Dict[str, Any]]] = mapped_column(
+        JSONB, nullable=True, comment="Full Runes JSON"
+    )
+    advanced_stats: Mapped[Optional[Dict[str, Any]]] = mapped_column(
+        JSONB, nullable=True, comment="Full Challenges JSON"
     )
 
     # Relationships
@@ -187,7 +198,7 @@ class MatchParticipant(Base):
 
     def __repr__(self) -> str:
         """Return string representation of the match participant."""
-        return f"<MatchParticipant(match_id='{self.match_id}', game_name='{self.game_name}', champion='{self.champion_name}')>"
+        return f"<MatchParticipant({self.match_id}, {self.participant_id}, {self.game_name})>"
 
 
 # Create composite indexes for common queries
@@ -201,7 +212,7 @@ Index("idx_participants_kills_deaths", MatchParticipant.kills, MatchParticipant.
 
 Index(
     "idx_participants_position_champion",
-    MatchParticipant.individual_position,
+    MatchParticipant.team_position,
     MatchParticipant.champion_id,
 )
 

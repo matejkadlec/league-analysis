@@ -9,10 +9,10 @@ from pydantic import BaseModel, Field, ConfigDict
 class MatchBase(BaseModel):
     """Base Match schema with common attributes."""
 
-    platform_id: str = Field(
-        ..., max_length=8, description="Platform where the match was played"
+    region: str = Field(
+        ..., max_length=8, description="Region where the match was played"
     )
-    game_creation: int = Field(
+    game_start_timestamp: int = Field(
         ..., description="Game creation timestamp in milliseconds since epoch"
     )
     game_duration: int = Field(..., ge=0, description="Game duration in seconds")
@@ -24,10 +24,19 @@ class MatchBase(BaseModel):
     game_end_timestamp: Optional[int] = Field(
         None, description="Game end timestamp in milliseconds since epoch"
     )
+    early_surrender: Optional[bool] = Field(
+        None, description="Whether the game ended in early surrender"
+    )
+    surrender: Optional[bool] = Field(
+        None, description="Whether the game ended in surrender"
+    )
+    game_result: Optional[str] = Field(
+        None, max_length=32, description="End of game result"
+    )
     tournament_id: Optional[str] = Field(
         None, max_length=64, description="Tournament ID"
     )
-    is_processed: bool = Field(
+    fully_analyzed: bool = Field(
         False, description="Whether this match has been processed for player analysis"
     )
     processing_error: Optional[str] = Field(
@@ -57,7 +66,7 @@ class MatchUpdate(BaseModel):
     tournament_id: Optional[str] = Field(
         None, max_length=64, description="Tournament ID"
     )
-    is_processed: Optional[bool] = Field(
+    fully_analyzed: Optional[bool] = Field(
         None, description="Whether this match has been processed for player analysis"
     )
     processing_error: Optional[str] = Field(

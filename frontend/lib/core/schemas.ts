@@ -23,8 +23,8 @@ export type Player = z.infer<typeof PlayerSchema>;
 // Match Schema
 export const MatchSchema = z.object({
   match_id: z.string(),
-  platform_id: z.string(),
-  game_creation: z.number(),
+  region: z.string(),
+  game_start_timestamp: z.number(),
   game_duration: z.number(),
   queue_id: z.number(),
   game_version: z.string(),
@@ -32,8 +32,11 @@ export const MatchSchema = z.object({
   game_mode: z.string().optional().nullable(),
   game_type: z.string().optional().nullable(),
   game_end_timestamp: z.number().optional().nullable(),
+  early_surrender: z.boolean().optional().nullable(),
+  surrender: z.boolean().optional().nullable(),
+  game_result: z.string().optional().nullable(),
   tournament_id: z.string().optional().nullable(),
-  is_processed: z.boolean(),
+  fully_analyzed: z.boolean(),
   processing_error: z.string().optional().nullable(),
   created_at: z.string(),
   updated_at: z.string(),
@@ -70,18 +73,64 @@ export const MatchStatsResponseSchema = z.object({
 
 // Match Participant Schema
 export const MatchParticipantSchema = z.object({
-  id: z.number(),
   match_id: z.string(),
+  participant_id: z.number(),
   puuid: z.string(),
-  game_name: z.string(),
+  game_name: z.string().optional().nullable(),
   tag_line: z.string().optional().nullable(),
+  summoner_id: z.string().optional().nullable(),
+  profile_icon: z.number().default(0),
+  summoner_level: z.number().default(1),
+
+  // Team
   team_id: z.number(),
+  team_position: z.string().optional().nullable(),
+
+  // Champion
+  champion_id: z.number(),
   champion_name: z.string(),
-  kills: z.number(),
-  deaths: z.number(),
-  assists: z.number(),
+  champion_level: z.number().default(1),
+  champion_transform: z.number().default(0),
+
+  // Results
   win: z.boolean(),
-  kda: z.number(),
+  remake: z.boolean().default(false),
+
+  // KDA
+  kills: z.number().default(0),
+  deaths: z.number().default(0),
+  assists: z.number().default(0),
+  kda: z.coerce.number().optional().nullable(),
+  largest_multi_kill: z.number().default(0),
+  largest_killing_spree: z.number().default(0),
+
+  // Damage
+  total_damage_dealt_to_champions: z.number().default(0),
+  total_damage_taken: z.number().default(0),
+
+  // Vision
+  vision_score: z.number().default(0),
+  wards_placed: z.number().default(0),
+  wards_killed: z.number().default(0),
+
+  // Farming
+  total_minions_killed: z.number().default(0),
+  neutral_minions_killed: z.number().default(0),
+  gold_earned: z.number().default(0),
+  gold_spent: z.number().default(0),
+
+  // Items
+  item0: z.number().default(0),
+  item1: z.number().default(0),
+  item2: z.number().default(0),
+  item3: z.number().default(0),
+  item4: z.number().default(0),
+  item5: z.number().default(0),
+  trinket: z.number().default(0),
+
+  // JSON
+  runes: z.record(z.string(), z.any()).nullable().optional(),
+  advanced_stats: z.record(z.string(), z.any()).nullable().optional(),
 });
 
 // Detection Factor Schema

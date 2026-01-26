@@ -86,26 +86,117 @@ class MatchDTOTransformer:
         Returns:
             Dictionary with participant data ready for database storage
         """
+        # Determine remake status (inverted logic)
+        is_remake = not getattr(participant_dto, "eligible_for_progression", True)
+
         data = {
+            # Identity
+            "participant_id": participant_dto.participant_id,
             "puuid": participant_dto.puuid,
-            "game_name": participant_dto.riot_id_game_name or None,
+            "game_name": participant_dto.riot_id_game_name
+            or participant_dto.summoner_name
+            or None,
             "tag_line": participant_dto.riot_id_tagline or None,
+            "summoner_id": participant_dto.summoner_id,
+            "profile_icon": getattr(
+                participant_dto, "profile_icon", 0
+            ),  # Fallback if missing
             "summoner_level": participant_dto.summoner_level,
+            # Team & Context
+            "team_id": participant_dto.team_id,
+            "team_position": participant_dto.team_position
+            or participant_dto.individual_position,
+            # Champion
             "champion_id": participant_dto.champion_id,
             "champion_name": participant_dto.champion_name,
-            "team_id": participant_dto.team_id,
-            "team_position": participant_dto.team_position,
+            "champion_level": participant_dto.champ_level,
+            "champion_transform": getattr(participant_dto, "champion_transform", 0),
+            # Results
             "win": participant_dto.win,
+            "remake": is_remake,
+            # KDA
             "kills": participant_dto.kills,
             "deaths": participant_dto.deaths,
             "assists": participant_dto.assists,
-            "gold_earned": participant_dto.gold_earned,
-            "cs": participant_dto.total_minions_killed
-            + participant_dto.neutral_minions_killed,
-            "vision_score": participant_dto.vision_score or 0,
+            "largest_multi_kill": getattr(participant_dto, "largest_multi_kill", 0),
+            "largest_killing_spree": getattr(
+                participant_dto, "largest_killing_spree", 0
+            ),
+            "first_blood_kill": getattr(participant_dto, "first_blood_kill", False),
+            "first_tower_kill": getattr(participant_dto, "first_tower_kill", False),
+            # Damage Dealt
+            "total_damage_dealt": participant_dto.total_damage_dealt,
             "total_damage_dealt_to_champions": participant_dto.total_damage_dealt_to_champions,
+            "physical_damage_dealt_to_champions": getattr(
+                participant_dto, "physical_damage_dealt_to_champions", 0
+            ),
+            "magic_damage_dealt_to_champions": getattr(
+                participant_dto, "magic_damage_dealt_to_champions", 0
+            ),
+            "true_damage_dealt_to_champions": getattr(
+                participant_dto, "true_damage_dealt_to_champions", 0
+            ),
+            "damage_dealt_to_objectives": getattr(
+                participant_dto, "damage_dealt_to_objectives", 0
+            ),
+            "damage_dealt_to_turrets": getattr(
+                participant_dto, "damage_dealt_to_turrets", 0
+            ),
+            # Damage Taken
             "total_damage_taken": participant_dto.total_damage_taken,
+            "physical_damage_taken": getattr(
+                participant_dto, "physical_damage_taken", 0
+            ),
+            "magic_damage_taken": getattr(participant_dto, "magic_damage_taken", 0),
+            "true_damage_taken": getattr(participant_dto, "true_damage_taken", 0),
+            "damage_self_mitigated": getattr(
+                participant_dto, "total_self_mitigated", 0
+            ),
+            # Support
+            "total_self_healing": 0,  # Not always available directly, check challenges? Keeping simple for now.
+            "total_healing": participant_dto.total_heal,
+            "total_shielding": participant_dto.total_damage_shielded_on_teammates,
+            # Vision
+            "vision_score": int(participant_dto.vision_score or 0),
+            "wards_placed": participant_dto.wards_placed,
+            "wards_killed": participant_dto.wards_killed,
+            "vision_wards_placed": participant_dto.detector_wards_placed,
+            "vision_wards_bought": participant_dto.vision_wards_bought_in_game,
+            # Farming
+            "total_minions_killed": participant_dto.total_minions_killed,
+            "neutral_minions_killed": participant_dto.neutral_minions_killed,
+            "gold_earned": participant_dto.gold_earned,
+            "gold_spent": participant_dto.gold_spent,
+            # Items
+            "item0": participant_dto.item0,
+            "item1": participant_dto.item1,
+            "item2": participant_dto.item2,
+            "item3": participant_dto.item3,
+            "item4": participant_dto.item4,
+            "item5": participant_dto.item5,
+            "trinket": participant_dto.item6,  # Item 6 is usually the trinket
+            "items_purchased": participant_dto.items_purchased,
+            "consumables_purchased": participant_dto.consumables_purchased,
+            # Spells
+            "summoner1_id": getattr(participant_dto, "summoner1_id", None),
+            "summoner1_casts": getattr(participant_dto, "summoner1_casts", 0),
+            "summoner2_id": getattr(participant_dto, "summoner2_id", None),
+            "summoner2_casts": getattr(participant_dto, "summoner2_casts", 0),
+            # Objectives
+            "turret_kills": getattr(participant_dto, "turret_kills", 0),
+            "inhibitor_kills": getattr(participant_dto, "inhibitor_kills", 0),
+            "objectives_stolen": getattr(participant_dto, "objectives_stolen", 0),
+            # Time
+            "time_spent_dead": getattr(participant_dto, "total_time_spent_dead", 0),
+            "time_played": getattr(participant_dto, "time_played", 0),
+            # JSON Data
+            "runes": participant_dto.perks,
+            "advanced_stats": participant_dto.challenges,
         }
+
+        # Safe fallback for game name
+        if not data["game_name"]:
+            data["game_name"] = "Unknown Player"
 
         return MatchDTOTransformer.sanitize_participant_names(data)
 

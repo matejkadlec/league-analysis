@@ -46,10 +46,17 @@ class MatchTransformer:
         self, metadata: Dict[str, Any], info: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Transform match information."""
+        # Calculate derived flags from participants
+        participants = info.get("participants", [])
+        early_surrender = any(
+            p.get("gameEndedInEarlySurrender", False) for p in participants
+        )
+        surrender = any(p.get("gameEndedInSurrender", False) for p in participants)
+
         return {
             "match_id": metadata.get("matchId"),
-            "platform_id": info.get("platformId"),
-            "game_creation": info.get("gameCreation"),
+            "region": info.get("platformId"),
+            "game_start_timestamp": info.get("gameCreation"),
             "game_duration": info.get("gameDuration"),
             "queue_id": info.get("queueId"),
             "game_version": info.get("gameVersion"),
@@ -57,6 +64,9 @@ class MatchTransformer:
             "game_mode": info.get("gameMode"),
             "game_type": info.get("gameType"),
             "game_end_timestamp": info.get("gameEndTimestamp"),
+            "game_result": info.get("endOfGameResult"),
+            "early_surrender": early_surrender,
+            "surrender": surrender,
             "tournament_id": info.get("tournamentId"),
         }
 

@@ -293,7 +293,7 @@ class MatchmakingAnalysisService:
                 MatchParticipant.puuid == puuid,
                 Match.queue_id == 420,  # Ranked Solo/Duo only
             )
-            .order_by(Match.game_creation.desc())
+            .order_by(Match.game_start_timestamp.desc())
             .limit(count)
         )
         db_matches = [row[0] for row in result.all()]
@@ -399,8 +399,8 @@ class MatchmakingAnalysisService:
                     "matchId": match_dto.metadata.match_id,
                 },
                 "info": {
-                    "platformId": match_dto.info.platform_id,
-                    "gameCreation": match_dto.info.game_creation,
+                    "platformId": match_dto.info.region,
+                    "gameCreation": match_dto.info.game_start_timestamp,
                     "gameDuration": match_dto.info.game_duration,
                     "queueId": match_dto.info.queue_id,
                     "gameVersion": match_dto.info.game_version,
@@ -522,7 +522,7 @@ class MatchmakingAnalysisService:
             await self.db.execute(
                 update(Match)
                 .where(Match.match_id == match_id)
-                .values(is_processed=True)
+                .values(fully_analyzed=True)
             )
             await self.db.commit()
             logger.debug("Marked match as processed", match_id=match_id)
@@ -764,7 +764,7 @@ class MatchmakingAnalysisService:
                 MatchParticipant.puuid == puuid,
                 Match.queue_id == 420,  # Ranked Solo/Duo only
             )
-            .order_by(Match.game_creation.desc())
+            .order_by(Match.game_start_timestamp.desc())
             .limit(match_count)
         )
         db_wins = result.all()
