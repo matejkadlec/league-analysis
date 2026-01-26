@@ -5,7 +5,7 @@ export const PlayerSchema = z.object({
   puuid: z.string(),
   game_name: z.string().optional().nullable(),
   tag_line: z.string().optional().nullable(),
-  region: z.string(),
+  platform: z.string(),
   summoner_level: z.number().int().optional().nullable(),
   profile_icon_id: z.number().optional().nullable(),
   id: z.coerce.number().optional().nullable(),
@@ -23,7 +23,7 @@ export type Player = z.infer<typeof PlayerSchema>;
 // Match Schema
 export const MatchSchema = z.object({
   match_id: z.string(),
-  region: z.string(),
+  platform: z.string(),
   game_start_timestamp: z.number(),
   game_duration: z.number(),
   queue_id: z.number(),
@@ -35,7 +35,6 @@ export const MatchSchema = z.object({
   early_surrender: z.boolean().optional().nullable(),
   surrender: z.boolean().optional().nullable(),
   game_result: z.string().optional().nullable(),
-  tournament_id: z.string().optional().nullable(),
   fully_analyzed: z.boolean(),
   processing_error: z.string().optional().nullable(),
   created_at: z.string(),

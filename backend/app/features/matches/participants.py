@@ -55,11 +55,11 @@ class MatchParticipant(Base):
 
     # Identity
     game_name: Mapped[Optional[str]] = mapped_column(
-        String(64), nullable=True, comment="Riot ID Name"
+        String(16), nullable=True, comment="Player's game name"
     )
 
     tag_line: Mapped[Optional[str]] = mapped_column(
-        String(8), nullable=True, comment="Riot ID Tag"
+        String(5), nullable=True, comment="Player's tag Line"
     )
 
     summoner_id: Mapped[Optional[str]] = mapped_column(

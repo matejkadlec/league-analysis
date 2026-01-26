@@ -399,7 +399,7 @@ class MatchmakingAnalysisService:
                     "matchId": match_dto.metadata.match_id,
                 },
                 "info": {
-                    "platformId": match_dto.info.region,
+                    "platformId": match_dto.info.platform,
                     "gameCreation": match_dto.info.game_start_timestamp,
                     "gameDuration": match_dto.info.game_duration,
                     "queueId": match_dto.info.queue_id,

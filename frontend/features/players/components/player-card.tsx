@@ -167,7 +167,7 @@ export function PlayerCard({ player }: PlayerCardProps) {
                   {player.tag_line && `#${player.tag_line}`}
                 </CardTitle>
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <span>{player.region.toUpperCase()}</span>
+                  <span>{player.platform.toUpperCase()}</span>
                   <Badge variant="secondary">
                     Level {player.summoner_level}
                   </Badge>
@@ -253,8 +253,8 @@ export function PlayerCard({ player }: PlayerCardProps) {
               <p>{formatDate(player.created_at)}</p>
             </div>
             <div>
-              <p className="font-medium text-muted-foreground">Region</p>
-              <p className="uppercase">{player.region}</p>
+              <p className="font-medium text-muted-foreground">Platform</p>
+              <p className="uppercase">{player.platform}</p>
             </div>
           </div>
         </div>

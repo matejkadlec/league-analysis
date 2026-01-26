@@ -32,21 +32,21 @@ class Player(Base):
         comment="Player's universally unique identifier from Riot API",
     )
 
-    # Riot ID information (Replaces old riot_id/summoner_name)
+    # Player Name & Tag (Game Name + Tag Line)
     game_name: Mapped[Optional[str]] = mapped_column(
-        String(64), nullable=True, index=True, comment="Riot ID game name"
+        String(16), nullable=True, index=True, comment="Player's game name"
     )
 
     tag_line: Mapped[Optional[str]] = mapped_column(
-        String(8), nullable=True, comment="Riot ID tag line"
+        String(5), nullable=True, comment="Player's tag line"
     )
 
-    # Region (formerly platform)
-    region: Mapped[str] = mapped_column(
-        String(16),
+    # Platform
+    platform: Mapped[str] = mapped_column(
+        String(4),
         nullable=False,
         index=True,
-        comment="Region/Platform (e.g., EUW1, EUROPE)",
+        comment="Platform (e.g. EUN1)",
     )
 
     # Player statistics
@@ -113,7 +113,7 @@ class Player(Base):
 
     def __repr__(self) -> str:
         """Return string representation of the player."""
-        return f"<Player(puuid='{self.puuid}', game_name='{self.game_name}#{self.tag_line}', region='{self.region}')>"
+        return f"<Player(puuid='{self.puuid}', game_name='{self.game_name}#{self.tag_line}', platform='{self.platform}')>"
 
     # Database-only relationships - used by SQLAlchemy ORM but not directly referenced in Python code
     # These relationships enable database queries and cascade operations
@@ -129,4 +129,4 @@ class Player(Base):
 
 
 # Create composite indexes for common queries
-Index("idx_players_riot_id", Player.game_name, Player.tag_line)
+Index("idx_players_game_name_tag_line", Player.game_name, Player.tag_line)

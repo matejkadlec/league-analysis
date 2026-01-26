@@ -32,7 +32,7 @@ class Match(Base):
     )
 
     # Platform and routing information
-    region: Mapped[str] = mapped_column(
+    platform: Mapped[str] = mapped_column(
         String(8),
         nullable=False,
         index=True,
@@ -125,14 +125,6 @@ class Match(Base):
         comment="When this match record was last updated",
     )
 
-    # Additional match metadata
-    tournament_id: Mapped[Optional[str]] = mapped_column(
-        String(64),
-        nullable=True,
-        index=True,
-        comment="Tournament ID if this is a tournament match",
-    )
-
     # Processing flags
     fully_analyzed: Mapped[bool] = mapped_column(
         Boolean,
@@ -157,7 +149,7 @@ class Match(Base):
 
 
 # Create indexes for common queries
-Index("idx_matches_region_timestamp", Match.region, Match.game_start_timestamp)
+Index("idx_matches_platform_timestamp", Match.platform, Match.game_start_timestamp)
 
 Index("idx_matches_queue_timestamp", Match.queue_id, Match.game_start_timestamp)
 

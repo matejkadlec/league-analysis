@@ -9,8 +9,8 @@ from pydantic import BaseModel, Field, ConfigDict
 class MatchBase(BaseModel):
     """Base Match schema with common attributes."""
 
-    region: str = Field(
-        ..., max_length=8, description="Region where the match was played"
+    platform: str = Field(
+        ..., max_length=4, description="Platform where the match was played"
     )
     game_start_timestamp: int = Field(
         ..., description="Game creation timestamp in milliseconds since epoch"
@@ -32,9 +32,6 @@ class MatchBase(BaseModel):
     )
     game_result: Optional[str] = Field(
         None, max_length=32, description="End of game result"
-    )
-    tournament_id: Optional[str] = Field(
-        None, max_length=64, description="Tournament ID"
     )
     fully_analyzed: bool = Field(
         False, description="Whether this match has been processed for player analysis"
@@ -63,9 +60,6 @@ class MatchUpdate(BaseModel):
     )
     game_mode: Optional[str] = Field(None, max_length=32, description="Game mode")
     game_type: Optional[str] = Field(None, max_length=32, description="Game type")
-    tournament_id: Optional[str] = Field(
-        None, max_length=64, description="Tournament ID"
-    )
     fully_analyzed: Optional[bool] = Field(
         None, description="Whether this match has been processed for player analysis"
     )

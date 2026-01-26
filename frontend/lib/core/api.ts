@@ -233,7 +233,7 @@ export async function getTrackedPlayers(): Promise<
 export interface AddTrackedPlayerParams {
   game_name: string;
   tag_line: string;
-  region: string;
+  platform: string;
 }
 
 export async function addTrackedPlayer(
@@ -255,7 +255,7 @@ export async function addTrackedPlayer(
 
 export interface SearchSuggestionsParams {
   q: string;
-  region: string;
+  platform: string;
   limit?: number;
 }
 
@@ -265,7 +265,7 @@ export async function searchPlayerSuggestions(
   const PlayerArraySchema = z.array(PlayerSchema);
   return validatedGet(PlayerArraySchema, "/players/suggestions", {
     q: params.q,
-    region: params.region,
+    platform: params.platform,
     ...(params.limit !== undefined && { limit: params.limit }),
   });
 }

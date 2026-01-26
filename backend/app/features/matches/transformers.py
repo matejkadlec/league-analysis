@@ -93,10 +93,10 @@ class MatchDTOTransformer:
             # Identity
             "participant_id": participant_dto.participant_id,
             "puuid": participant_dto.puuid,
-            "game_name": participant_dto.riot_id_game_name
+            "game_name": participant_dto.game_name
             or participant_dto.summoner_name
             or None,
-            "tag_line": participant_dto.riot_id_tagline or None,
+            "tag_line": participant_dto.tag_line or None,
             "summoner_id": participant_dto.summoner_id,
             "profile_icon": getattr(
                 participant_dto, "profile_icon", 0
@@ -233,7 +233,7 @@ class PlayerDataSanitizer:
         Ensures:
         - Empty strings converted to None
         - Game name has fallback value
-        - Region is uppercase
+        - platform is uppercase
 
         Args:
             player_data: Player data dictionary
@@ -254,8 +254,8 @@ class PlayerDataSanitizer:
                 player_data.get("game_name")
             )
 
-        # Normalize region to uppercase
-        if "region" in player_data and player_data["region"]:
-            player_data["region"] = player_data["region"].upper()
+        # Normalize platform to uppercase
+        if "platform" in player_data and player_data["platform"]:
+            player_data["platform"] = player_data["platform"].upper()
 
         return player_data

@@ -10,7 +10,7 @@
 
 Designed as a specialized alternative to platforms like op.gg, this application focuses on deep-dive analytics to detect smurfs, identifying boosters, and flagging boosted accounts (e.g., detecting skill discrepancies like a bronze-level performance in diamond games). It empowers users with granular data to better understand match fairness and player behavior.
 
-## Features
+## Planned Features
 
 - **Player Tracking & Analysis**: monitor specific summoners and analyze their performance trends.
 - **Matchmaking Fairness**: evaluate the balance of teams and matchmaking quality.

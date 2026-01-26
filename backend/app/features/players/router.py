@@ -24,44 +24,33 @@ limiter = Limiter(key_func=get_remote_address)
 router = APIRouter(prefix="/players", tags=["players"])
 router.get_player_service = get_player_service  # type: ignore[attr-defined]
 
-# Riot ID validation constants
-RIOT_ID_NAME_MAX_LENGTH = 16
-RIOT_ID_TAG_MAX_LENGTH = 8
+# Game name and Tag line constants
+GAME_NAME_MAX_LENGTH = 16
+TAG_LINE_MAX_LENGTH = 5
 
 
-def _validate_riot_id_length(game_name: str, tag_line: str) -> None:
-    """Validate Riot ID component lengths."""
-    if (
-        len(game_name) > RIOT_ID_NAME_MAX_LENGTH
-        or len(tag_line) > RIOT_ID_TAG_MAX_LENGTH
-    ):
-        raise HTTPException(status_code=400, detail="Riot ID too long")
+def _validate_game_name(game_name: str) -> None:
+    """Validate game name length and characters."""
+    if not game_name:
+        raise HTTPException(status_code=400, detail="Game name cannot be empty")
 
+    if len(game_name) > GAME_NAME_MAX_LENGTH:
+        raise HTTPException(status_code=400, detail="Game name too long")
 
-def _validate_riot_id_characters(game_name: str, tag_line: str) -> None:
-    """Validate Riot ID component characters."""
     if not re.match(r"^[a-zA-Z0-9\s\.\-_]+$", game_name):
-        raise HTTPException(status_code=400, detail="Invalid characters in name")
+        raise HTTPException(status_code=400, detail="Invalid characters in game name")
+
+
+def _validate_tag_line(tag_line: str) -> None:
+    """Validate tag line length and characters."""
+    if not tag_line:
+        raise HTTPException(status_code=400, detail="Tag line cannot be empty")
+
+    if len(tag_line) > TAG_LINE_MAX_LENGTH:
+        raise HTTPException(status_code=400, detail="Tag line too long")
 
     if not re.match(r"^[a-zA-Z0-9]+$", tag_line):
-        raise HTTPException(status_code=400, detail="Invalid characters in tag")
-
-
-def validate_riot_id(riot_id: str) -> tuple[str, str]:
-    """Validate Riot ID format and return game_name and tag_line."""
-    if "#" not in riot_id:
-        raise HTTPException(status_code=400, detail="Invalid Riot ID format")
-
-    game_name, tag_line = riot_id.split("#", 1)
-    game_name, tag_line = game_name.strip(), tag_line.strip()
-
-    if not game_name or not tag_line:
-        raise HTTPException(status_code=400, detail="Invalid Riot ID format")
-
-    _validate_riot_id_length(game_name, tag_line)
-    _validate_riot_id_characters(game_name, tag_line)
-
-    return game_name, tag_line
+        raise HTTPException(status_code=400, detail="Invalid characters in tag line")
 
 
 @router.get("/search", response_model=list[PlayerResponse])
@@ -73,26 +62,28 @@ async def search_player(
         ...,
         min_length=3,
         max_length=30,
-        description="Search query (name, tag, or riot_id)",
+        description="Search query (game name, tag line or both)",
     ),
-    region: Platform = Query(Platform.EUN1, description="Platform region"),
+    plaform: Platform = Query(Platform.EUN1, description="Platform (e.g. EUN1)"),
 ):
     """
-    Fuzzy search for players by name, tag, or Riot ID.
+    Fuzzy search for players by game name, tag line or both.
 
     Returns array of matches (empty if none found). Search patterns:
-    - "Name#TAG" → Riot ID (exact match prioritized)
+    - "Name#TAG" → Exact match prioritized (Game Name + Tag Line)
     - "#TAG" → Tag only
     - "Name" → Game name
     """
     try:
         results = await player_service.fuzzy_search_players(
             query=query,
-            region=region.value,
+            plaform=plaform.value,
             limit=10,
         )
         if not results:
-            logger.debug(f"No results found for query: {query}, region: {region.value}")
+            logger.debug(
+                f"No results found for query: {query}, platform: {platform.value}"
+            )
         return results
 
     except Exception as e:
@@ -101,7 +92,7 @@ async def search_player(
             "player_search_failed",
             error=str(e),
             query=query,
-            region=region.value,
+            plaform=plaform.value,
             exc_info=True,
         )
         raise HTTPException(
@@ -118,9 +109,9 @@ async def get_player_suggestions(
         ...,
         min_length=0,
         max_length=30,
-        description="Search query (name, tag, or riot_id)",
+        description="Search query (name, tag, or Name#Tag)",
     ),
-    region: Platform = Query(..., description="Platform region (required)"),
+    platform: Platform = Query(..., description="Platform  (e.g. EUN1)"),
     limit: int = Query(
         5,
         ge=1,
@@ -141,7 +132,7 @@ async def get_player_suggestions(
 
     Args:
         q: Search string (0-100 characters)
-        region: Platform region (e.g., "eun1", "euw1", "na1") - required
+        platform: Platform platform (e.g., "eun1", "euw1", "na1") - required
         limit: Maximum number of suggestions to return (default: 5, max: 10)
 
     Returns:
@@ -149,18 +140,20 @@ async def get_player_suggestions(
                               sorted by relevance (empty array if none found)
 
     Examples:
-        GET /players/suggestions?q=Danger&region=eun1
-        GET /players/suggestions?q=DangerousDan#EUW&region=eun1&limit=3
-        GET /players/suggestions?q=#EUW&region=eun1&limit=10
+        GET /players/suggestions?q=Danger&platform=eun1
+        GET /players/suggestions?q=John Doe#EUNE&platform=eun1&limit=3
+        GET /players/suggestions?q=#EUNE&platform=eun1&limit=10
     """
     try:
         results = await player_service.fuzzy_search_players(
             query=q,
-            region=region.value,
+            platform=platform.value,
             limit=limit,
         )
         if not results:
-            logger.debug(f"No suggestions found for query: {q}, region: {region.value}")
+            logger.debug(
+                f"No suggestions found for query: {q}, platform: {platform.value}"
+            )
         return results
 
     except Exception as e:
@@ -168,7 +161,7 @@ async def get_player_suggestions(
         logger.error(
             "player_suggestions_failed",
             error=str(e),
-            region=region.value,
+            platform=platform.value,
             exc_info=True,
         )
         raise HTTPException(
@@ -304,24 +297,31 @@ async def get_tracked_players(player_service: PlayerServiceDep):
         )
 
 
-async def _process_riot_id_tracking(
-    player_service, riot_data_manager, riot_id: str, region: str
+async def _process_name_and_tag_tracking(
+    player_service, riot_data_manager, full_id: str, platform: str
 ):
-    """Process tracking request with Riot ID."""
-    game_name, tag_line = validate_riot_id(riot_id)
+    """Process tracking request with Name and Tag."""
+    if "#" not in full_id:
+        raise HTTPException(status_code=400, detail="Invalid format. Use Name#Tag")
+    game_name, tag_line = full_id.split("#", 1)
+    game_name, tag_line = game_name.strip(), tag_line.strip()
+
+    _validate_game_name(game_name)
+    _validate_tag_line(tag_line)
+
     return await player_service.add_and_track_player(
         riot_data_manager=riot_data_manager,
         game_name=game_name,
         tag_line=tag_line,
-        region=region,
+        platform=platform,
     )
 
 
-async def _process_game_name_tracking(player_service, game_name: str, region: str):
+async def _process_game_name_tracking(player_service, game_name: str, platform: str):
     """Process tracking request with game name."""
     try:
         player_response = await player_service.get_player_by_game_name(
-            game_name, region
+            game_name, platform
         )
         return await player_service.track_player(player_response.puuid)
     except ValueError:
@@ -336,7 +336,7 @@ async def add_tracked_player(
     player_service: PlayerServiceDep,
     game_name: str = Query(..., description="Game name"),
     tag_line: str = Query(..., description="Tag line (without #)"),
-    region: str = Query("eun1", description="Platform region"),
+    platform: str = Query("eun1", description="Platform platform"),
 ):
     """
     Search for a player in Riot API and add them with is_tracked=true.
@@ -344,7 +344,7 @@ async def add_tracked_player(
     Args:
         game_name: Game name
         tag_line: Tag line
-        region: Platform region (default: eun1)
+        platform: Platform platform (default: eun1)
 
     Returns:
         Player data with is_tracked=True
@@ -359,15 +359,16 @@ async def add_tracked_player(
     )
     # try:
     #     if riot_id:
+    #         # we replaced riot_id with game_name#tag_line (because that's what it essentially is)
     #         return await _process_riot_id_tracking(
-    #             player_service, riot_data_manager, riot_id, region
+    #             player_service, riot_data_manager, riot_id, platform
     #         )
 
     #     # game_name is guaranteed to be not None here due to validation above
     #     return await _process_game_name_tracking(
     #         player_service,
     #         game_name,  # type: ignore[arg-type]
-    #         region,
+    #         platform,
     #     )
 
     # except ValueError as e:
@@ -375,7 +376,7 @@ async def add_tracked_player(
     # except HTTPException:
     #     raise
     # except Exception as e:
-    #     _handle_tracking_unexpected_error(e, riot_id, game_name, region)
+    #     _handle_tracking_unexpected_error(e, riot_id, game_name, platform)
 
 
 def _handle_tracking_value_error(e: ValueError) -> None:
@@ -388,15 +389,15 @@ def _handle_tracking_value_error(e: ValueError) -> None:
 
 
 def _handle_tracking_unexpected_error(
-    e: Exception, riot_id: str | None, game_name: str | None, region: str
+    e: Exception, full_id: str | None, game_name: str | None, platform: str
 ) -> None:
     """Handle unexpected errors during player tracking."""
     logger.error(
         "add_tracked_player_failed",
         error=str(e),
-        riot_id=riot_id,
+        full_id=full_id,
         game_name=game_name,
-        region=region,
+        platform=platform,
         exc_info=True,
     )
     raise HTTPException(

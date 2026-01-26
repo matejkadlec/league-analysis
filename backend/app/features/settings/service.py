@@ -13,7 +13,7 @@ from .schemas import (
     SettingTestResponse,
 )
 from app.core.riot_api.client import RiotAPIClient
-from app.core.riot_api.constants import Platform, Region
+from app.core.riot_api.constants import Region, Platform
 from app.core.riot_api.errors import RiotAPIError
 
 logger = structlog.get_logger(__name__)
@@ -160,7 +160,9 @@ class SettingsService:
     ) -> SettingValidationResponse:
         """Test API key by making request to Riot API."""
         try:
-            test_url = client.endpoints.account_by_riot_id("Faker", "KR1")
+            test_url = client.endpoints.get_account_by_riot_id(
+                "Jim Morioriarty", "EUN1"
+            )
             logger.info("riot_api_key_validation_attempt", test_url=test_url)
 
             response = await client._make_request(

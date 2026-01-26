@@ -519,7 +519,7 @@ class MatchService:
                     game_name=info["game_name"],
                     tag_line=info["tag_line"],
                     summoner_level=info["summoner_level"],
-                    region=platform_id.upper(),
+                    platform=platform_id.upper(),
                     is_tracked=False,
                 )
             )
@@ -535,7 +535,7 @@ class MatchService:
                 raise ValueError("Invalid match data")
 
             transformed = self.transformer.transform_match_data(match_data)
-            platform_id = transformed["match"].get("region", "EUN1")
+            platform_id = transformed["match"].get("platform", "EUN1")
 
             # Ensure all participant players exist
             await self._ensure_players_exist(transformed["participants"], platform_id)
@@ -597,7 +597,7 @@ class MatchService:
 
         try:
             # Extract platform
-            platform_id = match_dto.info.region or default_platform
+            platform_id = match_dto.info.platform or default_platform
 
             # Calculate flags
             early_surrender = any(
@@ -610,7 +610,7 @@ class MatchService:
             # Create Match record
             match = Match(
                 match_id=match_dto.metadata.match_id,
-                region=platform_id.upper(),
+                platform=platform_id.upper(),
                 game_start_timestamp=match_dto.info.game_start_timestamp,
                 game_end_timestamp=match_dto.info.game_end_timestamp,
                 game_duration=match_dto.info.game_duration,

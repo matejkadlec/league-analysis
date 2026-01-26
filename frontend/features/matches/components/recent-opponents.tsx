@@ -131,7 +131,7 @@ export function RecentOpponents({
                       )}
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      {player.region.toUpperCase()}
+                      {player.platform.toUpperCase()}
                     </p>
                     {player.summoner_level && (
                       <p className="text-xs text-muted-foreground">

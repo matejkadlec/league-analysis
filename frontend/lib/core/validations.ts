@@ -30,7 +30,7 @@ const playerNameValidation = z
       "Invalid format. Use 'Name#TAG' (tag max 6 chars) or summoner name (3-16 chars)",
   });
 
-const regionEnum = z.enum([
+const platformEnum = z.enum([
   "eun1",
   "euw1",
   "na1",
@@ -51,14 +51,14 @@ const regionEnum = z.enum([
 
 export const playerSearchSchema = z.object({
   searchValue: playerNameValidation,
-  region: regionEnum,
+  platform: platformEnum,
 });
 
 export type PlayerSearchForm = z.infer<typeof playerSearchSchema>;
 
 export const addTrackedPlayerSchema = z.object({
   searchValue: playerNameValidation,
-  region: regionEnum,
+  platform: platformEnum,
 });
 
 export type AddTrackedPlayerForm = z.infer<typeof addTrackedPlayerSchema>;

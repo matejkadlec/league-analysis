@@ -81,13 +81,13 @@ export function PlayerSearch({ onPlayerFound }: PlayerSearchProps) {
     resolver: zodResolver(playerSearchSchema),
     defaultValues: {
       searchValue: "",
-      region: "eun1",
+      platform: "eun1",
     },
   });
 
   // eslint-disable-next-line react-hooks/incompatible-library -- React Hook Form watch() is intentionally not memoizable
   const searchValue = form.watch("searchValue");
-  const region = form.watch("region");
+  const platform = form.watch("platform");
 
   // Debounce search value for autocomplete
   useEffect(() => {
@@ -100,7 +100,7 @@ export function PlayerSearch({ onPlayerFound }: PlayerSearchProps) {
 
   // Fetch suggestions when debounced value changes
   const { data: suggestionsResult, isLoading: suggestionsLoading } = useQuery({
-    queryKey: ["player-suggestions", debouncedSearchValue, region],
+    queryKey: ["player-suggestions", debouncedSearchValue, platform],
     queryFn: async () => {
       if (debouncedSearchValue.length < MIN_SEARCH_LENGTH) {
         return { success: true as const, data: [] };
@@ -108,7 +108,7 @@ export function PlayerSearch({ onPlayerFound }: PlayerSearchProps) {
 
       const result = await searchPlayerSuggestions({
         q: debouncedSearchValue,
-        region: region,
+        platform: platform,
         limit: 5,
       });
 
@@ -141,7 +141,7 @@ export function PlayerSearch({ onPlayerFound }: PlayerSearchProps) {
       onPlayerFound(player);
       form.reset({
         searchValue: "",
-        region: form.getValues("region"),
+        platform: form.getValues("platform"),
       });
     },
     [form, onPlayerFound],
@@ -186,7 +186,7 @@ export function PlayerSearch({ onPlayerFound }: PlayerSearchProps) {
       // Use single query parameter for fuzzy search
       const params = {
         query: data.searchValue,
-        region: data.region,
+        platform: data.platform,
       };
 
       const result = await validatedGet(
@@ -213,7 +213,7 @@ export function PlayerSearch({ onPlayerFound }: PlayerSearchProps) {
       onPlayerFound(player);
       form.reset({
         searchValue: "",
-        region: form.getValues("region"),
+        platform: form.getValues("platform"),
       });
     },
   });
@@ -235,7 +235,7 @@ export function PlayerSearch({ onPlayerFound }: PlayerSearchProps) {
       const params = {
         game_name,
         tag_line,
-        region: lastSearchParams.region,
+        platform: lastSearchParams.platform,
       };
 
       const result = await addTrackedPlayer(params);
@@ -250,7 +250,7 @@ export function PlayerSearch({ onPlayerFound }: PlayerSearchProps) {
         onPlayerFound(player);
         form.reset({
           searchValue: "",
-          region: form.getValues("region"),
+          platform: form.getValues("platform"),
         });
       }
     },
@@ -297,7 +297,7 @@ export function PlayerSearch({ onPlayerFound }: PlayerSearchProps) {
                               <Input
                                 {...field}
                                 ref={inputRef}
-                                placeholder="Player#TAG or SummonerName"
+                                placeholder="John Doe#EUNE"
                                 disabled={isPending}
                                 onKeyDown={handleKeyDown}
                                 onFocus={() => {
@@ -382,7 +382,7 @@ export function PlayerSearch({ onPlayerFound }: PlayerSearchProps) {
               <div className="col-span-12 lg:col-span-3">
                 <FormField
                   control={form.control}
-                  name="region"
+                  name="platform"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Server</FormLabel>

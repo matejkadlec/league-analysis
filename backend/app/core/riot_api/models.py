@@ -49,8 +49,8 @@ class ParticipantDTO(BaseModel):
     summoner_level: int = Field(..., alias="summonerLevel")
 
     # Riot ID fields
-    riot_id_game_name: Optional[str] = Field(None, alias="riotIdGameName")
-    riot_id_tagline: Optional[str] = Field(None, alias="riotIdTagline")
+    game_name: Optional[str] = Field(None, alias="riotIdGameName")
+    tag_line: Optional[str] = Field(None, alias="riotIdTagline")
 
     # Team & Position
     team_id: int = Field(..., alias="teamId")
@@ -147,7 +147,7 @@ class MatchInfoDTO(BaseModel):
     game_end_timestamp: Optional[int] = Field(None, alias="gameEndTimestamp")
     game_result: Optional[str] = Field(None, alias="endOfGameResult")
     participants: List[ParticipantDTO]
-    region: str = Field(..., alias="platformId")
+    platform: str = Field(..., alias="platformId")
 
     model_config = ConfigDict(populate_by_name=True)
 

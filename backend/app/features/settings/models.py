@@ -25,7 +25,7 @@ class RiotAPIKey(Base):
 
     # Primary key
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    
+
     # Key Value (The 'RGAPI-...' string)
     key_value: Mapped[str] = mapped_column(
         String(42),
@@ -49,13 +49,13 @@ class RiotAPIKey(Base):
         nullable=False,
         comment="When this key was added to the system",
     )
-    
+
     last_used_at: Mapped[Optional[datetime]] = mapped_column(
         SQLDateTime(timezone=True),
         nullable=True,
         comment="Last time this key was successfully used",
     )
-    
+
     times_used: Mapped[int] = mapped_column(
         BigInteger,
         default=0,

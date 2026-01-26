@@ -179,7 +179,7 @@ export function TrackedPlayersList({ onViewPlayer }: TrackedPlayersListProps) {
                   )}
                 </div>
                 <div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground">
-                  <span className="uppercase">{player.region}</span>
+                  <span className="uppercase">{player.platform}</span>
                   {player.summoner_level && (
                     <span>Level {player.summoner_level}</span>
                   )}

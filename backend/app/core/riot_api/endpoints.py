@@ -89,12 +89,12 @@ class RiotAPIEndpoints:
         return f"{base_url}/lol/match/v5/matches/{match_id}"
 
     # League endpoints (Platform)
-    def league_entries_by_summoner_id(
-        self, summoner_id: str, platform: Optional[Platform] = None
+    def league_entries_by_puuid(
+        self, puuid: str, platform: Optional[Platform] = None
     ) -> str:
         """Get league entries by encrypted Summoner ID endpoint."""
         platform_url = self.get_platform_url(platform)
-        return f"{platform_url}/lol/league/v4/entries/by-summoner/{summoner_id}"
+        return f"{platform_url}/lol/league/v4/entries/by-puuid/{puuid}"
 
 
 def parse_rate_limit_header(header_value: str) -> List[Dict[str, int]]:

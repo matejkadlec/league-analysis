@@ -12,14 +12,9 @@ class PlayerBase(BaseModel):
     puuid: str = Field(..., min_length=78, max_length=78, description="Player's PUUID")
     game_name: Optional[str] = Field(None, description="Riot ID game name")
     tag_line: Optional[str] = Field(None, description="Riot tag line")
-    region: str = Field(..., description="Region/Platform (e.g. EUW1)")
+    platform: str = Field(..., description="Platform (e.g. EUN1)")
     summoner_level: Optional[int] = Field(None, description="Account/Summoner level")
     profile_icon_id: Optional[int] = Field(None, description="Profile icon ID")
-
-    # Deprecated fields (maintained for some compat or removed?)
-    # summoner_name removed in favor of game_name
-    # platform removed in favor of region
-    # riot_id: Optional[str] = Field(None, description="Riot ID in format name#tag")
 
 
 class PlayerCreate(PlayerBase):
@@ -40,7 +35,6 @@ class PlayerUpdate(BaseModel):
 class PlayerResponse(PlayerBase):
     """Schema for player response data."""
 
-    # id: Optional[int] = Field(None, description="Database ID") # ID is internal, usually PUUID is public key
     created_at: datetime
     updated_at: datetime
 

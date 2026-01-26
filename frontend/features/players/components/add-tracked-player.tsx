@@ -38,7 +38,7 @@ export function AddTrackedPlayer() {
     resolver: zodResolver(addTrackedPlayerSchema),
     defaultValues: {
       searchValue: "",
-      region: "eun1",
+      platform: "eun1",
     },
   });
 
@@ -57,7 +57,7 @@ export function AddTrackedPlayer() {
       const result = await addTrackedPlayer({
         game_name,
         tag_line,
-        region: data.region,
+        platform: data.platform,
       });
 
       if (!result.success) {
@@ -84,7 +84,7 @@ export function AddTrackedPlayer() {
       // Reset form
       form.reset({
         searchValue: "",
-        region: form.getValues("region"),
+        platform: form.getValues("platform"),
       });
 
       // Clear error state
@@ -122,7 +122,7 @@ export function AddTrackedPlayer() {
                   <FormLabel>Player Name</FormLabel>
                   <FormControl>
                     <Input
-                      placeholder="Player#TAG or SummonerName"
+                      placeholder="John Doe#EUNE"
                       disabled={isPending}
                       {...field}
                     />
@@ -137,7 +137,7 @@ export function AddTrackedPlayer() {
 
             <FormField
               control={form.control}
-              name="region"
+              name="platform"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Server</FormLabel>

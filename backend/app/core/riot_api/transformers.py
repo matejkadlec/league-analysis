@@ -55,7 +55,7 @@ class MatchTransformer:
 
         return {
             "match_id": metadata.get("matchId"),
-            "region": info.get("platformId"),
+            "platform": info.get("platformId"),
             "game_start_timestamp": info.get("gameCreation"),
             "game_duration": info.get("gameDuration"),
             "queue_id": info.get("queueId"),
@@ -67,7 +67,6 @@ class MatchTransformer:
             "game_result": info.get("endOfGameResult"),
             "early_surrender": early_surrender,
             "surrender": surrender,
-            "tournament_id": info.get("tournamentId"),
         }
 
     def _transform_participants(

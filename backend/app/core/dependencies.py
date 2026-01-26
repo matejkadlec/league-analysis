@@ -7,6 +7,7 @@ from typing import Annotated
 
 from . import get_db, get_riot_api_key
 from .riot_api import RiotAPIClient
+
 # from .riot_api import RiotDataManager # DELETED
 from .riot_api.constants import Platform, Region
 
@@ -21,7 +22,7 @@ async def get_riot_client(
     if not api_key:
         raise HTTPException(status_code=500, detail="Riot API key not configured")
 
-    # Use default region/platform (hardcoded for EUN region)
+    # Use default region and platform
     region = Region("europe")
     platform = Platform("eun1")
 
@@ -31,6 +32,7 @@ async def get_riot_client(
         yield client
     finally:
         await client.close()
+
 
 # Removed RiotDataManager dependency
 # async def get_riot_data_manager(
