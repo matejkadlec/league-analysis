@@ -97,7 +97,7 @@ export function PlayerAnalysis({ puuid }: PlayerAnalysisProps) {
     mutationFn: async () => {
       const request: DetectionRequest = {
         puuid,
-        min_games: 30,
+        min_games: 0,
         queue_filter: 420,
         force_reanalyze: true,
       };
@@ -174,18 +174,6 @@ export function PlayerAnalysis({ puuid }: PlayerAnalysisProps) {
           </div>
         ) : !detection ? (
           <div className="space-y-4">
-            <Alert>
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>
-                <p className="font-medium mb-2">
-                  Player analysis requires at least 30 ranked matches
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  If this player was recently tracked, matches are still being
-                  fetched in the background. Please check back in a few minutes.
-                </p>
-              </AlertDescription>
-            </Alert>
             <div className="text-center py-4">
               <Button
                 onClick={() => mutate()}

@@ -431,7 +431,7 @@ class MatchmakingAnalysisService:
                             "totalDamageDealt": p.total_damage_dealt,
                             "totalDamageDealtToChampions": p.total_damage_dealt_to_champions,
                             "damageTaken": p.total_damage_taken,
-                            "totalHeal": p.total_heal,
+                            "totalHeal": p.total_self_healing,
                             "individualPosition": p.individual_position,
                             "teamPosition": p.team_position,
                             "role": p.role,

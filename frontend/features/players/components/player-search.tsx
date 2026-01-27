@@ -370,7 +370,7 @@ export function PlayerSearch({ onPlayerFound }: PlayerSearchProps) {
                         </Popover>
                       </FormControl>
                       <p className="text-xs text-muted-foreground">
-                        Enter Riot ID (Name#TAG) or summoner name
+                        Enter game name or tag line
                       </p>
                       <FormMessage />
                     </FormItem>

@@ -98,7 +98,7 @@ class MatchTransformer:
                         "totalDamageDealtToChampions", 0
                     ),
                     "total_damage_taken": participant.get("damageTaken", 0),
-                    "total_heal": participant.get("totalHeal", 0),
+                    "total_self_healing": participant.get("totalHeal", 0),
                     "individual_position": participant.get("individualPosition"),
                     "team_position": participant.get("teamPosition"),
                     "role": participant.get("role"),

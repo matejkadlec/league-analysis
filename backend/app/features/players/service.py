@@ -13,6 +13,7 @@ from app.core.exceptions import (
     PlayerServiceError,
 )
 from app.core.decorators import service_error_handler, input_validation
+from app.core.riot_api.constants import Region, Platform
 
 if TYPE_CHECKING:
     from app.core.riot_api.client import RiotAPIClient
@@ -483,7 +484,7 @@ class PlayerService:
 
         # Score and sort results
         top_players = self._score_and_sort_players(
-            platform, search_type, query_lower, game_name, tag_line, limit
+            players, search_type, query_lower, game_name, tag_line, limit
         )
 
         logger.info(
@@ -522,7 +523,6 @@ class PlayerService:
         recent_matches_subq = (
             select(MatchParticipant.match_id)
             .where(MatchParticipant.puuid == puuid)
-            .order_by(MatchParticipant.id.desc())
             .limit(limit * 5)  # Get more matches to find enough opponents
             .subquery()
         )
@@ -558,9 +558,9 @@ class PlayerService:
 
     async def add_and_track_player(
         self,
-        riot_data_manager,
-        game_name: str | None = None,
-        tag_line: str | None = None,
+        riot_client: "RiotAPIClient",
+        game_name: str,
+        tag_line: str,
         platform: str = "eun1",
     ) -> PlayerResponse:
         """
@@ -569,7 +569,7 @@ class PlayerService:
         Combines get_player + track_player in one transaction.
 
         Args:
-            riot_data_manager: RiotDataManager instance for Riot API calls
+            riot_client: RiotAPIClient instance
             game_name: Riot game name
             tag_line: Riot tag line
             platform: Platform code (default: eun1)
@@ -580,39 +580,87 @@ class PlayerService:
         Raises:
             ValueError: If player not found
         """
-        # Fetch player data from Riot API (this will add to DB if not exists)
-        if game_name and tag_line:
-            # Use RiotDataManager to fetch from API
-            player_response = await riot_data_manager.get_account(
-                game_name, tag_line, platform
+        try:
+            # Determine Region from Platform for Account API
+            # Heuristic mapping
+            platform_lower = platform.lower()
+            region = Region.EUROPE  # Default
+
+            if platform_lower in ["na1", "br1", "la1", "la2"]:
+                region = Region.AMERICAS
+            elif platform_lower in ["kr", "jp1"]:
+                region = Region.ASIA
+            elif platform_lower in ["ph2", "sg2", "th2", "tw2", "vn2"]:
+                region = Region.SEA
+
+            platform_enum = Platform(platform_lower)
+
+            # 1. Fetch Account data (PUUID, Name#Tag)
+            account = await riot_client.get_account_by_riot_id(
+                game_name, tag_line, region
             )
 
-            if not player_response:
+            if not account:
                 raise ValueError(f"Player not found: {game_name}#{tag_line}")
 
-        else:
-            raise ValueError("game_name and tag_line required")
-
-        # Check if already tracked
-        if player_response.is_tracked:
-            logger.info(
-                "Player is already tracked",
-                puuid=player_response.puuid,
-                game_name=player_response.game_name,
+            # 2. Fetch Summoner data (Level, Icon)
+            summoner = await riot_client.get_summoner_by_puuid(
+                account.puuid, platform_enum
             )
-            return player_response
 
-        # Track the player
-        tracked_player = await self.track_player(player_response.puuid)
+            if not summoner:
+                # Should theoretically exist if account exists, but maybe different shard?
+                raise ValueError(f"Summoner not found for PUUID: {account.puuid}")
 
-        logger.info(
-            "Player added and tracked successfully",
-            puuid=tracked_player.puuid,
-            game_name=tracked_player.game_name,
-            platform=platform,
-        )
+            # 3. Upsert Player in DB
+            stmt = select(Player).where(Player.puuid == account.puuid)
+            result = await self.db.execute(stmt)
+            player = result.scalar_one_or_none()
 
-        return tracked_player
+            if player:
+                # Update existing
+                player.game_name = account.game_name
+                player.tag_line = account.tag_line
+                player.platform = platform
+                player.summoner_level = summoner.summoner_level
+                player.profile_icon_id = summoner.profile_icon_id
+                player.is_tracked = True
+                player.updated_at = datetime.now(timezone.utc)
+
+                logger.info(
+                    "Player updated and tracked",
+                    puuid=player.puuid,
+                    game_name=player.game_name,
+                )
+            else:
+                # Create new
+                player = Player(
+                    puuid=account.puuid,
+                    game_name=account.game_name,
+                    tag_line=account.tag_line,
+                    platform=platform,
+                    summoner_level=summoner.summoner_level,
+                    profile_icon_id=summoner.profile_icon_id,
+                    is_tracked=True,
+                )
+                self.db.add(player)
+
+                logger.info(
+                    "Player created and tracked",
+                    puuid=player.puuid,
+                    game_name=player.game_name,
+                )
+
+            await self.db.commit()
+            await self.db.refresh(player)
+
+            return PlayerResponse.model_validate(player)
+
+        except Exception as e:
+            # Check if it is a 404 from Riot API (usually comes as exception from client)
+            # You might want to handle it specifically if your client raises specific exceptions
+            logger.error("add_and_track_player_failed", error=str(e))
+            raise e
 
     async def track_player(self, puuid: str) -> PlayerResponse:
         """Mark a player as tracked for automated monitoring.

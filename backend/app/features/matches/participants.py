@@ -30,7 +30,7 @@ class MatchParticipant(Base):
 
     # Composite Primary Key
     match_id: Mapped[str] = mapped_column(
-        String(64),
+        String(20),
         ForeignKey("core.matches.match_id", ondelete="CASCADE"),
         primary_key=True,
         nullable=False,
@@ -54,12 +54,12 @@ class MatchParticipant(Base):
     )
 
     # Identity
-    game_name: Mapped[Optional[str]] = mapped_column(
-        String(16), nullable=True, comment="Player's game name"
+    game_name: Mapped[str] = mapped_column(
+        String(16), nullable=False, comment="Player's game name"
     )
 
-    tag_line: Mapped[Optional[str]] = mapped_column(
-        String(5), nullable=True, comment="Player's tag Line"
+    tag_line: Mapped[str] = mapped_column(
+        String(5), nullable=False, comment="Player's tag Line"
     )
 
     summoner_id: Mapped[Optional[str]] = mapped_column(
@@ -155,6 +155,11 @@ class MatchParticipant(Base):
     neutral_minions_killed: Mapped[int] = mapped_column(Integer, default=0)
     gold_earned: Mapped[int] = mapped_column(Integer, default=0)
     gold_spent: Mapped[int] = mapped_column(Integer, default=0)
+
+    @property
+    def cs(self) -> int:
+        """Calculate total creep score (CS)."""
+        return (self.total_minions_killed or 0) + (self.neutral_minions_killed or 0)
 
     # Items
     item0: Mapped[int] = mapped_column(Integer, default=0)

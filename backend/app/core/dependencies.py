@@ -4,6 +4,7 @@ from collections.abc import AsyncGenerator
 from fastapi import Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Annotated
+import os
 
 from . import get_db, get_riot_api_key
 from .riot_api import RiotAPIClient
@@ -16,11 +17,21 @@ async def get_riot_client(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> AsyncGenerator[RiotAPIClient, None]:
     """Get Riot API client instance."""
-    # Get API key from database
-    api_key = await get_riot_api_key(db)
+    # Get API key from database or environment
+    try:
+        api_key = await get_riot_api_key(db)
+    except ValueError:
+        # Fallback to env var if DB key missing
+        api_key = os.getenv("RIOT_API_KEY")
 
     if not api_key:
-        raise HTTPException(status_code=500, detail="Riot API key not configured")
+        api_key = os.getenv("RIOT_API_KEY")
+
+    if not api_key:
+        raise HTTPException(
+            status_code=503,
+            detail="Riot API key not configured. Please add it via Settings page or .env file.",
+        )
 
     # Use default region and platform
     region = Region("europe")

@@ -27,7 +27,7 @@ class DetectionRequest(BaseModel):
     """Request for player analysis."""
 
     puuid: str = Field(..., description="Player PUUID to analyze")
-    min_games: int = Field(30, ge=10, le=100, description="Minimum games for analysis")
+    min_games: int = Field(30, ge=0, le=100, description="Minimum games for analysis")
     queue_filter: Optional[int] = Field(None, description="Filter by queue ID")
     time_period_days: Optional[int] = Field(
         None, ge=1, le=365, description="Time period in days"

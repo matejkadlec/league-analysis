@@ -221,6 +221,73 @@ class MatchService:
             logger.error("Failed to get player stats", puuid=puuid, error=str(e))
             raise
 
+    async def fetch_player_matches(
+        self,
+        riot_api_client: Any,
+        puuid: str,
+        count: int = 20,
+        queue: Optional[int] = None,
+    ) -> int:
+        """
+        Fetch new matches for a player from Riot API and store them.
+
+        Args:
+            riot_api_client: Initialized Riot API client
+            puuid: Player PUUID
+            count: Number of matches to fetch
+            queue: Optional queue filter
+
+        Returns:
+            Number of new matches stored
+        """
+        try:
+            # Fetch match IDs (always fetch enough to find new ones)
+            fetch_count = max(count, 50)
+            match_ids = await self._fetch_match_ids_from_api(
+                riot_api_client, puuid, queue
+            )
+
+            if not match_ids:
+                return 0
+
+            # Filter existing
+            new_match_ids = await self._get_new_match_ids(match_ids)
+            if not new_match_ids:
+                return 0
+
+            # Limit to requested count
+            new_match_ids = new_match_ids[:count]
+
+            logger.info(
+                "Fetching new matches details",
+                puuid=puuid,
+                count=len(new_match_ids),
+            )
+
+            # Fetch and store details for each
+            stored_count = 0
+            for match_id in new_match_ids:
+                try:
+                    success = await self._fetch_and_store_single_match(
+                        riot_api_client, match_id
+                    )
+                    if success:
+                        stored_count += 1
+                except Exception as e:
+                    logger.error(
+                        "Failed to process match during fetch",
+                        match_id=match_id,
+                        error=str(e),
+                    )
+                    # Continue with next match
+
+            return stored_count
+
+        except Exception as e:
+            logger.error("Failed to fetch player matches", puuid=puuid, error=str(e))
+            # Don't raise, just return 0 to allow partial success or graceful fallback
+            return 0
+
     async def _fetch_match_ids_from_api(
         self, riot_api_client, puuid: str, queue: int
     ) -> list[str]:
@@ -484,12 +551,14 @@ class MatchService:
                 "game_name": "Unknown Player",
                 "tag_line": None,
                 "summoner_level": 1,
+                "profile_icon_id": 29,  # Default icon
             }
 
         return {
             "game_name": participant.get("game_name") or "Unknown Player",
             "tag_line": participant.get("tag_line"),
             "summoner_level": participant.get("summoner_level", 1),
+            "profile_icon_id": participant.get("profile_icon_id", 29),
         }
 
     async def _ensure_players_exist(
@@ -519,6 +588,7 @@ class MatchService:
                     game_name=info["game_name"],
                     tag_line=info["tag_line"],
                     summoner_level=info["summoner_level"],
+                    profile_icon_id=info["profile_icon_id"],
                     platform=platform_id.upper(),
                     is_tracked=False,
                 )
@@ -598,6 +668,30 @@ class MatchService:
         try:
             # Extract platform
             platform_id = match_dto.info.platform or default_platform
+
+            # Ensure all participant players exist
+            participants_info = []
+            for p in match_dto.info.participants:
+                # p is ParticipantDTO which has fields aliased from API response
+                # game_name -> riotIdGameName, tag_line -> riotIdTagline
+                game_name = p.game_name or p.summoner_name or "Unknown"
+                tag_line = p.tag_line
+
+                # If using summonerName and no tag, try to split if it contains #
+                if not tag_line and "#" in game_name:
+                    game_name, tag_line = game_name.split("#", 1)
+
+                participants_info.append(
+                    {
+                        "puuid": p.puuid,
+                        "game_name": game_name,
+                        "tag_line": tag_line or "RIOT",
+                        "summoner_level": p.summoner_level,
+                        "profile_icon_id": getattr(p, "profile_icon", 29),
+                    }
+                )
+
+            await self._ensure_players_exist(participants_info, platform_id)
 
             # Calculate flags
             early_surrender = any(

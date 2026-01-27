@@ -153,15 +153,15 @@ class MatchDTOTransformer:
                 participant_dto, "total_self_mitigated", 0
             ),
             # Support
-            "total_self_healing": 0,  # Not always available directly, check challenges? Keeping simple for now.
-            "total_healing": participant_dto.total_heal,
-            "total_shielding": participant_dto.total_damage_shielded_on_teammates,
+            "total_self_healing": participant_dto.total_self_healing,
+            "total_healing": participant_dto.total_healing,
+            "total_shielding": participant_dto.total_shielding,
             # Vision
             "vision_score": int(participant_dto.vision_score or 0),
             "wards_placed": participant_dto.wards_placed,
             "wards_killed": participant_dto.wards_killed,
-            "vision_wards_placed": participant_dto.detector_wards_placed,
-            "vision_wards_bought": participant_dto.vision_wards_bought_in_game,
+            "vision_wards_placed": participant_dto.vision_wards_placed,
+            "vision_wards_bought": participant_dto.vision_wards_bought,
             # Farming
             "total_minions_killed": participant_dto.total_minions_killed,
             "neutral_minions_killed": participant_dto.neutral_minions_killed,
@@ -174,7 +174,7 @@ class MatchDTOTransformer:
             "item3": participant_dto.item3,
             "item4": participant_dto.item4,
             "item5": participant_dto.item5,
-            "trinket": participant_dto.item6,  # Item 6 is usually the trinket
+            "trinket": participant_dto.trinket,
             "items_purchased": participant_dto.items_purchased,
             "consumables_purchased": participant_dto.consumables_purchased,
             # Spells
@@ -190,8 +190,8 @@ class MatchDTOTransformer:
             "time_spent_dead": getattr(participant_dto, "total_time_spent_dead", 0),
             "time_played": getattr(participant_dto, "time_played", 0),
             # JSON Data
-            "runes": participant_dto.perks,
-            "advanced_stats": participant_dto.challenges,
+            "runes": participant_dto.runes,
+            "advanced_stats": participant_dto.advanced_stats,
         }
 
         # Safe fallback for game name

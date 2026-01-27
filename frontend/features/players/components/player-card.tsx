@@ -172,7 +172,7 @@ export function PlayerCard({ player }: PlayerCardProps) {
                     Level {player.summoner_level}
                   </Badge>
                   {player.is_tracked && (
-                    <Badge variant="default" className="bg-yellow-600">
+                    <Badge variant="default" className="bg-primary">
                       Tracked
                     </Badge>
                   )}

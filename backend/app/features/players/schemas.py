@@ -10,11 +10,11 @@ class PlayerBase(BaseModel):
     """Base player schema with common fields."""
 
     puuid: str = Field(..., min_length=78, max_length=78, description="Player's PUUID")
-    game_name: Optional[str] = Field(None, description="Riot ID game name")
-    tag_line: Optional[str] = Field(None, description="Riot tag line")
+    game_name: str = Field(..., description="Riot ID game name")
+    tag_line: str = Field(..., description="Riot tag line")
     platform: str = Field(..., description="Platform (e.g. EUN1)")
-    summoner_level: Optional[int] = Field(None, description="Account/Summoner level")
-    profile_icon_id: Optional[int] = Field(None, description="Profile icon ID")
+    summoner_level: int = Field(..., description="Account/Summoner level")
+    profile_icon_id: int = Field(..., description="Profile icon ID")
 
 
 class PlayerCreate(PlayerBase):

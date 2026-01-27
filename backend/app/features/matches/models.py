@@ -134,10 +134,6 @@ class Match(Base):
         comment="Whether this match has been processed for player analysis",
     )
 
-    processing_error: Mapped[Optional[str]] = mapped_column(
-        String(256), nullable=True, comment="Error message if match processing failed"
-    )
-
     # Relationships
     participants = relationship(
         "MatchParticipant", back_populates="match", cascade="all, delete-orphan"
@@ -154,8 +150,6 @@ Index("idx_matches_platform_timestamp", Match.platform, Match.game_start_timesta
 Index("idx_matches_queue_timestamp", Match.queue_id, Match.game_start_timestamp)
 
 Index("idx_matches_version_timestamp", Match.game_version, Match.game_start_timestamp)
-
-Index("idx_matches_analyzed_error", Match.fully_analyzed, Match.processing_error)
 
 # Additional performance indexes for common query patterns
 Index("idx_matches_timestamp_queue", Match.game_start_timestamp, Match.queue_id)

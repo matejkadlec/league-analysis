@@ -47,6 +47,7 @@ class ParticipantDTO(BaseModel):
     summoner_name: str = Field(..., alias="summonerName")
     summoner_id: Optional[str] = Field(None, alias="summonerId")
     summoner_level: int = Field(..., alias="summonerLevel")
+    profile_icon: int = Field(..., alias="profileIcon")
 
     # Riot ID fields
     game_name: Optional[str] = Field(None, alias="riotIdGameName")
@@ -74,8 +75,8 @@ class ParticipantDTO(BaseModel):
     gold_earned: int = Field(..., alias="goldEarned")
     gold_spent: int = Field(0, alias="goldSpent")
     vision_score: Optional[float] = Field(None, alias="visionScore")
-    detector_wards_placed: int = Field(0, alias="detectorWardsPlaced")
-    vision_wards_bought_in_game: int = Field(0, alias="visionWardsBoughtInGame")
+    vision_wards_placed: int = Field(0, alias="detectorWardsPlaced")
+    vision_wards_bought: int = Field(0, alias="visionWardsBoughtInGame")
     wards_placed: int = Field(0, alias="wardsPlaced")
     wards_killed: int = Field(0, alias="wardsKilled")
 
@@ -91,11 +92,9 @@ class ParticipantDTO(BaseModel):
     total_damage_taken: int = Field(..., alias="totalDamageTaken")
 
     # Healing & Shielding
-    total_heal: int = Field(0, alias="totalHeal")
-    total_heals_on_teammates: int = Field(0, alias="totalHealsOnTeammates")
-    total_damage_shielded_on_teammates: int = Field(
-        0, alias="totalDamageShieldedOnTeammates"
-    )
+    total_self_healing: int = Field(0, alias="totalHeal")
+    total_healing: int = Field(0, alias="totalHealsOnTeammates")
+    total_shielding: int = Field(0, alias="totalDamageShieldedOnTeammates")
     total_self_mitigated: int = Field(0, alias="damageSelfMitigated")
 
     # Items
@@ -105,7 +104,7 @@ class ParticipantDTO(BaseModel):
     item3: int = Field(0)
     item4: int = Field(0)
     item5: int = Field(0)
-    item6: int = Field(0)
+    trinket: int = Field(0, alias="item6")
     items_purchased: int = Field(0, alias="itemsPurchased")
     consumables_purchased: int = Field(0, alias="consumablesPurchased")
 
@@ -117,8 +116,8 @@ class ParticipantDTO(BaseModel):
     game_ended_in_surrender: Optional[bool] = Field(None, alias="gameEndedInSurrender")
 
     # Advanced
-    perks: dict = Field(default_factory=dict, alias="perks")
-    challenges: dict = Field(default_factory=dict, alias="challenges")
+    runes: dict = Field(default_factory=dict, alias="perks")
+    advanced_stats: dict = Field(default_factory=dict, alias="challenges")
 
     # Legacy / Unused in new schema but kept for completeness or other uses
     role: Optional[str] = None

@@ -33,12 +33,12 @@ class Player(Base):
     )
 
     # Player Name & Tag (Game Name + Tag Line)
-    game_name: Mapped[Optional[str]] = mapped_column(
-        String(16), nullable=True, index=True, comment="Player's game name"
+    game_name: Mapped[str] = mapped_column(
+        String(16), nullable=False, index=True, comment="Player's game name"
     )
 
-    tag_line: Mapped[Optional[str]] = mapped_column(
-        String(5), nullable=True, comment="Player's tag line"
+    tag_line: Mapped[str] = mapped_column(
+        String(5), nullable=False, comment="Player's tag line"
     )
 
     # Platform
@@ -50,12 +50,12 @@ class Player(Base):
     )
 
     # Player statistics
-    profile_icon_id: Mapped[Optional[int]] = mapped_column(
-        Integer, nullable=True, comment="Profile icon ID"
+    profile_icon_id: Mapped[int] = mapped_column(
+        Integer, nullable=False, comment="Profile icon ID"
     )
 
-    summoner_level: Mapped[Optional[int]] = mapped_column(
-        Integer, nullable=True, comment="Summoner/Account level"
+    summoner_level: Mapped[int] = mapped_column(
+        Integer, nullable=False, comment="Summoner/Account level"
     )
 
     # Tracking & Analysis flags

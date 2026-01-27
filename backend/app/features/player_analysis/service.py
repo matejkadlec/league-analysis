@@ -6,7 +6,7 @@ factors including win rate, account level, rank progression, and performance
 consistency using modular factor analyzers.
 """
 
-from typing import Optional, List, Dict, Any, Callable
+from typing import Optional, List, Dict, Any, Callable, TYPE_CHECKING
 from datetime import datetime, timedelta, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, desc
@@ -30,13 +30,21 @@ from .analyzers import (
     RankProgressionFactorAnalyzer,
 )
 
+if TYPE_CHECKING:
+    from app.features.matches.service import MatchService
+
 logger = structlog.get_logger(__name__)
 
 
 class PlayerAnalysisService:
     """Service for comprehensive player analysis using modular factor analyzers."""
 
-    def __init__(self, db: AsyncSession, data_manager: RiotAPIClient):
+    def __init__(
+        self,
+        db: AsyncSession,
+        data_manager: RiotAPIClient,
+        match_service: Optional["MatchService"] = None,
+    ):
         """
         Initialize player analysis service.
 
@@ -44,9 +52,12 @@ class PlayerAnalysisService:
         :type db: AsyncSession
         :param data_manager: Riot API client
         :type data_manager: RiotAPIClient
+        :param match_service: Match service for fetching matches
+        :type match_service: MatchService
         """
         self.db = db
         self.data_manager = data_manager
+        self.match_service = match_service
 
         # Load configuration
         config = get_detection_config()
@@ -72,7 +83,6 @@ class PlayerAnalysisService:
     @service_error_handler("PlayerAnalysisService")
     @input_validation(
         validate_non_empty=["puuid"],
-        validate_positive=["min_games"],
     )
     async def analyze_player(
         self,
@@ -119,6 +129,43 @@ class PlayerAnalysisService:
             puuid, queue_filter, min_games, time_period_days
         )
 
+        min_matches_for_analysis = self.analysis_config.get(
+            "min_matches_for_analysis", 10
+        )
+        effective_min_games = max(min_games, min_matches_for_analysis)
+
+        # Fetch matches from API if insufficient data and services available
+        if (
+            len(recent_matches) < effective_min_games
+            and self.data_manager
+            and self.match_service
+        ):
+            try:
+                logger.info(
+                    "Insufficient matches in DB, fetching from API",
+                    puuid=puuid,
+                    current=len(recent_matches),
+                    required=effective_min_games,
+                )
+
+                # Fetch more matches (fetch enough to potentially fill the gap)
+                # We request 2x needed to be safe with filters
+                matches_to_fetch = max(20, effective_min_games * 2)
+
+                newly_fetched = await self.match_service.fetch_player_matches(
+                    self.data_manager, puuid, count=matches_to_fetch, queue=queue_filter
+                )
+
+                if newly_fetched > 0:
+                    logger.info("Fetched new matches", count=newly_fetched)
+                    # Re-query matches from DB
+                    recent_matches, match_ids = await self._get_recent_matches(
+                        puuid, queue_filter, min_games, time_period_days
+                    )
+            except Exception as e:
+                logger.error("Error fetching matches during analysis", error=str(e))
+                # Continue with what we have to hopefully provide partial result or Insufficient Data response
+
         # Apply analysis configuration limits
         max_matches = self.analysis_config.get("recent_matches_limit", 50)
         if len(recent_matches) > max_matches:
@@ -132,15 +179,25 @@ class PlayerAnalysisService:
             )
 
         if len(recent_matches) < min_games:
-            logger.info(
-                "Insufficient match data",
-                puuid=puuid,
-                matches=len(recent_matches),
-                required=min_games,
-            )
-            return self._create_insufficient_data_response(
-                puuid, len(recent_matches), min_games
-            )
+            # If min_games is 0, we can analyze even with fewer matches
+            if min_games > 0:
+                logger.info(
+                    "Insufficient match data",
+                    puuid=puuid,
+                    matches=len(recent_matches),
+                    required=min_games,
+                )
+                return self._create_insufficient_data_response(
+                    puuid, len(recent_matches), min_games
+                )
+            elif len(recent_matches) == 0:
+                # Special case: 0 matches found at all
+                pass  # Continue to analyze, factor analyzers should handle empty lists gracefully
+
+        # Refresh player object to ensure it's attached to session and up-to-date
+        # (Session might have been committed during match fetching)
+        if player:
+            await self.db.refresh(player)
 
         # Analyze each factor
         factors = await self._analyze_detection_factors(puuid, recent_matches, player)
@@ -359,10 +416,11 @@ class PlayerAnalysisService:
                 "kills": participant.kills,
                 "deaths": participant.deaths,
                 "assists": participant.assists,
-                "cs": participant.cs,
+                "cs": participant.total_minions_killed
+                + participant.neutral_minions_killed,
                 "vision_score": participant.vision_score,
                 "champion_id": participant.champion_id,
-                "role": participant.role,
+                "role": participant.team_position,
                 "team_id": participant.team_id,
             }
             matches_data.append(match_dict)
@@ -426,7 +484,7 @@ class PlayerAnalysisService:
         scores = {f.name: f.score for f in factors}
 
         # Get actual account level from player data (not the score!)
-        actual_account_level = player.account_level if player else 0
+        actual_account_level = player.summoner_level if player else 0
 
         # Get current rank information
         current_rank = await self._get_current_rank(puuid)

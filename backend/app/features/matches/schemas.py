@@ -36,9 +36,6 @@ class MatchBase(BaseModel):
     fully_analyzed: bool = Field(
         False, description="Whether this match has been processed for player analysis"
     )
-    processing_error: Optional[str] = Field(
-        None, max_length=256, description="Error message if match processing failed"
-    )
 
 
 class MatchCreate(MatchBase):
@@ -62,9 +59,6 @@ class MatchUpdate(BaseModel):
     game_type: Optional[str] = Field(None, max_length=32, description="Game type")
     fully_analyzed: Optional[bool] = Field(
         None, description="Whether this match has been processed for player analysis"
-    )
-    processing_error: Optional[str] = Field(
-        None, max_length=256, description="Error message if match processing failed"
     )
 
 

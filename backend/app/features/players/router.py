@@ -15,6 +15,10 @@ from .dependencies import (
     get_player_service,
 )
 from app.core.riot_api.constants import Platform
+from app.core.riot_api.client import RiotAPIClient
+from app.core.dependencies import get_riot_client
+from fastapi import APIRouter, HTTPException, Query, Request, Depends
+from typing import Annotated
 
 logger = structlog.get_logger(__name__)
 
@@ -297,43 +301,10 @@ async def get_tracked_players(player_service: PlayerServiceDep):
         )
 
 
-async def _process_name_and_tag_tracking(
-    player_service, riot_data_manager, full_id: str, platform: str
-):
-    """Process tracking request with Name and Tag."""
-    if "#" not in full_id:
-        raise HTTPException(status_code=400, detail="Invalid format. Use Name#Tag")
-    game_name, tag_line = full_id.split("#", 1)
-    game_name, tag_line = game_name.strip(), tag_line.strip()
-
-    _validate_game_name(game_name)
-    _validate_tag_line(tag_line)
-
-    return await player_service.add_and_track_player(
-        riot_data_manager=riot_data_manager,
-        game_name=game_name,
-        tag_line=tag_line,
-        platform=platform,
-    )
-
-
-async def _process_game_name_tracking(player_service, game_name: str, platform: str):
-    """Process tracking request with game name."""
-    try:
-        player_response = await player_service.get_player_by_game_name(
-            game_name, platform
-        )
-        return await player_service.track_player(player_response.puuid)
-    except ValueError:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Player '{game_name}' not found in database. Please use Riot ID (name#tag) format to add new players.",
-        )
-
-
 @router.post("/add-tracked", response_model=PlayerResponse)
 async def add_tracked_player(
     player_service: PlayerServiceDep,
+    riot_client: Annotated[RiotAPIClient, Depends(get_riot_client)],
     game_name: str = Query(..., description="Game name"),
     tag_line: str = Query(..., description="Tag line (without #)"),
     platform: str = Query("eun1", description="Platform platform"),
@@ -354,29 +325,28 @@ async def add_tracked_player(
         404: Player not found in Riot API
         500: Unexpected error
     """
-    raise HTTPException(
-        status_code=501, detail="Riot Data Manager refactoring in progress"
-    )
-    # try:
-    #     if riot_id:
-    #         # we replaced riot_id with game_name#tag_line (because that's what it essentially is)
-    #         return await _process_riot_id_tracking(
-    #             player_service, riot_data_manager, riot_id, platform
-    #         )
+    try:
+        # Validate inputs
+        _validate_game_name(game_name)
+        _validate_tag_line(tag_line)
 
-    #     # game_name is guaranteed to be not None here due to validation above
-    #     return await _process_game_name_tracking(
-    #         player_service,
-    #         game_name,  # type: ignore[arg-type]
-    #         platform,
-    #     )
+        return await player_service.add_and_track_player(
+            riot_client=riot_client,
+            game_name=game_name,
+            tag_line=tag_line,
+            platform=platform,
+        )
 
-    # except ValueError as e:
-    #     _handle_tracking_value_error(e)
-    # except HTTPException:
-    #     raise
-    # except Exception as e:
-    #     _handle_tracking_unexpected_error(e, riot_id, game_name, platform)
+    except ValueError as e:
+        _handle_tracking_value_error(e)
+    except HTTPException:
+        raise
+    except Exception as e:
+        full_id = f"{game_name}#{tag_line}"
+        _handle_tracking_unexpected_error(e, full_id, game_name, platform)
+        raise HTTPException(
+            status_code=500, detail="Internal server error adding tracked player"
+        )
 
 
 def _handle_tracking_value_error(e: ValueError) -> None:
