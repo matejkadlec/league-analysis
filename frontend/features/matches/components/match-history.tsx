@@ -1,16 +1,27 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { History, AlertCircle, Loader2 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  History,
+  AlertCircle,
+  Loader2,
+  RefreshCw,
+  Clock,
+  StopCircle,
+  ListRestart,
+} from "lucide-react";
+import { toast } from "sonner";
 
 import { MatchListResponseSchema } from "@/lib/core/schemas";
-import { validatedGet } from "@/lib/core/api";
+import { validatedGet, api } from "@/lib/core/api";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Table,
@@ -20,6 +31,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 interface MatchHistoryProps {
   puuid: string;
@@ -36,13 +55,18 @@ interface MatchHistoryProps {
 // more of a sidebar problem, but as it's closely related to this, and will be most likely quick
 // fix, we can do it in one ticket
 export function MatchHistory({ puuid, queueFilter = 420 }: MatchHistoryProps) {
-  const PAGE_SIZE = 50;
+  const PAGE_SIZE = 20;
   const loadMoreRef = useRef<HTMLDivElement>(null);
   const previousMatchCount = useRef(0);
+  const queryClient = useQueryClient();
+  const router = useRouter();
 
   // Component uses key={`${puuid}-${queueFilter}`} to reset state on prop changes
   // This avoids calling setState in useEffect which violates React Compiler rules
-  const [displayCount, setDisplayCount] = useState(50);
+  const [displayCount, setDisplayCount] = useState(20);
+  const [analysisJobId, setAnalysisJobId] = useState<string | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [showAnalysisConfirm, setShowAnalysisConfirm] = useState(false);
 
   const {
     data: response,
@@ -89,12 +113,108 @@ export function MatchHistory({ puuid, queueFilter = 420 }: MatchHistoryProps) {
     staleTime: 60000,
   });
 
-  const data = response?.success ? response.data : null;
+  const { mutate: analyzeMutate } = useMutation({
+    mutationFn: async () => {
+      const resp = await api.post<{ job_id: string; status: string }>(
+        `/matches/analyze/${puuid}`,
+      );
+      return resp.data.job_id;
+    },
+    onSuccess: (jobId) => {
+      setAnalysisJobId(jobId);
+      setIsAnalyzing(true);
+      toast.success("Analysis started...");
+    },
+    onError: (err) => {
+      toast.error("Failed to start analysis");
+      console.error(err);
+    },
+  });
 
+  // Poll for status updates
+  const { data: jobStatus } = useQuery({
+    queryKey: ["analysisStatus", analysisJobId],
+    queryFn: async () => {
+      if (!analysisJobId) return null;
+      const response = await api.get<any>(
+        `/matches/analyze/status/${analysisJobId}`,
+      );
+      const result = response.data;
+      if (result.status === "completed" || result.status === "failed") {
+        setIsAnalyzing(false);
+        setAnalysisJobId(null);
+
+        // Refresh client-side data
+        queryClient.invalidateQueries({ queryKey: ["matchHistory"] });
+
+        // Refresh server-side data (Next.js App Router)
+        router.refresh();
+
+        if (result.status === "completed") {
+          toast.success("Analysis complete!");
+        } else {
+          toast.error(result.error || "Analysis failed");
+        }
+      } else if (
+        result.status === "pending" ||
+        result.status === "in_progress"
+      ) {
+        // Force update for initial state
+        setIsAnalyzing(true);
+      }
+      return result;
+    },
+    enabled: !!analysisJobId,
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      return status === "completed" || status === "failed" ? false : 2000;
+    },
+  });
+
+  const { mutate: cancelMutate } = useMutation({
+    mutationFn: async () => {
+      if (!analysisJobId) return;
+      await api.post(`/matches/analyze/cancel/${analysisJobId}`);
+    },
+    onSuccess: () => {
+      toast.info("Analysis cancelled.");
+      setIsAnalyzing(false);
+      setAnalysisJobId(null);
+    },
+    onError: (err) => {
+      toast.error("Failed to cancel analysis");
+      console.error(err);
+      // Still close UI to avoid stuck state
+      setIsAnalyzing(false);
+      setAnalysisJobId(null);
+    },
+  });
+
+  const handleAnalyze = () => {
+    // Check for high number of analyzed matches
+    const totalAnalyzed = (data as any)?.total_analyzed || 0;
+    console.debug("Analyze request check", { totalAnalyzed });
+
+    if (totalAnalyzed >= 50) {
+      setShowAnalysisConfirm(true);
+    } else {
+      analyzeMutate();
+    }
+  };
+
+  const handleConfirmAnalyze = () => {
+    setShowAnalysisConfirm(false);
+    analyzeMutate();
+  };
+
+  const handleCancelAnalysis = () => {
+    cancelMutate();
+  };
+
+  const data = response?.success ? response.data : null;
   const allMatches = data?.matches || [];
   const totalMatches = data?.total || 0;
   const hasMore = allMatches.length < totalMatches;
-
   // Preserve scroll position when new matches load
   useEffect(() => {
     if (
@@ -166,7 +286,7 @@ export function MatchHistory({ puuid, queueFilter = 420 }: MatchHistoryProps) {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <History className="h-5 w-5 text-primary" />
+            <ListRestart className="h-5 w-5 text-primary" />
             Match History
           </CardTitle>
         </CardHeader>
@@ -208,7 +328,7 @@ export function MatchHistory({ puuid, queueFilter = 420 }: MatchHistoryProps) {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <History className="h-5 w-5 text-primary" />
+            <ListRestart className="h-5 w-5 text-primary" />
             Match History
           </CardTitle>
         </CardHeader>
@@ -218,7 +338,7 @@ export function MatchHistory({ puuid, queueFilter = 420 }: MatchHistoryProps) {
             <AlertDescription>
               {isNotFound ? (
                 <div className="space-y-2">
-                  <p>No match history found for this player.</p>
+                  <p>No matches found for this player.</p>
                   <p className="text-sm text-muted-foreground">
                     This could mean the player has no ranked games, or match
                     data is not yet available.
@@ -249,7 +369,7 @@ export function MatchHistory({ puuid, queueFilter = 420 }: MatchHistoryProps) {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <History className="h-5 w-5 text-primary" />
+            <ListRestart className="h-5 w-5 text-primary" />
             Match History
           </CardTitle>
         </CardHeader>
@@ -274,21 +394,73 @@ export function MatchHistory({ puuid, queueFilter = 420 }: MatchHistoryProps) {
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-2">
-            <History className="h-5 w-5 text-primary" />
+            <ListRestart className="h-5 w-5 text-primary" />
             Match History
           </CardTitle>
-          <Badge variant="secondary">{totalMatches} matches in database</Badge>
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={handleAnalyze}
+              disabled={isAnalyzing}
+              type="submit"
+              className="text-xs px-2.5 py-0.5 gap-2"
+            >
+              {isAnalyzing ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
+              Analyze Match History
+            </Button>
+          </div>
         </div>
-        {totalMatches > 0 && totalMatches < 50 && (
-          <p className="mt-2 text-xs text-muted-foreground">
-            More matches are being fetched in the background
-          </p>
+
+        {isAnalyzing && (
+          <div className="mt-4 p-4 rounded-lg bg-slate-950 border border-slate-800 space-y-4">
+            <div className="flex items-center justify-between text-sm text-slate-400">
+              <span className="flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                {jobStatus?.message || "Initializing..."}
+              </span>
+              <span className="flex items-center gap-2">
+                <Clock className="h-4 w-4" />
+                {jobStatus?.estimated_minutes_remaining
+                  ? `~${jobStatus.estimated_minutes_remaining} min remaining`
+                  : "~2 min remaining"}
+              </span>
+            </div>
+
+            <Progress
+              value={
+                jobStatus?.total > 0
+                  ? (jobStatus.progress / jobStatus.total) * 100
+                  : 0
+              }
+              className="h-2"
+            />
+
+            <div className="text-center text-sm text-slate-500">
+              {jobStatus?.total > 0
+                ? Math.round((jobStatus.progress / jobStatus.total) * 100)
+                : 0}
+              % complete
+            </div>
+
+            <Button
+              onClick={handleCancelAnalysis}
+              variant="destructive"
+              className="w-full matchmaking-cancel-btn"
+              size="sm"
+            >
+              <StopCircle className="mr-2 h-4 w-4" />
+              Cancel Analysis
+            </Button>
+          </div>
         )}
       </CardHeader>
       <CardContent>
-        <div className="rounded-md border">
+        <div className="rounded-md border max-h-[600px] overflow-y-auto relative">
           <Table>
-            <TableHeader>
+            <TableHeader className="bg-background sticky top-0 z-10 shadow-sm">
               <TableRow>
                 <TableHead>Queue</TableHead>
                 <TableHead>Date</TableHead>
@@ -324,29 +496,54 @@ export function MatchHistory({ puuid, queueFilter = 420 }: MatchHistoryProps) {
               ))}
             </TableBody>
           </Table>
-        </div>
-        {hasMore && (
-          <div ref={loadMoreRef} className="mt-4 flex justify-center py-4">
-            {isFetching ? (
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                <span className="text-sm">Loading more matches...</span>
-              </div>
-            ) : (
-              <div className="text-sm text-muted-foreground">
-                Showing {allMatches.length} of {totalMatches} matches
-              </div>
-            )}
-          </div>
-        )}
-        {!hasMore && allMatches.length > 0 && (
-          <div className="mt-4 flex justify-center py-4">
-            <div className="text-sm text-muted-foreground">
-              All {totalMatches} matches loaded
+
+          {hasMore && (
+            <div
+              ref={loadMoreRef}
+              className="flex justify-center py-4 border-t bg-background/50"
+            >
+              {isFetching ? (
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span className="text-sm">Loading more matches...</span>
+                </div>
+              ) : (
+                <div className="text-sm text-muted-foreground">
+                  Showing {allMatches.length} of {totalMatches} matches
+                </div>
+              )}
             </div>
-          </div>
-        )}
+          )}
+          {!hasMore && allMatches.length > 0 && (
+            <div className="flex justify-center py-4 border-t bg-background/50">
+              <div className="text-sm text-muted-foreground">
+                All {totalMatches} matches loaded
+              </div>
+            </div>
+          )}
+        </div>
       </CardContent>
+
+      <Dialog open={showAnalysisConfirm} onOpenChange={setShowAnalysisConfirm}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Analyze Match History?</DialogTitle>
+            <DialogDescription>
+              This player already has 50 or more analyzed matches, do you wish
+              to proceed?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowAnalysisConfirm(false)}
+            >
+              No
+            </Button>
+            <Button onClick={handleConfirmAnalyze}>Yes</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }

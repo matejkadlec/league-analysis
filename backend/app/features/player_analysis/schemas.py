@@ -33,7 +33,7 @@ class DetectionRequest(BaseModel):
         None, ge=1, le=365, description="Time period in days"
     )
     force_reanalyze: bool = Field(
-        False, description="Force re-analysis even if recent analysis exists"
+        False, description="Force reanalysis even if recent analysis exists"
     )
 
 

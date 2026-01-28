@@ -11,7 +11,7 @@ import {
 } from "@/lib/core/schemas";
 import { JobCard, JobExecutions, SystemStatus } from "@/features/jobs";
 import { ProtectedRoute } from "@/features/auth";
-import { ThemeToggle } from "@/components/theme-toggle";
+
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2, AlertCircle, Clock } from "lucide-react";
@@ -112,7 +112,6 @@ function JobsPageContent() {
               <span>Auto-refresh in {secondsUntilRefresh}s</span>
             </div>
           </div>
-          <ThemeToggle />
         </div>
         <p className="text-sm leading-relaxed">
           Monitor and manage automated background jobs for player tracking and

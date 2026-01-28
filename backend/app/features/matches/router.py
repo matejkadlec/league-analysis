@@ -1,7 +1,10 @@
 """Match API endpoints for the Riot API application."""
 
-from fastapi import APIRouter, HTTPException, Query
-from typing import Optional
+from fastapi import APIRouter, HTTPException, Query, BackgroundTasks, Depends
+from typing import Optional, Dict, Any
+import uuid
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.core.database import get_db
 
 from .schemas import (
     MatchListResponse,
@@ -15,50 +18,224 @@ from .dependencies import (
 router = APIRouter(prefix="/matches", tags=["matches"])
 router.get_match_service = get_match_service  # type: ignore[attr-defined]
 
+# In-memory job store for analysis tasks
+analysis_jobs: Dict[str, Dict[str, Any]] = {}
+
 
 @router.get("/player/{puuid}", response_model=MatchListResponse)
 async def get_player_matches(
     puuid: str,
     match_service: MatchServiceDep,
-    start: int = Query(0, ge=0, description="Start index for pagination"),
-    count: int = Query(20, ge=1, le=500, description="Number of matches to return"),
-    queue: Optional[int] = Query(
-        None, description="Filter by queue ID (420=ranked solo)"
-    ),
-    start_time: Optional[int] = Query(None, description="Start timestamp"),
-    end_time: Optional[int] = Query(None, description="End timestamp"),
+    queue: Optional[int] = Query(None, description="Queue ID filter"),
+    start: int = Query(0, ge=0, description="Start index"),
+    count: int = Query(20, ge=1, le=100, description="Number of matches to return"),
 ):
-    """Get match history for a player. Queue IDs: 420=Ranked Solo, 440=Ranked Flex, 450=ARAM, 400=Normal."""
-    try:
-        matches = await match_service.get_player_matches(
-            puuid=puuid,
-            start=start,
-            count=count,
-            queue=queue,
-            start_time=start_time,
-            end_time=end_time,
-        )
-        return matches
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    """
+    Get match history for a player from local database.
+    """
+    return await match_service.get_player_matches(
+        puuid=puuid,
+        start=start,
+        count=count,
+        queue=queue,
+    )
 
 
 @router.get("/player/{puuid}/stats", response_model=MatchStatsResponse)
-async def get_player_match_stats(
+async def get_player_stats(
     puuid: str,
     match_service: MatchServiceDep,
-    queue: Optional[int] = Query(None, description="Filter by queue ID"),
-    limit: int = Query(50, ge=1, le=200, description="Number of matches to analyze"),
+    queue: Optional[int] = Query(None, description="Queue ID filter"),
+    limit: int = Query(20, ge=1, le=100, description="Number of matches to analyze"),
 ):
-    """Get player statistics from recent matches."""
+    """
+    Get aggregated statistics for a player from recent matches.
+    """
+    return await match_service.get_player_stats(
+        puuid=puuid,
+        queue=queue,
+        limit=limit,
+    )
+
+
+# ... (Previous code)
+
+
+async def _run_analysis_task(
+    job_id: str,
+    puuid: str,
+    api_key: str,
+):
+    """Background task for analysis.
+
+    Scenarios:
+    1. Fetch last 100 matches from Riot API (Queue 420)
+    2. Upsert them to DB
+    3. Update job status
+    """
+    # Force immediate status update to indicate task has started
+    if job_id in analysis_jobs:
+        analysis_jobs[job_id]["status"] = "in_progress"
+        analysis_jobs[job_id]["message"] = "Task started..."
+
+    import sys
+
+    # Print to stderr to ensure visibility even if logging is misconfigured
+    print(f"DEBUG: Starting analysis task for job {job_id}", file=sys.stderr)
+
+    import logging
+    import traceback
+
+    logger = logging.getLogger(__name__)
+
     try:
-        stats = await match_service.get_player_stats(
-            puuid=puuid, queue=queue, limit=limit
-        )
-        return stats
-    except HTTPException:
-        raise
+        from app.core.riot_api.client import RiotAPIClient
+        from app.features.matches.service import MatchService
+        from app.core.database import db_manager
+
+        analysis_jobs[job_id]["message"] = "Preparing analysis..."
+
+        # Callback for progress updates
+        async def progress_callback(current, total):
+            if job_id in analysis_jobs:
+                # Check for cancellation during progress update
+                if analysis_jobs[job_id].get("cancelled", False):
+                    # We will handle the break in the service via should_cancel
+                    pass
+
+                analysis_jobs[job_id]["progress"] = current
+                analysis_jobs[job_id]["total"] = total
+
+                # Calculate estimate (1.5s per request)
+                remaining = total - current
+                est_seconds = remaining * 1.5
+                est_minutes = int(est_seconds / 60)
+                if est_seconds > 0 and est_minutes == 0:
+                    est_minutes = 1
+
+                analysis_jobs[job_id]["estimated_minutes_remaining"] = est_minutes
+                analysis_jobs[job_id][
+                    "message"
+                ] = f"Analysis in progress... Processing {current} of {total} requests"
+
+        # Cancellation check callback
+        def should_cancel() -> bool:
+            return analysis_jobs.get(job_id, {}).get("cancelled", False)
+
+        # Create a new session for the background task
+        async with db_manager.get_session() as session:
+            match_service = MatchService(session)
+
+            async with RiotAPIClient(api_key) as client:
+                # 1. Fetch and update match data
+                analysis_jobs[job_id][
+                    "message"
+                ] = "Fetching match list from Riot API..."
+                print(
+                    f"DEBUG: Client initialized, fetching matches for {puuid}",
+                    file=sys.stderr,
+                )
+
+                # We specifically request count=100 and queue=420 (Ranked Solo)
+                count = await match_service.analyze_match_history(
+                    client,
+                    puuid,
+                    progress_callback=progress_callback,
+                    should_cancel=should_cancel,
+                )
+
+                # Check if we finished due to cancellation
+                if should_cancel():
+                    analysis_jobs[job_id]["status"] = "cancelled"
+                    analysis_jobs[job_id][
+                        "message"
+                    ] = f"Analysis cancelled. Processed {count} matches."
+                    print(
+                        f"DEBUG: Analysis cancelled. Processed {count} matches.",
+                        file=sys.stderr,
+                    )
+                    return
+
+                print(
+                    f"DEBUG: Analysis finished. Processed {count} matches.",
+                    file=sys.stderr,
+                )
+
+                analysis_jobs[job_id]["status"] = "completed"
+                analysis_jobs[job_id]["matches_processed"] = count
+                analysis_jobs[job_id]["message"] = "Match history updated successfully"
+
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        error_msg = str(e)
+        stack_trace = traceback.format_exc()
+
+        logger.error(f"Analysis failed for job {job_id}: {error_msg}")
+        logger.error(stack_trace)
+        print(
+            f"ERROR: Analysis job {job_id} failed: {error_msg}\n{stack_trace}",
+            file=sys.stderr,
+        )
+
+        # Check for Rate Limit specific error string
+        if "429" in error_msg:
+            error_msg = "Riot API Rate Limit Exceeded. Please try again in 2 minutes."
+
+        # Ensure we don't crash the dict access if job was removed (unlikely but safe)
+        if job_id in analysis_jobs:
+            analysis_jobs[job_id]["status"] = "failed"
+            analysis_jobs[job_id]["error"] = error_msg
+
+
+@router.post("/analyze/{puuid}")
+async def analyze_match_history(
+    puuid: str,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+):
+    """Start match history analysis background job."""
+    import os
+    from app.core.config import get_riot_api_key
+
+    try:
+        api_key = await get_riot_api_key(db)
+    except ValueError:
+        api_key = os.getenv("RIOT_API_KEY")
+
+    if not api_key:
+        raise HTTPException(
+            status_code=500, detail="RIOT_API_KEY not configured (DB or ENV)"
+        )
+
+    job_id = str(uuid.uuid4())
+    analysis_jobs[job_id] = {
+        "status": "pending",
+        "progress": 0,
+        "total": 0,
+        "message": "Initializing...",
+        "estimated_minutes_remaining": 5,  # Rough estimate
+    }
+
+    background_tasks.add_task(_run_analysis_task, job_id, puuid, api_key)
+
+    return {"job_id": job_id, "status": "pending"}
+
+
+@router.post("/analyze/cancel/{job_id}")
+async def cancel_analysis_job(job_id: str):
+    """Cancel a running analysis job."""
+    if job_id not in analysis_jobs:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    analysis_jobs[job_id]["cancelled"] = True
+    analysis_jobs[job_id]["status"] = "cancelling"
+    analysis_jobs[job_id]["message"] = "Cancelling analysis..."
+
+    return {"job_id": job_id, "status": "cancelling"}
+
+
+@router.get("/analyze/status/{job_id}")
+async def get_analysis_status(job_id: str):
+    """Get status of match history analysis job."""
+    if job_id not in analysis_jobs:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return analysis_jobs[job_id]

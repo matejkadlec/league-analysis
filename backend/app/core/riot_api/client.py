@@ -134,6 +134,18 @@ class RiotAPIClient:
     ) -> tuple[bool, int]:
         """Handle rate limit (429) with retry logic."""
         retry_after = int(headers.get("Retry-After", 1))
+
+        # Log the detailed rate limit headers for debugging
+        app_limit = headers.get("X-App-Rate-Limit", "unknown")
+        app_count = headers.get("X-App-Rate-Limit-Count", "unknown")
+        method_limit = headers.get("X-Method-Rate-Limit", "unknown")
+        logger.warning(
+            "Rate limit hit",
+            retry_after=retry_after,
+            app_limit=app_limit,
+            current_usage=app_count,
+        )
+
         if attempt < max_retries:
             return (True, retry_after)
         raise RateLimitError(

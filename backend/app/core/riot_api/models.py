@@ -57,10 +57,11 @@ class ParticipantDTO(BaseModel):
     team_id: int = Field(..., alias="teamId")
     team_position: Optional[str] = Field(None, alias="teamPosition")
 
-    # Champion
+    # Champions
     champion_id: int = Field(..., alias="championId")
     champion_name: str = Field(..., alias="championName")
-    champ_level: int = Field(..., alias="champLevel")
+    champion_level: int = Field(..., alias="champLevel")
+    champion_transform: int = Field(0, alias="championTransform")
 
     # KDA & Perf
     win: bool
@@ -70,6 +71,11 @@ class ParticipantDTO(BaseModel):
     kda: float = Field(
         0.0
     )  # Calculated property in API, but explicit here for validation
+
+    largest_multi_kill: int = Field(0, alias="largestMultiKill")
+    largest_killing_spree: int = Field(0, alias="largestKillingSpree")
+    first_blood_kill: bool = Field(False, alias="firstBloodKill")
+    first_tower_kill: bool = Field(False, alias="firstTowerKill")
 
     # Economy & Vision
     gold_earned: int = Field(..., alias="goldEarned")
@@ -89,7 +95,18 @@ class ParticipantDTO(BaseModel):
     total_damage_dealt_to_champions: int = Field(
         ..., alias="totalDamageDealtToChampions"
     )
+    physical_damage_dealt_to_champions: int = Field(
+        0, alias="physicalDamageDealtToChampions"
+    )
+    magic_damage_dealt_to_champions: int = Field(0, alias="magicDamageDealtToChampions")
+    true_damage_dealt_to_champions: int = Field(0, alias="trueDamageDealtToChampions")
+    damage_dealt_to_objectives: int = Field(0, alias="damageDealtToObjectives")
+    damage_dealt_to_turrets: int = Field(0, alias="damageDealtToTurrets")
+
     total_damage_taken: int = Field(..., alias="totalDamageTaken")
+    physical_damage_taken: int = Field(0, alias="physicalDamageTaken")
+    magic_damage_taken: int = Field(0, alias="magicDamageTaken")
+    true_damage_taken: int = Field(0, alias="trueDamageTaken")
 
     # Healing & Shielding
     total_self_healing: int = Field(0, alias="totalHeal")
@@ -107,6 +124,20 @@ class ParticipantDTO(BaseModel):
     trinket: int = Field(0, alias="item6")
     items_purchased: int = Field(0, alias="itemsPurchased")
     consumables_purchased: int = Field(0, alias="consumablesPurchased")
+    role_bound_item: int = Field(0, alias="roleBoundItem")
+
+    # Spells/Objectives/Time
+    summoner1_id: int = Field(0, alias="summoner1Id")
+    summoner1_casts: int = Field(0, alias="summoner1Casts")
+    summoner2_id: int = Field(0, alias="summoner2Id")
+    summoner2_casts: int = Field(0, alias="summoner2Casts")
+
+    turret_kills: int = Field(0, alias="turretKills")
+    inhibitor_kills: int = Field(0, alias="inhibitorKills")
+    objectives_stolen: int = Field(0, alias="objectivesStolen")
+
+    time_spent_dead: int = Field(0, alias="totalTimeSpentDead")
+    time_played: int = Field(0, alias="timePlayed")
 
     # Flags
     eligible_for_progression: bool = Field(True, alias="eligibleForProgression")
@@ -114,6 +145,13 @@ class ParticipantDTO(BaseModel):
         None, alias="gameEndedInEarlySurrender"
     )
     game_ended_in_surrender: Optional[bool] = Field(None, alias="gameEndedInSurrender")
+
+    @property
+    def remake(self) -> bool:
+        """Remake is the negation of eligibleForProgression."""
+        return not self.eligible_for_progression
+
+    # Advanced
 
     # Advanced
     runes: dict = Field(default_factory=dict, alias="perks")

@@ -26,6 +26,11 @@ tail -f logs/frontend.log
 
 **Services**: Backend http://localhost:8000 (/api), Frontend http://localhost:3000
 
+**URL Navigation**:
+
+- Player Analysis: `http://localhost:3000/player-analysis?puuid=<PUUID>` (uses URL query param for state)
+- Matchmaking Analysis: `http://localhost:3000/matchmaking-analysis?puuid=<PUUID>` (uses URL query param for state)
+
 **⚠️ CRITICAL**: After editing `.env`, restart `run.sh` (reads env vars on startup)
 
 # Tech Stack
@@ -88,3 +93,6 @@ The database schema is defined in `backend/init_database.sql`.
 
 **Instruction for AI Agents**:
 When completing a task that involves changes to the codebase, always end your response with a concise overview/summarization of the changes made. Include reasoning for any unintuitive changes or significant modifications that the user didn't explicitly ask for but were necessary for the solution. This summary should help the user understand exactly what was done and why.
+
+**Troubleshooting**:
+If you encounter errors or bugs during task execution, AUTO-CHECK `logs/backend.log` and `logs/frontend.log` first. These logs often contain critical tracebacks (e.g., `NameError`, `ImportError`, `429 Too Many Requests`) that are not visible in the API response or UI output.

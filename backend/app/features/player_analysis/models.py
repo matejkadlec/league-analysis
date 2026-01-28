@@ -23,7 +23,7 @@ from app.core.models import Base
 class PlayerAnalysis(Base):
     """Player analysis model storing detection results and signals for smurfs, boosted accounts, and trolls."""
 
-    __tablename__ = "player_analysis"
+    __tablename__ = "player_analyses"
     __table_args__ = {"schema": "core"}
 
     # Primary key

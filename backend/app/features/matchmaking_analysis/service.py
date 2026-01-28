@@ -427,7 +427,7 @@ class MatchmakingAnalysisService:
                             "neutralMinionsKilled": getattr(
                                 p, "neutral_minions_killed", 0
                             ),
-                            "champLevel": p.champ_level,
+                            "champLevel": p.champion_level,
                             "totalDamageDealt": p.total_damage_dealt,
                             "totalDamageDealtToChampions": p.total_damage_dealt_to_champions,
                             "damageTaken": p.total_damage_taken,
@@ -767,7 +767,8 @@ class MatchmakingAnalysisService:
             .order_by(Match.game_start_timestamp.desc())
             .limit(match_count)
         )
-        db_wins = result.all()
+        # Convert Rows to tuples to satisfy type checker
+        db_wins = [tuple(row) for row in result.all()]
 
         # Return winrate if we have enough matches, otherwise return None and the partial results
         if len(db_wins) >= match_count:

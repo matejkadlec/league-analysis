@@ -2,7 +2,7 @@
 
 import { AddTrackedPlayer, TrackedPlayersList } from "@/features/players";
 import { ProtectedRoute } from "@/features/auth";
-import { ThemeToggle } from "@/components/theme-toggle";
+
 import { Card } from "@/components/ui/card";
 
 export default function TrackedPlayersPage() {
@@ -17,7 +17,6 @@ export default function TrackedPlayersPage() {
           >
             <div className="mb-4 flex items-start justify-between">
               <h1 className="text-2xl font-semibold">Tracked Players</h1>
-              <ThemeToggle />
             </div>
             <p className="text-sm leading-relaxed">
               Track League of Legends players for automated match history

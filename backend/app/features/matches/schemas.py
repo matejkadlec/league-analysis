@@ -83,6 +83,7 @@ class MatchListResponse(BaseModel):
 
     matches: List[MatchResponse]
     total: int = Field(..., description="Total matches available")
+    total_analyzed: int = Field(0, description="Total number of fully analyzed matches")
     page: int = Field(..., description="Current page number")
     size: int = Field(..., description="Number of matches per page")
     pages: int = Field(..., description="Total number of pages")

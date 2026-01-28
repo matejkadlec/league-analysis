@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { ThemeToggle } from "@/components/theme-toggle";
+
 import { ProtectedRoute } from "@/features/auth";
 import { Card, CardContent } from "@/components/ui/card";
 
@@ -25,7 +25,6 @@ export default function Home() {
                   />
                 </div>
               </div>
-              <ThemeToggle />
             </div>
           </div>
           <CardContent className="px-8 pt-0 pb-4 prose prose-lg max-w-none space-y-4">

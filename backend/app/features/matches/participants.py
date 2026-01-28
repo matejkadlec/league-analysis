@@ -66,9 +66,9 @@ class MatchParticipant(Base):
         String(63), nullable=True, comment="Legacy Summoner ID"
     )
 
-    profile_icon: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    profile_icon: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
-    summoner_level: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    summoner_level: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     # Team & Context
     team_id: Mapped[int] = mapped_column(

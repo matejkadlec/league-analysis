@@ -1,14 +1,14 @@
 "use client";
 
 import { useState, useEffect, Suspense, useTransition, useRef } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { Player, PlayerSchema } from "@/lib/core/schemas";
 import { validatedGet } from "@/lib/core/api";
 import { PlayerSearch, PlayerCard, PlayerStats } from "@/features/players";
 import { MatchHistory, RecentOpponents } from "@/features/matches";
 import { PlayerAnalysis } from "@/features/player-analysis";
 import { ProtectedRoute } from "@/features/auth";
-import { ThemeToggle } from "@/components/theme-toggle";
+
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   PlayerCardSkeleton,
@@ -18,11 +18,9 @@ import {
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
 
-// TODO [SPY-68]: Add PUUID to URL after a player is selected (same as the redirect from Tracked Players),
-// so the player's data stays loaded until user goes to another page, and i.e. refresh won't force
-// you to search for player again
 export default function PlayerAnalysisPage() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
   const [isPending, startTransition] = useTransition();
   const loadedPuuidRef = useRef<string | null>(null);
@@ -54,6 +52,8 @@ export default function PlayerAnalysisPage() {
 
   const handlePlayerFound = (player: Player) => {
     setSelectedPlayer(player);
+    // Update URL with PUUID
+    router.push(`/player-analysis?puuid=${player.puuid}`);
   };
 
   return (
@@ -67,7 +67,6 @@ export default function PlayerAnalysisPage() {
           >
             <div className="mb-4 flex items-start justify-between">
               <h1 className="text-2xl font-semibold">Player Analysis</h1>
-              <ThemeToggle />
             </div>
             <p className="text-sm leading-relaxed">
               Analyze League of Legends players for smurf behavior using match

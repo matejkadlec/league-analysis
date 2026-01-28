@@ -74,6 +74,11 @@ class MatchService:
                 puuid, queue, start_time, end_time
             )
 
+            # Get total analyzed matches count
+            total_analyzed = await self._count_analyzed_matches_from_db(
+                puuid, queue, start_time, end_time
+            )
+
             match_responses = [
                 MatchResponse.model_validate(match) for match in db_matches
             ]
@@ -88,6 +93,7 @@ class MatchService:
                 puuid=puuid,
                 matches_count=len(match_responses),
                 total_count=total_count,
+                total_analyzed=total_analyzed,
                 page=page,
                 size=size,
             )
@@ -95,6 +101,7 @@ class MatchService:
             return MatchListResponse(
                 matches=match_responses,
                 total=total_count,
+                total_analyzed=total_analyzed,
                 page=page,
                 size=size,
                 pages=pages,
@@ -538,6 +545,31 @@ class MatchService:
         result = await self.db.execute(query)
         return result.scalar_one()
 
+    async def _count_analyzed_matches_from_db(
+        self,
+        puuid: str,
+        queue: Optional[int],
+        start_time: Optional[int],
+        end_time: Optional[int],
+    ) -> int:
+        """Count total analyzed matches for a player from database."""
+        query = (
+            select(func.count(Match.match_id))
+            .join(MatchParticipant)
+            .where(MatchParticipant.puuid == puuid)
+            .where(Match.fully_analyzed == True)
+        )
+
+        if queue:
+            query = query.where(Match.queue_id == queue)
+        if start_time:
+            query = query.where(Match.game_start_timestamp >= start_time)
+        if end_time:
+            query = query.where(Match.game_start_timestamp <= end_time)
+
+        result = await self.db.execute(query)
+        return result.scalar_one()
+
     def _get_player_info_for_puuid(
         self, puuid: str, participants: List[Dict[str, Any]]
     ) -> Dict[str, Any]:
@@ -813,3 +845,188 @@ class MatchService:
         )
 
         return new_match_ids
+
+    async def analyze_match_history(
+        self,
+        riot_api_client: Any,
+        puuid: str,
+        progress_callback: Optional[Any] = None,
+        should_cancel: Optional[Any] = None,
+    ) -> int:
+        """
+        Analyze matches for a player by re-fetching details from Riot API and updating DB.
+        Fetches up to 100 recent matches from Riot API (not just DB) to ensure new matches are caught.
+
+        Args:
+            riot_api_client: Initialized client
+            puuid: Player PUUID
+            progress_callback: Optional async callback(current, total)
+            should_cancel: Optional callable returning bool. If True, stops processing.
+        """
+        try:
+            # Check cancel before starting
+            if should_cancel and should_cancel():
+                logger.info("Analysis cancelled before fetching list", puuid=puuid)
+                return 0
+
+            # 1. Get recent match IDs from Riot API (Limit 100 to catch new + update recent old)
+            match_list = await riot_api_client.get_match_list_by_puuid(
+                puuid=puuid, count=100, queue=420
+            )
+
+            match_ids = []
+            if match_list:
+                if hasattr(match_list, "match_ids"):
+                    match_ids = list(match_list.match_ids)
+                elif isinstance(match_list, list):
+                    match_ids = match_list
+
+            import sys
+
+            print(
+                f"DEBUG: Riot API returned {len(match_ids)} matches for PUUID {puuid}",
+                file=sys.stderr,
+            )
+
+            if not match_ids:
+                logger.info("No matches found in Riot API", puuid=puuid)
+                return 0
+
+            logger.info(
+                "Starting match history analysis (fetch & update)",
+                puuid=puuid,
+                count=len(match_ids),
+            )
+
+            processed = 0
+            total = len(match_ids)
+
+            import asyncio
+
+            for i, match_id in enumerate(match_ids):
+                # Check for cancellation
+                if should_cancel and should_cancel():
+                    logger.info(
+                        "Analysis cancelled by user request",
+                        puuid=puuid,
+                        processed=processed,
+                    )
+                    break
+
+                # Report progress
+                if progress_callback:
+                    await progress_callback(processed, total)
+
+                # STRICT THROTTLING: 1.2s delay to respect 100 req/2min Dev Key limit
+                # We do this proactively to avoid hitting 429s and crashing the batch
+                await asyncio.sleep(1.2)
+
+                try:
+                    # 2. Fetch fresh DTO
+                    match_dto = await riot_api_client.get_match(match_id)
+                    if not match_dto:
+                        continue
+
+                    # 3. Reprocess (Upsert)
+                    await self._reprocess_match(match_dto)
+                    processed += 1
+                except Exception as e:
+                    logger.error(
+                        "Failed to reprocess match", match_id=match_id, error=str(e)
+                    )
+                    # Continue
+
+            # Final
+            if progress_callback:
+                await progress_callback(processed, total)
+
+            return processed
+        except Exception as e:
+            logger.error("Match history analysis failed", puuid=puuid, error=str(e))
+            raise
+
+    async def _reprocess_match(self, match_dto: Any) -> None:
+        """Update existing match or insert new match using merge (upsert)."""
+        from .transformers import MatchDTOTransformer
+
+        # Extract platform
+        platform_id = match_dto.info.platform or "EUN1"
+        match_id = match_dto.metadata.match_id
+
+        # Calculate flags
+        early_surrender = any(
+            p.game_ended_in_early_surrender for p in match_dto.info.participants
+        )
+        surrender = any(p.game_ended_in_surrender for p in match_dto.info.participants)
+
+        try:
+            # 1. Update Match record
+            match = Match(
+                match_id=match_id,
+                platform=platform_id.upper(),
+                game_start_timestamp=match_dto.info.game_start_timestamp,
+                game_end_timestamp=match_dto.info.game_end_timestamp,
+                game_duration=match_dto.info.game_duration,
+                game_mode=match_dto.info.game_mode,
+                game_type=match_dto.info.game_type,
+                game_version=match_dto.info.game_version,
+                map_id=match_dto.info.map_id,
+                queue_id=match_dto.info.queue_id,
+                early_surrender=early_surrender,
+                surrender=surrender,
+                game_result=match_dto.info.game_result,
+                fully_analyzed=True,  # Match fetched is considered analyzed for history
+            )
+            # Use merge to upsert
+            await self.db.merge(match)
+
+            # 2. Update Participants
+            for participant in match_dto.info.participants:
+                # Ensure Player Exists (Foreign Key Requirement)
+                # Riot API matches include all participants, but not all are in our DB.
+                # We upsert a skeletal Player record if missing to satisfy the FK.
+
+                # Basic sanitation
+                p_game_name = (
+                    participant.game_name or participant.summoner_name or "Unknown"
+                )
+                p_tag_line = participant.tag_line or (
+                    platform_id.replace("1", "") if platform_id else "RIOT"
+                )
+
+                # Safety check for empty strings that might come from API
+                if not p_game_name or p_game_name == "":
+                    p_game_name = "Unknown"
+                if not p_tag_line or p_tag_line == "":
+                    p_tag_line = "RIOT"
+
+                # Construct minimal player for upsert
+                # Note: We use merge, so existing fields (ranks etc) are preserved if we don't set them here
+                player_record = Player(
+                    puuid=participant.puuid,
+                    game_name=p_game_name,
+                    tag_line=p_tag_line,
+                    platform=platform_id.lower(),
+                    profile_icon_id=participant.profile_icon
+                    or 29,  # Default icon if missing
+                    summoner_level=participant.summoner_level
+                    or 0,  # Default level if missing
+                    is_tracked=False,
+                )
+                await self.db.merge(player_record)
+
+                # Now process the match participant
+                participant_data = MatchDTOTransformer.extract_participant_data(
+                    participant
+                )
+                match_participant = MatchParticipant(
+                    match_id=match_id,
+                    **participant_data,
+                )
+                await self.db.merge(match_participant)
+
+            await self.db.commit()
+
+        except Exception as e:
+            await self.db.rollback()
+            raise

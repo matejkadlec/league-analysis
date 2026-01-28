@@ -92,7 +92,7 @@ class MatchTransformer:
                     "vision_score": participant.get("visionScore", 0),
                     "cs": self._calculate_cs(participant),
                     "kda": self._calculate_participant_kda(participant),
-                    "champ_level": participant.get("champLevel", 1),
+                    "champion_level": participant.get("champLevel", 1),
                     "total_damage_dealt": participant.get("totalDamageDealt", 0),
                     "total_damage_dealt_to_champions": participant.get(
                         "totalDamageDealtToChampions", 0
@@ -102,6 +102,41 @@ class MatchTransformer:
                     "individual_position": participant.get("individualPosition"),
                     "team_position": participant.get("teamPosition"),
                     "role": participant.get("role"),
+                    # New fields
+                    "champion_transform": participant.get("championTransform", 0),
+                    "largest_multi_kill": participant.get("largestMultiKill", 0),
+                    "largest_killing_spree": participant.get("largestKillingSpree", 0),
+                    "first_blood_kill": participant.get("firstBloodKill", False),
+                    "first_tower_kill": participant.get("firstTowerKill", False),
+                    "physical_damage_dealt_to_champions": participant.get(
+                        "physicalDamageDealtToChampions", 0
+                    ),
+                    "magic_damage_dealt_to_champions": participant.get(
+                        "magicDamageDealtToChampions", 0
+                    ),
+                    "true_damage_dealt_to_champions": participant.get(
+                        "trueDamageDealtToChampions", 0
+                    ),
+                    "damage_dealt_to_objectives": participant.get(
+                        "damageDealtToObjectives", 0
+                    ),
+                    "damage_dealt_to_turrets": participant.get(
+                        "damageDealtToTurrets", 0
+                    ),
+                    "physical_damage_taken": participant.get("physicalDamageTaken", 0),
+                    "magic_damage_taken": participant.get("magicDamageTaken", 0),
+                    "true_damage_taken": participant.get("trueDamageTaken", 0),
+                    "role_bound_item": participant.get("roleBoundItem", 0),
+                    "summoner1_id": participant.get("summoner1Id"),
+                    "summoner1_casts": participant.get("summoner1Casts", 0),
+                    "summoner2_id": participant.get("summoner2Id"),
+                    "summoner2_casts": participant.get("summoner2Casts", 0),
+                    "turret_kills": participant.get("turretKills", 0),
+                    "inhibitor_kills": participant.get("inhibitorKills", 0),
+                    "objectives_stolen": participant.get("objectivesStolen", 0),
+                    "time_spent_dead": participant.get("totalTimeSpentDead", 0),
+                    "time_played": participant.get("timePlayed", 0),
+                    "remake": not participant.get("eligibleForProgression", True),
                 }
                 transformed_participants.append(participant_dict)
             except Exception as e:

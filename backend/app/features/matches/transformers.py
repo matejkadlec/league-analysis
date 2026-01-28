@@ -109,7 +109,7 @@ class MatchDTOTransformer:
             # Champion
             "champion_id": participant_dto.champion_id,
             "champion_name": participant_dto.champion_name,
-            "champion_level": participant_dto.champ_level,
+            "champion_level": participant_dto.champion_level,
             "champion_transform": getattr(participant_dto, "champion_transform", 0),
             # Results
             "win": participant_dto.win,
@@ -177,6 +177,7 @@ class MatchDTOTransformer:
             "trinket": participant_dto.trinket,
             "items_purchased": participant_dto.items_purchased,
             "consumables_purchased": participant_dto.consumables_purchased,
+            "role_bound_item": getattr(participant_dto, "role_bound_item", 0),
             # Spells
             "summoner1_id": getattr(participant_dto, "summoner1_id", None),
             "summoner1_casts": getattr(participant_dto, "summoner1_casts", 0),
@@ -187,7 +188,7 @@ class MatchDTOTransformer:
             "inhibitor_kills": getattr(participant_dto, "inhibitor_kills", 0),
             "objectives_stolen": getattr(participant_dto, "objectives_stolen", 0),
             # Time
-            "time_spent_dead": getattr(participant_dto, "total_time_spent_dead", 0),
+            "time_spent_dead": getattr(participant_dto, "time_spent_dead", 0),
             "time_played": getattr(participant_dto, "time_played", 0),
             # JSON Data
             "runes": participant_dto.runes,

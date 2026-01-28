@@ -50,6 +50,7 @@ export const MatchSchema = z.object({
 export const MatchListResponseSchema = z.object({
   matches: z.array(MatchSchema),
   total: z.number(),
+  total_analyzed: z.number().optional().default(0),
   page: z.number(),
   size: z.number(),
   pages: z.number(),

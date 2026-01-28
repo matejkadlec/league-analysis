@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert } from "@/components/ui/alert";
-import { ThemeToggle } from "@/components/theme-toggle";
+
 import { Loader2, Check, X } from "lucide-react";
 import { toast } from "sonner";
 
@@ -139,7 +139,6 @@ function SettingsPageContent() {
         >
           <div className="mb-4 flex items-start justify-between">
             <h1 className="text-2xl font-semibold">System Settings</h1>
-            <ThemeToggle />
           </div>
           <p className="text-sm leading-relaxed">
             Configure system settings and runtime configuration

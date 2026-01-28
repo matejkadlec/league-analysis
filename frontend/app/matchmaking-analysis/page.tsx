@@ -12,7 +12,7 @@ import {
   MatchmakingAnalysisResults,
 } from "@/features/matchmaking";
 import { ProtectedRoute } from "@/features/auth";
-import { ThemeToggle } from "@/components/theme-toggle";
+
 import { Card } from "@/components/ui/card";
 import {
   PlayerCardSkeleton,
@@ -65,7 +65,6 @@ function MatchmakingAnalysisContent() {
         >
           <div className="mb-4 flex items-start justify-between">
             <h1 className="text-2xl font-semibold">Matchmaking Analysis</h1>
-            <ThemeToggle />
           </div>
           <p className="text-sm leading-relaxed">
             Analyze matchmaking fairness by comparing average winrates of

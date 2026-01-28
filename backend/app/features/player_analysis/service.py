@@ -103,7 +103,7 @@ class PlayerAnalysisService:
         :type queue_filter: Optional[int]
         :param time_period_days: Optional time period filter
         :type time_period_days: Optional[int]
-        :param force_reanalyze: Force re-analysis even if recent analysis exists
+        :param force_reanalyze: Force reanalysis even if recent analysis exists
         :type force_reanalyze: bool
         :returns: DetectionResponse with analysis results
         :rtype: DetectionResponse
@@ -377,19 +377,16 @@ class PlayerAnalysisService:
         from app.features.matches.participants import MatchParticipant
 
         # Build query for recent matches
-        # Use analysis config for minimum matches calculation
-        min_matches_for_analysis = self.analysis_config.get(
-            "min_matches_for_analysis", 10
-        )
-        effective_min_games = max(min_games, min_matches_for_analysis)
-
+        # Get more matches than minimum to have better analysis data
+        # We limit to a reasonable upper bound (e.g. 100) to avoid fetching too much
+        # The actual analysis limit is applied in analyze_player
         query = (
             select(Match, MatchParticipant)
             .join(MatchParticipant, Match.match_id == MatchParticipant.match_id)
             .where(MatchParticipant.puuid == puuid)
             .order_by(desc(Match.game_start_timestamp))
-            .limit(effective_min_games * 2)
-        )  # Get more to filter
+            .limit(100)
+        )
 
         if queue_filter:
             query = query.where(Match.queue_id == queue_filter)
@@ -426,9 +423,7 @@ class PlayerAnalysisService:
             matches_data.append(match_dict)
             match_ids.append(match.match_id)
 
-        # Return only the requested number of matches
-        limit = min(len(matches_data), effective_min_games)
-        return matches_data[:limit], match_ids[:limit]
+        return matches_data, match_ids
 
     def _analyze_kda(self, recent_matches: List[Dict[str, Any]]) -> DetectionFactor:
         """Analyze KDA factor."""

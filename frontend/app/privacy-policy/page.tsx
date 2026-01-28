@@ -1,6 +1,5 @@
 "use client";
 
-import { ThemeToggle } from "@/components/theme-toggle";
 import { ProtectedRoute } from "@/features/auth";
 import { Card, CardContent } from "@/components/ui/card";
 
@@ -14,7 +13,6 @@ export default function PrivacyPolicyPage() {
               <h1 className="text-3xl font-[family-name:var(--font-league)]">
                 Privacy Policy
               </h1>
-              <ThemeToggle />
             </div>
           </div>
           <CardContent className="px-8 pt-0 pb-4 prose prose-lg max-w-none space-y-4">
