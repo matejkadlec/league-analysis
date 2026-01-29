@@ -15,7 +15,7 @@ from app.core.rate_limiter import limiter
 from app.features.auth import auth_router
 from app.features.players.router import router as players_router
 from app.features.matches.router import router as matches_router
-from app.features.player_analysis.router import router as player_analysis_router
+from app.features.playstyle_analysis.router import router as playstyle_analysis_router
 from app.features.jobs import (
     jobs_router,
     start_scheduler,
@@ -124,7 +124,7 @@ tags_metadata = [
     {"name": "auth", "description": "Authentication and user management."},
     {"name": "players", "description": "Player search and management."},
     {"name": "matches", "description": "Match history and analysis."},
-    {"name": "player-analysis", "description": "Player analysis algorithms."},
+    {"name": "playstyle-analysis", "description": "Playstyle analysis algorithms."},
     {"name": "jobs", "description": "Background job management."},
     {"name": "settings", "description": "System settings."},
     {"name": "matchmaking-analysis", "description": "Matchmaking fairness analysis."},
@@ -165,7 +165,9 @@ app.add_middleware(
 app.include_router(auth_router, prefix="/api/v1/auth", tags=["authentication"])
 app.include_router(players_router, prefix="/api/v1", tags=["players"])
 app.include_router(matches_router, prefix="/api/v1", tags=["matches"])
-app.include_router(player_analysis_router, prefix="/api/v1", tags=["player-analysis"])
+app.include_router(
+    playstyle_analysis_router, prefix="/api/v1", tags=["playstyle-analysis"]
+)
 app.include_router(jobs_router, prefix="/api/v1", tags=["jobs"])
 app.include_router(settings_router, prefix="/api/v1", tags=["settings"])
 app.include_router(matchmaking_router, prefix="/api/v1", tags=["matchmaking-analysis"])
@@ -173,7 +175,7 @@ app.include_router(matchmaking_router, prefix="/api/v1", tags=["matchmaking-anal
 # Legacy route compatibility
 app.include_router(players_router)
 app.include_router(matches_router)
-app.include_router(player_analysis_router)
+app.include_router(playstyle_analysis_router)
 app.include_router(jobs_router)
 
 

@@ -28,7 +28,7 @@ jobs/
 
 1. **Tracked Player Updater** - Updates tracked player data (15 min)
 2. **Match Fetcher** - Fetches new matches (30 min)
-3. **Player Analyzer** - Runs player analysis (daily)
+3. **Player Analyzer** - Runs playstyle analysis (daily)
 4. **Ban Checker** - Checks for banned accounts (daily)
 
 ## Job States

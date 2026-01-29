@@ -58,7 +58,7 @@ export function MatchHistorySkeleton() {
   );
 }
 
-export function PlayerAnalysisSkeleton() {
+export function PlaystyleAnalysisSkeleton() {
   return (
     <Card>
       <CardHeader>

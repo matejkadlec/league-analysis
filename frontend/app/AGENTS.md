@@ -12,7 +12,7 @@ app/
 ├── error.tsx              # Error boundary
 ├── loading.tsx            # Root loading state
 ├── not-found.tsx          # 404 page
-├── player-analysis/       # Player analysis page
+├── playstyle-analysis/    # Playstyle analysis page
 ├── matchmaking-analysis/  # Matchmaking analysis page
 └── jobs/                  # Background jobs monitoring
 ```

@@ -31,6 +31,8 @@ async def get_riot_api_key(
 
         return setting
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("failed_to_get_riot_api_key", error=str(e), exc_info=True)
         raise HTTPException(

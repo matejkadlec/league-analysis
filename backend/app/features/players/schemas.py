@@ -46,8 +46,8 @@ class PlayerResponse(PlayerBase):
         default=False,
         description="Whether this player has been completely analyzed",
     )
-    last_player_analysis: Optional[datetime] = Field(
-        None, description="Time of last player analysis"
+    last_playstyle_analysis: Optional[datetime] = Field(
+        None, description="Time of last playstyle analysis"
     )
     last_matchmaking_analysis: Optional[datetime] = Field(
         None, description="Time of last matchmaking analysis"

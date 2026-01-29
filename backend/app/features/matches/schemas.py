@@ -34,7 +34,8 @@ class MatchBase(BaseModel):
         None, max_length=32, description="End of game result"
     )
     fully_analyzed: bool = Field(
-        False, description="Whether this match has been processed for player analysis"
+        False,
+        description="Whether this match has been processed for playstyle analysis",
     )
 
 
@@ -58,7 +59,7 @@ class MatchUpdate(BaseModel):
     game_mode: Optional[str] = Field(None, max_length=32, description="Game mode")
     game_type: Optional[str] = Field(None, max_length=32, description="Game type")
     fully_analyzed: Optional[bool] = Field(
-        None, description="Whether this match has been processed for player analysis"
+        None, description="Whether this match has been processed for playstyle analysis"
     )
 
 

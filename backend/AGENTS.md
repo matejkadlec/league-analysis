@@ -24,7 +24,7 @@ Each feature: `router.py`, `service.py`, `models.py`, `schemas.py`, `dependencie
 
 - `players/` - Search, tracking, rank
 - `matches/` - Match history, stats
-- `player_analysis/` - Smurf detection (see feature AGENTS.md)
+- `playstyle_analysis/` - Playstyle analysis and stats
 - `matchmaking_analysis/` - Fairness evaluation
 - `jobs/` - Background tasks (see feature AGENTS.md)
 - `settings/` - Runtime config

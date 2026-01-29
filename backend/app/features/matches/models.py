@@ -131,7 +131,7 @@ class Match(Base):
         nullable=False,
         default=False,
         index=True,
-        comment="Whether this match has been processed for player analysis",
+        comment="Whether this match has been processed for playstyle analysis",
     )
 
     # Relationships

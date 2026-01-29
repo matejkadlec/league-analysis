@@ -40,7 +40,8 @@ export default function PrivacyPolicyPage() {
             </p>
             <ul className="list-disc pl-6 space-y-2">
               <li>
-                Provide player analysis and account anomaly detection services
+                Provide playstyle analysis and account anomaly detection
+                services
               </li>
               <li>Display match history and performance statistics</li>
               <li>Track player rank progression and metrics</li>

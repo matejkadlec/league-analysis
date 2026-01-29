@@ -12,7 +12,7 @@ export const PlayerSchema = z.object({
   is_tracked: z.boolean().optional().default(false),
   matches_analyzed: z.number().int().optional().default(0),
   fully_analyzed: z.boolean().optional().default(false),
-  last_player_analysis: z.string().optional().nullable(),
+  last_playstyle_analysis: z.string().optional().nullable(),
   last_matchmaking_analysis: z.string().optional().nullable(),
   created_at: z.string(),
   updated_at: z.string(),
@@ -133,56 +133,37 @@ export const MatchParticipantSchema = z.object({
   advanced_stats: z.record(z.string(), z.any()).nullable().optional(),
 });
 
-// Detection Factor Schema
-export const DetectionFactorSchema = z.object({
-  name: z.string(),
-  value: z.number(),
-  meets_threshold: z.boolean(),
-  weight: z.number(),
-  description: z.string(),
-  score: z.number(),
-});
+// Playstyle Tag Schema
+// Allowing the struct to be flexible because the backend returns a flexible dictionary
+export const PlaystyleTagSchema = z
+  .object({
+    value: z.number().optional().default(0),
+    threshold_met: z.boolean().optional().default(false),
+    description: z.string().optional(),
+    details: z.string().optional(),
+  })
+  .passthrough();
 
-// Detection Response Schema
-export const DetectionResponseSchema = z.object({
+// Playstyle Analysis Response Schema
+export const PlaystyleAnalysisResponseSchema = z.object({
+  id: z.number().optional(),
   puuid: z.string(),
-  is_smurf: z.boolean(),
-  detection_score: z.number(),
-  confidence_level: z.string(),
-  factors: z.array(DetectionFactorSchema),
-  reason: z.string().nullish(),
-  sample_size: z.number(),
-  analysis_time_seconds: z.number().nullish(),
-  created_at: z.string().nullish(),
+  status: z.enum([
+    "PENDING",
+    "IN_PROGRESS",
+    "COMPLETED",
+    "FAILED",
+    "CANCELLED",
+  ]),
+  tags: z.record(z.string(), PlaystyleTagSchema),
+  summary_stats: z.record(z.string(), z.any()),
+  created_at: z.string().optional(),
+  updated_at: z.string().optional(),
 });
 
-// Detection Stats Response Schema
-export const DetectionStatsResponseSchema = z.object({
-  total_analyses: z.number(),
-  smurf_count: z.number(),
-  smurf_detection_rate: z.number(),
-  average_score: z.number(),
-  confidence_distribution: z.record(z.string(), z.number()),
-  factor_trigger_rates: z.record(z.string(), z.number()),
-  queue_type_distribution: z.record(z.string(), z.number()),
-  last_analysis: z.string().optional(),
-});
-
-// Detection Config Response Schema
-export const DetectionConfigResponseSchema = z.object({
-  thresholds: z.record(z.string(), z.number()),
-  weights: z.record(z.string(), z.number()),
-  min_games_required: z.number(),
-  analysis_version: z.string(),
-  last_updated: z.string(),
-});
-
-// Detection Request Schema
-export const DetectionRequestSchema = z.object({
+// Playstyle Analysis Request Schema
+export const PlaystyleAnalysisRequestSchema = z.object({
   puuid: z.string(),
-  min_games: z.number().int().min(1).optional().default(30),
-  queue_filter: z.number().int().optional().default(420),
-  time_period_days: z.number().int().optional(),
   force_reanalyze: z.boolean().optional().default(true),
 });
 
@@ -191,15 +172,13 @@ export type Match = z.infer<typeof MatchSchema>;
 export type MatchListResponse = z.infer<typeof MatchListResponseSchema>;
 export type MatchStatsResponse = z.infer<typeof MatchStatsResponseSchema>;
 export type MatchParticipant = z.infer<typeof MatchParticipantSchema>;
-export type DetectionFactor = z.infer<typeof DetectionFactorSchema>;
-export type DetectionResponse = z.infer<typeof DetectionResponseSchema>;
-export type DetectionStatsResponse = z.infer<
-  typeof DetectionStatsResponseSchema
+export type PlaystyleTag = z.infer<typeof PlaystyleTagSchema>;
+export type PlaystyleAnalysisResponse = z.infer<
+  typeof PlaystyleAnalysisResponseSchema
 >;
-export type DetectionConfigResponse = z.infer<
-  typeof DetectionConfigResponseSchema
+export type PlaystyleAnalysisRequest = z.infer<
+  typeof PlaystyleAnalysisRequestSchema
 >;
-export type DetectionRequest = z.infer<typeof DetectionRequestSchema>;
 
 // ===== JOB SCHEMAS =====
 
@@ -294,19 +273,6 @@ export const EncounterMatchSchema = z.object({
   win: z.boolean(),
   kda: z.number(),
 });
-
-export const DetectionExistsResponseSchema = z.object({
-  exists: z.boolean(),
-  last_analysis: z.string().nullish(),
-  is_smurf: z.boolean().nullish(),
-  detection_score: z.number().nullish(),
-  confidence_level: z.string().nullish(),
-});
-
-export type EncounterMatch = z.infer<typeof EncounterMatchSchema>;
-export type DetectionExistsResponse = z.infer<
-  typeof DetectionExistsResponseSchema
->;
 
 export const RecentOpponentsSchema = z.array(PlayerSchema);
 export type RecentOpponents = z.infer<typeof RecentOpponentsSchema>;

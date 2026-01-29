@@ -818,10 +818,10 @@ class PlayerService:
         self, limit: int, min_matches: int = 20
     ) -> List[Player]:
         """
-        Get unanalyzed players with sufficient match history for player analysis.
+        Get unanalyzed players with sufficient match history for playstyle analysis.
 
         This is used by the player analyzer job to find players ready for
-        player analysis.
+        playstyle analysis.
 
         Args:
             limit: Maximum number of players to return
@@ -831,14 +831,14 @@ class PlayerService:
             List of Player objects ready for analysis
         """
         from app.features.matches.participants import MatchParticipant
-        from app.features.player_analysis.models import PlayerAnalysis
+        from app.features.playstyle_analysis.models import PlaystyleAnalysis
 
         stmt = (
             select(Player, func.count(MatchParticipant.match_id).label("match_count"))
             .join(MatchParticipant, Player.puuid == MatchParticipant.puuid)
-            .outerjoin(PlayerAnalysis, Player.puuid == PlayerAnalysis.puuid)
+            .outerjoin(PlaystyleAnalysis, Player.puuid == PlaystyleAnalysis.puuid)
             .where(Player.is_tracked.is_(False))
-            .where(PlayerAnalysis.puuid.is_(None))
+            .where(PlaystyleAnalysis.puuid.is_(None))
             .group_by(Player.puuid)
             .having(func.count(MatchParticipant.match_id) >= min_matches)
             .limit(limit)

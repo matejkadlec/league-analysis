@@ -6,7 +6,7 @@ Domain-specific UI components, hooks, and utilities. Each feature is self-contai
 
 - `players/` - Search, cards, stats, tracked list
 - `matches/` - Match history, opponent stats
-- `player-analysis/` - Analysis results
+- `playstyle-analysis/` - Analysis results
 - `matchmaking/` - Fairness analysis
 - `jobs/` - Job management
 - `settings/` - Settings UI
@@ -20,6 +20,7 @@ features/<feature-name>/
 │   ├── player-card.tsx
 │   └── player-stats.tsx
 ├── hooks/               # Feature-specific hooks (optional)
+
 │   └── use-player-search.ts
 ├── utils/               # Feature-specific utilities (optional)
 │   └── player-formatters.ts

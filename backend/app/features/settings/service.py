@@ -160,9 +160,7 @@ class SettingsService:
     ) -> SettingValidationResponse:
         """Test API key by making request to Riot API."""
         try:
-            test_url = client.endpoints.get_account_by_riot_id(
-                "Jim Morioriarty", "EUN1"
-            )
+            test_url = client.endpoints.account_by_riot_id("Jim Morioriarty", "EUN1")
             logger.info("riot_api_key_validation_attempt", test_url=test_url)
 
             response = await client._make_request(

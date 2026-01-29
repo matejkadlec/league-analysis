@@ -15,6 +15,7 @@ from sqlalchemy.sql import func
 import sqlalchemy as sa
 
 from app.core.models import Base
+from .ranks import PlayerRank
 
 
 class Player(Base):
@@ -84,10 +85,10 @@ class Player(Base):
     )
 
     # Timestamps
-    last_player_analysis: Mapped[Optional[datetime]] = mapped_column(
+    last_playstyle_analysis: Mapped[Optional[datetime]] = mapped_column(
         SQLDateTime(timezone=True),
         nullable=True,
-        comment="Time of the last player analysis",
+        comment="Time of the last playstyle analysis",
     )
 
     last_matchmaking_analysis: Mapped[Optional[datetime]] = mapped_column(
@@ -120,8 +121,11 @@ class Player(Base):
     match_participations = relationship(  # noqa: F841 - Used by SQLAlchemy ORM
         "MatchParticipant", back_populates="player", cascade="all, delete-orphan"
     )
-    player_analysis = relationship(  # noqa: F841 - Used by SQLAlchemy ORM
-        "PlayerAnalysis", back_populates="player", cascade="all, delete-orphan"
+    playstyle_analysis = relationship(  # noqa: F841 - Used by SQLAlchemy ORM
+        "PlaystyleAnalysis",
+        back_populates="player",
+        cascade="all, delete-orphan",
+        uselist=False,
     )
     ranks = relationship(  # noqa: F841 - Used by SQLAlchemy ORM
         "PlayerRank", back_populates="player", cascade="all, delete-orphan"

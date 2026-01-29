@@ -6,19 +6,19 @@ import { Player, PlayerSchema } from "@/lib/core/schemas";
 import { validatedGet } from "@/lib/core/api";
 import { PlayerSearch, PlayerCard, PlayerStats } from "@/features/players";
 import { MatchHistory, RecentOpponents } from "@/features/matches";
-import { PlayerAnalysis } from "@/features/player-analysis";
+import { PlaystyleAnalysis } from "@/features/playstyle-analysis";
 import { ProtectedRoute } from "@/features/auth";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   PlayerCardSkeleton,
   MatchHistorySkeleton,
-  PlayerAnalysisSkeleton,
+  PlaystyleAnalysisSkeleton,
 } from "@/components/loading-skeleton";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
 
-export default function PlayerAnalysisPage() {
+export default function PlaystyleAnalysisPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
@@ -53,7 +53,7 @@ export default function PlayerAnalysisPage() {
   const handlePlayerFound = (player: Player) => {
     setSelectedPlayer(player);
     // Update URL with PUUID
-    router.push(`/player-analysis?puuid=${player.puuid}`);
+    router.push(`/playstyle-analysis?puuid=${player.puuid}`);
   };
 
   return (
@@ -66,11 +66,11 @@ export default function PlayerAnalysisPage() {
             className="bg-[#152b56] p-6 text-white dark:bg-[#0a1428]"
           >
             <div className="mb-4 flex items-start justify-between">
-              <h1 className="text-2xl font-semibold">Player Analysis</h1>
+              <h1 className="text-2xl font-semibold">Playstyle Analysis</h1>
             </div>
             <p className="text-sm leading-relaxed">
-              Analyze League of Legends players for smurf behavior using match
-              history and performance metrics
+              Deep dive into player behavior patterns, role preferences, and
+              playstyle characteristics.
             </p>
           </Card>
 
@@ -112,16 +112,18 @@ export default function PlayerAnalysisPage() {
                     />
                   </Suspense>
 
-                  <Tabs defaultValue="smurf" className="w-full">
+                  <Tabs defaultValue="playstyle" className="w-full">
                     <TabsList className="grid w-full grid-cols-2">
-                      <TabsTrigger value="smurf">Player Analysis</TabsTrigger>
+                      <TabsTrigger value="playstyle">
+                        Playstyle Analysis
+                      </TabsTrigger>
                       <TabsTrigger value="opponents">
                         Recent Opponents
                       </TabsTrigger>
                     </TabsList>
-                    <TabsContent value="smurf" className="mt-6">
-                      <Suspense fallback={<PlayerAnalysisSkeleton />}>
-                        <PlayerAnalysis puuid={selectedPlayer.puuid} />
+                    <TabsContent value="playstyle" className="mt-6">
+                      <Suspense fallback={<PlaystyleAnalysisSkeleton />}>
+                        <PlaystyleAnalysis puuid={selectedPlayer.puuid} />
                       </Suspense>
                     </TabsContent>
                     <TabsContent value="opponents" className="mt-6">

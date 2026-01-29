@@ -68,7 +68,7 @@ async def search_player(
         max_length=30,
         description="Search query (game name, tag line or both)",
     ),
-    plaform: Platform = Query(Platform.EUN1, description="Platform (e.g. EUN1)"),
+    platform: Platform = Query(Platform.EUN1, description="Platform (e.g. EUN1)"),
 ):
     """
     Fuzzy search for players by game name, tag line or both.
@@ -81,7 +81,7 @@ async def search_player(
     try:
         results = await player_service.fuzzy_search_players(
             query=query,
-            plaform=plaform.value,
+            platform=platform.value,
             limit=10,
         )
         if not results:
@@ -96,7 +96,7 @@ async def search_player(
             "player_search_failed",
             error=str(e),
             query=query,
-            plaform=plaform.value,
+            platform=platform.value,
             exc_info=True,
         )
         raise HTTPException(

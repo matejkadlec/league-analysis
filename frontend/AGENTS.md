@@ -11,7 +11,7 @@ Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS 4, shadcn/ui (New Yo
 Next.js App Router pages:
 
 - `page.tsx` - Home/dashboard
-- `player-analysis/page.tsx` - Player analysis
+- `playstyle-analysis/page.tsx` - Playstyle analysis
 - `matchmaking-analysis/page.tsx` - Matchmaking fairness
 - `tracked-players/page.tsx` - Tracked players management
 - `jobs/page.tsx` - Background jobs control
@@ -23,7 +23,7 @@ Domain-specific components, hooks, utilities:
 
 - `players/` - Search, cards, stats, tracked list
 - `matches/` - Match history, opponent stats
-- `player-analysis/` - Analysis results
+- `playstyle-analysis/` - Analysis results
 - `matchmaking/` - Fairness analysis
 - `jobs/` - Job management
 - `settings/` - Settings UI

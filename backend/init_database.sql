@@ -41,6 +41,14 @@ CREATE TYPE jobs.job_type_enum AS ENUM (
     'BAN_CHECKER'
 );
 
+CREATE TYPE core.analysis_status_enum AS ENUM (
+    'PENDING',
+    'IN_PROGRESS',
+    'COMPLETED',
+    'FAILED',
+    'CANCELLED'
+);
+
 SET default_tablespace = '';
 SET default_table_access_method = heap;
 
@@ -102,7 +110,7 @@ CREATE TABLE core.players (
     summoner_level integer,
     is_tracked boolean NOT NULL,
     matches_analyzed integer DEFAULT 0 NOT NULL,
-    last_player_analysis timestamp with time zone,
+    last_playstyle_analysis timestamp with time zone,
     last_matchmaking_analysis timestamp with time zone,
     fully_analyzed boolean DEFAULT false NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
@@ -269,68 +277,32 @@ CREATE INDEX ix_app_matchmaking_analyses_status ON core.matchmaking_analyses USI
 CREATE INDEX ix_matchmaking_analyses_created_at ON core.matchmaking_analyses USING btree (created_at);
 CREATE INDEX ix_matchmaking_analyses_puuid_status ON core.matchmaking_analyses USING btree (puuid, status);
 
--- [table] core.player_analyses
+-- [table] core.playstyle_analyses
 
-CREATE SEQUENCE core.player_analyses_id_seq
-    AS integer
+CREATE SEQUENCE core.playstyle_analyses_id_seq
     START WITH 1
     INCREMENT BY 1
     NO MINVALUE
     NO MAXVALUE
     CACHE 1;
 
-CREATE TABLE core.player_analyses (
-    id integer DEFAULT nextval('core.player_analyses_id_seq'::regclass) NOT NULL,
+CREATE TABLE core.playstyle_analyses (
+    id bigint DEFAULT nextval('core.playstyle_analyses_id_seq'::regclass) NOT NULL,
     puuid character varying(78) NOT NULL,
-    is_smurf boolean NOT NULL,
-    confidence character varying(32),
-    smurf_score numeric(5,3) NOT NULL,
-    win_rate_score numeric(5,3),
-    kda_score numeric(5,3),
-    account_level_score numeric(5,3),
-    rank_discrepancy_score numeric(5,3),
-    rank_progression_score numeric(5,3),
-    win_rate_trend_score numeric(5,3),
-    performance_consistency_score numeric(5,3),
-    performance_trends_score numeric(5,3),
-    role_performance_score numeric(5,3),
-    games_analyzed integer NOT NULL,
-    queue_type character varying(32),
-    time_period_days integer,
-    win_rate_threshold numeric(5,3),
-    kda_threshold numeric(5,3),
-    account_level integer,
-    current_tier character varying(16),
-    current_rank character varying(4),
-    peak_tier character varying(16),
-    peak_rank character varying(4),
+    status core.analysis_status_enum DEFAULT 'PENDING'::core.analysis_status_enum NOT NULL,
+    tags jsonb DEFAULT '{}'::jsonb NOT NULL,
+    summary_stats jsonb DEFAULT '{}'::jsonb NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    last_analysis timestamp with time zone DEFAULT now() NOT NULL,
-    analysis_version character varying(16),
-    false_positive_reported boolean NOT NULL,
-    manually_verified boolean NOT NULL,
-    notes text
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
-ALTER SEQUENCE core.player_analyses_id_seq OWNED BY core.player_analyses.id;
+ALTER SEQUENCE core.playstyle_analyses_id_seq OWNED BY core.playstyle_analyses.id;
 
-ALTER TABLE ONLY core.player_analyses
-    ADD CONSTRAINT pk_player_analyses PRIMARY KEY (id);
+ALTER TABLE ONLY core.playstyle_analyses
+    ADD CONSTRAINT pk_playstyle_analyses PRIMARY KEY (id);
 
-CREATE INDEX idx_player_analyses_analysis_time ON core.player_analyses USING btree (last_analysis, is_smurf);
-CREATE INDEX idx_player_analyses_false_positive ON core.player_analyses USING btree (false_positive_reported, is_smurf);
-CREATE INDEX idx_player_analyses_is_smurf_score ON core.player_analyses USING btree (is_smurf, smurf_score);
-CREATE INDEX idx_player_analyses_puuid_confidence ON core.player_analyses USING btree (puuid, confidence);
-CREATE INDEX idx_player_analyses_queue_score ON core.player_analyses USING btree (queue_type, smurf_score);
-CREATE INDEX ix_core.player_analyses_confidence ON core.player_analyses USING btree (confidence);
-CREATE INDEX ix_core.player_analyses_false_positive_reported ON core.player_analyses USING btree (false_positive_reported);
-CREATE INDEX ix_core.player_analyses_is_smurf ON core.player_analyses USING btree (is_smurf);
-CREATE INDEX ix_core.player_analyses_last_analysis ON core.player_analyses USING btree (last_analysis);
-CREATE INDEX ix_core.player_analyses_manually_verified ON core.player_analyses USING btree (manually_verified);
-CREATE INDEX ix_core.player_analyses_puuid ON core.player_analyses USING btree (puuid);
-CREATE INDEX ix_core.player_analyses_queue_type ON core.player_analyses USING btree (queue_type);
-CREATE INDEX ix_core.player_analyses_smurf_score ON core.player_analyses USING btree (smurf_score);
+CREATE INDEX ix_core_playstyle_analyses_puuid ON core.playstyle_analyses USING btree (puuid);
+CREATE INDEX ix_core_playstyle_analyses_status ON core.playstyle_analyses USING btree (status);
 
 -- [table] core.player_ranks
 
@@ -512,8 +484,8 @@ ALTER TABLE ONLY core.match_participants
 ALTER TABLE ONLY core.matchmaking_analyses
     ADD CONSTRAINT fk_matchmaking_analyses_puuid_players FOREIGN KEY (puuid) REFERENCES core.players(puuid) ON DELETE CASCADE;
 
-ALTER TABLE ONLY core.player_analyses
-    ADD CONSTRAINT fk_player_analyses_puuid_players FOREIGN KEY (puuid) REFERENCES core.players(puuid) ON DELETE CASCADE;
+ALTER TABLE ONLY core.playstyle_analyses
+    ADD CONSTRAINT fk_playstyle_analyses_puuid_players FOREIGN KEY (puuid) REFERENCES core.players(puuid) ON DELETE CASCADE;
 
 ALTER TABLE ONLY core.player_ranks
     ADD CONSTRAINT fk_player_ranks_puuid_players FOREIGN KEY (puuid) REFERENCES core.players(puuid) ON DELETE CASCADE;

@@ -75,8 +75,8 @@ export function TrackedPlayersList({ onViewPlayer }: TrackedPlayersListProps) {
     if (onViewPlayer) {
       onViewPlayer(player);
     } else {
-      // Navigate to player analysis page with the player
-      router.push(`/player-analysis?puuid=${player.puuid}`);
+      // Navigate to playstyle analysis page with the player
+      router.push(`/playstyle-analysis?puuid=${player.puuid}`);
     }
   };
 
