@@ -25,7 +25,7 @@ async def analyze_playstyle(
     try:
         logger.info("starting_playstyle_analysis", puuid=request.puuid)
 
-        result = await service.analyze_player(
+        result = await service.analyze_playstyle(
             puuid=request.puuid,
             force=request.force_reanalyze,
         )

@@ -95,3 +95,16 @@ When completing a task that involves changes to the codebase, always end your re
 
 **Troubleshooting**:
 If you encounter errors or bugs during task execution, AUTO-CHECK `logs/backend.log` and `logs/frontend.log` first. These logs often contain critical tracebacks (e.g., `NameError`, `ImportError`, `429 Too Many Requests`) that are not visible in the API response or UI output.
+
+## Code Quality Standards
+
+- **Clean Code**: Remove "thinking comments" or notes to self from the final code logic.
+  - ❌ `// Wait, if I hide non-met thresholds, then what?`
+  - ❌ `# User said "total_damage_dealt way bigger than total_damage_dealt_to_champions"`
+  - ✅ Write imperative comments explaining _why_ complex logic exists, not the thought process that led to it.
+
+## Quality Assurance
+
+- **Static Analysis**: After modifying any Backend (Python) or Frontend (TypeScript/React) file, you MUST run the `get_errors` tool on that file.
+  - If errors are reported (e.g., SyntaxError, TypeScript type errors), you MUST fix them before completing the task.
+  - Do not assume "it looks correct" - verify with the tool.

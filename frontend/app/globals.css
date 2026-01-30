@@ -232,3 +232,26 @@
     background-color: #e5e7eb !important;
   }
 }
+
+/* Components */
+@layer components {
+  /*
+    Small Gold Button
+    - Matches styling of the "Analyze Match History" button
+    - Fixed gold gradient background
+    - Small text and padding
+  */
+  .button-small {
+    @apply inline-flex items-center justify-center whitespace-nowrap rounded-md font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 shadow h-7 text-xs px-2.5 py-0.5 gap-1.5 cursor-pointer text-primary-foreground hover:opacity-90;
+    background: linear-gradient(
+      105deg,
+      rgb(242, 215, 119) 0%,
+      rgb(207, 169, 58) 10%,
+      rgb(157, 125, 34) 90%
+    );
+    color: oklch(11.2% 0.045 285.88); /* Dark text for contrast against gold */
+    font-size: 12px !important;
+    padding: 0px 10px !important;
+    gap: 6px !important;
+  }
+}

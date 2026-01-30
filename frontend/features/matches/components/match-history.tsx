@@ -123,7 +123,7 @@ export function MatchHistory({ puuid, queueFilter = 420 }: MatchHistoryProps) {
     onSuccess: (jobId) => {
       setAnalysisJobId(jobId);
       setIsAnalyzing(true);
-      toast.success("Analysis started...");
+      toast.success("Match history analysis started");
     },
     onError: (err) => {
       toast.error("Failed to start analysis");
@@ -402,7 +402,7 @@ export function MatchHistory({ puuid, queueFilter = 420 }: MatchHistoryProps) {
               onClick={handleAnalyze}
               disabled={isAnalyzing}
               type="submit"
-              className="text-xs px-2.5 py-0.5 gap-2"
+              className="button-small"
             >
               {isAnalyzing ? (
                 <Loader2 className="h-4 w-4 animate-spin" />

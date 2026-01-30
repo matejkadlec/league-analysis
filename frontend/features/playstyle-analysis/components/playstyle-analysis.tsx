@@ -5,21 +5,15 @@ import {
   Activity,
   Clock,
   RefreshCw,
-  Trophy,
   Target,
-  Swords,
-  Shield,
-  Zap,
-  Info,
-  User,
   AlertCircle,
   Loader2,
 } from "lucide-react";
+import { toast } from "sonner";
 
 import {
   PlaystyleAnalysisResponseSchema,
   type PlaystyleAnalysisRequest,
-  type PlaystyleAnalysisResponse,
 } from "@/lib/core/schemas";
 import { validatedPost, validatedGet } from "@/lib/core/api";
 import { cn } from "@/lib/core/utils";
@@ -32,7 +26,6 @@ import {
   CardTitle,
   CardDescription,
 } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Tooltip,
@@ -73,16 +66,10 @@ function formatTimeAgo(dateString: string): {
   return { text, isOld };
 }
 
-// Map specialized icons for certain tags if needed
-const getTagIcon = (tagCode: string) => {
-  const code = tagCode.toLowerCase();
-  if (code.includes("laner")) return <Swords className="h-4 w-4" />;
-  if (code.includes("otp")) return <Target className="h-4 w-4" />;
-  if (code.includes("aggr")) return <Zap className="h-4 w-4" />;
-  if (code.includes("safe")) return <Shield className="h-4 w-4" />;
-  if (code.includes("farm")) return <Trophy className="h-4 w-4" />;
-  return <Activity className="h-4 w-4" />;
-};
+function formatStat(value: number): string {
+  const formatted = value.toFixed(1);
+  return formatted.endsWith(".0") ? formatted.slice(0, -2) : formatted;
+}
 
 export function PlaystyleAnalysis({ puuid }: PlaystyleAnalysisProps) {
   const queryClient = useQueryClient();
@@ -97,9 +84,6 @@ export function PlaystyleAnalysis({ puuid }: PlaystyleAnalysisProps) {
 
       if (!result.success) {
         if (result.error?.status === 404) return null;
-        // Return null if error to allow UI to show empty state or fallback,
-        // though validatedGet might not provide status in all error shapes.
-        // Let's assume non-2xx throws or returns success: false
         return null;
       }
       return result.data;
@@ -109,17 +93,31 @@ export function PlaystyleAnalysis({ puuid }: PlaystyleAnalysisProps) {
 
   const { mutate, isPending, error } = useMutation({
     mutationFn: async () => {
+      // Start minimum delay timer
+      const minDelayPromise = new Promise((resolve) =>
+        setTimeout(resolve, 1500),
+      );
+
       const request: PlaystyleAnalysisRequest = {
         puuid,
         force_reanalyze: true,
       };
-      return validatedPost(
-        PlaystyleAnalysisResponseSchema,
-        "/playstyle-analysis/analyze",
-        request,
-      );
+
+      // Run request and delay in parallel
+      const [response] = await Promise.all([
+        validatedPost(
+          PlaystyleAnalysisResponseSchema,
+          "/playstyle-analysis/analyze",
+          request,
+        ),
+        minDelayPromise,
+      ]);
+
+      return response;
     },
     onSuccess: () => {
+      toast.dismiss("analysis-started");
+      toast.success("Playstyle analysis completed");
       queryClient.invalidateQueries({
         queryKey: ["playstyle-analysis", puuid],
       });
@@ -128,28 +126,73 @@ export function PlaystyleAnalysis({ puuid }: PlaystyleAnalysisProps) {
 
   const isInitialLoading = isLoadingAnalysis && !analysis;
 
+  // Calculate colors for win rate
+  let winRateColor = "text-primary";
+  if (analysis?.summary_stats?.win_rate !== undefined) {
+    const wr = analysis.summary_stats.win_rate * 100;
+    if (wr >= 50.5) {
+      winRateColor = "text-emerald-500";
+    } else if (wr > 49) {
+      winRateColor = "text-amber-500";
+    } else {
+      winRateColor = "text-rose-500";
+    }
+  }
+
   return (
-    <Card className="w-full">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Activity className="h-5 w-5 text-primary" />
-          Playstyle Analysis
-        </CardTitle>
+    <Card className="w-full pb-8">
+      <CardHeader className="pb-2">
+        <div className="flex items-center justify-between">
+          <CardTitle className="flex items-center gap-2 text-xl">
+            <Activity className="h-5 w-5 text-primary" />
+            Playstyle Analysis
+          </CardTitle>
+          {analysis && (
+            <Button
+              onClick={() => {
+                toast.success("Playstyle analysis started", {
+                  id: "analysis-started",
+                });
+                mutate();
+              }}
+              disabled={isPending}
+              className="button-small"
+            >
+              {isPending ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <RefreshCw className="h-3.5 w-3.5" />
+              )}
+              Analyze Playstyle
+            </Button>
+          )}
+        </div>
         <CardDescription>
-          Deep dive into player behavior patterns, role preferences, and
-          playstyle characteristics.
+          <div className="mt-2 mb-4">
+            Deep dive into player behavior patterns, role preferences, and
+            playstyle characteristics.
+          </div>
         </CardDescription>
+        {analysis && (analysis.updated_at || analysis.created_at) && (
+          <div className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
+            <Clock className="h-3 w-3" />
+            Analyzed{" "}
+            {formatTimeAgo(analysis.updated_at || analysis.created_at!).text}
+          </div>
+        )}
       </CardHeader>
+
       <CardContent>
         {isInitialLoading ? (
           <div className="flex items-center justify-center py-8">
             <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
           </div>
         ) : !analysis ? (
-          <div className="space-y-4">
+          <div className="space-y-4 pt-4">
             <div className="text-center py-8 text-muted-foreground">
-              <p>No playstyle analysis found for this player.</p>
               <p className="text-sm">
+                No playstyle analysis found for this player.
+                <br />
                 Run an analysis to discover playstyle tags.
               </p>
             </div>
@@ -180,161 +223,157 @@ export function PlaystyleAnalysis({ puuid }: PlaystyleAnalysisProps) {
             )}
           </div>
         ) : (
-          <div className="space-y-12">
-            {/* Status & Timestamp Header */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Clock className="h-4 w-4" />
-                {analysis.created_at ? (
-                  <span>
-                    Analyzed {formatTimeAgo(analysis.created_at).text}
-                  </span>
-                ) : (
-                  <span>Just now</span>
-                )}
-              </div>
-              <div>
-                <Button
-                  onClick={() => mutate()}
-                  disabled={isPending}
-                  type="submit"
-                  className="text-xs px-2.5 py-0.5 gap-1.5"
-                >
-                  {isPending ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <RefreshCw className="h-4 w-4" />
-                  )}
-                  Refresh
-                </Button>
-              </div>
-            </div>
-
+          <div className="space-y-3 mt-1">
             {/* Summary Section */}
             {analysis.summary_stats && (
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <Card className="bg-muted/50 border-none shadow-none">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                <Card className="bg-muted/30 border-none shadow-none">
                   <CardContent className="p-4 flex flex-col items-center justify-center text-center">
-                    <span className="text-sm text-muted-foreground font-medium">
+                    <span className="text-xs uppercase text-muted-foreground font-semibold">
                       Win Rate
                     </span>
-                    <span className="text-2xl font-bold">
+                    <span
+                      className={cn("text-2xl font-bold mt-1", winRateColor)}
+                    >
                       {typeof analysis.summary_stats.win_rate === "number"
                         ? `${(analysis.summary_stats.win_rate * 100).toFixed(1)}%`
                         : "N/A"}
                     </span>
+                    {typeof analysis.summary_stats.recent_win_rate ===
+                      "number" && (
+                      <span className="text-base text-muted-foreground mt-0.5">
+                        {(analysis.summary_stats.recent_win_rate * 100).toFixed(
+                          0,
+                        )}
+                        % in the last 10 games
+                      </span>
+                    )}
                   </CardContent>
                 </Card>
-                <Card className="bg-muted/50 border-none shadow-none">
+                <Card className="bg-muted/30 border-none shadow-none">
                   <CardContent className="p-4 flex flex-col items-center justify-center text-center">
-                    <span className="text-sm text-muted-foreground font-medium">
+                    <span className="text-xs uppercase text-muted-foreground font-semibold">
                       Total Games
                     </span>
-                    <span className="text-2xl font-bold">
+                    <span className="text-2xl font-bold mt-1">
                       {analysis.summary_stats.total_games || 0}
                     </span>
+                    {analysis.summary_stats.total_wins !== undefined &&
+                      analysis.summary_stats.total_losses !== undefined && (
+                        <span className="text-base text-muted-foreground mt-0.5">
+                          {analysis.summary_stats.total_wins}W /{" "}
+                          {analysis.summary_stats.total_losses}L
+                        </span>
+                      )}
                   </CardContent>
                 </Card>
-                <Card className="bg-muted/50 border-none shadow-none">
+                <Card className="bg-muted/30 border-none shadow-none">
                   <CardContent className="p-4 flex flex-col items-center justify-center text-center">
-                    <span className="text-sm text-muted-foreground font-medium">
+                    <span className="text-xs uppercase text-muted-foreground font-semibold">
                       Main Role
                     </span>
-                    <span className="text-xl font-bold truncate max-w-full">
-                      {analysis.summary_stats.main_role || "Fill"}
-                    </span>
+                    <div className="flex flex-col items-center">
+                      <span className="text-xl font-bold mt-1 truncate max-w-full">
+                        {!analysis.summary_stats.main_role ||
+                        analysis.summary_stats.main_role === "None"
+                          ? "Fill"
+                          : analysis.summary_stats.main_role}
+                      </span>
+                      {analysis.summary_stats.most_played_champion &&
+                        analysis.summary_stats.most_played_champion !==
+                          "None" && (
+                          <span className="text-base text-muted-foreground mt-0.5">
+                            {analysis.summary_stats.most_played_champion}
+                          </span>
+                        )}
+                    </div>
                   </CardContent>
                 </Card>
-                <Card className="bg-muted/50 border-none shadow-none">
+                <Card className="bg-muted/30 border-none shadow-none">
                   <CardContent className="p-4 flex flex-col items-center justify-center text-center">
-                    <span className="text-sm text-muted-foreground font-medium">
-                      Avg KDA
+                    <span className="text-xs uppercase text-muted-foreground font-semibold">
+                      Average KDA
                     </span>
-                    <span className="text-2xl font-bold">
+                    <span
+                      className={cn(
+                        "text-2xl font-bold mt-1",
+                        typeof analysis.summary_stats.avg_kda === "number"
+                          ? analysis.summary_stats.avg_kda < 2
+                            ? "text-rose-500"
+                            : analysis.summary_stats.avg_kda < 3
+                              ? "text-amber-500"
+                              : "text-emerald-500"
+                          : "",
+                      )}
+                    >
                       {typeof analysis.summary_stats.avg_kda === "number"
                         ? analysis.summary_stats.avg_kda.toFixed(2)
                         : "N/A"}
                     </span>
+                    {typeof analysis.summary_stats.avg_kills === "number" &&
+                      typeof analysis.summary_stats.avg_deaths === "number" &&
+                      typeof analysis.summary_stats.avg_assists ===
+                        "number" && (
+                        <span className="text-base text-muted-foreground mt-0.5">
+                          {formatStat(analysis.summary_stats.avg_kills)} /{" "}
+                          {formatStat(analysis.summary_stats.avg_deaths)} /{" "}
+                          {formatStat(analysis.summary_stats.avg_assists)}
+                        </span>
+                      )}
                   </CardContent>
                 </Card>
               </div>
             )}
 
-            <Separator />
-
             {/* Playstyle Tags Grid */}
-            <div>
-              <h3 className="text-base font-semibold mb-4 flex items-center gap-2">
-                <Target className="h-5 w-5 text-primary" />
-                Playstyle Traits
-              </h3>
+            <div className="space-y-4">
               {!analysis.tags || Object.keys(analysis.tags).length === 0 ? (
-                <p className="text-muted-foreground italic">
-                  No specific playstyle traits identified yet.
-                </p>
+                <div className="text-center py-8 border rounded-lg border-dashed text-muted-foreground text-sm">
+                  No traits identified yet.
+                </div>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {Object.entries(analysis.tags).map(([tagCode, tagData]) => (
-                    <TooltipProvider key={tagCode}>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <div
-                            className={cn(
-                              "flex items-center gap-3 p-3 rounded-lg border transition-colors hover:bg-muted/50",
-                              tagData.threshold_met
-                                ? "opacity-100 bg-background"
-                                : "opacity-50 grayscale bg-muted/20",
-                            )}
-                          >
+                <div className="flex flex-wrap justify-center gap-3">
+                  {Object.entries(analysis.tags).map(([tagCode, tagData]) => {
+                    // Determine colors based on sentiment (metadata)
+                    // Backend returns sentiment: positive, negative, neutral
+                    const sentiment = tagData.sentiment || "neutral";
+
+                    let colorClass =
+                      "bg-secondary text-secondary-foreground border-transparent hover:bg-secondary/80";
+
+                    if (sentiment === "positive") {
+                      colorClass =
+                        "bg-emerald-500/15 text-emerald-500 border-emerald-500/20 hover:bg-emerald-500/25";
+                    } else if (sentiment === "negative") {
+                      colorClass =
+                        "bg-rose-500/15 text-rose-500 border-rose-500/20 hover:bg-rose-500/25";
+                    } else if (sentiment === "neutral") {
+                      colorClass =
+                        "bg-amber-500/15 text-amber-500 border-amber-500/20 hover:bg-amber-500/25"; // Yellow/Orange
+                    }
+
+                    if (!tagData.threshold_met) return null;
+
+                    return (
+                      <TooltipProvider key={tagCode}>
+                        <Tooltip delayDuration={300}>
+                          <TooltipTrigger asChild>
                             <div
                               className={cn(
-                                "p-2 rounded-full",
-                                tagData.threshold_met
-                                  ? "bg-primary/10 text-primary"
-                                  : "bg-muted text-muted-foreground",
+                                "inline-flex items-center rounded-md border px-3 py-1.5 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 cursor-help select-none",
+                                colorClass,
                               )}
                             >
-                              {getTagIcon(tagCode)}
+                              {String(tagData.display_name || tagCode)}
                             </div>
-                            <div className="flex-1">
-                              <div className="flex items-center justify-between">
-                                <span className="font-semibold capitalize">
-                                  {tagCode}
-                                </span>
-                                {tagData.threshold_met && (
-                                  <Badge
-                                    variant="secondary"
-                                    className="text-xs"
-                                  >
-                                    Active
-                                  </Badge>
-                                )}
-                              </div>
-                              <div className="text-xs text-muted-foreground line-clamp-1">
-                                {tagData.description}
-                              </div>
-                            </div>
-                          </div>
-                        </TooltipTrigger>
-                        <TooltipContent side="right">
-                          <div className="space-y-1">
-                            <p className="font-semibold">{tagCode}</p>
-                            <p className="text-sm max-w-xs">
-                              {tagData.description}
-                            </p>
-                            {tagData.details && (
-                              <p className="text-xs mt-1 text-muted-foreground">
-                                {tagData.details}
-                              </p>
-                            )}
-                            <p className="text-xs mt-2 font-mono">
-                              Score: {tagData.value.toFixed(2)}
-                            </p>
-                          </div>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  ))}
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>{tagData.description}</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    );
+                  })}
                 </div>
               )}
             </div>
