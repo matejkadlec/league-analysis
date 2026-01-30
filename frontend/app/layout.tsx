@@ -5,6 +5,7 @@ import "./globals.css";
 import { Providers } from "@/components/providers";
 import { ThemeProvider } from "@/components/theme-provider";
 import { SidebarNav } from "@/components/sidebar-nav";
+import { HeaderMessages } from "@/components/header-messages";
 import { Toaster } from "sonner";
 
 const montserrat = Montserrat({
@@ -43,6 +44,7 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <Providers>
+            <HeaderMessages />
             <div className="flex min-h-screen">
               <SidebarNav />
               <main id="content" className="flex-1 bg-background">
