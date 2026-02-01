@@ -135,7 +135,7 @@ export function TrackedPlayersList({ onViewPlayer }: TrackedPlayersListProps) {
               <Users className="h-5 w-5 text-primary" />
               <CardTitle>Tracked Players</CardTitle>
             </div>
-            <Badge variant="secondary">0 Players</Badge>
+            <Badge variant="secondary">0 players</Badge>
           </div>
         </CardHeader>
         <CardContent>
@@ -159,7 +159,9 @@ export function TrackedPlayersList({ onViewPlayer }: TrackedPlayersListProps) {
             <Users className="h-5 w-5 text-primary" />
             <CardTitle>Tracked Players</CardTitle>
           </div>
-          <Badge variant="secondary">{data.length} Players</Badge>
+          <Badge variant="secondary">
+            {data.length} {data.length === 1 ? "player" : "players"}
+          </Badge>
         </div>
       </CardHeader>
       <CardContent>

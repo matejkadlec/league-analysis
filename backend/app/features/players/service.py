@@ -212,13 +212,38 @@ class PlayerService:
                 context={"puuid": puuid, "platform": platform},
             )
 
+        # Count total matches for this player
+        from app.features.matches.participants import MatchParticipant
+        from app.features.matches.models import Match
+
+        # Get total matches count
+        count_result = await self.db.execute(
+            select(func.count())
+            .select_from(MatchParticipant)
+            .where(MatchParticipant.puuid == puuid)
+        )
+        total_matches = count_result.scalar() or 0
+
+        # Get count of fully analyzed matches
+        analyzed_count_result = await self.db.execute(
+            select(func.count(Match.match_id))
+            .join(MatchParticipant, Match.match_id == MatchParticipant.match_id)
+            .where(MatchParticipant.puuid == puuid, Match.fully_analyzed == True)
+        )
+        analyzed_matches = analyzed_count_result.scalar() or 0
+
         logger.info(
             "Player data retrieved by PUUID from database",
             puuid=puuid,
             platform=platform,
+            total_matches=total_matches,
+            analyzed_matches=analyzed_matches,
         )
 
-        return PlayerResponse.model_validate(player)
+        response = PlayerResponse.model_validate(player)
+        response.total_matches = total_matches
+        response.analyzed_matches = analyzed_matches
+        return response
 
     @staticmethod
     def _parse_search_query(query: str) -> tuple[str, str | None, str | None]:
@@ -808,7 +833,6 @@ class PlayerService:
                 puuid=player.puuid,
                 current_matches=match_count,
                 target_matches=target_matches,
-                matches_analyzed=player.matches_analyzed,
                 is_tracked=player.is_tracked,
             )
 
@@ -862,7 +886,6 @@ class PlayerService:
                 puuid=player.puuid,
                 current_matches=match_count,
                 min_matches=min_matches,
-                matches_analyzed=player.matches_analyzed,
                 is_tracked=player.is_tracked,
             )
 
@@ -951,8 +974,6 @@ class PlayerService:
                     is_tracked=False,  # Discovered, not tracked
                     # is_analyzed=False,  # Deleted
                     # is_active=True, # Deleted
-                    fully_analyzed=False,
-                    matches_analyzed=0,
                 )
                 self.db.add(new_player)
                 discovered_count += 1

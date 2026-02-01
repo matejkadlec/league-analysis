@@ -3,6 +3,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState } from "react";
 import { AuthProvider } from "@/features/auth";
+import { ApiKeyStatusProvider } from "@/lib/core/api-key-status-context";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
@@ -19,7 +20,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <AuthProvider>{children}</AuthProvider>
+      <ApiKeyStatusProvider>
+        <AuthProvider>{children}</AuthProvider>
+      </ApiKeyStatusProvider>
     </QueryClientProvider>
   );
 }

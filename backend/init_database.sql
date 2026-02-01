@@ -109,10 +109,8 @@ CREATE TABLE core.players (
     profile_icon_id integer,
     summoner_level integer,
     is_tracked boolean NOT NULL,
-    matches_analyzed integer DEFAULT 0 NOT NULL,
     last_playstyle_analysis timestamp with time zone,
     last_matchmaking_analysis timestamp with time zone,
-    fully_analyzed boolean DEFAULT false NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL
 );
@@ -221,6 +219,27 @@ CREATE TABLE core.match_participants (
     objectives_stolen integer DEFAULT 0,
     time_spent_dead integer DEFAULT 0,
     time_played integer DEFAULT 0,
+    solo_kills                       INTEGER DEFAULT 0,
+    gold_per_minute                  NUMERIC(10, 2) DEFAULT 0,
+    vision_score_per_minute          NUMERIC(10, 2) DEFAULT 0,
+    kill_participation               NUMERIC(5, 4) DEFAULT 0,
+    max_kill_deficit                 INTEGER DEFAULT 0,
+    team_damage_percentage           NUMERIC(5, 4) DEFAULT 0,
+    damage_taken_on_team_percentage  NUMERIC(5, 4) DEFAULT 0,
+    roam_kills                       INTEGER DEFAULT 0,
+    enemy_jungle_monster_kills       INTEGER DEFAULT 0,
+    turret_plates_taken              INTEGER DEFAULT 0,
+    ally_saves                       INTEGER DEFAULT 0,
+    survived_single_digit_hp_count   INTEGER DEFAULT 0,
+    skillshots_hit                   INTEGER DEFAULT 0,
+    skillshots_dodged                INTEGER DEFAULT 0,
+    enemy_immobilizations            INTEGER DEFAULT 0,
+    kills_near_enemy_turret          INTEGER DEFAULT 0,
+    takedowns_first_x_minutes        INTEGER DEFAULT 0,
+    buffs_stolen                     INTEGER DEFAULT 0,
+    epic_monster_steals              INTEGER DEFAULT 0,
+    laning_phase_gold_exp_advantage  INTEGER DEFAULT 0,
+    max_cs_advantage                 INTEGER DEFAULT 0,
     runes jsonb,
     advanced_stats jsonb
 );
@@ -403,6 +422,7 @@ CREATE TABLE jobs.job_configurations (
     id integer DEFAULT nextval('jobs.job_configurations_id_seq'::regclass) NOT NULL,
     job_type jobs.job_type_enum NOT NULL,
     name character varying(128) NOT NULL,
+    description text,
     schedule character varying(256) NOT NULL,
     is_active boolean NOT NULL,
     config_json jsonb,
@@ -419,6 +439,11 @@ CREATE INDEX idx_job_config_type_active ON jobs.job_configurations USING btree (
 CREATE INDEX ix_app_job_configurations_is_active ON jobs.job_configurations USING btree (is_active);
 CREATE INDEX ix_app_job_configurations_job_type ON jobs.job_configurations USING btree (job_type);
 CREATE UNIQUE INDEX ix_app_job_configurations_name ON jobs.job_configurations USING btree (name);
+
+-- Default Jobs
+INSERT INTO jobs.job_configurations (name, job_type, description, schedule, is_active)
+VALUES ('Match Fetcher', 'MATCH_FETCHER', 'Fetches matches for tracked players', '3600', true)
+ON CONFLICT (name) DO NOTHING;
 
 -- [table] jobs.job_executions
 

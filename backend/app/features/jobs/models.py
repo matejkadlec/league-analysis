@@ -70,6 +70,12 @@ class JobConfiguration(Base):
         comment="Unique name for this job configuration",
     )
 
+    description: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True,
+        comment="Description of what the job does",
+    )
+
     # Scheduling configuration
     schedule: Mapped[str] = mapped_column(
         String(256),

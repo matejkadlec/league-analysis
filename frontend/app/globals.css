@@ -251,7 +251,7 @@
     );
     color: oklch(11.2% 0.045 285.88); /* Dark text for contrast against gold */
     font-size: 12px !important;
-    padding: 0px 10px !important;
+    padding: 0px 14px !important;
     gap: 6px !important;
   }
 }

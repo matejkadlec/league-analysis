@@ -43,3 +43,15 @@ class SettingTestResponse(BaseModel):
     success: bool = Field(..., description="Whether the test was successful")
     message: str = Field(..., description="Test result message")
     details: Optional[dict] = Field(None, description="Additional test details")
+
+
+class APIKeyStatusResponse(BaseModel):
+    """Response schema for API key status."""
+
+    has_db_key: bool
+    has_env_key: bool
+    active_source: str  # "db", "env", "none"
+    env_key_identifier: Optional[str] = Field(
+        None,
+        description="Short identifier (hash/slice) of the env key to track uniqueness",
+    )

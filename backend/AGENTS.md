@@ -78,14 +78,11 @@ async def get_player(
 
 ```bash
 # Tests
-docker compose exec backend uv run pytest
-docker compose exec backend uv run pytest --cov=app
-
-# Rebuild (if dependencies change)
-docker compose build backend
+uv run pytest
+uv run pytest --cov=app
 
 # Type check
-docker compose exec backend uv run pyright
+uv run pyright
 ```
 
 # Add New Feature

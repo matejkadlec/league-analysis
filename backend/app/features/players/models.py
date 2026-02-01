@@ -68,22 +68,6 @@ class Player(Base):
         comment="Whether this player is being actively tracked for continuous updates",
     )
 
-    matches_analyzed: Mapped[int] = mapped_column(
-        Integer,
-        nullable=False,
-        default=0,
-        server_default=sa.text("0"),
-        comment="Total number of matches analyzed since player was added",
-    )
-
-    fully_analyzed: Mapped[bool] = mapped_column(
-        Boolean,
-        nullable=False,
-        default=False,
-        server_default=sa.text("false"),
-        comment="Whether all available player's matches was analyzed or not",
-    )
-
     # Timestamps
     last_playstyle_analysis: Mapped[Optional[datetime]] = mapped_column(
         SQLDateTime(timezone=True),

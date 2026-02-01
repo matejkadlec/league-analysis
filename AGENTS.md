@@ -11,8 +11,8 @@
 >
 > 1. Update SQLAlchemy models in code.
 > 2. Update `backend/init_database.sql` (Single Source of Truth).
-> 3. **Incremental Update**: If preserving data is required, generate and provide the specific SQL commands to align the active database with `init_database.sql` (DROP old tables, CREATE new ones).
-> 4. **Full Reset (Optional)**: If data is expendable, drop and recreate the DB using `psql -f init_database.sql`.
+> 3. **Incremental Update (PREFERRED)**: We now have valuable data. AUTOMATICALLY GENERATE and EXECUTE specific SQL commands to align the active database with `init_database.sql` (e.g., `ALTER TABLE`, `INSERT`). Do NOT suggest full resets unless absolutely necessary.
+> 4. **Full Reset (Last Resort)**: If data is corrupted or expendable, drop and recreate the DB using `psql -f init_database.sql`.
 >    **Instruction**: Assume legacy job logic was flawed. When implementing new features, prioritize architectural correctness and data validation.
 
 **Start development**:
@@ -72,7 +72,7 @@ The database schema is defined in `backend/init_database.sql`.
 
 1. Update SQLAlchemy models in `backend/app/features/*/models.py`
 2. Update `backend/init_database.sql` with SQL
-3. Apply locally (`psql -f init_database.sql`)
+3. Apply changes incrementally (e.g. `ALTER TABLE`) to preserve data.
 
 # Constraints
 

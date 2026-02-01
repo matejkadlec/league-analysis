@@ -1,7 +1,9 @@
 """Player API endpoints for the Riot API application."""
 
 import re
-from fastapi import APIRouter, HTTPException, Query, Request
+import os
+from fastapi import APIRouter, HTTPException, Query, Request, Depends, BackgroundTasks
+from typing import Annotated
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 import structlog
@@ -16,11 +18,14 @@ from .dependencies import (
 )
 from app.core.riot_api.constants import Platform
 from app.core.riot_api.client import RiotAPIClient
+from app.core.riot_api.errors import AuthenticationError
 from app.core.dependencies import get_riot_client
-from fastapi import APIRouter, HTTPException, Query, Request, Depends
-from typing import Annotated
+from app.core.database import db_manager
+from app.features.matches.service import MatchService
+from app.core.config import settings
 
 logger = structlog.get_logger(__name__)
+
 
 # Rate limiter instance
 limiter = Limiter(key_func=get_remote_address)
@@ -301,10 +306,85 @@ async def get_tracked_players(player_service: PlayerServiceDep):
         )
 
 
+async def run_background_match_sync(puuid: str, platform: str):
+    """
+    Background task to sync matches.
+    Also creates a JobExecution entry so it appears in the Jobs dashboard.
+    """
+    async with db_manager.get_session() as session:
+        # 1. Create Job Execution Record
+        # We need to find the Match Fetcher job configuration first
+        from app.features.jobs.models import (
+            JobConfiguration,
+            JobType,
+            JobExecution,
+            JobStatus,
+        )
+        from sqlalchemy import select, func
+
+        stmt = (
+            select(JobConfiguration)
+            .where(JobConfiguration.job_type == JobType.MATCH_FETCHER)
+            .limit(1)
+        )
+        result = await session.execute(stmt)
+        job_config = result.scalar_one_or_none()
+
+        job_execution = None
+        if job_config:
+            job_execution = JobExecution(
+                job_config_id=job_config.id,
+                status=JobStatus.RUNNING,
+                started_at=func.now(),
+                api_requests_made=0,
+                records_created=0,
+                records_updated=0,
+                execution_log={"trigger": "new_player_added", "puuid": puuid},
+            )
+            session.add(job_execution)
+            await session.commit()
+            await session.refresh(job_execution)
+
+        # 2. Run the Sync Logic
+        api_key = getattr(settings, "riot_api_key", os.getenv("RIOT_API_KEY"))
+        riot_client = RiotAPIClient(api_key=api_key)
+
+        try:
+            match_service = MatchService(session)
+            # Create a simple object with attributes
+            player_obj = type("PlayerObj", (), {"puuid": puuid, "platform": platform})
+
+            logger.info("Starting background match sync", puuid=puuid)
+            count = await match_service.sync_matches_for_player(riot_client, player_obj)
+            logger.info("Background match sync completed", puuid=puuid, count=count)
+
+            # 3. Update Job Execution on Success
+            if job_execution:
+                job_execution.status = JobStatus.SUCCESS
+                job_execution.completed_at = func.now()
+                job_execution.records_created = count
+                job_execution.detailed_logs = {
+                    "message": f"Synced {count} matches for new player"
+                }
+                await session.commit()
+
+        except Exception as e:
+            logger.error("Background match sync failed", puuid=puuid, error=str(e))
+            # 4. Update Job Execution on Failure
+            if job_execution:
+                job_execution.status = JobStatus.FAILED
+                job_execution.completed_at = func.now()
+                job_execution.error_message = str(e)
+                await session.commit()
+        finally:
+            await riot_client.close()
+
+
 @router.post("/add-tracked", response_model=PlayerResponse)
 async def add_tracked_player(
     player_service: PlayerServiceDep,
     riot_client: Annotated[RiotAPIClient, Depends(get_riot_client)],
+    background_tasks: BackgroundTasks,
     game_name: str = Query(..., description="Game name"),
     tag_line: str = Query(..., description="Tag line (without #)"),
     platform: str = Query("eun1", description="Platform platform"),
@@ -330,15 +410,28 @@ async def add_tracked_player(
         _validate_game_name(game_name)
         _validate_tag_line(tag_line)
 
-        return await player_service.add_and_track_player(
+        result = await player_service.add_and_track_player(
             riot_client=riot_client,
             game_name=game_name,
             tag_line=tag_line,
             platform=platform,
         )
 
+        # Trigger background match fetch
+        background_tasks.add_task(
+            run_background_match_sync, result.puuid, result.platform
+        )
+
+        return result
+
     except ValueError as e:
         _handle_tracking_value_error(e)
+    except AuthenticationError as e:
+        logger.error("riot_api_auth_error", error=str(e))
+        raise HTTPException(
+            status_code=503,
+            detail="Riot API Key is invalid or expired. Please update it in Settings.",
+        )
     except HTTPException:
         raise
     except Exception as e:

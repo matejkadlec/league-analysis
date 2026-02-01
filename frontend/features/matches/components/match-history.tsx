@@ -111,6 +111,18 @@ export function MatchHistory({ puuid, queueFilter = 420 }: MatchHistoryProps) {
     refetchOnReconnect: false,
     placeholderData: (previousData) => previousData,
     staleTime: 60000,
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      // Auto-refetch if we have no matches yet (waiting for background job)
+      if (
+        data?.success &&
+        data.data?.matches &&
+        data.data.matches.length === 0
+      ) {
+        return 5000;
+      }
+      return false;
+    },
   });
 
   const { mutate: analyzeMutate } = useMutation({
@@ -364,31 +376,6 @@ export function MatchHistory({ puuid, queueFilter = 420 }: MatchHistoryProps) {
     );
   }
 
-  if (!isLoading && allMatches.length === 0) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <ListRestart className="h-5 w-5 text-primary" />
-            Match History
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Alert>
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>
-              <p className="font-medium">No matches available yet</p>
-              <p className="mt-2 text-sm text-muted-foreground">
-                Matches will appear here as background jobs fetch them from the
-                Riot API. This may take a few minutes for new players.
-              </p>
-            </AlertDescription>
-          </Alert>
-        </CardContent>
-      </Card>
-    );
-  }
-
   return (
     <Card>
       <CardHeader>
@@ -409,7 +396,7 @@ export function MatchHistory({ puuid, queueFilter = 420 }: MatchHistoryProps) {
               ) : (
                 <RefreshCw className="h-4 w-4" />
               )}
-              Analyze Match History
+              Update
             </Button>
           </div>
         </div>
@@ -458,70 +445,88 @@ export function MatchHistory({ puuid, queueFilter = 420 }: MatchHistoryProps) {
         )}
       </CardHeader>
       <CardContent>
-        <div className="rounded-md border max-h-[600px] overflow-y-auto relative">
-          <Table>
-            <TableHeader className="bg-background sticky top-0 z-10 shadow-sm">
-              <TableRow>
-                <TableHead>Queue</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead>Duration</TableHead>
-                <TableHead>Version</TableHead>
-                <TableHead>Status</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {allMatches.map((match) => (
-                <TableRow key={match.match_id}>
-                  <TableCell className="font-medium">
-                    {getQueueName(match.queue_id)}
-                  </TableCell>
-                  <TableCell>
-                    {formatDate(match.game_start_timestamp)}
-                  </TableCell>
-                  <TableCell>{formatDuration(match.game_duration)}</TableCell>
-                  <TableCell>
-                    <span className="font-mono text-xs">
-                      {match.patch_version ||
-                        match.game_version.split(".").slice(0, 2).join(".")}
-                    </span>
-                  </TableCell>
-                  <TableCell>
-                    {match.fully_analyzed ? (
-                      <Badge variant="default">Analyzed</Badge>
-                    ) : (
-                      <Badge variant="secondary">Pending</Badge>
-                    )}
-                  </TableCell>
+        {allMatches.length === 0 ? (
+          <Alert>
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              <p className="font-medium">
+                This player has no matches in the database.
+              </p>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Tracked players matches will appear here as a background job
+                fetches them from the Riot API. If player is tracked and matches
+                are not appearing even after a few minutes, something is wrong.
+                For non-tracked players, use the <b>Analyze Match History</b>{" "}
+                button.
+              </p>
+            </AlertDescription>
+          </Alert>
+        ) : (
+          <div className="rounded-md border max-h-[600px] overflow-y-auto relative">
+            <Table>
+              <TableHeader className="bg-background sticky top-0 z-10 shadow-sm">
+                <TableRow>
+                  <TableHead>Queue</TableHead>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Duration</TableHead>
+                  <TableHead>Version</TableHead>
+                  <TableHead>Status</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {allMatches.map((match) => (
+                  <TableRow key={match.match_id}>
+                    <TableCell className="font-medium">
+                      {getQueueName(match.queue_id)}
+                    </TableCell>
+                    <TableCell>
+                      {formatDate(match.game_start_timestamp)}
+                    </TableCell>
+                    <TableCell>{formatDuration(match.game_duration)}</TableCell>
+                    <TableCell>
+                      <span className="font-mono text-xs">
+                        {match.patch_version ||
+                          match.game_version.split(".").slice(0, 2).join(".")}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      {match.fully_analyzed ? (
+                        <Badge variant="default">Analyzed</Badge>
+                      ) : (
+                        <Badge variant="secondary">Pending</Badge>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
 
-          {hasMore && (
-            <div
-              ref={loadMoreRef}
-              className="flex justify-center py-4 border-t bg-background/50"
-            >
-              {isFetching ? (
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  <span className="text-sm">Loading more matches...</span>
-                </div>
-              ) : (
-                <div className="text-sm text-muted-foreground">
-                  Showing {allMatches.length} of {totalMatches} matches
-                </div>
-              )}
-            </div>
-          )}
-          {!hasMore && allMatches.length > 0 && (
-            <div className="flex justify-center py-4 border-t bg-background/50">
-              <div className="text-sm text-muted-foreground">
-                All {totalMatches} matches loaded
+            {hasMore && (
+              <div
+                ref={loadMoreRef}
+                className="flex justify-center py-4 border-t bg-background/50"
+              >
+                {isFetching ? (
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span className="text-sm">Loading more matches...</span>
+                  </div>
+                ) : (
+                  <div className="text-sm text-muted-foreground">
+                    Showing {allMatches.length} of {totalMatches} matches
+                  </div>
+                )}
               </div>
-            </div>
-          )}
-        </div>
+            )}
+            {!hasMore && allMatches.length > 0 && (
+              <div className="flex justify-center py-4 border-t bg-background/50">
+                <div className="text-sm text-muted-foreground">
+                  All {totalMatches} matches loaded
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </CardContent>
 
       <Dialog open={showAnalysisConfirm} onOpenChange={setShowAnalysisConfirm}>

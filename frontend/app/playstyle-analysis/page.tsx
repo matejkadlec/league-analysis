@@ -104,14 +104,6 @@ export default function PlaystyleAnalysisPage() {
                     <PlayerCard player={selectedPlayer} />
                   </Suspense>
 
-                  <Suspense fallback={<PlayerCardSkeleton />}>
-                    <PlayerStats
-                      puuid={selectedPlayer.puuid}
-                      queueFilter={420}
-                      limit={50}
-                    />
-                  </Suspense>
-
                   <Tabs defaultValue="playstyle" className="w-full">
                     <TabsList className="grid w-full grid-cols-2">
                       <TabsTrigger value="playstyle">
@@ -123,7 +115,11 @@ export default function PlaystyleAnalysisPage() {
                     </TabsList>
                     <TabsContent value="playstyle" className="mt-6">
                       <Suspense fallback={<PlaystyleAnalysisSkeleton />}>
-                        <PlaystyleAnalysis puuid={selectedPlayer.puuid} />
+                        <PlaystyleAnalysis
+                          puuid={selectedPlayer.puuid}
+                          matchCount={selectedPlayer.total_matches}
+                          analyzedMatchCount={selectedPlayer.analyzed_matches}
+                        />
                       </Suspense>
                     </TabsContent>
                     <TabsContent value="opponents" className="mt-6">

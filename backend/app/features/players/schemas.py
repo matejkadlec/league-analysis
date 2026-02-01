@@ -42,9 +42,13 @@ class PlayerResponse(PlayerBase):
         default=False,
         description="Whether this player is being tracked for automated updates",
     )
-    fully_analyzed: bool = Field(
-        default=False,
-        description="Whether this player has been completely analyzed",
+    total_matches: int = Field(
+        default=0,
+        description="Total matches recorded in database",
+    )
+    analyzed_matches: int = Field(
+        default=0,
+        description="Number of matches that are fully analyzed",
     )
     last_playstyle_analysis: Optional[datetime] = Field(
         None, description="Time of last playstyle analysis"

@@ -7,12 +7,25 @@ from .schemas import (
     SettingResponse,
     SettingUpdate,
     SettingTestResponse,
+    APIKeyStatusResponse,
 )
 from .dependencies import SettingsServiceDep
 
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix="/settings", tags=["settings"])
+
+
+@router.get("/riot_api_key/status", response_model=APIKeyStatusResponse)
+async def get_riot_api_key_status(
+    settings_service: SettingsServiceDep,
+):
+    """
+    Get the status of the Riot API key configuration.
+    Returns whether valid key exists in DB or Env, and which one is active.
+    Used for UI header messages.
+    """
+    return await settings_service.get_api_key_status()
 
 
 @router.get("/riot_api_key", response_model=SettingResponse)
@@ -52,11 +65,8 @@ async def update_riot_api_key(
     The new key is validated against the Riot API before being saved.
     If validation fails, the update is rejected.
 
-    **Note**: After updating, you must restart the backend container
-    for the changes to take effect:
-    ```bash
-    docker compose restart backend
-    ```
+    **Note**: After updating, you should restart the backend application
+    for the changes to take effect properly.
     """
     try:
         # Check if setting exists, create if not

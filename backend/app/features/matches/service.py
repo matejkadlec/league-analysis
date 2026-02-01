@@ -2,6 +2,7 @@
 
 from typing import Optional, List, Dict, Any, TYPE_CHECKING
 import structlog
+import asyncio
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, desc
@@ -22,6 +23,7 @@ from app.core.riot_api.errors import (
     ForbiddenError,
     NotFoundError,
 )
+from app.core.riot_api.constants import get_region_by_platform, QueueType
 
 if TYPE_CHECKING:
     from app.core.riot_api.client import RiotAPIClient
@@ -296,7 +298,7 @@ class MatchService:
             return 0
 
     async def _fetch_match_ids_from_api(
-        self, riot_api_client, puuid: str, queue: int
+        self, riot_api_client, puuid: str, queue: Optional[int]
     ) -> list[str]:
         """
         Fetch match IDs from Riot API with error handling.
@@ -1001,7 +1003,12 @@ class MatchService:
                     p_tag_line = "RIOT"
 
                 # Construct minimal player for upsert
-                # Note: We use merge, so existing fields (ranks etc) are preserved if we don't set them here
+                # Check if player already exists to preserve is_tracked status
+                existing_player_result = await self.db.execute(
+                    select(Player).where(Player.puuid == participant.puuid)
+                )
+                existing_player = existing_player_result.scalar_one_or_none()
+
                 player_record = Player(
                     puuid=participant.puuid,
                     game_name=p_game_name,
@@ -1011,7 +1018,8 @@ class MatchService:
                     or 29,  # Default icon if missing
                     summoner_level=participant.summoner_level
                     or 0,  # Default level if missing
-                    is_tracked=False,
+                    # Preserve is_tracked if player exists, otherwise default to False
+                    is_tracked=existing_player.is_tracked if existing_player else False,
                 )
                 await self.db.merge(player_record)
 
@@ -1030,3 +1038,126 @@ class MatchService:
         except Exception as e:
             await self.db.rollback()
             raise
+
+    async def sync_matches_for_player(
+        self,
+        riot_client: "RiotAPIClient",
+        player: Any,
+    ) -> int:
+        """
+        Sync matches for a player from Riot API (Current Season).
+        Fetches match IDs in batches and stores missing matches.
+        """
+        puuid = getattr(player, "puuid", None)
+        platform = getattr(player, "platform", None)
+
+        if not puuid or not platform:
+            logger.error("Invalid player object passed to sync_matches", player=player)
+            return 0
+
+        region = get_region_by_platform(platform)
+        start = 0
+        count = 100
+        total_stored = 0
+        keep_fetching = True
+
+        # Track updated game name/tag if retrieved from API
+        updated_game_name = None
+        updated_tag_line = None
+
+        logger.info("Starting match sync", puuid=puuid, platform=platform)
+
+        while keep_fetching:
+            try:
+                # 1. Fetch match IDs
+                match_list_dto = await riot_client.get_match_list_by_puuid(
+                    puuid=puuid,
+                    region=region,
+                    start=start,
+                    count=count,
+                    queue=QueueType.RANKED_SOLO_5X5,
+                )
+            except Exception as e:
+                logger.error("Failed to fetch match IDs", puuid=puuid, error=str(e))
+                break
+
+            if not match_list_dto or not match_list_dto.match_ids:
+                break
+
+            ids_list = match_list_dto.match_ids
+
+            stmt = select(Match.match_id).where(
+                Match.match_id.in_(ids_list), Match.fully_analyzed == True
+            )
+            result = await self.db.execute(stmt)
+            analyzed_ids = set(result.scalars().all())
+
+            # Process matches that are either NEW or NOT FULLY ANALYZED
+            ids_to_process = [mid for mid in ids_list if mid not in analyzed_ids]
+
+            for match_id in ids_to_process:
+                try:
+                    # STRICT THROTTLING: 1.2s delay to respect 100 req/2min Dev Key limit
+                    await asyncio.sleep(1.2)
+
+                    # 2. Fetch match details
+                    match_dto = await riot_client.get_match(match_id, region=region)
+                    if not match_dto:
+                        continue
+
+                    if not match_dto.info.game_version.startswith("16."):
+                        keep_fetching = False
+                        break
+
+                    # Use reprocess to ensure fully_analyzed=True and consistent logic
+                    await self._reprocess_match(match_dto)
+                    # _reprocess_match commits internally
+
+                    total_stored += 1
+
+                except Exception as e:
+                    logger.warning(
+                        "Error syncing match", match_id=match_id, error=str(e)
+                    )
+                    continue
+
+            if not keep_fetching or len(ids_list) < count:
+                break
+
+            start += count
+
+        # 3. Always update player info from Riot Account API after syncing matches
+        try:
+            # STRICT THROTTLING: 1.2s delay before account fetch
+            await asyncio.sleep(1.2)
+
+            account_dto = await riot_client.get_account_by_puuid(
+                puuid=puuid, region=region
+            )  # Use region derived from platform for faster lookup if possible, or leave default global
+            if account_dto:
+                # Update player in DB
+                from sqlalchemy import update
+
+                update_stmt = (
+                    update(Player)
+                    .where(Player.puuid == puuid)
+                    .values(
+                        game_name=account_dto.game_name,
+                        tag_line=account_dto.tag_line,
+                        updated_at=func.now(),
+                    )
+                )
+                await self.db.execute(update_stmt)
+                await self.db.commit()
+                logger.info(
+                    "Updated player account info from Riot API",
+                    puuid=puuid,
+                    game_name=account_dto.game_name,
+                    tag_line=account_dto.tag_line,
+                )
+        except Exception as e:
+            logger.error(
+                "Failed to update player account info", puuid=puuid, error=str(e)
+            )
+
+        return total_stored

@@ -37,6 +37,8 @@ import { Separator } from "@/components/ui/separator";
 
 interface PlaystyleAnalysisProps {
   puuid: string;
+  matchCount?: number;
+  analyzedMatchCount?: number;
 }
 
 function formatTimeAgo(dateString: string): {
@@ -71,7 +73,11 @@ function formatStat(value: number): string {
   return formatted.endsWith(".0") ? formatted.slice(0, -2) : formatted;
 }
 
-export function PlaystyleAnalysis({ puuid }: PlaystyleAnalysisProps) {
+export function PlaystyleAnalysis({
+  puuid,
+  matchCount,
+  analyzedMatchCount, // Destructure new prop
+}: PlaystyleAnalysisProps) {
   const queryClient = useQueryClient();
 
   const { data: analysis, isLoading: isLoadingAnalysis } = useQuery({
@@ -93,6 +99,11 @@ export function PlaystyleAnalysis({ puuid }: PlaystyleAnalysisProps) {
 
   const { mutate, isPending, error } = useMutation({
     mutationFn: async () => {
+      // Show start toast immediately
+      toast.loading("Playstyle analysis started", {
+        id: "analysis-started",
+      });
+
       // Start minimum delay timer
       const minDelayPromise = new Promise((resolve) =>
         setTimeout(resolve, 1500),
@@ -113,6 +124,11 @@ export function PlaystyleAnalysis({ puuid }: PlaystyleAnalysisProps) {
         minDelayPromise,
       ]);
 
+      // Check if the response was successful - throw error if not
+      if (!response.success) {
+        throw new Error(response.error?.message || "Analysis failed");
+      }
+
       return response;
     },
     onSuccess: () => {
@@ -121,6 +137,10 @@ export function PlaystyleAnalysis({ puuid }: PlaystyleAnalysisProps) {
       queryClient.invalidateQueries({
         queryKey: ["playstyle-analysis", puuid],
       });
+    },
+    onError: (error: Error) => {
+      toast.dismiss("analysis-started");
+      toast.error(error.message || "Failed to run analysis");
     },
   });
 
@@ -149,12 +169,7 @@ export function PlaystyleAnalysis({ puuid }: PlaystyleAnalysisProps) {
           </CardTitle>
           {analysis && (
             <Button
-              onClick={() => {
-                toast.success("Playstyle analysis started", {
-                  id: "analysis-started",
-                });
-                mutate();
-              }}
+              onClick={() => mutate()}
               disabled={isPending}
               className="button-small"
             >
@@ -163,7 +178,7 @@ export function PlaystyleAnalysis({ puuid }: PlaystyleAnalysisProps) {
               ) : (
                 <RefreshCw className="h-3.5 w-3.5" />
               )}
-              Analyze Playstyle
+              Update
             </Button>
           )}
         </div>
@@ -176,7 +191,7 @@ export function PlaystyleAnalysis({ puuid }: PlaystyleAnalysisProps) {
         {analysis && (analysis.updated_at || analysis.created_at) && (
           <div className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
             <Clock className="h-3 w-3" />
-            Analyzed{" "}
+            Updated{" "}
             {formatTimeAgo(analysis.updated_at || analysis.created_at!).text}
           </div>
         )}
@@ -189,7 +204,7 @@ export function PlaystyleAnalysis({ puuid }: PlaystyleAnalysisProps) {
           </div>
         ) : !analysis ? (
           <div className="space-y-4 pt-4">
-            <div className="text-center py-8 text-muted-foreground">
+            <div className="text-center pb-8 text-muted-foreground">
               <p className="text-sm">
                 No playstyle analysis found for this player.
                 <br />
@@ -197,19 +212,46 @@ export function PlaystyleAnalysis({ puuid }: PlaystyleAnalysisProps) {
               </p>
             </div>
             <div className="text-center">
-              <Button onClick={() => mutate()} disabled={isPending} size="lg">
-                {isPending ? (
-                  <>
-                    <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-background border-t-transparent" />
-                    Analyzing...
-                  </>
-                ) : (
-                  <>
-                    <Activity className="mr-2 h-4 w-4" />
-                    Run Analysis
-                  </>
-                )}
-              </Button>
+              {/* Check if we have enough FULLY ANALYZED matches */}
+              {(analyzedMatchCount ?? 0) < 10 ? (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span tabIndex={0}>
+                        <Button disabled size="lg" type="submit">
+                          <Activity className="mr-2 h-4 w-4" />
+                          Run Analysis
+                        </Button>
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>
+                        This player doesn&apos;t have enough matches for the
+                        analysis ({analyzedMatchCount}/10 analyzed).
+                      </p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              ) : (
+                <Button
+                  onClick={() => mutate()}
+                  disabled={isPending}
+                  size="lg"
+                  type="submit"
+                >
+                  {isPending ? (
+                    <>
+                      <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-background border-t-transparent" />
+                      Analyzing...
+                    </>
+                  ) : (
+                    <>
+                      <Activity className="mr-2 h-4 w-4" />
+                      Run Analysis
+                    </>
+                  )}
+                </Button>
+              )}
             </div>
             {error && (
               <Alert variant="destructive">
@@ -227,6 +269,7 @@ export function PlaystyleAnalysis({ puuid }: PlaystyleAnalysisProps) {
             {/* Summary Section */}
             {analysis.summary_stats && (
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                {/* Win Rate Card */}
                 <Card className="bg-muted/30 border-none shadow-none">
                   <CardContent className="p-4 flex flex-col items-center justify-center text-center">
                     <span className="text-xs uppercase text-muted-foreground font-semibold">
@@ -239,25 +282,6 @@ export function PlaystyleAnalysis({ puuid }: PlaystyleAnalysisProps) {
                         ? `${(analysis.summary_stats.win_rate * 100).toFixed(1)}%`
                         : "N/A"}
                     </span>
-                    {typeof analysis.summary_stats.recent_win_rate ===
-                      "number" && (
-                      <span className="text-base text-muted-foreground mt-0.5">
-                        {(analysis.summary_stats.recent_win_rate * 100).toFixed(
-                          0,
-                        )}
-                        % in the last 10 games
-                      </span>
-                    )}
-                  </CardContent>
-                </Card>
-                <Card className="bg-muted/30 border-none shadow-none">
-                  <CardContent className="p-4 flex flex-col items-center justify-center text-center">
-                    <span className="text-xs uppercase text-muted-foreground font-semibold">
-                      Total Games
-                    </span>
-                    <span className="text-2xl font-bold mt-1">
-                      {analysis.summary_stats.total_games || 0}
-                    </span>
                     {analysis.summary_stats.total_wins !== undefined &&
                       analysis.summary_stats.total_losses !== undefined && (
                         <span className="text-base text-muted-foreground mt-0.5">
@@ -267,28 +291,8 @@ export function PlaystyleAnalysis({ puuid }: PlaystyleAnalysisProps) {
                       )}
                   </CardContent>
                 </Card>
-                <Card className="bg-muted/30 border-none shadow-none">
-                  <CardContent className="p-4 flex flex-col items-center justify-center text-center">
-                    <span className="text-xs uppercase text-muted-foreground font-semibold">
-                      Main Role
-                    </span>
-                    <div className="flex flex-col items-center">
-                      <span className="text-xl font-bold mt-1 truncate max-w-full">
-                        {!analysis.summary_stats.main_role ||
-                        analysis.summary_stats.main_role === "None"
-                          ? "Fill"
-                          : analysis.summary_stats.main_role}
-                      </span>
-                      {analysis.summary_stats.most_played_champion &&
-                        analysis.summary_stats.most_played_champion !==
-                          "None" && (
-                          <span className="text-base text-muted-foreground mt-0.5">
-                            {analysis.summary_stats.most_played_champion}
-                          </span>
-                        )}
-                    </div>
-                  </CardContent>
-                </Card>
+
+                {/* Average KDA Card */}
                 <Card className="bg-muted/30 border-none shadow-none">
                   <CardContent className="p-4 flex flex-col items-center justify-center text-center">
                     <span className="text-xs uppercase text-muted-foreground font-semibold">
@@ -318,6 +322,59 @@ export function PlaystyleAnalysis({ puuid }: PlaystyleAnalysisProps) {
                           {formatStat(analysis.summary_stats.avg_kills)} /{" "}
                           {formatStat(analysis.summary_stats.avg_deaths)} /{" "}
                           {formatStat(analysis.summary_stats.avg_assists)}
+                        </span>
+                      )}
+                  </CardContent>
+                </Card>
+
+                {/* Main Role Card */}
+                <Card className="bg-muted/30 border-none shadow-none">
+                  <CardContent className="p-4 flex flex-col items-center justify-center text-center">
+                    <span className="text-xs uppercase text-muted-foreground font-semibold">
+                      Main Role
+                    </span>
+                    <span className="text-2xl font-bold mt-1 truncate max-w-full">
+                      {!analysis.summary_stats.main_role ||
+                      analysis.summary_stats.main_role === "None"
+                        ? "NONE"
+                        : analysis.summary_stats.main_role}
+                    </span>
+                    {analysis.summary_stats.main_role &&
+                      analysis.summary_stats.main_role !== "None" &&
+                      typeof analysis.summary_stats.main_role_win_rate ===
+                        "number" && (
+                        <span className="text-base text-muted-foreground mt-0.5">
+                          {(
+                            analysis.summary_stats.main_role_win_rate * 100
+                          ).toFixed(1)}
+                          % WR
+                        </span>
+                      )}
+                  </CardContent>
+                </Card>
+
+                {/* Main Champion Card */}
+                <Card className="bg-muted/30 border-none shadow-none">
+                  <CardContent className="p-4 flex flex-col items-center justify-center text-center">
+                    <span className="text-xs uppercase text-muted-foreground font-semibold">
+                      Main Champion
+                    </span>
+                    <span className="text-xl font-bold mt-1 truncate max-w-full">
+                      {analysis.summary_stats.most_played_champion &&
+                      analysis.summary_stats.most_played_champion !== "None"
+                        ? analysis.summary_stats.most_played_champion
+                        : "—"}
+                    </span>
+                    {analysis.summary_stats.most_played_champion &&
+                      analysis.summary_stats.most_played_champion !== "None" &&
+                      typeof analysis.summary_stats
+                        .most_played_champion_win_rate === "number" && (
+                        <span className="text-base text-muted-foreground mt-0.5">
+                          {(
+                            analysis.summary_stats
+                              .most_played_champion_win_rate * 100
+                          ).toFixed(1)}
+                          % WR
                         </span>
                       )}
                   </CardContent>

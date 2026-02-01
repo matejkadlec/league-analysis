@@ -11,8 +11,10 @@ from .schemas import (
     SettingUpdate,
     SettingValidationResponse,
     SettingTestResponse,
+    APIKeyStatusResponse,
 )
 from app.core.riot_api.client import RiotAPIClient
+from app.core.config import settings
 from app.core.riot_api.constants import Region, Platform
 from app.core.riot_api.errors import RiotAPIError
 
@@ -57,6 +59,48 @@ class SettingsService:
             )
 
         return None
+
+    async def get_api_key_status(self) -> APIKeyStatusResponse:
+        """Get the current status of the Riot API key configuration."""
+        import os
+        import hashlib
+
+        # Check DB
+        stmt = (
+            select(RiotAPIKey)
+            .where(RiotAPIKey.is_active == True)
+            .order_by(RiotAPIKey.added_at.desc())
+            .limit(1)
+        )
+        result = await self.db.execute(stmt)
+        db_key_exists = result.scalar_one_or_none() is not None
+
+        # Check Env
+        env_key = os.getenv("RIOT_API_KEY")
+        # In this project context, settings might not load env var directly into 'riot_api_key' field if not in .env?
+        # But os.getenv directly checks .env if loaded.
+        has_env_key = bool(env_key and env_key.strip())
+
+        # Determine source used by system (mimicking config logic)
+        active_source = "none"
+        if db_key_exists:
+            active_source = "db"
+        elif has_env_key:
+            active_source = "env"
+
+        # Generate identifier for env key if it exists
+        env_key_identifier = None
+        if has_env_key and env_key:
+            # Create a short hash of the key to use as identifier (last 8 chars of md5)
+            # We don't want to expose any part of the actual key that could be guessed
+            env_key_identifier = hashlib.md5(env_key.encode()).hexdigest()[-8:]
+
+        return APIKeyStatusResponse(
+            has_db_key=db_key_exists,
+            has_env_key=has_env_key,
+            active_source=active_source,
+            env_key_identifier=env_key_identifier,
+        )
 
     async def update_setting(self, key: str, update: SettingUpdate) -> SettingResponse:
         """Update a setting value."""

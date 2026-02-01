@@ -364,6 +364,7 @@ export function JobCard({ job }: JobCardProps) {
         <div className="flex gap-2">
           <Button
             size="sm"
+            type="submit"
             onClick={handleTrigger}
             disabled={!job.is_active || triggerMutation.isPending}
             className="flex-1"

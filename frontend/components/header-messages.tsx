@@ -6,15 +6,20 @@ import { useQuery } from "@tanstack/react-query";
 import { X, AlertTriangle, AlertOctagon, Info } from "lucide-react";
 import { useAuth } from "@/features/auth";
 import { api } from "@/lib/core/api";
+import { useApiKeyStatus } from "@/lib/core/api-key-status-context";
 
 interface APIKeyStatus {
   has_db_key: boolean;
   has_env_key: boolean;
   active_source: "db" | "env" | "none";
+  env_key_identifier?: string;
 }
 
 export function HeaderMessages() {
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, isLoading: isAuthLoading } = useAuth();
+  const { isApiKeyInvalid } = useApiKeyStatus();
+  // Store closed keys as an array of identifiers
+  // For env keys: "env_key_{identifier}"
   const [closedMessages, setClosedMessages] = useState<string[]>([]);
   const [mounted, setMounted] = useState(false);
 
@@ -52,7 +57,8 @@ export function HeaderMessages() {
   if (!mounted) return null;
 
   // 1. Signed Out Message (Always visible if not authed)
-  if (!isAuthenticated) {
+  // Don't show if auth is still loading to prevent flash
+  if (!isAuthLoading && !isAuthenticated) {
     return (
       <div className="w-full h-[40px] absolute top-0 left-0 z-[100] flex items-center justify-center bg-emerald-950/75 backdrop-blur-sm border-b border-emerald-800/50">
         <div className="text-sm font-medium text-emerald-100 flex items-center gap-2 px-4 text-center">
@@ -73,27 +79,56 @@ export function HeaderMessages() {
     );
   }
 
-  // 2. Admin Messages
+  // 2. HIGHEST PRIORITY: API Key Invalid/Expired (detected dynamically from API calls)
+  // This takes precedence over all other admin messages
+  if (isApiKeyInvalid) {
+    return (
+      <div className="w-full h-[40px] absolute top-0 left-0 z-[100] flex items-center justify-center bg-red-600/75 backdrop-blur-sm shadow-md border-b border-red-800/50">
+        <div className="flex items-center gap-2 text-sm font-semibold text-red-100 px-4 text-center">
+          <AlertOctagon className="h-4 w-4 shrink-0" />
+          <span>
+            Riot API Key is invalid or expired! Please update it in{" "}
+            <Link
+              href="/settings"
+              className="underline hover:text-white transition-colors font-bold"
+            >
+              settings
+            </Link>{" "}
+            to restore functionality.
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  // 3. Admin Messages
   if (user?.is_admin && keyStatus) {
-    // RED: No Key
+    // RED: No Key configured at all
     if (keyStatus.active_source === "none") {
       return (
         <div className="w-full h-[40px] absolute top-0 left-0 z-[100] flex items-center justify-center bg-red-600/75 backdrop-blur-sm shadow-md border-b border-red-800/50">
-          <div className="flex items-center gap-2 text-sm font-semibold text-red-100 animate-pulse px-4 text-center">
+          <div className="flex items-center gap-2 text-sm font-semibold text-red-100 px-4 text-center">
             <AlertOctagon className="h-4 w-4 shrink-0" />
             <span>
-              CRITICAL: No active Riot API Key found! System cannot function.
-              Please configure it in Settings or .env immediately.
+              No active Riot API Key found! System cannot function. Please
+              configure it in settings
+              {process.env.NODE_ENV === "production" ? " " : " or .env "}
+              immediately.
             </span>
           </div>
         </div>
       );
     }
 
-    // YELLOW: Env Key (Closable)
+    // YELLOW: Env Key (Closable - Unique per key)
+    const envKeyId = `env_key_${keyStatus.env_key_identifier || "legacy"}`;
+    const isClosed = closedMessages.includes(envKeyId);
+
+    // Hide env warning in production (env is standard there)
     if (
       keyStatus.active_source === "env" &&
-      !closedMessages.includes("env_key_warning")
+      !isClosed &&
+      process.env.NODE_ENV !== "production"
     ) {
       return (
         <div className="w-full h-[40px] absolute top-0 left-0 z-[100] flex items-center justify-center bg-amber-500/75 backdrop-blur-sm border-b border-amber-800/50 shadow-sm">
@@ -101,11 +136,12 @@ export function HeaderMessages() {
             <AlertTriangle className="h-4 w-4 shrink-0" />
             <span>
               Using Riot API Key from environment variables. Consider adding it
-              to Database for better management.
+              to database for better management. Also note that local server
+              needs restart after environment variable change.
             </span>
           </div>
           <button
-            onClick={() => closeMessage("env_key_warning")}
+            onClick={() => closeMessage(envKeyId)}
             className="cursor-pointer absolute right-4 top-1/2 -translate-y-1/2 p-2 hover:bg-amber-900/50 rounded-full transition-colors text-amber-100/80 hover:text-white"
           >
             <X className="h-4 w-4" />

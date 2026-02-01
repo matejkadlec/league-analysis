@@ -68,3 +68,17 @@ class QueueType(int, Enum):
     OVERCHARGE = 860
     SNOWURF = 870
     Odyssey = 880
+
+
+def get_region_by_platform(platform: str) -> Region:
+    """Map platform code to regional routing value."""
+    p = platform.lower()
+    if p in ["na1", "br1", "la1", "la2"]:
+        return Region.AMERICAS
+    if p in ["kr", "jp1"]:
+        return Region.ASIA
+    if p in ["eun1", "euw1", "ru", "tr1"]:
+        return Region.EUROPE
+    if p in ["oc1", "ph2", "sg2", "th2", "tw2", "vn2"]:
+        return Region.SEA
+    return Region.EUROPE  # Default fallback

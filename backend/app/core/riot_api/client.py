@@ -305,6 +305,14 @@ class RiotAPIClient:
         response = await self._make_request(url)
         return AccountDTO(**response)
 
+    async def get_account_by_puuid(
+        self, puuid: str, region: Optional[Region] = None
+    ) -> AccountDTO:
+        """Get account by PUUID."""
+        url = self.endpoints.account_by_puuid(puuid, region)
+        response = await self._make_request(url)
+        return AccountDTO(**response)
+
     # Summoner endpoints
 
     async def get_summoner_by_puuid(

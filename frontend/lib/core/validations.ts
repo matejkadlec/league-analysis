@@ -1,33 +1,34 @@
 import { z } from "zod";
 
-const playerNameRefinement = (val: string) => {
-  const trimmed = val.trim();
-
-  if (trimmed.includes("#")) {
-    const parts = trimmed.split("#");
-    if (parts.length !== 2) return false;
-
-    const [name, tag] = parts;
-    return (
-      name &&
-      name.length >= 3 &&
-      name.length <= 16 &&
-      tag &&
-      tag.length >= 1 &&
-      tag.length <= 6
-    );
-  }
-
-  return trimmed.length >= 3 && trimmed.length <= 16;
-};
-
 const playerNameValidation = z
   .string()
   .min(1, "Player name is required")
   .transform((val) => val.trim())
-  .refine(playerNameRefinement, {
-    message:
-      "Invalid format. Use 'Name#TAG' (tag max 6 chars) or summoner name (3-16 chars)",
+  .superRefine((val, ctx) => {
+    // Basic format check
+    // Logic: Name > 16 chars, Tag > 5 chars
+
+    // We expect the # to be present if it's coming from our controlled input
+    const parts = val.split("#");
+    const name = parts[0];
+    // If there are multiple # (which shouldn't happen if controlled), we take the last part or join?
+    // Let's assume standard Name#Tag format.
+    const tag = parts.length > 1 ? parts.slice(1).join("#") : "";
+
+    if (name.length > 16) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Player name is too long, please check your input.",
+      });
+    }
+
+    // Tag limit: User said > 5 chars (so max 5)
+    if (tag.length > 5) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Tag line is too long, please check your input.",
+      });
+    }
   });
 
 const platformEnum = z.enum([

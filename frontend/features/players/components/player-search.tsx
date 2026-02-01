@@ -370,7 +370,7 @@ export function PlayerSearch({ onPlayerFound }: PlayerSearchProps) {
                         </Popover>
                       </FormControl>
                       <p className="text-xs text-muted-foreground">
-                        Enter game name or tag line
+                        Enter game name or tag line to begin search
                       </p>
                       <FormMessage />
                     </FormItem>

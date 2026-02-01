@@ -31,13 +31,32 @@ import {
 } from "@/components/ui/form";
 import { toast } from "sonner";
 
+const SERVER_MAPPING: Record<string, string> = {
+  eun1: "EUNE",
+  euw1: "EUW",
+  na1: "NA",
+  kr: "KR",
+  br1: "BR",
+  la1: "LAN",
+  la2: "LAS",
+  oc1: "OCE",
+  ru: "RU",
+  tr1: "TR",
+  jp1: "JP",
+  ph2: "PH",
+  sg2: "SG",
+  th2: "TH",
+  tw2: "TW",
+  vn2: "VN",
+};
+
 export function AddTrackedPlayer() {
   const queryClient = useQueryClient();
 
   const form = useForm<AddTrackedPlayerForm>({
     resolver: zodResolver(addTrackedPlayerSchema),
     defaultValues: {
-      searchValue: "",
+      searchValue: "#", // Default with #
       platform: "eun1",
     },
   });
@@ -61,6 +80,14 @@ export function AddTrackedPlayer() {
       });
 
       if (!result.success) {
+        // Map backend error to specific message if needed
+        if (result.error.message.includes("not found")) {
+          const serverName =
+            SERVER_MAPPING[data.platform] || data.platform.toUpperCase();
+          throw new Error(
+            `Player with this name and tag wasn't found on server ${serverName}.`,
+          );
+        }
         throw new Error(result.error.message);
       }
 
@@ -119,17 +146,60 @@ export function AddTrackedPlayer() {
               name="searchValue"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Player Name</FormLabel>
+                  <FormLabel>Player Name With Tag</FormLabel>
                   <FormControl>
                     <Input
                       placeholder="John Doe#EUNE"
                       disabled={isPending}
                       {...field}
+                      onChange={(e) => {
+                        let val = e.target.value;
+
+                        // 7.4: Filter special symbols (allow letters, numbers, foreign chars, space, #, -)
+                        // Disallow: $ ! ? etc.
+                        // Regex to remove forbidden symbols.
+                        // Allowed: \w (alphanumeric + _), space, #, -, and unicode letters.
+                        // Ideally we construct valid regex for all letters.
+                        // Easier: remove known bad symbols.
+                        const forbiddenPattern =
+                          /[!$@%^&*()+={}\[\]|\\:;"'<>,?/~`]/g;
+                        if (forbiddenPattern.test(val)) {
+                          // Remove them
+                          val = val.replace(forbiddenPattern, "");
+                        }
+
+                        // 7.3: Ensure # is present and cannot be deleted
+                        // If user tries to delete # (new val has no #), we reject the change (keep old value)
+                        // OR we re-insert it?
+                        // If we simply reject, it feels like it's stuck.
+                        // Let's try to be smart. If missing, append it?
+                        if (!val.includes("#")) {
+                          // User deleted #.
+                          // If they backspaced, maybe we shouldn't block, but re-add it?
+                          // But where?
+                          // Let's just block the removal of #.
+                          // Only update if # is still there.
+                          // Wait, if they select all and delete? -> val is empty.
+                          // Then we reset to "#".
+                          if (val === "") {
+                            val = "#";
+                          } else {
+                            // They deleted just the #?
+                            // Restore the previous # location? tricky.
+                            // Let's just append it if missing, or prepend.
+                            // Simpler: If no hash, keep the field.value (effectively blocking deletion)
+                            /* 
+                                  Actually, blocking deletion is the best interpretation of 
+                                  "cannot delete it".
+                               */
+                            return;
+                          }
+                        }
+
+                        field.onChange(val);
+                      }}
                     />
                   </FormControl>
-                  <p className="text-xs text-muted-foreground">
-                    Enter game name or tag line
-                  </p>
                   <FormMessage />
                 </FormItem>
               )}
@@ -151,7 +221,7 @@ export function AddTrackedPlayer() {
                         <SelectValue placeholder="Select a server" />
                       </SelectTrigger>
                     </FormControl>
-                    <SelectContent>
+                    <SelectContent className="max-h-[350px]">
                       <SelectItem value="eun1">EU Nordic & East</SelectItem>
                       <SelectItem value="euw1">EU West</SelectItem>
                       <SelectItem value="na1">North America</SelectItem>

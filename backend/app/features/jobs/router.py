@@ -13,8 +13,9 @@ from .schemas import (
 )
 from .dependencies import JobServiceDep
 
+from .implementations.match_fetcher import MatchFetcherJob
+
 # from .implementations.tracked_player_updater import TrackedPlayerUpdaterJob
-# from .implementations.match_fetcher import MatchFetcherJob
 # from .implementations.player_analyzer import PlayerAnalyzerJob
 # from .implementations.ban_checker import BanCheckerJob
 import structlog
@@ -33,21 +34,20 @@ def _create_job_instance(job):
     Returns:
         Job instance based on job type
     """
-    # NOTE: Implementations have been reset.
-    pass
-    # job_type_mapping = {
-    #     JobType.TRACKED_PLAYER_UPDATER: TrackedPlayerUpdaterJob,
-    #     JobType.MATCH_FETCHER: MatchFetcherJob,
-    #     JobType.PLAYER_ANALYZER: PlayerAnalyzerJob,
-    #     JobType.BAN_CHECKER: BanCheckerJob,
-    # }
+    job_type_mapping = {
+        # JobType.TRACKED_PLAYER_UPDATER: TrackedPlayerUpdaterJob,
+        JobType.MATCH_FETCHER: MatchFetcherJob,
+        # JobType.PLAYER_ANALYZER: PlayerAnalyzerJob,
+        # JobType.BAN_CHECKER: BanCheckerJob,
+    }
 
-    # job_class = job_type_mapping.get(job.job_type)
-    # if not job_class:
-    raise HTTPException(
-        status_code=501,
-        detail=f"Job implementations have been reset for cleanup. Please reimplement jobs.",
-    )
+    job_class = job_type_mapping.get(job.job_type)
+    if not job_class:
+        raise HTTPException(
+            status_code=501,
+            detail=f"Job type {job.job_type} implementation not found.",
+        )
+    return job_class(job.id)
 
     # return job_class(job.id)
 

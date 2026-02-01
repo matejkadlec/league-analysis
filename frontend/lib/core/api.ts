@@ -1,4 +1,4 @@
-import axios, { AxiosError } from "axios";
+import axios, { AxiosError, AxiosResponse } from "axios";
 import { z } from "zod";
 import {
   Player,
@@ -8,6 +8,10 @@ import {
   MatchmakingAnalysisResponse,
   MatchmakingAnalysisStatusResponse,
 } from "./schemas";
+import {
+  notifyApiKeyInvalid,
+  notifyApiKeyValid,
+} from "./api-key-status-context";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -28,11 +32,52 @@ export type ApiResponse<T> =
   | { success: true; data: T }
   | { success: false; error: ApiError };
 
+// Endpoints that use the Riot API (when these succeed, API key is valid)
+const RIOT_API_ENDPOINTS = [
+  "/players/add-tracked",
+  "/players/search",
+  "/matches/sync",
+  "/matchmaking-analysis",
+];
+
+function isRiotApiEndpoint(url: string | undefined): boolean {
+  if (!url) return false;
+  return RIOT_API_ENDPOINTS.some((endpoint) => url.includes(endpoint));
+}
+
+function isApiKeyError(response: AxiosResponse | undefined): boolean {
+  if (!response) return false;
+  const detail = response.data?.detail;
+  // Check for specific API key error messages from our backend
+  return (
+    typeof detail === "string" &&
+    (detail.toLowerCase().includes("api key") ||
+      detail.toLowerCase().includes("invalid") ||
+      detail.toLowerCase().includes("expired") ||
+      detail.toLowerCase().includes("401"))
+  );
+}
+
 api.interceptors.response.use(
-  (response) => response,
+  (response: AxiosResponse) => {
+    // On successful response from Riot API endpoints, mark API key as valid
+    if (isRiotApiEndpoint(response.config.url)) {
+      notifyApiKeyValid();
+    }
+    return response;
+  },
   (error: AxiosError) => {
-    // Just pass through errors without logging
-    // Error details are handled by individual request handlers
+    // Detect API key errors (401 or 503 with API key message)
+    const status = error.response?.status;
+    if (status === 401 || (status === 503 && isApiKeyError(error.response))) {
+      // Only mark invalid if it's from a Riot API endpoint or has API key error message
+      if (
+        isRiotApiEndpoint(error.config?.url) ||
+        isApiKeyError(error.response)
+      ) {
+        notifyApiKeyInvalid();
+      }
+    }
     return Promise.reject(error);
   },
 );

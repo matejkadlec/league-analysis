@@ -47,6 +47,11 @@ class RiotAPIEndpoints:
         base_url = self.get_base_url(region)
         return f"{base_url}/riot/account/v1/accounts/by-riot-id/{game_name}/{tag_line}"
 
+    def account_by_puuid(self, puuid: str, region: Optional[Region] = None) -> str:
+        """Get account by PUUID endpoint."""
+        base_url = self.get_base_url(region)
+        return f"{base_url}/riot/account/v1/accounts/by-puuid/{puuid}"
+
     def summoner_by_puuid(self, puuid: str, platform: Optional[Platform] = None) -> str:
         """Get summoner by PUUID endpoint."""
         platform_url = self.get_platform_url(platform)

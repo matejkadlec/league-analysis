@@ -189,6 +189,53 @@ class MatchParticipant(Base):
     time_spent_dead: Mapped[Optional[int]] = mapped_column(Integer, default=0)
     time_played: Mapped[Optional[int]] = mapped_column(Integer, default=0)
 
+    # Advanced Stats (Challenges)
+    solo_kills: Mapped[Optional[int]] = mapped_column(Integer, default=0)
+    gold_per_minute: Mapped[Optional[Decimal]] = mapped_column(
+        SQLDecimal(10, 2), default=0
+    )
+    vision_score_per_minute: Mapped[Optional[Decimal]] = mapped_column(
+        SQLDecimal(10, 2), default=0
+    )
+    kill_participation: Mapped[Optional[Decimal]] = mapped_column(
+        SQLDecimal(5, 4), default=0
+    )
+    max_kill_deficit: Mapped[Optional[int]] = mapped_column(Integer, default=0)
+    team_damage_percentage: Mapped[Optional[Decimal]] = mapped_column(
+        SQLDecimal(5, 4), default=0
+    )
+    damage_taken_on_team_percentage: Mapped[Optional[Decimal]] = mapped_column(
+        SQLDecimal(5, 4), default=0
+    )
+
+    # Specific Playstyle Metrics
+    roam_kills: Mapped[Optional[int]] = mapped_column(
+        Integer, default=0, comment="killsOnOtherLanesEarlyJungleAsLaner"
+    )
+    enemy_jungle_monster_kills: Mapped[Optional[int]] = mapped_column(
+        Integer, default=0
+    )
+    turret_plates_taken: Mapped[Optional[int]] = mapped_column(Integer, default=0)
+    ally_saves: Mapped[Optional[int]] = mapped_column(
+        Integer, default=0, comment="saveAllyFromDeath"
+    )
+    survived_single_digit_hp_count: Mapped[Optional[int]] = mapped_column(
+        Integer, default=0
+    )
+    skillshots_hit: Mapped[Optional[int]] = mapped_column(Integer, default=0)
+    skillshots_dodged: Mapped[Optional[int]] = mapped_column(Integer, default=0)
+    enemy_immobilizations: Mapped[Optional[int]] = mapped_column(
+        Integer, default=0, comment="enemyChampionImmobilizations"
+    )
+    kills_near_enemy_turret: Mapped[Optional[int]] = mapped_column(Integer, default=0)
+    takedowns_first_x_minutes: Mapped[Optional[int]] = mapped_column(Integer, default=0)
+    buffs_stolen: Mapped[Optional[int]] = mapped_column(Integer, default=0)
+    epic_monster_steals: Mapped[Optional[int]] = mapped_column(Integer, default=0)
+    laning_phase_gold_exp_advantage: Mapped[Optional[int]] = mapped_column(
+        Integer, default=0
+    )
+    max_cs_advantage: Mapped[Optional[int]] = mapped_column(Integer, default=0)
+
     # JSON Data
     runes: Mapped[Optional[Dict[str, Any]]] = mapped_column(
         JSONB, nullable=True, comment="Full Runes JSON"

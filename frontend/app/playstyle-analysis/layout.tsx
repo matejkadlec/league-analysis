@@ -1,7 +1,7 @@
 import { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Playstyle Analysis - League Analysis",
+  title: "Playstyle Analysis",
   description:
     "Analyze League of Legends players playstyle patterns, role preferences, and characteristics.",
 };

@@ -41,21 +41,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         headers: {
           Authorization: `Bearer ${token}`,
         },
+      }).catch((fetchError) => {
+        // Catch network errors at fetch level to prevent error overlay
+        // This handles cases like backend not ready, CORS, connection refused
+        if (process.env.NODE_ENV === "development") {
+          console.warn(
+            "Auth check network error (backend may be restarting):",
+            fetchError.message,
+          );
+        }
+        return null; // Return null to indicate fetch failed
       });
 
-      if (response.ok) {
+      if (response && response.ok) {
         const userData = await response.json();
         setUser(userData);
         setToken(token); // Ensure token is in sync across storage mechanisms
       } else {
-        // Token invalid or expired
+        // Token invalid, expired, or network error
         removeToken();
         setUser(null);
       }
     } catch (error) {
-      // Only log errors in development
+      // Catch any other errors (e.g., JSON parsing)
       if (process.env.NODE_ENV === "development") {
-        console.error("Auth check failed:", error);
+        console.warn("Auth check failed:", error);
       }
       removeToken();
       setUser(null);
