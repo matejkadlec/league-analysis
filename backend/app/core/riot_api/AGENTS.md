@@ -1,48 +1,47 @@
-# Riot API (`app/core/riot_api/`)
+# Riot API Client (`app/core/riot_api/`)
 
-Riot API integration with rate limiting, caching, and data transformation.
+> **Keep this file updated** when modifying Riot API integration.
+
+HTTP client for Riot Games API with rate limiting and error handling.
 
 ## Modules
 
-- `client.py` - HTTP client with auth and rate limiting
-- `data_manager.py` - Primary interface (database-first caching)
-- `rate_limiter.py` - Token bucket rate limiter
-- `transformers.py` - API response → DB model conversion
-- `endpoints.py` - Riot API endpoint definitions
-- `constants.py` - Region, platform, queue enums
+| Module            | Description                                   |
+| ----------------- | --------------------------------------------- |
+| `client.py`       | `RiotAPIClient` - async HTTP client with auth |
+| `rate_limiter.py` | Token bucket rate limiter                     |
+| `endpoints.py`    | URL builders for Riot API endpoints           |
+| `constants.py`    | Region, Platform, QueueType enums             |
+| `models.py`       | Pydantic DTOs for API responses               |
+| `errors.py`       | Custom exceptions (RateLimitError, etc.)      |
+| `transformers.py` | API response → DB model conversion            |
 
-## Rules
-
-**ALWAYS use RiotDataManager**:
+## Usage
 
 ```python
-# ✅ Correct
-from app.core.riot_api import RiotDataManager
-dm = RiotDataManager()
-player = await dm.get_summoner_by_puuid(puuid, platform, db)
-
-# ❌ Wrong - don't call RiotAPIClient directly
 from app.core.riot_api import RiotAPIClient
+
+async with RiotAPIClient(api_key=api_key) as client:
+    account = await client.get_account_by_puuid(puuid)
+    matches = await client.get_match_list_by_puuid(puuid, queue=420)
 ```
 
-**Handle rate limits**:
+## Rate Limiting
 
-- API calls return `None` when rate limited
-- Always check for `None` returns
-- Update RIOT_API_KEY in database for 403 errors
+- Development keys: 20 req/1s, 100 req/2min
+- Jobs use 1.2s delay between match requests
+- 429 errors trigger `RateLimitError` with `retry_after`
 
-**Use enum constants**:
+## Constants
 
 ```python
-from app.core.riot_api.constants import Platform
-platform = Platform.EUN1  # Not "eun1"
+from app.core.riot_api.constants import Platform, Region, QueueType
+
+platform = Platform.EUN1
+region = Region.EUROPE
+queue = QueueType.RANKED_SOLO_5x5  # 420
 ```
 
-## Data Flow
+## Related Docs
 
-1. Request → RiotDataManager
-2. Check database cache
-3. If miss, call RiotAPIClient
-4. Transform response via transformers
-5. Store in database
-6. Return data
+See [docs/riot-api.md](../../../../docs/riot-api.md) for full endpoint documentation.

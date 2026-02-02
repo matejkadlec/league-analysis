@@ -1,163 +1,68 @@
 # Features (`features/`)
 
-Domain-specific UI components, hooks, and utilities. Each feature is self-contained.
+> **Keep this file updated**: When adding features or components, update this documentation.
 
-## Existing Features
+Domain-specific UI components. Each feature is self-contained with its own components and exports.
 
-- `players/` - Search, cards, stats, tracked list
-- `matches/` - Match history, opponent stats
-- `playstyle-analysis/` - Analysis results
-- `matchmaking/` - Fairness analysis
-- `jobs/` - Job management
-- `settings/` - Settings UI
+## Features
 
-## Standard Structure
+| Feature               | Description                        |
+| --------------------- | ---------------------------------- |
+| `auth/`               | Authentication context and sign-in |
+| `jobs/`               | Job monitoring components          |
+| `matches/`            | Match history display              |
+| `matchmaking/`        | Match fairness analysis            |
+| `players/`            | Player search, cards, tracking     |
+| `playstyle-analysis/` | Playstyle analysis results         |
+
+## Structure
 
 ```
-features/<feature-name>/
-├── components/          # Feature-specific components
-│   ├── player-search.tsx
-│   ├── player-card.tsx
-│   └── player-stats.tsx
-├── hooks/               # Feature-specific hooks (optional)
-
-│   └── use-player-search.ts
-├── utils/               # Feature-specific utilities (optional)
-│   └── player-formatters.ts
-└── index.ts             # Public API exports
+features/<name>/
+├── components/           # Feature components
+├── index.ts              # Public exports
+├── types.ts              # Feature-specific types (optional)
+└── utils/                # Feature utilities (optional)
 ```
 
-## File Responsibilities
-
-### `index.ts` - Public API
+## Public API Pattern
 
 ```typescript
+// features/players/index.ts
 export { PlayerSearch } from "./components/player-search";
 export { PlayerCard } from "./components/player-card";
-export { usePlayerSearch } from "./hooks/use-player-search";
 ```
 
-### `components/` - Feature Components
+## Component Pattern
 
 ```typescript
 "use client";
 
-import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { api } from "@/lib/core/api";
+import { Card } from "@/components/ui/card";
+import { validatedGet } from "@/lib/core/api";
 
-interface PlayerSearchProps {
-  onPlayerSelect?: (player: Player) => void;
+interface MyComponentProps {
+  id: string;
 }
 
-export function PlayerSearch({ onPlayerSelect }: PlayerSearchProps) {
-  const [searchTerm, setSearchTerm] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
-
-  // Debouncing pattern
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedSearch(searchTerm);
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [searchTerm]);
-
-  // TanStack Query for data fetching
+export function MyComponent({ id }: MyComponentProps) {
   const { data, isLoading, error } = useQuery({
-    queryKey: ["player-suggestions", debouncedSearch],
-    queryFn: () => api.get(`/players/suggestions?q=${debouncedSearch}`),
-    enabled: debouncedSearch.length >= 3,
+    queryKey: ["my-data", id],
+    queryFn: () => validatedGet(Schema, `/endpoint/${id}`),
   });
 
-  return (
-    <div className="space-y-4">
-      <Input
-        value={searchTerm}
-        onChange={(e) => setSearchTerm(e.target.value)}
-        placeholder="Search players..."
-      />
-      {/* Render suggestions */}
-    </div>
-  );
-}
-```
-
-**Guidelines**:
-
-- `"use client"` for interactivity
-- TypeScript interface for props
-- Handle loading/error/success states
-- Use shadcn/ui primitives from `@/components/ui/`
-- TanStack Query for data fetching
-- kebab-case files, PascalCase components
-
-### `hooks/` - Custom Hooks
-
-```typescript
-"use client";
-
-import { useState, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { api } from "@/lib/core/api";
-
-export function usePlayerSearch(initialQuery: string = "") {
-  const [searchTerm, setSearchTerm] = useState(initialQuery);
-  const [debouncedSearch, setDebouncedSearch] = useState(initialQuery);
-
-  useEffect(() => {
-    const timer = setTimeout(() => setDebouncedSearch(searchTerm), 300);
-    return () => clearTimeout(timer);
-  }, [searchTerm]);
-
-  const query = useQuery({
-    queryKey: ["player-search", debouncedSearch],
-    queryFn: () => api.get(`/players/suggestions?q=${debouncedSearch}`),
-    enabled: debouncedSearch.length >= 3,
-  });
-
-  return {
-    searchTerm,
-    setSearchTerm,
-    suggestions: query.data,
-    isLoading: query.isLoading,
-    error: query.error,
-  };
-}
-```
-
-### `utils/` - Feature Utilities
-
-```typescript
-export function formatRiotId(gameName: string, tagLine: string): string {
-  return `${gameName}#${tagLine}`;
-}
-
-export function formatRank(tier: string, rank: string, lp: number): string {
-  return `${tier} ${rank} (${lp} LP)`;
+  if (isLoading) return <div>Loading...</div>;
+  if (error) return <div>Error</div>;
+  return <Card>{data}</Card>;
 }
 ```
 
 ## Rules
 
-- Feature components in `features/<feature>/components/`
-- Shared layout/infrastructure in `components/`
-- shadcn/ui stays in `components/ui/`
-- Pages import from features and compose them
-- Features expose clean public APIs via `index.ts`
-
-## Create New Feature
-
-1. Create `features/my-feature/`
-2. Add subdirectories: `components/`, `hooks/` (optional), `utils/` (optional)
-3. Create components in `components/`
-4. Create `index.ts` with exports:
-   ```typescript
-   export { MyComponent } from "./components/my-component";
-   export { useMyHook } from "./hooks/use-my-hook";
-   ```
-5. Import in pages:
-   ```typescript
-   import { MyComponent } from "@/features/my-feature";
-   ```
+- `"use client"` for interactivity
+- TypeScript interfaces for props
+- Handle loading/error/success states
+- Use shadcn/ui from `@/components/ui/`
+- Export via `index.ts`
+- kebab-case files, PascalCase components

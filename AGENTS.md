@@ -1,110 +1,169 @@
-# Quick Start
+# League Analysis - AI Agent Guide
 
-**Environment**: WSL (Windows Subsystem for Linux), PostgreSQL 18 on localhost:5432
-**Database**: `league-analysis` (user: `admin`, password in .env)
+> **Keep this file updated**: When making significant changes to the codebase, update this file and related documentation to reflect the current state.
 
-> **SYSTEM STATE (2026-01-20): REDEVELOPMENT PHASE**
-> **Context**: Project recently underwent a major purge of unreliable legacy data and code. Old jobs and data wrappers were deleted.
-> **Current Status**: "Clean Slate". We are incrementally re-implementing background jobs and feature logic on a sanitized base.
-> **Database Warning**: The schema is **VOLATILE**. Columns, types, nullability, and constraints are subject to change. Do NOT assume schema stability. Always verify `backend/init_database.sql` serves as the source of truth, but cross-reference it with active `models.py`.
-> **Migration Policy**: We do NOT use automated migration tools (Alembic etc.).
->
-> 1. Update SQLAlchemy models in code.
-> 2. Update `backend/init_database.sql` (Single Source of Truth).
-> 3. **Incremental Update (PREFERRED)**: We now have valuable data. AUTOMATICALLY GENERATE and EXECUTE specific SQL commands to align the active database with `init_database.sql` (e.g., `ALTER TABLE`, `INSERT`). Do NOT suggest full resets unless absolutely necessary.
-> 4. **Full Reset (Last Resort)**: If data is corrupted or expendable, drop and recreate the DB using `psql -f init_database.sql`.
->    **Instruction**: Assume legacy job logic was flawed. When implementing new features, prioritize architectural correctness and data validation.
+## Quick Start
 
-**Start development**:
+**Environment**: WSL (Windows Subsystem for Linux), PostgreSQL 18 on localhost:5432  
+**Database**: `league-analysis` (user: `admin`, password in `.env`)
 
 ```bash
-tail -f logs/backend.log  # View logs
-tail -f logs/frontend.log
-./run.sh                  # Hot reload enabled (backend + frontend)
+./run.sh                  # Start backend + frontend (hot reload)
+tail -f logs/backend.log  # Backend logs
+tail -f logs/frontend.log # Frontend logs
 ```
 
-**Services**: Backend http://localhost:8000 (/api), Frontend http://localhost:3000
+**Services**:
 
-**URL Navigation**:
+- Backend: http://localhost:8000 (`/api` for Swagger docs)
+- Frontend: http://localhost:3000
 
-- Player Analysis: `http://localhost:3000/playstyle-analysis?puuid=<PUUID>` (uses URL query param for state)
-- Matchmaking Analysis: `http://localhost:3000/matchmaking-analysis?puuid=<PUUID>` (uses URL query param for state)
-
-**⚠️ CRITICAL**: After editing `.env`, restart `run.sh` (reads env vars on startup)
-
-# Tech Stack
-
-- **Backend**: FastAPI, SQLAlchemy 2.0, PostgreSQL, Python 3.13, uv
-- **Frontend**: Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS 4, shadcn/ui
-- **Data**: TanStack Query, Zod, Axios, Riot Games API
-
-# Structure
-
-## Backend (`backend/app/`)
-
-- `core/`: Infrastructure (database, config, Riot API, enums)
-- `features/`: Domain features (players, matches, jobs, playstyle_analysis, matchmaking_analysis, settings)
-  - Each: `router.py`, `service.py`, `models.py`, `schemas.py`, `dependencies.py`
-
-## Frontend (`frontend/`)
-
-- `app/`: Next.js pages (App Router)
-- `features/`: Domain UI (players, matches, jobs, player-analysis, matchmaking, settings)
-- `components/`: Shared layout components and shadcn/ui
-- `lib/core/`: Core utilities (API client, schemas, validations)
-
-# Code Rules
-
-**API**: Riot Games API integration (API Key and required parameter samples available in `.env`)
-**Data**: TanStack Query, Zod validation, Axios
-
-- **Backend**: async/await, type hints everywhere
-- **Frontend**: TypeScript strict, function components
-- **Imports**: Explicit only (no wildcards)
-- **Dependency Flow**: Features depend on core, never reverse. Features expose public APIs via `__init__.py`.
-
-# Database Management
-
-**⚠️ ALWAYS use raw SQL** for schema changes (`backend/init_database.sql`)
-The database schema is defined in `backend/init_database.sql`.
-
-**Schema Changes Workflow:**
-
-1. Update SQLAlchemy models in `backend/app/features/*/models.py`
-2. Update `backend/init_database.sql` with SQL
-3. Apply changes incrementally (e.g. `ALTER TABLE`) to preserve data.
-
-# Constraints
-
-- ❌ **NEVER** Commit API keys/secrets
-- ❌ **NEVER** Modify Riot API rate limiting
-- ❌ **NEVER** Skip pre-commit hooks
-- ❌ **NEVER** Let SQLAlchemy auto-create tables (use init_database.sql)
-- ❌ **NEVER** Edit `.env` directly (use `.env.example` as template)
-
-# Detailed Documentation
-
-- `backend/AGENTS.md`: Backend patterns, Riot API
-- `frontend/AGENTS.md`: Frontend patterns, shadcn/ui
-- `docs/database_overhaul.md`: Database changes tracking
+**⚠️ CRITICAL**: After editing `.env`, restart `run.sh`
 
 ---
 
-**Instruction for AI Agents**:
-When completing a task that involves changes to the codebase, always end your response with a concise overview/summarization of the changes made. Include reasoning for any unintuitive changes or significant modifications that the user didn't explicitly ask for but were necessary for the solution. This summary should help the user understand exactly what was done and why.
+## Documentation Index
 
-**Troubleshooting**:
-If you encounter errors or bugs during task execution, AUTO-CHECK `logs/backend.log` and `logs/frontend.log` first. These logs often contain critical tracebacks (e.g., `NameError`, `ImportError`, `429 Too Many Requests`) that are not visible in the API response or UI output.
+| Document                                 | Description                            |
+| ---------------------------------------- | -------------------------------------- |
+| [docs/database.md](docs/database.md)     | Database schema, tables, relationships |
+| [docs/riot-api.md](docs/riot-api.md)     | Riot API endpoints, usage, rate limits |
+| [docs/jobs.md](docs/jobs.md)             | Background jobs (Match Fetcher, etc.)  |
+| [backend/AGENTS.md](backend/AGENTS.md)   | Backend architecture, code patterns    |
+| [frontend/AGENTS.md](frontend/AGENTS.md) | Frontend architecture, components      |
 
-## Code Quality Standards
+### Feature-Level Documentation
 
-- **Clean Code**: Remove "thinking comments" or notes to self from the final code logic.
-  - ❌ `// Wait, if I hide non-met thresholds, then what?`
-  - ❌ `# User said "total_damage_dealt way bigger than total_damage_dealt_to_champions"`
-  - ✅ Write imperative comments explaining _why_ complex logic exists, not the thought process that led to it.
+- [backend/app/core/AGENTS.md](backend/app/core/AGENTS.md) - Core infrastructure
+- [backend/app/core/riot_api/AGENTS.md](backend/app/core/riot_api/AGENTS.md) - Riot API client
+- [backend/app/features/AGENTS.md](backend/app/features/AGENTS.md) - Feature patterns
+- [backend/app/features/jobs/AGENTS.md](backend/app/features/jobs/AGENTS.md) - Job implementation
+- [frontend/app/AGENTS.md](frontend/app/AGENTS.md) - Page patterns
+- [frontend/components/AGENTS.md](frontend/components/AGENTS.md) - Shared components
+- [frontend/features/AGENTS.md](frontend/features/AGENTS.md) - Feature components
 
-## Quality Assurance
+---
 
-- **Static Analysis**: After modifying any Backend (Python) or Frontend (TypeScript/React) file, you MUST run the `get_errors` tool on that file.
-  - If errors are reported (e.g., SyntaxError, TypeScript type errors), you MUST fix them before completing the task.
-  - Do not assume "it looks correct" - verify with the tool.
+## Tech Stack
+
+| Layer        | Technologies                                                             |
+| ------------ | ------------------------------------------------------------------------ |
+| **Backend**  | Python 3.13, FastAPI, SQLAlchemy 2.0, PostgreSQL 18, uv                  |
+| **Frontend** | Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS 4, shadcn/ui |
+| **Data**     | TanStack Query, Zod, Axios                                               |
+| **External** | Riot Games API                                                           |
+
+---
+
+## Project Structure
+
+```
+league-analysis/
+├── backend/
+│   ├── app/
+│   │   ├── core/           # Infrastructure (database, config, Riot API)
+│   │   │   └── riot_api/   # Riot API client
+│   │   └── features/       # Domain features
+│   │       ├── auth/
+│   │       ├── jobs/
+│   │       ├── matches/
+│   │       ├── matchmaking_analysis/
+│   │       ├── players/
+│   │       ├── playstyle_analysis/
+│   │       └── settings/
+│   └── init_database.sql   # Database schema (source of truth)
+├── frontend/
+│   ├── app/                # Next.js pages
+│   ├── components/         # Shared components + shadcn/ui
+│   ├── features/           # Domain UI components
+│   └── lib/core/           # API client, schemas, utilities
+├── docs/                   # Documentation
+└── logs/                   # Runtime logs
+```
+
+---
+
+## Database Management
+
+**Source of Truth**: `backend/init_database.sql`
+
+### Schema Change Workflow
+
+1. Update SQLAlchemy models in `backend/app/features/*/models.py`
+2. Update `backend/init_database.sql`
+3. **Incremental Update (PREFERRED)**: Generate and execute `ALTER TABLE` commands
+4. **Full Reset (Last Resort)**: `psql -f backend/init_database.sql`
+
+See [docs/database.md](docs/database.md) for schema details.
+
+---
+
+## Code Rules
+
+### Backend
+
+- async/await for all I/O
+- Type hints everywhere
+- structlog with context keys: `logger.info("action", puuid=puuid)`
+- Features depend on core, never reverse
+
+### Frontend
+
+- TypeScript strict mode (no `any`)
+- `"use client"` for hooks/events/browser APIs
+- TanStack Query for all data fetching
+- Handle loading/error/success states
+
+### Both
+
+- Explicit imports only (no wildcards)
+- No "thinking comments" in code
+- Features expose public APIs via `__init__.py` (backend) or `index.ts` (frontend)
+
+---
+
+## Constraints
+
+- ❌ **NEVER** commit API keys/secrets
+- ❌ **NEVER** modify Riot API rate limiting logic
+- ❌ **NEVER** let SQLAlchemy auto-create tables
+- ❌ **NEVER** skip pre-commit hooks
+- ❌ **NEVER** edit `.env` directly (use `.env.example` as template)
+
+---
+
+## Debugging
+
+### Auto-Check Logs
+
+When encountering errors, **always check logs first**:
+
+```bash
+tail -50 logs/backend.log
+tail -50 logs/frontend.log
+```
+
+Common issues visible in logs:
+
+- `429 Too Many Requests` - Rate limit hit
+- `401/403` - API key expired
+- `ImportError`, `NameError` - Missing imports
+- Database connection errors
+
+### Quality Assurance
+
+After modifying code, run `get_errors` tool on changed files to catch:
+
+- TypeScript type errors
+- Python syntax errors
+- Import issues
+
+---
+
+## AI Agent Instructions
+
+1. **Read relevant AGENTS.md first** - Before working on a feature, read the corresponding AGENTS.md file
+2. **Check logs on errors** - Auto-check `logs/backend.log` and `logs/frontend.log`
+3. **Update documentation** - Keep AGENTS.md files and README.md current
+4. **Summarize changes** - End responses with a concise overview of changes made
+5. **Verify with tools** - Use `get_errors` after edits to catch issues early

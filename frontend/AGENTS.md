@@ -1,119 +1,94 @@
-# Tech Stack
+# Frontend (`frontend/`)
 
-Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS 4, shadcn/ui (New York), TanStack Query v5, Zod v4, react-hook-form, Axios, next-themes, sonner, lucide-react
+> **Keep this file updated** when making frontend changes.
 
-# Structure
+## Tech Stack
 
-**Feature-based**: Related UI grouped by domain
+Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS 4, shadcn/ui (New York), TanStack Query v5, Zod v4, Axios, sonner, lucide-react
 
-## Pages (`app/`)
+## Structure
 
-Next.js App Router pages:
-
-- `page.tsx` - Home/dashboard
-- `playstyle-analysis/page.tsx` - Playstyle analysis
-- `matchmaking-analysis/page.tsx` - Matchmaking fairness
-- `tracked-players/page.tsx` - Tracked players management
-- `jobs/page.tsx` - Background jobs control
-- `settings/page.tsx` - System settings
-
-## Features (`features/`)
-
-Domain-specific components, hooks, utilities:
-
-- `players/` - Search, cards, stats, tracked list
-- `matches/` - Match history, opponent stats
-- `playstyle-analysis/` - Analysis results
-- `matchmaking/` - Fairness analysis
-- `jobs/` - Job management
-- `settings/` - Settings UI
-
-Each feature: `components/`, `hooks/` (optional), `utils/` (optional), `index.ts`
-
-## Shared (`components/`)
-
-Layout/infrastructure only (NOT feature-specific):
-
-- `sidebar-nav.tsx` - Navigation
-- `theme-provider.tsx`, `theme-toggle.tsx` - Dark mode
-- `providers.tsx` - TanStack Query provider
-- `loading-skeleton.tsx` - Generic loading states
-- `ui/` - **shadcn/ui primitives (DO NOT MOVE)**
-
-## Core (`lib/core/`)
-
-- `api.ts` - Axios client config
-- `schemas.ts` - Shared Zod schemas
-- `validations.ts` - Validation utilities
-- `utils.ts` - Generic utilities (cn(), formatters)
-- `hooks.ts` - Toast notifications
-
-# Rules
-
-**Component placement**:
-
-- Used by ONE feature → `features/<feature>/components/`
-- Shared layout/infrastructure → `components/`
-- shadcn/ui → `components/ui/` (never move)
-
-**Public exports**:
-
-```typescript
-// features/players/index.ts
-export { PlayerSearch } from "./components/player-search";
-export { PlayerCard } from "./components/player-card";
+```
+frontend/
+├── app/                 # Next.js pages (see app/AGENTS.md)
+├── components/          # Shared components (see components/AGENTS.md)
+│   └── ui/              # shadcn/ui primitives (DO NOT EDIT)
+├── features/            # Domain UI (see features/AGENTS.md)
+│   ├── auth/
+│   ├── jobs/
+│   ├── matches/
+│   ├── matchmaking/
+│   ├── players/
+│   └── playstyle-analysis/
+└── lib/core/            # Utilities (api, schemas, utils)
 ```
 
-**Imports**:
+## Code Patterns
+
+### Imports
 
 ```typescript
 // Features (public API)
 import { PlayerSearch, PlayerCard } from "@/features/players";
 import { MatchHistory } from "@/features/matches";
 
-// Features (direct)
-import { PlayerSearch } from "@/features/players/components/player-search";
-
-// Core
-import { api } from "@/lib/core/api";
-import { playerSchema } from "@/lib/core/schemas";
+// Core utilities
+import { api, validatedGet } from "@/lib/core/api";
+import { PlayerSchema } from "@/lib/core/schemas";
 import { cn } from "@/lib/core/utils";
-import { useToast } from "@/lib/core/hooks";
 
-// Shared
+// Shared components
 import { Button } from "@/components/ui/button";
-import { SidebarNav } from "@/components/sidebar-nav";
 ```
 
-**Code style**:
+### Data Fetching
+
+```typescript
+const { data, isLoading, error } = useQuery({
+  queryKey: ["player", puuid],
+  queryFn: () => validatedGet(PlayerSchema, `/players/${puuid}`),
+});
+```
+
+### Component Pattern
+
+```typescript
+"use client";
+
+interface MyComponentProps {
+  puuid: string;
+}
+
+export function MyComponent({ puuid }: MyComponentProps) {
+  // Loading state
+  if (isLoading) return <Skeleton />;
+
+  // Error state
+  if (error) return <Alert variant="destructive">...</Alert>;
+
+  // Success state
+  return <div>...</div>;
+}
+```
+
+## Rules
 
 - TypeScript strict mode (no `any`)
-- kebab-case for files, PascalCase for components
 - `"use client"` for hooks/events/browser APIs
-- Follow shadcn/ui patterns
 - TanStack Query for all data fetching
 - Handle loading/error/success states
-- Debouncing for search (useEffect + setTimeout)
-- Keyboard nav for autocomplete (ArrowUp/Down, Enter, Escape)
+- Features expose public APIs via `index.ts`
 
-# Commands
+## Commands
 
 ```bash
-npm run dev      # Start dev server (hot reload)
-npm run build    # Build for production
-rm -rf .next     # Clear build cache
+npm run dev      # Start dev server
+npm run build    # Production build
+rm -rf .next     # Clear cache
 ```
 
-# Add New Feature
+## Related Docs
 
-1. Create `features/my-feature/`
-2. Add subdirectories: `components/`, `hooks/` (optional), `utils/` (optional)
-3. Create `index.ts`:
-   ```typescript
-   export { MyComponent } from "./components/my-component";
-   export { useMyHook } from "./hooks/use-my-hook";
-   ```
-4. Import in pages:
-   ```typescript
-   import { MyComponent } from "@/features/my-feature";
-   ```
+- [app/AGENTS.md](app/AGENTS.md) - Page patterns
+- [components/AGENTS.md](components/AGENTS.md) - Shared components
+- [features/AGENTS.md](features/AGENTS.md) - Feature components

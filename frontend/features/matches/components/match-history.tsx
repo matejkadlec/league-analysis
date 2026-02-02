@@ -187,7 +187,7 @@ function MatchRow({
     <div
       className={`px-3 py-1 rounded border-2 mb-1.5 border-t-1 border-b-1 border-amber-400/20 last:border-b-0 last:mb-0 ${result.bgClass}`}
     >
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-3">
         {/* Column 1: Queue Type & Patch - WIDER, CENTERED VERTICALLY */}
         <div className="w-35 shrink-0 flex flex-col justify-center">
           <span className="text-sm font-medium text-center">
@@ -310,7 +310,7 @@ function MatchRow({
         </div>
 
         {/* Column 6: LP Change */}
-        <div className="w-15 shrink-0 text-right flex flex-col justify-center">
+        <div className="w-12 shrink-0 text-center flex flex-col justify-center">
           {match.lp_change !== null && match.lp_change !== undefined ? (
             <span
               className={`text-xs font-medium ${

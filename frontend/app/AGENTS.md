@@ -1,72 +1,55 @@
 # Pages (`app/`)
 
+> **Keep this file updated**: When adding pages, update this documentation.
+
 Next.js App Router pages.
 
-## Structure
+## Pages
 
-```
-app/
-├── layout.tsx             # Root layout with providers
-├── page.tsx               # Home landing page
-├── globals.css            # Global styles + Tailwind + shadcn
-├── error.tsx              # Error boundary
-├── loading.tsx            # Root loading state
-├── not-found.tsx          # 404 page
-├── playstyle-analysis/    # Playstyle analysis page
-├── matchmaking-analysis/  # Matchmaking analysis page
-└── jobs/                  # Background jobs monitoring
-```
+| Route                   | File                            | Description                |
+| ----------------------- | ------------------------------- | -------------------------- |
+| `/`                     | `page.tsx`                      | Home landing page          |
+| `/playstyle-analysis`   | `playstyle-analysis/page.tsx`   | Player playstyle analysis  |
+| `/matchmaking-analysis` | `matchmaking-analysis/page.tsx` | Match fairness analysis    |
+| `/tracked-players`      | `tracked-players/page.tsx`      | Tracked player list        |
+| `/jobs`                 | `jobs/page.tsx`                 | Background jobs monitoring |
+| `/settings`             | `settings/page.tsx`             | App settings               |
+| `/sign-in`              | `sign-in/page.tsx`              | Authentication             |
+
+## Key Files
+
+| File            | Purpose                           |
+| --------------- | --------------------------------- |
+| `layout.tsx`    | Root layout with providers        |
+| `globals.css`   | Global styles + Tailwind + shadcn |
+| `error.tsx`     | Error boundary                    |
+| `loading.tsx`   | Root loading state                |
+| `not-found.tsx` | 404 page                          |
 
 ## Rules
 
-**Add `"use client"` for**:
+- Add `"use client"` for hooks, browser APIs, event handlers
+- Always handle loading/error/success states
+- Add new pages to `components/sidebar-nav.tsx`
+- Use container pattern: `<div className="container mx-auto py-8">`
 
-- Hooks (useState, useEffect, etc.)
-- Browser APIs
-- Event handlers
-
-**Container pattern**:
-
-```typescript
-<div className="container mx-auto py-8">{/* content */}</div>
-```
-
-**Handle states**:
+## Page Template
 
 ```typescript
-// Loading
-if (isLoading) return <LoadingSkeleton />;
+"use client";
 
-// Error
-if (error) return <div>Error: {error.message}</div>;
-
-// Success
-return <div>{data}</div>;
-```
-
-**Data fetching**:
-
-```typescript
+import { useQuery } from "@tanstack/react-query";
 import { validatedGet } from "@/lib/core/api";
+import { LoadingSkeleton } from "@/components/loading-skeleton";
 
-const { data, isLoading, error } = useQuery({
-  queryKey: ["key"],
-  queryFn: () => validatedGet(Schema, "/endpoint"),
-});
+export default function MyPage() {
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["my-data"],
+    queryFn: () => validatedGet(Schema, "/endpoint"),
+  });
+
+  if (isLoading) return <LoadingSkeleton />;
+  if (error) return <div>Error: {error.message}</div>;
+  return <div>{/* content */}</div>;
+}
 ```
-
-**Follow ApiResponse<T> pattern** from backend (success/error fields).
-
-# Create New Page
-
-1. Create `app/my-page/page.tsx`
-2. Add navigation to `components/sidebar-nav.tsx`
-3. Add auto-refresh if needed: `refetchInterval: 15000` in useQuery
-
-# Don'ts
-
-- ❌ Modify CSS variables in globals.css (managed by shadcn)
-- ❌ Create pages without error handling
-- ❌ Forget to add to sidebar navigation
-- ❌ Use browser APIs without `"use client"`
-- ❌ Skip loading and error states

@@ -1,66 +1,45 @@
-# Tech Stack
+# Backend (`backend/`)
 
-Python 3.13, FastAPI, SQLAlchemy 2.0+, Pydantic v2, structlog, APScheduler, httpx, pytest
+> **Keep this file updated** when making backend changes.
 
-# Structure
+## Tech Stack
 
-**Feature-based**: Related code grouped by domain
+Python 3.13, FastAPI, SQLAlchemy 2.0+, Pydantic v2, structlog, APScheduler, httpx
 
-## Core (`app/core/`)
+## Structure
 
-- `database.py` - Session management
-- `config.py` - Settings, env vars
-- `exceptions.py` - Base exceptions
-- `dependencies.py` - Core DI
-- `enums.py` - Shared enums (Tier, Platform)
-- `models.py` - Base SQLAlchemy model
-- `decorators.py` - Retry, circuit breaker
-- `validation.py` - Shared validators
-- `riot_api/` - Riot API client (see `riot_api/AGENTS.md`)
+```
+backend/app/
+├── main.py              # App init, router registration
+├── core/                # Infrastructure (see core/AGENTS.md)
+│   └── riot_api/        # Riot API client (see riot_api/AGENTS.md)
+└── features/            # Domain features (see features/AGENTS.md)
+    ├── auth/
+    ├── jobs/            # Background tasks (see jobs/AGENTS.md)
+    ├── matches/
+    ├── matchmaking_analysis/
+    ├── players/
+    ├── playstyle_analysis/
+    └── settings/
+```
 
-## Features (`app/features/`)
+Each feature contains: `router.py`, `service.py`, `models.py`, `schemas.py`, `dependencies.py`
 
-Each feature: `router.py`, `service.py`, `models.py`, `schemas.py`, `dependencies.py`
+## Code Patterns
 
-- `players/` - Search, tracking, rank
-- `matches/` - Match history, stats
-- `playstyle_analysis/` - Playstyle analysis and stats
-- `matchmaking_analysis/` - Fairness evaluation
-- `jobs/` - Background tasks (see feature AGENTS.md)
-- `settings/` - Runtime config
-
-# Rules
-
-**Architecture**:
-
-- Features depend on core, never reverse
-- Features expose public APIs via `__init__.py`
-
-**Code**:
-
-- async/await for all I/O
-- Type hints everywhere
-- structlog with context keys: `logger.info("action", puuid=puuid)`
-- Thin routes, logic in services
-
-**Imports**:
+### Imports
 
 ```python
 # Core
 from app.core.database import get_db
 from app.core.config import get_settings
-from app.core.riot_api import RiotDataManager
-from app.core.enums import Tier, Platform
+from app.core.riot_api import RiotAPIClient
 
 # Features (public API)
 from app.features.players import PlayerService, Player
-from app.features.matches import MatchService
-
-# Features (direct)
-from app.features.players.service import PlayerService
 ```
 
-**Dependency injection**:
+### Dependency Injection
 
 ```python
 from fastapi import Depends
@@ -74,23 +53,33 @@ async def get_player(
     return await player_service.get_player(puuid)
 ```
 
-# Commands
+### Logging
 
-```bash
-# Tests
-uv run pytest
-uv run pytest --cov=app
-
-# Type check
-uv run pyright
+```python
+import structlog
+logger = structlog.get_logger(__name__)
+logger.info("action_completed", puuid=puuid, count=count)
 ```
 
-# Add New Feature
+## Rules
 
-1. Create `app/features/my_feature/`
-2. Add standard files: `__init__.py`, `router.py`, `service.py`, `models.py`, `schemas.py`, `dependencies.py`
-3. Register router in `main.py`:
-   ```python
-   from app.features.my_feature import my_feature_router
-   app.include_router(my_feature_router, prefix="/api/v1", tags=["my_feature"])
-   ```
+- async/await for all I/O
+- Type hints everywhere
+- Features depend on core, never reverse
+- Thin routes, logic in services
+- Features expose public APIs via `__init__.py`
+
+## Commands
+
+```bash
+uv run pytest              # Run tests
+uv run pytest --cov=app    # With coverage
+uv run pyright             # Type check
+```
+
+## Related Docs
+
+- [core/AGENTS.md](app/core/AGENTS.md) - Core infrastructure
+- [core/riot_api/AGENTS.md](app/core/riot_api/AGENTS.md) - Riot API client
+- [features/AGENTS.md](app/features/AGENTS.md) - Feature patterns
+- [features/jobs/AGENTS.md](app/features/jobs/AGENTS.md) - Job implementation

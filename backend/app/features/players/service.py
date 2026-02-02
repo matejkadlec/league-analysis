@@ -964,16 +964,14 @@ class PlayerService:
                 }
                 player_data = PlayerDataSanitizer.sanitize_player_fields(player_data)
 
-                # Create new player record marked for analysis
+                # Create new player record (discovered, not tracked)
                 new_player = Player(
                     puuid=participant.puuid,
                     game_name=player_data["game_name"],
                     tag_line=player_data["tag_line"],
                     platform=normalized_platform,
                     summoner_level=participant.summoner_level,
-                    is_tracked=False,  # Discovered, not tracked
-                    # is_analyzed=False,  # Deleted
-                    # is_active=True, # Deleted
+                    is_tracked=False,
                 )
                 self.db.add(new_player)
                 discovered_count += 1

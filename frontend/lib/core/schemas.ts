@@ -331,21 +331,6 @@ export type JobExecutionListResponse = z.infer<
   typeof JobExecutionListResponseSchema
 >;
 
-// Encounter Match Schema
-export const EncounterMatchSchema = z.object({
-  match_id: z.string(),
-  game_name: z.string(),
-  tag_line: z.string().optional().nullable(),
-  champion_name: z.string(),
-  team_id: z.number(),
-  is_teammate: z.boolean(),
-  win: z.boolean(),
-  kda: z.number(),
-});
-
-export const RecentOpponentsSchema = z.array(PlayerSchema);
-export type RecentOpponents = z.infer<typeof RecentOpponentsSchema>;
-
 // ===== PLAYER LEAGUE SCHEMA =====
 // Simplified immutable league snapshot (ordered by created_at DESC for current)
 export const PlayerLeagueSchema = z.object({
