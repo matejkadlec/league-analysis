@@ -2,7 +2,7 @@
 
 import {
   Player,
-  PlayerRankSchema,
+  PlayerLeagueSchema,
   MatchStatsResponseSchema,
 } from "@/lib/core/schemas";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -176,13 +176,13 @@ export function PlayerCard({ player }: PlayerCardProps) {
   const [isUpdating, setIsUpdating] = useState(false);
   const [isHoveringTracked, setIsHoveringTracked] = useState(false);
 
-  // Fetch player rank
-  const { data: rank, refetch: refetchRank } = useQuery({
-    queryKey: ["player-rank", player.puuid],
+  // Fetch player league
+  const { data: league, refetch: refetchLeague } = useQuery({
+    queryKey: ["player-league", player.puuid],
     queryFn: async () => {
       const result = await validatedGet(
-        PlayerRankSchema.nullable(),
-        `/players/${player.puuid}/rank`,
+        PlayerLeagueSchema.nullable(),
+        `/players/${player.puuid}/league`,
       );
       if (!result.success) {
         return null;
@@ -213,11 +213,11 @@ export function PlayerCard({ player }: PlayerCardProps) {
   const handleUpdate = async () => {
     setIsUpdating(true);
     try {
-      // Trigger a rank refresh from API
-      await api.post(`/players/${player.puuid}/refresh-rank`);
+      // Trigger a league refresh from API
+      await api.post(`/players/${player.puuid}/refresh-league`);
       // Refetch all data
       await Promise.all([
-        refetchRank(),
+        refetchLeague(),
         refetchStats(),
         queryClient.invalidateQueries({ queryKey: ["player", player.puuid] }),
       ]);
@@ -254,7 +254,7 @@ export function PlayerCard({ player }: PlayerCardProps) {
     untrackMutation.mutate();
   };
 
-  const rankColors = rank ? getRankColors(rank.tier) : null;
+  const leagueColors = league ? getRankColors(league.tier) : null;
 
   return (
     <Card>
@@ -271,15 +271,15 @@ export function PlayerCard({ player }: PlayerCardProps) {
                   {player.game_name}
                   {player.tag_line && `#${player.tag_line}`}
                 </CardTitle>
-                {rank && (
+                {league && (
                   <>
-                    <span className={`font-semibold ${rankColors?.text}`}>
-                      {rank.display_rank}
+                    <span className={`font-semibold ${leagueColors?.text}`}>
+                      {league.display_rank}
                     </span>
                     <Badge
-                      className={`font-mono ${rankColors?.badge} border-0`}
+                      className={`font-mono ${leagueColors?.badge} border-0`}
                     >
-                      {rank.league_points} LP
+                      {league.league_points} LP
                     </Badge>
                   </>
                 )}
@@ -342,8 +342,8 @@ export function PlayerCard({ player }: PlayerCardProps) {
       </CardHeader>
 
       <CardContent className="space-y-3">
-        {/* Win Rate Section (from rank data) */}
-        {rank && (
+        {/* Win Rate Section (from league data) */}
+        {league && (
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -351,20 +351,20 @@ export function PlayerCard({ player }: PlayerCardProps) {
                 <span className="text-sm font-medium">Win Rate</span>
               </div>
               <span
-                className={`text-lg font-bold ${getWinRateColor(rank.win_rate)}`}
+                className={`text-lg font-bold ${getWinRateColor(league.win_rate)}`}
               >
-                {formatWinRate(rank.win_rate)}%
+                {formatWinRate(league.win_rate)}%
               </span>
             </div>
             <div className="relative h-2 w-full bg-muted rounded-full overflow-hidden">
               <div
-                className={`absolute left-0 top-0 h-full duration-300 ${getWinRateBarColor(rank.win_rate)}`}
-                style={{ width: `${Math.min(rank.win_rate, 100)}%` }}
+                className={`absolute left-0 top-0 h-full duration-300 ${getWinRateBarColor(league.win_rate)}`}
+                style={{ width: `${Math.min(league.win_rate, 100)}%` }}
               />
             </div>
             <div className="flex justify-between text-xs text-muted-foreground">
-              <span>{rank.wins}W</span>
-              <span>{rank.losses}L</span>
+              <span>{league.wins}W</span>
+              <span>{league.losses}L</span>
             </div>
           </div>
         )}

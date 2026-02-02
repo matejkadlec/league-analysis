@@ -10,7 +10,7 @@ from sqlalchemy import select, func, desc
 from .models import Match
 from .participants import MatchParticipant
 from app.features.players.models import Player
-from app.features.players.ranks import PlayerRank
+from app.features.players.leagues import PlayerLeague
 from .schemas import (
     MatchResponse,
     MatchListResponse,
@@ -192,14 +192,122 @@ class MatchService:
                     participants_by_match[p.match_id] = []
                 participants_by_match[p.match_id].append(p)
 
-            # Get player ranks for LP change calculation (ordered by created_at)
-            ranks_stmt = (
-                select(PlayerRank)
-                .where(PlayerRank.puuid == puuid)
-                .order_by(desc(PlayerRank.created_at))
+            # Get player leagues for LP change calculation (ordered by created_at DESC - newest first)
+            leagues_stmt = (
+                select(PlayerLeague)
+                .where(PlayerLeague.puuid == puuid)
+                .order_by(desc(PlayerLeague.created_at))
             )
-            ranks_result = await self.db.execute(ranks_stmt)
-            player_ranks = list(ranks_result.scalars().all())
+            leagues_result = await self.db.execute(leagues_stmt)
+            player_leagues = list(leagues_result.scalars().all())
+
+            # Build a helper to calculate LP change for a match
+            # Logic: Find the league snapshot recorded AFTER the match ended,
+            # then compare it to the previous snapshot to get the LP change
+            def calculate_lp_change(match_end_timestamp: int) -> int | None:
+                """Calculate LP change for a match based on league snapshots.
+
+                Args:
+                    match_end_timestamp: The match end timestamp in milliseconds
+
+                Returns:
+                    LP change (positive for gain, negative for loss) or None if cannot determine
+                """
+                if len(player_leagues) < 2:
+                    return None
+
+                from datetime import datetime, timezone
+
+                # Convert match timestamp (ms) to datetime
+                match_end_dt = datetime.fromtimestamp(
+                    match_end_timestamp / 1000, tz=timezone.utc
+                )
+
+                # Find the CLOSEST league snapshot AFTER the match ended (this is the "after" snapshot)
+                # player_leagues is ordered DESC (newest first), so we iterate from newest to oldest
+                # We want the LAST snapshot that is still AFTER the match (closest to match time)
+                after_snapshot = None
+                before_snapshot = None
+
+                for i, league in enumerate(player_leagues):
+                    # Make league.created_at timezone-aware if it isn't
+                    league_dt = league.created_at
+                    if league_dt.tzinfo is None:
+                        league_dt = league_dt.replace(tzinfo=timezone.utc)
+
+                    if league_dt > match_end_dt:
+                        # This snapshot is after the match, keep track of it
+                        # Continue iterating to find the closest one
+                        after_snapshot = league
+                        # The next one (older) might be before the match or also after
+                        if i + 1 < len(player_leagues):
+                            before_snapshot = player_leagues[i + 1]
+                        # Don't break - continue to find the closest after_snapshot
+                    else:
+                        # This snapshot is BEFORE or at the match time
+                        # The previous after_snapshot (if any) is the closest one
+                        break
+
+                if after_snapshot is None or before_snapshot is None:
+                    return None
+
+                # Calculate LP change
+                # Need to account for tier/rank changes too
+                after_lp = after_snapshot.league_points
+                before_lp = before_snapshot.league_points
+
+                # Simple case: same tier and rank
+                if (
+                    after_snapshot.tier == before_snapshot.tier
+                    and after_snapshot.rank == before_snapshot.rank
+                ):
+                    return after_lp - before_lp
+
+                # If tier or rank changed, we need more complex calculation
+                # For now, return the LP difference with a rough estimate
+                # (this won't be perfect for promotions/demotions)
+                tier_order = [
+                    "IRON",
+                    "BRONZE",
+                    "SILVER",
+                    "GOLD",
+                    "PLATINUM",
+                    "EMERALD",
+                    "DIAMOND",
+                    "MASTER",
+                    "GRANDMASTER",
+                    "CHALLENGER",
+                ]
+                rank_order = ["IV", "III", "II", "I"]  # IV is lowest
+
+                try:
+                    after_tier_idx = tier_order.index(after_snapshot.tier.upper())
+                    before_tier_idx = tier_order.index(before_snapshot.tier.upper())
+
+                    if after_tier_idx != before_tier_idx:
+                        # Tier changed - assume ~100 LP per division
+                        tier_diff = after_tier_idx - before_tier_idx
+                        # Rough estimate: gained/lost multiple divisions worth of LP
+                        return tier_diff * 100 + (after_lp - before_lp)
+
+                    # Same tier, different rank
+                    after_rank_idx = (
+                        rank_order.index(after_snapshot.rank)
+                        if after_snapshot.rank
+                        else 0
+                    )
+                    before_rank_idx = (
+                        rank_order.index(before_snapshot.rank)
+                        if before_snapshot.rank
+                        else 0
+                    )
+                    rank_diff = after_rank_idx - before_rank_idx
+
+                    # Each rank is roughly 100 LP apart
+                    return rank_diff * 100 + (after_lp - before_lp)
+                except (ValueError, AttributeError):
+                    # Tier not found or other error
+                    return after_lp - before_lp
 
             # Build match responses with player data
             match_responses = []
@@ -284,8 +392,12 @@ class MatchService:
                         vision_score=player_participant.vision_score,
                     )
 
-                # Calculate LP change (simplified - would need match timestamps to be accurate)
+                # Calculate LP change based on league snapshots
                 lp_change = None
+                if (
+                    match.game_end_timestamp and match.queue_id == 420
+                ):  # Only for ranked solo/duo
+                    lp_change = calculate_lp_change(match.game_end_timestamp)
 
                 match_response = MatchWithPlayerData(
                     match_id=match.match_id,

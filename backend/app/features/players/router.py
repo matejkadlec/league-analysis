@@ -11,7 +11,7 @@ import structlog
 from .schemas import (
     PlayerResponse,
 )
-from .ranks_schemas import PlayerRankResponse
+from .leagues_schemas import PlayerLeagueResponse
 from .dependencies import (
     PlayerServiceDep,
     get_player_service,
@@ -469,60 +469,60 @@ def _handle_tracking_unexpected_error(
     )
 
 
-# === Player Rank Endpoints ===
+# === Player League Endpoints ===
 
 
-@router.post("/{puuid}/refresh-rank", response_model=PlayerRankResponse | None)
-async def refresh_player_rank(
+@router.post("/{puuid}/refresh-league", response_model=PlayerLeagueResponse | None)
+async def refresh_player_league(
     puuid: str,
     player_service: PlayerServiceDep,
     riot_client: Annotated["RiotAPIClient", Depends(get_riot_client)],
     queue_type: str = Query(
-        "RANKED_SOLO_5x5", description="Queue type to refresh rank for"
+        "RANKED_SOLO_5x5", description="Queue type to refresh league for"
     ),
 ):
     """
-    Refresh and get the current rank for a player from Riot API.
+    Refresh and get the current league for a player from Riot API.
 
-    This endpoint fetches the latest rank data from Riot API and stores it.
+    This endpoint fetches the latest league data from Riot API and stores it.
 
     Args:
         puuid: Player's PUUID
         queue_type: Queue type (default: RANKED_SOLO_5x5)
 
     Returns:
-        Updated rank data or None if no rank data exists
+        Updated league data or None if no league data exists
 
     Raises:
         404: Player not found
         500: Database or API error
     """
     try:
-        # Get the player model (not PlayerResponse) for update_player_rank
+        # Get the player model (not PlayerResponse) for update_player_league
         from .models import Player
 
         player_model = await player_service.db.get(Player, puuid)
         if not player_model:
             raise HTTPException(status_code=404, detail="Player not found")
 
-        # Update rank from Riot API (adds record to player_service.db session)
-        rank_updated = await player_service.update_player_rank(
+        # Update league from Riot API (adds record to player_service.db session)
+        league_updated = await player_service.update_player_league(
             player_model, riot_client
         )
 
         # Commit using the same session the service used
         await player_service.db.commit()
 
-        # Return the updated rank
-        rank = await player_service.get_player_rank(puuid, queue_type)
-        if rank:
-            return PlayerRankResponse.model_validate(rank)
+        # Return the updated league
+        league = await player_service.get_player_league(puuid, queue_type)
+        if league:
+            return PlayerLeagueResponse.model_validate(league)
         return None
     except HTTPException:
         raise
     except AuthenticationError as e:
         logger.error(
-            "refresh_player_rank_failed",
+            "refresh_player_league_failed",
             error=str(e),
             puuid=puuid,
             exc_info=True,
@@ -535,47 +535,47 @@ async def refresh_player_rank(
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         logger.error(
-            "refresh_player_rank_failed",
+            "refresh_player_league_failed",
             error=str(e),
             puuid=puuid,
             exc_info=True,
         )
         raise HTTPException(
             status_code=500,
-            detail="Internal server error refreshing player rank",
+            detail="Internal server error refreshing player league",
         )
 
 
-@router.get("/{puuid}/rank", response_model=PlayerRankResponse | None)
-async def get_player_current_rank(
+@router.get("/{puuid}/league", response_model=PlayerLeagueResponse | None)
+async def get_player_current_league(
     puuid: str,
     player_service: PlayerServiceDep,
     queue_type: str = Query(
-        "RANKED_SOLO_5x5", description="Queue type to fetch rank for"
+        "RANKED_SOLO_5x5", description="Queue type to fetch league for"
     ),
 ):
     """
-    Get the current rank for a player.
+    Get the current league for a player.
 
     Args:
         puuid: Player's PUUID
         queue_type: Queue type (default: RANKED_SOLO_5x5)
 
     Returns:
-        Current rank data or None if no rank data exists
+        Current league data or None if no league data exists
 
     Raises:
         500: Database error
     """
     try:
-        rank = await player_service.get_player_rank(puuid, queue_type)
+        league = await player_service.get_player_league(puuid, queue_type)
 
-        if rank:
-            return PlayerRankResponse.model_validate(rank)
+        if league:
+            return PlayerLeagueResponse.model_validate(league)
         return None
     except Exception as e:
         logger.error(
-            "get_player_rank_failed",
+            "get_player_league_failed",
             error=str(e),
             puuid=puuid,
             queue_type=queue_type,
@@ -583,5 +583,5 @@ async def get_player_current_rank(
         )
         raise HTTPException(
             status_code=500,
-            detail="Internal server error retrieving player rank",
+            detail="Internal server error retrieving player league",
         )

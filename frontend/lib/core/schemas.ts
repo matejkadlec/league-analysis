@@ -346,17 +346,20 @@ export const EncounterMatchSchema = z.object({
 export const RecentOpponentsSchema = z.array(PlayerSchema);
 export type RecentOpponents = z.infer<typeof RecentOpponentsSchema>;
 
-// ===== PLAYER RANK SCHEMA =====
-// Simplified immutable rank snapshot (ordered by created_at DESC for current)
-export const PlayerRankSchema = z.object({
-  id: z.number(),
+// ===== PLAYER LEAGUE SCHEMA =====
+// Simplified immutable league snapshot (ordered by created_at DESC for current)
+export const PlayerLeagueSchema = z.object({
   puuid: z.string(),
+  league_id: z.string(),
   queue_type: z.string(),
   tier: z.string(),
   rank: z.string().nullable(),
   league_points: z.number(),
   wins: z.number(),
   losses: z.number(),
+  veteran: z.boolean(),
+  inactive: z.boolean(),
+  fresh_blood: z.boolean(),
   hot_streak: z.boolean(),
   created_at: z.string(),
   // Computed properties from backend
@@ -365,7 +368,7 @@ export const PlayerRankSchema = z.object({
   display_rank: z.string(),
 });
 
-export type PlayerRank = z.infer<typeof PlayerRankSchema>;
+export type PlayerLeague = z.infer<typeof PlayerLeagueSchema>;
 
 // ===== SYSTEM SETTINGS SCHEMA =====
 export const SettingSchema = z.object({

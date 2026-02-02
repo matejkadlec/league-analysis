@@ -368,43 +368,30 @@ ALTER TABLE ONLY core.playstyle_analyses
 CREATE INDEX ix_core_playstyle_analyses_puuid ON core.playstyle_analyses USING btree (puuid);
 CREATE INDEX ix_core_playstyle_analyses_status ON core.playstyle_analyses USING btree (status);
 
--- [table] core.player_ranks
--- Immutable rank history table (snapshot per created_at)
+-- [table] core.player_leagues
+-- Immutable league history table (snapshot per created_at)
 
-CREATE SEQUENCE core.player_ranks_id_seq
-    AS integer
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-CREATE TABLE core.player_ranks (
-    id integer DEFAULT nextval('core.player_ranks_id_seq'::regclass) NOT NULL,
+CREATE TABLE core.player_leagues (
     puuid character varying(78) NOT NULL,
+    league_id character varying(36) NOT NULL,
     queue_type character varying(32) NOT NULL,
     tier character varying(16) NOT NULL,
     rank character varying(4),
     league_points integer NOT NULL,
     wins integer NOT NULL,
     losses integer NOT NULL,
+    veteran boolean DEFAULT false NOT NULL,
+    inactive boolean DEFAULT false NOT NULL,
+    fresh_blood boolean DEFAULT false NOT NULL,
     hot_streak boolean DEFAULT false NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
-ALTER SEQUENCE core.player_ranks_id_seq OWNED BY core.player_ranks.id;
-
-ALTER TABLE ONLY core.player_ranks
-    ADD CONSTRAINT pk_player_ranks PRIMARY KEY (id);
-
-CREATE INDEX idx_ranks_puuid_queue ON core.player_ranks USING btree (puuid, queue_type);
-CREATE INDEX idx_ranks_tier_lp ON core.player_ranks USING btree (tier, league_points);
-CREATE INDEX idx_ranks_tier_rank ON core.player_ranks USING btree (tier, rank);
-CREATE INDEX idx_ranks_puuid_created ON core.player_ranks USING btree (puuid, created_at DESC);
-CREATE INDEX ix_app_player_ranks_puuid ON core.player_ranks USING btree (puuid);
-CREATE INDEX ix_app_player_ranks_queue_type ON core.player_ranks USING btree (queue_type);
-CREATE INDEX ix_app_player_ranks_rank ON core.player_ranks USING btree (rank);
-CREATE INDEX ix_app_player_ranks_tier ON core.player_ranks USING btree (tier);
+CREATE INDEX idx_leagues_puuid_queue ON core.player_leagues USING btree (puuid, queue_type);
+CREATE INDEX idx_leagues_tier_lp ON core.player_leagues USING btree (tier, league_points);
+CREATE INDEX idx_leagues_tier_rank ON core.player_leagues USING btree (tier, rank);
+CREATE INDEX idx_leagues_puuid_created ON core.player_leagues USING btree (puuid, created_at DESC);
+CREATE INDEX idx_leagues_league_id ON core.player_leagues USING btree (league_id);
 
 -- [table] core.riot_api_keys
 
@@ -546,8 +533,8 @@ ALTER TABLE ONLY core.matchmaking_analyses
 ALTER TABLE ONLY core.playstyle_analyses
     ADD CONSTRAINT fk_playstyle_analyses_puuid_players FOREIGN KEY (puuid) REFERENCES core.players(puuid) ON DELETE CASCADE;
 
-ALTER TABLE ONLY core.player_ranks
-    ADD CONSTRAINT fk_player_ranks_puuid_players FOREIGN KEY (puuid) REFERENCES core.players(puuid) ON DELETE CASCADE;
+ALTER TABLE ONLY core.player_leagues
+    ADD CONSTRAINT fk_player_leagues_puuid_players FOREIGN KEY (puuid) REFERENCES core.players(puuid) ON DELETE CASCADE;
 
 ALTER TABLE ONLY jobs.job_executions
     ADD CONSTRAINT fk_job_executions_job_config_id_job_configurations FOREIGN KEY (job_config_id) REFERENCES jobs.job_configurations(id) ON DELETE CASCADE;

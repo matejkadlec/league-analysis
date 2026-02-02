@@ -15,7 +15,7 @@ from sqlalchemy.sql import func
 import sqlalchemy as sa
 
 from app.core.models import Base
-from .ranks import PlayerRank
+from .leagues import PlayerLeague
 
 
 class Player(Base):
@@ -111,8 +111,8 @@ class Player(Base):
         cascade="all, delete-orphan",
         uselist=False,
     )
-    ranks = relationship(  # noqa: F841 - Used by SQLAlchemy ORM
-        "PlayerRank", back_populates="player", cascade="all, delete-orphan"
+    leagues = relationship(  # noqa: F841 - Used by SQLAlchemy ORM
+        "PlayerLeague", back_populates="player", cascade="all, delete-orphan"
     )
 
 

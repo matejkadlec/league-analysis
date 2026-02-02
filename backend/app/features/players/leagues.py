@@ -1,4 +1,4 @@
-"""Player rank model for storing ranked information."""
+"""Player league model for storing ranked information."""
 
 from datetime import datetime
 from typing import Optional
@@ -17,31 +17,39 @@ from sqlalchemy.sql import func
 from app.core.models import Base
 
 
-class PlayerRank(Base):
-    """Player rank model storing ranked information.
+class PlayerLeague(Base):
+    """Player league model storing ranked information.
 
-    This table is immutable - each row is a snapshot of rank at a point in time.
-    To get current rank, order by created_at DESC and take the first result.
+    This table is immutable - each row is a snapshot of league at a point in time.
+    To get current league, order by created_at DESC and take the first result.
     """
 
-    __tablename__ = "player_ranks"
+    __tablename__ = "player_leagues"
     __table_args__ = {"schema": "core"}
 
-    # Primary key
-    id: Mapped[int] = mapped_column(
-        Integer, primary_key=True, comment="Auto-incrementing primary key"
-    )
-
-    # Foreign key
+    # Composite primary key using puuid + created_at
     puuid: Mapped[str] = mapped_column(
         String(78),
         ForeignKey("core.players.puuid", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
+        primary_key=True,
         comment="Reference to the player (Riot PUUID)",
     )
 
-    # Queue and rank information
+    created_at: Mapped[datetime] = mapped_column(
+        SQLDateTime(timezone=True),
+        primary_key=True,
+        server_default=func.now(),
+        comment="When this league snapshot was recorded",
+    )
+
+    # League information
+    league_id: Mapped[str] = mapped_column(
+        String(36),
+        nullable=False,
+        index=True,
+        comment="Riot league ID (UUID)",
+    )
+
     queue_type: Mapped[str] = mapped_column(
         String(32),
         nullable=False,
@@ -72,6 +80,27 @@ class PlayerRank(Base):
         Integer, nullable=False, default=0, comment="Number of losses in this queue"
     )
 
+    veteran: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        comment="Whether player is a veteran (100+ games in this queue)",
+    )
+
+    inactive: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        comment="Whether player is inactive (decay warning)",
+    )
+
+    fresh_blood: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        comment="Whether player recently joined this tier",
+    )
+
     hot_streak: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,
@@ -79,20 +108,12 @@ class PlayerRank(Base):
         comment="Whether player is on a winning streak",
     )
 
-    # Timestamp - immutable, only set on creation
-    created_at: Mapped[datetime] = mapped_column(
-        SQLDateTime(timezone=True),
-        nullable=False,
-        server_default=func.now(),
-        comment="When this rank snapshot was recorded",
-    )
-
     # Relationships
-    player = relationship("Player", back_populates="ranks")
+    player = relationship("Player", back_populates="leagues")
 
     def __repr__(self) -> str:
-        """Return string representation of the player rank."""
-        return f"<PlayerRank(puuid='{self.puuid}', queue='{self.queue_type}', tier='{self.tier}', rank='{self.rank}')>"
+        """Return string representation of the player league."""
+        return f"<PlayerLeague(puuid='{self.puuid}', queue='{self.queue_type}', tier='{self.tier}', rank='{self.rank}')>"
 
     @property
     def win_rate(self) -> float:
@@ -116,10 +137,12 @@ class PlayerRank(Base):
 
 
 # Create composite indexes for common queries
-Index("idx_ranks_puuid_queue", PlayerRank.puuid, PlayerRank.queue_type)
+Index("idx_leagues_puuid_queue", PlayerLeague.puuid, PlayerLeague.queue_type)
 
-Index("idx_ranks_tier_rank", PlayerRank.tier, PlayerRank.rank)
+Index("idx_leagues_tier_rank", PlayerLeague.tier, PlayerLeague.rank)
 
-Index("idx_ranks_tier_lp", PlayerRank.tier, PlayerRank.league_points)
+Index("idx_leagues_tier_lp", PlayerLeague.tier, PlayerLeague.league_points)
 
-Index("idx_ranks_puuid_created", PlayerRank.puuid, PlayerRank.created_at.desc())
+Index("idx_leagues_puuid_created", PlayerLeague.puuid, PlayerLeague.created_at.desc())
+
+Index("idx_leagues_league_id", PlayerLeague.league_id)

@@ -17,7 +17,7 @@ from app.core.riot_api.constants import Region, Platform
 
 if TYPE_CHECKING:
     from app.core.riot_api.client import RiotAPIClient
-    from .ranks import PlayerRank
+    from .leagues import PlayerLeague
 
 logger = structlog.get_logger(__name__)
 
@@ -1003,33 +1003,33 @@ class PlayerService:
         return discovered_count
 
     @service_error_handler("PlayerService")
-    async def update_player_rank(
+    async def update_player_league(
         self, player: Player, riot_api_client: "RiotAPIClient"
     ) -> bool:
-        """Update player's current rank from Riot API.
+        """Update player's current league from Riot API.
 
         Fetches the player's ranked league entries and stores their
-        Solo/Duo rank in the PlayerRank table only if rank has changed.
+        Solo/Duo league in the PlayerLeague table only if league has changed.
 
         Args:
-            player: Player to update rank for
+            player: Player to update league for
             riot_api_client: RiotAPIClient instance (from jobs)
 
         Returns:
-            True if rank was updated, False if no rank data found or unchanged
+            True if league was updated, False if no league data found or unchanged
 
         Raises:
             ValueError: If player has invalid platform
         """
         from app.core.riot_api.constants import Platform
-        from .ranks import PlayerRank
+        from .leagues import PlayerLeague
 
-        logger.debug("Updating player rank", puuid=player.puuid)
+        logger.debug("Updating player league", puuid=player.puuid)
 
         # Convert platform string to Platform enum
         platform_enum = Platform(player.platform.lower())
 
-        # Fetch rank data from Riot API using PUUID-based endpoint
+        # Fetch league data from Riot API using PUUID-based endpoint
         league_entries = await riot_api_client.get_league_entries_by_puuid(
             player.puuid, platform_enum
         )
@@ -1044,74 +1044,79 @@ class PlayerService:
         )
 
         if not solo_entry:
-            logger.debug("No Solo/Duo rank found for player", puuid=player.puuid)
+            logger.debug("No Solo/Duo league found for player", puuid=player.puuid)
             return False
 
-        # Get the most recent rank to compare
-        current_rank = await self.get_player_rank(player.puuid)
+        # Get the most recent league to compare
+        current_league = await self.get_player_league(player.puuid)
 
-        # Check if rank has changed (tier, rank, LP, wins, losses)
-        if current_rank:
+        # Check if league has changed (tier, rank, LP, wins, losses)
+        if current_league:
             is_same = (
-                current_rank.tier == solo_entry.tier
-                and current_rank.rank == solo_entry.rank
-                and current_rank.league_points == solo_entry.league_points
-                and current_rank.wins == solo_entry.wins
-                and current_rank.losses == solo_entry.losses
+                current_league.tier == solo_entry.tier
+                and current_league.rank == solo_entry.rank
+                and current_league.league_points == solo_entry.league_points
+                and current_league.wins == solo_entry.wins
+                and current_league.losses == solo_entry.losses
             )
             if is_same:
                 logger.debug(
-                    "Player rank unchanged, skipping insert",
+                    "Player league unchanged, skipping insert",
                     puuid=player.puuid,
                     tier=solo_entry.tier,
                 )
                 return False
 
-        # Create rank record with hot_streak
-        rank_record = PlayerRank(
+        # Create league record with all fields from Riot API
+        league_record = PlayerLeague(
             puuid=player.puuid,
+            league_id=solo_entry.league_id,
             queue_type=solo_entry.queue_type,
             tier=solo_entry.tier,
             rank=solo_entry.rank,
             league_points=solo_entry.league_points,
             wins=solo_entry.wins,
             losses=solo_entry.losses,
+            veteran=solo_entry.veteran,
+            inactive=solo_entry.inactive,
+            fresh_blood=solo_entry.fresh_blood,
             hot_streak=solo_entry.hot_streak,
         )
 
-        self.db.add(rank_record)
+        self.db.add(league_record)
 
         logger.info(
-            "Updated player rank",
+            "Updated player league",
             puuid=player.puuid,
             tier=solo_entry.tier,
             rank=solo_entry.rank,
             lp=solo_entry.league_points,
             hot_streak=solo_entry.hot_streak,
+            fresh_blood=solo_entry.fresh_blood,
         )
 
         return True
 
-    async def get_player_rank(
+    async def get_player_league(
         self, puuid: str, queue_type: str = "RANKED_SOLO_5x5"
-    ) -> "PlayerRank | None":
-        """Get the most recent rank for a player.
+    ) -> "PlayerLeague | None":
+        """Get the most recent league for a player.
 
         Args:
             puuid: Player's PUUID
             queue_type: Queue type (default: RANKED_SOLO_5x5)
 
         Returns:
-            Most recent PlayerRank or None if no rank data exists
+            Most recent PlayerLeague or None if no league data exists
         """
         from sqlalchemy import select
-        from .ranks import PlayerRank
+        from .leagues import PlayerLeague
 
         stmt = (
-            select(PlayerRank)
-            .where(PlayerRank.puuid == puuid)
-            .where(PlayerRank.queue_type == queue_type)
-            .order_by(PlayerRank.created_at.desc())
+            select(PlayerLeague)
+            .where(PlayerLeague.puuid == puuid)
+            .where(PlayerLeague.queue_type == queue_type)
+            .order_by(PlayerLeague.created_at.desc())
             .limit(1)
         )
         result = await self.db.execute(stmt)

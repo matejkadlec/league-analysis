@@ -53,7 +53,7 @@ const RIOT_API_ENDPOINTS = [
   "/players/search",
   "/matches/sync",
   "/matchmaking-analysis",
-  "/refresh-rank",
+  "/refresh-league",
 ];
 
 function isRiotApiEndpoint(url: string | undefined): boolean {
