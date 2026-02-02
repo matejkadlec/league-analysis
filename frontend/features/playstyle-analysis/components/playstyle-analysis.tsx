@@ -160,7 +160,7 @@ export function PlaystyleAnalysis({
   }
 
   return (
-    <Card className="w-full pb-8">
+    <Card className="w-full pb-2">
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-2 text-xl">
@@ -169,14 +169,16 @@ export function PlaystyleAnalysis({
           </CardTitle>
           {analysis && (
             <Button
+              variant="outline"
+              size="sm"
               onClick={() => mutate()}
               disabled={isPending}
               className="button-small"
             >
               {isPending ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
               ) : (
-                <RefreshCw className="h-3.5 w-3.5" />
+                <RefreshCw className="h-4 w-4 mr-1" />
               )}
               Update
             </Button>

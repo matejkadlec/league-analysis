@@ -74,12 +74,6 @@ export function SignInForm() {
             </p>
           </div>
 
-          {error && (
-            <Alert variant="destructive" className="mb-6">
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
-
           <Form {...form}>
             <form
               id="sign-in-form"
@@ -145,6 +139,19 @@ export function SignInForm() {
               </Button>
             </form>
           </Form>
+
+          {/* Error message shown below the form to prevent layout shift */}
+          <div
+            className={`mt-4 transition-all duration-300 ease-in-out overflow-hidden ${
+              error ? "max-h-20 opacity-100" : "max-h-0 opacity-0"
+            }`}
+          >
+            {error && (
+              <Alert variant="destructive">
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+          </div>
         </div>
       </div>
     </div>

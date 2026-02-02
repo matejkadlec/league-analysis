@@ -1009,14 +1009,14 @@ class PlayerService:
         """Update player's current rank from Riot API.
 
         Fetches the player's ranked league entries and stores their
-        Solo/Duo rank in the PlayerRank table.
+        Solo/Duo rank in the PlayerRank table only if rank has changed.
 
         Args:
             player: Player to update rank for
             riot_api_client: RiotAPIClient instance (from jobs)
 
         Returns:
-            True if rank was updated, False if no rank data found or error occurred
+            True if rank was updated, False if no rank data found or unchanged
 
         Raises:
             ValueError: If player has invalid platform
@@ -1047,7 +1047,27 @@ class PlayerService:
             logger.debug("No Solo/Duo rank found for player", puuid=player.puuid)
             return False
 
-        # Create rank record
+        # Get the most recent rank to compare
+        current_rank = await self.get_player_rank(player.puuid)
+
+        # Check if rank has changed (tier, rank, LP, wins, losses)
+        if current_rank:
+            is_same = (
+                current_rank.tier == solo_entry.tier
+                and current_rank.rank == solo_entry.rank
+                and current_rank.league_points == solo_entry.league_points
+                and current_rank.wins == solo_entry.wins
+                and current_rank.losses == solo_entry.losses
+            )
+            if is_same:
+                logger.debug(
+                    "Player rank unchanged, skipping insert",
+                    puuid=player.puuid,
+                    tier=solo_entry.tier,
+                )
+                return False
+
+        # Create rank record with hot_streak
         rank_record = PlayerRank(
             puuid=player.puuid,
             queue_type=solo_entry.queue_type,
@@ -1056,14 +1076,7 @@ class PlayerService:
             league_points=solo_entry.league_points,
             wins=solo_entry.wins,
             losses=solo_entry.losses,
-            veteran=solo_entry.veteran,
-            inactive=solo_entry.inactive,
-            fresh_blood=solo_entry.fresh_blood,
             hot_streak=solo_entry.hot_streak,
-            league_id=(
-                solo_entry.league_id if hasattr(solo_entry, "league_id") else None
-            ),
-            is_current=True,
         )
 
         self.db.add(rank_record)
@@ -1074,6 +1087,7 @@ class PlayerService:
             tier=solo_entry.tier,
             rank=solo_entry.rank,
             lp=solo_entry.league_points,
+            hot_streak=solo_entry.hot_streak,
         )
 
         return True
@@ -1097,7 +1111,7 @@ class PlayerService:
             select(PlayerRank)
             .where(PlayerRank.puuid == puuid)
             .where(PlayerRank.queue_type == queue_type)
-            .order_by(PlayerRank.updated_at.desc())
+            .order_by(PlayerRank.created_at.desc())
             .limit(1)
         )
         result = await self.db.execute(stmt)

@@ -56,6 +56,65 @@ export const MatchListResponseSchema = z.object({
   pages: z.number(),
 });
 
+// Player Match Participant Schema (for detailed match list)
+export const PlayerMatchParticipantSchema = z.object({
+  champion_id: z.number(),
+  champion_name: z.string(),
+  champion_level: z.number(),
+  team_position: z.string().optional().nullable(),
+  team_id: z.number(),
+  win: z.boolean(),
+  remake: z.boolean().default(false),
+  kills: z.number().default(0),
+  deaths: z.number().default(0),
+  assists: z.number().default(0),
+  kda: z.number().optional().nullable(),
+  total_cs: z.number().default(0),
+  vision_score: z.number().default(0),
+});
+
+// Enemy Lane Opponent Schema
+export const EnemyLaneOpponentSchema = z.object({
+  champion_id: z.number(),
+  champion_name: z.string(),
+  champion_level: z.number(),
+  kills: z.number().default(0),
+  deaths: z.number().default(0),
+  assists: z.number().default(0),
+});
+
+// Team Champion Schema (for team compositions)
+export const TeamChampionSchema = z.object({
+  champion_id: z.number(),
+  champion_name: z.string(),
+  team_position: z.string().optional().nullable(),
+  puuid: z.string(),
+});
+
+// Team Composition Schema
+export const TeamCompositionSchema = z.object({
+  blue_team: z.array(TeamChampionSchema),
+  red_team: z.array(TeamChampionSchema),
+});
+
+// Match With Player Data Schema
+export const MatchWithPlayerDataSchema = MatchSchema.extend({
+  player_participant: PlayerMatchParticipantSchema.optional().nullable(),
+  lane_opponent: EnemyLaneOpponentSchema.optional().nullable(),
+  lp_change: z.number().optional().nullable(),
+  team_compositions: TeamCompositionSchema.optional().nullable(),
+});
+
+// Detailed Match List Response Schema
+export const MatchListWithPlayerDataResponseSchema = z.object({
+  matches: z.array(MatchWithPlayerDataSchema),
+  total: z.number(),
+  total_analyzed: z.number().optional().default(0),
+  page: z.number(),
+  size: z.number(),
+  pages: z.number(),
+});
+
 // Match Stats Response Schema
 export const MatchStatsResponseSchema = z.object({
   puuid: z.string(),
@@ -172,6 +231,16 @@ export type Match = z.infer<typeof MatchSchema>;
 export type MatchListResponse = z.infer<typeof MatchListResponseSchema>;
 export type MatchStatsResponse = z.infer<typeof MatchStatsResponseSchema>;
 export type MatchParticipant = z.infer<typeof MatchParticipantSchema>;
+export type PlayerMatchParticipant = z.infer<
+  typeof PlayerMatchParticipantSchema
+>;
+export type EnemyLaneOpponent = z.infer<typeof EnemyLaneOpponentSchema>;
+export type TeamChampion = z.infer<typeof TeamChampionSchema>;
+export type TeamComposition = z.infer<typeof TeamCompositionSchema>;
+export type MatchWithPlayerData = z.infer<typeof MatchWithPlayerDataSchema>;
+export type MatchListWithPlayerDataResponse = z.infer<
+  typeof MatchListWithPlayerDataResponseSchema
+>;
 export type PlaystyleTag = z.infer<typeof PlaystyleTagSchema>;
 export type PlaystyleAnalysisResponse = z.infer<
   typeof PlaystyleAnalysisResponseSchema
@@ -278,6 +347,7 @@ export const RecentOpponentsSchema = z.array(PlayerSchema);
 export type RecentOpponents = z.infer<typeof RecentOpponentsSchema>;
 
 // ===== PLAYER RANK SCHEMA =====
+// Simplified immutable rank snapshot (ordered by created_at DESC for current)
 export const PlayerRankSchema = z.object({
   id: z.number(),
   puuid: z.string(),
@@ -287,16 +357,9 @@ export const PlayerRankSchema = z.object({
   league_points: z.number(),
   wins: z.number(),
   losses: z.number(),
-  veteran: z.boolean(),
-  inactive: z.boolean(),
-  fresh_blood: z.boolean(),
   hot_streak: z.boolean(),
-  league_id: z.string().nullable(),
-  league_name: z.string().nullable(),
-  season_id: z.string().nullable(),
-  is_current: z.boolean(),
   created_at: z.string(),
-  updated_at: z.string(),
+  // Computed properties from backend
   win_rate: z.number(),
   total_games: z.number(),
   display_rank: z.string(),
@@ -327,6 +390,33 @@ export const SettingTestResponseSchema = z.object({
 export type Setting = z.infer<typeof SettingSchema>;
 export type SettingUpdate = z.infer<typeof SettingUpdateSchema>;
 export type SettingTestResponse = z.infer<typeof SettingTestResponseSchema>;
+
+// ===== USER SETTINGS SCHEMA =====
+export const ThemeEnum = z.enum(["LIGHT", "DARK"]);
+export type Theme = z.infer<typeof ThemeEnum>;
+
+export const UserSettingsSchema = z.object({
+  theme: ThemeEnum,
+  save_playstyle_url: z.boolean(),
+  saved_playstyle_puuid: z.string().nullable(),
+  save_matchmaking_url: z.boolean(),
+  saved_matchmaking_puuid: z.string().nullable(),
+  default_platform: z.string().nullable(),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+
+export const UserSettingsUpdateSchema = z.object({
+  theme: ThemeEnum.optional(),
+  save_playstyle_url: z.boolean().optional(),
+  saved_playstyle_puuid: z.string().nullable().optional(),
+  save_matchmaking_url: z.boolean().optional(),
+  saved_matchmaking_puuid: z.string().nullable().optional(),
+  default_platform: z.string().nullable().optional(),
+});
+
+export type UserSettings = z.infer<typeof UserSettingsSchema>;
+export type UserSettingsUpdate = z.infer<typeof UserSettingsUpdateSchema>;
 
 // ===== MATCHMAKING ANALYSIS SCHEMAS =====
 export const MatchmakingAnalysisResultsSchema = z.object({

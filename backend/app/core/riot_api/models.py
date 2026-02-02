@@ -213,11 +213,19 @@ class MatchDTO(BaseModel):
 
 
 class LeagueEntryDTO(BaseModel):
-    """League entry information."""
+    """League entry information.
+
+    Note: The /lol/league/v4/entries/by-puuid/{puuid} endpoint does NOT return
+    summonerId or summonerName fields - they are optional here for compatibility
+    with other league endpoints that may return them.
+    """
 
     league_id: str = Field(..., alias="leagueId")
-    summoner_id: str = Field(..., alias="summonerId")
-    summoner_name: str = Field(..., alias="summonerName")
+    # summonerId/summonerName are NOT returned by the by-puuid endpoint
+    summoner_id: str | None = Field(default=None, alias="summonerId")
+    summoner_name: str | None = Field(default=None, alias="summonerName")
+    # puuid is returned by the by-puuid endpoint
+    puuid: str | None = Field(default=None, alias="puuid")
     queue_type: str = Field(..., alias="queueType")
     tier: str
     rank: str

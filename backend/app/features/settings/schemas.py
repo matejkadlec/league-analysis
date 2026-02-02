@@ -2,8 +2,16 @@
 
 from datetime import datetime
 from typing import Optional
+from enum import Enum as PyEnum
 
 from pydantic import BaseModel, Field, ConfigDict
+
+
+class ThemeEnum(str, PyEnum):
+    """Theme preference enum."""
+
+    LIGHT = "LIGHT"
+    DARK = "DARK"
 
 
 class SettingUpdate(BaseModel):
@@ -54,4 +62,53 @@ class APIKeyStatusResponse(BaseModel):
     env_key_identifier: Optional[str] = Field(
         None,
         description="Short identifier (hash/slice) of the env key to track uniqueness",
+    )
+
+
+# ===== USER SETTINGS SCHEMAS =====
+
+
+class UserSettingsResponse(BaseModel):
+    """Schema for user settings response."""
+
+    theme: ThemeEnum = Field(..., description="User's theme preference")
+    save_playstyle_url: bool = Field(
+        ..., description="Whether to save playstyle analysis PUUID in URL"
+    )
+    saved_playstyle_puuid: Optional[str] = Field(
+        None, description="Saved PUUID for playstyle analysis"
+    )
+    save_matchmaking_url: bool = Field(
+        ..., description="Whether to save matchmaking analysis PUUID in URL"
+    )
+    saved_matchmaking_puuid: Optional[str] = Field(
+        None, description="Saved PUUID for matchmaking analysis"
+    )
+    default_platform: Optional[str] = Field(
+        "eun1", description="Default server/platform"
+    )
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class UserSettingsUpdate(BaseModel):
+    """Schema for updating user settings."""
+
+    theme: Optional[ThemeEnum] = Field(None, description="Theme preference")
+    save_playstyle_url: Optional[bool] = Field(
+        None, description="Save playstyle PUUID in URL"
+    )
+    saved_playstyle_puuid: Optional[str] = Field(
+        None, max_length=78, description="Saved playstyle PUUID"
+    )
+    save_matchmaking_url: Optional[bool] = Field(
+        None, description="Save matchmaking PUUID in URL"
+    )
+    saved_matchmaking_puuid: Optional[str] = Field(
+        None, max_length=78, description="Saved matchmaking PUUID"
+    )
+    default_platform: Optional[str] = Field(
+        None, max_length=4, description="Default server/platform"
     )

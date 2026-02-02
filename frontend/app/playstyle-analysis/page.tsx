@@ -2,14 +2,14 @@
 
 import { useState, useEffect, Suspense, useTransition, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { Player, PlayerSchema } from "@/lib/core/schemas";
-import { validatedGet } from "@/lib/core/api";
-import { PlayerSearch, PlayerCard, PlayerStats } from "@/features/players";
-import { MatchHistory, RecentOpponents } from "@/features/matches";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Player, PlayerSchema, UserSettingsSchema } from "@/lib/core/schemas";
+import { validatedGet, validatedPut } from "@/lib/core/api";
+import { PlayerSearch, PlayerCard } from "@/features/players";
+import { MatchHistory } from "@/features/matches";
 import { PlaystyleAnalysis } from "@/features/playstyle-analysis";
 import { ProtectedRoute } from "@/features/auth";
 
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   PlayerCardSkeleton,
   MatchHistorySkeleton,
@@ -21,19 +21,52 @@ import { toast } from "sonner";
 export default function PlaystyleAnalysisPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
   const [isPending, startTransition] = useTransition();
   const loadedPuuidRef = useRef<string | null>(null);
+  const initialLoadDone = useRef(false);
 
-  // Fetch player data if puuid is provided in URL
+  // Fetch user settings for URL persistence
+  const { data: userSettingsResult } = useQuery({
+    queryKey: ["user-settings"],
+    queryFn: () => validatedGet(UserSettingsSchema, "/settings/user"),
+    staleTime: 60000,
+  });
+
+  const userSettings = userSettingsResult?.success
+    ? userSettingsResult.data
+    : null;
+
+  // Mutation to save PUUID to user settings
+  const savePuuidMutation = useMutation({
+    mutationFn: async (puuid: string | null) => {
+      const result = await validatedPut(UserSettingsSchema, "/settings/user", {
+        saved_playstyle_puuid: puuid,
+      });
+      if (!result.success) {
+        throw new Error(result.error.message);
+      }
+      return result.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["user-settings"] });
+    },
+  });
+
+  // Effect to load player from URL or saved settings
   useEffect(() => {
-    const puuid = searchParams.get("puuid");
-    // Only load if we have a puuid, haven't loaded it yet, and don't have a selected player
-    if (puuid && loadedPuuidRef.current !== puuid && !selectedPlayer) {
-      loadedPuuidRef.current = puuid;
+    if (initialLoadDone.current) return;
+
+    const puuidFromUrl = searchParams.get("puuid");
+
+    // Priority 1: Load from URL param
+    if (puuidFromUrl && loadedPuuidRef.current !== puuidFromUrl) {
+      initialLoadDone.current = true;
+      loadedPuuidRef.current = puuidFromUrl;
 
       startTransition(() => {
-        validatedGet(PlayerSchema, `/players/${puuid}`)
+        validatedGet(PlayerSchema, `/players/${puuidFromUrl}`)
           .then((result) => {
             if (result.success) {
               setSelectedPlayer(result.data);
@@ -47,13 +80,58 @@ export default function PlaystyleAnalysisPage() {
             loadedPuuidRef.current = null;
           });
       });
+      return;
     }
-  }, [searchParams, selectedPlayer]);
+
+    // Priority 2: Load from saved settings (if no URL param and save_playstyle_url is enabled)
+    if (
+      !puuidFromUrl &&
+      userSettings?.save_playstyle_url &&
+      userSettings?.saved_playstyle_puuid
+    ) {
+      initialLoadDone.current = true;
+      const savedPuuid = userSettings.saved_playstyle_puuid;
+      loadedPuuidRef.current = savedPuuid;
+
+      startTransition(() => {
+        validatedGet(PlayerSchema, `/players/${savedPuuid}`)
+          .then((result) => {
+            if (result.success) {
+              setSelectedPlayer(result.data);
+              // Also update URL to show the saved puuid
+              router.push(`/playstyle-analysis?puuid=${savedPuuid}`);
+            } else {
+              loadedPuuidRef.current = null;
+            }
+          })
+          .catch(() => {
+            loadedPuuidRef.current = null;
+          });
+      });
+    }
+  }, [searchParams, userSettings, router]);
 
   const handlePlayerFound = (player: Player) => {
     setSelectedPlayer(player);
     // Update URL with PUUID
     router.push(`/playstyle-analysis?puuid=${player.puuid}`);
+
+    // Save PUUID if user has save_playstyle_url enabled
+    if (userSettings?.save_playstyle_url) {
+      savePuuidMutation.mutate(player.puuid);
+    }
+  };
+
+  const handleClearPlayer = () => {
+    setSelectedPlayer(null);
+    loadedPuuidRef.current = null;
+    initialLoadDone.current = false;
+    router.push("/playstyle-analysis");
+
+    // Clear saved PUUID if user has save_playstyle_url enabled
+    if (userSettings?.save_playstyle_url) {
+      savePuuidMutation.mutate(null);
+    }
   };
 
   return (
@@ -76,66 +154,52 @@ export default function PlaystyleAnalysisPage() {
 
           {/* Two Column Layout */}
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            {/* Left Column - Player Search and Match History */}
+            {/* Left Column: Player Search + Playstyle Analysis */}
             <div className="space-y-6">
-              <PlayerSearch onPlayerFound={handlePlayerFound} />
-
-              {selectedPlayer && (
-                <Suspense fallback={<MatchHistorySkeleton />}>
-                  <MatchHistory
-                    key={`${selectedPlayer.puuid}-420`}
-                    puuid={selectedPlayer.puuid}
-                    queueFilter={420}
-                  />
-                </Suspense>
+              <PlayerSearch
+                onPlayerFound={handlePlayerFound}
+                onClear={handleClearPlayer}
+                showClear={!!selectedPlayer}
+              />
+              {(isPending || selectedPlayer) && (
+                <>
+                  {isPending ? (
+                    <PlaystyleAnalysisSkeleton />
+                  ) : selectedPlayer ? (
+                    <Suspense fallback={<PlaystyleAnalysisSkeleton />}>
+                      <PlaystyleAnalysis
+                        puuid={selectedPlayer.puuid}
+                        matchCount={selectedPlayer.total_matches}
+                        analyzedMatchCount={selectedPlayer.analyzed_matches}
+                      />
+                    </Suspense>
+                  ) : null}
+                </>
               )}
             </div>
 
-            {/* Right Column - Player Stats and Analysis */}
-            <div className="space-y-6">
+            {/* Right Column: Player Card */}
+            <div>
               {isPending ? (
-                <>
-                  <PlayerCardSkeleton />
-                  <PlayerCardSkeleton />
-                </>
+                <PlayerCardSkeleton />
               ) : selectedPlayer ? (
-                <>
-                  <Suspense fallback={<PlayerCardSkeleton />}>
-                    <PlayerCard player={selectedPlayer} />
-                  </Suspense>
-
-                  <Tabs defaultValue="playstyle" className="w-full">
-                    <TabsList className="grid w-full grid-cols-2">
-                      <TabsTrigger value="playstyle">
-                        Playstyle Analysis
-                      </TabsTrigger>
-                      <TabsTrigger value="opponents">
-                        Recent Opponents
-                      </TabsTrigger>
-                    </TabsList>
-                    <TabsContent value="playstyle" className="mt-6">
-                      <Suspense fallback={<PlaystyleAnalysisSkeleton />}>
-                        <PlaystyleAnalysis
-                          puuid={selectedPlayer.puuid}
-                          matchCount={selectedPlayer.total_matches}
-                          analyzedMatchCount={selectedPlayer.analyzed_matches}
-                        />
-                      </Suspense>
-                    </TabsContent>
-                    <TabsContent value="opponents" className="mt-6">
-                      <Suspense fallback={<PlayerCardSkeleton />}>
-                        <RecentOpponents
-                          puuid={selectedPlayer.puuid}
-                          limit={10}
-                          onAnalyzePlayer={handlePlayerFound}
-                        />
-                      </Suspense>
-                    </TabsContent>
-                  </Tabs>
-                </>
+                <Suspense fallback={<PlayerCardSkeleton />}>
+                  <PlayerCard player={selectedPlayer} />
+                </Suspense>
               ) : null}
             </div>
           </div>
+
+          {/* Full Width Match History */}
+          {selectedPlayer && (
+            <Suspense fallback={<MatchHistorySkeleton />}>
+              <MatchHistory
+                key={`${selectedPlayer.puuid}-420`}
+                puuid={selectedPlayer.puuid}
+                queueFilter={420}
+              />
+            </Suspense>
+          )}
         </div>
       </div>
     </ProtectedRoute>

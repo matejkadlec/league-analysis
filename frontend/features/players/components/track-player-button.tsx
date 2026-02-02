@@ -11,6 +11,7 @@ interface TrackPlayerButtonProps {
   playerName?: string;
   variant?: "default" | "outline" | "ghost";
   size?: "default" | "sm" | "lg" | "icon";
+  className?: string;
 }
 
 export function TrackPlayerButton({
@@ -18,6 +19,7 @@ export function TrackPlayerButton({
   playerName,
   variant = "outline",
   size = "default",
+  className,
 }: TrackPlayerButtonProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -104,6 +106,7 @@ export function TrackPlayerButton({
     <Button
       variant={variant}
       size={size}
+      className={className}
       onClick={handleToggleTracking}
       disabled={isLoading}
     >

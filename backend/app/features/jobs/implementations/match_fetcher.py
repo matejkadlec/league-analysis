@@ -12,12 +12,13 @@ from app.core.riot_api.client import RiotAPIClient
 from app.core.config import settings, get_riot_api_key
 from app.core.riot_api.constants import get_region_by_platform, QueueType, Region
 from app.features.matches.models import Match
+from app.features.players.models import Player
 
 logger = structlog.get_logger(__name__)
 
 
 class MatchFetcherJob(BaseJob):
-    """Job to fetch matches for tracked players."""
+    """Job to fetch matches for tracked players and update their ranks."""
 
     def __init__(self, job_config_id: int):
         super().__init__(job_config_id)
@@ -41,7 +42,9 @@ class MatchFetcherJob(BaseJob):
 
             for player in tracked_players:
                 try:
-                    await self._process_player(db, player, match_service, riot_client)
+                    await self._process_player(
+                        db, player, player_service, match_service, riot_client
+                    )
                 except Exception as e:
                     logger.error(
                         "Error processing player", puuid=player.puuid, error=str(e)
@@ -52,9 +55,34 @@ class MatchFetcherJob(BaseJob):
         self,
         db: AsyncSession,
         player: "PlayerResponse",
+        player_service: PlayerService,
         match_service: MatchService,
         riot_client: RiotAPIClient,
     ) -> None:
-        """Fetch and sync matches for a single player."""
+        """Fetch and sync matches for a single player, then update their rank."""
+        # Fetch new matches
         count = await match_service.sync_matches_for_player(riot_client, player)
         self.metrics["records_created"] += count
+
+        # Update player rank (will only insert if rank has changed)
+        try:
+            # Need to get the Player model, not PlayerResponse
+            player_model = await db.get(Player, player.puuid)
+            if player_model:
+                rank_updated = await player_service.update_player_rank(
+                    player_model, riot_client
+                )
+                # Commit the rank update immediately
+                await db.commit()
+                if rank_updated:
+                    logger.info(
+                        "Player rank updated",
+                        puuid=player.puuid,
+                        game_name=player.game_name,
+                    )
+        except Exception as e:
+            logger.error(
+                "Error updating player rank",
+                puuid=player.puuid,
+                error=str(e),
+            )

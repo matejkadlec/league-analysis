@@ -33,6 +33,39 @@ class Platform(str, Enum):
     VN2 = "vn2"
 
 
+# Platform display names (community-known abbreviations)
+PLATFORM_DISPLAY_NAMES: dict[str, str] = {
+    "br1": "BR",
+    "eun1": "EUNE",
+    "euw1": "EUW",
+    "jp1": "JP",
+    "kr": "KR",
+    "la1": "LAN",
+    "la2": "LAS",
+    "na1": "NA",
+    "oc1": "OCE",
+    "ph2": "PH",
+    "ru": "RU",
+    "sg2": "SG",
+    "th2": "TH",
+    "tr1": "TR",
+    "tw2": "TW",
+    "vn2": "VN",
+}
+
+
+def get_platform_display_name(platform: str) -> str:
+    """Get the community-friendly display name for a platform.
+
+    Args:
+        platform: Platform code (e.g., 'eun1', 'EUN1')
+
+    Returns:
+        Display name (e.g., 'EUNE')
+    """
+    return PLATFORM_DISPLAY_NAMES.get(platform.lower(), platform.upper())
+
+
 class QueueType(int, Enum):
     """Riot API queue types for match filtering."""
 

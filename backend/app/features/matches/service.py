@@ -10,10 +10,17 @@ from sqlalchemy import select, func, desc
 from .models import Match
 from .participants import MatchParticipant
 from app.features.players.models import Player
+from app.features.players.ranks import PlayerRank
 from .schemas import (
     MatchResponse,
     MatchListResponse,
     MatchStatsResponse,
+    MatchWithPlayerData,
+    MatchListWithPlayerDataResponse,
+    PlayerMatchParticipant,
+    EnemyLaneOpponent,
+    TeamChampion,
+    TeamComposition,
 )
 from app.core.riot_api.transformers import MatchTransformer
 from app.core.riot_api.errors import (
@@ -114,6 +121,224 @@ class MatchService:
             )
             raise
 
+    async def get_player_matches_with_data(
+        self,
+        puuid: str,
+        start: int = 0,
+        count: int = 20,
+        queue: Optional[int] = None,
+    ) -> MatchListWithPlayerDataResponse:
+        """
+        Get match history for a player with participant data.
+
+        Returns matches with the player's champion, stats, lane opponent,
+        and LP changes.
+
+        Args:
+            puuid: Player PUUID
+            start: Start index for pagination
+            count: Number of matches to return
+            queue: Filter by queue ID
+
+        Returns:
+            MatchListWithPlayerDataResponse with detailed match data
+        """
+        try:
+            # Get matches from database
+            db_matches = await self._get_matches_from_db(
+                puuid, start, count, queue, None, None
+            )
+
+            if not db_matches:
+                return MatchListWithPlayerDataResponse(
+                    matches=[],
+                    total=0,
+                    total_analyzed=0,
+                    page=0,
+                    size=count,
+                    pages=0,
+                )
+
+            # Get total counts
+            total_count = await self._count_matches_from_db(puuid, queue, None, None)
+            total_analyzed = await self._count_analyzed_matches_from_db(
+                puuid, queue, None, None
+            )
+
+            # Get all match IDs
+            match_ids = [m.match_id for m in db_matches]
+
+            # Get player's participants for all matches
+            player_participants_stmt = select(MatchParticipant).where(
+                MatchParticipant.match_id.in_(match_ids),
+                MatchParticipant.puuid == puuid,
+            )
+            player_participants_result = await self.db.execute(player_participants_stmt)
+            player_participants_by_match = {
+                p.match_id: p for p in player_participants_result.scalars().all()
+            }
+
+            # Get all participants for these matches (for finding lane opponents)
+            all_participants_stmt = select(MatchParticipant).where(
+                MatchParticipant.match_id.in_(match_ids),
+            )
+            all_participants_result = await self.db.execute(all_participants_stmt)
+            all_participants = list(all_participants_result.scalars().all())
+
+            # Group participants by match
+            participants_by_match: Dict[str, List[MatchParticipant]] = {}
+            for p in all_participants:
+                if p.match_id not in participants_by_match:
+                    participants_by_match[p.match_id] = []
+                participants_by_match[p.match_id].append(p)
+
+            # Get player ranks for LP change calculation (ordered by created_at)
+            ranks_stmt = (
+                select(PlayerRank)
+                .where(PlayerRank.puuid == puuid)
+                .order_by(desc(PlayerRank.created_at))
+            )
+            ranks_result = await self.db.execute(ranks_stmt)
+            player_ranks = list(ranks_result.scalars().all())
+
+            # Build match responses with player data
+            match_responses = []
+            for match in db_matches:
+                player_participant = player_participants_by_match.get(match.match_id)
+                match_participants = participants_by_match.get(match.match_id, [])
+
+                # Find lane opponent
+                lane_opponent = None
+                if player_participant and player_participant.team_position:
+                    for p in match_participants:
+                        if (
+                            p.puuid != puuid
+                            and p.team_id != player_participant.team_id
+                            and p.team_position == player_participant.team_position
+                        ):
+                            lane_opponent = EnemyLaneOpponent(
+                                champion_id=p.champion_id,
+                                champion_name=p.champion_name,
+                                champion_level=p.champion_level,
+                                kills=p.kills or 0,
+                                deaths=p.deaths or 0,
+                                assists=p.assists or 0,
+                            )
+                            break
+
+                # Build team compositions
+                # Role order: TOP, JUNGLE, MIDDLE, BOTTOM, UTILITY
+                role_order = {
+                    "TOP": 0,
+                    "JUNGLE": 1,
+                    "MIDDLE": 2,
+                    "BOTTOM": 3,
+                    "UTILITY": 4,
+                }
+                blue_team = []
+                red_team = []
+                for p in match_participants:
+                    team_champ = TeamChampion(
+                        champion_id=p.champion_id,
+                        champion_name=p.champion_name,
+                        team_position=p.team_position,
+                        puuid=p.puuid,
+                    )
+                    if p.team_id == 100:
+                        blue_team.append(team_champ)
+                    else:
+                        red_team.append(team_champ)
+
+                # Sort by role
+                blue_team.sort(key=lambda x: role_order.get(x.team_position or "", 5))
+                red_team.sort(key=lambda x: role_order.get(x.team_position or "", 5))
+
+                team_compositions = TeamComposition(
+                    blue_team=blue_team,
+                    red_team=red_team,
+                )
+
+                # Build player participant data
+                player_data = None
+                if player_participant:
+                    total_cs = (
+                        getattr(player_participant, "total_minions_killed", 0) or 0
+                    ) + (getattr(player_participant, "neutral_minions_killed", 0) or 0)
+                    # Also try cs column if available
+                    if hasattr(player_participant, "cs") and player_participant.cs:
+                        total_cs = player_participant.cs
+
+                    player_data = PlayerMatchParticipant(
+                        champion_id=player_participant.champion_id,
+                        champion_name=player_participant.champion_name,
+                        champion_level=player_participant.champion_level,
+                        team_position=player_participant.team_position,
+                        team_id=player_participant.team_id,
+                        win=player_participant.win,
+                        remake=player_participant.remake,
+                        kills=player_participant.kills,
+                        deaths=player_participant.deaths,
+                        assists=player_participant.assists,
+                        kda=player_participant.kda,
+                        total_cs=total_cs,
+                        vision_score=player_participant.vision_score,
+                    )
+
+                # Calculate LP change (simplified - would need match timestamps to be accurate)
+                lp_change = None
+
+                match_response = MatchWithPlayerData(
+                    match_id=match.match_id,
+                    platform=match.platform,
+                    game_start_timestamp=match.game_start_timestamp,
+                    game_duration=match.game_duration,
+                    queue_id=match.queue_id,
+                    game_version=match.game_version,
+                    map_id=match.map_id,
+                    game_mode=match.game_mode,
+                    game_type=match.game_type,
+                    game_end_timestamp=match.game_end_timestamp,
+                    early_surrender=match.early_surrender,
+                    surrender=match.surrender,
+                    game_result=match.game_result,
+                    fully_analyzed=match.fully_analyzed,
+                    created_at=match.created_at,
+                    updated_at=match.updated_at,
+                    player_participant=player_data,
+                    lane_opponent=lane_opponent,
+                    lp_change=lp_change,
+                    team_compositions=team_compositions,
+                )
+                match_responses.append(match_response)
+
+            # Calculate pagination
+            page = (start // count) if count > 0 else 0
+            pages = ((total_count + count - 1) // count) if count > 0 else 0
+
+            logger.debug(
+                "Retrieved matches with player data",
+                puuid=puuid,
+                matches_count=len(match_responses),
+                total_count=total_count,
+            )
+
+            return MatchListWithPlayerDataResponse(
+                matches=match_responses,
+                total=total_count,
+                total_analyzed=total_analyzed,
+                page=page,
+                size=count,
+                pages=pages,
+            )
+        except Exception as e:
+            logger.error(
+                "Failed to get player matches with data",
+                puuid=puuid,
+                error=str(e),
+                exc_info=True,
+            )
+            raise
+
     @staticmethod
     def _create_empty_stats_response(puuid: str) -> MatchStatsResponse:
         """Create stats response for players with no matches."""
@@ -171,7 +396,7 @@ class MatchService:
         )
 
     async def get_player_stats(
-        self, puuid: str, queue: Optional[int] = None, limit: int = 50
+        self, puuid: str, queue: Optional[int] = None, limit: Optional[int] = None
     ) -> MatchStatsResponse:
         """
         Calculate player statistics from recent matches.
@@ -179,14 +404,18 @@ class MatchService:
         Args:
             puuid: Player PUUID
             queue: Filter by queue ID
-            limit: Number of matches to analyze
+            limit: Number of matches to analyze. If None, analyze all matches.
 
         Returns:
             MatchStatsResponse with player statistics
         """
         try:
+            # If limit is None, get all matches (use a high count)
+            fetch_limit = limit if limit is not None else 10000
             # Get recent matches for the player
-            matches = await self.get_player_matches(puuid, count=limit, queue=queue)
+            matches = await self.get_player_matches(
+                puuid, count=fetch_limit, queue=queue
+            )
 
             if not matches.matches:
                 return self._create_empty_stats_response(puuid)
@@ -856,56 +1085,124 @@ class MatchService:
         should_cancel: Optional[Any] = None,
     ) -> int:
         """
-        Analyze matches for a player by re-fetching details from Riot API and updating DB.
-        Fetches up to 100 recent matches from Riot API (not just DB) to ensure new matches are caught.
+        Smart match history analysis: fetches only NEW matches and re-analyzes failed ones.
+
+        Workflow:
+        1. Get match IDs from Riot API (queue=420, count=100)
+        2. Get existing analyzed match IDs from DB for this player
+        3. Get match IDs with fully_analyzed=false from DB
+        4. Fetch only: (new matches NOT in DB) + (matches with fully_analyzed=false)
+        5. Skip Season 15 matches (gameVersion not starting with "16.")
 
         Args:
             riot_api_client: Initialized client
             puuid: Player PUUID
             progress_callback: Optional async callback(current, total)
             should_cancel: Optional callable returning bool. If True, stops processing.
+
+        Returns:
+            Number of matches processed
         """
+        import asyncio
+        import sys
+
         try:
             # Check cancel before starting
             if should_cancel and should_cancel():
                 logger.info("Analysis cancelled before fetching list", puuid=puuid)
                 return 0
 
-            # 1. Get recent match IDs from Riot API (Limit 100 to catch new + update recent old)
+            # 1. Get recent match IDs from Riot API
             match_list = await riot_api_client.get_match_list_by_puuid(
                 puuid=puuid, count=100, queue=420
             )
 
-            match_ids = []
+            api_match_ids = []
             if match_list:
                 if hasattr(match_list, "match_ids"):
-                    match_ids = list(match_list.match_ids)
+                    api_match_ids = list(match_list.match_ids)
                 elif isinstance(match_list, list):
-                    match_ids = match_list
-
-            import sys
+                    api_match_ids = match_list
 
             print(
-                f"DEBUG: Riot API returned {len(match_ids)} matches for PUUID {puuid}",
+                f"DEBUG: Riot API returned {len(api_match_ids)} matches for PUUID {puuid}",
                 file=sys.stderr,
             )
 
-            if not match_ids:
+            if not api_match_ids:
                 logger.info("No matches found in Riot API", puuid=puuid)
                 return 0
 
+            # 2. Get existing fully analyzed match IDs from DB for this player
+            existing_analyzed_stmt = (
+                select(Match.match_id)
+                .join(MatchParticipant, Match.match_id == MatchParticipant.match_id)
+                .where(
+                    MatchParticipant.puuid == puuid,
+                    Match.fully_analyzed == True,
+                )
+            )
+            result = await self.db.execute(existing_analyzed_stmt)
+            existing_analyzed_ids = set(result.scalars().all())
+
+            # 3. Get match IDs that need re-analysis (fully_analyzed=false)
+            needs_reanalysis_stmt = (
+                select(Match.match_id)
+                .join(MatchParticipant, Match.match_id == MatchParticipant.match_id)
+                .where(
+                    MatchParticipant.puuid == puuid,
+                    Match.fully_analyzed == False,
+                )
+            )
+            result = await self.db.execute(needs_reanalysis_stmt)
+            needs_reanalysis_ids = set(result.scalars().all())
+
+            # 4. Calculate matches to fetch:
+            #    - New matches: in API list but NOT in our fully analyzed set
+            #    - Plus: any that need re-analysis
+            new_match_ids = [
+                mid for mid in api_match_ids if mid not in existing_analyzed_ids
+            ]
+
+            # Combine: new + needs_reanalysis (deduplicate)
+            matches_to_process = list(set(new_match_ids) | needs_reanalysis_ids)
+
+            # Preserve order from API (newer first) for new matches
+            ordered_to_process = [
+                mid for mid in api_match_ids if mid in matches_to_process
+            ]
+            # Add any needs_reanalysis that weren't in API list (unlikely but possible)
+            for mid in needs_reanalysis_ids:
+                if mid not in ordered_to_process:
+                    ordered_to_process.append(mid)
+
             logger.info(
-                "Starting match history analysis (fetch & update)",
+                "Smart match analysis starting",
                 puuid=puuid,
-                count=len(match_ids),
+                api_matches=len(api_match_ids),
+                already_analyzed=len(existing_analyzed_ids),
+                new_matches=len(new_match_ids),
+                needs_reanalysis=len(needs_reanalysis_ids),
+                to_process=len(ordered_to_process),
             )
 
+            print(
+                f"DEBUG: Processing {len(ordered_to_process)} matches "
+                f"({len(new_match_ids)} new, {len(needs_reanalysis_ids)} re-analysis)",
+                file=sys.stderr,
+            )
+
+            if not ordered_to_process:
+                logger.info("No new or incomplete matches to process", puuid=puuid)
+                if progress_callback:
+                    await progress_callback(0, 0)
+                return 0
+
             processed = 0
-            total = len(match_ids)
+            skipped_season = 0
+            total = len(ordered_to_process)
 
-            import asyncio
-
-            for i, match_id in enumerate(match_ids):
+            for i, match_id in enumerate(ordered_to_process):
                 # Check for cancellation
                 if should_cancel and should_cancel():
                     logger.info(
@@ -917,30 +1214,47 @@ class MatchService:
 
                 # Report progress
                 if progress_callback:
-                    await progress_callback(processed, total)
+                    await progress_callback(i, total)
 
                 # STRICT THROTTLING: 1.2s delay to respect 100 req/2min Dev Key limit
-                # We do this proactively to avoid hitting 429s and crashing the batch
                 await asyncio.sleep(1.2)
 
                 try:
-                    # 2. Fetch fresh DTO
+                    # Fetch match details
                     match_dto = await riot_api_client.get_match(match_id)
                     if not match_dto:
                         continue
 
-                    # 3. Reprocess (Upsert)
+                    # Season 16 filter: skip matches from Season 15 (Task 1)
+                    game_version = match_dto.info.game_version
+                    if not game_version.startswith("16."):
+                        logger.debug(
+                            "Skipping Season 15 match",
+                            match_id=match_id,
+                            game_version=game_version,
+                        )
+                        skipped_season += 1
+                        continue
+
+                    # Reprocess (Upsert)
                     await self._reprocess_match(match_dto)
                     processed += 1
                 except Exception as e:
                     logger.error(
-                        "Failed to reprocess match", match_id=match_id, error=str(e)
+                        "Failed to process match", match_id=match_id, error=str(e)
                     )
-                    # Continue
+                    # Continue with next match
 
-            # Final
+            # Final progress update
             if progress_callback:
-                await progress_callback(processed, total)
+                await progress_callback(total, total)
+
+            logger.info(
+                "Match analysis completed",
+                puuid=puuid,
+                processed=processed,
+                skipped_season=skipped_season,
+            )
 
             return processed
         except Exception as e:

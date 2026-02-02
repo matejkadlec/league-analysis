@@ -301,3 +301,51 @@ class SettingsService:
                 else None
             ),
         )
+
+    # ===== USER SETTINGS METHODS =====
+
+    async def get_or_create_user_settings(self, user_id: int):
+        """Get user settings, creating default settings if they don't exist."""
+        from app.features.auth.user_settings import UserSettings
+
+        stmt = select(UserSettings).where(UserSettings.user_id == user_id)
+        result = await self.db.execute(stmt)
+        settings = result.scalar_one_or_none()
+
+        if not settings:
+            # Create default settings
+            settings = UserSettings(user_id=user_id)
+            self.db.add(settings)
+            await self.db.commit()
+            await self.db.refresh(settings)
+            logger.info("Created default user settings", user_id=user_id)
+
+        return settings
+
+    async def update_user_settings(self, user_id: int, update):
+        """Update user settings with provided values."""
+        from app.features.auth.user_settings import UserSettings, ThemeEnum
+
+        # Get or create settings first
+        settings = await self.get_or_create_user_settings(user_id)
+
+        # Update only provided fields
+        update_data = update.model_dump(exclude_unset=True)
+
+        for field, value in update_data.items():
+            if field == "theme" and value is not None:
+                # Convert string to enum
+                settings.theme = ThemeEnum(value) if isinstance(value, str) else value
+            elif hasattr(settings, field):
+                setattr(settings, field, value)
+
+        await self.db.commit()
+        await self.db.refresh(settings)
+
+        logger.info(
+            "Updated user settings",
+            user_id=user_id,
+            updated_fields=list(update_data.keys()),
+        )
+
+        return settings

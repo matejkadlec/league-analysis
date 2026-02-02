@@ -472,6 +472,80 @@ def _handle_tracking_unexpected_error(
 # === Player Rank Endpoints ===
 
 
+@router.post("/{puuid}/refresh-rank", response_model=PlayerRankResponse | None)
+async def refresh_player_rank(
+    puuid: str,
+    player_service: PlayerServiceDep,
+    riot_client: Annotated["RiotAPIClient", Depends(get_riot_client)],
+    queue_type: str = Query(
+        "RANKED_SOLO_5x5", description="Queue type to refresh rank for"
+    ),
+):
+    """
+    Refresh and get the current rank for a player from Riot API.
+
+    This endpoint fetches the latest rank data from Riot API and stores it.
+
+    Args:
+        puuid: Player's PUUID
+        queue_type: Queue type (default: RANKED_SOLO_5x5)
+
+    Returns:
+        Updated rank data or None if no rank data exists
+
+    Raises:
+        404: Player not found
+        500: Database or API error
+    """
+    try:
+        # Get the player model (not PlayerResponse) for update_player_rank
+        from .models import Player
+
+        player_model = await player_service.db.get(Player, puuid)
+        if not player_model:
+            raise HTTPException(status_code=404, detail="Player not found")
+
+        # Update rank from Riot API (adds record to player_service.db session)
+        rank_updated = await player_service.update_player_rank(
+            player_model, riot_client
+        )
+
+        # Commit using the same session the service used
+        await player_service.db.commit()
+
+        # Return the updated rank
+        rank = await player_service.get_player_rank(puuid, queue_type)
+        if rank:
+            return PlayerRankResponse.model_validate(rank)
+        return None
+    except HTTPException:
+        raise
+    except AuthenticationError as e:
+        logger.error(
+            "refresh_player_rank_failed",
+            error=str(e),
+            puuid=puuid,
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=503,
+            detail="Riot API Key is invalid or expired. Please update it in Settings.",
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error(
+            "refresh_player_rank_failed",
+            error=str(e),
+            puuid=puuid,
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=500,
+            detail="Internal server error refreshing player rank",
+        )
+
+
 @router.get("/{puuid}/rank", response_model=PlayerRankResponse | None)
 async def get_player_current_rank(
     puuid: str,

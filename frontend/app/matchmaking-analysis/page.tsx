@@ -2,9 +2,9 @@
 
 import { useState, Suspense, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useQueryClient } from "@tanstack/react-query";
-import { Player } from "@/lib/core/schemas";
-import { getPlayerByPuuid } from "@/lib/core/api";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Player, UserSettingsSchema, PlayerSchema } from "@/lib/core/schemas";
+import { getPlayerByPuuid, validatedGet, validatedPut } from "@/lib/core/api";
 import { PlayerSearch, PlayerCard } from "@/features/players";
 import { MatchHistory } from "@/features/matches";
 import {
@@ -25,34 +25,103 @@ function MatchmakingAnalysisContent() {
   const queryClient = useQueryClient();
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
   const hasLoadedFromUrl = useRef(false);
+  const initialLoadDone = useRef(false);
 
-  // On mount, check if there's a puuid in the URL and fetch player data
+  // Fetch user settings for URL persistence
+  const { data: userSettingsResult } = useQuery({
+    queryKey: ["user-settings"],
+    queryFn: () => validatedGet(UserSettingsSchema, "/settings/user"),
+    staleTime: 60000,
+  });
+
+  const userSettings = userSettingsResult?.success
+    ? userSettingsResult.data
+    : null;
+
+  // Mutation to save PUUID to user settings
+  const savePuuidMutation = useMutation({
+    mutationFn: async (puuid: string | null) => {
+      const result = await validatedPut(UserSettingsSchema, "/settings/user", {
+        saved_matchmaking_puuid: puuid,
+      });
+      if (!result.success) {
+        throw new Error(result.error.message);
+      }
+      return result.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["user-settings"] });
+    },
+  });
+
+  // Effect to load player from URL or saved settings
   useEffect(() => {
+    if (initialLoadDone.current) return;
+
     const puuidFromUrl = searchParams.get("puuid");
-    if (puuidFromUrl && !selectedPlayer && !hasLoadedFromUrl.current) {
+
+    // Priority 1: Load from URL param
+    if (puuidFromUrl && !hasLoadedFromUrl.current) {
+      initialLoadDone.current = true;
       hasLoadedFromUrl.current = true;
+
       getPlayerByPuuid(puuidFromUrl).then((result) => {
         if (result.success) {
           setSelectedPlayer(result.data);
-          // Invalidate the MatchmakingAnalysisResults query to ensure it fetches fresh data
           queryClient.invalidateQueries({
             queryKey: ["matchmaking-analysis-results", puuidFromUrl],
           });
         } else {
           console.error("Failed to load player from URL:", result.error);
-          // Clear invalid puuid from URL
           router.push("/matchmaking-analysis", { scroll: false });
         }
       });
+      return;
     }
-  }, [searchParams, selectedPlayer, router, queryClient]);
+
+    // Priority 2: Load from saved settings (if no URL param and save_matchmaking_url is enabled)
+    if (
+      !puuidFromUrl &&
+      userSettings?.save_matchmaking_url &&
+      userSettings?.saved_matchmaking_puuid
+    ) {
+      initialLoadDone.current = true;
+      const savedPuuid = userSettings.saved_matchmaking_puuid;
+      hasLoadedFromUrl.current = true;
+
+      validatedGet(PlayerSchema, `/players/${savedPuuid}`).then((result) => {
+        if (result.success) {
+          setSelectedPlayer(result.data);
+          router.push(`/matchmaking-analysis?puuid=${savedPuuid}`, {
+            scroll: false,
+          });
+        }
+      });
+    }
+  }, [searchParams, userSettings, router, queryClient]);
 
   const handlePlayerFound = (player: Player) => {
     setSelectedPlayer(player);
-    // Update URL with puuid parameter
     router.push(`/matchmaking-analysis?puuid=${player.puuid}`, {
       scroll: false,
     });
+
+    // Save PUUID if user has save_matchmaking_url enabled
+    if (userSettings?.save_matchmaking_url) {
+      savePuuidMutation.mutate(player.puuid);
+    }
+  };
+
+  const handleClearPlayer = () => {
+    setSelectedPlayer(null);
+    hasLoadedFromUrl.current = false;
+    initialLoadDone.current = false;
+    router.push("/matchmaking-analysis", { scroll: false });
+
+    // Clear saved PUUID if user has save_matchmaking_url enabled
+    if (userSettings?.save_matchmaking_url) {
+      savePuuidMutation.mutate(null);
+    }
   };
 
   return (
@@ -74,34 +143,41 @@ function MatchmakingAnalysisContent() {
 
         {/* Two Column Layout */}
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          {/* Left Column - Player Search and Match History */}
+          {/* Left Column: Player Search + Matchmaking Analysis */}
           <div className="space-y-6">
-            <PlayerSearch onPlayerFound={handlePlayerFound} />
-
+            <PlayerSearch
+              onPlayerFound={handlePlayerFound}
+              onClear={handleClearPlayer}
+              showClear={!!selectedPlayer}
+            />
             {selectedPlayer && (
-              <Suspense fallback={<MatchHistorySkeleton />}>
-                <MatchHistory
-                  key={`${selectedPlayer.puuid}-420`}
-                  puuid={selectedPlayer.puuid}
-                  queueFilter={420}
-                />
-              </Suspense>
-            )}
-          </div>
-
-          {/* Right Column - Player Card and Matchmaking Analysis */}
-          <div className="space-y-6">
-            {selectedPlayer ? (
               <>
-                <Suspense fallback={<PlayerCardSkeleton />}>
-                  <PlayerCard player={selectedPlayer} />
-                </Suspense>
                 <MatchmakingAnalysis puuid={selectedPlayer.puuid} />
                 <MatchmakingAnalysisResults puuid={selectedPlayer.puuid} />
               </>
-            ) : null}
+            )}
+          </div>
+
+          {/* Right Column: Player Card */}
+          <div>
+            {selectedPlayer && (
+              <Suspense fallback={<PlayerCardSkeleton />}>
+                <PlayerCard player={selectedPlayer} />
+              </Suspense>
+            )}
           </div>
         </div>
+
+        {/* Full Width Match History */}
+        {selectedPlayer && (
+          <Suspense fallback={<MatchHistorySkeleton />}>
+            <MatchHistory
+              key={`${selectedPlayer.puuid}-420`}
+              puuid={selectedPlayer.puuid}
+              queueFilter={420}
+            />
+          </Suspense>
+        )}
       </div>
     </div>
   );

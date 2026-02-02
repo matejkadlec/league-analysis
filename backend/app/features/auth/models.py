@@ -1,7 +1,7 @@
 """User model for authentication and authorization."""
 
 from datetime import datetime
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 from sqlalchemy import (
     BigInteger,
@@ -10,10 +10,13 @@ from sqlalchemy import (
     String,
     Index,
 )
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from app.core.models import Base
+
+if TYPE_CHECKING:
+    from .user_settings import UserSettings
 
 
 class User(Base):
@@ -91,6 +94,21 @@ class User(Base):
         comment="When the user last logged in",
     )
 
+    # Riot Account Connection
+    riot_account_connected: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        comment="Whether a Riot account has been linked to this user",
+    )
+
+    puuid: Mapped[Optional[str]] = mapped_column(
+        String(78),
+        nullable=True,
+        index=True,
+        comment="Linked Riot account PUUID (references core.players)",
+    )
+
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
         SQLDateTime(timezone=True),
@@ -107,6 +125,14 @@ class User(Base):
         comment="When this user account was last updated",
     )
 
+    # Relationships
+    settings: Mapped[Optional["UserSettings"]] = relationship(
+        "UserSettings",
+        back_populates="user",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+
     def __repr__(self) -> str:
         """Return string representation of the user."""
         return f"<User(id={self.id}, email='{self.email}', display_name='{self.display_name}', is_admin={self.is_admin})>"
@@ -117,3 +143,4 @@ Index("idx_users_is_active_is_admin", User.is_active, User.is_admin)
 Index("idx_users_email_is_active", User.email, User.is_active)
 Index("idx_users_last_login", User.last_login)
 Index("idx_users_created_at", User.created_at)
+Index("ix_users_puuid", User.puuid)

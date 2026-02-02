@@ -1,6 +1,6 @@
 """Settings API endpoints for managing system configuration."""
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 import structlog
 
 from .schemas import (
@@ -8,8 +8,12 @@ from .schemas import (
     SettingUpdate,
     SettingTestResponse,
     APIKeyStatusResponse,
+    UserSettingsResponse,
+    UserSettingsUpdate,
 )
 from .dependencies import SettingsServiceDep
+from app.features.auth.dependencies import get_current_active_user
+from app.features.auth.models import User
 
 logger = structlog.get_logger(__name__)
 
@@ -134,4 +138,52 @@ async def test_riot_api_key(
         raise HTTPException(
             status_code=500,
             detail="Internal server error testing Riot API key",
+        )
+
+
+# ===== USER SETTINGS ENDPOINTS =====
+
+
+@router.get("/user", response_model=UserSettingsResponse)
+async def get_user_settings(
+    current_user: User = Depends(get_current_active_user),
+    settings_service: SettingsServiceDep = None,
+):
+    """
+    Get the current user's settings.
+
+    Returns the user's preferences including theme, URL persistence settings,
+    and saved PUUIDs. Creates default settings if none exist.
+    """
+    try:
+        settings = await settings_service.get_or_create_user_settings(current_user.id)
+        return settings
+    except Exception as e:
+        logger.error("failed_to_get_user_settings", error=str(e), exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to get user settings",
+        )
+
+
+@router.put("/user", response_model=UserSettingsResponse)
+async def update_user_settings(
+    update: UserSettingsUpdate,
+    current_user: User = Depends(get_current_active_user),
+    settings_service: SettingsServiceDep = None,
+):
+    """
+    Update the current user's settings.
+
+    Only provided fields will be updated. To clear a saved PUUID,
+    set the corresponding field to null/empty string.
+    """
+    try:
+        settings = await settings_service.update_user_settings(current_user.id, update)
+        return settings
+    except Exception as e:
+        logger.error("failed_to_update_user_settings", error=str(e), exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to update user settings",
         )

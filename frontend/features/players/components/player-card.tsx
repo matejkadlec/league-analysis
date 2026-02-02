@@ -1,38 +1,51 @@
 "use client";
 
-import { Player, PlayerRankSchema } from "@/lib/core/schemas";
+import {
+  Player,
+  PlayerRankSchema,
+  MatchStatsResponseSchema,
+} from "@/lib/core/schemas";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { User, Trophy } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { User, Trophy, RefreshCw, Loader2, Clock, StarOff } from "lucide-react";
 import { TrackPlayerButton } from "./track-player-button";
-import { useQuery } from "@tanstack/react-query";
-import { validatedGet } from "@/lib/core/api";
+import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
+import { validatedGet, api, untrackPlayer } from "@/lib/core/api";
+import { getPlatformDisplayName } from "@/lib/core/platform-utils";
+import { toast } from "sonner";
+import { useState } from "react";
 
 interface PlayerCardProps {
   player: Player;
 }
 
-// Helper function to get win rate colors based on percentage
-function getWinRateColors(winRate: number): string {
-  if (winRate >= 60) {
-    // Excellent (60%+) - Bright lime/chartreuse (distinct from emerald backgrounds)
-    return "text-lime-700 dark:text-lime-300 font-semibold";
-  } else if (winRate >= 55) {
-    // Good (55-60%) - Bright green (strong contrast)
-    return "text-green-700 dark:text-green-300 font-medium";
-  } else if (winRate >= 50) {
-    // Above average (50-55%) - Teal (distinct from rank colors)
-    return "text-teal-700 dark:text-teal-300";
-  } else if (winRate >= 45) {
-    // Average (45-50%) - Yellow/amber (strong contrast)
-    return "text-amber-700 dark:text-amber-300";
-  } else if (winRate >= 40) {
-    // Below average (40-45%) - Orange (strong contrast)
-    return "text-orange-700 dark:text-orange-300";
+// Helper function to get win rate color based on percentage
+function getWinRateColor(winRate: number): string {
+  if (winRate >= 50.5) {
+    return "text-emerald-500";
+  } else if (winRate > 49) {
+    return "text-amber-500";
   } else {
-    // Poor (<40%) - Red (strong contrast)
-    return "text-red-700 dark:text-red-300 font-medium";
+    return "text-rose-500";
   }
+}
+
+// Helper function to get win rate bar color based on percentage
+function getWinRateBarColor(winRate: number): string {
+  if (winRate >= 50.5) {
+    return "bg-emerald-500";
+  } else if (winRate > 49) {
+    return "bg-amber-500";
+  } else {
+    return "bg-rose-500";
+  }
+}
+
+// Format win rate - remove .0 if whole number
+function formatWinRate(winRate: number): string {
+  const formatted = winRate.toFixed(1);
+  return formatted.endsWith(".0") ? Math.round(winRate).toString() : formatted;
 }
 
 // Helper function to get rank colors based on tier
@@ -126,17 +139,45 @@ function getRankColors(tier: string): {
   }
 }
 
+// Format date for display
+function formatDate(dateString: string | null | undefined): string {
+  if (!dateString) return "Never";
+  return new Date(dateString).toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+// Format relative time (like "just now", "5 minutes ago", "2 hours ago")
+function formatRelativeTime(dateString: string | null | undefined): string {
+  if (!dateString) return "Never";
+
+  const now = new Date();
+  const date = new Date(dateString);
+  const diffMs = now.getTime() - date.getTime();
+  const diffSecs = Math.floor(diffMs / 1000);
+  const diffMins = Math.floor(diffSecs / 60);
+  const diffHours = Math.floor(diffMins / 60);
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffSecs < 60) return "just now";
+  if (diffMins < 60) return `${diffMins} minute${diffMins > 1 ? "s" : ""} ago`;
+  if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? "s" : ""} ago`;
+  if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? "s" : ""} ago`;
+
+  return formatDate(dateString);
+}
+
 export function PlayerCard({ player }: PlayerCardProps) {
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
-  };
+  const queryClient = useQueryClient();
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [isHoveringTracked, setIsHoveringTracked] = useState(false);
 
   // Fetch player rank
-  const { data: rank } = useQuery({
+  const { data: rank, refetch: refetchRank } = useQuery({
     queryKey: ["player-rank", player.puuid],
     queryFn: async () => {
       const result = await validatedGet(
@@ -151,113 +192,246 @@ export function PlayerCard({ player }: PlayerCardProps) {
     retry: false,
   });
 
+  // Fetch player stats (all matches)
+  const { data: stats, refetch: refetchStats } = useQuery({
+    queryKey: ["player-stats", player.puuid, 420],
+    queryFn: async () => {
+      const result = await validatedGet(
+        MatchStatsResponseSchema,
+        `/matches/player/${player.puuid}/stats`,
+        { queue: 420 },
+      );
+      if (!result.success) {
+        return null;
+      }
+      return result.data;
+    },
+    retry: false,
+  });
+
+  // Handle update button click
+  const handleUpdate = async () => {
+    setIsUpdating(true);
+    try {
+      // Trigger a rank refresh from API
+      await api.post(`/players/${player.puuid}/refresh-rank`);
+      // Refetch all data
+      await Promise.all([
+        refetchRank(),
+        refetchStats(),
+        queryClient.invalidateQueries({ queryKey: ["player", player.puuid] }),
+      ]);
+      toast.success("Player data updated");
+    } catch {
+      toast.error("Failed to update player data");
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  // Untrack mutation
+  const untrackMutation = useMutation({
+    mutationFn: async () => {
+      const response = await untrackPlayer(player.puuid);
+      if (!response.success) {
+        throw new Error(response.error.message);
+      }
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["player", player.puuid] });
+      queryClient.invalidateQueries({ queryKey: ["tracked-players"] });
+      toast.success("Player untracked");
+    },
+    onError: (error: Error) => {
+      toast.error("Failed to untrack player", {
+        description: error.message,
+      });
+    },
+  });
+
+  const handleUntrack = () => {
+    untrackMutation.mutate();
+  };
+
+  const rankColors = rank ? getRankColors(rank.tier) : null;
+
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="pb-3">
+        {/* First Part: Header Row */}
         <div className="flex items-center space-x-3">
           <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-            {/* TODO [SPY-61]: Use actual player's icon, and until we have them, use some league icon as a placeholder */}
             <User className="h-6 w-6 text-primary" />
           </div>
-          <div className="flex-1">
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-xl">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                <CardTitle className="text-xl truncate">
                   {player.game_name}
                   {player.tag_line && `#${player.tag_line}`}
                 </CardTitle>
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <span>{player.platform.toUpperCase()}</span>
-                  <Badge variant="secondary">
-                    Level {player.summoner_level}
-                  </Badge>
-                  {player.is_tracked && (
-                    <Badge variant="default" className="bg-primary">
-                      Tracked
+                {rank && (
+                  <>
+                    <span className={`font-semibold ${rankColors?.text}`}>
+                      {rank.display_rank}
+                    </span>
+                    <Badge
+                      className={`font-mono ${rankColors?.badge} border-0`}
+                    >
+                      {rank.league_points} LP
                     </Badge>
-                  )}
-                </div>
+                  </>
+                )}
               </div>
-              <TrackPlayerButton
-                puuid={player.puuid}
-                playerName={
-                  player.game_name +
-                  (player.tag_line ? `#${player.tag_line}` : "")
-                }
-                variant="outline"
-                size="default"
-              />
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="button-small"
+                  onClick={handleUpdate}
+                  disabled={isUpdating}
+                >
+                  {isUpdating ? (
+                    <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-4 w-4 mr-1" />
+                  )}
+                  Update
+                </Button>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
+              <span>{getPlatformDisplayName(player.platform)}</span>
+              <span>•</span>
+              <span>Level {player.summoner_level}</span>
+              {stats && stats.total_matches > 0 && (
+                <>
+                  <span>•</span>
+                  <span>Played {stats.total_matches} games</span>
+                </>
+              )}
+              {player.is_tracked && (
+                <>
+                  <span>•</span>
+                  <Badge
+                    variant="default"
+                    className="bg-primary text-xs cursor-pointer transition-all hover:bg-primary/100 flex items-center gap-1"
+                    onClick={handleUntrack}
+                    onMouseEnter={() => setIsHoveringTracked(true)}
+                    onMouseLeave={() => setIsHoveringTracked(false)}
+                  >
+                    {isHoveringTracked ? (
+                      <>
+                        Untrack
+                        <StarOff className="h-3 w-3" />
+                      </>
+                    ) : (
+                      "Tracked"
+                    )}
+                  </Badge>
+                </>
+              )}
+            </div>
+            <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
+              <Clock className="h-3 w-3" />
+              <span>Updated {formatRelativeTime(player.updated_at)}</span>
             </div>
           </div>
         </div>
       </CardHeader>
-      <CardContent>
-        <div className="space-y-4">
-          {/* Rank Display */}
-          {rank &&
-            (() => {
-              const colors = getRankColors(rank.tier);
-              return (
-                <div
-                  className={`rounded-lg border bg-gradient-to-br ${colors.gradient} p-4`}
-                >
-                  <div className="flex items-center gap-3">
-                    <Trophy className={`h-8 w-8 ${colors.icon}`} />
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className={`text-lg font-bold ${colors.text}`}>
-                          {rank.display_rank}
-                        </span>
-                        <Badge className={`font-mono ${colors.badge} border-0`}>
-                          {rank.league_points} LP
-                        </Badge>
-                      </div>
-                      <div className="mt-1 flex items-center gap-3 text-sm text-muted-foreground">
-                        <span>
-                          {rank.wins}W / {rank.losses}L
-                        </span>
-                        <span>•</span>
-                        <span className={getWinRateColors(rank.win_rate)}>
-                          {rank.win_rate.toFixed(1)}% WR
-                        </span>
-                        {rank.hot_streak && (
-                          <>
-                            <span>•</span>
-                            <Badge variant="destructive" className="text-xs">
-                              🔥 Hot Streak
-                            </Badge>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              );
-            })()}
 
-          <div className="grid grid-cols-2 gap-4 text-sm">
-            <div>
-              <p className="font-medium text-muted-foreground">PUUID</p>
-              <p className="font-mono text-xs">
-                {player.puuid.slice(0, 20)}...
-              </p>
+      <CardContent className="space-y-3">
+        {/* Win Rate Section (from rank data) */}
+        {rank && (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Trophy className="h-4 w-4 text-yellow-500" />
+                <span className="text-sm font-medium">Win Rate</span>
+              </div>
+              <span
+                className={`text-lg font-bold ${getWinRateColor(rank.win_rate)}`}
+              >
+                {formatWinRate(rank.win_rate)}%
+              </span>
             </div>
-            <div>
-              <p className="font-medium text-muted-foreground">Last Seen</p>
-              <p>{formatDate(player.updated_at)}</p>
+            <div className="relative h-2 w-full bg-muted rounded-full overflow-hidden">
+              <div
+                className={`absolute left-0 top-0 h-full duration-300 ${getWinRateBarColor(rank.win_rate)}`}
+                style={{ width: `${Math.min(rank.win_rate, 100)}%` }}
+              />
             </div>
-            <div>
-              <p className="font-medium text-muted-foreground">
-                Account Tracked Since
-              </p>
-              <p>{formatDate(player.created_at)}</p>
-            </div>
-            <div>
-              <p className="font-medium text-muted-foreground">Platform</p>
-              <p className="uppercase">{player.platform}</p>
+            <div className="flex justify-between text-xs text-muted-foreground">
+              <span>{rank.wins}W</span>
+              <span>{rank.losses}L</span>
             </div>
           </div>
+        )}
+
+        {/* Analysis Timestamps */}
+        <div className="grid grid-cols-3 gap-3 text-sm pt-1">
+          <div>
+            <p className="font-medium text-muted-foreground">
+              Last Playstyle Analysis
+            </p>
+            <p>{formatDate(player.last_playstyle_analysis)}</p>
+          </div>
+          <div>
+            <p className="font-medium text-muted-foreground">
+              Last Matchmaking Analysis
+            </p>
+            <p>{formatDate(player.last_matchmaking_analysis)}</p>
+          </div>
+          <div>
+            <p className="font-medium text-muted-foreground">
+              Match History Updated
+            </p>
+            <p>{formatDate(player.updated_at)}</p>
+          </div>
         </div>
+
+        {/* Sample Statistics */}
+        {stats && stats.total_matches > 0 && (
+          <div className="space-y-3">
+            <div className="grid grid-cols-3 gap-3">
+              <div className="text-center p-2 rounded-lg bg-muted/50">
+                <p className="text-lg font-bold text-blue-500">
+                  {stats.avg_kills.toFixed(1)}
+                </p>
+                <p className="text-xs text-muted-foreground">Avg Kills</p>
+              </div>
+              <div className="text-center p-2 rounded-lg bg-muted/50">
+                <p className="text-lg font-bold text-red-500">
+                  {stats.avg_deaths.toFixed(1)}
+                </p>
+                <p className="text-xs text-muted-foreground">Avg Deaths</p>
+              </div>
+              <div className="text-center p-2 rounded-lg bg-muted/50">
+                <p className="text-lg font-bold text-green-500">
+                  {stats.avg_assists.toFixed(1)}
+                </p>
+                <p className="text-xs text-muted-foreground">Avg Assists</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="text-center p-2 rounded-lg bg-muted/50">
+                <p className="text-lg font-bold">{stats.avg_kda.toFixed(2)}</p>
+                <p className="text-xs text-muted-foreground">KDA</p>
+              </div>
+              <div className="text-center p-2 rounded-lg bg-muted/50">
+                <p className="text-lg font-bold">{stats.avg_cs.toFixed(0)}</p>
+                <p className="text-xs text-muted-foreground">Avg CS</p>
+              </div>
+              <div className="text-center p-2 rounded-lg bg-muted/50">
+                <p className="text-lg font-bold">
+                  {stats.avg_vision_score.toFixed(0)}
+                </p>
+                <p className="text-xs text-muted-foreground">Avg Vision</p>
+              </div>
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

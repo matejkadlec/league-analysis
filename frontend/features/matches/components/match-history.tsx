@@ -4,18 +4,24 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-  History,
   AlertCircle,
   Loader2,
   RefreshCw,
   Clock,
   StopCircle,
   ListRestart,
+  Swords,
 } from "lucide-react";
 import { toast } from "sonner";
+import Image from "next/image";
 
-import { MatchListResponseSchema } from "@/lib/core/schemas";
+import {
+  MatchListWithPlayerDataResponseSchema,
+  MatchWithPlayerData,
+  TeamChampion,
+} from "@/lib/core/schemas";
 import { validatedGet, api } from "@/lib/core/api";
+import { getChampionIconUrl } from "@/lib/core/data-dragon";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -23,14 +29,6 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import {
   Dialog,
   DialogContent,
@@ -45,15 +43,328 @@ interface MatchHistoryProps {
   queueFilter?: number;
 }
 
-// TODO: [SPY-64]
-// 1. Show less matches on initial load (10/15/20).
-// 2. Make the component scrollable, so the user scrolls through the component, rather than through
-// whole page. This ensures that other components will be shown on the page, as well as the sidebar
-// footer, which currently dissappears when the MatchHistoy is shown, and scrolling down pushes it
-// down as well, making it impossible to see it for th user.
-// 3. Ensure the sidebar footer is shown even if this component goes off the page, this is probably
-// more of a sidebar problem, but as it's closely related to this, and will be most likely quick
-// fix, we can do it in one ticket
+// Queue names mapping
+const QUEUE_NAMES: Record<number, string> = {
+  420: "Ranked Solo/Duo",
+  440: "Ranked Flex",
+  400: "Normal Draft",
+  430: "Normal Blind",
+  450: "ARAM",
+};
+
+// Format time as "H:MM AM/PM"
+function formatTime(timestamp: number): string {
+  const date = new Date(timestamp);
+  let hours = date.getHours();
+  const minutes = date.getMinutes();
+  const ampm = hours >= 12 ? "PM" : "AM";
+  hours = hours % 12;
+  hours = hours ? hours : 12; // 0 should be 12
+  return `${hours}:${minutes.toString().padStart(2, "0")} ${ampm}`;
+}
+
+// Format date as "D.M.YYYY"
+function formatDate(timestamp: number): string {
+  const date = new Date(timestamp);
+  return `${date.getDate()}.${date.getMonth() + 1}.${date.getFullYear()}`;
+}
+
+// Format date and time as "D.M.YYYY H:MM AM/PM"
+function formatDateTime(timestamp: number): string {
+  return `${formatDate(timestamp)} ${formatTime(timestamp)}`;
+}
+
+// Format duration as "MM:SS"
+function formatDuration(seconds: number): string {
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${mins}:${secs.toString().padStart(2, "0")}`;
+}
+
+// Calculate days ago from timestamp
+function getDaysAgo(timestamp: number): string {
+  const now = Date.now();
+  const diffMs = now - timestamp;
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+  if (diffDays === 0) return "Today";
+  if (diffDays === 1) return "Yesterday";
+  return `${diffDays} days ago`;
+}
+
+// Get queue name
+function getQueueName(queueId: number): string {
+  return QUEUE_NAMES[queueId] || `Queue ${queueId}`;
+}
+
+// Get result text and color
+function getResultInfo(match: MatchWithPlayerData): {
+  text: string;
+  colorClass: string;
+  bgClass: string;
+} {
+  const participant = match.player_participant;
+
+  if (!participant) {
+    return {
+      text: "Unknown",
+      colorClass: "text-muted-foreground",
+      bgClass: "bg-muted/30",
+    };
+  }
+
+  if (participant.remake || match.early_surrender) {
+    return {
+      text: "REMAKE",
+      colorClass: "text-gray-500",
+      bgClass: "bg-gray-500/50",
+    };
+  }
+
+  if (participant.win) {
+    return {
+      text: "VICTORY",
+      colorClass: "text-emerald-500",
+      bgClass: "bg-emerald-700/30",
+    };
+  }
+
+  return {
+    text: "DEFEAT",
+    colorClass: "text-rose-500",
+    bgClass: "bg-rose-600/30",
+  };
+}
+
+// Match row component
+function MatchRow({
+  match,
+  playerPuuid,
+}: {
+  match: MatchWithPlayerData;
+  playerPuuid: string;
+}) {
+  const participant = match.player_participant;
+  const opponent = match.lane_opponent;
+  const result = getResultInfo(match);
+  const teamComps = match.team_compositions;
+
+  // Calculate CS per minute
+  const csPerMinute = participant
+    ? (participant.total_cs / (match.game_duration / 60)).toFixed(1)
+    : "0";
+
+  // Render a champion icon for team compositions
+  const renderTeamChampIcon = (
+    champ: TeamChampion,
+    isCurrentPlayer: boolean,
+    teamColor: "blue" | "red",
+  ) => {
+    const borderColor = isCurrentPlayer
+      ? "ring-2 ring-yellow-400"
+      : teamColor === "blue"
+        ? "ring-1 ring-blue-500"
+        : "ring-1 ring-red-500";
+
+    return (
+      <div
+        key={champ.puuid}
+        className={`relative h-6 w-6 rounded overflow-hidden shrink-0 ${borderColor}`}
+        title={champ.champion_name}
+      >
+        <Image
+          src={getChampionIconUrl(champ.champion_name)}
+          alt={champ.champion_name}
+          fill
+          className="object-cover"
+          unoptimized
+        />
+      </div>
+    );
+  };
+
+  return (
+    <div
+      className={`px-3 py-1 rounded border-2 mb-1.5 border-t-1 border-b-1 border-amber-400/20 last:border-b-0 last:mb-0 ${result.bgClass}`}
+    >
+      <div className="flex items-center gap-4">
+        {/* Column 1: Queue Type & Patch - WIDER, CENTERED VERTICALLY */}
+        <div className="w-35 shrink-0 flex flex-col justify-center">
+          <span className="text-sm font-medium text-center">
+            {getQueueName(match.queue_id)}
+          </span>
+          <span className="text-xs text-muted-foreground text-center mt-1">
+            Patch {match.game_version.split(".").slice(0, 2).join(".")}
+          </span>
+        </div>
+
+        {/* Column 2: Date & Time - AT LEAST 1/4 WIDTH */}
+        <div className="w-33 shrink-0 flex flex-col justify-center">
+          <span className="text-sm text-center">
+            {formatDateTime(match.game_start_timestamp)}
+          </span>
+          <span className="text-xs text-center text-muted-foreground mt-1">
+            {getDaysAgo(match.game_start_timestamp)}
+          </span>
+        </div>
+
+        {/* Column 3: Champion vs Champion - 20 rem, 3 subcolumns */}
+        <div className="flex items-center gap-0 w-80">
+          {/* Subcolumn 1: Player Champion (11 rem) */}
+          <div className="w-44 flex items-center gap-2">
+            <div className="relative h-10 w-10 rounded overflow-hidden shrink-0">
+              {participant && (
+                <Image
+                  src={getChampionIconUrl(participant.champion_name)}
+                  alt={participant.champion_name}
+                  fill
+                  className="object-cover"
+                  unoptimized
+                />
+              )}
+            </div>
+            <div className="flex flex-col flex-1 min-w-0">
+              <span className="text-sm font-medium truncate">
+                {participant?.champion_name || "—"}
+              </span>
+              <div className="flex items-center justify-between">
+                {participant && (
+                  <span className="text-xs">
+                    {participant.kills} / {participant.deaths} /{" "}
+                    {participant.assists}
+                  </span>
+                )}
+                <span className="text-xs text-muted-foreground ml-1">
+                  {participant ? `Lv ${participant.champion_level}` : "—"}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Subcolumn 2: Swords Icon (2.5 rem) */}
+          <div className="w-10 flex items-center justify-center shrink-0">
+            <Swords className="h-4 w-4 text-muted-foreground" />
+          </div>
+
+          {/* Subcolumn 3: Enemy Champion (11 rem) */}
+          <div className="w-44 flex items-center gap-2">
+            <div className="relative h-10 w-10 rounded overflow-hidden shrink-0">
+              {opponent ? (
+                <Image
+                  src={getChampionIconUrl(opponent.champion_name)}
+                  alt={opponent.champion_name}
+                  fill
+                  className="object-cover"
+                  unoptimized
+                />
+              ) : (
+                <div className="h-full w-full bg-muted" />
+              )}
+            </div>
+            <div className="flex flex-col flex-1 min-w-0">
+              <span className="text-sm font-medium truncate">
+                {opponent?.champion_name || "—"}
+              </span>
+              <div className="flex items-center justify-between">
+                {opponent ? (
+                  <span className="text-xs">
+                    {opponent.kills} / {opponent.deaths} / {opponent.assists}
+                  </span>
+                ) : (
+                  <span className="text-xs text-muted-foreground">—</span>
+                )}
+                <span className="text-xs text-muted-foreground ml-1">
+                  {opponent ? `Lv ${opponent.champion_level}` : "—"}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Column 4: Stats (KDA, CS, Vision) */}
+        {participant && (
+          <div className="w-25 shrink-0 flex flex-col justify-center text-xs ml-2">
+            <span>
+              <span className="font-medium">
+                {participant.kda?.toFixed(2) ?? "Perfect"}
+              </span>{" "}
+              KDA
+            </span>
+            <span className="mt-0.5">
+              <span className="font-medium">{participant.total_cs}</span> CS (
+              {csPerMinute}/min)
+            </span>
+            <span className="mt-0.5">
+              <span className="font-medium">{participant.vision_score}</span>{" "}
+              Vision Score
+            </span>
+          </div>
+        )}
+
+        {/* Column 5: Duration & Surrender */}
+        <div className="w-15 shrink-0 text-center flex flex-col justify-center">
+          <span className="">{formatDuration(match.game_duration)}</span>
+          {/* {match.surrender && !match.early_surrender ? (
+            <span className="text-xs text-muted-foreground">Surrender</span>
+          ) : null} */}
+        </div>
+
+        {/* Column 6: LP Change */}
+        <div className="w-15 shrink-0 text-right flex flex-col justify-center">
+          {match.lp_change !== null && match.lp_change !== undefined ? (
+            <span
+              className={`text-xs font-medium ${
+                match.lp_change > 0
+                  ? "text-emerald-500"
+                  : match.lp_change < 0
+                    ? "text-rose-500"
+                    : "text-muted-foreground"
+              }`}
+            >
+              {match.lp_change > 0 ? "+" : ""}
+              {match.lp_change} LP
+            </span>
+          ) : null}
+        </div>
+
+        {/* Column 7: Team Compositions (5v5) */}
+        <div className="w-37 shrink-0 flex flex-col items-center justify-center gap-1">
+          {teamComps ? (
+            <>
+              {/* Blue Team Row */}
+              <div className="flex items-center gap-1 bg-blue-900/30 rounded px-1 py-0.5">
+                {teamComps.blue_team.map((champ) =>
+                  renderTeamChampIcon(
+                    champ,
+                    champ.puuid === playerPuuid,
+                    "blue",
+                  ),
+                )}
+              </div>
+              {/* Vs Text */}
+              <div className="text-center text-xs text-muted-foreground">
+                Vs
+              </div>
+              {/* Red Team Row */}
+              <div className="flex items-center gap-1 bg-red-900/30 rounded px-1 py-0.5">
+                {teamComps.red_team.map((champ) =>
+                  renderTeamChampIcon(
+                    champ,
+                    champ.puuid === playerPuuid,
+                    "red",
+                  ),
+                )}
+              </div>
+            </>
+          ) : (
+            <div className="text-xs text-muted-foreground text-center">—</div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function MatchHistory({ puuid, queueFilter = 420 }: MatchHistoryProps) {
   const PAGE_SIZE = 20;
   const loadMoreRef = useRef<HTMLDivElement>(null);
@@ -61,8 +372,6 @@ export function MatchHistory({ puuid, queueFilter = 420 }: MatchHistoryProps) {
   const queryClient = useQueryClient();
   const router = useRouter();
 
-  // Component uses key={`${puuid}-${queueFilter}`} to reset state on prop changes
-  // This avoids calling setState in useEffect which violates React Compiler rules
   const [displayCount, setDisplayCount] = useState(20);
   const [analysisJobId, setAnalysisJobId] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -75,12 +384,12 @@ export function MatchHistory({ puuid, queueFilter = 420 }: MatchHistoryProps) {
     isFetching,
     refetch,
   } = useQuery({
-    queryKey: ["matchHistory", puuid, queueFilter, displayCount],
+    queryKey: ["matchHistoryDetailed", puuid, queueFilter, displayCount],
     queryFn: async () => {
       try {
         const result = await validatedGet(
-          MatchListResponseSchema,
-          `/matches/player/${puuid}`,
+          MatchListWithPlayerDataResponseSchema,
+          `/matches/player/${puuid}/detailed`,
           {
             queue: queueFilter,
             start: 0,
@@ -89,14 +398,12 @@ export function MatchHistory({ puuid, queueFilter = 420 }: MatchHistoryProps) {
         );
         return result;
       } catch (err) {
-        // Handle network errors gracefully
         console.debug("Match history fetch error:", err);
         throw err;
       }
     },
     enabled: !!puuid,
     retry: (failureCount, error) => {
-      // Don't retry on network errors, but allow retries on other errors
       if (
         error instanceof Error &&
         (error.message.includes("Network Error") ||
@@ -113,7 +420,6 @@ export function MatchHistory({ puuid, queueFilter = 420 }: MatchHistoryProps) {
     staleTime: 60000,
     refetchInterval: (query) => {
       const data = query.state.data;
-      // Auto-refetch if we have no matches yet (waiting for background job)
       if (
         data?.success &&
         data.data?.matches &&
@@ -137,31 +443,29 @@ export function MatchHistory({ puuid, queueFilter = 420 }: MatchHistoryProps) {
       setIsAnalyzing(true);
       toast.success("Match history analysis started");
     },
-    onError: (err) => {
+    onError: () => {
       toast.error("Failed to start analysis");
-      console.error(err);
     },
   });
 
-  // Poll for status updates
   const { data: jobStatus } = useQuery({
     queryKey: ["analysisStatus", analysisJobId],
     queryFn: async () => {
       if (!analysisJobId) return null;
-      const response = await api.get<any>(
-        `/matches/analyze/status/${analysisJobId}`,
-      );
+      const response = await api.get<{
+        status: string;
+        error?: string;
+        progress?: number;
+        total?: number;
+        message?: string;
+        estimated_minutes_remaining?: number;
+      }>(`/matches/analyze/status/${analysisJobId}`);
       const result = response.data;
       if (result.status === "completed" || result.status === "failed") {
         setIsAnalyzing(false);
         setAnalysisJobId(null);
-
-        // Refresh client-side data
-        queryClient.invalidateQueries({ queryKey: ["matchHistory"] });
-
-        // Refresh server-side data (Next.js App Router)
+        queryClient.invalidateQueries({ queryKey: ["matchHistoryDetailed"] });
         router.refresh();
-
         if (result.status === "completed") {
           toast.success("Analysis complete!");
         } else {
@@ -171,7 +475,6 @@ export function MatchHistory({ puuid, queueFilter = 420 }: MatchHistoryProps) {
         result.status === "pending" ||
         result.status === "in_progress"
       ) {
-        // Force update for initial state
         setIsAnalyzing(true);
       }
       return result;
@@ -193,20 +496,16 @@ export function MatchHistory({ puuid, queueFilter = 420 }: MatchHistoryProps) {
       setIsAnalyzing(false);
       setAnalysisJobId(null);
     },
-    onError: (err) => {
+    onError: () => {
       toast.error("Failed to cancel analysis");
-      console.error(err);
-      // Still close UI to avoid stuck state
       setIsAnalyzing(false);
       setAnalysisJobId(null);
     },
   });
 
   const handleAnalyze = () => {
-    // Check for high number of analyzed matches
-    const totalAnalyzed = (data as any)?.total_analyzed || 0;
-    console.debug("Analyze request check", { totalAnalyzed });
-
+    const totalAnalyzed =
+      (data as { total_analyzed?: number })?.total_analyzed || 0;
     if (totalAnalyzed >= 50) {
       setShowAnalysisConfirm(true);
     } else {
@@ -227,7 +526,7 @@ export function MatchHistory({ puuid, queueFilter = 420 }: MatchHistoryProps) {
   const allMatches = data?.matches || [];
   const totalMatches = data?.total || 0;
   const hasMore = allMatches.length < totalMatches;
-  // Preserve scroll position when new matches load
+
   useEffect(() => {
     if (
       allMatches.length > previousMatchCount.current &&
@@ -268,31 +567,6 @@ export function MatchHistory({ puuid, queueFilter = 420 }: MatchHistoryProps) {
     };
   }, [loadMore]);
 
-  const formatDate = (timestamp: number) => {
-    return new Date(timestamp).toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
-  };
-
-  const formatDuration = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, "0")}`;
-  };
-
-  const getQueueName = (queueId: number) => {
-    const queues: Record<number, string> = {
-      420: "Ranked Solo/Duo",
-      440: "Ranked Flex",
-      400: "Normal Draft",
-      430: "Normal Blind",
-      450: "ARAM",
-    };
-    return queues[queueId] || `Queue ${queueId}`;
-  };
-
   if (isLoading) {
     return (
       <Card>
@@ -303,9 +577,9 @@ export function MatchHistory({ puuid, queueFilter = 420 }: MatchHistoryProps) {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-2">
-          <Skeleton className="h-12 w-full" />
-          <Skeleton className="h-12 w-full" />
-          <Skeleton className="h-12 w-full" />
+          <Skeleton className="h-20 w-full" />
+          <Skeleton className="h-20 w-full" />
+          <Skeleton className="h-20 w-full" />
         </CardContent>
       </Card>
     );
@@ -319,11 +593,10 @@ export function MatchHistory({ puuid, queueFilter = 420 }: MatchHistoryProps) {
     } else if (response && !response.success && response.error) {
       errorMessage =
         typeof response.error === "object" && "message" in response.error
-          ? response.error.message
+          ? (response.error as { message: string }).message
           : String(response.error);
     }
 
-    // Handle specific network error messages
     if (
       errorMessage.includes("Network Error") ||
       errorMessage.includes("ERR_NETWORK")
@@ -388,13 +661,14 @@ export function MatchHistory({ puuid, queueFilter = 420 }: MatchHistoryProps) {
             <Button
               onClick={handleAnalyze}
               disabled={isAnalyzing}
-              type="submit"
+              variant="outline"
+              size="sm"
               className="button-small"
             >
               {isAnalyzing ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
               ) : (
-                <RefreshCw className="h-4 w-4" />
+                <RefreshCw className="h-4 w-4 mr-1" />
               )}
               Update
             </Button>
@@ -418,16 +692,18 @@ export function MatchHistory({ puuid, queueFilter = 420 }: MatchHistoryProps) {
 
             <Progress
               value={
-                jobStatus?.total > 0
-                  ? (jobStatus.progress / jobStatus.total) * 100
+                jobStatus?.total && jobStatus.total > 0
+                  ? ((jobStatus.progress || 0) / jobStatus.total) * 100
                   : 0
               }
               className="h-2"
             />
 
             <div className="text-center text-sm text-slate-500">
-              {jobStatus?.total > 0
-                ? Math.round((jobStatus.progress / jobStatus.total) * 100)
+              {jobStatus?.total && jobStatus.total > 0
+                ? Math.round(
+                    ((jobStatus.progress || 0) / jobStatus.total) * 100,
+                  )
                 : 0}
               % complete
             </div>
@@ -435,7 +711,7 @@ export function MatchHistory({ puuid, queueFilter = 420 }: MatchHistoryProps) {
             <Button
               onClick={handleCancelAnalysis}
               variant="destructive"
-              className="w-full matchmaking-cancel-btn"
+              className="w-full"
               size="sm"
             >
               <StopCircle className="mr-2 h-4 w-4" />
@@ -456,50 +732,19 @@ export function MatchHistory({ puuid, queueFilter = 420 }: MatchHistoryProps) {
                 Tracked players matches will appear here as a background job
                 fetches them from the Riot API. If player is tracked and matches
                 are not appearing even after a few minutes, something is wrong.
-                For non-tracked players, use the <b>Analyze Match History</b>{" "}
-                button.
+                For non-tracked players, use the <b>Update</b> button.
               </p>
             </AlertDescription>
           </Alert>
         ) : (
-          <div className="rounded-md border max-h-[600px] overflow-y-auto relative">
-            <Table>
-              <TableHeader className="bg-background sticky top-0 z-10 shadow-sm">
-                <TableRow>
-                  <TableHead>Queue</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Duration</TableHead>
-                  <TableHead>Version</TableHead>
-                  <TableHead>Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {allMatches.map((match) => (
-                  <TableRow key={match.match_id}>
-                    <TableCell className="font-medium">
-                      {getQueueName(match.queue_id)}
-                    </TableCell>
-                    <TableCell>
-                      {formatDate(match.game_start_timestamp)}
-                    </TableCell>
-                    <TableCell>{formatDuration(match.game_duration)}</TableCell>
-                    <TableCell>
-                      <span className="font-mono text-xs">
-                        {match.patch_version ||
-                          match.game_version.split(".").slice(0, 2).join(".")}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      {match.fully_analyzed ? (
-                        <Badge variant="default">Analyzed</Badge>
-                      ) : (
-                        <Badge variant="secondary">Pending</Badge>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+          <div className="rounded-md border">
+            {allMatches.map((match) => (
+              <MatchRow
+                key={match.match_id}
+                match={match}
+                playerPuuid={puuid}
+              />
+            ))}
 
             {hasMore && (
               <div

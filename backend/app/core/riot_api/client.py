@@ -376,6 +376,25 @@ class RiotAPIClient:
 
         return [LeagueEntryDTO(**entry) for entry in response]
 
+    async def get_league_entries_by_puuid(
+        self, puuid: str, platform: Optional[Platform] = None
+    ) -> List[LeagueEntryDTO]:
+        """Get league entries by encrypted PUUID.
+
+        This is the preferred method as it doesn't require getting Summoner ID first.
+        Returns league entries for all ranked queues (Solo/Duo, Flex, etc.)
+        """
+        url = self.endpoints.league_entries_by_puuid(puuid, platform)
+        response = await self._make_request(url)
+
+        # API returns a list of league entries (can be empty if unranked)
+        if not isinstance(response, list):
+            raise RiotAPIError(
+                f"Expected list response for league entries, got {type(response)}"
+            )
+
+        return [LeagueEntryDTO(**entry) for entry in response]
+
     # Utility methods
 
     @staticmethod

@@ -131,10 +131,6 @@
     cursor: pointer;
   }
 
-  .dark button[type="submit"]:hover {
-    opacity: 0.9;
-  }
-
   /* Matchmaking analysis start button (gold gradient) */
   .dark .matchmaking-start-btn {
     background: linear-gradient(
@@ -148,10 +144,6 @@
     border: none;
   }
 
-  .dark .matchmaking-start-btn:hover:not(:disabled) {
-    opacity: 0.9;
-  }
-
   /* Matchmaking analysis cancel button (red gradient) */
   .dark .matchmaking-cancel-btn {
     background: linear-gradient(
@@ -163,10 +155,6 @@
     color: #ffffff !important;
     cursor: pointer;
     border: none;
-  }
-
-  .dark .matchmaking-cancel-btn:hover:not(:disabled) {
-    opacity: 0.9;
   }
 
   div[role="alert"] > div {
@@ -242,16 +230,40 @@
     - Small text and padding
   */
   .button-small {
-    @apply inline-flex items-center justify-center whitespace-nowrap rounded-md font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 shadow h-7 text-xs px-2.5 py-0.5 gap-1.5 cursor-pointer text-primary-foreground hover:opacity-90;
+    @apply inline-flex items-center justify-center whitespace-nowrap rounded-md font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 shadow h-7 text-xs px-2.5 py-0.5 gap-1.5 cursor-pointer text-primary-foreground;
     background: linear-gradient(
       105deg,
       rgb(242, 215, 119) 0%,
       rgb(207, 169, 58) 10%,
       rgb(157, 125, 34) 90%
     );
-    color: oklch(11.2% 0.045 285.88); /* Dark text for contrast against gold */
+    color: oklch(11.2% 0.045 285.88);
     font-size: 12px !important;
     padding: 0px 14px !important;
     gap: 6px !important;
+    transition: filter 0.75s ease !important;
+    filter: saturate(1) brightness(1);
+  }
+
+  .button-small:hover {
+    filter: saturate(1.15) brightness(1.15);
+    color: oklch(11.2% 0.045 285.88) !important;
+  }
+
+  .button-small svg {
+    transition: transform 0.5s ease;
+    transform: rotate(0deg);
+  }
+
+  .button-small:hover svg {
+    transform: rotate(180deg);
+  }
+
+  .button-small.full-rotation svg {
+    transition: transform 0.75s ease;
+  }
+
+  .button-small.full-rotation:hover svg {
+    transform: rotate(360deg);
   }
 }

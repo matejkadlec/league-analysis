@@ -1,6 +1,6 @@
 -- League Analysis Database Schema
 -- Single Source of Truth
--- Generated: 2026-01-22
+-- Generated: 2026-02-01
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -49,6 +49,11 @@ CREATE TYPE core.analysis_status_enum AS ENUM (
     'CANCELLED'
 );
 
+CREATE TYPE auth.theme_enum AS ENUM (
+    'LIGHT',
+    'DARK'
+);
+
 SET default_tablespace = '';
 SET default_table_access_method = heap;
 
@@ -75,6 +80,8 @@ CREATE TABLE auth.users (
     email_verified boolean DEFAULT false NOT NULL,
     email_verified_at timestamp with time zone,
     last_login timestamp with time zone,
+    riot_account_connected boolean DEFAULT false NOT NULL,
+    puuid character varying(78),
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL
 );
@@ -94,6 +101,44 @@ CREATE INDEX ix_users_email ON auth.users USING btree (email);
 CREATE INDEX ix_users_is_active ON auth.users USING btree (is_active);
 CREATE INDEX ix_users_is_admin ON auth.users USING btree (is_admin);
 CREATE INDEX ix_users_last_login ON auth.users USING btree (last_login);
+CREATE INDEX ix_users_puuid ON auth.users USING btree (puuid) WHERE puuid IS NOT NULL;
+
+-- [table] auth.user_settings
+
+CREATE TABLE auth.user_settings (
+    user_id bigint NOT NULL,
+    theme auth.theme_enum DEFAULT 'DARK'::auth.theme_enum NOT NULL,
+    save_playstyle_url boolean DEFAULT false NOT NULL,
+    saved_playstyle_puuid character varying(78),
+    save_matchmaking_url boolean DEFAULT false NOT NULL,
+    saved_matchmaking_puuid character varying(78),
+    default_platform character varying(4) DEFAULT 'eun1'::character varying,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+ALTER TABLE ONLY auth.user_settings
+    ADD CONSTRAINT pk_user_settings PRIMARY KEY (user_id);
+
+ALTER TABLE ONLY auth.user_settings
+    ADD CONSTRAINT fk_user_settings_user_id FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
+
+-- [trigger] auth.create_user_settings_on_user_insert
+-- Automatically creates a user_settings record when a new user is inserted
+
+CREATE OR REPLACE FUNCTION auth.create_user_settings()
+RETURNS TRIGGER AS $$
+BEGIN
+    INSERT INTO auth.user_settings (user_id)
+    VALUES (NEW.id);
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_create_user_settings_after_user_insert
+    AFTER INSERT ON auth.users
+    FOR EACH ROW
+    EXECUTE FUNCTION auth.create_user_settings();
 
 -- ==================================================================
 -- SCHEMA: core
@@ -324,6 +369,7 @@ CREATE INDEX ix_core_playstyle_analyses_puuid ON core.playstyle_analyses USING b
 CREATE INDEX ix_core_playstyle_analyses_status ON core.playstyle_analyses USING btree (status);
 
 -- [table] core.player_ranks
+-- Immutable rank history table (snapshot per created_at)
 
 CREATE SEQUENCE core.player_ranks_id_seq
     AS integer
@@ -342,16 +388,8 @@ CREATE TABLE core.player_ranks (
     league_points integer NOT NULL,
     wins integer NOT NULL,
     losses integer NOT NULL,
-    veteran boolean NOT NULL,
-    inactive boolean NOT NULL,
-    fresh_blood boolean NOT NULL,
-    hot_streak boolean NOT NULL,
-    league_id character varying(64),
-    league_name character varying(64),
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    season_id character varying(16),
-    is_current boolean NOT NULL
+    hot_streak boolean DEFAULT false NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
 ALTER SEQUENCE core.player_ranks_id_seq OWNED BY core.player_ranks.id;
@@ -359,17 +397,13 @@ ALTER SEQUENCE core.player_ranks_id_seq OWNED BY core.player_ranks.id;
 ALTER TABLE ONLY core.player_ranks
     ADD CONSTRAINT pk_player_ranks PRIMARY KEY (id);
 
-CREATE INDEX idx_ranks_puuid_current ON core.player_ranks USING btree (puuid, is_current);
 CREATE INDEX idx_ranks_puuid_queue ON core.player_ranks USING btree (puuid, queue_type);
-CREATE INDEX idx_ranks_queue_current ON core.player_ranks USING btree (queue_type, is_current);
 CREATE INDEX idx_ranks_tier_lp ON core.player_ranks USING btree (tier, league_points);
 CREATE INDEX idx_ranks_tier_rank ON core.player_ranks USING btree (tier, rank);
-CREATE INDEX ix_app_player_ranks_is_current ON core.player_ranks USING btree (is_current);
-CREATE INDEX ix_app_player_ranks_league_id ON core.player_ranks USING btree (league_id);
+CREATE INDEX idx_ranks_puuid_created ON core.player_ranks USING btree (puuid, created_at DESC);
 CREATE INDEX ix_app_player_ranks_puuid ON core.player_ranks USING btree (puuid);
 CREATE INDEX ix_app_player_ranks_queue_type ON core.player_ranks USING btree (queue_type);
 CREATE INDEX ix_app_player_ranks_rank ON core.player_ranks USING btree (rank);
-CREATE INDEX ix_app_player_ranks_season_id ON core.player_ranks USING btree (season_id);
 CREATE INDEX ix_app_player_ranks_tier ON core.player_ranks USING btree (tier);
 
 -- [table] core.riot_api_keys

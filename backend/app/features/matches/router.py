@@ -8,6 +8,7 @@ from app.core.database import get_db
 
 from .schemas import (
     MatchListResponse,
+    MatchListWithPlayerDataResponse,
     MatchStatsResponse,
 )
 from .dependencies import (
@@ -41,15 +42,40 @@ async def get_player_matches(
     )
 
 
+@router.get("/player/{puuid}/detailed", response_model=MatchListWithPlayerDataResponse)
+async def get_player_matches_detailed(
+    puuid: str,
+    match_service: MatchServiceDep,
+    queue: Optional[int] = Query(None, description="Queue ID filter"),
+    start: int = Query(0, ge=0, description="Start index"),
+    count: int = Query(20, ge=1, le=100, description="Number of matches to return"),
+):
+    """
+    Get detailed match history for a player including champion data,
+    lane opponent, and LP changes.
+    """
+    return await match_service.get_player_matches_with_data(
+        puuid=puuid,
+        start=start,
+        count=count,
+        queue=queue,
+    )
+
+
 @router.get("/player/{puuid}/stats", response_model=MatchStatsResponse)
 async def get_player_stats(
     puuid: str,
     match_service: MatchServiceDep,
     queue: Optional[int] = Query(None, description="Queue ID filter"),
-    limit: int = Query(20, ge=1, le=100, description="Number of matches to analyze"),
+    limit: Optional[int] = Query(
+        None,
+        ge=1,
+        description="Number of matches to analyze. If not provided, uses all matches.",
+    ),
 ):
     """
     Get aggregated statistics for a player from recent matches.
+    If limit is not provided, all matches in the database will be analyzed.
     """
     return await match_service.get_player_stats(
         puuid=puuid,

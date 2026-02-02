@@ -4,7 +4,22 @@ import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Search, User, AlertCircle, UserPlus, Loader2 } from "lucide-react";
+import {
+  Search,
+  User,
+  AlertCircle,
+  UserPlus,
+  Loader2,
+  X,
+  EqualApproximately,
+  Trash2,
+  Trash,
+  Eraser,
+  EraserIcon,
+  LucideEraser,
+  LucideCross,
+  RefreshCcw,
+} from "lucide-react";
 import { z } from "zod";
 
 import { Player, PlayerSchema } from "@/lib/core/schemas";
@@ -42,6 +57,15 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  Cross1Icon,
+  Cross2Icon,
+  CrossCircledIcon,
+  ReloadIcon,
+  ResetIcon,
+  TrashIcon,
+  UpdateIcon,
+} from "@radix-ui/react-icons";
 
 // Constants for autocomplete behavior
 const SUGGESTION_DEBOUNCE_MS = 300;
@@ -66,9 +90,15 @@ const SERVER_FLAGS: Record<string, string> = {
 
 interface PlayerSearchProps {
   onPlayerFound: (player: Player) => void;
+  onClear?: () => void;
+  showClear?: boolean;
 }
 
-export function PlayerSearch({ onPlayerFound }: PlayerSearchProps) {
+export function PlayerSearch({
+  onPlayerFound,
+  onClear,
+  showClear,
+}: PlayerSearchProps) {
   const [showTrackOption, setShowTrackOption] = useState(false);
   const [lastSearchParams, setLastSearchParams] =
     useState<PlayerSearchForm | null>(null);
@@ -269,9 +299,22 @@ export function PlayerSearch({ onPlayerFound }: PlayerSearchProps) {
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center space-x-2">
-          <User className="h-5 w-5 text-primary" />
-          <CardTitle>Player Search</CardTitle>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <User className="h-5 w-5 text-primary" />
+            <CardTitle>Player Search</CardTitle>
+          </div>
+          {showClear && onClear && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="button-small full-rotation"
+              onClick={onClear}
+            >
+              <ReloadIcon className="h-4 w-4 mr-1" />
+              Reset Search
+            </Button>
+          )}
         </div>
       </CardHeader>
       <CardContent>

@@ -18,7 +18,11 @@ from app.core.models import Base
 
 
 class PlayerRank(Base):
-    """Player rank model storing ranked information."""
+    """Player rank model storing ranked information.
+
+    This table is immutable - each row is a snapshot of rank at a point in time.
+    To get current rank, order by created_at DESC and take the first result.
+    """
 
     __tablename__ = "player_ranks"
     __table_args__ = {"schema": "core"}
@@ -68,68 +72,19 @@ class PlayerRank(Base):
         Integer, nullable=False, default=0, comment="Number of losses in this queue"
     )
 
-    veteran: Mapped[bool] = mapped_column(
-        Boolean,
-        nullable=False,
-        default=False,
-        comment="Whether the player is a veteran",
-    )
-
-    inactive: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=False, comment="Whether the player is inactive"
-    )
-
-    fresh_blood: Mapped[bool] = mapped_column(
-        Boolean,
-        nullable=False,
-        default=False,
-        comment="Whether the player is fresh blood",
-    )
-
     hot_streak: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,
         default=False,
-        comment="Whether the player is on a hot streak",
+        comment="Whether player is on a winning streak",
     )
 
-    # League information
-    league_id: Mapped[Optional[str]] = mapped_column(
-        String(64), nullable=True, index=True, comment="League ID"
-    )
-
-    league_name: Mapped[Optional[str]] = mapped_column(
-        String(64), nullable=True, comment="League name"
-    )
-
-    # Timestamps
+    # Timestamp - immutable, only set on creation
     created_at: Mapped[datetime] = mapped_column(
         SQLDateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
-        comment="When this rank record was created",
-    )
-
-    updated_at: Mapped[datetime] = mapped_column(
-        SQLDateTime(timezone=True),
-        nullable=False,
-        server_default=func.now(),
-        onupdate=func.now(),
-        comment="When this rank record was last updated",
-    )
-
-    # Season information
-    season_id: Mapped[Optional[str]] = mapped_column(
-        String(16), nullable=True, index=True, comment="Season identifier"
-    )
-
-    # Is current rank flag
-    is_current: Mapped[bool] = mapped_column(
-        Boolean,
-        nullable=False,
-        default=True,
-        index=True,
-        comment="Whether this is the current rank for the player",
+        comment="When this rank snapshot was recorded",
     )
 
     # Relationships
@@ -165,8 +120,6 @@ Index("idx_ranks_puuid_queue", PlayerRank.puuid, PlayerRank.queue_type)
 
 Index("idx_ranks_tier_rank", PlayerRank.tier, PlayerRank.rank)
 
-Index("idx_ranks_queue_current", PlayerRank.queue_type, PlayerRank.is_current)
-
-Index("idx_ranks_puuid_current", PlayerRank.puuid, PlayerRank.is_current)
-
 Index("idx_ranks_tier_lp", PlayerRank.tier, PlayerRank.league_points)
+
+Index("idx_ranks_puuid_created", PlayerRank.puuid, PlayerRank.created_at.desc())

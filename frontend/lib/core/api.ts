@@ -1,4 +1,8 @@
-import axios, { AxiosError, AxiosResponse } from "axios";
+import axios, {
+  AxiosError,
+  AxiosResponse,
+  InternalAxiosRequestConfig,
+} from "axios";
 import { z } from "zod";
 import {
   Player,
@@ -21,6 +25,17 @@ export const api = axios.create({
   timeout: 30000,
 });
 
+// Add auth token to all requests if available
+api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
+  if (typeof window !== "undefined") {
+    const token = localStorage.getItem("auth_token");
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+  }
+  return config;
+});
+
 export interface ApiError {
   message: string;
   code?: string;
@@ -38,6 +53,7 @@ const RIOT_API_ENDPOINTS = [
   "/players/search",
   "/matches/sync",
   "/matchmaking-analysis",
+  "/refresh-rank",
 ];
 
 function isRiotApiEndpoint(url: string | undefined): boolean {
