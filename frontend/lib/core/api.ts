@@ -54,6 +54,7 @@ const RIOT_API_ENDPOINTS = [
   "/matches/sync",
   "/matchmaking-analysis",
   "/refresh-league",
+  "/auth/connect-riot-account",
 ];
 
 function isRiotApiEndpoint(url: string | undefined): boolean {
@@ -61,16 +62,22 @@ function isRiotApiEndpoint(url: string | undefined): boolean {
   return RIOT_API_ENDPOINTS.some((endpoint) => url.includes(endpoint));
 }
 
+// Standard error code returned by backend when Riot API key is invalid
+const RIOT_API_KEY_INVALID_CODE = "RIOT_API_KEY_INVALID";
+
 function isApiKeyError(response: AxiosResponse | undefined): boolean {
   if (!response) return false;
   const detail = response.data?.detail;
-  // Check for specific API key error messages from our backend
+  // Check for our specific API key error code first (most reliable)
+  if (detail === RIOT_API_KEY_INVALID_CODE) {
+    return true;
+  }
+  // Fallback: Check for API key error messages in response
   return (
     typeof detail === "string" &&
     (detail.toLowerCase().includes("api key") ||
-      detail.toLowerCase().includes("invalid") ||
-      detail.toLowerCase().includes("expired") ||
-      detail.toLowerCase().includes("401"))
+      detail.toLowerCase().includes("unauthorized") ||
+      detail.toLowerCase().includes("expired"))
   );
 }
 
@@ -83,16 +90,10 @@ api.interceptors.response.use(
     return response;
   },
   (error: AxiosError) => {
-    // Detect API key errors (401 or 503 with API key message)
-    const status = error.response?.status;
-    if (status === 401 || (status === 503 && isApiKeyError(error.response))) {
-      // Only mark invalid if it's from a Riot API endpoint or has API key error message
-      if (
-        isRiotApiEndpoint(error.config?.url) ||
-        isApiKeyError(error.response)
-      ) {
-        notifyApiKeyInvalid();
-      }
+    // Check ALL responses for API key errors (503 with specific code)
+    // This ensures any endpoint that internally uses Riot API will trigger the header
+    if (isApiKeyError(error.response)) {
+      notifyApiKeyInvalid();
     }
     return Promise.reject(error);
   },
@@ -373,6 +374,29 @@ export async function cancelMatchmakingAnalysis(
         timeout: 5000, // 5 second timeout for cancellation
       },
     );
+    return {
+      success: true,
+      data: response.data,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: formatError(error),
+    };
+  }
+}
+
+export interface ConnectRiotAccountRequest {
+  game_name: string;
+  tag_line: string;
+  platform: string;
+}
+
+export async function connectRiotAccount(
+  data: ConnectRiotAccountRequest,
+): Promise<ApiResponse<{ puuid: string; riot_account_connected: boolean }>> {
+  try {
+    const response = await api.post("/auth/connect-riot-account", data);
     return {
       success: true,
       data: response.data,

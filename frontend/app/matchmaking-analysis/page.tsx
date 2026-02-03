@@ -6,7 +6,6 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Player, UserSettingsSchema, PlayerSchema } from "@/lib/core/schemas";
 import { getPlayerByPuuid, validatedGet, validatedPut } from "@/lib/core/api";
 import { PlayerSearch, PlayerCard } from "@/features/players";
-import { MatchHistory } from "@/features/matches";
 import {
   MatchmakingAnalysis,
   MatchmakingAnalysisResults,
@@ -14,10 +13,7 @@ import {
 import { ProtectedRoute } from "@/features/auth";
 
 import { Card } from "@/components/ui/card";
-import {
-  PlayerCardSkeleton,
-  MatchHistorySkeleton,
-} from "@/components/loading-skeleton";
+import { PlayerCardSkeleton } from "@/components/loading-skeleton";
 
 function MatchmakingAnalysisContent() {
   const router = useRouter();
@@ -167,17 +163,6 @@ function MatchmakingAnalysisContent() {
             )}
           </div>
         </div>
-
-        {/* Full Width Match History */}
-        {selectedPlayer && (
-          <Suspense fallback={<MatchHistorySkeleton />}>
-            <MatchHistory
-              key={`${selectedPlayer.puuid}-420`}
-              puuid={selectedPlayer.puuid}
-              queueFilter={420}
-            />
-          </Suspense>
-        )}
       </div>
     </div>
   );

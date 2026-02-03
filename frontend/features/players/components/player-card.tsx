@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import {
   Player,
   PlayerLeagueSchema,
@@ -13,19 +14,21 @@ import { TrackPlayerButton } from "./track-player-button";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { validatedGet, api, untrackPlayer } from "@/lib/core/api";
 import { getPlatformDisplayName } from "@/lib/core/platform-utils";
+import { getProfileIconUrl } from "@/lib/core/data-dragon";
 import { toast } from "sonner";
 import { useState } from "react";
 
 interface PlayerCardProps {
   player: Player;
+  onRefreshAll?: () => void;
 }
 
 // Helper function to get win rate color based on percentage
 function getWinRateColor(winRate: number): string {
-  if (winRate >= 50.5) {
-    return "text-emerald-500";
+  if (winRate >= 51) {
+    return "text-green-500";
   } else if (winRate > 49) {
-    return "text-amber-500";
+    return "text-yellow-500";
   } else {
     return "text-rose-500";
   }
@@ -33,10 +36,10 @@ function getWinRateColor(winRate: number): string {
 
 // Helper function to get win rate bar color based on percentage
 function getWinRateBarColor(winRate: number): string {
-  if (winRate >= 50.5) {
-    return "bg-emerald-500";
+  if (winRate >= 51) {
+    return "bg-green-500";
   } else if (winRate > 49) {
-    return "bg-amber-500";
+    return "bg-yellow-500";
   } else {
     return "bg-rose-500";
   }
@@ -171,7 +174,7 @@ function formatRelativeTime(dateString: string | null | undefined): string {
   return formatDate(dateString);
 }
 
-export function PlayerCard({ player }: PlayerCardProps) {
+export function PlayerCard({ player, onRefreshAll }: PlayerCardProps) {
   const queryClient = useQueryClient();
   const [isUpdating, setIsUpdating] = useState(false);
   const [isHoveringTracked, setIsHoveringTracked] = useState(false);
@@ -221,6 +224,10 @@ export function PlayerCard({ player }: PlayerCardProps) {
         refetchStats(),
         queryClient.invalidateQueries({ queryKey: ["player", player.puuid] }),
       ]);
+      // Call parent refresh callback if provided (refreshes all profile cards)
+      if (onRefreshAll) {
+        onRefreshAll();
+      }
       toast.success("Player data updated");
     } catch {
       toast.error("Failed to update player data");
@@ -257,12 +264,28 @@ export function PlayerCard({ player }: PlayerCardProps) {
   const leagueColors = league ? getRankColors(league.tier) : null;
 
   return (
-    <Card>
+    <Card id="player-summary">
       <CardHeader className="pb-3">
         {/* First Part: Header Row */}
         <div className="flex items-center space-x-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-            <User className="h-6 w-6 text-primary" />
+          {/* Profile Icon */}
+          <div
+            className="relative h-18 w-18 rounded-full overflow-hidden bg-primary/10"
+            style={{ height: "72px", width: "72px" }}
+          >
+            {player.profile_icon_id ? (
+              <Image
+                src={getProfileIconUrl(player.profile_icon_id)}
+                alt="Profile Icon"
+                fill
+                className="object-cover"
+                sizes="72px"
+              />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center">
+                <User className="h-9 w-9 text-primary" />
+              </div>
+            )}
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between gap-2">

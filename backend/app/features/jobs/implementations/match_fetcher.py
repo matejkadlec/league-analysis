@@ -59,27 +59,47 @@ class MatchFetcherJob(BaseJob):
         match_service: MatchService,
         riot_client: RiotAPIClient,
     ) -> None:
-        """Fetch and sync matches for a single player, then update their league."""
+        """Fetch and sync matches for a single player, then update their league and profile."""
         # Fetch new matches
         count = await match_service.sync_matches_for_player(riot_client, player)
         self.metrics["records_created"] += count
 
+        # Need to get the Player model, not PlayerResponse
+        player_model = await db.get(Player, player.puuid)
+        if not player_model:
+            return
+
+        # Update player profile (game_name, tag_line, profile_icon_id, summoner_level)
+        try:
+            profile_updated = await player_service.update_player_profile(
+                player_model, riot_client
+            )
+            if profile_updated:
+                logger.info(
+                    "Player profile updated",
+                    puuid=player.puuid,
+                    game_name=player_model.game_name,
+                )
+        except Exception as e:
+            logger.error(
+                "Error updating player profile",
+                puuid=player.puuid,
+                error=str(e),
+            )
+
         # Update player league (will only insert if league has changed)
         try:
-            # Need to get the Player model, not PlayerResponse
-            player_model = await db.get(Player, player.puuid)
-            if player_model:
-                league_updated = await player_service.update_player_league(
-                    player_model, riot_client
+            league_updated = await player_service.update_player_league(
+                player_model, riot_client
+            )
+            # Commit both profile and league updates
+            await db.commit()
+            if league_updated:
+                logger.info(
+                    "Player league updated",
+                    puuid=player.puuid,
+                    game_name=player.game_name,
                 )
-                # Commit the league update immediately
-                await db.commit()
-                if league_updated:
-                    logger.info(
-                        "Player league updated",
-                        puuid=player.puuid,
-                        game_name=player.game_name,
-                    )
         except Exception as e:
             logger.error(
                 "Error updating player league",

@@ -485,6 +485,7 @@ async def refresh_player_league(
     Refresh and get the current league for a player from Riot API.
 
     This endpoint fetches the latest league data from Riot API and stores it.
+    Also updates player profile (game_name, tag_line, profile_icon_id, summoner_level).
 
     Args:
         puuid: Player's PUUID
@@ -504,6 +505,9 @@ async def refresh_player_league(
         player_model = await player_service.db.get(Player, puuid)
         if not player_model:
             raise HTTPException(status_code=404, detail="Player not found")
+
+        # Update player profile (game_name, tag_line, profile_icon_id, summoner_level)
+        await player_service.update_player_profile(player_model, riot_client)
 
         # Update league from Riot API (adds record to player_service.db session)
         league_updated = await player_service.update_player_league(

@@ -130,6 +130,55 @@ export const MatchStatsResponseSchema = z.object({
   avg_vision_score: z.number(),
 });
 
+// Champion Stats Item Schema
+export const ChampionStatsItemSchema = z.object({
+  champion_name: z.string(),
+  champion_id: z.number(),
+  games_played: z.number(),
+  wins: z.number(),
+  losses: z.number(),
+  win_rate: z.number(),
+  avg_kills: z.number(),
+  avg_deaths: z.number(),
+  avg_assists: z.number(),
+  avg_kda: z.number(),
+});
+
+export type ChampionStatsItem = z.infer<typeof ChampionStatsItemSchema>;
+
+// Champion Stats Response Schema
+export const ChampionStatsResponseSchema = z.object({
+  puuid: z.string(),
+  total_champions: z.number(),
+  champions: z.array(ChampionStatsItemSchema),
+});
+
+export type ChampionStatsResponse = z.infer<typeof ChampionStatsResponseSchema>;
+
+// Lane Stats Item Schema
+export const LaneStatsItemSchema = z.object({
+  lane: z.string(),
+  games_played: z.number(),
+  wins: z.number(),
+  losses: z.number(),
+  win_rate: z.number(),
+  avg_kills: z.number(),
+  avg_deaths: z.number(),
+  avg_assists: z.number(),
+  avg_kda: z.number(),
+});
+
+export type LaneStatsItem = z.infer<typeof LaneStatsItemSchema>;
+
+// Lane Stats Response Schema
+export const LaneStatsResponseSchema = z.object({
+  puuid: z.string(),
+  total_lanes: z.number(),
+  lanes: z.array(LaneStatsItemSchema),
+});
+
+export type LaneStatsResponse = z.infer<typeof LaneStatsResponseSchema>;
+
 // Match Participant Schema
 export const MatchParticipantSchema = z.object({
   match_id: z.string(),

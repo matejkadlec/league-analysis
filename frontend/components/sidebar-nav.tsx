@@ -1,19 +1,41 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import Image from "next/image";
-import { Menu, X, User, LogOut, Settings, Wrench } from "lucide-react";
+import {
+  Menu,
+  X,
+  User,
+  LogOut,
+  Settings,
+  Wrench,
+  ChevronDown,
+} from "lucide-react";
 import { useAuth } from "@/features/auth";
 
 interface NavItem {
   name: string;
   path: string;
+  hasDropdown?: boolean;
+  dropdownItems?: { name: string; anchor: string }[];
 }
 
 const navItems: NavItem[] = [
   { name: "Home", path: "/" },
+  {
+    name: "My Profile",
+    path: "/my-profile",
+    hasDropdown: true,
+    dropdownItems: [
+      { name: "Player Summary", anchor: "#player-summary" },
+      { name: "Recent Performance", anchor: "#recent-performance" },
+      { name: "Top Champions", anchor: "#top-champions" },
+      { name: "Role Performance", anchor: "#role-performance" },
+      { name: "Match History", anchor: "#match-history" },
+    ],
+  },
   { name: "Playstyle Analysis", path: "/playstyle-analysis" },
   { name: "Matchmaking Analysis", path: "/matchmaking-analysis" },
   { name: "Tracked Players", path: "/tracked-players" },
@@ -21,8 +43,15 @@ const navItems: NavItem[] = [
 
 export function SidebarNav() {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
   const pathname = usePathname();
   const { user, logout } = useAuth();
+
+  // Auto open/close dropdown when visiting/leaving My Profile page
+  useEffect(() => {
+    const isOnMyProfile = pathname === "/my-profile";
+    setProfileDropdownOpen(isOnMyProfile);
+  }, [pathname]);
 
   // Hide sidebar on sign-in page
   if (pathname === "/sign-in") {
@@ -34,6 +63,21 @@ export function SidebarNav() {
       return pathname === "/";
     }
     return pathname.startsWith(path);
+  };
+
+  const handleDropdownClick = (e: React.MouseEvent, item: NavItem) => {
+    if (item.hasDropdown && isActive(item.path)) {
+      e.preventDefault();
+      setProfileDropdownOpen(!profileDropdownOpen);
+    }
+  };
+
+  const handleAnchorClick = (anchor: string) => {
+    setMenuOpen(false);
+    const element = document.querySelector(anchor);
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
   };
 
   return (
@@ -84,26 +128,87 @@ export function SidebarNav() {
             <ul className="space-y-2">
               {navItems.map((item) => (
                 <li key={item.name}>
-                  <Link
-                    href={item.path}
-                    onClick={() => setMenuOpen(false)}
-                    className={`block border-l-4 px-6 py-3 text-white transition-all duration-300 hover:bg-white/10 ${
-                      isActive(item.path)
-                        ? "border-[#cfa93a] bg-white/5"
-                        : "border-transparent hover:border-[#cfa93a]/50"
-                    }`}
-                  >
-                    <span
-                      suppressHydrationWarning
-                      className={`transition-colors duration-300 ${
+                  {item.hasDropdown ? (
+                    <div>
+                      <Link
+                        href={item.path}
+                        onClick={(e) => {
+                          if (isActive(item.path)) {
+                            handleDropdownClick(e, item);
+                          } else {
+                            setMenuOpen(false);
+                          }
+                        }}
+                        className={`flex items-center justify-between border-l-4 px-6 py-3 text-white transition-all duration-300 hover:bg-white/10 ${
+                          isActive(item.path)
+                            ? "border-[#cfa93a] bg-white/5"
+                            : "border-transparent hover:border-[#cfa93a]/50"
+                        }`}
+                      >
+                        <span
+                          suppressHydrationWarning
+                          className={`transition-colors duration-300 ${
+                            isActive(item.path)
+                              ? "text-[#cfa93a] font-medium"
+                              : "hover:text-[#cfa93a]"
+                          }`}
+                        >
+                          {item.name}
+                        </span>
+                        <ChevronDown
+                          className={`h-6 w-6 text-[#cfa93a] transition-transform duration-300 ${
+                            profileDropdownOpen ? "rotate-180" : ""
+                          }`}
+                        />
+                      </Link>
+                      {/* Dropdown items */}
+                      {isActive(item.path) && (
+                        <div
+                          className={`overflow-hidden transition-all duration-300 ease-in-out ${
+                            profileDropdownOpen
+                              ? "max-h-64 opacity-100"
+                              : "max-h-0 opacity-0"
+                          }`}
+                        >
+                          <ul className="bg-white/5 py-1">
+                            {item.dropdownItems?.map((dropdownItem) => (
+                              <li key={dropdownItem.anchor}>
+                                <button
+                                  onClick={() =>
+                                    handleAnchorClick(dropdownItem.anchor)
+                                  }
+                                  className="w-full text-left px-10 py-2 text-sm text-white/70 cursor-pointer transition-colors duration-300 hover:text-[#cfa93a]"
+                                >
+                                  {dropdownItem.name}
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <Link
+                      href={item.path}
+                      onClick={() => setMenuOpen(false)}
+                      className={`block border-l-4 px-6 py-3 text-white transition-all duration-300 hover:bg-white/10 ${
                         isActive(item.path)
-                          ? "text-[#cfa93a] font-medium"
-                          : "hover:text-[#cfa93a]"
+                          ? "border-[#cfa93a] bg-white/5"
+                          : "border-transparent hover:border-[#cfa93a]/50"
                       }`}
                     >
-                      {item.name}
-                    </span>
-                  </Link>
+                      <span
+                        suppressHydrationWarning
+                        className={`transition-colors duration-300 ${
+                          isActive(item.path)
+                            ? "text-[#cfa93a] font-medium"
+                            : "hover:text-[#cfa93a]"
+                        }`}
+                      >
+                        {item.name}
+                      </span>
+                    </Link>
+                  )}
                 </li>
               ))}
             </ul>

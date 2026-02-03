@@ -6,13 +6,11 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Player, PlayerSchema, UserSettingsSchema } from "@/lib/core/schemas";
 import { validatedGet, validatedPut } from "@/lib/core/api";
 import { PlayerSearch, PlayerCard } from "@/features/players";
-import { MatchHistory } from "@/features/matches";
 import { PlaystyleAnalysis } from "@/features/playstyle-analysis";
 import { ProtectedRoute } from "@/features/auth";
 
 import {
   PlayerCardSkeleton,
-  MatchHistorySkeleton,
   PlaystyleAnalysisSkeleton,
 } from "@/components/loading-skeleton";
 import { Card } from "@/components/ui/card";
@@ -189,17 +187,6 @@ export default function PlaystyleAnalysisPage() {
               ) : null}
             </div>
           </div>
-
-          {/* Full Width Match History */}
-          {selectedPlayer && (
-            <Suspense fallback={<MatchHistorySkeleton />}>
-              <MatchHistory
-                key={`${selectedPlayer.puuid}-420`}
-                puuid={selectedPlayer.puuid}
-                queueFilter={420}
-              />
-            </Suspense>
-          )}
         </div>
       </div>
     </ProtectedRoute>

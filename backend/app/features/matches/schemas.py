@@ -195,3 +195,62 @@ class MatchStatsResponse(BaseModel):
     avg_vision_score: float = Field(..., ge=0.0, description="Average vision score")
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class ChampionStatsItem(BaseModel):
+    """Schema for stats of a single champion."""
+
+    champion_name: str = Field(..., description="Champion name")
+    champion_id: int = Field(..., description="Champion ID")
+    games_played: int = Field(..., ge=0, description="Number of games played")
+    wins: int = Field(..., ge=0, description="Number of wins")
+    losses: int = Field(..., ge=0, description="Number of losses")
+    win_rate: float = Field(..., ge=0.0, le=1.0, description="Win rate (0.0 to 1.0)")
+    avg_kills: float = Field(..., ge=0.0, description="Average kills")
+    avg_deaths: float = Field(..., ge=0.0, description="Average deaths")
+    avg_assists: float = Field(..., ge=0.0, description="Average assists")
+    avg_kda: float = Field(..., ge=0.0, description="Average KDA")
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ChampionStatsResponse(BaseModel):
+    """Schema for champion stats response."""
+
+    puuid: str = Field(..., description="Player PUUID")
+    total_champions: int = Field(..., ge=0, description="Total unique champions played")
+    champions: List[ChampionStatsItem] = Field(
+        default_factory=list, description="List of champion stats"
+    )
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class LaneStatsItem(BaseModel):
+    """Schema for stats of a single lane/position."""
+
+    lane: str = Field(
+        ..., description="Lane/position name (TOP, JUNGLE, MID, ADC, SUPPORT)"
+    )
+    games_played: int = Field(..., ge=0, description="Number of games played")
+    wins: int = Field(..., ge=0, description="Number of wins")
+    losses: int = Field(..., ge=0, description="Number of losses")
+    win_rate: float = Field(..., ge=0.0, le=1.0, description="Win rate (0.0 to 1.0)")
+    avg_kills: float = Field(..., ge=0.0, description="Average kills")
+    avg_deaths: float = Field(..., ge=0.0, description="Average deaths")
+    avg_assists: float = Field(..., ge=0.0, description="Average assists")
+    avg_kda: float = Field(..., ge=0.0, description="Average KDA")
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class LaneStatsResponse(BaseModel):
+    """Schema for lane stats response."""
+
+    puuid: str = Field(..., description="Player PUUID")
+    total_lanes: int = Field(..., ge=0, description="Total unique lanes played")
+    lanes: List[LaneStatsItem] = Field(
+        default_factory=list, description="List of lane stats"
+    )
+
+    model_config = ConfigDict(from_attributes=True)

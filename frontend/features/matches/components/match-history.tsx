@@ -19,6 +19,7 @@ import {
   MatchListWithPlayerDataResponseSchema,
   MatchWithPlayerData,
   TeamChampion,
+  MatchStatsResponseSchema,
 } from "@/lib/core/schemas";
 import { validatedGet, api } from "@/lib/core/api";
 import { getChampionIconUrl } from "@/lib/core/data-dragon";
@@ -41,6 +42,31 @@ import {
 interface MatchHistoryProps {
   puuid: string;
   queueFilter?: number;
+  lastUpdated?: string | null;
+}
+
+// Format relative time
+function formatRelativeTime(dateString: string | null | undefined): string {
+  if (!dateString) return "Never";
+
+  const now = new Date();
+  const date = new Date(dateString);
+  const diffMs = now.getTime() - date.getTime();
+  const diffSecs = Math.floor(diffMs / 1000);
+  const diffMins = Math.floor(diffSecs / 60);
+  const diffHours = Math.floor(diffMins / 60);
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffSecs < 60) return "just now";
+  if (diffMins < 60) return `${diffMins} minute${diffMins > 1 ? "s" : ""} ago`;
+  if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? "s" : ""} ago`;
+  if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? "s" : ""} ago`;
+
+  return new Date(dateString).toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
 }
 
 // Queue names mapping
@@ -365,7 +391,11 @@ function MatchRow({
   );
 }
 
-export function MatchHistory({ puuid, queueFilter = 420 }: MatchHistoryProps) {
+export function MatchHistory({
+  puuid,
+  queueFilter = 420,
+  lastUpdated,
+}: MatchHistoryProps) {
   const PAGE_SIZE = 20;
   const loadMoreRef = useRef<HTMLDivElement>(null);
   const previousMatchCount = useRef(0);
@@ -376,6 +406,18 @@ export function MatchHistory({ puuid, queueFilter = 420 }: MatchHistoryProps) {
   const [analysisJobId, setAnalysisJobId] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [showAnalysisConfirm, setShowAnalysisConfirm] = useState(false);
+
+  // Fetch match stats for total wins/losses
+  const { data: statsResult } = useQuery({
+    queryKey: ["match-history-stats", puuid, queueFilter],
+    queryFn: () =>
+      validatedGet(MatchStatsResponseSchema, `/matches/player/${puuid}/stats`, {
+        queue: queueFilter,
+      }),
+    enabled: !!puuid,
+  });
+
+  const stats = statsResult?.success ? statsResult.data : null;
 
   const {
     data: response,
@@ -527,6 +569,10 @@ export function MatchHistory({ puuid, queueFilter = 420 }: MatchHistoryProps) {
   const totalMatches = data?.total || 0;
   const hasMore = allMatches.length < totalMatches;
 
+  // Use stats for total wins/losses display
+  const wins = stats?.wins || 0;
+  const losses = stats?.losses || 0;
+
   useEffect(() => {
     if (
       allMatches.length > previousMatchCount.current &&
@@ -650,7 +696,7 @@ export function MatchHistory({ puuid, queueFilter = 420 }: MatchHistoryProps) {
   }
 
   return (
-    <Card>
+    <Card id="match-history">
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-2">
@@ -674,6 +720,17 @@ export function MatchHistory({ puuid, queueFilter = 420 }: MatchHistoryProps) {
             </Button>
           </div>
         </div>
+        {totalMatches > 0 && (
+          <div className="text-sm mt-1">
+            {totalMatches} games analyzed ({wins}W / {losses}L)
+          </div>
+        )}
+        {lastUpdated && (
+          <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
+            <Clock className="h-3 w-3" />
+            <span>Updated {formatRelativeTime(lastUpdated)}</span>
+          </div>
+        )}
 
         {isAnalyzing && (
           <div className="mt-4 p-4 rounded-lg bg-slate-950 border border-slate-800 space-y-4">

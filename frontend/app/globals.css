@@ -90,6 +90,7 @@
     background-color: var(--color-background);
     color: var(--color-foreground);
     font-family: var(--font-sans);
+    scrollbar-gutter: stable;
   }
 
   #content {
@@ -219,6 +220,35 @@
   .dark #sign-in-form input[type="password"] {
     background-color: #e5e7eb !important;
   }
+
+  /* Remove focus outline from logo */
+  aside a[href="/"] {
+    outline: none !important;
+    pointer-events: auto !important;
+  }
+
+  aside a[href="/"]:focus,
+  aside a[href="/"]:focus-visible,
+  aside a[href="/"]:active {
+    outline: none !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+
+  /* Remove focus outline from all buttons */
+  button:focus,
+  button:focus-visible,
+  button:active {
+    outline: none !important;
+    box-shadow: none !important;
+    border-color: transparent !important;
+  }
+
+  /* Remove ring styles from buttons */
+  button:focus-visible {
+    --tw-ring-color: transparent !important;
+    --tw-ring-offset-width: 0px !important;
+  }
 }
 
 /* Components */
@@ -264,6 +294,49 @@
   }
 
   .button-small.full-rotation:hover svg {
+    transform: rotate(360deg);
+  }
+
+  /*
+    Medium Gold Button
+    - Same styling as button-small but larger
+    - For dialogs and forms where a more prominent CTA is needed
+  */
+  .button-medium {
+    @apply inline-flex items-center justify-center whitespace-nowrap rounded-md font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-5 [&_svg]:shrink-0 shadow h-10 cursor-pointer text-primary-foreground;
+    background: linear-gradient(
+      105deg,
+      rgb(242, 215, 119) 0%,
+      rgb(207, 169, 58) 10%,
+      rgb(157, 125, 34) 90%
+    );
+    color: oklch(11.2% 0.045 285.88);
+    font-size: 14px !important;
+    padding: 8px 20px !important;
+    gap: 8px !important;
+    transition: filter 0.75s ease !important;
+    filter: saturate(1) brightness(1);
+  }
+
+  .button-medium:hover {
+    filter: saturate(1.15) brightness(1.15);
+    color: oklch(11.2% 0.045 285.88) !important;
+  }
+
+  .button-medium svg {
+    transition: transform 0.5s ease;
+    transform: rotate(0deg);
+  }
+
+  .button-medium:hover svg {
+    transform: rotate(180deg);
+  }
+
+  .button-medium.full-rotation svg {
+    transition: transform 0.75s ease;
+  }
+
+  .button-medium.full-rotation:hover svg {
     transform: rotate(360deg);
   }
 }

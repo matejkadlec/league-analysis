@@ -1,16 +1,21 @@
 """Authentication router with login, logout, and user management endpoints."""
 
 from datetime import timedelta
+from typing import TYPE_CHECKING, Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import select
 
 from app.core.rate_limiter import limiter
+from app.core.dependencies import get_riot_client
 from .dependencies import get_current_active_user, get_current_admin_user
 from .models import User
-from .schemas import Token, UserCreate, UserResponse
+from .schemas import Token, UserCreate, UserResponse, LinkRiotAccountRequest
 from .service import AuthService, get_auth_service
+
+if TYPE_CHECKING:
+    from app.core.riot_api.client import RiotAPIClient
 
 router = APIRouter()
 
@@ -120,3 +125,58 @@ async def list_users(
     """List all users (admin only)."""
     result = await auth_service.db.execute(select(User))
     return list(result.scalars().all())
+
+
+@router.post("/connect-riot-account", response_model=UserResponse)
+async def connect_riot_account(
+    request: Request,
+    link_request: LinkRiotAccountRequest,
+    current_user: User = Depends(get_current_active_user),
+    auth_service: AuthService = Depends(get_auth_service),
+    riot_client: Annotated["RiotAPIClient", Depends(get_riot_client)] = None,
+) -> User:
+    """Link a Riot account to the current user.
+
+    Validates the player exists via Riot API and links the PUUID to the user.
+    """
+    from app.features.players.service import PlayerService
+
+    player_service = PlayerService(auth_service.db)
+
+    try:
+        # Look up player from Riot API to get PUUID
+        player = await player_service.add_and_track_player(
+            riot_client=riot_client,
+            game_name=link_request.game_name,
+            tag_line=link_request.tag_line,
+            platform=link_request.platform,
+        )
+    except Exception as e:
+        error_msg = str(e)
+        if "not found" in error_msg.lower():
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Player {link_request.game_name}#{link_request.tag_line} was not found on the selected server.",
+            )
+        # Check for API key errors - return 503 with specific code
+        if (
+            "401" in error_msg
+            or "api key" in error_msg.lower()
+            or "unauthorized" in error_msg.lower()
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="RIOT_API_KEY_INVALID",
+            )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to verify player: {error_msg}",
+        )
+
+    # Update user with riot account info
+    current_user.riot_account_connected = True
+    current_user.puuid = player.puuid
+    await auth_service.db.commit()
+    await auth_service.db.refresh(current_user)
+
+    return current_user

@@ -571,6 +571,203 @@ class MatchService:
             logger.error("Failed to get player stats", puuid=puuid, error=str(e))
             raise
 
+    async def get_player_champion_stats(
+        self,
+        puuid: str,
+        queue: Optional[int] = None,
+        limit: int = 20,
+    ) -> "ChampionStatsResponse":
+        """
+        Get player statistics grouped by champion.
+
+        Args:
+            puuid: Player PUUID
+            queue: Filter by queue ID (e.g., 420 for ranked solo/duo)
+            limit: Maximum number of champions to return (sorted by games played)
+
+        Returns:
+            ChampionStatsResponse with per-champion statistics
+        """
+        from .schemas import ChampionStatsResponse, ChampionStatsItem
+
+        try:
+            # Build query for participants
+            query = select(MatchParticipant).where(MatchParticipant.puuid == puuid)
+
+            # If queue filter, join with matches
+            if queue is not None:
+                query = query.join(
+                    Match, MatchParticipant.match_id == Match.match_id
+                ).where(Match.queue_id == queue)
+
+            result = await self.db.execute(query)
+            participants = result.scalars().all()
+
+            if not participants:
+                return ChampionStatsResponse(
+                    puuid=puuid, total_champions=0, champions=[]
+                )
+
+            # Aggregate stats by champion
+            champion_data: dict = {}
+            for p in participants:
+                champ_name = p.champion_name
+                if champ_name not in champion_data:
+                    champion_data[champ_name] = {
+                        "champion_id": p.champion_id,
+                        "games": 0,
+                        "wins": 0,
+                        "kills": 0,
+                        "deaths": 0,
+                        "assists": 0,
+                    }
+                champion_data[champ_name]["games"] += 1
+                if p.win:
+                    champion_data[champ_name]["wins"] += 1
+                champion_data[champ_name]["kills"] += p.kills
+                champion_data[champ_name]["deaths"] += p.deaths
+                champion_data[champ_name]["assists"] += p.assists
+
+            # Build response items
+            champions = []
+            for champ_name, data in champion_data.items():
+                games = data["games"]
+                wins = data["wins"]
+                losses = games - wins
+                avg_kda = self._calculate_kda(
+                    data["kills"], data["deaths"], data["assists"]
+                )
+                champions.append(
+                    ChampionStatsItem(
+                        champion_name=champ_name,
+                        champion_id=data["champion_id"],
+                        games_played=games,
+                        wins=wins,
+                        losses=losses,
+                        win_rate=wins / games if games > 0 else 0.0,
+                        avg_kills=data["kills"] / games if games > 0 else 0.0,
+                        avg_deaths=data["deaths"] / games if games > 0 else 0.0,
+                        avg_assists=data["assists"] / games if games > 0 else 0.0,
+                        avg_kda=avg_kda,
+                    )
+                )
+
+            # Sort by games played descending, limit results
+            champions.sort(key=lambda x: x.games_played, reverse=True)
+            champions = champions[:limit]
+
+            return ChampionStatsResponse(
+                puuid=puuid,
+                total_champions=len(champion_data),
+                champions=champions,
+            )
+        except Exception as e:
+            logger.error(
+                "Failed to get player champion stats", puuid=puuid, error=str(e)
+            )
+            raise
+
+    async def get_player_lane_stats(
+        self,
+        puuid: str,
+        queue: Optional[int] = None,
+    ) -> "LaneStatsResponse":
+        """
+        Get player statistics grouped by lane/position.
+
+        Args:
+            puuid: Player PUUID
+            queue: Filter by queue ID (e.g., 420 for ranked solo/duo)
+
+        Returns:
+            LaneStatsResponse with per-lane statistics
+        """
+        from .schemas import LaneStatsResponse, LaneStatsItem
+
+        # Lane display name mapping
+        lane_names = {
+            "TOP": "Top",
+            "JUNGLE": "Jungle",
+            "MIDDLE": "Mid",
+            "BOTTOM": "Bottom",
+            "UTILITY": "Support",
+        }
+
+        try:
+            # Build query for participants
+            query = select(MatchParticipant).where(
+                MatchParticipant.puuid == puuid,
+                MatchParticipant.team_position.isnot(None),
+                MatchParticipant.team_position != "",
+                MatchParticipant.team_position != "UNKNOWN",
+            )
+
+            # If queue filter, join with matches
+            if queue is not None:
+                query = query.join(
+                    Match, MatchParticipant.match_id == Match.match_id
+                ).where(Match.queue_id == queue)
+
+            result = await self.db.execute(query)
+            participants = result.scalars().all()
+
+            if not participants:
+                return LaneStatsResponse(puuid=puuid, total_lanes=0, lanes=[])
+
+            # Aggregate stats by lane
+            lane_data: dict = {}
+            for p in participants:
+                lane = p.team_position
+                if lane not in lane_data:
+                    lane_data[lane] = {
+                        "games": 0,
+                        "wins": 0,
+                        "kills": 0,
+                        "deaths": 0,
+                        "assists": 0,
+                    }
+                lane_data[lane]["games"] += 1
+                if p.win:
+                    lane_data[lane]["wins"] += 1
+                lane_data[lane]["kills"] += p.kills
+                lane_data[lane]["deaths"] += p.deaths
+                lane_data[lane]["assists"] += p.assists
+
+            # Build response items
+            lanes = []
+            for lane, data in lane_data.items():
+                games = data["games"]
+                wins = data["wins"]
+                losses = games - wins
+                avg_kda = self._calculate_kda(
+                    data["kills"], data["deaths"], data["assists"]
+                )
+                lanes.append(
+                    LaneStatsItem(
+                        lane=lane_names.get(lane, lane),
+                        games_played=games,
+                        wins=wins,
+                        losses=losses,
+                        win_rate=wins / games if games > 0 else 0.0,
+                        avg_kills=data["kills"] / games if games > 0 else 0.0,
+                        avg_deaths=data["deaths"] / games if games > 0 else 0.0,
+                        avg_assists=data["assists"] / games if games > 0 else 0.0,
+                        avg_kda=avg_kda,
+                    )
+                )
+
+            # Sort by games played descending
+            lanes.sort(key=lambda x: x.games_played, reverse=True)
+
+            return LaneStatsResponse(
+                puuid=puuid,
+                total_lanes=len(lane_data),
+                lanes=lanes,
+            )
+        except Exception as e:
+            logger.error("Failed to get player lane stats", puuid=puuid, error=str(e))
+            raise
+
     async def fetch_player_matches(
         self,
         riot_api_client: Any,

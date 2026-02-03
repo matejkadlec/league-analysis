@@ -10,6 +10,8 @@ from .schemas import (
     MatchListResponse,
     MatchListWithPlayerDataResponse,
     MatchStatsResponse,
+    ChampionStatsResponse,
+    LaneStatsResponse,
 )
 from .dependencies import (
     MatchServiceDep,
@@ -81,6 +83,46 @@ async def get_player_stats(
         puuid=puuid,
         queue=queue,
         limit=limit,
+    )
+
+
+@router.get("/player/{puuid}/champion-stats", response_model=ChampionStatsResponse)
+async def get_player_champion_stats(
+    puuid: str,
+    match_service: MatchServiceDep,
+    queue: Optional[int] = Query(
+        None, description="Queue ID filter (e.g., 420 for ranked solo/duo)"
+    ),
+    limit: int = Query(
+        20, ge=1, le=50, description="Maximum number of champions to return"
+    ),
+):
+    """
+    Get player statistics grouped by champion.
+    Returns champions sorted by games played descending.
+    """
+    return await match_service.get_player_champion_stats(
+        puuid=puuid,
+        queue=queue,
+        limit=limit,
+    )
+
+
+@router.get("/player/{puuid}/lane-stats", response_model=LaneStatsResponse)
+async def get_player_lane_stats(
+    puuid: str,
+    match_service: MatchServiceDep,
+    queue: Optional[int] = Query(
+        None, description="Queue ID filter (e.g., 420 for ranked solo/duo)"
+    ),
+):
+    """
+    Get player statistics grouped by lane/position.
+    Returns lanes sorted by games played descending.
+    """
+    return await match_service.get_player_lane_stats(
+        puuid=puuid,
+        queue=queue,
     )
 
 

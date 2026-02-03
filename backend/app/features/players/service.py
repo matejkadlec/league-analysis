@@ -1001,6 +1001,88 @@ class PlayerService:
         return discovered_count
 
     @service_error_handler("PlayerService")
+    async def update_player_profile(
+        self, player: Player, riot_api_client: "RiotAPIClient"
+    ) -> bool:
+        """Update player's profile info (game_name, tag_line, profile_icon_id, summoner_level) from Riot API.
+
+        Fetches the latest summoner and account data and updates the player record.
+
+        Args:
+            player: Player to update profile for
+            riot_api_client: RiotAPIClient instance
+
+        Returns:
+            True if profile was updated, False if unchanged or error
+
+        Raises:
+            ValueError: If player has invalid platform
+        """
+        from app.core.riot_api.constants import Platform, Region
+        from datetime import datetime, timezone
+
+        logger.debug("Updating player profile", puuid=player.puuid)
+
+        # Convert platform string to Platform enum
+        platform_enum = Platform(player.platform.lower())
+
+        # Determine region from platform
+        platform_lower = player.platform.lower()
+        region = Region.EUROPE  # Default
+
+        if platform_lower in ["na1", "br1", "la1", "la2"]:
+            region = Region.AMERICAS
+        elif platform_lower in ["kr", "jp1"]:
+            region = Region.ASIA
+        elif platform_lower in ["ph2", "sg2", "th2", "tw2", "vn2"]:
+            region = Region.SEA
+
+        try:
+            # Fetch summoner data for profile_icon_id and summoner_level
+            summoner = await riot_api_client.get_summoner_by_puuid(
+                player.puuid, platform_enum
+            )
+
+            # Fetch account data for game_name and tag_line
+            account = await riot_api_client.get_account_by_puuid(player.puuid, region)
+
+            # Check if anything changed
+            changed = False
+            if account.game_name != player.game_name:
+                player.game_name = account.game_name
+                changed = True
+            if account.tag_line != player.tag_line:
+                player.tag_line = account.tag_line
+                changed = True
+            if summoner.profile_icon_id != player.profile_icon_id:
+                player.profile_icon_id = summoner.profile_icon_id
+                changed = True
+            if summoner.summoner_level != player.summoner_level:
+                player.summoner_level = summoner.summoner_level
+                changed = True
+
+            if changed:
+                player.updated_at = datetime.now(timezone.utc)
+                logger.info(
+                    "Updated player profile",
+                    puuid=player.puuid,
+                    game_name=player.game_name,
+                    profile_icon_id=player.profile_icon_id,
+                )
+                return True
+            else:
+                logger.debug("Player profile unchanged", puuid=player.puuid)
+                return False
+
+        except Exception as e:
+            logger.error(
+                "Failed to update player profile",
+                puuid=player.puuid,
+                error=str(e),
+            )
+            return False
+
+    @service_error_handler("PlayerService")
     async def update_player_league(
         self, player: Player, riot_api_client: "RiotAPIClient"
     ) -> bool:

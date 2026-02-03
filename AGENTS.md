@@ -125,10 +125,10 @@ See [docs/database.md](docs/database.md) for schema details.
 ## Constraints
 
 - ❌ **NEVER** commit API keys/secrets
+- ❌ **NEVER** commit for user in general
 - ❌ **NEVER** modify Riot API rate limiting logic
 - ❌ **NEVER** let SQLAlchemy auto-create tables
 - ❌ **NEVER** skip pre-commit hooks
-- ❌ **NEVER** edit `.env` directly (use `.env.example` as template)
 
 ---
 

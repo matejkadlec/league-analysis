@@ -9,6 +9,8 @@ export interface User {
   email_verified: boolean;
   email_verified_at: string | null;
   last_login: string | null;
+  riot_account_connected: boolean;
+  puuid: string | null;
   created_at: string;
   updated_at: string;
 }

@@ -234,6 +234,7 @@ export function AddTrackedPlayer() {
                     </FormItem>
                   )}
                 />
+                <p className="text-xs text-muted-foreground">Enter game name</p>
               </div>
 
               {/* Tag - takes 3/12 */}
@@ -243,7 +244,7 @@ export function AddTrackedPlayer() {
                   name="tagLine"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Tag</FormLabel>
+                      <FormLabel>Tag Line</FormLabel>
                       <FormControl>
                         <Input
                           placeholder="EUNE"
@@ -263,10 +264,11 @@ export function AddTrackedPlayer() {
                     </FormItem>
                   )}
                 />
+                <p className="text-xs text-muted-foreground">Enter tag line</p>
               </div>
 
-              {/* Server - takes 4/12 */}
-              <div className="col-span-4">
+              {/* Server - takes 3/12 */}
+              <div className="col-span-3">
                 <FormField
                   control={form.control}
                   name="platform"
