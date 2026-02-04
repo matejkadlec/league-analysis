@@ -218,6 +218,22 @@ class JobExecution(Base):
         comment="All logs captured during job execution (INFO, WARNING, ERROR, etc.)",
     )
 
+    # Trigger source
+    triggered_by: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        default="system",
+        comment="Who triggered the job execution: 'system' (scheduler) or 'user' (manual trigger)",
+    )
+
+    # API key error tracking
+    has_api_key_error: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        comment="Whether this execution encountered an API key authentication error",
+    )
+
     # Relationships
     job_config = relationship("JobConfiguration", back_populates="executions")
 

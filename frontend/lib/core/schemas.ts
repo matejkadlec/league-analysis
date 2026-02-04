@@ -396,6 +396,8 @@ export const JobExecutionSchema = z.object({
   error_message: z.string().nullable().optional(),
   execution_log: z.record(z.string(), z.any()).nullable().optional(),
   detailed_logs: z.record(z.string(), z.any()).nullable().optional(),
+  triggered_by: z.string().default("system"),
+  has_api_key_error: z.boolean().default(false),
 });
 
 // Job Status Response Schema

@@ -8,20 +8,41 @@ from app.features.jobs.base import BaseJob
 from app.features.players.service import PlayerService
 from app.features.players.schemas import PlayerResponse
 from app.features.matches.service import MatchService
-from app.core.riot_api.client import RiotAPIClient
+from app.core.riot_api.client import RiotAPIClient, APICallRecord
 from app.core.config import settings, get_riot_api_key
 from app.core.riot_api.constants import get_region_by_platform, QueueType, Region
+from app.core.riot_api.errors import AuthenticationError
 from app.features.matches.models import Match
 from app.features.players.models import Player
 
 logger = structlog.get_logger(__name__)
 
 
+def _is_api_key_error(error: Exception) -> bool:
+    """Check if an error is related to API key authentication."""
+    error_str = str(error).lower()
+    return (
+        isinstance(error, AuthenticationError)
+        or "401" in error_str
+        or "invalid api key" in error_str
+        or "authentication" in error_str
+    )
+
+
 class MatchFetcherJob(BaseJob):
     """Job to fetch matches for tracked players and update their leagues."""
 
-    def __init__(self, job_config_id: int):
-        super().__init__(job_config_id)
+    def __init__(self, job_config_id: int, triggered_by: str = "system"):
+        super().__init__(job_config_id, triggered_by)
+
+    def _track_api_request(self, metric_name: str, count: int) -> None:
+        """Callback for tracking API requests from RiotAPIClient."""
+        if metric_name == "requests_made":
+            self.metrics["api_requests_made"] += count
+
+    def _store_api_calls(self, api_calls: List[APICallRecord]) -> None:
+        """Store API call records from the RiotAPIClient."""
+        self._api_call_records = api_calls
 
     async def execute(self, db: AsyncSession) -> None:
         """Execute the match fetcher job."""
@@ -33,7 +54,10 @@ class MatchFetcherJob(BaseJob):
         player_service = PlayerService(db)
         match_service = MatchService(db)
 
-        async with RiotAPIClient(api_key=api_key) as riot_client:
+        async with RiotAPIClient(
+            api_key=api_key,
+            request_callback=self._track_api_request,
+        ) as riot_client:
             # Get tracked players
             tracked_players = await player_service.get_tracked_players()
             logger.info(
@@ -46,10 +70,20 @@ class MatchFetcherJob(BaseJob):
                         db, player, player_service, match_service, riot_client
                     )
                 except Exception as e:
+                    error_msg = str(e)
+                    is_api_key_err = _is_api_key_error(e)
                     logger.error(
-                        "Error processing player", puuid=player.puuid, error=str(e)
+                        "Error processing player", puuid=player.puuid, error=error_msg
                     )
+                    self.record_error(error_msg, is_api_key_error=is_api_key_err)
+                    # If it's an API key error, stop processing more players
+                    if is_api_key_err:
+                        logger.error("API key error detected, stopping job execution")
+                        break
                     continue
+
+            # Store API call records from the client
+            self._store_api_calls(riot_client.get_api_calls())
 
     async def _process_player(
         self,
@@ -75,17 +109,26 @@ class MatchFetcherJob(BaseJob):
                 player_model, riot_client
             )
             if profile_updated:
+                self.metrics["records_updated"] += 1
                 logger.info(
                     "Player profile updated",
                     puuid=player.puuid,
                     game_name=player_model.game_name,
                 )
         except Exception as e:
+            error_msg = str(e)
+            is_api_key_err = _is_api_key_error(e)
             logger.error(
                 "Error updating player profile",
                 puuid=player.puuid,
-                error=str(e),
+                error=error_msg,
             )
+            self.record_error(
+                f"Failed to update player profile: {error_msg}",
+                is_api_key_error=is_api_key_err,
+            )
+            if is_api_key_err:
+                raise  # Re-raise to stop processing
 
         # Update player league (will only insert if league has changed)
         try:
@@ -95,14 +138,23 @@ class MatchFetcherJob(BaseJob):
             # Commit both profile and league updates
             await db.commit()
             if league_updated:
+                self.metrics["records_updated"] += 1
                 logger.info(
                     "Player league updated",
                     puuid=player.puuid,
                     game_name=player.game_name,
                 )
         except Exception as e:
+            error_msg = str(e)
+            is_api_key_err = _is_api_key_error(e)
             logger.error(
                 "Error updating player league",
                 puuid=player.puuid,
-                error=str(e),
+                error=error_msg,
             )
+            self.record_error(
+                f"Failed to update player league: {error_msg}",
+                is_api_key_error=is_api_key_err,
+            )
+            if is_api_key_err:
+                raise  # Re-raise to stop processing

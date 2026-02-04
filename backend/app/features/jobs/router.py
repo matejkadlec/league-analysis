@@ -25,11 +25,12 @@ logger = structlog.get_logger(__name__)
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
 
-def _create_job_instance(job):
+def _create_job_instance(job, triggered_by: str = "system"):
     """Create a job instance based on job type.
 
     Args:
         job: Job configuration (JobConfiguration or JobConfigurationResponse)
+        triggered_by: Who triggered the job: 'system' (scheduler) or 'user' (manual).
 
     Returns:
         Job instance based on job type
@@ -47,9 +48,7 @@ def _create_job_instance(job):
             status_code=501,
             detail=f"Job type {job.job_type} implementation not found.",
         )
-    return job_class(job.id)
-
-    # return job_class(job.id)
+    return job_class(job.id, triggered_by=triggered_by)
 
 
 # === Job Configuration Endpoints ===
@@ -220,8 +219,8 @@ async def trigger_job(
                 detail=f"Job '{job.name}' is not active and cannot be triggered",
             )
 
-        # Create and trigger the job instance
-        job_instance = _create_job_instance(job)
+        # Create and trigger the job instance (triggered by user)
+        job_instance = _create_job_instance(job, triggered_by="user")
         background_tasks.add_task(job_instance.run)
 
         logger.info(

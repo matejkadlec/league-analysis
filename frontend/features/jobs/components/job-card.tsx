@@ -38,6 +38,7 @@ import cronstrue from "cronstrue";
 
 interface JobCardProps {
   job: JobConfiguration;
+  onExecutionClick?: (executionId: number) => void;
 }
 
 /**
@@ -55,6 +56,34 @@ function formatCronSchedule(schedule: string): string {
   } catch {
     return schedule;
   }
+}
+
+/**
+ * Format schedule from seconds to human-readable format
+ * If seconds < 60: "X seconds"
+ * If seconds >= 60 and exact minutes: "X minutes"
+ * If seconds >= 60 and not exact: "X minutes Y seconds"
+ */
+function formatScheduleInterval(schedule: string): string {
+  // Try to parse as number (seconds)
+  const seconds = parseInt(schedule, 10);
+  if (isNaN(seconds)) {
+    // Not a number, try cron format
+    return formatCronSchedule(schedule);
+  }
+
+  if (seconds < 60) {
+    return `${seconds} seconds`;
+  }
+
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
+
+  if (remainingSeconds === 0) {
+    return `${minutes} minute${minutes !== 1 ? "s" : ""}`;
+  }
+
+  return `${minutes} minute${minutes !== 1 ? "s" : ""} ${remainingSeconds} second${remainingSeconds !== 1 ? "s" : ""}`;
 }
 
 /**
@@ -85,7 +114,25 @@ function formatRelativeTime(timestamp: string): string {
   return `${diffDays}d ago`;
 }
 
-export function JobCard({ job }: JobCardProps) {
+/**
+ * Get a brief description for job types
+ */
+function getJobDescription(jobType: string): string {
+  const descriptions: Record<string, string> = {
+    MATCH_FETCHER:
+      "Fetches new matches and updates player profiles for tracked players",
+    TRACKED_PLAYER_UPDATER:
+      "Updates league and profile data for tracked players",
+    PLAYER_ANALYZER: "Analyzes player statistics and generates insights",
+    BAN_CHECKER: "Checks for banned accounts among tracked players",
+  };
+  return (
+    descriptions[jobType] ||
+    `Executes ${jobType.replace(/_/g, " ").toLowerCase()} tasks`
+  );
+}
+
+export function JobCard({ job, onExecutionClick }: JobCardProps) {
   const [showHistory, setShowHistory] = useState(false);
   const [showConfigDialog, setShowConfigDialog] = useState(false);
   const [configJson, setConfigJson] = useState(
@@ -94,7 +141,7 @@ export function JobCard({ job }: JobCardProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Fetch latest execution for this job
+  // Fetch latest 5 executions for this job (for history display)
   const { data: executionsResult } = useQuery({
     queryKey: ["job-executions", job.id],
     queryFn: () =>
@@ -103,16 +150,18 @@ export function JobCard({ job }: JobCardProps) {
         `/jobs/${job.id}/executions`,
         {
           page: 1,
-          size: 1,
+          size: 5,
         },
       ),
     enabled: !!job.id,
+    refetchInterval: 15000, // Auto-refresh every 15 seconds to update relative time
   });
 
+  const recentExecutions = executionsResult?.success
+    ? executionsResult.data.executions
+    : [];
   const lastExecution =
-    executionsResult?.success && executionsResult.data.executions.length > 0
-      ? executionsResult.data.executions[0]
-      : null;
+    recentExecutions.length > 0 ? recentExecutions[0] : null;
 
   // Calculate duration
   const duration =
@@ -235,7 +284,7 @@ export function JobCard({ job }: JobCardProps) {
               </Badge>
             </div>
             <div className="text-sm font-normal text-muted-foreground">
-              {job.job_type.replace(/_/g, " ")}
+              {job.description || getJobDescription(job.job_type)}
             </div>
           </div>
         </CardTitle>
@@ -247,7 +296,7 @@ export function JobCard({ job }: JobCardProps) {
           <div className="flex-1">
             <p className="font-medium">Schedule</p>
             <p className="text-muted-foreground">
-              {formatCronSchedule(job.schedule)}
+              {formatScheduleInterval(job.schedule)}
             </p>
           </div>
         </div>
@@ -401,10 +450,53 @@ export function JobCard({ job }: JobCardProps) {
         {showHistory && (
           <div className="mt-4 border-t pt-4">
             <p className="mb-2 text-sm font-medium">Recent Executions</p>
-            {/* TODO: Add execution history list here */}
-            <p className="text-xs text-muted-foreground">
-              View full execution history in the Executions tab
-            </p>
+            {recentExecutions.length > 0 ? (
+              <div className="space-y-2">
+                {recentExecutions.map((execution) => (
+                  <div
+                    key={execution.id}
+                    className="flex items-center justify-between rounded-md border p-2 text-xs cursor-pointer hover:bg-muted/50 transition-colors"
+                    onClick={() => onExecutionClick?.(execution.id)}
+                  >
+                    <div className="flex items-center gap-2">
+                      <Badge
+                        variant={
+                          execution.status === "SUCCESS"
+                            ? "default"
+                            : execution.status === "FAILED"
+                              ? "destructive"
+                              : "secondary"
+                        }
+                        className={`text-[10px] min-w-[70px] justify-center ${
+                          execution.status === "RATE_LIMITED"
+                            ? "bg-yellow-100 text-yellow-800 border-yellow-300 dark:bg-yellow-900/30 dark:text-yellow-200 dark:border-yellow-800"
+                            : ""
+                        }`}
+                      >
+                        {execution.status.replace("_", " ")}
+                      </Badge>
+                      <span className="text-muted-foreground min-w-[60px]">
+                        API: {execution.api_requests_made}
+                      </span>
+                      <span className="text-muted-foreground">
+                        {formatRelativeTime(execution.started_at)}
+                      </span>
+                    </div>
+                    <span className="text-muted-foreground">
+                      {execution.started_at && execution.completed_at
+                        ? formatDuration(
+                            (new Date(execution.completed_at).getTime() -
+                              new Date(execution.started_at).getTime()) /
+                              1000,
+                          )
+                        : "N/A"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">No executions yet</p>
+            )}
           </div>
         )}
       </CardContent>

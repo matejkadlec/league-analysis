@@ -1,6 +1,8 @@
 """Riot API HTTP client with proper rate limiting, error handling, and authentication."""
 
 import asyncio
+import re
+from dataclasses import dataclass, field
 from typing import Optional, Dict, Any, List, Union, Callable
 import httpx
 import structlog
@@ -26,6 +28,18 @@ from .endpoints import RiotAPIEndpoints
 from .constants import Region, Platform, QueueType
 
 logger = structlog.get_logger(__name__)
+
+
+@dataclass
+class APICallRecord:
+    """Record of an individual API call."""
+
+    endpoint: str  # Template like "/lol/match/v5/matches/{matchId}"
+    region: str
+    params: Dict[str, Any] = field(
+        default_factory=dict
+    )  # e.g., {"matchId": "EUN1_123"}
+    timestamp: str = ""  # ISO timestamp
 
 
 class RiotAPIClient:
@@ -68,6 +82,9 @@ class RiotAPIClient:
         # HTTP session
         self.session = None
         self._session_lock = asyncio.Lock()
+
+        # Track individual API calls for job logging
+        self._api_calls: List[APICallRecord] = []
 
     async def __aenter__(self):
         """Async context manager entry."""
@@ -117,6 +134,25 @@ class RiotAPIClient:
         if self.session and not self.session.is_closed:
             await self.session.aclose()
             logger.info("Riot API client session closed")
+
+    def get_api_calls(self) -> List[APICallRecord]:
+        """Get all recorded API calls for this session."""
+        return self._api_calls.copy()
+
+    def _record_api_call(
+        self, endpoint_template: str, region: str, params: Dict[str, Any]
+    ) -> None:
+        """Record an API call for job logging."""
+        from datetime import datetime, timezone
+
+        self._api_calls.append(
+            APICallRecord(
+                endpoint=endpoint_template,
+                region=region.upper() if region else "UNKNOWN",
+                params=params,
+                timestamp=datetime.now(timezone.utc).isoformat(),
+            )
+        )
 
     def _raise_client_error_if_needed(self, status: int) -> None:
         """Raise specific RiotAPIError subclass for client errors."""
@@ -208,6 +244,10 @@ class RiotAPIClient:
 
         response = await self.session.request(method, url, params=params, json=data)
 
+        # Track all API requests (successful or failed) - every HTTP call counts
+        if self.request_callback:
+            self.request_callback("requests_made", 1)
+
         try:
             self.rate_limiter.update_limits(
                 dict(response.headers), endpoint_path, method
@@ -221,10 +261,6 @@ class RiotAPIClient:
                 if should_retry:
                     await asyncio.sleep(sleep_seconds)
                     return None  # Signal to retry
-
-            # Success - invoke callback to track request
-            if self.request_callback:
-                self.request_callback("requests_made", 1)
 
             response_data = response.json()
             await self.rate_limiter.record_success(endpoint_path, method)
@@ -301,6 +337,12 @@ class RiotAPIClient:
         self, game_name: str, tag_line: str, region: Optional[Region] = None
     ) -> AccountDTO:
         """Get account by Riot ID (gameName#tagLine)."""
+        used_region = region or self.region
+        self._record_api_call(
+            "/riot/account/v1/accounts/by-riot-id/{gameName}/{tagLine}",
+            self._enum_str(used_region),
+            {"gameName": game_name, "tagLine": tag_line},
+        )
         url = self.endpoints.account_by_riot_id(game_name, tag_line, region)
         response = await self._make_request(url)
         return AccountDTO(**response)
@@ -309,6 +351,12 @@ class RiotAPIClient:
         self, puuid: str, region: Optional[Region] = None
     ) -> AccountDTO:
         """Get account by PUUID."""
+        used_region = region or self.region
+        self._record_api_call(
+            "/riot/account/v1/accounts/by-puuid/{puuid}",
+            self._enum_str(used_region),
+            {"puuid": puuid},
+        )
         url = self.endpoints.account_by_puuid(puuid, region)
         response = await self._make_request(url)
         return AccountDTO(**response)
@@ -319,6 +367,12 @@ class RiotAPIClient:
         self, puuid: str, platform: Optional[Platform] = None
     ) -> SummonerDTO:
         """Get summoner by PUUID."""
+        used_platform = platform or self.platform
+        self._record_api_call(
+            "/lol/summoner/v4/summoners/by-puuid/{puuid}",
+            self._enum_str(used_platform),
+            {"puuid": puuid},
+        )
         url = self.endpoints.summoner_by_puuid(puuid, platform)
         response = await self._make_request(url)
         return SummonerDTO(**response)
@@ -338,6 +392,13 @@ class RiotAPIClient:
         """Get match list by PUUID."""
         # Normalize queue parameter to QueueType
         queue_type = self._normalize_queue_type(queue)
+        used_region = region or self.region
+
+        self._record_api_call(
+            "/lol/match/v5/matches/by-puuid/{puuid}/ids",
+            self._enum_str(used_region),
+            {"puuid": puuid},
+        )
 
         url = self.endpoints.match_list_by_puuid(
             puuid, start, count, queue_type, type, start_time, end_time, region
@@ -356,6 +417,12 @@ class RiotAPIClient:
         self, match_id: str, region: Optional[Region] = None
     ) -> MatchDTO:
         """Get match details by match ID."""
+        used_region = region or self.region
+        self._record_api_call(
+            "/lol/match/v5/matches/{matchId}",
+            self._enum_str(used_region),
+            {"matchId": match_id},
+        )
         url = self.endpoints.match_by_id(match_id, region)
         response = await self._make_request(url)
         return MatchDTO(**response)
@@ -365,6 +432,12 @@ class RiotAPIClient:
         self, summoner_id: str, platform: Optional[Platform] = None
     ) -> List[LeagueEntryDTO]:
         """Get league entries by encrypted Summoner ID."""
+        used_platform = platform or self.platform
+        self._record_api_call(
+            "/lol/league/v4/entries/by-summoner/{summonerId}",
+            self._enum_str(used_platform),
+            {"summonerId": summoner_id},
+        )
         url = self.endpoints.league_entries_by_summoner_id(summoner_id, platform)
         response = await self._make_request(url)
 
@@ -384,6 +457,12 @@ class RiotAPIClient:
         This is the preferred method as it doesn't require getting Summoner ID first.
         Returns league entries for all ranked queues (Solo/Duo, Flex, etc.)
         """
+        used_platform = platform or self.platform
+        self._record_api_call(
+            "/lol/league/v4/entries/by-puuid/{puuid}",
+            self._enum_str(used_platform),
+            {"puuid": puuid},
+        )
         url = self.endpoints.league_entries_by_puuid(puuid, platform)
         response = await self._make_request(url)
 

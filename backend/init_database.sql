@@ -487,7 +487,9 @@ CREATE TABLE jobs.job_executions (
     records_updated integer NOT NULL,
     error_message text,
     execution_log jsonb,
-    detailed_logs jsonb
+    detailed_logs jsonb,
+    triggered_by character varying(16) DEFAULT 'system' NOT NULL,
+    has_api_key_error boolean DEFAULT false NOT NULL
 );
 
 ALTER SEQUENCE jobs.job_executions_id_seq OWNED BY jobs.job_executions.id;

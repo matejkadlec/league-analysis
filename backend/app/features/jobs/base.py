@@ -19,6 +19,66 @@ from .error_handling import RateLimitSignal
 logger = structlog.get_logger(__name__)
 
 
+def _format_api_calls_for_storage(api_calls: List[Any]) -> List[Dict[str, Any]]:
+    """Format API call records for JSONB storage, grouping similar calls."""
+    from collections import defaultdict
+
+    # Group calls by endpoint
+    grouped: Dict[str, Dict[str, Any]] = defaultdict(
+        lambda: {
+            "count": 0,
+            "region": None,
+            "params_list": [],
+            "first_timestamp": None,
+            "last_timestamp": None,
+        }
+    )
+
+    for call in api_calls:
+        endpoint = call.endpoint
+        group = grouped[endpoint]
+        group["count"] += 1
+        group["region"] = call.region
+        group["params_list"].append(call.params)
+
+        if group["first_timestamp"] is None:
+            group["first_timestamp"] = call.timestamp
+        group["last_timestamp"] = call.timestamp
+
+    # Convert to list format for storage
+    result = []
+    for endpoint, data in grouped.items():
+        entry = {
+            "endpoint": endpoint,
+            "region": data["region"],
+            "count": data["count"],
+            "first_timestamp": data["first_timestamp"],
+            "last_timestamp": data["last_timestamp"],
+        }
+
+        # For single calls or calls with different params, include params
+        if data["count"] == 1:
+            entry["params"] = data["params_list"][0]
+        else:
+            # For multiple calls, store first and last param values
+            # Extract the key param (matchId, puuid, etc.)
+            param_key = (
+                list(data["params_list"][0].keys())[0]
+                if data["params_list"][0]
+                else None
+            )
+            if param_key:
+                first_val = data["params_list"][0].get(param_key)
+                last_val = data["params_list"][-1].get(param_key)
+                entry["param_key"] = param_key
+                entry["first_param"] = first_val
+                entry["last_param"] = last_val
+
+        result.append(entry)
+
+    return result
+
+
 class BaseJob(ABC):
     """Abstract base class for all automated jobs.
 
@@ -32,13 +92,15 @@ class BaseJob(ABC):
     - execute(): The main job logic
     """
 
-    def __init__(self, job_config_id: int):
+    def __init__(self, job_config_id: int, triggered_by: str = "system"):
         """Initialize the job with its configuration ID.
 
         Args:
             job_config_id: ID of job configuration from database.
+            triggered_by: Who triggered the job: 'system' (scheduler) or 'user' (manual).
         """
         self.job_config_id = job_config_id
+        self.triggered_by = triggered_by
         self.job_config: Optional[JobConfiguration] = None
         self.job_execution: Optional[JobExecution] = None
         self.metrics = defaultdict(int)
@@ -50,6 +112,11 @@ class BaseJob(ABC):
             }
         )
         self.execution_log: Dict[str, Any] = {}
+        # Track errors encountered during execution
+        self._errors_encountered: List[str] = []
+        self._has_api_key_error: bool = False
+        # Track API call records for detailed logging
+        self._api_call_records: List[Any] = []
 
     @abstractmethod
     async def execute(self, db: AsyncSession) -> None:
@@ -105,6 +172,7 @@ class BaseJob(ABC):
                 records_updated=0,
                 execution_log={},
                 detailed_logs=None,  # Will be populated on completion
+                triggered_by=self.triggered_by,
             )
             db.add(self.job_execution)
             if not await self.safe_commit(db, "job start"):
@@ -158,9 +226,19 @@ class BaseJob(ABC):
             self._log_completion_details(success, duration)
 
             # Prepare detailed logs for database storage
-            detailed_logs = None
+            detailed_logs: Dict[str, Any] = {}
             if logs:
-                detailed_logs = {"logs": self._strip_redundant_fields(logs)}
+                detailed_logs["logs"] = self._strip_redundant_fields(logs)
+
+            # Add API call records if available
+            if self._api_call_records:
+                detailed_logs["api_calls"] = _format_api_calls_for_storage(
+                    self._api_call_records
+                )
+
+            # Convert to None if empty
+            if not detailed_logs:
+                detailed_logs = None
 
             update_stmt = self._build_completion_update_statement(
                 JobExecution,
@@ -205,9 +283,11 @@ class BaseJob(ABC):
                 "Job is already running, skipping execution",
                 job_config_id=self.job_config_id,
                 running_execution_id=running_job.id,
-                running_since=running_job.started_at.isoformat()
-                if running_job.started_at
-                else None,
+                running_since=(
+                    running_job.started_at.isoformat()
+                    if running_job.started_at
+                    else None
+                ),
             )
             return True
 
@@ -292,12 +372,27 @@ class BaseJob(ABC):
                     logs=job_logs,
                 )
             else:
+                # Check if any errors were recorded during execution
                 job_logs = self._get_job_logs()
-                await self.log_completion(
-                    db,
-                    success=True,
-                    logs=job_logs,
-                )
+                if self.has_errors():
+                    # Job completed but with errors - mark as FAILED
+                    error_summary = (
+                        f"Job completed with {len(self._errors_encountered)} error(s)"
+                    )
+                    if self._has_api_key_error:
+                        error_summary = "API key error: Invalid or expired Riot API key"
+                    await self.log_completion(
+                        db,
+                        success=False,
+                        error_message=error_summary,
+                        logs=job_logs,
+                    )
+                else:
+                    await self.log_completion(
+                        db,
+                        success=True,
+                        logs=job_logs,
+                    )
             finally:
                 structlog_contextvars.clear_contextvars()
 
@@ -363,6 +458,25 @@ class BaseJob(ABC):
         """Increment a metric counter."""
         self.metrics[metric_name] += count
 
+    def record_error(self, error_message: str, is_api_key_error: bool = False) -> None:
+        """Record an error that occurred during job execution.
+
+        Args:
+            error_message: The error message to record.
+            is_api_key_error: Whether this is an API key authentication error.
+        """
+        self._errors_encountered.append(error_message)
+        if is_api_key_error:
+            self._has_api_key_error = True
+
+    def has_errors(self) -> bool:
+        """Check if any errors were encountered during execution."""
+        return len(self._errors_encountered) > 0
+
+    def has_api_key_error(self) -> bool:
+        """Check if an API key error was encountered."""
+        return self._has_api_key_error
+
     def add_log_entry(self, key: str, value: Any) -> None:
         """Add an entry to the execution log."""
         self.execution_log[key] = value
@@ -416,6 +530,7 @@ class BaseJob(ABC):
                 error_message=error_message,
                 execution_log=self.execution_log,
                 detailed_logs=detailed_logs,
+                has_api_key_error=self._has_api_key_error,
             )
         )
 

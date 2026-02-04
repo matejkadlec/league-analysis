@@ -9,7 +9,8 @@ import {
   JobExecutionListResponseSchema,
   JobConfiguration,
 } from "@/lib/core/schemas";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { notifyApiKeyInvalid } from "@/lib/core/api-key-status-context";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -24,14 +25,34 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
 } from "@/components/ui/dialog";
-import { AlertCircle, FileText, Loader2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import {
+  AlertCircle,
+  FileText,
+  Loader2,
+  ChevronDown,
+  ChevronUp,
+} from "lucide-react";
 
 interface JobExecutionsProps {
   executions: JobExecutionListResponse | null;
   jobs: JobConfiguration[];
+  /** If provided, opens the execution details dialog for this execution ID */
+  selectedExecutionId?: number | null;
+  /** Callback when execution selection changes */
+  onExecutionSelect?: (executionId: number | null) => void;
+}
+
+interface APICallEntry {
+  endpoint: string;
+  region: string;
+  count: number;
+  first_timestamp?: string;
+  last_timestamp?: string;
+  params?: Record<string, string>;
+  param_key?: string;
+  first_param?: string;
+  last_param?: string;
 }
 
 /**
@@ -53,7 +74,7 @@ function formatDuration(
 }
 
 /**
- * Format timestamp to local date/time: DD/MM/YYYY HH:MM PM/AM
+ * Format timestamp to local date/time: D.M.YYYY H:MM:SS AM/PM
  */
 function formatDateTime(timestamp: string): string {
   const date = new Date(timestamp);
@@ -64,26 +85,55 @@ function formatDateTime(timestamp: string): string {
 
   let hours = date.getHours();
   const minutes = date.getMinutes();
+  const seconds = date.getSeconds();
   const ampm = hours >= 12 ? "PM" : "AM";
 
   hours = hours % 12;
   hours = hours ? hours : 12; // the hour '0' should be '12'
 
   const minutesStr = minutes < 10 ? "0" + minutes : minutes;
+  const secondsStr = seconds < 10 ? "0" + seconds : seconds;
 
-  return `${day}/${month}/${year} ${hours}:${minutesStr} ${ampm}`;
+  return `${day}.${month}.${year} ${hours}:${minutesStr}:${secondsStr} ${ampm}`;
+}
+
+/**
+ * Format timestamp for log display: D.M.YYYY H:MM:SS AM/PM
+ */
+function formatLogDateTime(timestamp: string): string {
+  return formatDateTime(timestamp);
+}
+
+/**
+ * Format records summary message
+ */
+function formatRecordsSummary(created: number, updated: number): string {
+  if (created === 0 && updated === 0) {
+    return "No records created or updated";
+  }
+  if (created > 0 && updated > 0) {
+    return `${created} records created and ${updated} records updated`;
+  }
+  if (created > 0) {
+    return `${created} records created`;
+  }
+  return `${updated} records updated`;
 }
 
 export function JobExecutions({
   executions: initialExecutions,
   jobs,
+  selectedExecutionId,
+  onExecutionSelect,
 }: JobExecutionsProps) {
-  const [selectedExecution, setSelectedExecution] =
+  const [internalSelectedExecution, setInternalSelectedExecution] =
     useState<JobExecution | null>(null);
   const [displayCount, setDisplayCount] = useState(20);
+  const [expandedApiCalls, setExpandedApiCalls] = useState<Set<string>>(
+    new Set(),
+  );
   const PAGE_SIZE = 20;
   const loadMoreRef = useRef<HTMLDivElement>(null);
-  const previousScrollTop = useRef(0);
 
   // Create job name mapping
   const jobNameMap = useMemo(() => {
@@ -92,17 +142,7 @@ export function JobExecutions({
     return map;
   }, [jobs]);
 
-  // Reset display count when initial data changes
-  const executionKey = initialExecutions?.total ?? 0;
-
-  // Derive display count from the execution key to avoid setState in effect
-  const [resetKey, setResetKey] = useState(executionKey);
-  if (resetKey !== executionKey) {
-    setDisplayCount(20);
-    setResetKey(executionKey);
-  }
-
-  // Fetch executions with pagination
+  // Fetch executions with pagination - always fetch all at once for display
   const {
     data: response,
     isLoading,
@@ -110,12 +150,11 @@ export function JobExecutions({
   } = useQuery({
     queryKey: ["job-executions-infinite", displayCount],
     queryFn: async () => {
-      const page = Math.ceil(displayCount / PAGE_SIZE);
       const result = await validatedGet(
         JobExecutionListResponseSchema,
         "/jobs/executions/all",
         {
-          page: page,
+          page: 1,
           size: displayCount,
         },
       );
@@ -138,20 +177,25 @@ export function JobExecutions({
   const totalExecutions = data?.total || 0;
   const hasMore = allExecutions.length < totalExecutions;
 
-  // Preserve scroll position when data updates (auto-refresh)
+  // Handle external selection (from job card)
   useEffect(() => {
-    // Save scroll position before fetching
-    if (isFetching) {
-      previousScrollTop.current = window.scrollY;
+    if (selectedExecutionId !== undefined && selectedExecutionId !== null) {
+      const execution = allExecutions.find((e) => e.id === selectedExecutionId);
+      if (execution) {
+        setInternalSelectedExecution(execution);
+      }
     }
-  }, [isFetching]);
+  }, [selectedExecutionId, allExecutions]);
 
+  // Check for API key errors in job executions and trigger header notification
   useEffect(() => {
-    // Restore scroll position after data updates
-    if (!isFetching && previousScrollTop.current > 0) {
-      window.scrollTo(0, previousScrollTop.current);
+    const hasApiKeyError = allExecutions.some(
+      (execution) => execution.has_api_key_error,
+    );
+    if (hasApiKeyError) {
+      notifyApiKeyInvalid();
     }
-  }, [isFetching, allExecutions]);
+  }, [allExecutions]);
 
   // Load more function
   const loadMore = useCallback(() => {
@@ -165,11 +209,11 @@ export function JobExecutions({
     const observer = new IntersectionObserver(
       (entries) => {
         const first = entries[0];
-        if (first.isIntersecting) {
+        if (first.isIntersecting && hasMore && !isFetching) {
           loadMore();
         }
       },
-      { threshold: 0.1, rootMargin: "100px" },
+      { threshold: 0.1, rootMargin: "200px" },
     );
 
     const currentRef = loadMoreRef.current;
@@ -182,21 +226,55 @@ export function JobExecutions({
         observer.unobserve(currentRef);
       }
     };
-  }, [loadMore]);
+  }, [loadMore, hasMore, isFetching]);
 
   // Get job name by ID
   const getJobName = (jobConfigId: number): string => {
     return jobNameMap.get(jobConfigId) || `Job #${jobConfigId}`;
   };
 
-  if (isLoading || allExecutions.length === 0) {
+  const handleSelectExecution = (execution: JobExecution) => {
+    setInternalSelectedExecution(execution);
+    onExecutionSelect?.(execution.id);
+  };
+
+  const handleCloseDialog = () => {
+    setInternalSelectedExecution(null);
+    onExecutionSelect?.(null);
+  };
+
+  const toggleApiCallExpanded = (endpoint: string) => {
+    setExpandedApiCalls((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(endpoint)) {
+        newSet.delete(endpoint);
+      } else {
+        newSet.add(endpoint);
+      }
+      return newSet;
+    });
+  };
+
+  if (isLoading && allExecutions.length === 0) {
     return (
       <Card>
-        <CardHeader>
-          <CardTitle>Recent Executions</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-col items-center justify-center gap-2 py-8 text-center">
+        <CardContent className="py-8">
+          <div className="flex flex-col items-center justify-center gap-2 text-center">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            <p className="text-sm text-muted-foreground">
+              Loading executions...
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (allExecutions.length === 0) {
+    return (
+      <Card>
+        <CardContent className="py-8">
+          <div className="flex flex-col items-center justify-center gap-2 text-center">
             <FileText className="h-8 w-8 text-muted-foreground" />
             <p className="text-sm text-muted-foreground">
               No job executions found
@@ -210,23 +288,18 @@ export function JobExecutions({
   return (
     <>
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            <span>Recent Executions</span>
-            <Badge variant="secondary">{totalExecutions} total</Badge>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
+        <CardContent className="pt-4">
           <div className="rounded-md border">
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Job Name</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Triggered By</TableHead>
                   <TableHead>Started At</TableHead>
+                  <TableHead>Completed At</TableHead>
                   <TableHead>Duration</TableHead>
-                  <TableHead>Stats</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead>Statistics</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -234,7 +307,7 @@ export function JobExecutions({
                   <TableRow
                     key={execution.id}
                     className="cursor-pointer hover:bg-muted/50"
-                    onClick={() => setSelectedExecution(execution)}
+                    onClick={() => handleSelectExecution(execution)}
                   >
                     <TableCell className="font-medium">
                       {getJobName(execution.job_config_id)}
@@ -259,8 +332,18 @@ export function JobExecutions({
                         {execution.status.replace("_", " ")}
                       </Badge>
                     </TableCell>
+                    <TableCell className="text-sm">
+                      <Badge variant="outline" className="font-normal">
+                        {execution.triggered_by === "user" ? "User" : "System"}
+                      </Badge>
+                    </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {formatDateTime(execution.started_at)}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {execution.completed_at
+                        ? formatDateTime(execution.completed_at)
+                        : "—"}
                     </TableCell>
                     <TableCell className="text-sm">
                       {formatDuration(
@@ -270,24 +353,16 @@ export function JobExecutions({
                     </TableCell>
                     <TableCell className="text-sm">
                       <div className="flex flex-col gap-0.5">
-                        <span>API: {execution.api_requests_made}</span>
+                        <span>
+                          Riot API requests: {execution.api_requests_made}
+                        </span>
                         <span className="text-xs text-muted-foreground">
-                          Created: {execution.records_created} | Updated:{" "}
-                          {execution.records_updated}
+                          {formatRecordsSummary(
+                            execution.records_created,
+                            execution.records_updated,
+                          )}
                         </span>
                       </div>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedExecution(execution);
-                        }}
-                      >
-                        Details
-                      </Button>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -295,427 +370,353 @@ export function JobExecutions({
             </Table>
           </div>
 
-          {/* Infinite scroll trigger */}
-          {hasMore && (
-            <div ref={loadMoreRef} className="mt-4 flex justify-center py-4">
-              {isFetching ? (
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  <span className="text-sm">Loading more executions...</span>
-                </div>
-              ) : (
-                <div className="text-sm text-muted-foreground">
-                  Showing {allExecutions.length} of {totalExecutions} executions
-                </div>
-              )}
-            </div>
-          )}
-          {!hasMore && allExecutions.length > 0 && (
-            <div className="mt-4 flex justify-center py-4">
+          {/* Infinite scroll trigger - always visible when there's more data */}
+          <div ref={loadMoreRef} className="mt-4 flex justify-center py-4">
+            {isFetching ? (
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span className="text-sm">Loading more executions...</span>
+              </div>
+            ) : hasMore ? (
+              <div className="text-sm text-muted-foreground">
+                Showing {allExecutions.length} of {totalExecutions} executions
+              </div>
+            ) : (
               <div className="text-sm text-muted-foreground">
                 All {totalExecutions} executions loaded
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </CardContent>
       </Card>
 
       {/* Execution Details Dialog */}
       <Dialog
-        open={!!selectedExecution}
-        onOpenChange={(open) => !open && setSelectedExecution(null)}
+        open={!!internalSelectedExecution}
+        onOpenChange={(open) => !open && handleCloseDialog()}
       >
         <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Execution Details</DialogTitle>
-            <DialogDescription>
-              Detailed information for execution #{selectedExecution?.id}
-            </DialogDescription>
           </DialogHeader>
 
-          {selectedExecution && (
+          {internalSelectedExecution && (
             <div className="space-y-4 pb-4">
-              {/* Status */}
-              <div className="flex items-center justify-between">
-                <span className="font-medium">Status</span>
-                <Badge
-                  variant={
-                    selectedExecution.status === "SUCCESS"
-                      ? "default"
-                      : selectedExecution.status === "FAILED"
-                        ? "destructive"
-                        : "secondary"
-                  }
-                  className={
-                    selectedExecution.status === "RATE_LIMITED"
-                      ? "bg-yellow-100 text-yellow-800 border-yellow-300 dark:bg-yellow-900/30 dark:text-yellow-200 dark:border-yellow-800"
-                      : ""
-                  }
-                >
-                  {selectedExecution.status.replace("_", " ")}
-                </Badge>
-              </div>
-
-              {/* Timing */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-sm font-medium">Started At</p>
-                  <p className="text-sm text-muted-foreground">
-                    {formatDateTime(selectedExecution.started_at)}
-                  </p>
+              {/* Status and Triggered By row */}
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <span className="font-medium">Status</span>
+                  <Badge
+                    variant={
+                      internalSelectedExecution.status === "SUCCESS"
+                        ? "default"
+                        : internalSelectedExecution.status === "FAILED"
+                          ? "destructive"
+                          : "secondary"
+                    }
+                    className={
+                      internalSelectedExecution.status === "RATE_LIMITED"
+                        ? "bg-yellow-100 text-yellow-800 border-yellow-300 dark:bg-yellow-900/30 dark:text-yellow-200 dark:border-yellow-800"
+                        : ""
+                    }
+                  >
+                    {internalSelectedExecution.status.replace("_", " ")}
+                  </Badge>
                 </div>
-                <div>
-                  <p className="text-sm font-medium">Completed At</p>
-                  <p className="text-sm text-muted-foreground">
-                    {selectedExecution.completed_at
-                      ? formatDateTime(selectedExecution.completed_at)
-                      : "N/A"}
-                  </p>
+                <div className="flex items-center gap-2">
+                  <span className="font-medium">Triggered By</span>
+                  <Badge variant="outline" className="font-normal">
+                    {internalSelectedExecution.triggered_by === "user"
+                      ? "User"
+                      : "System"}
+                  </Badge>
                 </div>
               </div>
 
-              {/* Statistics */}
+              {/* Statistics - 3 columns, 2 rows */}
               <div className="rounded-lg border p-4">
-                <p className="mb-2 font-medium">Statistics</p>
-                <div className="grid grid-cols-2 gap-2 text-sm">
+                <p className="mb-3 font-medium">Statistics</p>
+                <div className="grid grid-cols-3 gap-4 text-sm">
+                  {/* Row 1 */}
                   <div>
-                    <span className="text-muted-foreground">API Requests:</span>{" "}
+                    <span className="text-muted-foreground">Started at:</span>{" "}
                     <span className="font-medium">
-                      {selectedExecution.api_requests_made}
+                      {formatDateTime(internalSelectedExecution.started_at)}
                     </span>
                   </div>
                   <div>
                     <span className="text-muted-foreground">
-                      Records Created:
+                      Riot API requests:
                     </span>{" "}
                     <span className="font-medium">
-                      {selectedExecution.records_created}
+                      {internalSelectedExecution.api_requests_made}
                     </span>
                   </div>
                   <div>
                     <span className="text-muted-foreground">
-                      Records Updated:
+                      Records created:
                     </span>{" "}
                     <span className="font-medium">
-                      {selectedExecution.records_updated}
+                      {internalSelectedExecution.records_created}
+                    </span>
+                  </div>
+                  {/* Row 2 */}
+                  <div>
+                    <span className="text-muted-foreground">Completed at:</span>{" "}
+                    <span className="font-medium">
+                      {internalSelectedExecution.completed_at
+                        ? formatDateTime(internalSelectedExecution.completed_at)
+                        : "N/A"}
                     </span>
                   </div>
                   <div>
                     <span className="text-muted-foreground">Duration:</span>{" "}
                     <span className="font-medium">
                       {formatDuration(
-                        selectedExecution.started_at,
-                        selectedExecution.completed_at,
+                        internalSelectedExecution.started_at,
+                        internalSelectedExecution.completed_at,
                       )}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">
+                      Records updated:
+                    </span>{" "}
+                    <span className="font-medium">
+                      {internalSelectedExecution.records_updated}
                     </span>
                   </div>
                 </div>
               </div>
 
               {/* Error Message */}
-              {selectedExecution.error_message && (
+              {internalSelectedExecution.error_message && (
                 <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4">
                   <div className="mb-2 flex items-center gap-2 font-medium text-destructive">
                     <AlertCircle className="h-4 w-4" />
                     Error Message
                   </div>
-                  <p className="text-sm">{selectedExecution.error_message}</p>
+                  <p className="text-sm">
+                    {internalSelectedExecution.error_message}
+                  </p>
                 </div>
               )}
 
-              {/* Execution Log */}
-              {selectedExecution.execution_log && (
+              {/* API Calls Section */}
+              {internalSelectedExecution.detailed_logs?.api_calls && (
                 <div className="rounded-lg border bg-muted/50 p-4">
-                  <p className="mb-2 font-medium">Execution Log</p>
-                  <pre className="max-h-[180px] overflow-auto rounded-md border bg-background p-3 text-xs">
-                    {JSON.stringify(selectedExecution.execution_log, null, 2)}
-                  </pre>
-                </div>
-              )}
-
-              {/* Detailed Logs */}
-              {selectedExecution.detailed_logs && (
-                <div className="space-y-4">
-                  {/* Log Summary */}
-                  {selectedExecution.detailed_logs.summary && (
-                    <div className="rounded-lg border bg-muted/50 p-4">
-                      <p className="mb-3 font-medium">Log Summary</p>
-                      <div className="grid grid-cols-4 gap-3 text-sm">
-                        <div className="rounded border bg-background p-2">
-                          <div className="text-xs text-muted-foreground">
-                            Total Logs
-                          </div>
-                          <div className="text-lg font-semibold">
-                            {selectedExecution.detailed_logs.summary.total_logs}
-                          </div>
-                        </div>
-                        {selectedExecution.detailed_logs.summary.by_level && (
-                          <>
-                            {Object.entries(
-                              selectedExecution.detailed_logs.summary.by_level,
-                            ).map(([level, count]) => (
-                              <div
-                                key={level}
-                                className={`rounded border p-2 ${
-                                  level === "ERROR"
-                                    ? "border-destructive/50 bg-destructive/5"
-                                    : level === "WARNING"
-                                      ? "border-yellow-500/50 bg-yellow-500/5"
-                                      : "bg-background"
-                                }`}
-                              >
-                                <div className="text-xs text-muted-foreground">
-                                  {level}
-                                </div>
-                                <div className="text-lg font-semibold">
-                                  {count as number}
-                                </div>
-                              </div>
-                            ))}
-                          </>
+                  <p className="mb-3 font-medium">API Calls</p>
+                  <div className="max-h-[300px] overflow-auto rounded-md border bg-background p-3">
+                    <div className="space-y-2 font-mono text-[11px]">
+                      {/* Session Started */}
+                      <div className="text-blue-600 dark:text-blue-400">
+                        [INFO] [
+                        {formatLogDateTime(
+                          internalSelectedExecution.started_at,
                         )}
+                        ]: Riot API client session started
                       </div>
 
-                      {/* Errors */}
-                      {selectedExecution.detailed_logs.summary.errors &&
-                        selectedExecution.detailed_logs.summary.errors.length >
-                          0 && (
-                          <div className="mt-4">
-                            <p className="mb-2 flex items-center gap-2 text-sm font-medium text-destructive">
-                              <AlertCircle className="h-4 w-4" />
-                              Errors (
-                              {
-                                selectedExecution.detailed_logs.summary.errors
-                                  .length
-                              }
-                              )
-                            </p>
-                            <div className="max-h-[250px] space-y-2 overflow-auto rounded border border-destructive/20 bg-destructive/5 p-3">
-                              {selectedExecution.detailed_logs.summary.errors.map(
-                                (
-                                  error: {
-                                    message: string;
-                                    timestamp: string;
-                                    context?: Record<string, unknown>;
-                                  },
-                                  idx: number,
-                                ) => {
-                                  // Try to parse message if it's JSON
-                                  let displayMessage = error.message;
-                                  let parsedContext = error.context;
+                      {/* API Calls */}
+                      {(
+                        internalSelectedExecution.detailed_logs
+                          .api_calls as APICallEntry[]
+                      ).map((call: APICallEntry, idx: number) => {
+                        const countText =
+                          call.count === 1 ? "once" : `${call.count} times`;
+                        const isExpanded = expandedApiCalls.has(
+                          `${idx}-${call.endpoint}`,
+                        );
+                        const hasMultipleParams =
+                          call.count > 1 && call.param_key;
 
-                                  try {
-                                    if (
-                                      typeof error.message === "string" &&
-                                      error.message.startsWith("{")
-                                    ) {
-                                      const parsed = JSON.parse(error.message);
-                                      displayMessage =
-                                        parsed.event ||
-                                        parsed.message ||
-                                        error.message;
-                                      parsedContext = {
-                                        ...parsedContext,
-                                        ...parsed,
-                                      };
+                        return (
+                          <div key={idx} className="space-y-1">
+                            <div className="text-blue-600 dark:text-blue-400">
+                              [INFO] [
+                              {formatLogDateTime(
+                                call.first_timestamp ||
+                                  internalSelectedExecution.started_at,
+                              )}
+                              ]: Called {call.endpoint} {countText}
+                            </div>
+                            <div className="pl-4 text-muted-foreground">
+                              <div>Region: {call.region}</div>
+                              {call.params &&
+                                call.count === 1 &&
+                                Object.entries(call.params).map(
+                                  ([key, value]) => (
+                                    <div key={key}>
+                                      {key.charAt(0).toUpperCase() +
+                                        key.slice(1)}
+                                      : {value}
+                                    </div>
+                                  ),
+                                )}
+                              {hasMultipleParams && (
+                                <div>
+                                  <button
+                                    onClick={() =>
+                                      toggleApiCallExpanded(
+                                        `${idx}-${call.endpoint}`,
+                                      )
                                     }
-                                  } catch {
-                                    // Keep original message if parsing fails
-                                  }
-
-                                  return (
-                                    <div
-                                      key={idx}
-                                      className="rounded border border-destructive/30 bg-background p-3 text-xs"
-                                    >
-                                      <div className="mb-1 font-medium text-destructive">
-                                        {displayMessage}
-                                      </div>
-                                      {parsedContext && (
-                                        <div className="mt-2 space-y-1 text-muted-foreground">
-                                          {Object.entries(parsedContext)
-                                            .filter(
-                                              ([key]) =>
-                                                ![
-                                                  "event",
-                                                  "message",
-                                                  "timestamp",
-                                                  "logger",
-                                                  "level",
-                                                ].includes(key),
-                                            )
-                                            .slice(0, 3)
-                                            .map(([key, value]) => (
-                                              <div
-                                                key={key}
-                                                className="break-all"
-                                              >
-                                                <span className="font-mono text-[10px]">
-                                                  {key}:
-                                                </span>{" "}
-                                                <span className="text-[10px]">
-                                                  {String(value).substring(
-                                                    0,
-                                                    80,
-                                                  )}
-                                                  {String(value).length > 80 &&
-                                                    "..."}
-                                                </span>
-                                              </div>
-                                            ))}
-                                        </div>
-                                      )}
-                                      <div className="mt-2 text-[10px] text-muted-foreground">
-                                        {new Date(
-                                          error.timestamp,
-                                        ).toLocaleString()}
-                                      </div>
-                                    </div>
-                                  );
-                                },
-                              )}
-                            </div>
-                          </div>
-                        )}
-
-                      {/* Warnings */}
-                      {selectedExecution.detailed_logs.summary.warnings &&
-                        selectedExecution.detailed_logs.summary.warnings
-                          .length > 0 && (
-                          <div className="mt-4">
-                            <p className="mb-2 text-sm font-medium text-yellow-600">
-                              Warnings (
-                              {
-                                selectedExecution.detailed_logs.summary.warnings
-                                  .length
-                              }
-                              )
-                            </p>
-                            <div className="max-h-[150px] space-y-2 overflow-auto rounded border border-yellow-500/20 bg-yellow-500/5 p-3">
-                              {selectedExecution.detailed_logs.summary.warnings.map(
-                                (
-                                  warning: {
-                                    message: string;
-                                    timestamp: string;
-                                  },
-                                  idx: number,
-                                ) => (
-                                  <div
-                                    key={idx}
-                                    className="rounded border border-yellow-500/30 bg-background p-2 text-xs"
+                                    className="inline-flex items-center gap-1 text-primary hover:underline cursor-pointer"
                                   >
-                                    <div className="mb-1 font-medium text-yellow-700 dark:text-yellow-600">
-                                      {warning.message}
-                                    </div>
-                                    <div className="text-[10px] text-muted-foreground">
-                                      {new Date(
-                                        warning.timestamp,
-                                      ).toLocaleString()}
-                                    </div>
-                                  </div>
-                                ),
-                              )}
-                            </div>
-                          </div>
-                        )}
-                    </div>
-                  )}
-
-                  {/* Full Logs */}
-                  {selectedExecution.detailed_logs.logs && (
-                    <div className="rounded-lg border bg-muted/50 p-4">
-                      <div className="mb-3 flex items-center justify-between">
-                        <p className="font-medium">Detailed Logs</p>
-                        <Badge variant="secondary">
-                          {selectedExecution.detailed_logs.logs.length} entries
-                        </Badge>
-                      </div>
-                      <div className="max-h-[300px] overflow-auto rounded-md border bg-background p-3">
-                        <div className="space-y-2 font-mono text-[11px]">
-                          {selectedExecution.detailed_logs.logs.map(
-                            (log: Record<string, unknown>, idx: number) => {
-                              const logLevel =
-                                typeof log.level === "string"
-                                  ? log.level.toUpperCase()
-                                  : "INFO";
-
-                              // Extract extra fields (everything except the standard fields)
-                              const standardFields = new Set([
-                                "level",
-                                "timestamp",
-                                "event",
-                              ]);
-                              const extraFields = Object.entries(log).filter(
-                                ([key]) => !standardFields.has(key),
-                              );
-
-                              return (
-                                <div
-                                  key={idx}
-                                  className={`rounded border-l-4 border-y border-r bg-muted/20 p-2 space-y-1.5 ${
-                                    logLevel === "ERROR"
-                                      ? "border-l-destructive"
-                                      : logLevel === "WARNING"
-                                        ? "border-l-yellow-500"
-                                        : logLevel === "INFO"
-                                          ? "border-l-blue-500"
-                                          : logLevel === "DEBUG"
-                                            ? "border-l-orange-500"
-                                            : "border-l-muted"
-                                  }`}
-                                >
-                                  {/* Main log line */}
-                                  <div className="flex gap-2">
-                                    <span
-                                      className={`shrink-0 font-bold ${
-                                        logLevel === "ERROR"
-                                          ? "text-destructive"
-                                          : logLevel === "WARNING"
-                                            ? "text-yellow-600"
-                                            : logLevel === "INFO"
-                                              ? "text-blue-600"
-                                              : logLevel === "DEBUG"
-                                                ? "text-orange-600"
-                                                : "text-muted-foreground"
-                                      }`}
-                                    >
-                                      {logLevel.padEnd(7, " ")}
-                                    </span>
-                                    <span className="shrink-0 text-muted-foreground">
-                                      {String(log.timestamp || "")}
-                                    </span>
-                                    <span className="flex-1 break-all">
-                                      {String(log.event || "")}
-                                    </span>
-                                  </div>
-
-                                  {/* Extra fields */}
-                                  {extraFields.length > 0 && (
-                                    <div className="space-y-0.5 text-[10px] text-muted-foreground/80 bg-background/50 rounded p-2 border border-muted">
-                                      {extraFields.map(([key, value]) => (
-                                        <div key={key} className="flex gap-2">
-                                          <span className="font-mono font-semibold shrink-0">
-                                            {key}:
-                                          </span>
-                                          <span className="break-all">
-                                            {typeof value === "object"
-                                              ? JSON.stringify(value)
-                                              : String(value)}
-                                          </span>
-                                        </div>
-                                      ))}
+                                    {call.param_key &&
+                                      call.param_key.charAt(0).toUpperCase() +
+                                        call.param_key.slice(1)}
+                                    s:{" "}
+                                    {isExpanded ? (
+                                      <>
+                                        <ChevronUp className="h-3 w-3" />
+                                        Collapse
+                                      </>
+                                    ) : (
+                                      <>
+                                        {call.first_param}, ...,{" "}
+                                        {call.last_param}
+                                        <ChevronDown className="h-3 w-3" />
+                                      </>
+                                    )}
+                                  </button>
+                                  {isExpanded && (
+                                    <div className="mt-1 pl-2 border-l-2 border-muted">
+                                      First: {call.first_param}
+                                      <br />
+                                      Last: {call.last_param}
+                                      <br />
+                                      <span className="text-xs text-muted-foreground">
+                                        ({call.count} total calls)
+                                      </span>
                                     </div>
                                   )}
                                 </div>
-                              );
-                            },
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+
+                      {/* Session Closed */}
+                      {internalSelectedExecution.completed_at && (
+                        <div className="text-blue-600 dark:text-blue-400">
+                          [INFO] [
+                          {formatLogDateTime(
+                            internalSelectedExecution.completed_at,
                           )}
+                          ]: Riot API client session closed
                         </div>
-                      </div>
+                      )}
                     </div>
-                  )}
+                  </div>
                 </div>
               )}
+
+              {/* Detailed Logs (only show if no API calls section, or has additional logs) */}
+              {internalSelectedExecution.detailed_logs?.logs &&
+                !internalSelectedExecution.detailed_logs?.api_calls && (
+                  <div className="rounded-lg border bg-muted/50 p-4">
+                    <div className="mb-3 flex items-center justify-between">
+                      <p className="font-medium">Detailed Logs</p>
+                      <Badge variant="secondary">
+                        {
+                          (
+                            internalSelectedExecution.detailed_logs
+                              .logs as Array<Record<string, unknown>>
+                          ).length
+                        }{" "}
+                        entries
+                      </Badge>
+                    </div>
+                    <div className="max-h-[300px] overflow-auto rounded-md border bg-background p-3">
+                      <div className="space-y-2 font-mono text-[11px]">
+                        {(
+                          internalSelectedExecution.detailed_logs.logs as Array<
+                            Record<string, unknown>
+                          >
+                        ).map((log: Record<string, unknown>, idx: number) => {
+                          const logLevel =
+                            typeof log.level === "string"
+                              ? log.level.toUpperCase()
+                              : "INFO";
+
+                          // Extract extra fields (everything except the standard fields)
+                          const standardFields = new Set([
+                            "level",
+                            "timestamp",
+                            "event",
+                          ]);
+                          const extraFields = Object.entries(log).filter(
+                            ([key]) => !standardFields.has(key),
+                          );
+
+                          return (
+                            <div
+                              key={idx}
+                              className={`rounded border-l-4 border-y border-r bg-muted/20 p-2 space-y-1.5 ${
+                                logLevel === "ERROR"
+                                  ? "border-l-destructive"
+                                  : logLevel === "WARNING"
+                                    ? "border-l-yellow-500"
+                                    : logLevel === "INFO"
+                                      ? "border-l-blue-500"
+                                      : logLevel === "DEBUG"
+                                        ? "border-l-orange-500"
+                                        : "border-l-muted"
+                              }`}
+                            >
+                              {/* Main log line */}
+                              <div className="flex gap-2">
+                                <span
+                                  className={`shrink-0 font-bold ${
+                                    logLevel === "ERROR"
+                                      ? "text-destructive"
+                                      : logLevel === "WARNING"
+                                        ? "text-yellow-600"
+                                        : logLevel === "INFO"
+                                          ? "text-blue-600"
+                                          : logLevel === "DEBUG"
+                                            ? "text-orange-600"
+                                            : "text-muted-foreground"
+                                  }`}
+                                >
+                                  [{logLevel}]
+                                </span>
+                                <span className="shrink-0 text-muted-foreground">
+                                  [
+                                  {formatLogDateTime(
+                                    String(log.timestamp || ""),
+                                  )}
+                                  ]:
+                                </span>
+                                <span className="flex-1 break-all">
+                                  {String(log.event || "")}
+                                </span>
+                              </div>
+
+                              {/* Extra fields */}
+                              {extraFields.length > 0 && (
+                                <div className="space-y-0.5 text-[10px] text-muted-foreground/80 bg-background/50 rounded p-2 border border-muted pl-4">
+                                  {extraFields.map(([key, value]) => (
+                                    <div key={key}>
+                                      {key.charAt(0).toUpperCase() +
+                                        key.slice(1)}
+                                      :{" "}
+                                      {typeof value === "object"
+                                        ? JSON.stringify(value)
+                                        : String(value)}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                )}
             </div>
           )}
         </DialogContent>

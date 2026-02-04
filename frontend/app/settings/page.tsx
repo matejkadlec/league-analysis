@@ -26,6 +26,7 @@ import {
 
 import { Loader2, Check, X } from "lucide-react";
 import { toast } from "sonner";
+import { notifyApiKeyValid } from "@/lib/core/api-key-status-context";
 
 // Server to flag mapping (same as player-search.tsx)
 const SERVER_FLAGS: Record<string, string> = {
@@ -86,6 +87,11 @@ function SettingsPageContent() {
         queryClient.invalidateQueries({
           queryKey: ["settings", "riot_api_key"],
         });
+        // Clear the "API key invalid" header message since we now have a new key
+        notifyApiKeyValid();
+        queryClient.invalidateQueries({
+          queryKey: ["apiKeyStatus"],
+        });
         setApiKey(""); // Clear input
         setTestResult(null);
       } else {
@@ -117,6 +123,7 @@ function SettingsPageContent() {
           toast.success("API key is valid!", {
             description: result.data.message,
           });
+          // Note: Don't clear the header message here since the key hasn't been saved yet
         } else {
           toast.error("API key is invalid", {
             description: result.data.message,

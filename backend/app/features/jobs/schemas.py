@@ -75,6 +75,12 @@ class JobExecutionResponse(BaseModel):
         None,
         description="All logs captured during execution (includes logs array and summary)",
     )
+    triggered_by: str = Field(
+        default="system", description="Who triggered the job: 'system' or 'user'"
+    )
+    has_api_key_error: bool = Field(
+        default=False, description="Whether this execution encountered an API key error"
+    )
 
     model_config = ConfigDict(from_attributes=True)
 

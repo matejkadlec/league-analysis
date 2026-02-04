@@ -1864,38 +1864,4 @@ class MatchService:
 
             start += count
 
-        # 3. Always update player info from Riot Account API after syncing matches
-        try:
-            # STRICT THROTTLING: 1.2s delay before account fetch
-            await asyncio.sleep(1.2)
-
-            account_dto = await riot_client.get_account_by_puuid(
-                puuid=puuid, region=region
-            )  # Use region derived from platform for faster lookup if possible, or leave default global
-            if account_dto:
-                # Update player in DB
-                from sqlalchemy import update
-
-                update_stmt = (
-                    update(Player)
-                    .where(Player.puuid == puuid)
-                    .values(
-                        game_name=account_dto.game_name,
-                        tag_line=account_dto.tag_line,
-                        updated_at=func.now(),
-                    )
-                )
-                await self.db.execute(update_stmt)
-                await self.db.commit()
-                logger.info(
-                    "Updated player account info from Riot API",
-                    puuid=puuid,
-                    game_name=account_dto.game_name,
-                    tag_line=account_dto.tag_line,
-                )
-        except Exception as e:
-            logger.error(
-                "Failed to update player account info", puuid=puuid, error=str(e)
-            )
-
         return total_stored

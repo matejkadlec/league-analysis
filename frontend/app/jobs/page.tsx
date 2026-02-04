@@ -29,6 +29,16 @@ export default function JobsPage() {
 
 function JobsPageContent() {
   const [secondsUntilRefresh, setSecondsUntilRefresh] = useState(15);
+  const [activeTab, setActiveTab] = useState("jobs");
+  const [selectedExecutionId, setSelectedExecutionId] = useState<number | null>(
+    null,
+  );
+
+  // Handler for when an execution is clicked in a job card
+  const handleExecutionClick = (executionId: number) => {
+    setSelectedExecutionId(executionId);
+    setActiveTab("executions");
+  };
 
   // Fetch all job configurations
   const {
@@ -133,10 +143,10 @@ function JobsPageContent() {
       </div>
 
       {/* Tabs for Jobs and Executions */}
-      <Tabs defaultValue="jobs" className="w-full">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="jobs">Job Configurations</TabsTrigger>
-          <TabsTrigger value="executions">Recent Executions</TabsTrigger>
+          <TabsTrigger value="executions">Job Executions</TabsTrigger>
         </TabsList>
 
         {/* Job Configurations Tab */}
@@ -165,7 +175,11 @@ function JobsPageContent() {
           ) : (
             <div className="grid gap-4 md:grid-cols-2">
               {jobs.map((job: JobConfiguration) => (
-                <JobCard key={job.id} job={job} />
+                <JobCard
+                  key={job.id}
+                  job={job}
+                  onExecutionClick={handleExecutionClick}
+                />
               ))}
             </div>
           )}
@@ -180,7 +194,12 @@ function JobsPageContent() {
               </div>
             </Card>
           ) : (
-            <JobExecutions executions={executions} jobs={jobs} />
+            <JobExecutions
+              executions={executions}
+              jobs={jobs}
+              selectedExecutionId={selectedExecutionId}
+              onExecutionSelect={setSelectedExecutionId}
+            />
           )}
         </TabsContent>
       </Tabs>
