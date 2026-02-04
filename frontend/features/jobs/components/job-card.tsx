@@ -60,30 +60,38 @@ function formatCronSchedule(schedule: string): string {
 
 /**
  * Format schedule from seconds to human-readable format
- * If seconds < 60: "X seconds"
- * If seconds >= 60 and exact minutes: "X minutes"
- * If seconds >= 60 and not exact: "X minutes Y seconds"
+ * Rules:
+ * - If <60 seconds: show only seconds
+ * - If >=3600 (1 hour): show hours, and minutes if not exact hours (no seconds)
+ * - Otherwise: show minutes only (round seconds to nearest minute)
  */
 function formatScheduleInterval(schedule: string): string {
   // Try to parse as number (seconds)
-  const seconds = parseInt(schedule, 10);
-  if (isNaN(seconds)) {
+  const totalSeconds = parseInt(schedule, 10);
+  if (isNaN(totalSeconds)) {
     // Not a number, try cron format
     return formatCronSchedule(schedule);
   }
 
-  if (seconds < 60) {
-    return `${seconds} seconds`;
+  // Less than 1 minute - show seconds only
+  if (totalSeconds < 60) {
+    return `${totalSeconds} second${totalSeconds !== 1 ? "s" : ""}`;
   }
 
-  const minutes = Math.floor(seconds / 60);
-  const remainingSeconds = seconds % 60;
+  // 1 hour or more
+  if (totalSeconds >= 3600) {
+    const hours = Math.floor(totalSeconds / 3600);
+    const remainingMinutes = Math.round((totalSeconds % 3600) / 60);
 
-  if (remainingSeconds === 0) {
-    return `${minutes} minute${minutes !== 1 ? "s" : ""}`;
+    if (remainingMinutes === 0) {
+      return `${hours} hour${hours !== 1 ? "s" : ""}`;
+    }
+    return `${hours} hour${hours !== 1 ? "s" : ""} ${remainingMinutes} minute${remainingMinutes !== 1 ? "s" : ""}`;
   }
 
-  return `${minutes} minute${minutes !== 1 ? "s" : ""} ${remainingSeconds} second${remainingSeconds !== 1 ? "s" : ""}`;
+  // Between 1 minute and 1 hour - show minutes only (rounded)
+  const minutes = Math.round(totalSeconds / 60);
+  return `${minutes} minute${minutes !== 1 ? "s" : ""}`;
 }
 
 /**
@@ -120,11 +128,9 @@ function formatRelativeTime(timestamp: string): string {
 function getJobDescription(jobType: string): string {
   const descriptions: Record<string, string> = {
     MATCH_FETCHER:
-      "Fetches new matches and updates player profiles for tracked players",
-    TRACKED_PLAYER_UPDATER:
-      "Updates league and profile data for tracked players",
-    PLAYER_ANALYZER: "Analyzes player statistics and generates insights",
-    BAN_CHECKER: "Checks for banned accounts among tracked players",
+      "Fetches new matches and updates player's match history and rank progression",
+    PLAYER_UPDATER:
+      "Fetches player info and updates player name, tag, icon and level",
   };
   return (
     descriptions[jobType] ||
@@ -302,11 +308,11 @@ export function JobCard({ job, onExecutionClick }: JobCardProps) {
         </div>
 
         {/* Last Execution */}
-        {lastExecution && (
-          <div className="flex items-start gap-2 text-sm">
-            <Clock className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-            <div className="flex-1">
-              <p className="font-medium">Last Execution</p>
+        <div className="flex items-start gap-2 text-sm">
+          <Clock className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+          <div className="flex-1">
+            <p className="font-medium">Last Execution</p>
+            {lastExecution ? (
               <div className="flex items-center gap-2">
                 <Badge
                   variant={
@@ -329,9 +335,11 @@ export function JobCard({ job, onExecutionClick }: JobCardProps) {
                   </span>
                 )}
               </div>
-            </div>
+            ) : (
+              <p className="text-muted-foreground">Never</p>
+            )}
           </div>
-        )}
+        </div>
 
         {/* Configuration Section */}
         {job.config_json && Object.keys(job.config_json).length > 0 && (
@@ -434,7 +442,7 @@ export function JobCard({ job, onExecutionClick }: JobCardProps) {
             size="sm"
             variant="outline"
             onClick={toggleHistory}
-            className="flex-1"
+            className="flex-1 cursor-pointer"
           >
             <History className="mr-2 h-4 w-4" />
             History

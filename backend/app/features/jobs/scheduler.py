@@ -24,17 +24,12 @@ _JOB_REGISTRY: Optional[Dict[JobType, Type[BaseJob]]] = None
 def _get_job_registry() -> Dict[JobType, Type[BaseJob]]:
     global _JOB_REGISTRY
     if _JOB_REGISTRY is None:
-        # from .implementations.tracked_player_updater import TrackedPlayerUpdaterJob
         from .implementations.match_fetcher import MatchFetcherJob
-
-        # from .implementations.player_analyzer import PlayerAnalyzerJob
-        # from .implementations.ban_checker import BanCheckerJob
+        from .implementations.player_updater import PlayerUpdaterJob
 
         _JOB_REGISTRY = {
-            # JobType.TRACKED_PLAYER_UPDATER: TrackedPlayerUpdaterJob,
             JobType.MATCH_FETCHER: MatchFetcherJob,
-            # JobType.PLAYER_ANALYZER: PlayerAnalyzerJob,
-            # JobType.BAN_CHECKER: BanCheckerJob,
+            JobType.PLAYER_UPDATER: PlayerUpdaterJob,
         }
 
     return _JOB_REGISTRY
@@ -254,6 +249,9 @@ async def start_scheduler() -> AsyncIOScheduler:
             "Job scheduler started successfully",
         )
 
+        # Check for and run any overdue jobs
+        await _check_and_run_overdue_jobs()
+
         # Load and schedule job configurations from database
         await _load_and_schedule_jobs()
 
@@ -335,6 +333,117 @@ def _schedule_job(
         job_type=job_type.value if isinstance(job_type, JobType) else str(job_type),
         interval_seconds=interval_seconds,
     )
+
+
+async def _check_and_run_overdue_jobs() -> None:
+    """Check for overdue jobs and run them immediately at startup.
+
+    This handles the case where the server was offline longer than the job interval.
+    Jobs are considered overdue if:
+    - They have never run before (no executions), OR
+    - Their last execution was longer ago than their interval
+
+    Both jobs can run in parallel since they are async.
+    """
+    try:
+        logger.info("Checking for overdue jobs at startup")
+        from sqlalchemy import select
+        from datetime import timezone
+
+        async with db_manager.get_session() as db:
+            stmt = select(JobConfiguration).where(JobConfiguration.is_active)
+            result = await db.execute(stmt)
+            job_configs = result.scalars().all()
+
+        if not job_configs:
+            logger.info("No active jobs to check")
+            return
+
+        registry = _get_job_registry()
+        overdue_jobs = []
+
+        # Get current time with UTC timezone
+        now = datetime.now(timezone.utc)
+
+        for job_config in job_configs:
+            try:
+                job_type = _convert_job_type(job_config)
+                if not job_type:
+                    continue
+
+                job_class = _get_job_class(job_type, job_config, registry)
+                if not job_class:
+                    continue
+
+                interval_seconds = _resolve_interval_seconds(job_config)
+
+                # Check last execution
+                async with db_manager.get_session() as db:
+                    stmt = (
+                        select(JobExecution)
+                        .where(JobExecution.job_config_id == job_config.id)
+                        .order_by(JobExecution.started_at.desc())
+                        .limit(1)
+                    )
+                    result = await db.execute(stmt)
+                    last_execution = result.scalar_one_or_none()
+
+                # Determine if job is overdue
+                is_overdue = False
+                reason = ""
+
+                if last_execution is None:
+                    is_overdue = True
+                    reason = "never run before"
+                else:
+                    time_since_last_run = (
+                        now - last_execution.started_at
+                    ).total_seconds()
+                    if time_since_last_run > interval_seconds:
+                        is_overdue = True
+                        reason = f"last run {int(time_since_last_run/60)} minutes ago (interval: {int(interval_seconds/60)} minutes)"
+
+                if is_overdue:
+                    logger.info(
+                        "Job is overdue, will run at startup",
+                        job_name=job_config.name,
+                        reason=reason,
+                    )
+                    overdue_jobs.append((job_config, job_class))
+
+            except Exception as e:
+                logger.error(
+                    "Error checking if job is overdue",
+                    job_name=job_config.name,
+                    error=str(e),
+                )
+                continue
+
+        # Run all overdue jobs in parallel
+        if overdue_jobs:
+            logger.info("Running overdue jobs at startup", count=len(overdue_jobs))
+
+            import asyncio
+
+            tasks = []
+            for job_config, job_class in overdue_jobs:
+                job_instance = job_class(job_config.id, triggered_by="system")
+                tasks.append(asyncio.create_task(job_instance.run()))
+
+            # Wait for all jobs to complete
+            await asyncio.gather(*tasks, return_exceptions=True)
+
+            logger.info("Completed running overdue jobs at startup")
+        else:
+            logger.info("No overdue jobs found at startup")
+
+    except Exception as e:
+        logger.error(
+            "Failed to check and run overdue jobs",
+            error=str(e),
+            error_type=type(e).__name__,
+        )
+        # Don't raise - this is not critical for scheduler startup
 
 
 async def _load_and_schedule_jobs() -> None:

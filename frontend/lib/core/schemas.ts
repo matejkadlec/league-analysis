@@ -355,12 +355,7 @@ export type PlaystyleAnalysisRequest = z.infer<
 // ===== JOB SCHEMAS =====
 
 // Job Type Enum (must match backend enum values)
-export const JobTypeSchema = z.enum([
-  "TRACKED_PLAYER_UPDATER",
-  "MATCH_FETCHER",
-  "PLAYER_ANALYZER",
-  "BAN_CHECKER",
-]);
+export const JobTypeSchema = z.enum(["MATCH_FETCHER", "PLAYER_UPDATER"]);
 
 // Job Status Enum (must match backend enum values)
 export const JobStatusSchema = z.enum([
@@ -376,6 +371,7 @@ export const JobConfigurationSchema = z.object({
   id: z.number(),
   job_type: JobTypeSchema,
   name: z.string(),
+  description: z.string().nullable().optional(),
   schedule: z.string(),
   is_active: z.boolean(),
   config_json: z.record(z.string(), z.any()).nullable().optional(),

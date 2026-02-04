@@ -24,10 +24,8 @@ from app.core.models import Base
 class JobType(str, PyEnum):
     """Enumeration of job types."""
 
-    TRACKED_PLAYER_UPDATER = "TRACKED_PLAYER_UPDATER"
     MATCH_FETCHER = "MATCH_FETCHER"
-    PLAYER_ANALYZER = "PLAYER_ANALYZER"
-    BAN_CHECKER = "BAN_CHECKER"
+    PLAYER_UPDATER = "PLAYER_UPDATER"
 
 
 class JobStatus(str, PyEnum):
@@ -59,7 +57,7 @@ class JobConfiguration(Base):
         ENUM(JobType, name="job_type_enum", create_type=False, schema="jobs"),
         nullable=False,
         index=True,
-        comment="Type of job (tracked_player_updater, player_analyzer)",
+        comment="Type of job (match_fetcher, player_updater)",
     )
 
     name: Mapped[str] = mapped_column(

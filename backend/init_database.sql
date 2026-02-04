@@ -35,10 +35,8 @@ CREATE TYPE jobs.job_status_enum AS ENUM (
 );
 
 CREATE TYPE jobs.job_type_enum AS ENUM (
-    'TRACKED_PLAYER_UPDATER',
     'MATCH_FETCHER',
-    'PLAYER_ANALYZER',
-    'BAN_CHECKER'
+    'PLAYER_UPDATER'
 );
 
 CREATE TYPE core.analysis_status_enum AS ENUM (
@@ -463,7 +461,11 @@ CREATE UNIQUE INDEX ix_app_job_configurations_name ON jobs.job_configurations US
 
 -- Default Jobs
 INSERT INTO jobs.job_configurations (name, job_type, description, schedule, is_active)
-VALUES ('Match Fetcher', 'MATCH_FETCHER', 'Fetches matches for tracked players', '3600', true)
+VALUES ('Match Fetcher', 'MATCH_FETCHER', 'Fetches new matches and updates player''s match history and rank progression', '3600', true)
+ON CONFLICT (name) DO NOTHING;
+
+INSERT INTO jobs.job_configurations (name, job_type, description, schedule, is_active)
+VALUES ('Player Updater', 'PLAYER_UPDATER', 'Fetches player info and updates player name, tag, icon and level', '86400', true)
 ON CONFLICT (name) DO NOTHING;
 
 -- [table] jobs.job_executions

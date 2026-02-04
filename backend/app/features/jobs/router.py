@@ -14,10 +14,7 @@ from .schemas import (
 from .dependencies import JobServiceDep
 
 from .implementations.match_fetcher import MatchFetcherJob
-
-# from .implementations.tracked_player_updater import TrackedPlayerUpdaterJob
-# from .implementations.player_analyzer import PlayerAnalyzerJob
-# from .implementations.ban_checker import BanCheckerJob
+from .implementations.player_updater import PlayerUpdaterJob
 import structlog
 
 logger = structlog.get_logger(__name__)
@@ -36,10 +33,8 @@ def _create_job_instance(job, triggered_by: str = "system"):
         Job instance based on job type
     """
     job_type_mapping = {
-        # JobType.TRACKED_PLAYER_UPDATER: TrackedPlayerUpdaterJob,
         JobType.MATCH_FETCHER: MatchFetcherJob,
-        # JobType.PLAYER_ANALYZER: PlayerAnalyzerJob,
-        # JobType.BAN_CHECKER: BanCheckerJob,
+        JobType.PLAYER_UPDATER: PlayerUpdaterJob,
     }
 
     job_class = job_type_mapping.get(job.job_type)

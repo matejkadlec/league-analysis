@@ -18,13 +18,27 @@ Background task scheduling with APScheduler. See [docs/jobs.md](../../../../docs
 
 ## Current Jobs
 
-| Job           | File                               | Schedule     |
-| ------------- | ---------------------------------- | ------------ |
-| Match Fetcher | `implementations/match_fetcher.py` | Configurable |
+| Job            | File                                | Schedule   |
+| -------------- | ----------------------------------- | ---------- |
+| Match Fetcher  | `implementations/match_fetcher.py`  | 15 minutes |
+| Player Updater | `implementations/player_updater.py` | 24 hours   |
 
 ## Job States
 
 `PENDING` → `IN_PROGRESS` → `COMPLETED` / `FAILED` / `RATE_LIMITED`
+
+## Startup Behavior
+
+When the backend starts, the scheduler:
+
+1. Marks any jobs stuck in `RUNNING` state as `FAILED` (from ungraceful shutdowns)
+2. **Checks for overdue jobs** - runs jobs immediately if:
+   - They have never run before, OR
+   - Their last execution was longer ago than their configured interval
+3. Runs overdue jobs in parallel (both Match Fetcher and Player Updater can run simultaneously)
+4. Schedules all active jobs for future execution
+
+This ensures jobs catch up automatically after server downtime without manual intervention.
 
 ## Creating a New Job
 
