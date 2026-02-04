@@ -14,6 +14,7 @@ import { ProtectedRoute } from "@/features/auth";
 
 import { Card } from "@/components/ui/card";
 import { PlayerCardSkeleton } from "@/components/loading-skeleton";
+import { Skeleton } from "@/components/ui/skeleton";
 
 function MatchmakingAnalysisContent() {
   const router = useRouter();
@@ -118,60 +119,110 @@ function MatchmakingAnalysisContent() {
     if (userSettings?.save_matchmaking_url) {
       savePuuidMutation.mutate(null);
     }
+
+    // Invalidate any queries related to this player
+    queryClient.invalidateQueries({ queryKey: ["matchmaking-analysis"] });
+    queryClient.invalidateQueries({
+      queryKey: ["matchmaking-analysis-results"],
+    });
   };
 
+  // Determine if we're waiting for initial player data to load
+  const puuidFromUrl = searchParams.get("puuid");
+  const savedPuuid = userSettings?.save_matchmaking_url
+    ? userSettings?.saved_matchmaking_puuid
+    : null;
+  const hasInitialPuuid = !!puuidFromUrl || !!savedPuuid;
+  const isLoadingInitialPlayer = hasInitialPuuid && !selectedPlayer;
+
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="mb-6 space-y-6">
-        {/* Header Card - Full Width */}
-        <Card
-          id="header-card"
-          className="bg-[#152b56] p-6 text-white dark:bg-[#0a1428]"
-        >
-          <div className="mb-4 flex items-start justify-between">
-            <h1 className="text-2xl font-semibold">Matchmaking Analysis</h1>
-          </div>
-          <p className="text-sm leading-relaxed">
-            Analyze matchmaking fairness by comparing average winrates of
-            teammates vs enemies in recent ranked matches
-          </p>
-        </Card>
+    <>
+      {/* Header card - always shows immediately */}
+      <div className="container mx-auto px-4 pt-8">
+        <div className="mb-6">
+          <Card
+            id="header-card"
+            className="bg-[#152b56] p-6 text-white dark:bg-[#0a1428]"
+          >
+            <div className="mb-4 flex items-start justify-between">
+              <h1 className="text-2xl font-semibold">Matchmaking Analysis</h1>
+            </div>
+            <p className="text-sm leading-relaxed">
+              Analyze matchmaking fairness by comparing average winrates of
+              teammates vs enemies in recent ranked matches
+            </p>
+          </Card>
+        </div>
+      </div>
 
-        {/* Two Column Layout */}
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          {/* Left Column: Player Search + Matchmaking Analysis */}
-          <div className="space-y-6">
-            <PlayerSearch
-              onPlayerFound={handlePlayerFound}
-              onClear={handleClearPlayer}
-              showClear={!!selectedPlayer}
-            />
-            {selectedPlayer && (
-              <>
-                <MatchmakingAnalysis puuid={selectedPlayer.puuid} />
-                <MatchmakingAnalysisResults puuid={selectedPlayer.puuid} />
-              </>
-            )}
-          </div>
+      {/* Content - shows skeletons during initial load */}
+      <div className="container mx-auto px-4 pb-8">
+        <div className="mb-6 space-y-6">
+          {/* Two Column Layout */}
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            {/* Left Column: Player Search + Matchmaking Analysis */}
+            <div className="space-y-6">
+              <PlayerSearch
+                onPlayerFound={handlePlayerFound}
+                onClear={handleClearPlayer}
+                showClear={!!selectedPlayer}
+              />
+              {isLoadingInitialPlayer ? (
+                <>
+                  <Card className="p-6">
+                    <Skeleton className="h-6 w-48 mb-4" />
+                    <Skeleton className="h-10 w-full mb-2" />
+                    <Skeleton className="h-4 w-32" />
+                  </Card>
+                  <Card className="p-6 space-y-4">
+                    <Skeleton className="h-6 w-40" />
+                    {[...Array(3)].map((_, i) => (
+                      <Skeleton key={i} className="h-16 w-full" />
+                    ))}
+                  </Card>
+                </>
+              ) : selectedPlayer ? (
+                <>
+                  <MatchmakingAnalysis puuid={selectedPlayer.puuid} />
+                  <MatchmakingAnalysisResults puuid={selectedPlayer.puuid} />
+                </>
+              ) : null}
+            </div>
 
-          {/* Right Column: Player Card */}
-          <div>
-            {selectedPlayer && (
-              <Suspense fallback={<PlayerCardSkeleton />}>
-                <PlayerCard player={selectedPlayer} />
-              </Suspense>
-            )}
+            {/* Right Column: Player Card */}
+            <div>
+              {isLoadingInitialPlayer ? (
+                <PlayerCardSkeleton />
+              ) : selectedPlayer ? (
+                <Suspense fallback={<PlayerCardSkeleton />}>
+                  <PlayerCard player={selectedPlayer} />
+                </Suspense>
+              ) : null}
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }
 
 export default function MatchmakingAnalysisPage() {
   return (
     <ProtectedRoute>
-      <Suspense fallback={<div>Loading...</div>}>
+      <Suspense
+        fallback={
+          <div className="container mx-auto px-4 pt-8">
+            <Skeleton className="h-32 w-full rounded-lg mb-6" />
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+              <div className="space-y-6">
+                <Skeleton className="h-20 w-full rounded-lg" />
+                <Skeleton className="h-48 w-full rounded-lg" />
+              </div>
+              <Skeleton className="h-80 w-full rounded-lg" />
+            </div>
+          </div>
+        }
+      >
         <MatchmakingAnalysisContent />
       </Suspense>
     </ProtectedRoute>

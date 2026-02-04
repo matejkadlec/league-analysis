@@ -86,6 +86,10 @@
     border-color: var(--color-border);
   }
 
+  html {
+    scrollbar-gutter: stable;
+  }
+
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
@@ -95,6 +99,7 @@
 
   #content {
     position: relative;
+    scrollbar-gutter: stable;
     background-image:
       linear-gradient(rgba(0, 9, 26, 0.6), rgba(0, 9, 26, 0.6)),
       url(/background.jpg);
@@ -248,6 +253,13 @@
   button:focus-visible {
     --tw-ring-color: transparent !important;
     --tw-ring-offset-width: 0px !important;
+  }
+}
+
+/* Shimmer animation for skeleton loading */
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
   }
 }
 

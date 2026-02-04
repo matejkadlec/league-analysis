@@ -20,9 +20,15 @@ import {
   MatchWithPlayerData,
   TeamChampion,
   MatchStatsResponseSchema,
+  TeamStats,
 } from "@/lib/core/schemas";
 import { validatedGet, api } from "@/lib/core/api";
-import { getChampionIconUrl } from "@/lib/core/data-dragon";
+import {
+  getChampionIconUrl,
+  getSummonerSpellIconUrlById,
+  getRuneStyleIconUrl,
+  getObjectiveIconUrl,
+} from "@/lib/core/data-dragon";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -38,6 +44,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Separator } from "@/components/ui/separator";
 
 interface MatchHistoryProps {
   puuid: string;
@@ -174,11 +181,196 @@ function MatchRow({
   const opponent = match.lane_opponent;
   const result = getResultInfo(match);
   const teamComps = match.team_compositions;
+  const teamStats = match.team_stats;
 
   // Calculate CS per minute
   const csPerMinute = participant
     ? (participant.total_cs / (match.game_duration / 60)).toFixed(1)
     : "0";
+
+  // Calculate opponent CS per minute
+  const opponentCsPerMinute = opponent
+    ? (opponent.total_cs / (match.game_duration / 60)).toFixed(1)
+    : "0";
+
+  // Format damage numbers (e.g., 15234 -> "15.2k")
+  const formatDamage = (damage: number): string => {
+    if (damage >= 1000) {
+      return `${(damage / 1000).toFixed(1)}k`;
+    }
+    return String(damage);
+  };
+
+  // Get player's team stats (blue or red based on team_id)
+  const getBlueTeamStats = () => teamStats?.blue_team || null;
+  const getRedTeamStats = () => teamStats?.red_team || null;
+
+  const blueTeamStats = getBlueTeamStats();
+  const redTeamStats = getRedTeamStats();
+
+  // Render summoner spell icon - bigger and with border radius
+  const renderSummonerSpell = (spellId: number | null | undefined) => {
+    if (!spellId) return <div className="h-5 w-5 bg-muted rounded" />;
+    const url = getSummonerSpellIconUrlById(spellId);
+    if (!url) return <div className="h-5 w-5 bg-muted rounded" />;
+    return (
+      <div className="relative rounded-sm h-5 w-5 overflow-hidden shrink-0 border border-black/30">
+        <Image
+          src={url}
+          alt="Summoner Spell"
+          fill
+          className="object-cover"
+          unoptimized
+        />
+      </div>
+    );
+  };
+
+  // Render runes (primary style + secondary style) - primary is circle, secondary is square
+  const renderRunes = (
+    runes:
+      | {
+          primary_style?: number | null;
+          sub_style?: number | null;
+          keystone?: number | null;
+        }
+      | null
+      | undefined,
+  ) => {
+    if (!runes) {
+      return (
+        <div className="flex flex-col gap-0.5">
+          <div className="h-7 w-7 bg-muted rounded-full" />
+          <div className="h-5 w-5 bg-muted rounded mx-auto" />
+        </div>
+      );
+    }
+
+    // Use primary_style for primary rune icon (not keystone)
+    const primaryStyleUrl = runes.primary_style
+      ? getRuneStyleIconUrl(runes.primary_style)
+      : null;
+    const subStyleUrl = runes.sub_style
+      ? getRuneStyleIconUrl(runes.sub_style)
+      : null;
+
+    return (
+      <div className="flex flex-col gap-0.5 items-center">
+        {/* Primary style rune - bigger, CIRCLE, no background */}
+        <div className="relative h-7 w-7 rounded-full overflow-hidden shrink-0 mb-1">
+          {primaryStyleUrl ? (
+            <Image
+              src={primaryStyleUrl}
+              alt="Primary Rune"
+              fill
+              className="object-cover"
+              unoptimized
+            />
+          ) : (
+            <div className="h-full w-full bg-muted" />
+          )}
+        </div>
+        {/* Secondary tree - square with border radius, no background */}
+        <div className="relative h-4 w-4 rounded overflow-hidden shrink-0">
+          {subStyleUrl ? (
+            <Image
+              src={subStyleUrl}
+              alt="Secondary Rune"
+              fill
+              className="object-cover"
+              unoptimized
+            />
+          ) : (
+            <div className="h-full w-full bg-muted" />
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  // Voidgrub SVG icon component
+  const VoidgrubIcon = ({ color }: { color: string }) => (
+    <svg
+      viewBox="0 0 16 16"
+      className="h-5 w-5"
+      fill={color}
+      fillRule="evenodd"
+      clipRule="evenodd"
+    >
+      <path d="M8 1 6.333 2.42s-.87.798-1.151.798H3.928c-.928 0-2.261.978-2.557 2.68-.074.429-.098 1.282.56 2.168L1 8.812s1.333.71 1.667 2.131C3 12.363 5.088 13.704 6.9 14.088l1.08.881V15L8 14.985l.019.015v-.031l1.08-.881c1.813-.384 3.901-1.724 4.234-3.145.334-1.42 1.667-2.13 1.667-2.13l-.931-.747c.658-.886.637-1.726.56-2.169-.296-1.701-1.629-2.68-2.557-2.68h-1.254c-.28 0-1.151-.797-1.151-.797zm.149 3.245a.2.2 0 0 0-.298 0L5.434 6.93a.2.2 0 0 0 .021.29c.275.228.818.687 1.007.914.21.255-1.316 1.405-1.862 1.804a.202.202 0 0 0-.026.304l1.84 1.88a.2.2 0 0 0 .285 0l1.158-1.183a.2.2 0 0 1 .286 0L9.3 12.122a.2.2 0 0 0 .286 0l1.84-1.88a.202.202 0 0 0-.026-.304c-.546-.399-2.073-1.549-1.862-1.804.189-.227.732-.686 1.007-.913a.2.2 0 0 0 .021-.29z" />
+    </svg>
+  );
+
+  // Render objective icon with team color
+  // Turret icon is 30% bigger (h-[26px] w-[26px] instead of h-5 w-5 which is 20px)
+  // To adjust turret size: change the h-[26px] w-[26px] values (26px = 20px * 1.3)
+  const renderObjectiveIcon = (
+    objective:
+      | "turret"
+      | "inhibitor"
+      | "dragon"
+      | "voidgrub"
+      | "herald"
+      | "baron",
+    count: number | null | undefined,
+    title: string,
+    team: "blue" | "red",
+  ) => {
+    // Turret gets 30% bigger size
+    const isTurret = objective === "turret";
+    const iconSizeClass = isTurret ? "h-[26px] w-[26px]" : "h-5 w-5";
+
+    // Display '?' for null/undefined counts (timeline data unavailable)
+    const displayCount =
+      count === null || count === undefined ? "?" : String(count);
+
+    return (
+      // Added 'w-full' and 'justify-center' to center within the grid column
+      <div
+        className="flex w-full h-full items-center justify-center"
+        title={title}
+      >
+        {objective === "voidgrub" ? (
+          <VoidgrubIcon color={team === "blue" ? "#0A96AA" : "#BE1E37"} />
+        ) : (
+          <div className={`relative ${iconSizeClass}`}>
+            <Image
+              src={getObjectiveIconUrl(objective, team)}
+              alt={title}
+              fill
+              className="object-cover"
+              unoptimized
+            />
+          </div>
+        )}
+        {/* Added 'w-5' and 'text-center' to reserve fixed space for 1 or 2 digits */}
+        <span className="w-5 text-center text-xs">{displayCount}</span>
+      </div>
+    );
+  };
+
+  // Render team stats row with team color
+  const renderTeamStatsRow = (
+    stats: TeamStats | null,
+    team: "blue" | "red",
+  ) => {
+    if (!stats) return null;
+    return (
+      <div className="grid grid-cols-6 h-full w-full gap-1.5 text-xs">
+        {renderObjectiveIcon("turret", stats.turrets, "Turrets", team)}
+        {renderObjectiveIcon("inhibitor", stats.inhibitors, "Inhibitors", team)}
+        {renderObjectiveIcon("dragon", stats.dragons, "Dragons", team)}
+        {renderObjectiveIcon("voidgrub", stats.voidgrubs, "Voidgrubs", team)}
+        {renderObjectiveIcon(
+          "herald",
+          stats.rift_heralds,
+          "Rift Heralds",
+          team,
+        )}
+        {renderObjectiveIcon("baron", stats.barons, "Barons", team)}
+      </div>
+    );
+  };
 
   // Render a champion icon for team compositions
   const renderTeamChampIcon = (
@@ -211,9 +403,9 @@ function MatchRow({
 
   return (
     <div
-      className={`px-3 py-1 rounded border-2 mb-1.5 border-t-1 border-b-1 border-amber-400/20 last:border-b-0 last:mb-0 ${result.bgClass}`}
+      className={`px-3 py-1.5 rounded border-2 mb-1.5 border-t-1 border-b-1 border-amber-400/20 last:border-b-0 last:mb-0 ${result.bgClass}`}
     >
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2">
         {/* Column 1: Queue Type & Patch - WIDER, CENTERED VERTICALLY */}
         <div className="w-35 shrink-0 flex flex-col justify-center">
           <span className="text-sm font-medium text-center">
@@ -224,7 +416,7 @@ function MatchRow({
           </span>
         </div>
 
-        {/* Column 2: Date & Time - AT LEAST 1/4 WIDTH */}
+        {/* Column 2: Date & Time */}
         <div className="w-33 shrink-0 flex flex-col justify-center">
           <span className="text-sm text-center">
             {formatDateTime(match.game_start_timestamp)}
@@ -234,80 +426,7 @@ function MatchRow({
           </span>
         </div>
 
-        {/* Column 3: Champion vs Champion - 20 rem, 3 subcolumns */}
-        <div className="flex items-center gap-0 w-80">
-          {/* Subcolumn 1: Player Champion (11 rem) */}
-          <div className="w-44 flex items-center gap-2">
-            <div className="relative h-10 w-10 rounded overflow-hidden shrink-0">
-              {participant && (
-                <Image
-                  src={getChampionIconUrl(participant.champion_name)}
-                  alt={participant.champion_name}
-                  fill
-                  className="object-cover"
-                  unoptimized
-                />
-              )}
-            </div>
-            <div className="flex flex-col flex-1 min-w-0">
-              <span className="text-sm font-medium truncate">
-                {participant?.champion_name || "—"}
-              </span>
-              <div className="flex items-center justify-between">
-                {participant && (
-                  <span className="text-xs">
-                    {participant.kills} / {participant.deaths} /{" "}
-                    {participant.assists}
-                  </span>
-                )}
-                <span className="text-xs text-muted-foreground ml-1">
-                  {participant ? `Lv ${participant.champion_level}` : "—"}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Subcolumn 2: Swords Icon (2.5 rem) */}
-          <div className="w-10 flex items-center justify-center shrink-0">
-            <Swords className="h-4 w-4 text-muted-foreground" />
-          </div>
-
-          {/* Subcolumn 3: Enemy Champion (11 rem) */}
-          <div className="w-44 flex items-center gap-2">
-            <div className="relative h-10 w-10 rounded overflow-hidden shrink-0">
-              {opponent ? (
-                <Image
-                  src={getChampionIconUrl(opponent.champion_name)}
-                  alt={opponent.champion_name}
-                  fill
-                  className="object-cover"
-                  unoptimized
-                />
-              ) : (
-                <div className="h-full w-full bg-muted" />
-              )}
-            </div>
-            <div className="flex flex-col flex-1 min-w-0">
-              <span className="text-sm font-medium truncate">
-                {opponent?.champion_name || "—"}
-              </span>
-              <div className="flex items-center justify-between">
-                {opponent ? (
-                  <span className="text-xs">
-                    {opponent.kills} / {opponent.deaths} / {opponent.assists}
-                  </span>
-                ) : (
-                  <span className="text-xs text-muted-foreground">—</span>
-                )}
-                <span className="text-xs text-muted-foreground ml-1">
-                  {opponent ? `Lv ${opponent.champion_level}` : "—"}
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Column 4: Stats (KDA, CS, Vision) */}
+        {/* Column 3: Player Stats (KDA, CS, Vision, Damage) */}
         {participant && (
           <div className="w-25 shrink-0 flex flex-col justify-center text-xs ml-2">
             <span>
@@ -322,21 +441,147 @@ function MatchRow({
             </span>
             <span className="mt-0.5">
               <span className="font-medium">{participant.vision_score}</span>{" "}
-              Vision Score
+              Vision
+            </span>
+            <span className="mt-0.5">
+              <span className="font-medium">
+                {formatDamage(participant.total_damage_dealt_to_champions || 0)}
+              </span>{" "}
+              DMG
             </span>
           </div>
         )}
 
-        {/* Column 5: Duration & Surrender */}
-        <div className="w-15 shrink-0 text-center flex flex-col justify-center">
-          <span className="">{formatDuration(match.game_duration)}</span>
-          {/* {match.surrender && !match.early_surrender ? (
-            <span className="text-xs text-muted-foreground">Surrender</span>
-          ) : null} */}
+        {/* Column 4: Champion vs Champion - with runes, summoners below champ, bigger icons */}
+        <div className="flex items-center gap-0 w-[420px]">
+          {/* Subcolumn 1: Player Champion with runes */}
+          <div className="w-40 flex items-center gap-2">
+            {/* Runes */}
+            {renderRunes(participant?.runes)}
+
+            {/* Champion icon with summoner spells below */}
+            <div className="flex flex-col items-center gap-0.5">
+              {/* Champion icon - 1.3x larger (h-13 w-13 = 52px instead of 40px) */}
+              <div className="relative h-[52px] w-[52px] rounded overflow-hidden shrink-0">
+                {participant && (
+                  <Image
+                    src={getChampionIconUrl(participant.champion_name)}
+                    alt={participant.champion_name}
+                    fill
+                    className="object-cover"
+                    unoptimized
+                  />
+                )}
+              </div>
+              {/* Summoner spells - horizontal row below champion */}
+              <div className="flex gap-0.5">
+                {renderSummonerSpell(participant?.summoner1_id)}
+                {renderSummonerSpell(participant?.summoner2_id)}
+              </div>
+            </div>
+
+            {/* Champion name and stats */}
+            <div className="flex flex-col flex-1 min-w-0">
+              <span className="text-sm font-medium truncate">
+                {participant?.champion_name || "—"}
+              </span>
+              <span className="text-xs text-muted-foreground">
+                {participant ? `Lv ${participant.champion_level}` : "—"}
+              </span>
+              {participant && (
+                <span className="text-xs">
+                  {participant.kills} / {participant.deaths} /{" "}
+                  {participant.assists}
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Subcolumn 2: Swords Icon */}
+          <div className="w-10 flex items-center justify-center shrink-0">
+            <Swords className="h-5 w-5 text-muted-foreground" />
+          </div>
+
+          {/* Subcolumn 3: Enemy Champion with runes */}
+          <div className="w-40 flex items-center gap-2">
+            {/* Runes */}
+            {renderRunes(opponent?.runes)}
+
+            {/* Champion icon with summoner spells below */}
+            <div className="flex flex-col items-center gap-0.5">
+              {/* Champion icon - 1.3x larger */}
+              <div className="relative h-[52px] w-[52px] rounded overflow-hidden shrink-0">
+                {opponent ? (
+                  <Image
+                    src={getChampionIconUrl(opponent.champion_name)}
+                    alt={opponent.champion_name}
+                    fill
+                    className="object-cover"
+                    unoptimized
+                  />
+                ) : (
+                  <div className="h-full w-full bg-muted" />
+                )}
+              </div>
+              {/* Summoner spells - horizontal row below champion */}
+              <div className="flex gap-0.5">
+                {renderSummonerSpell(opponent?.summoner1_id)}
+                {renderSummonerSpell(opponent?.summoner2_id)}
+              </div>
+            </div>
+
+            {/* Champion name and stats */}
+            <div className="flex flex-col flex-1 min-w-0">
+              <span className="text-sm font-medium truncate">
+                {opponent?.champion_name || "—"}
+              </span>
+              <span className="text-xs text-muted-foreground">
+                {opponent ? `Lv ${opponent.champion_level}` : "—"}
+              </span>
+              {opponent ? (
+                <span className="text-xs">
+                  {opponent.kills} / {opponent.deaths} / {opponent.assists}
+                </span>
+              ) : (
+                <span className="text-xs text-muted-foreground">—</span>
+              )}
+            </div>
+          </div>
         </div>
 
-        {/* Column 6: LP Change */}
-        <div className="w-12 shrink-0 text-center flex flex-col justify-center">
+        {/* Column 5: Enemy Laner Stats */}
+        {opponent && (
+          <div className="w-25 shrink-0 flex flex-col justify-center text-xs ml-2">
+            <span>
+              <span className="font-medium">
+                {opponent.kda?.toFixed(2) ?? "Perfect"}
+              </span>{" "}
+              KDA
+            </span>
+            <span className="mt-0.5">
+              <span className="font-medium">{opponent.total_cs}</span> CS (
+              {opponentCsPerMinute}/min)
+            </span>
+            <span className="mt-0.5">
+              <span className="font-medium">{opponent.vision_score}</span>{" "}
+              Vision
+            </span>
+            <span className="mt-0.5">
+              <span className="font-medium">
+                {formatDamage(opponent.total_damage_dealt_to_champions || 0)}
+              </span>{" "}
+              DMG
+            </span>
+          </div>
+        )}
+
+        {/* Column 6: Duration & Surrender */}
+        <div className="w-16 shrink-0 text-center flex flex-col justify-center">
+          <span className="">{formatDuration(match.game_duration)}</span>
+        </div>
+
+        {/* Column 7: LP Change */}
+        <div className="w-12 mr-2 shrink-0 text-center flex flex-col justify-center">
           {match.lp_change !== null && match.lp_change !== undefined ? (
             <span
               className={`text-xs font-medium ${
@@ -353,38 +598,48 @@ function MatchRow({
           ) : null}
         </div>
 
-        {/* Column 7: Team Compositions (5v5) */}
-        <div className="w-37 shrink-0 flex flex-col items-center justify-center gap-1">
+        {/* Column 8: Team Compositions */}
+        <div className="w-37 flex flex-col items-center justify-center gap-0.5 mr-1">
           {teamComps ? (
             <>
-              {/* Blue Team Row */}
-              <div className="flex items-center gap-1 bg-blue-900/30 rounded px-1 py-0.5">
-                {teamComps.blue_team.map((champ) =>
-                  renderTeamChampIcon(
-                    champ,
-                    champ.puuid === playerPuuid,
-                    "blue",
-                  ),
-                )}
+              {/* Blue Team Row with stats */}
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1 bg-blue-900/30 rounded px-1 py-0.5">
+                  {teamComps.blue_team.map((champ) =>
+                    renderTeamChampIcon(
+                      champ,
+                      champ.puuid === playerPuuid,
+                      "blue",
+                    ),
+                  )}
+                </div>
               </div>
-              {/* Vs Text */}
+              {/* Vs Separator */}
               <div className="text-center text-xs text-muted-foreground">
                 Vs
               </div>
-              {/* Red Team Row */}
-              <div className="flex items-center gap-1 bg-red-900/30 rounded px-1 py-0.5">
-                {teamComps.red_team.map((champ) =>
-                  renderTeamChampIcon(
-                    champ,
-                    champ.puuid === playerPuuid,
-                    "red",
-                  ),
-                )}
+              {/* Red Team Row with stats */}
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1 bg-red-900/30 rounded px-1 py-0.5">
+                  {teamComps.red_team.map((champ) =>
+                    renderTeamChampIcon(
+                      champ,
+                      champ.puuid === playerPuuid,
+                      "red",
+                    ),
+                  )}
+                </div>
               </div>
             </>
           ) : (
             <div className="text-xs text-muted-foreground text-center">—</div>
           )}
+        </div>
+        {/* Column 9: Team Stats */}
+        <div className="flex flex-col items-center justify-center gap-0.5">
+          {blueTeamStats && renderTeamStatsRow(blueTeamStats, "blue")}
+          <Separator className="my-2 bg-gradient-to-r from-transparent via-gray-300 to-transparent" />
+          {redTeamStats && renderTeamStatsRow(redTeamStats, "red")}
         </div>
       </div>
     </div>

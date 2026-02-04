@@ -21,6 +21,8 @@ from .schemas import (
     EnemyLaneOpponent,
     TeamChampion,
     TeamComposition,
+    TeamStats,
+    TeamStatsComposition,
 )
 from app.core.riot_api.transformers import MatchTransformer
 from app.core.riot_api.errors import (
@@ -324,6 +326,9 @@ class MatchService:
                             and p.team_id != player_participant.team_id
                             and p.team_position == player_participant.team_position
                         ):
+                            opponent_cs = (
+                                getattr(p, "total_minions_killed", 0) or 0
+                            ) + (getattr(p, "neutral_minions_killed", 0) or 0)
                             lane_opponent = EnemyLaneOpponent(
                                 champion_id=p.champion_id,
                                 champion_name=p.champion_name,
@@ -331,10 +336,18 @@ class MatchService:
                                 kills=p.kills or 0,
                                 deaths=p.deaths or 0,
                                 assists=p.assists or 0,
+                                kda=float(p.kda) if p.kda else None,
+                                total_cs=opponent_cs,
+                                vision_score=p.vision_score or 0,
+                                total_damage_dealt_to_champions=p.total_damage_dealt_to_champions
+                                or 0,
+                                summoner1_id=p.summoner1_id,
+                                summoner2_id=p.summoner2_id,
+                                runes=p.runes,
                             )
                             break
 
-                # Build team compositions
+                # Build team compositions and calculate team stats
                 # Role order: TOP, JUNGLE, MIDDLE, BOTTOM, UTILITY
                 role_order = {
                     "TOP": 0,
@@ -345,6 +358,30 @@ class MatchService:
                 }
                 blue_team = []
                 red_team = []
+                blue_stats = {
+                    "kills": 0,
+                    "deaths": 0,
+                    "assists": 0,
+                    "turrets": None,  # Unknown without timeline data
+                    "inhibitors": None,  # Unknown: lostAnInhibitor is per-player takedown stat
+                    "dragons": None,  # Unknown without timeline data
+                    "barons": 0,
+                    "rift_heralds": 0,
+                    "voidgrubs": None,  # Unknown: voidMonsterKill is per-player takedown stat
+                }
+                red_stats = {
+                    "kills": 0,
+                    "deaths": 0,
+                    "assists": 0,
+                    "turrets": None,  # Unknown without timeline data
+                    "inhibitors": None,  # Unknown: lostAnInhibitor is per-player takedown stat
+                    "dragons": None,  # Unknown without timeline data
+                    "barons": 0,
+                    "rift_heralds": 0,
+                    "voidgrubs": None,  # Unknown: voidMonsterKill is per-player takedown stat
+                }
+
+                # First pass: aggregate using MAX for shared objectives
                 for p in match_participants:
                     team_champ = TeamChampion(
                         champion_id=p.champion_id,
@@ -352,10 +389,37 @@ class MatchService:
                         team_position=p.team_position,
                         puuid=p.puuid,
                     )
-                    if p.team_id == 100:
+
+                    # Extract objective stats from advanced_stats
+                    advanced = p.advanced_stats or {}
+                    # Note: turretTakedowns, dragonTakedowns, lostAnInhibitor, and voidMonsterKill
+                    # are per-player participation/takedown stats. Cannot accurately determine
+                    # team totals without match_timeline data.
+                    team_baron_kills = advanced.get("teamBaronKills", 0) or 0
+                    team_rift_herald_kills = advanced.get("teamRiftHeraldKills", 0) or 0
+
+                    if p.team_id == 100:  # Blue team
                         blue_team.append(team_champ)
-                    else:
+                        blue_stats["kills"] += p.kills or 0
+                        blue_stats["deaths"] += p.deaths or 0
+                        blue_stats["assists"] += p.assists or 0
+                        # Use MAX for team-wide objective stats
+                        blue_stats["barons"] = max(
+                            blue_stats["barons"], team_baron_kills
+                        )
+                        blue_stats["rift_heralds"] = max(
+                            blue_stats["rift_heralds"], team_rift_herald_kills
+                        )
+                    else:  # Red team (200)
                         red_team.append(team_champ)
+                        red_stats["kills"] += p.kills or 0
+                        red_stats["deaths"] += p.deaths or 0
+                        red_stats["assists"] += p.assists or 0
+                        # Use MAX for team-wide objective stats
+                        red_stats["barons"] = max(red_stats["barons"], team_baron_kills)
+                        red_stats["rift_heralds"] = max(
+                            red_stats["rift_heralds"], team_rift_herald_kills
+                        )
 
                 # Sort by role
                 blue_team.sort(key=lambda x: role_order.get(x.team_position or "", 5))
@@ -364,6 +428,47 @@ class MatchService:
                 team_compositions = TeamComposition(
                     blue_team=blue_team,
                     red_team=red_team,
+                )
+
+                # Calculate team KDA
+                def calc_kda(kills, deaths, assists):
+                    if deaths == 0:
+                        return float(kills + assists) if kills + assists > 0 else None
+                    return round((kills + assists) / deaths, 2)
+
+                team_stats = TeamStatsComposition(
+                    blue_team=TeamStats(
+                        kills=blue_stats["kills"],
+                        deaths=blue_stats["deaths"],
+                        assists=blue_stats["assists"],
+                        kda=calc_kda(
+                            blue_stats["kills"],
+                            blue_stats["deaths"],
+                            blue_stats["assists"],
+                        ),
+                        turrets=blue_stats["turrets"],
+                        inhibitors=blue_stats["inhibitors"],
+                        dragons=blue_stats["dragons"],
+                        barons=blue_stats["barons"],
+                        rift_heralds=blue_stats["rift_heralds"],
+                        voidgrubs=blue_stats["voidgrubs"],
+                    ),
+                    red_team=TeamStats(
+                        kills=red_stats["kills"],
+                        deaths=red_stats["deaths"],
+                        assists=red_stats["assists"],
+                        kda=calc_kda(
+                            red_stats["kills"],
+                            red_stats["deaths"],
+                            red_stats["assists"],
+                        ),
+                        turrets=red_stats["turrets"],
+                        inhibitors=red_stats["inhibitors"],
+                        dragons=red_stats["dragons"],
+                        barons=red_stats["barons"],
+                        rift_heralds=red_stats["rift_heralds"],
+                        voidgrubs=red_stats["voidgrubs"],
+                    ),
                 )
 
                 # Build player participant data
@@ -387,9 +492,18 @@ class MatchService:
                         kills=player_participant.kills,
                         deaths=player_participant.deaths,
                         assists=player_participant.assists,
-                        kda=player_participant.kda,
+                        kda=(
+                            float(player_participant.kda)
+                            if player_participant.kda
+                            else None
+                        ),
                         total_cs=total_cs,
                         vision_score=player_participant.vision_score,
+                        total_damage_dealt_to_champions=player_participant.total_damage_dealt_to_champions
+                        or 0,
+                        summoner1_id=player_participant.summoner1_id,
+                        summoner2_id=player_participant.summoner2_id,
+                        runes=player_participant.runes,
                     )
 
                 # Calculate LP change based on league snapshots
@@ -420,6 +534,7 @@ class MatchService:
                     lane_opponent=lane_opponent,
                     lp_change=lp_change,
                     team_compositions=team_compositions,
+                    team_stats=team_stats,
                 )
                 match_responses.append(match_response)
 

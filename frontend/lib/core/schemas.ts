@@ -56,6 +56,25 @@ export const MatchListResponseSchema = z.object({
   pages: z.number(),
 });
 
+// Runes Schema for participant data
+export const ParticipantRunesSchema = z.object({
+  primary_style: z.number().optional().nullable(),
+  sub_style: z.number().optional().nullable(),
+  keystone: z.number().optional().nullable(),
+  primary_perks: z.array(z.number()).optional().nullable(),
+  sub_perks: z.array(z.number()).optional().nullable(),
+  stat_perks: z
+    .object({
+      defense: z.number().optional().nullable(),
+      flex: z.number().optional().nullable(),
+      offense: z.number().optional().nullable(),
+    })
+    .optional()
+    .nullable(),
+});
+
+export type ParticipantRunes = z.infer<typeof ParticipantRunesSchema>;
+
 // Player Match Participant Schema (for detailed match list)
 export const PlayerMatchParticipantSchema = z.object({
   champion_id: z.number(),
@@ -71,6 +90,10 @@ export const PlayerMatchParticipantSchema = z.object({
   kda: z.number().optional().nullable(),
   total_cs: z.number().default(0),
   vision_score: z.number().default(0),
+  total_damage_dealt_to_champions: z.number().default(0),
+  summoner1_id: z.number().optional().nullable(),
+  summoner2_id: z.number().optional().nullable(),
+  runes: ParticipantRunesSchema.optional().nullable(),
 });
 
 // Enemy Lane Opponent Schema
@@ -81,7 +104,37 @@ export const EnemyLaneOpponentSchema = z.object({
   kills: z.number().default(0),
   deaths: z.number().default(0),
   assists: z.number().default(0),
+  kda: z.number().optional().nullable(),
+  total_cs: z.number().default(0),
+  vision_score: z.number().default(0),
+  total_damage_dealt_to_champions: z.number().default(0),
+  summoner1_id: z.number().optional().nullable(),
+  summoner2_id: z.number().optional().nullable(),
+  runes: ParticipantRunesSchema.optional().nullable(),
 });
+
+// Team Stats Schema
+export const TeamStatsSchema = z.object({
+  kills: z.number().default(0),
+  deaths: z.number().default(0),
+  assists: z.number().default(0),
+  turrets: z.number().nullable().optional(),
+  inhibitors: z.number().nullable().optional(),
+  dragons: z.number().nullable().optional(),
+  barons: z.number().default(0),
+  rift_heralds: z.number().default(0),
+  voidgrubs: z.number().nullable().optional(),
+});
+
+export type TeamStats = z.infer<typeof TeamStatsSchema>;
+
+// Team Stats Composition Schema
+export const TeamStatsCompositionSchema = z.object({
+  blue_team: TeamStatsSchema.optional().nullable(),
+  red_team: TeamStatsSchema.optional().nullable(),
+});
+
+export type TeamStatsComposition = z.infer<typeof TeamStatsCompositionSchema>;
 
 // Team Champion Schema (for team compositions)
 export const TeamChampionSchema = z.object({
@@ -103,6 +156,7 @@ export const MatchWithPlayerDataSchema = MatchSchema.extend({
   lane_opponent: EnemyLaneOpponentSchema.optional().nullable(),
   lp_change: z.number().optional().nullable(),
   team_compositions: TeamCompositionSchema.optional().nullable(),
+  team_stats: TeamStatsCompositionSchema.optional().nullable(),
 });
 
 // Detailed Match List Response Schema

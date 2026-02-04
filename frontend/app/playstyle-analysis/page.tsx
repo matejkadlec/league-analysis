@@ -130,13 +130,24 @@ export default function PlaystyleAnalysisPage() {
     if (userSettings?.save_playstyle_url) {
       savePuuidMutation.mutate(null);
     }
+
+    // Invalidate any queries related to this player
+    queryClient.invalidateQueries({ queryKey: ["playstyle-analysis"] });
   };
+
+  // Determine if we're waiting for initial player data to load
+  const puuidFromUrl = searchParams.get("puuid");
+  const savedPuuid = userSettings?.save_playstyle_url
+    ? userSettings?.saved_playstyle_puuid
+    : null;
+  const hasInitialPuuid = !!puuidFromUrl || !!savedPuuid;
+  const isLoadingInitialPlayer = hasInitialPuuid && !selectedPlayer;
 
   return (
     <ProtectedRoute>
-      <div className="container mx-auto px-4 py-8">
-        <div className="mb-6 space-y-6">
-          {/* Header Card - Full Width */}
+      {/* Header card - always shows immediately */}
+      <div className="container mx-auto px-4 pt-8">
+        <div className="mb-6">
           <Card
             id="header-card"
             className="bg-[#152b56] p-6 text-white dark:bg-[#0a1428]"
@@ -149,7 +160,12 @@ export default function PlaystyleAnalysisPage() {
               playstyle characteristics.
             </p>
           </Card>
+        </div>
+      </div>
 
+      {/* Content - shows skeletons during initial load */}
+      <div className="container mx-auto px-4 pb-8">
+        <div className="mb-6 space-y-6">
           {/* Two Column Layout */}
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             {/* Left Column: Player Search + Playstyle Analysis */}
@@ -159,9 +175,9 @@ export default function PlaystyleAnalysisPage() {
                 onClear={handleClearPlayer}
                 showClear={!!selectedPlayer}
               />
-              {(isPending || selectedPlayer) && (
+              {(isPending || isLoadingInitialPlayer || selectedPlayer) && (
                 <>
-                  {isPending ? (
+                  {isPending || isLoadingInitialPlayer ? (
                     <PlaystyleAnalysisSkeleton />
                   ) : selectedPlayer ? (
                     <Suspense fallback={<PlaystyleAnalysisSkeleton />}>
@@ -178,7 +194,7 @@ export default function PlaystyleAnalysisPage() {
 
             {/* Right Column: Player Card */}
             <div>
-              {isPending ? (
+              {isPending || isLoadingInitialPlayer ? (
                 <PlayerCardSkeleton />
               ) : selectedPlayer ? (
                 <Suspense fallback={<PlayerCardSkeleton />}>

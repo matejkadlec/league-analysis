@@ -1,9 +1,9 @@
 """Pydantic schemas for Match model."""
 
 from datetime import datetime
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, field_validator
 
 
 class MatchBase(BaseModel):
@@ -79,6 +79,19 @@ class MatchResponse(MatchBase):
     model_config = ConfigDict(from_attributes=True)
 
 
+class RunesData(BaseModel):
+    """Schema for runes data with flattened structure."""
+
+    primary_style: Optional[int] = Field(None, description="Primary rune style ID")
+    sub_style: Optional[int] = Field(None, description="Sub rune style ID")
+    keystone: Optional[int] = Field(None, description="Keystone rune ID")
+    primary_perks: Optional[List[int]] = Field(None, description="Primary perk IDs")
+    sub_perks: Optional[List[int]] = Field(None, description="Sub perk IDs")
+    stat_perks: Optional[Dict[str, int]] = Field(None, description="Stat perk values")
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class PlayerMatchParticipant(BaseModel):
     """Schema for the player's participation in a match."""
 
@@ -95,6 +108,59 @@ class PlayerMatchParticipant(BaseModel):
     kda: Optional[float] = Field(None, description="Computed KDA")
     total_cs: int = Field(0, description="Total CS (minions + monsters)")
     vision_score: int = Field(0, description="Vision score")
+    total_damage_dealt_to_champions: int = Field(
+        0, description="Total damage to champions"
+    )
+    summoner1_id: Optional[int] = Field(None, description="First summoner spell ID")
+    summoner2_id: Optional[int] = Field(None, description="Second summoner spell ID")
+    runes: Optional[RunesData] = Field(None, description="Runes data")
+
+    @field_validator("runes", mode="before")
+    @classmethod
+    def transform_runes(cls, v: Any) -> Optional[Dict[str, Any]]:
+        """Transform raw Riot API perks structure to flattened runes data."""
+        if v is None or not isinstance(v, dict):
+            return v
+
+        # Check if already transformed (has primary_style key)
+        if "primary_style" in v:
+            return v
+
+        # Check if raw Riot API format (has 'styles' key)
+        if "styles" not in v:
+            return None
+
+        # Extract data from Riot API format
+        styles = v.get("styles", [])
+        stat_perks = v.get("statPerks", {})
+
+        primary_style = None
+        sub_style = None
+        keystone = None
+        primary_perks = []
+        sub_perks = []
+
+        for style in styles:
+            if style.get("description") == "primaryStyle":
+                primary_style = style.get("style")
+                selections = style.get("selections", [])
+                if selections:
+                    keystone = selections[0].get("perk")
+                    primary_perks = [s.get("perk") for s in selections]
+
+            elif style.get("description") == "subStyle":
+                sub_style = style.get("style")
+                selections = style.get("selections", [])
+                sub_perks = [s.get("perk") for s in selections]
+
+        return {
+            "primary_style": primary_style,
+            "sub_style": sub_style,
+            "keystone": keystone,
+            "primary_perks": primary_perks,
+            "sub_perks": sub_perks,
+            "stat_perks": stat_perks,
+        }
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -108,6 +174,66 @@ class EnemyLaneOpponent(BaseModel):
     kills: int = Field(0, description="Enemy kills")
     deaths: int = Field(0, description="Enemy deaths")
     assists: int = Field(0, description="Enemy assists")
+    kda: Optional[float] = Field(None, description="Enemy KDA")
+    total_cs: int = Field(0, description="Enemy total CS")
+    vision_score: int = Field(0, description="Enemy vision score")
+    total_damage_dealt_to_champions: int = Field(
+        0, description="Enemy damage to champions"
+    )
+    summoner1_id: Optional[int] = Field(
+        None, description="Enemy first summoner spell ID"
+    )
+    summoner2_id: Optional[int] = Field(
+        None, description="Enemy second summoner spell ID"
+    )
+    runes: Optional[RunesData] = Field(None, description="Enemy runes data")
+
+    @field_validator("runes", mode="before")
+    @classmethod
+    def transform_runes(cls, v: Any) -> Optional[Dict[str, Any]]:
+        """Transform raw Riot API perks structure to flattened runes data."""
+        if v is None or not isinstance(v, dict):
+            return v
+
+        # Check if already transformed (has primary_style key)
+        if "primary_style" in v:
+            return v
+
+        # Check if raw Riot API format (has 'styles' key)
+        if "styles" not in v:
+            return None
+
+        # Extract data from Riot API format
+        styles = v.get("styles", [])
+        stat_perks = v.get("statPerks", {})
+
+        primary_style = None
+        sub_style = None
+        keystone = None
+        primary_perks = []
+        sub_perks = []
+
+        for style in styles:
+            if style.get("description") == "primaryStyle":
+                primary_style = style.get("style")
+                selections = style.get("selections", [])
+                if selections:
+                    keystone = selections[0].get("perk")
+                    primary_perks = [s.get("perk") for s in selections]
+
+            elif style.get("description") == "subStyle":
+                sub_style = style.get("style")
+                selections = style.get("selections", [])
+                sub_perks = [s.get("perk") for s in selections]
+
+        return {
+            "primary_style": primary_style,
+            "sub_style": sub_style,
+            "keystone": keystone,
+            "primary_perks": primary_perks,
+            "sub_perks": sub_perks,
+            "stat_perks": stat_perks,
+        }
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -136,6 +262,47 @@ class TeamComposition(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class TeamStats(BaseModel):
+    """Schema for aggregated team statistics."""
+
+    kills: int = Field(0, description="Total team kills")
+    deaths: int = Field(0, description="Total team deaths")
+    assists: int = Field(0, description="Total team assists")
+    kda: Optional[float] = Field(None, description="Team KDA")
+    turrets: Optional[int] = Field(
+        None,
+        description="Total turrets destroyed (null = unknown without timeline data)",
+    )
+    inhibitors: Optional[int] = Field(
+        None,
+        description="Total inhibitors destroyed (null = lostAnInhibitor is per-player takedown stat)",
+    )
+    dragons: Optional[int] = Field(
+        None, description="Total dragons killed (null = unknown without timeline data)"
+    )
+    barons: int = Field(0, description="Total barons killed (from teamBaronKills)")
+    rift_heralds: int = Field(
+        0, description="Total rift heralds killed (from teamRiftHeraldKills)"
+    )
+    voidgrubs: Optional[int] = Field(
+        None,
+        description="Total voidgrubs killed (null = voidMonsterKill is per-player takedown stat)",
+    )
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class TeamStatsComposition(BaseModel):
+    """Schema for both team statistics."""
+
+    blue_team: TeamStats = Field(
+        default_factory=TeamStats, description="Blue team stats"
+    )
+    red_team: TeamStats = Field(default_factory=TeamStats, description="Red team stats")
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class MatchWithPlayerData(MatchResponse):
     """Match response including player-specific participant data."""
 
@@ -148,6 +315,9 @@ class MatchWithPlayerData(MatchResponse):
     lp_change: Optional[int] = Field(None, description="LP change from this match")
     team_compositions: Optional[TeamComposition] = Field(
         None, description="Team compositions for the match"
+    )
+    team_stats: Optional[TeamStatsComposition] = Field(
+        None, description="Team statistics for the match"
     )
 
     model_config = ConfigDict(from_attributes=True)
