@@ -19,10 +19,29 @@ interface MatchmakingAnalysisResultsProps {
   puuid: string;
 }
 
+/**
+ * Format date/time as DD/MM/YYYY H:MM AM|PM (no leading zeros except minutes)
+ */
+function formatDateTime(dateString: string): string {
+  const date = new Date(dateString);
+  const day = date.getDate();
+  const month = date.getMonth() + 1;
+  const year = date.getFullYear();
+
+  let hours = date.getHours();
+  const minutes = date.getMinutes();
+  const ampm = hours >= 12 ? "PM" : "AM";
+  hours = hours % 12;
+  hours = hours ? hours : 12; // the hour '0' should be '12'
+
+  const minutesStr = minutes < 10 ? `0${minutes}` : minutes;
+
+  return `${day}/${month}/${year} ${hours}:${minutesStr} ${ampm}`;
+}
+
 export function MatchmakingAnalysisResults({
   puuid,
 }: MatchmakingAnalysisResultsProps) {
-  // Use a separate query key to avoid conflicts with MatchmakingAnalysis component
   const {
     data: latestAnalysis,
     isLoading,
@@ -40,18 +59,24 @@ export function MatchmakingAnalysisResults({
       return result.data;
     },
     retry: false,
-    staleTime: 30000, // Keep results fresh for 30 seconds
+    staleTime: 30000,
   });
 
-  // Simple rule: Show if there's any analysis with results in DB
-  // Same logic as button text: {latestAnalysis ? "Run New Analysis" : "Start Analysis"}
-  // Don't show while loading or if no data
+  // Debug logging
+  console.log("MatchmakingAnalysisResults debug:", {
+    isLoading,
+    error,
+    latestAnalysis,
+    hasResults: latestAnalysis?.results,
+    status: latestAnalysis?.status,
+  });
+
   if (isLoading || error || !latestAnalysis) {
     return null;
   }
 
-  // Don't show if there are no results (nothing to display)
-  if (!latestAnalysis.results) {
+  // Only show if analysis is completed AND has results
+  if (latestAnalysis.status !== "completed" || !latestAnalysis.results) {
     return null;
   }
 
@@ -60,17 +85,23 @@ export function MatchmakingAnalysisResults({
 
   // Calculate the difference to show if matchmaking was fair
   const winrateDiff = team_avg_winrate - enemy_avg_winrate;
-  const isFavorable = winrateDiff > 0.05; // >5% difference in your favor
-  const isUnfavorable = winrateDiff < -0.05; // >5% difference against you
+  const winrateDiffPercent = Math.abs(winrateDiff * 100).toFixed(1);
+  const isFavorable = winrateDiff > 0.05;
+  const isUnfavorable = winrateDiff < -0.05;
   const isFair = !isFavorable && !isUnfavorable;
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <TrendingUp className="h-5 w-5 text-primary" />
-          Recent Analysis Results
-        </CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle className="flex items-center gap-2">
+            <TrendingUp className="h-5 w-5 text-primary" />
+            Recent Analysis Results
+          </CardTitle>
+          <span className="text-sm text-muted-foreground">
+            {formatDateTime(latestAnalysis.created_at)}
+          </span>
+        </div>
       </CardHeader>
       <CardContent className="space-y-4">
         <Table>
@@ -135,12 +166,14 @@ export function MatchmakingAnalysisResults({
 
           {isFavorable && (
             <p className="text-sm text-green-600 dark:text-green-400">
-              ✓ Your teammates had higher average winrates than enemies
+              ✓ Your teammates had higher average winrates than enemies by{" "}
+              <span className="font-bold">{winrateDiffPercent}%</span>
             </p>
           )}
           {isUnfavorable && (
             <p className="text-sm text-red-600 dark:text-red-400">
-              ✗ Your enemies had higher average winrates than teammates
+              ✗ Your enemies had higher average winrates than teammates by{" "}
+              <span className="font-bold">{winrateDiffPercent}%</span>
             </p>
           )}
           {isFair && (

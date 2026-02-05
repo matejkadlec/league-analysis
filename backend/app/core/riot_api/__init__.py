@@ -7,6 +7,13 @@ including proper rate limiting, error handling, and authentication.
 
 from .client import RiotAPIClient
 from .rate_limiter import RateLimiter
+from .db_rate_limiter import (
+    DBRateLimiter,
+    RateLimitComponent,
+    RateLimitState,
+    COMPONENT_PRIORITY,
+    COMPONENT_MAX_WAIT,
+)
 from .errors import (
     RiotAPIError,
     RateLimitError,
@@ -29,6 +36,11 @@ __all__ = [
     "RiotAPIClient",
     "RiotDataManager",
     "RateLimiter",
+    "DBRateLimiter",
+    "RateLimitComponent",
+    "RateLimitState",
+    "COMPONENT_PRIORITY",
+    "COMPONENT_MAX_WAIT",
     "RiotAPIError",
     "RateLimitError",
     "AuthenticationError",

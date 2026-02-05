@@ -1,8 +1,8 @@
 """Schemas for matchmaking analysis requests and responses."""
 
-from typing import Optional
+from typing import Optional, Dict
 from datetime import datetime
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field
 
 
 class MatchmakingAnalysisRequest(BaseModel):
@@ -36,18 +36,41 @@ class MatchmakingAnalysisResults(BaseModel):
 class MatchmakingAnalysisResponse(BaseModel):
     """Response containing matchmaking analysis data."""
 
-    id: int
     puuid: str
-    status: str
-    progress: int
-    total_requests: int
-    estimated_minutes_remaining: int
     results: Optional[MatchmakingAnalysisResults] = None
-    error_message: Optional[str] = None
     created_at: datetime
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
-    updated_at: datetime
+    puuid_progress: Optional[Dict[str, bool]] = None
+    requests_saved: int = 0
+    rate_limit_wait_seconds: int = 0
+
+    @computed_field
+    @property
+    def status(self) -> str:
+        """Compute status from timestamps."""
+        if self.completed_at:
+            return "completed"
+        elif self.started_at:
+            return "in_progress"
+        else:
+            return "pending"
+
+    @computed_field
+    @property
+    def progress(self) -> int:
+        """Compute progress from puuid_progress."""
+        if not self.puuid_progress:
+            return 0
+        return sum(1 for v in self.puuid_progress.values() if v)
+
+    @computed_field
+    @property
+    def total_puuids(self) -> int:
+        """Total number of PUUIDs to analyze."""
+        if not self.puuid_progress:
+            return 0
+        return len(self.puuid_progress)
 
     class Config:
         """Pydantic config."""
@@ -58,15 +81,54 @@ class MatchmakingAnalysisResponse(BaseModel):
 class MatchmakingAnalysisStatusResponse(BaseModel):
     """Quick status check response."""
 
-    id: int
+    puuid: str
     status: str
     progress: int
-    total_requests: int
-    estimated_minutes_remaining: int
+    total_puuids: int
     results: Optional[MatchmakingAnalysisResults] = None
-    error_message: Optional[str] = None
+    created_at: datetime
+    requests_saved: int = 0
+    rate_limit_wait_seconds: int = 0
 
     class Config:
         """Pydantic config."""
 
         from_attributes = True
+
+
+class MatchmakingAnalysisHistoryItem(BaseModel):
+    """Single item in analysis history."""
+
+    created_at: datetime
+    team_avg_winrate: float
+    enemy_avg_winrate: float
+
+    @computed_field
+    @property
+    def gap(self) -> float:
+        """Winrate gap (positive = in favor of player's team)."""
+        return self.team_avg_winrate - self.enemy_avg_winrate
+
+    class Config:
+        """Pydantic config."""
+
+        from_attributes = True
+
+
+class MatchmakingAnalysisHistoryResponse(BaseModel):
+    """Response containing analysis history for a player."""
+
+    items: list[MatchmakingAnalysisHistoryItem]
+
+    class Config:
+        """Pydantic config."""
+
+        from_attributes = True
+
+
+class NotEnoughMatchesResponse(BaseModel):
+    """Response when player doesn't have enough matches."""
+
+    message: str = "Player doesn't have enough matches for this analysis."
+    matches_found: int
+    matches_required: int = 10

@@ -9,8 +9,10 @@ import {
   PlayerSchema,
   MatchmakingAnalysisResponseSchema,
   MatchmakingAnalysisStatusResponseSchema,
+  MatchmakingAnalysisHistoryResponseSchema,
   MatchmakingAnalysisResponse,
   MatchmakingAnalysisStatusResponse,
+  MatchmakingAnalysisHistoryResponse,
 } from "./schemas";
 import {
   notifyApiKeyInvalid,
@@ -346,6 +348,30 @@ export async function searchPlayerSuggestions(
 }
 
 // Matchmaking Analysis API Functions
+export async function checkPlayerMatches(
+  puuid: string,
+): Promise<
+  ApiResponse<
+    | { success: boolean; matches_found: number }
+    | { message: string; matches_found: number; matches_required: number }
+  >
+> {
+  try {
+    const response = await api.post("/matchmaking-analysis/check-matches", {
+      puuid,
+    });
+    return {
+      success: true,
+      data: response.data,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: formatError(error),
+    };
+  }
+}
+
 export async function startMatchmakingAnalysis(
   puuid: string,
 ): Promise<ApiResponse<MatchmakingAnalysisResponse>> {
@@ -359,11 +385,11 @@ export async function startMatchmakingAnalysis(
 }
 
 export async function getMatchmakingAnalysisStatus(
-  analysisId: number,
+  puuid: string,
 ): Promise<ApiResponse<MatchmakingAnalysisStatusResponse>> {
   return validatedGet(
     MatchmakingAnalysisStatusResponseSchema,
-    `/matchmaking-analysis/${analysisId}`,
+    `/matchmaking-analysis/player/${puuid}/status`,
   );
 }
 
@@ -376,27 +402,15 @@ export async function getLatestMatchmakingAnalysis(
   );
 }
 
-export async function cancelMatchmakingAnalysis(
-  analysisId: number,
-): Promise<ApiResponse<{ message: string }>> {
-  try {
-    const response = await api.post(
-      `/matchmaking-analysis/${analysisId}/cancel`,
-      {},
-      {
-        timeout: 5000, // 5 second timeout for cancellation
-      },
-    );
-    return {
-      success: true,
-      data: response.data,
-    };
-  } catch (error) {
-    return {
-      success: false,
-      error: formatError(error),
-    };
-  }
+export async function getMatchmakingAnalysisHistory(
+  puuid: string,
+  limit: number = 20,
+): Promise<ApiResponse<MatchmakingAnalysisHistoryResponse>> {
+  return validatedGet(
+    MatchmakingAnalysisHistoryResponseSchema,
+    `/matchmaking-analysis/player/${puuid}/history`,
+    { limit },
+  );
 }
 
 export interface ConnectRiotAccountRequest {

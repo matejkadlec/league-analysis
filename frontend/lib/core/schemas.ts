@@ -539,28 +539,48 @@ export const MatchmakingAnalysisResultsSchema = z.object({
 });
 
 export const MatchmakingAnalysisResponseSchema = z.object({
-  id: z.number(),
   puuid: z.string(),
   status: z.string(),
   progress: z.number(),
-  total_requests: z.number(),
-  estimated_minutes_remaining: z.number(),
+  total_puuids: z.number(),
   results: MatchmakingAnalysisResultsSchema.nullable().optional(),
-  error_message: z.string().nullable().optional(),
   created_at: z.string(),
   started_at: z.string().nullable().optional(),
   completed_at: z.string().nullable().optional(),
-  updated_at: z.string(),
+  puuid_progress: z
+    .record(z.string(), z.union([z.boolean(), z.string()]))
+    .nullable()
+    .optional(),
+  requests_saved: z.number().default(0),
+  rate_limit_wait_seconds: z.number().default(0),
 });
 
 export const MatchmakingAnalysisStatusResponseSchema = z.object({
-  id: z.number(),
+  puuid: z.string(),
   status: z.string(),
   progress: z.number(),
-  total_requests: z.number(),
-  estimated_minutes_remaining: z.number(),
+  total_puuids: z.number(),
   results: MatchmakingAnalysisResultsSchema.nullable().optional(),
-  error_message: z.string().nullable().optional(),
+  created_at: z.string(),
+  requests_saved: z.number().default(0),
+  rate_limit_wait_seconds: z.number().default(0),
+});
+
+export const MatchmakingAnalysisHistoryItemSchema = z.object({
+  created_at: z.string(),
+  team_avg_winrate: z.number(),
+  enemy_avg_winrate: z.number(),
+  gap: z.number(),
+});
+
+export const MatchmakingAnalysisHistoryResponseSchema = z.object({
+  items: z.array(MatchmakingAnalysisHistoryItemSchema),
+});
+
+export const NotEnoughMatchesResponseSchema = z.object({
+  message: z.string(),
+  matches_found: z.number(),
+  matches_required: z.number(),
 });
 
 export type MatchmakingAnalysisResults = z.infer<
@@ -571,4 +591,10 @@ export type MatchmakingAnalysisResponse = z.infer<
 >;
 export type MatchmakingAnalysisStatusResponse = z.infer<
   typeof MatchmakingAnalysisStatusResponseSchema
+>;
+export type MatchmakingAnalysisHistoryItem = z.infer<
+  typeof MatchmakingAnalysisHistoryItemSchema
+>;
+export type MatchmakingAnalysisHistoryResponse = z.infer<
+  typeof MatchmakingAnalysisHistoryResponseSchema
 >;

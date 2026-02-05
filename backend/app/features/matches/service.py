@@ -33,6 +33,7 @@ from app.core.riot_api.errors import (
     NotFoundError,
 )
 from app.core.riot_api.constants import get_region_by_platform, QueueType
+from app.core.riot_api.db_rate_limiter import DBRateLimiter, RateLimitComponent
 
 if TYPE_CHECKING:
     from app.core.riot_api.client import RiotAPIClient
@@ -1781,10 +1782,16 @@ class MatchService:
         self,
         riot_client: "RiotAPIClient",
         player: Any,
+        rate_limiter: Optional[DBRateLimiter] = None,
     ) -> int:
         """
         Sync matches for a player from Riot API (Current Season).
         Fetches match IDs in batches and stores missing matches.
+
+        Args:
+            riot_client: The Riot API client
+            player: Player object with puuid and platform
+            rate_limiter: Optional DB rate limiter for coordinated rate limiting
         """
         puuid = getattr(player, "puuid", None)
         platform = getattr(player, "platform", None)
@@ -1807,6 +1814,16 @@ class MatchService:
 
         while keep_fetching:
             try:
+                # Use DB rate limiter if provided
+                if rate_limiter:
+                    can_proceed = await rate_limiter.acquire()
+                    if not can_proceed:
+                        logger.warning(
+                            "Rate limit exceeded, stopping match sync",
+                            puuid=puuid,
+                        )
+                        break
+
                 # 1. Fetch match IDs
                 match_list_dto = await riot_client.get_match_list_by_puuid(
                     puuid=puuid,
@@ -1815,6 +1832,11 @@ class MatchService:
                     count=count,
                     queue=QueueType.RANKED_SOLO_5X5,
                 )
+
+                # Record the request if using rate limiter
+                if rate_limiter:
+                    await rate_limiter.record_request()
+
             except Exception as e:
                 logger.error("Failed to fetch match IDs", puuid=puuid, error=str(e))
                 break
@@ -1835,11 +1857,25 @@ class MatchService:
 
             for match_id in ids_to_process:
                 try:
-                    # STRICT THROTTLING: 1.2s delay to respect 100 req/2min Dev Key limit
-                    await asyncio.sleep(1.2)
+                    # Use DB rate limiter for coordinated rate limiting
+                    if rate_limiter:
+                        can_proceed = await rate_limiter.acquire()
+                        if not can_proceed:
+                            logger.warning(
+                                "Rate limit exceeded during match fetch",
+                                puuid=puuid,
+                                match_id=match_id,
+                            )
+                            keep_fetching = False
+                            break
 
                     # 2. Fetch match details
                     match_dto = await riot_client.get_match(match_id, region=region)
+
+                    # Record the request if using rate limiter
+                    if rate_limiter:
+                        await rate_limiter.record_request()
+
                     if not match_dto:
                         continue
 

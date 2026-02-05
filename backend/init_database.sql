@@ -176,7 +176,7 @@ CREATE TABLE core.matches (
     game_duration integer NOT NULL,
     early_surrender boolean DEFAULT false NOT NULL,
     surrender boolean DEFAULT false NOT NULL,
-    game_result character varying(32) NOT NULL,
+    game_result character varying(32),
     fully_analyzed boolean DEFAULT false NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL
@@ -306,38 +306,29 @@ Contains granular stats like damagePerMinute, healFromMapSources, skillshotsDodg
 Kept as full JSON to avoid frequent schema migrations when Riot adds new challenges.';
 
 -- [table] core.matchmaking_analyses
-
-CREATE SEQUENCE core.matchmaking_analyses_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
+-- Immutable table - new records are inserted for each analysis, never updated
 
 CREATE TABLE core.matchmaking_analyses (
-    id bigint DEFAULT nextval('core.matchmaking_analyses_id_seq'::regclass) NOT NULL,
     puuid character varying(78) NOT NULL,
-    status character varying(20) NOT NULL,
-    progress bigint NOT NULL,
-    total_requests bigint NOT NULL,
-    estimated_minutes_remaining bigint NOT NULL,
     results jsonb,
-    error_message text,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     started_at timestamp with time zone,
     completed_at timestamp with time zone,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL
+    puuid_progress jsonb DEFAULT '{}'::jsonb,
+    requests_saved integer DEFAULT 0 NOT NULL,
+    rate_limit_wait_seconds integer DEFAULT 0 NOT NULL
 );
 
-ALTER SEQUENCE core.matchmaking_analyses_id_seq OWNED BY core.matchmaking_analyses.id;
+COMMENT ON TABLE core.matchmaking_analyses IS 'Immutable matchmaking analysis results. New records inserted per analysis.';
+COMMENT ON COLUMN core.matchmaking_analyses.puuid_progress IS 'Tracks analyzed PUUIDs: {"<puuid>": true/false} where true=fully analyzed';
+COMMENT ON COLUMN core.matchmaking_analyses.requests_saved IS 'Number of API requests saved due to cached match data in database';
+COMMENT ON COLUMN core.matchmaking_analyses.rate_limit_wait_seconds IS 'Seconds remaining when waiting for rate limit reset (0 = not waiting)';
 
 ALTER TABLE ONLY core.matchmaking_analyses
-    ADD CONSTRAINT pk_matchmaking_analyses PRIMARY KEY (id);
+    ADD CONSTRAINT pk_matchmaking_analyses PRIMARY KEY (puuid, created_at);
 
-CREATE INDEX ix_app_matchmaking_analyses_puuid ON core.matchmaking_analyses USING btree (puuid);
-CREATE INDEX ix_app_matchmaking_analyses_status ON core.matchmaking_analyses USING btree (status);
-CREATE INDEX ix_matchmaking_analyses_created_at ON core.matchmaking_analyses USING btree (created_at);
-CREATE INDEX ix_matchmaking_analyses_puuid_status ON core.matchmaking_analyses USING btree (puuid, status);
+CREATE INDEX idx_matchmaking_analyses_puuid ON core.matchmaking_analyses USING btree (puuid);
+CREATE INDEX ix_matchmaking_analyses_created_at ON core.matchmaking_analyses USING btree (created_at DESC);
 
 -- [table] core.playstyle_analyses
 
@@ -390,6 +381,49 @@ CREATE INDEX idx_leagues_tier_lp ON core.player_leagues USING btree (tier, leagu
 CREATE INDEX idx_leagues_tier_rank ON core.player_leagues USING btree (tier, rank);
 CREATE INDEX idx_leagues_puuid_created ON core.player_leagues USING btree (puuid, created_at DESC);
 CREATE INDEX idx_leagues_league_id ON core.player_leagues USING btree (league_id);
+
+-- [table] core.rate_limit_state
+-- Central rate limit state for all Riot API components
+
+CREATE SEQUENCE core.rate_limit_state_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+CREATE TABLE core.rate_limit_state (
+    id integer DEFAULT nextval('core.rate_limit_state_id_seq'::regclass) NOT NULL,
+    component character varying(50) NOT NULL,
+    priority integer NOT NULL DEFAULT 3,
+    requests_made integer NOT NULL DEFAULT 0,
+    window_start timestamp with time zone NOT NULL DEFAULT now(),
+    window_size_seconds integer NOT NULL DEFAULT 120,
+    max_requests integer NOT NULL DEFAULT 100,
+    is_waiting boolean NOT NULL DEFAULT false,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+COMMENT ON TABLE core.rate_limit_state IS 'Central rate limit state for all Riot API components';
+COMMENT ON COLUMN core.rate_limit_state.component IS 'Component name: MATCH_FETCHER, PLAYER_UPDATER, MATCHMAKING_ANALYSIS';
+COMMENT ON COLUMN core.rate_limit_state.priority IS 'Priority level: 1=highest (PLAYER_UPDATER), 2=medium (MATCH_FETCHER), 3=lowest (MATCHMAKING_ANALYSIS)';
+COMMENT ON COLUMN core.rate_limit_state.requests_made IS 'Number of requests made in current window';
+COMMENT ON COLUMN core.rate_limit_state.window_start IS 'Start time of current rate limit window';
+COMMENT ON COLUMN core.rate_limit_state.window_size_seconds IS 'Size of rate limit window in seconds (Riot: 120s)';
+COMMENT ON COLUMN core.rate_limit_state.max_requests IS 'Maximum requests per window (Riot dev: 100)';
+COMMENT ON COLUMN core.rate_limit_state.is_waiting IS 'True if this component is waiting for higher priority components';
+
+ALTER SEQUENCE core.rate_limit_state_id_seq OWNED BY core.rate_limit_state.id;
+
+ALTER TABLE ONLY core.rate_limit_state
+    ADD CONSTRAINT pk_rate_limit_state PRIMARY KEY (id);
+
+ALTER TABLE ONLY core.rate_limit_state
+    ADD CONSTRAINT uq_rate_limit_state_component UNIQUE (component);
+
+CREATE INDEX idx_rate_limit_priority_waiting ON core.rate_limit_state USING btree (priority, is_waiting);
 
 -- [table] core.riot_api_keys
 

@@ -333,7 +333,7 @@
     - For dialogs and forms where a more prominent CTA is needed
   */
   .button-medium {
-    @apply inline-flex items-center justify-center whitespace-nowrap rounded-md font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-5 [&_svg]:shrink-0 shadow h-10 cursor-pointer text-primary-foreground;
+    @apply inline-flex items-center justify-center whitespace-nowrap rounded-md font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring opacity-90 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-5 [&_svg]:shrink-0 shadow h-10 cursor-pointer text-primary-foreground;
     background: linear-gradient(
       105deg,
       rgb(242, 215, 119) 0%,

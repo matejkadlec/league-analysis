@@ -1,4 +1,22 @@
-"""Matchmaking analysis service for analyzing League of Legends matchmaking fairness."""
+"""Matchmaking analysis service for analyzing League of Legends matchmaking fairness.
+
+This service calculates the average winrate of players on your team vs enemies
+across your last 10 ranked matches. For each of the ~100 players in those matches,
+it fetches their last 10 matches to calculate their winrate.
+
+Total API calls in worst case: ~1100 (1 + 10*10 + 10*10*10)
+- 1 to get player's match IDs
+- 100 to get match details (10 matches * 10 players)
+- 1000 to get each player's match history (10 matches * 10 players * 10 matches)
+
+Progress is tracked in puuid_progress JSONB column to enable resumption.
+
+Rate Limiting:
+- Uses DBRateLimiter with lowest priority (3) to yield to jobs
+- Will wait up to 30 minutes for rate limit window resets
+- Coordinates with Match Fetcher and Player Updater via database
+- When 429 errors occur, waits for Retry-After and retries
+"""
 
 import asyncio
 from typing import Optional, List, Dict, Tuple
@@ -6,102 +24,141 @@ from datetime import datetime, timezone
 import structlog
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update
+from sqlalchemy import select, update, and_
 from sqlalchemy.dialects.postgresql import insert
 
-from .models import MatchmakingAnalysis, AnalysisStatus
+from .models import MatchmakingAnalysis
 from app.features.matches.models import Match
 from app.features.matches.participants import MatchParticipant
 from .schemas import (
     MatchmakingAnalysisResponse,
     MatchmakingAnalysisStatusResponse,
+    MatchmakingAnalysisHistoryItem,
+    MatchmakingAnalysisHistoryResponse,
 )
 from app.core.riot_api.client import RiotAPIClient
-from app.core.riot_api.errors import RiotAPIError
+from app.core.riot_api.errors import RiotAPIError, RateLimitError
+from app.core.riot_api.db_rate_limiter import DBRateLimiter, RateLimitComponent
 from app.core.riot_api.transformers import MatchTransformer
+from app.core import db_manager
 
 logger = structlog.get_logger(__name__)
+
+# Maximum wait time for a single rate limit reset (120 seconds = 2 minutes)
+MAX_RATE_LIMIT_WAIT = 120
+
+# Global registry to track running analyses
+_running_analyses: Dict[str, asyncio.Task] = {}
 
 
 class MatchmakingAnalysisService:
     """Service for analyzing matchmaking fairness."""
+
+    # Constants
+    MATCHES_TO_ANALYZE = 10
+    MATCHES_FOR_WINRATE = 10
+    MIN_MATCHES_REQUIRED = 10
+    EXPECTED_PLAYERS = 100  # 10 matches * 10 players per match
 
     def __init__(self, db: AsyncSession, riot_client: RiotAPIClient):
         """Initialize matchmaking analysis service."""
         self.db = db
         self.riot_client = riot_client
         self.transformer = MatchTransformer()
-        self._cancel_flags: Dict[int, bool] = {}  # Track cancellation requests
+        self.rate_limiter: Optional[DBRateLimiter] = None
+        self.requests_saved: int = 0  # Track saved API calls
+        self._current_analysis_puuid: Optional[str] = None  # For updating wait status
+        self._current_analysis_created_at: Optional[datetime] = None
+
+    async def check_player_has_enough_matches(self, puuid: str) -> Tuple[bool, int]:
+        """
+        Check if player has at least 10 ranked matches.
+
+        Returns:
+            Tuple of (has_enough, match_count)
+        """
+        try:
+            match_list = await self.riot_client.get_match_list_by_puuid(
+                puuid=puuid,
+                start=0,
+                count=self.MIN_MATCHES_REQUIRED,
+                queue=420,  # Ranked Solo/Duo only
+            )
+            match_count = len(match_list.match_ids)
+            return match_count >= self.MIN_MATCHES_REQUIRED, match_count
+        except RiotAPIError as e:
+            logger.error(
+                "Failed to check player match count", puuid=puuid, error=str(e)
+            )
+            raise
 
     async def start_analysis(self, puuid: str) -> MatchmakingAnalysisResponse:
         """
         Start a new matchmaking analysis for a player.
 
-        Args:
-            puuid: Player PUUID to analyze
-
-        Returns:
-            MatchmakingAnalysisResponse with analysis ID and initial status
+        This creates a new analysis record and spawns a background task
+        to perform the analysis. The task runs independently of the request.
         """
-        # Check if there's already an active analysis for this player
+        # Clean up completed/cancelled tasks from registry
+        if puuid in _running_analyses:
+            task = _running_analyses[puuid]
+            if task.done():
+                # Task finished (completed, failed, or cancelled) - remove it
+                _running_analyses.pop(puuid, None)
+            else:
+                # Task is still running
+                logger.info("Analysis already running for player", puuid=puuid)
+                latest = await self.get_latest_analysis(puuid)
+                if latest:
+                    return latest
+
+        # Check for existing in-progress analysis in DB
         result = await self.db.execute(
             select(MatchmakingAnalysis)
             .where(
-                MatchmakingAnalysis.puuid == puuid,
-                MatchmakingAnalysis.status.in_(
-                    [AnalysisStatus.PENDING.value, AnalysisStatus.IN_PROGRESS.value]
-                ),
+                and_(
+                    MatchmakingAnalysis.puuid == puuid,
+                    MatchmakingAnalysis.started_at.isnot(None),
+                    MatchmakingAnalysis.completed_at.is_(None),
+                )
             )
             .order_by(MatchmakingAnalysis.created_at.desc())
+            .limit(1)
         )
         existing = result.scalar_one_or_none()
 
         if existing:
             logger.info(
-                "Found existing active analysis",
-                analysis_id=existing.id,
+                "Found existing in-progress analysis, resuming",
                 puuid=puuid,
-                status=existing.status,
+                created_at=existing.created_at,
             )
+            # Resume the existing analysis
+            task = asyncio.create_task(
+                self._run_analysis_background(puuid, existing.created_at)
+            )
+            _running_analyses[puuid] = task
             return MatchmakingAnalysisResponse.model_validate(existing)
 
         # Create new analysis record
-        # Initialize with 0 progress but also 0 total to avoid showing misleading "0 of 1000"
-        # Will be updated once we fetch the player's matches
+        now = datetime.now(timezone.utc)
         analysis = MatchmakingAnalysis(
             puuid=puuid,
-            status=AnalysisStatus.PENDING.value,
-            progress=0,
-            total_requests=0,  # Will be calculated after fetching matches
-            estimated_minutes_remaining=0,  # Will be calculated after fetching matches
+            created_at=now,
+            puuid_progress={},
         )
 
         self.db.add(analysis)
         await self.db.commit()
         await self.db.refresh(analysis)
 
-        logger.info(
-            "Created new matchmaking analysis", analysis_id=analysis.id, puuid=puuid
-        )
+        logger.info("Created new matchmaking analysis", puuid=puuid, created_at=now)
 
-        # Start analysis in background
-        asyncio.create_task(self._run_analysis(analysis.id, puuid))
+        # Start background task
+        task = asyncio.create_task(self._run_analysis_background(puuid, now))
+        _running_analyses[puuid] = task
 
         return MatchmakingAnalysisResponse.model_validate(analysis)
-
-    async def get_analysis_status(
-        self, analysis_id: int
-    ) -> Optional[MatchmakingAnalysisStatusResponse]:
-        """Get current status of an analysis."""
-        result = await self.db.execute(
-            select(MatchmakingAnalysis).where(MatchmakingAnalysis.id == analysis_id)
-        )
-        analysis = result.scalar_one_or_none()
-
-        if not analysis:
-            return None
-
-        return MatchmakingAnalysisStatusResponse.model_validate(analysis)
 
     async def get_latest_analysis(
         self, puuid: str
@@ -120,197 +177,274 @@ class MatchmakingAnalysisService:
 
         return MatchmakingAnalysisResponse.model_validate(analysis)
 
-    async def cancel_analysis(self, analysis_id: int) -> bool:
-        """
-        Cancel an ongoing analysis.
-
-        Args:
-            analysis_id: ID of the analysis to cancel
-
-        Returns:
-            True if cancelled successfully, False if not found or already complete
-        """
+    async def get_analysis_status(
+        self, puuid: str, created_at: datetime
+    ) -> Optional[MatchmakingAnalysisStatusResponse]:
+        """Get status of a specific analysis."""
         result = await self.db.execute(
-            select(MatchmakingAnalysis).where(MatchmakingAnalysis.id == analysis_id)
+            select(MatchmakingAnalysis).where(
+                and_(
+                    MatchmakingAnalysis.puuid == puuid,
+                    MatchmakingAnalysis.created_at == created_at,
+                )
+            )
         )
         analysis = result.scalar_one_or_none()
 
         if not analysis:
-            return False
+            return None
 
-        if analysis.status in [
-            AnalysisStatus.COMPLETED.value,
-            AnalysisStatus.FAILED.value,
-            AnalysisStatus.CANCELLED.value,
-        ]:
-            return False
+        # Build status response
+        puuid_progress = analysis.puuid_progress or {}
+        progress = sum(1 for v in puuid_progress.values() if v)
+        total = len(puuid_progress)
 
-        # Set cancel flag
-        self._cancel_flags[analysis_id] = True
+        status = "pending"
+        if analysis.completed_at:
+            status = "completed"
+        elif analysis.started_at:
+            status = "in_progress"
 
-        # Update status
-        await self.db.execute(
-            update(MatchmakingAnalysis)
-            .where(MatchmakingAnalysis.id == analysis_id)
-            .values(
-                status=AnalysisStatus.CANCELLED.value,
-                updated_at=datetime.now(timezone.utc),
+        # Convert dict results to schema if present
+        results_schema = None
+        if analysis.results:
+            from .schemas import MatchmakingAnalysisResults
+
+            results_schema = MatchmakingAnalysisResults(
+                team_avg_winrate=analysis.results.get("team_avg_winrate", 0),
+                enemy_avg_winrate=analysis.results.get("enemy_avg_winrate", 0),
+                matches_analyzed=analysis.results.get("matches_analyzed", 0),
             )
+
+        return MatchmakingAnalysisStatusResponse(
+            puuid=analysis.puuid,
+            status=status,
+            progress=progress,
+            total_puuids=total,
+            results=results_schema,
+            created_at=analysis.created_at,
+            requests_saved=analysis.requests_saved or 0,
         )
-        await self.db.commit()
 
-        logger.info("Analysis cancelled", analysis_id=analysis_id)
-        return True
+    async def get_analysis_history(
+        self, puuid: str, limit: int = 20
+    ) -> MatchmakingAnalysisHistoryResponse:
+        """Get history of completed analyses for a player."""
+        result = await self.db.execute(
+            select(MatchmakingAnalysis)
+            .where(
+                and_(
+                    MatchmakingAnalysis.puuid == puuid,
+                    MatchmakingAnalysis.completed_at.isnot(None),
+                    MatchmakingAnalysis.results.isnot(None),
+                )
+            )
+            .order_by(MatchmakingAnalysis.created_at.desc())
+            .limit(limit)
+        )
+        analyses = result.scalars().all()
 
-    async def _run_analysis(self, analysis_id: int, puuid: str) -> None:
+        items = []
+        for analysis in analyses:
+            if analysis.results:
+                items.append(
+                    MatchmakingAnalysisHistoryItem(
+                        created_at=analysis.created_at,
+                        team_avg_winrate=analysis.results.get("team_avg_winrate", 0),
+                        enemy_avg_winrate=analysis.results.get("enemy_avg_winrate", 0),
+                    )
+                )
+
+        return MatchmakingAnalysisHistoryResponse(items=items)
+
+    async def _run_analysis_background(self, puuid: str, created_at: datetime) -> None:
         """
         Run the matchmaking analysis in the background.
 
-        This method implements the core analysis logic:
-        1. Fetch player's last 10 matches
-        2. For each match, get 10 participants
-        3. For each participant, get their last 10 matches
-        4. Calculate average winrates for same team vs enemy team
+        This method creates its own DB session and runs independently.
+        Uses DB rate limiter with lowest priority to coordinate with other components.
         """
+        rate_limiter = None
         try:
-            logger.info(
-                "Starting matchmaking analysis", analysis_id=analysis_id, puuid=puuid
-            )
+            async with db_manager.get_session() as db:
+                from app.core.config import get_riot_api_key
 
+                api_key = await get_riot_api_key(db)
+
+                async with RiotAPIClient(api_key=api_key) as riot_client:
+                    # Initialize rate limiter with lowest priority
+                    rate_limiter = DBRateLimiter(
+                        db, RateLimitComponent.MATCHMAKING_ANALYSIS
+                    )
+
+                    service = MatchmakingAnalysisService(db, riot_client)
+                    service.rate_limiter = rate_limiter
+                    await service._run_analysis(puuid, created_at)
+        except Exception as e:
+            logger.error(
+                "Background analysis failed",
+                puuid=puuid,
+                error=str(e),
+                exc_info=True,
+            )
+        finally:
+            # Clean up from running analyses
+            _running_analyses.pop(puuid, None)
+            # Release rate limiter
+            if rate_limiter:
+                try:
+                    async with db_manager.get_session() as db:
+                        rate_limiter.db = db
+                        await rate_limiter.release()
+                except Exception:
+                    pass  # Best effort cleanup
+
+    async def _run_analysis(self, puuid: str, created_at: datetime) -> None:
+        """
+        Run the matchmaking analysis.
+
+        Workflow:
+        1. Get player's last 10 matches
+        2. Pre-populate puuid_progress with all participants (100 unique PUUIDs)
+        3. For each participant, calculate their winrate from last 10 matches
+        4. Average win rates for teammates vs enemies
+        """
+        logger.info("Starting matchmaking analysis", puuid=puuid, created_at=created_at)
+
+        # Reset requests_saved counter and set current analysis context
+        self.requests_saved = 0
+        self._current_analysis_puuid = puuid
+        self._current_analysis_created_at = created_at
+
+        # Mark as started
+        await self.db.execute(
+            update(MatchmakingAnalysis)
+            .where(
+                and_(
+                    MatchmakingAnalysis.puuid == puuid,
+                    MatchmakingAnalysis.created_at == created_at,
+                )
+            )
+            .values(started_at=datetime.now(timezone.utc))
+        )
+        await self.db.commit()
+
+        try:
             # Step 1: Get player's last 10 matches
-            player_matches = await self._fetch_player_matches(puuid, count=10)
+            match_ids = await self._fetch_player_matches(puuid, self.MATCHES_TO_ANALYZE)
 
-            if self._is_cancelled(analysis_id):
-                return
-
-            if not player_matches:
-                raise ValueError("No matches found for player")
-
-            logger.info(
-                "Fetched player matches",
-                analysis_id=analysis_id,
-                match_count=len(player_matches),
-            )
-
-            # Calculate total estimated requests
-            # 1 for initial match list + (10 matches * 11 requests per match)
-            # Each match: 1 for participants + 10 for each participant's history and matches
-            total_estimated = 1 + (len(player_matches) * 11)
-
-            # Update status to in progress with accurate totals
-            await self.db.execute(
-                update(MatchmakingAnalysis)
-                .where(MatchmakingAnalysis.id == analysis_id)
-                .values(
-                    status=AnalysisStatus.IN_PROGRESS.value,
-                    started_at=datetime.now(timezone.utc),
-                    updated_at=datetime.now(timezone.utc),
-                    progress=1,  # We've completed the initial fetch
-                    total_requests=total_estimated,
-                    estimated_minutes_remaining=total_estimated
-                    // 50,  # ~50 requests per minute
-                )
-            )
-            await self.db.commit()
-
-            # Step 2-5: Process each match and calculate winrates
-            results = await self._analyze_matches(analysis_id, puuid, player_matches)
-
-            if self._is_cancelled(analysis_id):
-                logger.info(
-                    "Analysis cancelled after processing",
-                    analysis_id=analysis_id,
-                )
-                return
-
-            # Check if results are empty (might indicate cancellation)
-            if not results or not results.get("matches_analyzed"):
+            if len(match_ids) < self.MIN_MATCHES_REQUIRED:
                 logger.warning(
-                    "No results from analysis (may have been cancelled)",
-                    analysis_id=analysis_id,
+                    "Not enough matches for analysis",
+                    puuid=puuid,
+                    found=len(match_ids),
+                    required=self.MIN_MATCHES_REQUIRED,
                 )
                 return
 
-            # Store results
+            logger.info("Fetched player matches", puuid=puuid, count=len(match_ids))
+
+            # Step 1b: Pre-populate puuid_progress with all participant:timestamp keys
+            all_keys = await self._collect_all_participant_keys(match_ids)
+            initial_progress = {k: False for k in all_keys}
+            await self._update_puuid_progress(puuid, created_at, initial_progress)
+            logger.info(
+                "Pre-populated progress with all participant keys",
+                puuid=puuid,
+                total_keys=len(all_keys),
+            )
+
+            # Step 2: Process each match and collect winrates
+            team_winrates: List[float] = []
+            enemy_winrates: List[float] = []
+
+            for match_idx, match_id in enumerate(match_ids):
+                logger.info(
+                    f"Processing match {match_idx + 1}/{len(match_ids)}",
+                    match_id=match_id,
+                )
+
+                match_result = await self._process_match(
+                    puuid, created_at, match_id, puuid
+                )
+
+                if match_result:
+                    team_winrates.extend(match_result["team_winrates"])
+                    enemy_winrates.extend(match_result["enemy_winrates"])
+
+            # Step 3: Calculate final results
+            team_avg = sum(team_winrates) / len(team_winrates) if team_winrates else 0.0
+            enemy_avg = (
+                sum(enemy_winrates) / len(enemy_winrates) if enemy_winrates else 0.0
+            )
+
+            # matches_analyzed = player's 10 matches
+            # players_analyzed = team (50) + enemy (50) = 100 winrate samples
+            # (some players appear in multiple matches, so unique count may be ~91)
+            results = {
+                "team_avg_winrate": round(team_avg, 4),
+                "enemy_avg_winrate": round(enemy_avg, 4),
+                "matches_analyzed": len(match_ids),
+                "players_analyzed": len(team_winrates) + len(enemy_winrates),
+            }
+
+            # Step 4: Save results with requests_saved
+            now = datetime.now(timezone.utc)
             await self.db.execute(
                 update(MatchmakingAnalysis)
-                .where(MatchmakingAnalysis.id == analysis_id)
-                .values(
-                    status=AnalysisStatus.COMPLETED.value,
-                    results=results,
-                    completed_at=datetime.now(timezone.utc),
-                    updated_at=datetime.now(timezone.utc),
-                    estimated_minutes_remaining=0,
+                .where(
+                    and_(
+                        MatchmakingAnalysis.puuid == puuid,
+                        MatchmakingAnalysis.created_at == created_at,
+                    )
                 )
+                .values(
+                    results=results,
+                    completed_at=now,
+                    requests_saved=self.requests_saved,
+                    rate_limit_wait_seconds=0,  # Clear wait indicator
+                )
+            )
+
+            # Step 5: Update player's last_matchmaking_analysis timestamp
+            from app.features.players.models import Player
+
+            await self.db.execute(
+                update(Player)
+                .where(Player.puuid == puuid)
+                .values(last_matchmaking_analysis=now)
             )
             await self.db.commit()
 
             logger.info(
                 "Matchmaking analysis completed",
-                analysis_id=analysis_id,
+                puuid=puuid,
                 results=results,
+                requests_saved=self.requests_saved,
             )
 
         except Exception as e:
             logger.error(
                 "Matchmaking analysis failed",
-                analysis_id=analysis_id,
+                puuid=puuid,
                 error=str(e),
                 exc_info=True,
             )
+            raise
 
-            # Update status to failed
-            await self.db.execute(
-                update(MatchmakingAnalysis)
-                .where(MatchmakingAnalysis.id == analysis_id)
-                .values(
-                    status=AnalysisStatus.FAILED.value,
-                    error_message=str(e),
-                    updated_at=datetime.now(timezone.utc),
-                )
-            )
-            await self.db.commit()
-
-        finally:
-            # Clean up cancel flag
-            self._cancel_flags.pop(analysis_id, None)
-
-    def _is_cancelled(self, analysis_id: int) -> bool:
-        """Check if analysis has been cancelled."""
-        return self._cancel_flags.get(analysis_id, False)
-
-    async def _fetch_player_matches(self, puuid: str, count: int = 10) -> List[str]:
-        """
-        Fetch player's last N match IDs.
-
-        Checks DB first for existing matches, then fetches from API for any missing ones.
-        """
-        # Check DB for existing ranked matches
-        result = await self.db.execute(
-            select(MatchParticipant.match_id)
-            .join(Match, MatchParticipant.match_id == Match.match_id)
-            .where(
-                MatchParticipant.puuid == puuid,
-                Match.queue_id == 420,  # Ranked Solo/Duo only
-            )
-            .order_by(Match.game_start_timestamp.desc())
-            .limit(count)
-        )
-        db_matches = [row[0] for row in result.all()]
-
-        logger.info(
-            "Found matches in DB",
-            puuid=puuid,
-            count=len(db_matches),
-            requested=count,
-        )
-
-        # If we have enough matches in DB, use those
-        if len(db_matches) >= count:
-            return db_matches[:count]
-
-        # Otherwise, fetch from API to get the latest
+    async def _fetch_player_matches(self, puuid: str, count: int) -> List[str]:
+        """Fetch player's last N match IDs from API."""
         try:
+            # Acquire rate limit before API call
+            if self.rate_limiter:
+                can_proceed = await self.rate_limiter.acquire()
+                if not can_proceed:
+                    logger.warning(
+                        "Rate limit exceeded, cannot fetch player matches",
+                        puuid=puuid,
+                    )
+                    return []
+
             match_list = await self.riot_client.get_match_list_by_puuid(
                 puuid=puuid,
                 start=0,
@@ -318,37 +452,214 @@ class MatchmakingAnalysisService:
                 queue=420,  # Ranked Solo/Duo only
             )
 
-            logger.info(
-                "Fetched matches from API",
-                puuid=puuid,
-                count=len(match_list.match_ids),
-            )
+            # Record the request
+            if self.rate_limiter:
+                await self.rate_limiter.record_request()
 
             return match_list.match_ids
         except RiotAPIError as e:
-            logger.error(
-                "Failed to fetch player matches from API",
-                puuid=puuid,
-                error=str(e),
-            )
-            # If API fails but we have some DB matches, return those
-            if db_matches:
-                logger.warning(
-                    "Using DB matches due to API failure",
-                    puuid=puuid,
-                    count=len(db_matches),
-                )
-                return db_matches
+            logger.error("Failed to fetch player matches", puuid=puuid, error=str(e))
             raise
+
+    async def _collect_all_participant_keys(self, match_ids: List[str]) -> List[str]:
+        """
+        Collect all participant progress keys from a list of matches.
+        Each key is in format 'puuid:timestamp' to track winrate calculation
+        per participant per match (since same player may appear in multiple matches).
+
+        Returns list of progress keys (100 for 10 matches - one per participant per match).
+        """
+        all_keys: List[str] = []
+
+        for match_id in match_ids:
+            participants = await self._get_match_participants(match_id)
+            match_start_timestamp = await self._get_match_start_timestamp(match_id)
+
+            if match_start_timestamp is None:
+                continue
+
+            for participant_puuid, _ in participants:
+                key = f"{participant_puuid}:{match_start_timestamp}"
+                all_keys.append(key)
+
+        return all_keys
+
+    async def _process_match(
+        self,
+        analysis_puuid: str,
+        analysis_created_at: datetime,
+        match_id: str,
+        target_puuid: str,
+    ) -> Optional[Dict]:
+        """
+        Process a single match and collect winrates for all participants.
+
+        For each participant, we calculate their winrate based on their
+        last 10 ranked matches starting at or before this match's start time.
+        This includes the match itself + their 9 previous matches.
+
+        Returns dict with team_winrates and enemy_winrates lists.
+        """
+        # Get match participants and match start timestamp
+        participants = await self._get_match_participants(match_id)
+
+        if not participants:
+            logger.warning("No participants found for match", match_id=match_id)
+            return None
+
+        # Get match start timestamp for historical winrate lookup
+        match_start_timestamp = await self._get_match_start_timestamp(match_id)
+        if match_start_timestamp is None:
+            logger.warning("Could not get match start timestamp", match_id=match_id)
+            return None
+
+        # Find target player's team
+        target_team_id = None
+        for participant_puuid, team_id in participants:
+            if participant_puuid == target_puuid:
+                target_team_id = team_id
+                break
+
+        if target_team_id is None:
+            logger.warning(
+                "Target player not found in match",
+                match_id=match_id,
+                target_puuid=target_puuid,
+            )
+            return None
+
+        team_winrates: List[float] = []
+        enemy_winrates: List[float] = []
+
+        # Process each participant
+        for participant_puuid, team_id in participants:
+            # Check if already analyzed for THIS specific match start timestamp
+            # Note: Same puuid may appear in multiple matches with different timestamps
+            # We use a composite key of puuid:start_timestamp for caching
+            analysis = await self._get_current_analysis(
+                analysis_puuid, analysis_created_at
+            )
+            puuid_progress = analysis.puuid_progress or {}
+            progress_key = f"{participant_puuid}:{match_start_timestamp}"
+
+            if progress_key in puuid_progress and puuid_progress[progress_key]:
+                # Already analyzed for this timestamp, get cached winrate
+                winrate = await self._get_cached_winrate(
+                    participant_puuid, match_start_timestamp
+                )
+            else:
+                # Need to analyze this player at this point in time
+                winrate = await self._calculate_participant_winrate(
+                    participant_puuid, match_start_timestamp
+                )
+
+                # Update progress with composite key
+                puuid_progress[progress_key] = True
+                await self._update_puuid_progress(
+                    analysis_puuid, analysis_created_at, puuid_progress
+                )
+
+            if winrate is not None:
+                if team_id == target_team_id:
+                    team_winrates.append(winrate)
+                else:
+                    enemy_winrates.append(winrate)
+
+        return {
+            "team_winrates": team_winrates,
+            "enemy_winrates": enemy_winrates,
+        }
+
+    async def _get_current_analysis(
+        self, puuid: str, created_at: datetime
+    ) -> MatchmakingAnalysis:
+        """Get the current analysis record."""
+        result = await self.db.execute(
+            select(MatchmakingAnalysis).where(
+                and_(
+                    MatchmakingAnalysis.puuid == puuid,
+                    MatchmakingAnalysis.created_at == created_at,
+                )
+            )
+        )
+        return result.scalar_one()
+
+    async def _update_puuid_progress(
+        self, puuid: str, created_at: datetime, progress: Dict[str, bool]
+    ) -> None:
+        """Update the puuid_progress for an analysis."""
+        await self.db.execute(
+            update(MatchmakingAnalysis)
+            .where(
+                and_(
+                    MatchmakingAnalysis.puuid == puuid,
+                    MatchmakingAnalysis.created_at == created_at,
+                )
+            )
+            .values(puuid_progress=progress)
+        )
+        await self.db.commit()
+
+    async def _update_wait_seconds(self, wait_seconds: int) -> None:
+        """Update the rate_limit_wait_seconds for the current analysis."""
+        if self._current_analysis_puuid and self._current_analysis_created_at:
+            await self.db.execute(
+                update(MatchmakingAnalysis)
+                .where(
+                    and_(
+                        MatchmakingAnalysis.puuid == self._current_analysis_puuid,
+                        MatchmakingAnalysis.created_at
+                        == self._current_analysis_created_at,
+                    )
+                )
+                .values(
+                    rate_limit_wait_seconds=wait_seconds,
+                    requests_saved=self.requests_saved,
+                )
+            )
+            await self.db.commit()
+
+    async def _wait_for_rate_limit_with_countdown(self, retry_after: int) -> None:
+        """
+        Wait for rate limit to reset with countdown updates to the database.
+        Updates the rate_limit_wait_seconds column every second so frontend can show countdown.
+        """
+        wait_time = min(retry_after, MAX_RATE_LIMIT_WAIT)
+        logger.info(
+            "Waiting for rate limit to reset",
+            wait_seconds=wait_time,
+        )
+
+        remaining = wait_time
+        while remaining > 0:
+            await self._update_wait_seconds(remaining)
+            await asyncio.sleep(1)
+            remaining -= 1
+
+        # Clear the wait indicator
+        await self._update_wait_seconds(0)
+
+    async def _get_match_start_timestamp(self, match_id: str) -> Optional[int]:
+        """
+        Get the game_start_timestamp for a match from the database.
+
+        This is used as the reference point for fetching a participant's
+        "last 10 matches at the time of this match". Using game_start_timestamp
+        is correct because Riot API's endTime parameter filters by gameCreation
+        (match start time), not gameEndTimestamp.
+
+        Returns:
+            Epoch timestamp in milliseconds, or None if match not found
+        """
+        result = await self.db.execute(
+            select(Match.game_start_timestamp).where(Match.match_id == match_id)
+        )
+        return result.scalar_one_or_none()
 
     async def _get_match_participants(self, match_id: str) -> List[Tuple[str, int]]:
         """
         Get list of (puuid, team_id) tuples for a match.
-
         Checks DB first, fetches from API if not found.
-
-        Returns:
-            List of (puuid, team_id) tuples
         """
         # Check database first
         result = await self.db.execute(
@@ -359,45 +670,40 @@ class MatchmakingAnalysisService:
         participants = result.all()
 
         if participants:
-            logger.debug(
-                "Found match participants in DB",
-                match_id=match_id,
-                count=len(participants),
-            )
             return [(p.puuid, p.team_id) for p in participants]
 
         # Not in DB, fetch from API
         logger.info("Fetching match from API", match_id=match_id)
 
         try:
+            # Acquire rate limit before API call
+            if self.rate_limiter:
+                can_proceed = await self.rate_limiter.acquire()
+                if not can_proceed:
+                    logger.warning(
+                        "Rate limit exceeded, cannot fetch match",
+                        match_id=match_id,
+                    )
+                    return []
+
             match_dto = await self.riot_client.get_match(match_id)
 
-            # Store match in database
+            # Record the request
+            if self.rate_limiter:
+                await self.rate_limiter.record_request()
+
             await self._store_match(match_dto)
 
-            # Extract participants
-            participants = []
-            for participant_data in match_dto.info.participants:
-                participants.append((participant_data.puuid, participant_data.team_id))
-
-            return participants
-
+            return [(p.puuid, p.team_id) for p in match_dto.info.participants]
         except RiotAPIError as e:
-            logger.error(
-                "Failed to fetch match",
-                match_id=match_id,
-                error=str(e),
-            )
-            raise
+            logger.error("Failed to fetch match", match_id=match_id, error=str(e))
+            return []
 
     async def _store_match(self, match_dto) -> None:
         """Store match and participants in database."""
         try:
-            # Convert MatchDTO to dict for transformer
             match_data_dict = {
-                "metadata": {
-                    "matchId": match_dto.metadata.match_id,
-                },
+                "metadata": {"matchId": match_dto.metadata.match_id},
                 "info": {
                     "platformId": match_dto.info.platform,
                     "gameCreation": match_dto.info.game_start_timestamp,
@@ -408,7 +714,7 @@ class MatchmakingAnalysisService:
                     "gameMode": match_dto.info.game_mode,
                     "gameType": match_dto.info.game_type,
                     "gameEndTimestamp": match_dto.info.game_end_timestamp,
-                    "tournamentId": getattr(match_dto.info, "tournament_code", None),
+                    "endOfGameResult": match_dto.info.game_result,
                     "participants": [
                         {
                             "puuid": p.puuid,
@@ -441,7 +747,6 @@ class MatchmakingAnalysisService:
                 },
             }
 
-            # Transform data
             transformed = self.transformer.transform_match_data(match_data_dict)
 
             # Upsert match
@@ -470,403 +775,207 @@ class MatchmakingAnalysisService:
                 error=str(e),
             )
             await self.db.rollback()
-            # Don't raise - this is a background task and we can continue
 
-    async def _get_participant_winrate(
-        self, puuid: str, match_id: str
-    ) -> Optional[bool]:
-        """
-        Get win status for a participant in a match.
-
-        Checks DB first, fetches from API if not found.
-
-        Returns:
-            True if won, False if lost, None if not found
-        """
-        # Check database first
-        result = await self.db.execute(
-            select(MatchParticipant.win).where(
-                MatchParticipant.match_id == match_id,
-                MatchParticipant.puuid == puuid,
-            )
-        )
-        win_status = result.scalar_one_or_none()
-
-        if win_status is not None:
-            return win_status
-
-        # Not in DB, need to fetch match
-        try:
-            match_dto = await self.riot_client.get_match(match_id)
-            await self._store_match(match_dto)
-
-            # Find participant in match
-            for participant_data in match_dto.info.participants:
-                if participant_data.puuid == puuid:
-                    return participant_data.win
-
-            return None
-
-        except RiotAPIError as e:
-            logger.warning(
-                "Failed to get participant winrate",
-                puuid=puuid,
-                match_id=match_id,
-                error=str(e),
-            )
-            return None
-
-    async def _mark_match_processed(self, match_id: str) -> None:
-        """Mark a match as processed after analyzing all its participants."""
-        try:
-            await self.db.execute(
-                update(Match)
-                .where(Match.match_id == match_id)
-                .values(fully_analyzed=True)
-            )
-            await self.db.commit()
-            logger.debug("Marked match as processed", match_id=match_id)
-        except Exception as e:
-            logger.warning(
-                "Failed to mark match as processed",
-                match_id=match_id,
-                error=str(e),
-            )
-            await self.db.rollback()
-            # Don't raise - this is not critical for analysis
-
-    async def _analyze_matches(
-        self, analysis_id: int, target_puuid: str, match_ids: List[str]
-    ) -> Dict:
-        """
-        Analyze all matches and calculate team vs enemy winrates.
-
-        Returns:
-            Dict with team_avg_winrate, enemy_avg_winrate, matches_analyzed
-        """
-        team_winrates: List[float] = []
-        enemy_winrates: List[float] = []
-
-        requests_completed = 1  # Initial match list fetch
-        total_estimated = len(match_ids) * 11  # Each match + 10 participants
-
-        for match_idx, match_id in enumerate(match_ids):
-            if self._is_cancelled(analysis_id):
-                logger.info(
-                    "Analysis cancelled during execution", analysis_id=analysis_id
-                )
-                return {}
-
-            logger.info(
-                f"Processing match {match_idx + 1}/{len(match_ids)}",
-                analysis_id=analysis_id,
-                match_id=match_id,
-            )
-
-            # Process single match
-            match_result = await self._process_single_match(
-                analysis_id,
-                match_id,
-                target_puuid,
-                requests_completed,
-                total_estimated,
-            )
-
-            if match_result is None:
-                # Cancelled or target player not found
-                if self._is_cancelled(analysis_id):
-                    return {}
-                continue
-
-            # Update counters and collect winrates
-            requests_completed = match_result["requests_completed"]
-            team_winrates.extend(match_result["team_winrates"])
-            enemy_winrates.extend(match_result["enemy_winrates"])
-
-            # Mark this match as processed after analyzing all its participants
-            await self._mark_match_processed(match_id)
-
-        return self._calculate_final_results(
-            team_winrates, enemy_winrates, len(match_ids)
-        )
-
-    async def _process_single_match(
-        self,
-        analysis_id: int,
-        match_id: str,
-        target_puuid: str,
-        requests_completed: int,
-        total_estimated: int,
-    ) -> Optional[Dict]:
-        """
-        Process a single match and collect winrates for team and enemy participants.
-
-        Args:
-            analysis_id: ID of the analysis
-            match_id: Match ID to process
-            target_puuid: PUUID of the target player
-            requests_completed: Number of requests completed so far
-            total_estimated: Total estimated requests
-
-        Returns:
-            Dict with requests_completed, team_winrates, enemy_winrates, or None if cancelled/invalid
-        """
-        # Get participants for this match
-        participants = await self._get_match_participants(match_id)
-        requests_completed += 1
-
-        # Find target player's team
-        target_team_id = self._find_target_team_id(participants, target_puuid)
-
-        if target_team_id is None:
-            logger.warning(
-                "Target player not found in match",
-                match_id=match_id,
-                target_puuid=target_puuid,
-            )
-            return None
-
-        # Process each participant
-        team_winrates: List[float] = []
-        enemy_winrates: List[float] = []
-
-        for participant_puuid, team_id in participants:
-            if participant_puuid == target_puuid:
-                continue  # Skip the target player themselves
-
-            if self._is_cancelled(analysis_id):
-                return None
-
-            # Get participant's winrate
-            winrate = await self._calculate_participant_winrate(participant_puuid)
-            requests_completed += 1
-
-            # Update progress
-            await self._update_progress(
-                analysis_id, requests_completed, total_estimated
-            )
-
-            # Categorize winrate by team
-            self._categorize_winrate(
-                winrate, team_id, target_team_id, team_winrates, enemy_winrates
-            )
-
-        return {
-            "requests_completed": requests_completed,
-            "team_winrates": team_winrates,
-            "enemy_winrates": enemy_winrates,
-        }
-
-    def _find_target_team_id(
-        self, participants: List[Tuple[str, int]], target_puuid: str
-    ) -> Optional[int]:
-        """
-        Find the team ID of the target player in a list of participants.
-
-        Args:
-            participants: List of (puuid, team_id) tuples
-            target_puuid: PUUID of the target player
-
-        Returns:
-            Team ID if found, None otherwise
-        """
-        for puuid, team_id in participants:
-            if puuid == target_puuid:
-                return team_id
-        return None
-
-    def _categorize_winrate(
-        self,
-        winrate: Optional[float],
-        team_id: int,
-        target_team_id: int,
-        team_winrates: List[float],
-        enemy_winrates: List[float],
-    ) -> None:
-        """
-        Categorize a participant's winrate as either team or enemy.
-
-        Args:
-            winrate: Participant's winrate (0.0-1.0) or None
-            team_id: Participant's team ID
-            target_team_id: Target player's team ID
-            team_winrates: List to append team winrates to (modified in place)
-            enemy_winrates: List to append enemy winrates to (modified in place)
-        """
-        if winrate is not None:
-            if team_id == target_team_id:
-                team_winrates.append(winrate)
-            else:
-                enemy_winrates.append(winrate)
-
-    def _calculate_final_results(
-        self,
-        team_winrates: List[float],
-        enemy_winrates: List[float],
-        matches_analyzed: int,
-    ) -> Dict:
-        """
-        Calculate final analysis results from collected winrates.
-
-        Args:
-            team_winrates: List of winrates for teammates
-            enemy_winrates: List of winrates for enemies
-            matches_analyzed: Number of matches analyzed
-
-        Returns:
-            Dict with team_avg_winrate, enemy_avg_winrate, matches_analyzed
-        """
-        team_avg = sum(team_winrates) / len(team_winrates) if team_winrates else 0.0
-        enemy_avg = sum(enemy_winrates) / len(enemy_winrates) if enemy_winrates else 0.0
-
-        return {
-            "team_avg_winrate": round(team_avg, 4),
-            "enemy_avg_winrate": round(enemy_avg, 4),
-            "matches_analyzed": matches_analyzed,
-        }
-
-    def _calculate_winrate_from_results(
-        self, win_results: List[Tuple[bool]]
+    async def _get_cached_winrate(
+        self, puuid: str, end_timestamp: int
     ) -> Optional[float]:
         """
-        Calculate winrate from a list of win/loss results.
+        Get winrate from cached matches in DB that ended at or before the given timestamp.
 
         Args:
-            win_results: List of tuples containing win status
-
-        Returns:
-            Float between 0.0 and 1.0, or None if empty
-        """
-        if not win_results:
-            return None
-
-        wins = sum(1 for (win,) in win_results if win)
-        total = len(win_results)
-        return wins / total if total > 0 else None
-
-    async def _get_db_winrate(
-        self, puuid: str, match_count: int
-    ) -> Tuple[Optional[float], List[Tuple[bool]]]:
-        """
-        Get winrate from database for a participant.
-
-        Args:
-            puuid: Player PUUID
-            match_count: Number of matches to check
-
-        Returns:
-            Tuple of (winrate if enough matches, all DB results for fallback)
+            puuid: Player's PUUID
+            end_timestamp: Epoch timestamp in milliseconds - include matches that ended <= this
         """
         result = await self.db.execute(
             select(MatchParticipant.win)
             .join(Match, MatchParticipant.match_id == Match.match_id)
             .where(
                 MatchParticipant.puuid == puuid,
-                Match.queue_id == 420,  # Ranked Solo/Duo only
+                Match.queue_id == 420,
+                Match.game_end_timestamp <= end_timestamp,
             )
-            .order_by(Match.game_start_timestamp.desc())
-            .limit(match_count)
+            .order_by(Match.game_end_timestamp.desc())
+            .limit(self.MATCHES_FOR_WINRATE)
         )
-        # Convert Rows to tuples to satisfy type checker
-        db_wins = [tuple(row) for row in result.all()]
+        wins = result.all()
 
-        # Return winrate if we have enough matches, otherwise return None and the partial results
-        if len(db_wins) >= match_count:
-            winrate = self._calculate_winrate_from_results(db_wins)
-            logger.debug(
-                "Calculated winrate from DB",
-                puuid=puuid,
-                wins=sum(1 for (win,) in db_wins if win),
-                total=len(db_wins),
-                winrate=winrate,
-            )
-            return winrate, db_wins
-
-        return None, db_wins
-
-    async def _get_api_winrate(self, puuid: str, match_count: int) -> Optional[float]:
-        """
-        Get winrate from Riot API for a participant.
-
-        Args:
-            puuid: Player PUUID
-            match_count: Number of matches to fetch
-
-        Returns:
-            Float between 0.0 and 1.0, or None if no matches found
-        """
-        match_list = await self.riot_client.get_match_list_by_puuid(
-            puuid=puuid,
-            start=0,
-            count=match_count,
-            queue=420,  # Ranked Solo/Duo only
-        )
-
-        if not match_list.match_ids:
+        if not wins:
             return None
 
-        # Get win status for each match
-        wins = 0
-        total = 0
-
-        for match_id in match_list.match_ids:
-            win_status = await self._get_participant_winrate(puuid, match_id)
-            if win_status is not None:
-                total += 1
-                if win_status:
-                    wins += 1
-
-        return wins / total if total > 0 else None
+        win_count = sum(1 for (win,) in wins if win)
+        return win_count / len(wins) if wins else None
 
     async def _calculate_participant_winrate(
-        self, puuid: str, match_count: int = 10
+        self, puuid: str, end_timestamp: int
     ) -> Optional[float]:
         """
-        Calculate winrate for a participant from their last N matches.
+        Calculate winrate for a participant from their last N matches starting at or before the timestamp.
 
-        Checks DB first for efficiency, falls back to API if needed.
+        This is crucial for accurate matchmaking analysis:
+        - We want the player's winrate INCLUDING the match with the current player
+        - Using endTime = game_start_timestamp ensures we get that match + 9 previous
+        - Riot API's endTime parameter filters by gameCreation (start time), not end time
+        - This represents "their last 10 matches at the time they played with you"
+
+        Args:
+            puuid: Player's PUUID
+            end_timestamp: Epoch timestamp in milliseconds (game_start_timestamp of reference match)
 
         Returns:
-            Float between 0.0 and 1.0, or None if no matches found
+            Winrate as float (0.0-1.0), or None if no matches found
         """
-        # Try DB first
-        db_winrate, db_wins = await self._get_db_winrate(puuid, match_count)
-        if db_winrate is not None:
-            return db_winrate
+        # Convert milliseconds to seconds for API (Riot uses epoch seconds for endTime)
+        end_time_seconds = end_timestamp // 1000
 
-        # Try API with fallback to partial DB data
-        try:
-            api_winrate = await self._get_api_winrate(puuid, match_count)
-            return (
-                api_winrate
-                if api_winrate is not None
-                else self._calculate_winrate_from_results(db_wins)
+        # First check if we already have enough matches in DB at or before this timestamp
+        result = await self.db.execute(
+            select(MatchParticipant.win)
+            .join(Match, MatchParticipant.match_id == Match.match_id)
+            .where(
+                MatchParticipant.puuid == puuid,
+                Match.queue_id == 420,
+                Match.game_start_timestamp <= end_timestamp,
             )
-        except RiotAPIError as e:
-            logger.warning(
-                "Failed to calculate participant winrate from API",
-                puuid=puuid,
-                error=str(e),
-            )
-            return self._calculate_winrate_from_results(db_wins)
-
-    async def _update_progress(
-        self, analysis_id: int, completed: int, total: int
-    ) -> None:
-        """Update analysis progress and time estimate."""
-        # Calculate estimated time remaining
-        # ~100 requests per 2 minutes = 50 requests per minute
-        requests_remaining = max(0, total - completed)
-        minutes_remaining = max(0, requests_remaining // 50)
-
-        await self.db.execute(
-            update(MatchmakingAnalysis)
-            .where(MatchmakingAnalysis.id == analysis_id)
-            .values(
-                progress=completed,
-                total_requests=total,
-                estimated_minutes_remaining=minutes_remaining,
-                updated_at=datetime.now(timezone.utc),
-            )
+            .order_by(Match.game_start_timestamp.desc())
+            .limit(self.MATCHES_FOR_WINRATE)
         )
-        await self.db.commit()
+        db_matches = result.all()
+
+        if len(db_matches) >= self.MATCHES_FOR_WINRATE:
+            # We have enough cached data - saved 11 requests (1 match list + 10 matches)
+            self.requests_saved += 11
+            win_count = sum(1 for (win,) in db_matches if win)
+            return win_count / len(db_matches)
+
+        cached_winrate = None
+        if db_matches:
+            win_count = sum(1 for (win,) in db_matches if win)
+            cached_winrate = win_count / len(db_matches)
+
+        # Need to fetch from API using endTime to get historical matches
+        max_rate_limit_retries = (
+            15  # Allow up to 15 rate limit waits (30+ minutes total)
+        )
+        rate_limit_retries = 0
+
+        while rate_limit_retries < max_rate_limit_retries:
+            try:
+                # Use endTime to only get matches that started BEFORE the reference match
+                match_list = await self.riot_client.get_match_list_by_puuid(
+                    puuid=puuid,
+                    start=0,
+                    count=self.MATCHES_FOR_WINRATE,
+                    queue=420,
+                    end_time=end_time_seconds,
+                )
+
+                if not match_list.match_ids:
+                    return cached_winrate
+
+                wins = 0
+                total = 0
+
+                for match_id in match_list.match_ids:
+                    win_status = await self._get_or_fetch_match_win_status(
+                        match_id, puuid
+                    )
+
+                    if win_status is not None:
+                        total += 1
+                        if win_status:
+                            wins += 1
+
+                return wins / total if total > 0 else cached_winrate
+
+            except RateLimitError as e:
+                rate_limit_retries += 1
+                retry_after = int(
+                    e.retry_after or 120
+                )  # Default to 120s if not specified
+                logger.info(
+                    "Rate limit hit, waiting before retry",
+                    puuid=puuid,
+                    end_timestamp=end_timestamp,
+                    retry_after=retry_after,
+                    attempt=rate_limit_retries,
+                )
+                await self._wait_for_rate_limit_with_countdown(retry_after)
+                # Continue to retry
+
+            except RiotAPIError as e:
+                logger.warning(
+                    "Failed to fetch participant matches",
+                    puuid=puuid,
+                    error=str(e),
+                )
+                return cached_winrate
+
+        logger.warning(
+            "Max rate limit retries exceeded",
+            puuid=puuid,
+            retries=rate_limit_retries,
+        )
+        return cached_winrate
+
+    async def _get_or_fetch_match_win_status(
+        self, match_id: str, puuid: str
+    ) -> Optional[bool]:
+        """
+        Get win status for a player in a match.
+        Checks DB first, fetches from API if needed.
+        Handles rate limits by waiting and retrying.
+        """
+        # Check if match exists in DB
+        result = await self.db.execute(
+            select(Match.match_id).where(Match.match_id == match_id)
+        )
+        match_exists = result.scalar_one_or_none() is not None
+
+        if match_exists:
+            # Match is in DB - get the participant's win status from DB
+            self.requests_saved += 1
+            result = await self.db.execute(
+                select(MatchParticipant.win).where(
+                    MatchParticipant.match_id == match_id,
+                    MatchParticipant.puuid == puuid,
+                )
+            )
+            return result.scalar_one_or_none()
+
+        # Need to fetch match from API with rate limit handling
+        max_retries = 10
+        for attempt in range(max_retries):
+            try:
+                match_dto = await self.riot_client.get_match(match_id)
+                await self._store_match(match_dto)
+
+                # Find participant's win status
+                for p in match_dto.info.participants:
+                    if p.puuid == puuid:
+                        return p.win
+                return None
+
+            except RateLimitError as e:
+                retry_after = int(e.retry_after or 120)
+                logger.info(
+                    "Rate limit hit during match fetch, waiting",
+                    match_id=match_id,
+                    retry_after=retry_after,
+                    attempt=attempt + 1,
+                )
+                await self._wait_for_rate_limit_with_countdown(retry_after)
+                # Continue to retry
+
+            except RiotAPIError as e:
+                logger.warning(
+                    "Failed to fetch match",
+                    match_id=match_id,
+                    error=str(e),
+                )
+                return None
+
+        logger.warning(
+            "Max retries exceeded for match fetch",
+            match_id=match_id,
+        )
+        return None

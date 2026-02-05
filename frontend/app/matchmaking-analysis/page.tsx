@@ -9,6 +9,8 @@ import { PlayerSearch, PlayerCard } from "@/features/players";
 import {
   MatchmakingAnalysis,
   MatchmakingAnalysisResults,
+  MatchmakingAnalysisHistory,
+  MatchmakingExplanationCard,
 } from "@/features/matchmaking";
 import { ProtectedRoute } from "@/features/auth";
 
@@ -189,14 +191,18 @@ function MatchmakingAnalysisContent() {
               ) : null}
             </div>
 
-            {/* Right Column: Player Card */}
-            <div>
+            {/* Right Column: Player Card + Analysis History */}
+            <div className="space-y-6">
               {isLoadingInitialPlayer ? (
                 <PlayerCardSkeleton />
               ) : selectedPlayer ? (
-                <Suspense fallback={<PlayerCardSkeleton />}>
-                  <PlayerCard player={selectedPlayer} />
-                </Suspense>
+                <>
+                  <Suspense fallback={<PlayerCardSkeleton />}>
+                    <PlayerCard player={selectedPlayer} />
+                  </Suspense>
+                  <MatchmakingAnalysisHistory puuid={selectedPlayer.puuid} />
+                  <MatchmakingExplanationCard />
+                </>
               ) : null}
             </div>
           </div>

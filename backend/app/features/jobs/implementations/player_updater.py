@@ -7,6 +7,7 @@ from app.features.jobs.base import BaseJob
 from app.features.players.service import PlayerService
 from app.features.players.schemas import PlayerResponse
 from app.core.riot_api.client import RiotAPIClient, APICallRecord
+from app.core.riot_api.db_rate_limiter import DBRateLimiter, RateLimitComponent
 from app.core.config import get_riot_api_key
 from app.core.riot_api.errors import AuthenticationError
 from app.features.players.models import Player
@@ -55,6 +56,9 @@ class PlayerUpdaterJob(BaseJob):
 
         player_service = PlayerService(db)
 
+        # Initialize DB rate limiter - Player Updater has highest priority
+        rate_limiter = DBRateLimiter(db, RateLimitComponent.PLAYER_UPDATER)
+
         async with RiotAPIClient(
             api_key=api_key,
             request_callback=self._track_api_request,
@@ -65,25 +69,31 @@ class PlayerUpdaterJob(BaseJob):
                 "Starting player updater job", tracked_count=len(tracked_players)
             )
 
-            for player in tracked_players:
-                try:
-                    await self._update_player_profile(
-                        db, player, player_service, riot_client
-                    )
-                except Exception as e:
-                    error_msg = str(e)
-                    is_api_key_err = _is_api_key_error(e)
-                    logger.error(
-                        "Error updating player profile",
-                        puuid=player.puuid,
-                        error=error_msg,
-                    )
-                    self.record_error(error_msg, is_api_key_error=is_api_key_err)
-                    # If it's an API key error, stop processing more players
-                    if is_api_key_err:
-                        logger.error("API key error detected, stopping job execution")
-                        break
-                    continue
+            try:
+                for player in tracked_players:
+                    try:
+                        await self._update_player_profile(
+                            db, player, player_service, riot_client, rate_limiter
+                        )
+                    except Exception as e:
+                        error_msg = str(e)
+                        is_api_key_err = _is_api_key_error(e)
+                        logger.error(
+                            "Error updating player profile",
+                            puuid=player.puuid,
+                            error=error_msg,
+                        )
+                        self.record_error(error_msg, is_api_key_error=is_api_key_err)
+                        # If it's an API key error, stop processing more players
+                        if is_api_key_err:
+                            logger.error(
+                                "API key error detected, stopping job execution"
+                            )
+                            break
+                        continue
+            finally:
+                # Release rate limiter when done
+                await rate_limiter.release()
 
             # Store API call records from the client
             self._store_api_calls(riot_client.get_api_calls())
@@ -94,6 +104,7 @@ class PlayerUpdaterJob(BaseJob):
         player: PlayerResponse,
         player_service: PlayerService,
         riot_client: RiotAPIClient,
+        rate_limiter: DBRateLimiter,
     ) -> None:
         """Update profile for a single player (game_name, tag_line, profile_icon_id, summoner_level)."""
         # Need to get the Player model, not PlayerResponse
@@ -104,9 +115,23 @@ class PlayerUpdaterJob(BaseJob):
 
         # Update player profile (game_name, tag_line, profile_icon_id, summoner_level)
         try:
+            # Acquire rate limit before API calls (2 calls per player)
+            can_proceed = await rate_limiter.acquire()
+            if not can_proceed:
+                logger.warning(
+                    "Rate limit exceeded, skipping player update",
+                    puuid=player.puuid,
+                )
+                return
+
             profile_updated = await player_service.update_player_profile(
                 player_model, riot_client
             )
+
+            # Record both API calls (summoner + account)
+            await rate_limiter.record_request()
+            await rate_limiter.record_request()
+
             await db.commit()
 
             if profile_updated:

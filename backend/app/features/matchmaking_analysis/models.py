@@ -1,16 +1,13 @@
-"""Matchmaking analysis model for tracking analysis state and results."""
+"""Matchmaking analysis model for immutable analysis results."""
 
 from typing import Optional
 from datetime import datetime
-from enum import Enum
 
 from sqlalchemy import (
-    BigInteger,
     DateTime as SQLDateTime,
     String,
-    Text,
+    PrimaryKeyConstraint,
     Index,
-    ForeignKey,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
@@ -19,83 +16,24 @@ from sqlalchemy.dialects.postgresql import JSONB
 from app.core.models import Base
 
 
-class AnalysisStatus(str, Enum):
-    """Status of matchmaking analysis."""
-
-    PENDING = "pending"
-    IN_PROGRESS = "in_progress"
-    COMPLETED = "completed"
-    FAILED = "failed"
-    CANCELLED = "cancelled"
-
-
 class MatchmakingAnalysis(Base):
-    """Matchmaking analysis model for tracking analysis progress and results."""
+    """Matchmaking analysis model - immutable records for each analysis.
+
+    This table uses an insert-only pattern:
+    - New analysis creates a new row
+    - puuid_progress is updated as players are analyzed
+    - Once completed, the row is never modified again
+    """
 
     __tablename__ = "matchmaking_analyses"
 
-    # Primary key
-    id: Mapped[int] = mapped_column(
-        BigInteger,
-        primary_key=True,
-        comment="Auto-incrementing primary key",
-    )
-
-    # Foreign key to player
+    # Composite primary key
     puuid: Mapped[str] = mapped_column(
         String(78),
-        ForeignKey("core.players.puuid", ondelete="CASCADE"),
         nullable=False,
-        index=True,
         comment="Player PUUID this analysis is for",
     )
 
-    # Analysis status and progress
-    status: Mapped[str] = mapped_column(
-        String(20),
-        nullable=False,
-        default=AnalysisStatus.PENDING.value,
-        index=True,
-        comment="Current status of the analysis",
-    )
-
-    progress: Mapped[int] = mapped_column(
-        BigInteger,
-        nullable=False,
-        default=0,
-        comment="Number of API requests completed",
-    )
-
-    total_requests: Mapped[int] = mapped_column(
-        BigInteger,
-        nullable=False,
-        default=1000,
-        comment="Estimated total API requests needed",
-    )
-
-    # Time estimation
-    estimated_minutes_remaining: Mapped[int] = mapped_column(
-        BigInteger,
-        nullable=False,
-        default=20,
-        comment="Estimated minutes remaining for completion",
-    )
-
-    # Results - stored as JSON for flexibility
-    results: Mapped[Optional[dict]] = mapped_column(
-        JSONB,
-        nullable=True,
-        comment="Analysis results as JSON (team/enemy winrates)",
-    )
-
-    # Error tracking
-    error_message: Mapped[Optional[str]] = mapped_column(
-        Text,
-        nullable=True,
-        comment="Error message if analysis failed",
-    )
-
-    # Timestamps
     created_at: Mapped[datetime] = mapped_column(
         SQLDateTime(timezone=True),
         nullable=False,
@@ -103,6 +41,14 @@ class MatchmakingAnalysis(Base):
         comment="When this analysis was created",
     )
 
+    # Analysis results - stored as JSON for flexibility
+    results: Mapped[Optional[dict]] = mapped_column(
+        JSONB,
+        nullable=True,
+        comment="Analysis results as JSON (team/enemy winrates)",
+    )
+
+    # Timestamps
     started_at: Mapped[Optional[datetime]] = mapped_column(
         SQLDateTime(timezone=True),
         nullable=True,
@@ -115,24 +61,62 @@ class MatchmakingAnalysis(Base):
         comment="When this analysis was completed",
     )
 
-    updated_at: Mapped[datetime] = mapped_column(
-        SQLDateTime(timezone=True),
-        nullable=False,
-        server_default=func.now(),
-        onupdate=func.now(),
-        comment="When this analysis record was last updated",
+    # Progress tracking - which PUUIDs have been analyzed
+    puuid_progress: Mapped[Optional[dict]] = mapped_column(
+        JSONB,
+        nullable=True,
+        default=dict,
+        comment="Tracks analyzed PUUIDs: {puuid: true/false}",
     )
 
-    # Indexes for efficient querying
+    # Number of API requests saved due to cached match data
+    requests_saved: Mapped[int] = mapped_column(
+        nullable=False,
+        default=0,
+        comment="Count of API requests saved from cached matches",
+    )
+
+    # Rate limit wait tracking - seconds remaining when waiting for rate limit
+    rate_limit_wait_seconds: Mapped[int] = mapped_column(
+        nullable=False,
+        default=0,
+        comment="Seconds remaining when waiting for rate limit reset (0 = not waiting)",
+    )
+
     __table_args__ = (
-        Index("ix_matchmaking_analyses_puuid_status", "puuid", "status"),
+        PrimaryKeyConstraint("puuid", "created_at", name="pk_matchmaking_analyses"),
+        Index("idx_matchmaking_analyses_puuid", "puuid"),
         Index("ix_matchmaking_analyses_created_at", "created_at"),
         {"schema": "core"},
     )
 
     def __repr__(self) -> str:
         """String representation of the analysis."""
+        progress_count = len(self.puuid_progress) if self.puuid_progress else 0
+        completed_count = sum(1 for v in (self.puuid_progress or {}).values() if v)
         return (
-            f"<MatchmakingAnalysis(id={self.id}, puuid={self.puuid}, "
-            f"status={self.status}, progress={self.progress}/{self.total_requests})>"
+            f"<MatchmakingAnalysis(puuid={self.puuid}, "
+            f"created_at={self.created_at}, "
+            f"progress={completed_count}/{progress_count})>"
         )
+
+    @property
+    def is_completed(self) -> bool:
+        """Check if analysis is completed."""
+        return self.completed_at is not None
+
+    @property
+    def is_in_progress(self) -> bool:
+        """Check if analysis is in progress."""
+        return self.started_at is not None and self.completed_at is None
+
+    @property
+    def progress_percentage(self) -> float:
+        """Calculate progress percentage based on analyzed PUUIDs."""
+        if not self.puuid_progress:
+            return 0.0
+        total = len(self.puuid_progress)
+        if total == 0:
+            return 0.0
+        completed = sum(1 for v in self.puuid_progress.values() if v)
+        return (completed / total) * 100
