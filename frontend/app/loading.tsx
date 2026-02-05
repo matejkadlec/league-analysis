@@ -1,6 +1,16 @@
+"use client";
+
+import { useAuth } from "@/features/auth";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export default function Loading() {
+  const { isAuthenticated, isLoading } = useAuth();
+
+  // Don't show loading skeletons if not authenticated (AuthGate will redirect)
+  if (isLoading || !isAuthenticated) {
+    return null;
+  }
+
   return (
     <div className="min-h-screen">
       <div className="container mx-auto px-4 py-8">

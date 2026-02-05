@@ -507,6 +507,30 @@ export const UserSettingsUpdateSchema = z.object({
 export type UserSettings = z.infer<typeof UserSettingsSchema>;
 export type UserSettingsUpdate = z.infer<typeof UserSettingsUpdateSchema>;
 
+// ===== USER PROFILE SCHEMAS =====
+export const UserResponseSchema = z.object({
+  id: z.number(),
+  email: z.string().email(),
+  display_name: z.string(),
+  is_active: z.boolean(),
+  is_admin: z.boolean(),
+  email_verified: z.boolean(),
+  email_verified_at: z.string().nullable(),
+  last_login: z.string().nullable(),
+  riot_account_connected: z.boolean(),
+  puuid: z.string().nullable(),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+
+export type UserResponse = z.infer<typeof UserResponseSchema>;
+
+export const UserProfileUpdateSchema = z.object({
+  display_name: z.string().min(1).max(128).optional(),
+});
+
+export type UserProfileUpdate = z.infer<typeof UserProfileUpdateSchema>;
+
 // ===== MATCHMAKING ANALYSIS SCHEMAS =====
 export const MatchmakingAnalysisResultsSchema = z.object({
   team_avg_winrate: z.number().min(0).max(1),

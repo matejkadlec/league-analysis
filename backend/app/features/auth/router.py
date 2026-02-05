@@ -11,7 +11,13 @@ from app.core.rate_limiter import limiter
 from app.core.dependencies import get_riot_client
 from .dependencies import get_current_active_user, get_current_admin_user
 from .models import User
-from .schemas import Token, UserCreate, UserResponse, LinkRiotAccountRequest
+from .schemas import (
+    Token,
+    UserCreate,
+    UserResponse,
+    LinkRiotAccountRequest,
+    UserProfileUpdate,
+)
 from .service import AuthService, get_auth_service
 
 if TYPE_CHECKING:
@@ -176,6 +182,25 @@ async def connect_riot_account(
     # Update user with riot account info
     current_user.riot_account_connected = True
     current_user.puuid = player.puuid
+    await auth_service.db.commit()
+    await auth_service.db.refresh(current_user)
+
+    return current_user
+
+
+@router.patch("/me", response_model=UserResponse)
+async def update_current_user_profile(
+    update: UserProfileUpdate,
+    current_user: User = Depends(get_current_active_user),
+    auth_service: AuthService = Depends(get_auth_service),
+) -> User:
+    """Update current user's profile fields (display_name, etc.)."""
+    from datetime import datetime, timezone
+
+    if update.display_name is not None:
+        current_user.display_name = update.display_name
+
+    current_user.updated_at = datetime.now(timezone.utc)
     await auth_service.db.commit()
     await auth_service.db.refresh(current_user)
 

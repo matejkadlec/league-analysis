@@ -94,8 +94,7 @@ export function RoleStatsCard({ stats, lastUpdated }: RoleStatsCardProps) {
         </CardHeader>
         <CardContent>
           <p className="text-muted-foreground text-sm">
-            No role data available. Play some ranked games to see your
-            performance by position.
+            Not enough match data to analyze role performance.
           </p>
         </CardContent>
       </Card>

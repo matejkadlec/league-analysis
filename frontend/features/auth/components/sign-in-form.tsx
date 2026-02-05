@@ -31,6 +31,11 @@ export function SignInForm() {
     reValidateMode: "onSubmit",
   });
 
+  // Watch form values to enable/disable submit button
+  const email = form.watch("email");
+  const password = form.watch("password");
+  const isFormValid = email.trim().length > 0 && password.trim().length > 0;
+
   const onSubmit = async (data: LoginCredentials) => {
     setError(null);
     setIsSubmitting(true);
@@ -70,7 +75,7 @@ export function SignInForm() {
           <div className="mb-8 text-center">
             <h1 className="text-3xl font-bold text-gray-900 mb-2">Sign In</h1>
             <p className="text-gray-600">
-              Enter your credentials to access your account
+              Enter your credentials to access the application
             </p>
           </div>
 
@@ -97,7 +102,7 @@ export function SignInForm() {
                       <Input
                         {...field}
                         type="email"
-                        placeholder="terry.davis@templeos.org"
+                        placeholder="john.doe@email.com"
                         disabled={isSubmitting}
                         className="text-gray-900 border-gray-300 placeholder:text-gray-500 focus-visible:ring-gray-400"
                         style={{ backgroundColor: "#e5e7eb" }}
@@ -134,7 +139,11 @@ export function SignInForm() {
                 )}
               />
 
-              <Button type="submit" disabled={isSubmitting} className="w-full">
+              <Button
+                type="submit"
+                disabled={isSubmitting || !isFormValid}
+                className="w-full button-medium"
+              >
                 {isSubmitting ? "Signing in..." : "Sign In"}
               </Button>
             </form>

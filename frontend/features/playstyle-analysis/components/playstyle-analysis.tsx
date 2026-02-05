@@ -17,6 +17,7 @@ import {
 } from "@/lib/core/schemas";
 import { validatedPost, validatedGet } from "@/lib/core/api";
 import { cn } from "@/lib/core/utils";
+import { getChampionDisplayName } from "@/lib/core/data-dragon";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -361,12 +362,32 @@ export function PlaystyleAnalysis({
                     <span className="text-xs uppercase text-muted-foreground font-semibold">
                       Main Champion
                     </span>
-                    <span className="text-xl font-bold mt-1 truncate max-w-full">
-                      {analysis.summary_stats.most_played_champion &&
-                      analysis.summary_stats.most_played_champion !== "None"
-                        ? analysis.summary_stats.most_played_champion
-                        : "—"}
-                    </span>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="text-xl font-bold mt-1 truncate max-w-full cursor-default">
+                            {analysis.summary_stats.most_played_champion &&
+                            analysis.summary_stats.most_played_champion !==
+                              "None"
+                              ? getChampionDisplayName(
+                                  analysis.summary_stats.most_played_champion,
+                                )
+                              : "—"}
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>
+                            {analysis.summary_stats.most_played_champion &&
+                            analysis.summary_stats.most_played_champion !==
+                              "None"
+                              ? getChampionDisplayName(
+                                  analysis.summary_stats.most_played_champion,
+                                )
+                              : "—"}
+                          </p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
                     {analysis.summary_stats.most_played_champion &&
                       analysis.summary_stats.most_played_champion !== "None" &&
                       typeof analysis.summary_stats

@@ -198,6 +198,7 @@ async def trigger_job(
     Raises:
         404: Job configuration not found.
         400: Job is not active or scheduler is disabled.
+        409: Job is already running.
     """
     try:
         # Check if job exists and is active
@@ -212,6 +213,21 @@ async def trigger_job(
             raise HTTPException(
                 status_code=400,
                 detail=f"Job '{job.name}' is not active and cannot be triggered",
+            )
+
+        # Check if job is already running (prevent concurrent runs)
+        is_running = await job_service.is_job_running(job.job_type)
+        if is_running:
+            logger.info(
+                "Job already running, skipping trigger",
+                job_id=job_id,
+                job_name=job.name,
+                job_type=job.job_type.value,
+            )
+            return JobTriggerResponse(
+                success=False,
+                message=f"Job '{job.name}' is already running. Please wait for it to complete.",
+                execution_id=None,
             )
 
         # Create and trigger the job instance (triggered by user)
@@ -282,4 +298,138 @@ async def get_job_system_status(
         raise HTTPException(
             status_code=500,
             detail="Internal server error retrieving job system status",
+        )
+
+
+@router.post("/sync-player/{puuid}", response_model=JobTriggerResponse)
+async def sync_player_data(
+    puuid: str,
+    background_tasks: BackgroundTasks,
+    job_service: JobServiceDep,
+):
+    """
+    Trigger a full sync for a specific player (matches + profile).
+
+    This runs the Match Fetcher job followed by the Player Updater job
+    for the specified player. Used by Update buttons on player cards.
+
+    Includes job locking to prevent concurrent runs - if either job
+    is already running, returns a message instead of running again.
+
+    Args:
+        puuid: Player's PUUID to sync.
+        background_tasks: FastAPI background tasks for async execution.
+
+    Returns:
+        Job trigger response indicating success or if job is already running.
+    """
+    try:
+        # Check if either job is already running
+        match_fetcher_running = await job_service.is_job_running(JobType.MATCH_FETCHER)
+        player_updater_running = await job_service.is_job_running(
+            JobType.PLAYER_UPDATER
+        )
+
+        if match_fetcher_running or player_updater_running:
+            running_jobs = []
+            if match_fetcher_running:
+                running_jobs.append("Match Fetcher")
+            if player_updater_running:
+                running_jobs.append("Player Updater")
+
+            logger.info(
+                "Sync requested but job already running",
+                puuid=puuid,
+                running_jobs=running_jobs,
+            )
+            return JobTriggerResponse(
+                success=False,
+                message=f"Update already in progress ({', '.join(running_jobs)} running). Please wait.",
+                execution_id=None,
+            )
+
+        # Get job configurations
+        match_fetcher_config = await job_service.get_job_config_by_type(
+            JobType.MATCH_FETCHER
+        )
+        player_updater_config = await job_service.get_job_config_by_type(
+            JobType.PLAYER_UPDATER
+        )
+
+        if not match_fetcher_config:
+            raise HTTPException(
+                status_code=500,
+                detail="Match Fetcher job configuration not found",
+            )
+
+        # Trigger Match Fetcher job
+        match_fetcher_job = MatchFetcherJob(
+            match_fetcher_config.id, triggered_by="user"
+        )
+        background_tasks.add_task(match_fetcher_job.run)
+
+        # Trigger Player Updater job (if config exists)
+        if player_updater_config:
+            player_updater_job = PlayerUpdaterJob(
+                player_updater_config.id, triggered_by="user"
+            )
+            background_tasks.add_task(player_updater_job.run)
+
+        logger.info(
+            "Player sync triggered",
+            puuid=puuid,
+            match_fetcher_id=match_fetcher_config.id,
+            player_updater_id=(
+                player_updater_config.id if player_updater_config else None
+            ),
+        )
+
+        return JobTriggerResponse(
+            success=True,
+            message="Player sync started. Match history and profile will be updated.",
+            execution_id=None,
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            "Failed to sync player data",
+            puuid=puuid,
+            error=str(e),
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=500,
+            detail="Internal server error syncing player data",
+        )
+
+
+@router.get("/running-status", response_model=dict)
+async def get_running_jobs_status(
+    job_service: JobServiceDep,
+):
+    """
+    Check which jobs are currently running.
+
+    Returns:
+        Dict with job types and their running status.
+    """
+    try:
+        match_fetcher_running = await job_service.is_job_running(JobType.MATCH_FETCHER)
+        player_updater_running = await job_service.is_job_running(
+            JobType.PLAYER_UPDATER
+        )
+
+        return {
+            "match_fetcher_running": match_fetcher_running,
+            "player_updater_running": player_updater_running,
+            "any_running": match_fetcher_running or player_updater_running,
+        }
+
+    except Exception as e:
+        logger.error("Failed to get running jobs status", error=str(e), exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail="Internal server error checking job status",
         )

@@ -104,3 +104,9 @@ class LinkRiotAccountRequest(BaseModel):
     game_name: str = Field(..., min_length=1, max_length=16)
     tag_line: str = Field(..., min_length=1, max_length=5, pattern=r"^[a-zA-Z0-9]+$")
     platform: str = Field(..., min_length=1, max_length=10)
+
+
+class UserProfileUpdate(BaseModel):
+    """Schema for updating user profile fields."""
+
+    display_name: Optional[str] = Field(None, min_length=1, max_length=128)

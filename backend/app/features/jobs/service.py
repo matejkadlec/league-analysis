@@ -222,3 +222,49 @@ class JobService:
 
         result = await self.db.execute(query)
         return result.scalar() or 0
+
+    async def is_job_running(self, job_type: "JobType") -> bool:
+        """Check if a job of the given type is currently running.
+
+        Args:
+            job_type: The type of job to check.
+
+        Returns:
+            True if a job of this type is running, False otherwise.
+        """
+        from .models import JobType as JT  # Avoid circular import
+
+        query = (
+            select(func.count())
+            .select_from(JobExecution)
+            .join(JobConfiguration, JobExecution.job_config_id == JobConfiguration.id)
+            .where(JobExecution.status == JobStatus.RUNNING)
+            .where(JobConfiguration.job_type == job_type)
+        )
+
+        result = await self.db.execute(query)
+        count = result.scalar() or 0
+        return count > 0
+
+    async def get_job_config_by_type(
+        self, job_type: "JobType"
+    ) -> Optional[JobConfigurationResponse]:
+        """Get job configuration by job type.
+
+        Args:
+            job_type: The type of job to find.
+
+        Returns:
+            Job configuration if found, None otherwise.
+        """
+        query = (
+            select(JobConfiguration)
+            .where(JobConfiguration.job_type == job_type)
+            .limit(1)
+        )
+        result = await self.db.execute(query)
+        job = result.scalar_one_or_none()
+
+        if job:
+            return JobConfigurationResponse.model_validate(job)
+        return None

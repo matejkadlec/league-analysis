@@ -2,13 +2,12 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertCircle,
   Loader2,
   RefreshCw,
   Clock,
-  StopCircle,
   ListRestart,
   Swords,
 } from "lucide-react";
@@ -25,25 +24,22 @@ import {
 import { validatedGet, api } from "@/lib/core/api";
 import {
   getChampionIconUrl,
+  getChampionDisplayName,
   getSummonerSpellIconUrlById,
   getRuneStyleIconUrl,
   getObjectiveIconUrl,
 } from "@/lib/core/data-dragon";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 
 interface MatchHistoryProps {
@@ -388,11 +384,11 @@ function MatchRow({
       <div
         key={champ.puuid}
         className={`relative h-6 w-6 rounded overflow-hidden shrink-0 ${borderColor}`}
-        title={champ.champion_name}
+        title={getChampionDisplayName(champ.champion_name)}
       >
         <Image
           src={getChampionIconUrl(champ.champion_name)}
-          alt={champ.champion_name}
+          alt={getChampionDisplayName(champ.champion_name)}
           fill
           className="object-cover"
           unoptimized
@@ -482,9 +478,24 @@ function MatchRow({
 
             {/* Champion name and stats */}
             <div className="flex flex-col flex-1 min-w-0">
-              <span className="text-sm font-medium truncate">
-                {participant?.champion_name || "—"}
-              </span>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="text-sm font-medium truncate cursor-default">
+                      {participant
+                        ? getChampionDisplayName(participant.champion_name)
+                        : "—"}
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>
+                      {participant
+                        ? getChampionDisplayName(participant.champion_name)
+                        : "—"}
+                    </p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
               <span className="text-xs text-muted-foreground">
                 {participant ? `Lv ${participant.champion_level}` : "—"}
               </span>
@@ -532,9 +543,24 @@ function MatchRow({
 
             {/* Champion name and stats */}
             <div className="flex flex-col flex-1 min-w-0">
-              <span className="text-sm font-medium truncate">
-                {opponent?.champion_name || "—"}
-              </span>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="text-sm font-medium truncate cursor-default">
+                      {opponent
+                        ? getChampionDisplayName(opponent.champion_name)
+                        : "—"}
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>
+                      {opponent
+                        ? getChampionDisplayName(opponent.champion_name)
+                        : "—"}
+                    </p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
               <span className="text-xs text-muted-foreground">
                 {opponent ? `Lv ${opponent.champion_level}` : "—"}
               </span>
@@ -658,9 +684,7 @@ export function MatchHistory({
   const router = useRouter();
 
   const [displayCount, setDisplayCount] = useState(20);
-  const [analysisJobId, setAnalysisJobId] = useState<string | null>(null);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [showAnalysisConfirm, setShowAnalysisConfirm] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
 
   // Fetch match stats for total wins/losses
   const { data: statsResult } = useQuery({
@@ -728,95 +752,43 @@ export function MatchHistory({
     },
   });
 
-  const { mutate: analyzeMutate } = useMutation({
-    mutationFn: async () => {
-      const resp = await api.post<{ job_id: string; status: string }>(
-        `/matches/analyze/${puuid}`,
+  // Handle update button click - triggers match fetcher job
+  const handleUpdate = async () => {
+    setIsUpdating(true);
+    try {
+      // Trigger the unified player sync (match fetcher + player updater)
+      const response = await api.post<{ success: boolean; message: string }>(
+        `/jobs/sync-player/${puuid}`,
       );
-      return resp.data.job_id;
-    },
-    onSuccess: (jobId) => {
-      setAnalysisJobId(jobId);
-      setIsAnalyzing(true);
-      toast.success("Match history analysis started");
-    },
-    onError: () => {
-      toast.error("Failed to start analysis");
-    },
-  });
 
-  const { data: jobStatus } = useQuery({
-    queryKey: ["analysisStatus", analysisJobId],
-    queryFn: async () => {
-      if (!analysisJobId) return null;
-      const response = await api.get<{
-        status: string;
-        error?: string;
-        progress?: number;
-        total?: number;
-        message?: string;
-        estimated_minutes_remaining?: number;
-      }>(`/matches/analyze/status/${analysisJobId}`);
-      const result = response.data;
-      if (result.status === "completed" || result.status === "failed") {
-        setIsAnalyzing(false);
-        setAnalysisJobId(null);
-        queryClient.invalidateQueries({ queryKey: ["matchHistoryDetailed"] });
-        router.refresh();
-        if (result.status === "completed") {
-          toast.success("Analysis complete!");
-        } else {
-          toast.error(result.error || "Analysis failed");
-        }
-      } else if (
-        result.status === "pending" ||
-        result.status === "in_progress"
-      ) {
-        setIsAnalyzing(true);
+      if (!response.data.success) {
+        // Job is already running
+        toast.info(response.data.message);
+        setIsUpdating(false);
+        return;
       }
-      return result;
-    },
-    enabled: !!analysisJobId,
-    refetchInterval: (query) => {
-      const status = query.state.data?.status;
-      return status === "completed" || status === "failed" ? false : 2000;
-    },
-  });
 
-  const { mutate: cancelMutate } = useMutation({
-    mutationFn: async () => {
-      if (!analysisJobId) return;
-      await api.post(`/matches/analyze/cancel/${analysisJobId}`);
-    },
-    onSuccess: () => {
-      toast.info("Analysis cancelled.");
-      setIsAnalyzing(false);
-      setAnalysisJobId(null);
-    },
-    onError: () => {
-      toast.error("Failed to cancel analysis");
-      setIsAnalyzing(false);
-      setAnalysisJobId(null);
-    },
-  });
+      // Show success message
+      toast.success("Update started", {
+        description: "Fetching new matches from Riot API...",
+      });
 
-  const handleAnalyze = () => {
-    const totalAnalyzed =
-      (data as { total_analyzed?: number })?.total_analyzed || 0;
-    if (totalAnalyzed >= 50) {
-      setShowAnalysisConfirm(true);
-    } else {
-      analyzeMutate();
+      // Wait a bit then refetch data
+      setTimeout(async () => {
+        await Promise.all([
+          refetch(),
+          queryClient.invalidateQueries({ queryKey: ["match-history-stats"] }),
+          queryClient.invalidateQueries({ queryKey: ["player"] }),
+          queryClient.invalidateQueries({ queryKey: ["player-league"] }),
+          queryClient.invalidateQueries({ queryKey: ["player-stats"] }),
+        ]);
+        router.refresh();
+        setIsUpdating(false);
+      }, 5000);
+    } catch {
+      toast.error("Failed to start update");
+      setIsUpdating(false);
     }
-  };
-
-  const handleConfirmAnalyze = () => {
-    setShowAnalysisConfirm(false);
-    analyzeMutate();
-  };
-
-  const handleCancelAnalysis = () => {
-    cancelMutate();
   };
 
   const data = response?.success ? response.data : null;
@@ -960,13 +932,13 @@ export function MatchHistory({
           </CardTitle>
           <div className="flex items-center gap-2">
             <Button
-              onClick={handleAnalyze}
-              disabled={isAnalyzing}
+              onClick={handleUpdate}
+              disabled={isUpdating}
               variant="outline"
               size="sm"
               className="button-small"
             >
-              {isAnalyzing ? (
+              {isUpdating ? (
                 <Loader2 className="h-4 w-4 mr-1 animate-spin" />
               ) : (
                 <RefreshCw className="h-4 w-4 mr-1" />
@@ -984,51 +956,6 @@ export function MatchHistory({
           <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
             <Clock className="h-3 w-3" />
             <span>Updated {formatRelativeTime(lastUpdated)}</span>
-          </div>
-        )}
-
-        {isAnalyzing && (
-          <div className="mt-4 p-4 rounded-lg bg-slate-950 border border-slate-800 space-y-4">
-            <div className="flex items-center justify-between text-sm text-slate-400">
-              <span className="flex items-center gap-2">
-                <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                {jobStatus?.message || "Initializing..."}
-              </span>
-              <span className="flex items-center gap-2">
-                <Clock className="h-4 w-4" />
-                {jobStatus?.estimated_minutes_remaining
-                  ? `~${jobStatus.estimated_minutes_remaining} min remaining`
-                  : "~2 min remaining"}
-              </span>
-            </div>
-
-            <Progress
-              value={
-                jobStatus?.total && jobStatus.total > 0
-                  ? ((jobStatus.progress || 0) / jobStatus.total) * 100
-                  : 0
-              }
-              className="h-2"
-            />
-
-            <div className="text-center text-sm text-slate-500">
-              {jobStatus?.total && jobStatus.total > 0
-                ? Math.round(
-                    ((jobStatus.progress || 0) / jobStatus.total) * 100,
-                  )
-                : 0}
-              % complete
-            </div>
-
-            <Button
-              onClick={handleCancelAnalysis}
-              variant="destructive"
-              className="w-full"
-              size="sm"
-            >
-              <StopCircle className="mr-2 h-4 w-4" />
-              Cancel Analysis
-            </Button>
           </div>
         )}
       </CardHeader>
@@ -1085,27 +1012,6 @@ export function MatchHistory({
           </div>
         )}
       </CardContent>
-
-      <Dialog open={showAnalysisConfirm} onOpenChange={setShowAnalysisConfirm}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Analyze Match History?</DialogTitle>
-            <DialogDescription>
-              This player already has 50 or more analyzed matches, do you wish
-              to proceed?
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setShowAnalysisConfirm(false)}
-            >
-              No
-            </Button>
-            <Button onClick={handleConfirmAnalyze}>Yes</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </Card>
   );
 }

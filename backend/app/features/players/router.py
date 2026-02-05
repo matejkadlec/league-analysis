@@ -22,6 +22,7 @@ from app.core.riot_api.errors import AuthenticationError
 from app.core.dependencies import get_riot_client
 from app.core.database import db_manager
 from app.features.matches.service import MatchService
+from app.features.players.service import PlayerService
 from app.core.config import settings
 
 logger = structlog.get_logger(__name__)
@@ -380,6 +381,105 @@ async def run_background_match_sync(puuid: str, platform: str):
             await riot_client.close()
 
 
+async def run_background_player_update(puuid: str, platform: str):
+    """
+    Background task to update player profile (name, tag, icon, level).
+    Also creates a JobExecution entry so it appears in the Jobs dashboard.
+    """
+    async with db_manager.get_session() as session:
+        from app.features.jobs.models import (
+            JobConfiguration,
+            JobType,
+            JobExecution,
+            JobStatus,
+        )
+        from app.features.players.models import Player
+        from sqlalchemy import select, func
+
+        # Find the Player Updater job configuration
+        stmt = (
+            select(JobConfiguration)
+            .where(JobConfiguration.job_type == JobType.PLAYER_UPDATER)
+            .limit(1)
+        )
+        result = await session.execute(stmt)
+        job_config = result.scalar_one_or_none()
+
+        job_execution = None
+        if job_config:
+            job_execution = JobExecution(
+                job_config_id=job_config.id,
+                status=JobStatus.RUNNING,
+                started_at=func.now(),
+                api_requests_made=0,
+                records_created=0,
+                records_updated=0,
+                execution_log={"trigger": "new_player_added", "puuid": puuid},
+            )
+            session.add(job_execution)
+            await session.commit()
+            await session.refresh(job_execution)
+
+        # Run the player update logic
+        api_key = getattr(settings, "riot_api_key", os.getenv("RIOT_API_KEY"))
+        riot_client = RiotAPIClient(api_key=api_key)
+
+        try:
+            player_service = PlayerService(session)
+            player_model = await session.get(Player, puuid)
+
+            if not player_model:
+                logger.warning("Player not found for profile update", puuid=puuid)
+                if job_execution:
+                    job_execution.status = JobStatus.FAILED
+                    job_execution.completed_at = func.now()
+                    job_execution.error_message = "Player not found"
+                    await session.commit()
+                return
+
+            logger.info("Starting background player profile update", puuid=puuid)
+            profile_updated = await player_service.update_player_profile(
+                player_model, riot_client
+            )
+
+            # Also update league info
+            league_updated = await player_service.update_player_league(
+                player_model, riot_client
+            )
+            await session.commit()
+
+            logger.info(
+                "Background player profile update completed",
+                puuid=puuid,
+                profile_updated=profile_updated,
+                league_updated=league_updated,
+            )
+
+            # Update Job Execution on Success
+            if job_execution:
+                job_execution.status = JobStatus.SUCCESS
+                job_execution.completed_at = func.now()
+                job_execution.records_updated = (
+                    1 if profile_updated or league_updated else 0
+                )
+                job_execution.detailed_logs = {
+                    "message": f"Updated profile for new player",
+                    "profile_updated": profile_updated,
+                    "league_updated": league_updated,
+                }
+                await session.commit()
+
+        except Exception as e:
+            logger.error("Background player update failed", puuid=puuid, error=str(e))
+            if job_execution:
+                job_execution.status = JobStatus.FAILED
+                job_execution.completed_at = func.now()
+                job_execution.error_message = str(e)
+                await session.commit()
+        finally:
+            await riot_client.close()
+
+
 @router.post("/add-tracked", response_model=PlayerResponse)
 async def add_tracked_player(
     player_service: PlayerServiceDep,
@@ -420,6 +520,11 @@ async def add_tracked_player(
         # Trigger background match fetch
         background_tasks.add_task(
             run_background_match_sync, result.puuid, result.platform
+        )
+
+        # Trigger background player profile update (name, tag, icon, level, league)
+        background_tasks.add_task(
+            run_background_player_update, result.puuid, result.platform
         )
 
         return result

@@ -2,10 +2,19 @@
 
 import Image from "next/image";
 import { ChampionStatsResponse } from "@/lib/core/schemas";
-import { getChampionIconUrl } from "@/lib/core/data-dragon";
+import {
+  getChampionIconUrl,
+  getChampionDisplayName,
+} from "@/lib/core/data-dragon";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Swords, Clock } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 interface ChampionStatsCardProps {
   stats: ChampionStatsResponse;
@@ -79,8 +88,7 @@ export function ChampionStatsCard({
         </CardHeader>
         <CardContent>
           <p className="text-muted-foreground text-sm">
-            No champion data available. Play some ranked games to see your
-            statistics here.
+            Not enough match data to analyze champion performance.
           </p>
         </CardContent>
       </Card>
@@ -121,7 +129,7 @@ export function ChampionStatsCard({
               <div className="relative h-10 w-10 rounded-full overflow-hidden border-2 border-primary/20">
                 <Image
                   src={getChampionIconUrl(champ.champion_name)}
-                  alt={champ.champion_name}
+                  alt={getChampionDisplayName(champ.champion_name)}
                   fill
                   className="object-cover"
                   sizes="40px"
@@ -130,7 +138,18 @@ export function ChampionStatsCard({
 
               {/* Champion name and games */}
               <div className="flex-1 min-w-0">
-                <p className="font-medium truncate">{champ.champion_name}</p>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <p className="font-medium truncate cursor-default">
+                        {getChampionDisplayName(champ.champion_name)}
+                      </p>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>{getChampionDisplayName(champ.champion_name)}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
                 <p className="text-xs text-muted-foreground">
                   {champ.games_played} game{champ.games_played !== 1 ? "s" : ""}
                 </p>

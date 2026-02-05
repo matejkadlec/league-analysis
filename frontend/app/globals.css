@@ -309,6 +309,24 @@
     transform: rotate(360deg);
   }
 
+  .button-small svg {
+    transform: none !important;
+  }
+
+  .button-small:hover svg {
+    transform: none !important;
+  }
+
+  .button-small:disabled {
+    cursor: not-allowed !important;
+    opacity: 0.5 !important;
+    filter: saturate(0.5) brightness(0.7) !important;
+  }
+
+  .button-small:disabled:hover {
+    filter: saturate(0.5) brightness(0.7) !important;
+  }
+
   /*
     Medium Gold Button
     - Same styling as button-small but larger
@@ -350,5 +368,15 @@
 
   .button-medium.full-rotation:hover svg {
     transform: rotate(360deg);
+  }
+
+  .button-medium:disabled {
+    cursor: not-allowed !important;
+    opacity: 0.5 !important;
+    filter: saturate(0.5) brightness(0.7) !important;
+  }
+
+  .button-medium:disabled:hover {
+    filter: saturate(0.5) brightness(0.7) !important;
   }
 }

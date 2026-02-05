@@ -45,7 +45,7 @@ export function SidebarNav() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
   const pathname = usePathname();
-  const { user, logout } = useAuth();
+  const { user, logout, isAuthenticated, isLoading } = useAuth();
 
   // Auto open/close dropdown when visiting/leaving My Profile page
   useEffect(() => {
@@ -53,8 +53,8 @@ export function SidebarNav() {
     setProfileDropdownOpen(isOnMyProfile);
   }, [pathname]);
 
-  // Hide sidebar on sign-in page
-  if (pathname === "/sign-in") {
+  // Hide sidebar on sign-in page or when not authenticated
+  if (pathname === "/sign-in" || isLoading || !isAuthenticated) {
     return null;
   }
 

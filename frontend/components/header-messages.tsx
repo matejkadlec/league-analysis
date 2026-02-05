@@ -56,27 +56,10 @@ export function HeaderMessages() {
 
   if (!mounted) return null;
 
-  // 1. Signed Out Message (Always visible if not authed)
-  // Don't show if auth is still loading to prevent flash
-  if (!isAuthLoading && !isAuthenticated) {
-    return (
-      <div className="w-full h-[40px] absolute top-0 left-0 z-[100] flex items-center justify-center bg-emerald-950/75 backdrop-blur-sm border-b border-emerald-800/50">
-        <div className="text-sm font-medium text-emerald-100 flex items-center gap-2 px-4 text-center">
-          <Info className="h-4 w-4 shrink-0" />
-          <span>
-            This project is under active development. Interested in
-            contributing? Find more{" "}
-            <Link
-              href="/join-us"
-              className="underline hover:text-white transition-colors font-semibold"
-            >
-              here
-            </Link>
-            .
-          </span>
-        </div>
-      </div>
-    );
+  // Don't show any messages while auth is loading or if not authenticated
+  // AuthGate will redirect non-authenticated users
+  if (isAuthLoading || !isAuthenticated) {
+    return null;
   }
 
   // 2. HIGHEST PRIORITY: API Key Invalid/Expired (detected dynamically from API calls)
@@ -137,7 +120,7 @@ export function HeaderMessages() {
             <span>
               Using Riot API Key from environment variables. Consider adding it
               to database for better management. Also note that local server
-              needs restart after environment variable change.
+              <b>needs a restart</b> after environment variable change.
             </span>
           </div>
           <button

@@ -109,6 +109,45 @@ export const CHAMPION_NAME_MAP: Record<string, string> = {
 };
 
 /**
+ * Reverse mapping from Data Dragon format to display name.
+ * Maps internal names (e.g., "MissFortune") to proper display names (e.g., "Miss Fortune").
+ */
+export const CHAMPION_DISPLAY_NAME_MAP: Record<string, string> = {
+  // Champions with apostrophes
+  Kaisa: "Kai'Sa",
+  Khazix: "Kha'Zix",
+  Chogath: "Cho'Gath",
+  Velkoz: "Vel'Koz",
+  KogMaw: "Kog'Maw",
+  RekSai: "Rek'Sai",
+  Belveth: "Bel'Veth",
+  KSante: "K'Sante",
+  // Champions with spaces
+  AurelionSol: "Aurelion Sol",
+  DrMundo: "Dr. Mundo",
+  JarvanIV: "Jarvan IV",
+  LeeSin: "Lee Sin",
+  MasterYi: "Master Yi",
+  MissFortune: "Miss Fortune",
+  Nunu: "Nunu & Willump",
+  Renata: "Renata Glasc",
+  TahmKench: "Tahm Kench",
+  TwistedFate: "Twisted Fate",
+  XinZhao: "Xin Zhao",
+};
+
+/**
+ * Get the proper display name for a champion.
+ * Converts Data Dragon format (e.g., "MissFortune") to display name (e.g., "Miss Fortune").
+ *
+ * @param championName - The champion name from the API (Data Dragon format)
+ * @returns The proper display name with spaces and apostrophes
+ */
+export function getChampionDisplayName(championName: string): string {
+  return CHAMPION_DISPLAY_NAME_MAP[championName] || championName;
+}
+
+/**
  * Normalize a champion display name to its Data Dragon format.
  *
  * @param displayName - The champion display name

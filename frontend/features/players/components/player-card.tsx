@@ -46,9 +46,12 @@ function getWinRateBarColor(winRate: number): string {
 }
 
 // Format win rate - remove .0 if whole number
+// Handles both decimal (0-1) and percentage (0-100) formats
 function formatWinRate(winRate: number): string {
-  const formatted = winRate.toFixed(1);
-  return formatted.endsWith(".0") ? Math.round(winRate).toString() : formatted;
+  // Convert to percentage if it's in decimal format (0-1)
+  const percent = winRate <= 1 ? winRate * 100 : winRate;
+  const formatted = percent.toFixed(1);
+  return formatted.endsWith(".0") ? Math.round(percent).toString() : formatted;
 }
 
 // Helper function to get rank colors based on tier
@@ -212,26 +215,45 @@ export function PlayerCard({ player, onRefreshAll }: PlayerCardProps) {
     retry: false,
   });
 
-  // Handle update button click
+  // Handle update button click - triggers match fetcher + player updater jobs
   const handleUpdate = async () => {
     setIsUpdating(true);
     try {
-      // Trigger a league refresh from API
-      await api.post(`/players/${player.puuid}/refresh-league`);
-      // Refetch all data
-      await Promise.all([
-        refetchLeague(),
-        refetchStats(),
-        queryClient.invalidateQueries({ queryKey: ["player", player.puuid] }),
-      ]);
-      // Call parent refresh callback if provided (refreshes all profile cards)
-      if (onRefreshAll) {
-        onRefreshAll();
+      // Trigger the unified player sync (match fetcher + player updater)
+      const response = await api.post<{ success: boolean; message: string }>(
+        `/jobs/sync-player/${player.puuid}`,
+      );
+
+      if (!response.data.success) {
+        // Job is already running
+        toast.info(response.data.message);
+        setIsUpdating(false);
+        return;
       }
-      toast.success("Player data updated");
+
+      // Show success message - data will be updated by jobs
+      toast.success("Update started", {
+        description:
+          "Match history and profile are being synced. Refresh in a moment.",
+      });
+
+      // Wait a bit then refetch data
+      setTimeout(async () => {
+        await Promise.all([
+          refetchLeague(),
+          refetchStats(),
+          queryClient.invalidateQueries({ queryKey: ["player", player.puuid] }),
+          queryClient.invalidateQueries({ queryKey: ["matchHistoryDetailed"] }),
+          queryClient.invalidateQueries({ queryKey: ["match-history-stats"] }),
+        ]);
+        // Call parent refresh callback if provided
+        if (onRefreshAll) {
+          onRefreshAll();
+        }
+        setIsUpdating(false);
+      }, 3000);
     } catch {
-      toast.error("Failed to update player data");
-    } finally {
+      toast.error("Failed to start update");
       setIsUpdating(false);
     }
   };
@@ -365,8 +387,8 @@ export function PlayerCard({ player, onRefreshAll }: PlayerCardProps) {
       </CardHeader>
 
       <CardContent className="space-y-3">
-        {/* Win Rate Section (from league data) */}
-        {league && (
+        {/* Win Rate Section (from league data, or from stats if no league) */}
+        {league ? (
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -390,7 +412,34 @@ export function PlayerCard({ player, onRefreshAll }: PlayerCardProps) {
               <span>{league.losses}L</span>
             </div>
           </div>
-        )}
+        ) : stats && stats.total_matches > 0 ? (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Trophy className="h-4 w-4 text-yellow-500" />
+                <span className="text-sm font-medium">Win Rate</span>
+                <span className="text-xs text-muted-foreground">
+                  (unranked)
+                </span>
+              </div>
+              <span
+                className={`text-lg font-bold ${getWinRateColor(stats.win_rate * 100)}`}
+              >
+                {formatWinRate(stats.win_rate)}%
+              </span>
+            </div>
+            <div className="relative h-2 w-full bg-muted rounded-full overflow-hidden">
+              <div
+                className={`absolute left-0 top-0 h-full duration-300 ${getWinRateBarColor(stats.win_rate * 100)}`}
+                style={{ width: `${Math.min(stats.win_rate * 100, 100)}%` }}
+              />
+            </div>
+            <div className="flex justify-between text-xs text-muted-foreground">
+              <span>{stats.wins}W</span>
+              <span>{stats.losses}L</span>
+            </div>
+          </div>
+        ) : null}
 
         {/* Analysis Timestamps */}
         <div className="grid grid-cols-3 gap-3 text-sm pt-1">

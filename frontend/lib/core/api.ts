@@ -216,6 +216,19 @@ export async function validatedDelete<T>(
   }
 }
 
+export async function validatedPatch<T>(
+  schema: z.ZodType<T>,
+  url: string,
+  data?: unknown,
+): Promise<ApiResponse<T>> {
+  try {
+    const response = await api.patch(url, data);
+    return validateResponse(schema, url, response.data);
+  } catch (error) {
+    return { success: false, error: formatError(error) };
+  }
+}
+
 // Player API Functions
 export async function getPlayerByPuuid(
   puuid: string,
