@@ -66,7 +66,7 @@ export function HeaderMessages() {
   // This takes precedence over all other admin messages
   if (isApiKeyInvalid) {
     return (
-      <div className="w-full h-[40px] absolute top-0 left-0 z-[100] flex items-center justify-center bg-red-600/75 backdrop-blur-sm shadow-md border-b border-red-800/50">
+      <div className="w-full h-[40px] fixed top-0 left-0 z-[100] flex items-center justify-center bg-red-600/75 backdrop-blur-sm shadow-md border-b border-red-800/50">
         <div className="flex items-center gap-2 text-sm font-semibold text-red-100 px-4 text-center">
           <AlertOctagon className="h-4 w-4 shrink-0" />
           <span>
@@ -89,7 +89,7 @@ export function HeaderMessages() {
     // RED: No Key configured at all
     if (keyStatus.active_source === "none") {
       return (
-        <div className="w-full h-[40px] absolute top-0 left-0 z-[100] flex items-center justify-center bg-red-600/75 backdrop-blur-sm shadow-md border-b border-red-800/50">
+        <div className="w-full h-[40px] fixed top-0 left-0 z-[100] flex items-center justify-center bg-red-600/75 backdrop-blur-sm shadow-md border-b border-red-800/50">
           <div className="flex items-center gap-2 text-sm font-semibold text-red-100 px-4 text-center">
             <AlertOctagon className="h-4 w-4 shrink-0" />
             <span>
@@ -114,7 +114,7 @@ export function HeaderMessages() {
       process.env.NODE_ENV !== "production"
     ) {
       return (
-        <div className="w-full h-[40px] absolute top-0 left-0 z-[100] flex items-center justify-center bg-amber-500/75 backdrop-blur-sm border-b border-amber-800/50 shadow-sm">
+        <div className="w-full h-[40px] fixed top-0 left-0 z-[100] flex items-center justify-center bg-amber-500/75 backdrop-blur-sm border-b border-amber-800/50 shadow-sm">
           <div className="flex items-center gap-2 text-sm font-medium text-amber-100 px-4 text-center">
             <AlertTriangle className="h-4 w-4 shrink-0" />
             <span>

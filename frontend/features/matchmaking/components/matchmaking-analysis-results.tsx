@@ -3,7 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { TrendingUp, Users } from "lucide-react";
 
-import { getLatestMatchmakingAnalysis } from "@/lib/core/api";
+import { getLatestCompletedMatchmakingAnalysis } from "@/lib/core/api";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -49,7 +49,7 @@ export function MatchmakingAnalysisResults({
   } = useQuery({
     queryKey: ["matchmaking-analysis-results", puuid],
     queryFn: async () => {
-      const result = await getLatestMatchmakingAnalysis(puuid);
+      const result = await getLatestCompletedMatchmakingAnalysis(puuid);
       if (!result.success) {
         if (result.error.status === 404) {
           return null;
@@ -60,15 +60,6 @@ export function MatchmakingAnalysisResults({
     },
     retry: false,
     staleTime: 30000,
-  });
-
-  // Debug logging
-  console.log("MatchmakingAnalysisResults debug:", {
-    isLoading,
-    error,
-    latestAnalysis,
-    hasResults: latestAnalysis?.results,
-    status: latestAnalysis?.status,
   });
 
   if (isLoading || error || !latestAnalysis) {
@@ -86,8 +77,8 @@ export function MatchmakingAnalysisResults({
   // Calculate the difference to show if matchmaking was fair
   const winrateDiff = team_avg_winrate - enemy_avg_winrate;
   const winrateDiffPercent = Math.abs(winrateDiff * 100).toFixed(1);
-  const isFavorable = winrateDiff > 0.05;
-  const isUnfavorable = winrateDiff < -0.05;
+  const isFavorable = winrateDiff >= 0.03;
+  const isUnfavorable = winrateDiff <= -0.03;
   const isFair = !isFavorable && !isUnfavorable;
 
   return (
@@ -96,7 +87,7 @@ export function MatchmakingAnalysisResults({
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-2">
             <TrendingUp className="h-5 w-5 text-primary" />
-            Recent Analysis Results
+            Last Analysis Result
           </CardTitle>
           <span className="text-sm text-muted-foreground">
             {formatDateTime(latestAnalysis.created_at)}
@@ -166,19 +157,19 @@ export function MatchmakingAnalysisResults({
 
           {isFavorable && (
             <p className="text-sm text-green-600 dark:text-green-400">
-              ✓ Your teammates had higher average winrates than enemies by{" "}
+              ✓ Your teammates had higher average win rates than enemies by{" "}
               <span className="font-bold">{winrateDiffPercent}%</span>
             </p>
           )}
           {isUnfavorable && (
             <p className="text-sm text-red-600 dark:text-red-400">
-              ✗ Your enemies had higher average winrates than teammates by{" "}
+              ✗ Your enemies had higher average win rates than teammates by{" "}
               <span className="font-bold">{winrateDiffPercent}%</span>
             </p>
           )}
           {isFair && (
             <p className="text-sm text-muted-foreground">
-              ≈ Matchmaking appears balanced (winrates within 5%)
+              ≈ Matchmaking relatively fair (win rates within 3%)
             </p>
           )}
         </div>

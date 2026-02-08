@@ -316,13 +316,13 @@ CREATE TABLE core.matchmaking_analyses (
     completed_at timestamp with time zone,
     puuid_progress jsonb DEFAULT '{}'::jsonb,
     requests_saved integer DEFAULT 0 NOT NULL,
-    rate_limit_wait_seconds integer DEFAULT 0 NOT NULL
+    rate_limit_reset_at timestamp with time zone
 );
 
 COMMENT ON TABLE core.matchmaking_analyses IS 'Immutable matchmaking analysis results. New records inserted per analysis.';
 COMMENT ON COLUMN core.matchmaking_analyses.puuid_progress IS 'Tracks analyzed PUUIDs: {"<puuid>": true/false} where true=fully analyzed';
 COMMENT ON COLUMN core.matchmaking_analyses.requests_saved IS 'Number of API requests saved due to cached match data in database';
-COMMENT ON COLUMN core.matchmaking_analyses.rate_limit_wait_seconds IS 'Seconds remaining when waiting for rate limit reset (0 = not waiting)';
+COMMENT ON COLUMN core.matchmaking_analyses.rate_limit_reset_at IS 'Timestamp when rate limit resets (NULL = not waiting)';
 
 ALTER TABLE ONLY core.matchmaking_analyses
     ADD CONSTRAINT pk_matchmaking_analyses PRIMARY KEY (puuid, created_at);

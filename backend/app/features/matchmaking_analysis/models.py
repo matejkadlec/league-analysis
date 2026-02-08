@@ -76,11 +76,12 @@ class MatchmakingAnalysis(Base):
         comment="Count of API requests saved from cached matches",
     )
 
-    # Rate limit wait tracking - seconds remaining when waiting for rate limit
-    rate_limit_wait_seconds: Mapped[int] = mapped_column(
-        nullable=False,
-        default=0,
-        comment="Seconds remaining when waiting for rate limit reset (0 = not waiting)",
+    # Rate limit wait tracking - timestamp when rate limit resets (NULL = not waiting)
+    rate_limit_reset_at: Mapped[Optional[datetime]] = mapped_column(
+        SQLDateTime(timezone=True),
+        nullable=True,
+        default=None,
+        comment="Timestamp when rate limit resets (NULL = not waiting)",
     )
 
     __table_args__ = (

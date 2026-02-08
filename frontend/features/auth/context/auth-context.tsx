@@ -53,13 +53,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return null; // Return null to indicate fetch failed
       });
 
-      if (response && response.ok) {
+      // If fetch failed (network error), don't remove token - backend may be down
+      if (!response) {
+        setIsLoading(false);
+        return;
+      }
+
+      if (response.ok) {
         const userData = await response.json();
         setUser(userData);
         setToken(token); // Ensure token is in sync across storage mechanisms
-      } else {
-        // Token invalid, expired, or network error
+      } else if (response.status === 401 || response.status === 403) {
+        // Only remove token on auth errors, not on other errors
         removeToken();
+        setUser(null);
+      } else {
+        // Other errors (500, etc.) - keep token, just set user to null temporarily
+        if (process.env.NODE_ENV === "development") {
+          console.warn("Auth check failed with status:", response.status);
+        }
         setUser(null);
       }
     } catch (error) {

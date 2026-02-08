@@ -309,11 +309,11 @@
     transform: rotate(360deg);
   }
 
-  .button-small svg {
+  .button-small.no-rotation svg {
     transform: none !important;
   }
 
-  .button-small:hover svg {
+  .button-small.no-rotation:hover svg {
     transform: none !important;
   }
 
@@ -370,6 +370,14 @@
     transform: rotate(360deg);
   }
 
+  .button-medium.no-rotation svg {
+    transition: none;
+  }
+
+  .button-medium.no-rotation:hover svg {
+    transform: none;
+  }
+
   .button-medium:disabled {
     cursor: not-allowed !important;
     opacity: 0.5 !important;
@@ -378,5 +386,29 @@
 
   .button-medium:disabled:hover {
     filter: saturate(0.5) brightness(0.7) !important;
+  }
+
+  /* Icon circle button (gold gradient, perfect circle, no padding) */
+  .icon-circle {
+    @apply inline-flex items-center justify-center rounded-full cursor-pointer;
+    width: 24px;
+    height: 24px;
+    min-width: 24px;
+    min-height: 24px;
+    padding: 0 !important;
+    background: linear-gradient(105deg, #f2d777 0%, #cfa93a 10%, #9d7d22 90%);
+    color: lab(1.0621% 2.72213 -7.61136);
+    border: none;
+    transition: filter 0.75s ease !important;
+    filter: saturate(1) brightness(1);
+  }
+
+  .icon-circle:hover {
+    filter: saturate(1.15) brightness(1.15);
+  }
+
+  .icon-circle svg {
+    width: 14px;
+    height: 14px;
   }
 }

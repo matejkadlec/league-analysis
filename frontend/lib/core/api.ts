@@ -402,6 +402,15 @@ export async function getLatestMatchmakingAnalysis(
   );
 }
 
+export async function getLatestCompletedMatchmakingAnalysis(
+  puuid: string,
+): Promise<ApiResponse<MatchmakingAnalysisResponse>> {
+  return validatedGet(
+    MatchmakingAnalysisResponseSchema,
+    `/matchmaking-analysis/player/${puuid}/latest-completed`,
+  );
+}
+
 export async function getMatchmakingAnalysisHistory(
   puuid: string,
   limit: number = 20,
@@ -411,6 +420,46 @@ export async function getMatchmakingAnalysisHistory(
     `/matchmaking-analysis/player/${puuid}/history`,
     { limit },
   );
+}
+
+export async function cancelMatchmakingAnalysis(
+  puuid: string,
+): Promise<ApiResponse<{ success: boolean; message: string }>> {
+  try {
+    const response = await api.delete(
+      `/matchmaking-analysis/player/${puuid}/cancel`,
+    );
+    return {
+      success: true,
+      data: response.data,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: formatError(error),
+    };
+  }
+}
+
+export async function deleteMatchmakingAnalysisRecord(
+  puuid: string,
+  createdAt: string,
+): Promise<ApiResponse<{ success: boolean; message: string }>> {
+  try {
+    const response = await api.delete(
+      `/matchmaking-analysis/player/${puuid}/analysis`,
+      { params: { created_at: createdAt } },
+    );
+    return {
+      success: true,
+      data: response.data,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: formatError(error),
+    };
+  }
 }
 
 export interface ConnectRiotAccountRequest {

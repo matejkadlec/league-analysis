@@ -427,8 +427,9 @@ class DBRateLimiter:
         """Try to acquire permission with callback for wait status updates.
 
         Args:
-            wait_callback: Optional async callback called with (seconds_remaining,) when waiting
-                           Called with 0 when wait is complete
+            wait_callback: Optional async callback called with (reset_at: Optional[datetime])
+                           when waiting for rate limit. Called with the absolute window_end
+                           time when wait starts, and None when wait is complete.
 
         Returns:
             True if the request can proceed, False if rate limited/timed out
@@ -461,7 +462,7 @@ class DBRateLimiter:
                 # Notify callback that wait is over
                 if wait_callback:
                     try:
-                        await wait_callback(0)
+                        await wait_callback(None)
                     except Exception:
                         pass
 
@@ -486,39 +487,32 @@ class DBRateLimiter:
                 )
                 return False
 
-            # Notify callback with remaining wait time (capped at 120 seconds)
-            remaining_wait = min(int(wait_time), 120)
+            # Notify callback with absolute window_end time (set once)
             if wait_callback:
                 try:
-                    await wait_callback(remaining_wait)
+                    await wait_callback(window_end)
                 except Exception:
                     pass
 
             logger.info(
                 "Rate limit reached, waiting for window reset",
                 component=self.component.value,
-                wait_time=remaining_wait,
+                wait_time=int(wait_time),
             )
 
-            # Wait in small chunks and update callback
-            chunk_size = 3  # Update every 3 seconds
-            while remaining_wait > 0 and total_waited < self.max_wait:
-                sleep_time = min(chunk_size, remaining_wait)
+            # Sleep until window expires (in chunks to allow cancellation)
+            chunk_size = 3
+            remaining = wait_time
+            while remaining > 0 and total_waited < self.max_wait:
+                sleep_time = min(chunk_size, remaining)
                 await asyncio.sleep(sleep_time)
                 total_waited += sleep_time
-                remaining_wait -= sleep_time
-
-                # Update callback with new remaining time
-                if wait_callback and remaining_wait > 0:
-                    try:
-                        await wait_callback(remaining_wait)
-                    except Exception:
-                        pass
+                remaining -= sleep_time
 
             # Notify callback that wait is complete
             if wait_callback:
                 try:
-                    await wait_callback(0)
+                    await wait_callback(None)
                 except Exception:
                     pass
 

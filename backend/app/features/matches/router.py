@@ -296,7 +296,7 @@ async def cancel_analysis_job(job_id: str):
 
     analysis_jobs[job_id]["cancelled"] = True
     analysis_jobs[job_id]["status"] = "cancelling"
-    analysis_jobs[job_id]["message"] = "Cancelling analysis..."
+    analysis_jobs[job_id]["message"] = "Analysis cancelled"
 
     return {"job_id": job_id, "status": "cancelling"}
 

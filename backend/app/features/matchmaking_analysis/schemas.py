@@ -43,7 +43,7 @@ class MatchmakingAnalysisResponse(BaseModel):
     completed_at: Optional[datetime] = None
     puuid_progress: Optional[Dict[str, bool]] = None
     requests_saved: int = 0
-    rate_limit_wait_seconds: int = 0
+    rate_limit_reset_at: Optional[datetime] = None
 
     @computed_field
     @property
@@ -88,7 +88,7 @@ class MatchmakingAnalysisStatusResponse(BaseModel):
     results: Optional[MatchmakingAnalysisResults] = None
     created_at: datetime
     requests_saved: int = 0
-    rate_limit_wait_seconds: int = 0
+    rate_limit_reset_at: Optional[datetime] = None
 
     class Config:
         """Pydantic config."""

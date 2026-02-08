@@ -197,10 +197,10 @@ function SettingsPageContent() {
           className="bg-[#152b56] p-6 text-white dark:bg-[#0a1428]"
         >
           <div className="mb-4 flex items-start justify-between">
-            <h1 className="text-2xl font-semibold">System Settings</h1>
+            <h1 className="text-2xl font-semibold">Settings</h1>
           </div>
           <p className="text-sm leading-relaxed">
-            Configure system settings and runtime configuration
+            Configure your user settings as well as global system settings
           </p>
         </Card>
 

@@ -552,7 +552,7 @@ export const MatchmakingAnalysisResponseSchema = z.object({
     .nullable()
     .optional(),
   requests_saved: z.number().default(0),
-  rate_limit_wait_seconds: z.number().default(0),
+  rate_limit_reset_at: z.string().nullable().optional(),
 });
 
 export const MatchmakingAnalysisStatusResponseSchema = z.object({
@@ -563,7 +563,7 @@ export const MatchmakingAnalysisStatusResponseSchema = z.object({
   results: MatchmakingAnalysisResultsSchema.nullable().optional(),
   created_at: z.string(),
   requests_saved: z.number().default(0),
-  rate_limit_wait_seconds: z.number().default(0),
+  rate_limit_reset_at: z.string().nullable().optional(),
 });
 
 export const MatchmakingAnalysisHistoryItemSchema = z.object({

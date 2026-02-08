@@ -131,5 +131,33 @@ echo ""
 echo -e "${YELLOW}Press Ctrl+C to stop all services${NC}"
 echo ""
 
-# Wait for both processes
-wait
+# Monitor both processes - if one dies, shut down the other
+while true; do
+    # Check if backend is still running
+    if ! ps -p $BACKEND_PID > /dev/null 2>&1; then
+        echo ""
+        echo -e "${RED}=============================================${NC}"
+        echo -e "${RED}❌ Backend process died unexpectedly!${NC}"
+        echo -e "${RED}=============================================${NC}"
+        echo -e "${YELLOW}Last 20 lines of backend log:${NC}"
+        tail -n 20 "$SCRIPT_DIR/logs/backend.log"
+        echo ""
+        echo -e "${YELLOW}Shutting down frontend...${NC}"
+        cleanup
+    fi
+    
+    # Check if frontend is still running
+    if ! ps -p $FRONTEND_PID > /dev/null 2>&1; then
+        echo ""
+        echo -e "${RED}=============================================${NC}"
+        echo -e "${RED}❌ Frontend process died unexpectedly!${NC}"
+        echo -e "${RED}=============================================${NC}"
+        echo -e "${YELLOW}Last 20 lines of frontend log:${NC}"
+        tail -n 20 "$SCRIPT_DIR/logs/frontend.log"
+        echo ""
+        echo -e "${YELLOW}Shutting down backend...${NC}"
+        cleanup
+    fi
+    
+    sleep 5
+done

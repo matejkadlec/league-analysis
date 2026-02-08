@@ -160,10 +160,18 @@ After modifying code, run `get_errors` tool on changed files to catch:
 
 ---
 
-## AI Agent Instructions
+## AI Agent Instructions - follow strictly
 
 1. **Read relevant AGENTS.md first** - Before working on a feature, read the corresponding AGENTS.md file
 2. **Check logs on errors** - Auto-check `logs/backend.log` and `logs/frontend.log`
-3. **Update documentation** - Keep AGENTS.md files and README.md current
+3. **Update documentation** - Keep AGENTS.md files, README.md and files in `docs/` up to date
 4. **Summarize changes** - End responses with a concise overview of changes made
 5. **Verify with tools** - Use `get_errors` after edits to catch issues early
+6. **Use PSQL console** - If you need to run an SQL command (i.e. after modifying `init_database.sql`
+   to keep the actual DB synced), use psql console. You will always need admin pw which is in `.env`.
+7. **Server shutdown** - Don't do server restart unless it's really needed. If you really need to do so,
+   shutdown the currently running session (I'm running the server locally all the time while coding),
+   and only after this run the server; otherwise it won't work and you will need to shut current
+   session anyway + it might cause issues if you don't do the shutdown first.
+8. **Restart is needed** - If a server restart is need in order for your changes to apply, prompt the
+   user to do so at the very end of your response.

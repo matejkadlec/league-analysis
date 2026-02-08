@@ -87,6 +87,22 @@ async def get_latest_analysis(
     return result
 
 
+@router.get(
+    "/player/{puuid}/latest-completed", response_model=MatchmakingAnalysisResponse
+)
+async def get_latest_completed_analysis(
+    puuid: str,
+    service: MatchmakingServiceDep,
+):
+    """Get the latest completed analysis for a player."""
+    result = await service.get_latest_completed_analysis(puuid)
+    if not result:
+        raise HTTPException(
+            status_code=404, detail="No completed analysis found for this player"
+        )
+    return result
+
+
 @router.get("/player/{puuid}/status", response_model=MatchmakingAnalysisStatusResponse)
 async def get_analysis_status_by_puuid(
     puuid: str,
@@ -106,7 +122,7 @@ async def get_analysis_status_by_puuid(
         results=result.results,
         created_at=result.created_at,
         requests_saved=result.requests_saved,
-        rate_limit_wait_seconds=result.rate_limit_wait_seconds,
+        rate_limit_reset_at=result.rate_limit_reset_at,
     )
 
 
@@ -120,3 +136,34 @@ async def get_analysis_history(
 ):
     """Get history of completed analyses for a player."""
     return await service.get_analysis_history(puuid, limit=limit)
+
+
+@router.delete("/player/{puuid}/cancel")
+async def cancel_analysis(
+    puuid: str,
+    service: MatchmakingServiceDep,
+):
+    """Cancel a running matchmaking analysis.
+
+    Cancels the background task, releases rate limiter, and deletes the
+    analysis record. Already-fetched matches are kept in DB.
+    """
+    cancelled = await service.cancel_analysis(puuid)
+    if not cancelled:
+        raise HTTPException(
+            status_code=404, detail="No active analysis found for this player"
+        )
+    return {"success": True, "message": "Analysis cancelled"}
+
+
+@router.delete("/player/{puuid}/analysis")
+async def delete_analysis_record(
+    puuid: str,
+    created_at: datetime,
+    service: MatchmakingServiceDep,
+):
+    """Delete a specific completed analysis record."""
+    deleted = await service.delete_analysis(puuid, created_at)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Analysis record not found")
+    return {"success": True, "message": "Analysis record deleted"}

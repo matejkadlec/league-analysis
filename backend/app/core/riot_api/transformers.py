@@ -75,34 +75,53 @@ class MatchTransformer:
         """Transform participant data."""
         transformed_participants: List[Dict[str, Any]] = []
 
-        for participant in participants:
+        for idx, participant in enumerate(participants):
             try:
                 participant_dict: Dict[str, Any] = {
                     "match_id": match_id,
+                    "participant_id": participant.get("participantId", idx + 1),
                     "puuid": participant.get("puuid"),
-                    "summoner_name": participant.get("summonerName"),
+                    # Handle both gameName/tagLine and riotIdGameName/riotIdTagline
+                    "game_name": participant.get("gameName")
+                    or participant.get("riotIdGameName")
+                    or participant.get("summonerName", "Unknown"),
+                    "tag_line": participant.get("tagLine")
+                    or participant.get("riotIdTagline")
+                    or "NA",
                     "team_id": participant.get("teamId"),
+                    "team_position": participant.get("teamPosition") or "",
                     "champion_id": participant.get("championId"),
                     "champion_name": participant.get("championName"),
+                    "champion_level": participant.get("champLevel", 1),
+                    "win": participant.get("win", False),
+                    "remake": not participant.get("eligibleForProgression", True),
                     "kills": participant.get("kills", 0),
                     "deaths": participant.get("deaths", 0),
                     "assists": participant.get("assists", 0),
-                    "win": participant.get("win", False),
+                    # Items - required, default to 0
+                    "item0": participant.get("item0", 0),
+                    "item1": participant.get("item1", 0),
+                    "item2": participant.get("item2", 0),
+                    "item3": participant.get("item3", 0),
+                    "item4": participant.get("item4", 0),
+                    "item5": participant.get("item5", 0),
+                    "trinket": participant.get("item6", 0),
+                    # Economy
                     "gold_earned": participant.get("goldEarned", 0),
                     "vision_score": participant.get("visionScore", 0),
-                    "cs": self._calculate_cs(participant),
-                    "kda": self._calculate_participant_kda(participant),
-                    "champion_level": participant.get("champLevel", 1),
+                    "total_minions_killed": participant.get("totalMinionsKilled", 0),
+                    "neutral_minions_killed": participant.get(
+                        "neutralMinionsKilled", 0
+                    ),
+                    # Damage
                     "total_damage_dealt": participant.get("totalDamageDealt", 0),
                     "total_damage_dealt_to_champions": participant.get(
                         "totalDamageDealtToChampions", 0
                     ),
-                    "total_damage_taken": participant.get("damageTaken", 0),
+                    "total_damage_taken": participant.get("totalDamageTaken")
+                    or participant.get("damageTaken", 0),
                     "total_self_healing": participant.get("totalHeal", 0),
-                    "individual_position": participant.get("individualPosition"),
-                    "team_position": participant.get("teamPosition"),
-                    "role": participant.get("role"),
-                    # New fields
+                    # Additional fields with defaults
                     "champion_transform": participant.get("championTransform", 0),
                     "largest_multi_kill": participant.get("largestMultiKill", 0),
                     "largest_killing_spree": participant.get("largestKillingSpree", 0),
@@ -136,7 +155,6 @@ class MatchTransformer:
                     "objectives_stolen": participant.get("objectivesStolen", 0),
                     "time_spent_dead": participant.get("totalTimeSpentDead", 0),
                     "time_played": participant.get("timePlayed", 0),
-                    "remake": not participant.get("eligibleForProgression", True),
                 }
                 transformed_participants.append(participant_dict)
             except Exception as e:
@@ -149,22 +167,6 @@ class MatchTransformer:
                 continue
 
         return transformed_participants
-
-    def _calculate_cs(self, participant: Dict[str, Any]) -> int:
-        """Calculate total creep score."""
-        return participant.get("totalMinionsKilled", 0) + participant.get(
-            "neutralMinionsKilled", 0
-        )
-
-    def _calculate_participant_kda(self, participant: Dict[str, Any]) -> float:
-        """Calculate KDA for a participant."""
-        kills = participant.get("kills", 0)
-        deaths = participant.get("deaths", 0)
-        assists = participant.get("assists", 0)
-
-        if deaths == 0:
-            return float(kills + assists)
-        return (kills + assists) / deaths
 
     def validate_match_data(self, match_data: Dict[str, Any]) -> bool:
         """
