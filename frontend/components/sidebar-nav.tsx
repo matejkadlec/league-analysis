@@ -11,7 +11,6 @@ import {
   LogOut,
   Settings,
   Wrench,
-  ChevronDown,
 } from "lucide-react";
 import { useAuth } from "@/features/auth";
 
@@ -24,6 +23,8 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { name: "Home", path: "/" },
+  // Anchor metadata is intentionally preserved for future re-enable of the
+  // in-page My Profile dropdown navigation.
   {
     name: "My Profile",
     path: "/my-profile",
@@ -58,6 +59,8 @@ export function SidebarNav() {
     return pathname.startsWith(path);
   };
 
+  // Intentionally kept for future My Profile anchor dropdown support.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleAnchorClick = (anchor: string) => {
     setMenuOpen(false);
     const element = document.querySelector(anchor);
@@ -114,83 +117,26 @@ export function SidebarNav() {
             <ul className="space-y-2">
               {navItems.map((item) => (
                 <li key={item.name}>
-                  {item.hasDropdown ? (
-                    <div>
-                      <Link
-                        href={item.path}
-                        onClick={() => {
-                          setMenuOpen(false);
-                        }}
-                        className={`flex items-center justify-between border-l-4 px-6 py-3 text-white transition-all duration-300 hover:bg-white/10 ${
-                          isActive(item.path)
-                            ? "border-[#cfa93a] bg-white/5"
-                            : "border-transparent hover:border-[#cfa93a]/50"
-                        }`}
-                      >
-                        <span
-                          suppressHydrationWarning
-                          className={`transition-colors duration-300 ${
-                            isActive(item.path)
-                              ? "text-[#cfa93a] font-medium"
-                              : "hover:text-[#cfa93a]"
-                          }`}
-                        >
-                          {item.name}
-                        </span>
-                          <ChevronDown
-                            className={`h-6 w-6 text-[#cfa93a] transition-transform duration-300 ${
-                              isActive(item.path) ? "rotate-180" : ""
-                            }`}
-                          />
-                      </Link>
-                      {/* Dropdown items */}
-                      {isActive(item.path) && (
-                        <div
-                            className={`overflow-hidden transition-all duration-300 ease-in-out ${
-                            isActive(item.path)
-                              ? "max-h-64 opacity-100"
-                              : "max-h-0 opacity-0"
-                          }`}
-                        >
-                          <ul className="bg-white/5 py-1">
-                            {item.dropdownItems?.map((dropdownItem) => (
-                              <li key={dropdownItem.anchor}>
-                                <button
-                                  onClick={() =>
-                                    handleAnchorClick(dropdownItem.anchor)
-                                  }
-                                  className="w-full text-left px-10 py-2 text-sm text-white/70 cursor-pointer transition-colors duration-300 hover:text-[#cfa93a]"
-                                >
-                                  {dropdownItem.name}
-                                </button>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <Link
-                      href={item.path}
-                      onClick={() => setMenuOpen(false)}
-                      className={`block border-l-4 px-6 py-3 text-white transition-all duration-300 hover:bg-white/10 ${
+                  <Link
+                    href={item.path}
+                    onClick={() => setMenuOpen(false)}
+                    className={`block border-l-4 px-6 py-3 text-white transition-all duration-300 hover:bg-white/10 ${
+                      isActive(item.path)
+                        ? "border-[#cfa93a] bg-white/5"
+                        : "border-transparent hover:border-[#cfa93a]/50"
+                    }`}
+                  >
+                    <span
+                      suppressHydrationWarning
+                      className={`transition-colors duration-300 ${
                         isActive(item.path)
-                          ? "border-[#cfa93a] bg-white/5"
-                          : "border-transparent hover:border-[#cfa93a]/50"
+                          ? "text-[#cfa93a] font-medium"
+                          : "hover:text-[#cfa93a]"
                       }`}
                     >
-                      <span
-                        suppressHydrationWarning
-                        className={`transition-colors duration-300 ${
-                          isActive(item.path)
-                            ? "text-[#cfa93a] font-medium"
-                            : "hover:text-[#cfa93a]"
-                        }`}
-                      >
-                        {item.name}
-                      </span>
-                    </Link>
-                  )}
+                      {item.name}
+                    </span>
+                  </Link>
                 </li>
               ))}
             </ul>

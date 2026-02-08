@@ -9,7 +9,6 @@ import {
   JobExecutionListResponseSchema,
   JobConfiguration,
 } from "@/lib/core/schemas";
-import { notifyApiKeyInvalid } from "@/lib/core/api-key-status-context";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -30,7 +29,6 @@ import {
   AlertCircle,
   FileText,
   Loader2,
-  ChevronDown,
   ChevronUp,
 } from "lucide-react";
 
@@ -120,6 +118,23 @@ function formatRecordsSummary(created: number, updated: number): string {
   return `${updated} records updated`;
 }
 
+function formatApiCallParamLabel(paramKey?: string): string {
+  if (!paramKey) {
+    return "Parameters";
+  }
+
+  if (paramKey === "puuid") {
+    return "PUUIDs";
+  }
+
+  if (paramKey === "matchId") {
+    return "Match IDs";
+  }
+
+  const spacedKey = paramKey.replace(/([a-z])([A-Z])/g, "$1 $2");
+  return `${spacedKey.charAt(0).toUpperCase()}${spacedKey.slice(1)}s`;
+}
+
 export function JobExecutions({
   executions: initialExecutions,
   jobs,
@@ -185,16 +200,6 @@ export function JobExecutions({
     }
     return selectedExecutionState;
   }, [selectedExecutionId, allExecutions, selectedExecutionState]);
-
-  // Check for API key errors in job executions and trigger header notification
-  useEffect(() => {
-    const hasApiKeyError = allExecutions.some(
-      (execution) => execution.has_api_key_error,
-    );
-    if (hasApiKeyError) {
-      notifyApiKeyInvalid();
-    }
-  }, [allExecutions]);
 
   // Load more function
   const loadMore = useCallback(() => {
@@ -437,51 +442,51 @@ export function JobExecutions({
                 <p className="mb-3 font-medium">Statistics</p>
                 <div className="grid grid-cols-3 gap-4 text-sm">
                   {/* Row 1 */}
-                  <div>
-                    <span className="text-muted-foreground">Started at:</span>{" "}
-                    <span className="font-medium">
+                  <div className="flex items-center justify-between gap-3 pr-4">
+                    <span className="text-muted-foreground">Started at:</span>
+                    <span className="font-medium text-right">
                       {formatDateTime(internalSelectedExecution.started_at)}
                     </span>
                   </div>
-                  <div>
+                  <div className="flex items-center justify-between gap-3 pr-4">
                     <span className="text-muted-foreground">
                       Riot API requests:
-                    </span>{" "}
-                    <span className="font-medium">
+                    </span>
+                    <span className="font-medium text-right">
                       {internalSelectedExecution.api_requests_made}
                     </span>
                   </div>
-                  <div>
+                  <div className="flex items-center justify-between gap-3 pr-4">
                     <span className="text-muted-foreground">
                       Records created:
-                    </span>{" "}
-                    <span className="font-medium">
+                    </span>
+                    <span className="font-medium text-right">
                       {internalSelectedExecution.records_created}
                     </span>
                   </div>
                   {/* Row 2 */}
-                  <div>
-                    <span className="text-muted-foreground">Completed at:</span>{" "}
-                    <span className="font-medium">
+                  <div className="flex items-center justify-between gap-3 pr-4">
+                    <span className="text-muted-foreground">Completed at:</span>
+                    <span className="font-medium text-right">
                       {internalSelectedExecution.completed_at
                         ? formatDateTime(internalSelectedExecution.completed_at)
                         : "N/A"}
                     </span>
                   </div>
-                  <div>
-                    <span className="text-muted-foreground">Duration:</span>{" "}
-                    <span className="font-medium">
+                  <div className="flex items-center justify-between gap-3 pr-4">
+                    <span className="text-muted-foreground">Duration:</span>
+                    <span className="font-medium text-right">
                       {formatDuration(
                         internalSelectedExecution.started_at,
                         internalSelectedExecution.completed_at,
                       )}
                     </span>
                   </div>
-                  <div>
+                  <div className="flex items-center justify-between gap-3 pr-4">
                     <span className="text-muted-foreground">
                       Records updated:
-                    </span>{" "}
-                    <span className="font-medium">
+                    </span>
+                    <span className="font-medium text-right">
                       {internalSelectedExecution.records_updated}
                     </span>
                   </div>
@@ -560,23 +565,19 @@ export function JobExecutions({
                                         `${idx}-${call.endpoint}`,
                                       )
                                     }
-                                    className="inline-flex items-center gap-1 text-primary hover:underline cursor-pointer"
+                                    className="m-0 block w-full border-0 bg-transparent p-0 text-left font-mono text-[11px] text-primary hover:underline cursor-pointer"
                                   >
-                                    {call.param_key &&
-                                      call.param_key.charAt(0).toUpperCase() +
-                                        call.param_key.slice(1)}
-                                    s:{" "}
                                     {isExpanded ? (
-                                      <>
+                                      <span className="inline-flex items-center gap-1">
                                         <ChevronUp className="h-3 w-3" />
                                         Collapse
-                                      </>
+                                      </span>
                                     ) : (
-                                      <>
+                                      <span className="break-all">
+                                        {formatApiCallParamLabel(call.param_key)}:{" "}
                                         {call.first_param}, ...,{" "}
                                         {call.last_param}
-                                        <ChevronDown className="h-3 w-3" />
-                                      </>
+                                      </span>
                                     )}
                                   </button>
                                   {isExpanded && (

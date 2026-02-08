@@ -9,7 +9,7 @@ Shared layout/infrastructure components. Feature-specific components go in `feat
 | File                   | Purpose                                         |
 | ---------------------- | ----------------------------------------------- |
 | `ui/`                  | shadcn/ui primitives (**DO NOT edit manually**) |
-| `sidebar-nav.tsx`      | Navigation sidebar                              |
+| `sidebar-nav.tsx`      | Navigation sidebar (My Profile currently renders as a regular link; anchor dropdown metadata is preserved for future use) |
 | `header-messages.tsx`  | System messages banner                          |
 | `theme-provider.tsx`   | Theme context                                   |
 | `theme-toggle.tsx`     | Dark mode toggle                                |

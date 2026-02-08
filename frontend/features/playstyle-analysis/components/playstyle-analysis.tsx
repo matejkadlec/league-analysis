@@ -211,11 +211,18 @@ export function PlaystyleAnalysis({
         ) : !analysis ? (
           <div className="space-y-4 pt-4">
             <div className="text-center pb-8 text-muted-foreground">
-              <p className="text-sm">
-                No playstyle analysis found for this player.
-                <br />
-                Run an analysis to discover playstyle tags.
-              </p>
+              {analyzedMatches < 10 ? (
+                <p className="text-sm">
+                  This player doesn&apos;t have enough matches for playstyle
+                  analysis.
+                </p>
+              ) : (
+                <p className="text-sm">
+                  No playstyle analysis found for this player.
+                  <br />
+                  Run an analysis to discover playstyle tags.
+                </p>
+              )}
             </div>
             <div className="text-center">
               {/* Check if we have enough FULLY ANALYZED matches */}

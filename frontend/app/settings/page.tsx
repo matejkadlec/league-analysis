@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
+  api,
   validatedGet,
   validatedPut,
   validatedPost,
@@ -63,6 +64,13 @@ const SERVER_FLAGS: Record<string, string> = {
   vn2: "🇻🇳",
 };
 
+interface APIKeyStatus {
+  has_db_key: boolean;
+  has_env_key: boolean;
+  active_source: "db" | "env" | "none";
+  env_key_identifier?: string;
+}
+
 export default function SettingsPage() {
   return (
     <ProtectedRoute requireAdmin>
@@ -85,13 +93,22 @@ function SettingsPageContent() {
   const {
     data: settingResult,
     isLoading,
-    error,
   } = useQuery({
     queryKey: ["settings", "riot_api_key"],
     queryFn: () => validatedGet(SettingSchema, "/settings/riot_api_key"),
   });
 
   const setting = settingResult?.success ? settingResult.data : null;
+
+  const { data: keyStatus, isLoading: isApiKeyStatusLoading } = useQuery({
+    queryKey: ["apiKeyStatus"],
+    queryFn: async () => {
+      const response = await api.get<APIKeyStatus>("/settings/riot_api_key/status");
+      return response.data;
+    },
+    staleTime: 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
 
   // Update API key mutation
   const updateMutation = useMutation({
@@ -211,7 +228,7 @@ function SettingsPageContent() {
               Riot API Configuration
             </h2>
 
-            {isLoading ? (
+            {isLoading || isApiKeyStatusLoading ? (
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
               </div>
@@ -231,11 +248,22 @@ function SettingsPageContent() {
                   </div>
                 )}
 
-                {!setting && !error && (
-                  <Alert>
+                {!setting && keyStatus?.active_source === "none" && (
+                  <Alert className="border-red-700 bg-red-950/40 text-red-200">
                     <p className="text-sm">
-                      No API key configured in database. Using environment
-                      variable.
+                      No active Riot API Key found! System cannot function.
+                      Please configure it in settings
+                      {process.env.NODE_ENV === "production" ? " " : " or .env "}
+                      immediately.
+                    </p>
+                  </Alert>
+                )}
+
+                {!setting && keyStatus?.active_source === "env" && (
+                  <Alert className="border-amber-700 bg-amber-950/40 text-amber-200">
+                    <p className="text-sm">
+                      Using Riot API Key from environment variables. Consider
+                      adding it to database for better management.
                     </p>
                   </Alert>
                 )}
@@ -449,20 +477,21 @@ function UserSettingsCard() {
       return;
     }
 
-    // Only allow letters, underscores, and spaces
-    const validPattern = /^[A-Za-z][A-Za-z_ ]*[A-Za-z]$|^[A-Za-z]{1,2}$/;
+    // Allow letters from any language, underscores, and spaces.
+    const validPattern = /^[\p{L}](?:[\p{L}\p{M}_ ]*[\p{L}])?$/u;
     if (!validPattern.test(trimmed)) {
       toast.error("Invalid display name", {
         description:
-          "Must only contain letters (A-Z), underscores, and spaces. Cannot start or end with space or underscore.",
+          "Must only contain letters (including language-specific characters), underscores, and spaces. Cannot start or end with space or underscore.",
       });
       return;
     }
 
     // Additional check for invalid characters
-    if (!/^[A-Za-z_ ]+$/.test(trimmed)) {
+    if (!/^[\p{L}\p{M}_ ]+$/u.test(trimmed)) {
       toast.error("Invalid characters", {
-        description: "Only letters (A-Z), underscores, and spaces are allowed",
+        description:
+          "Only letters (including language-specific characters), underscores, and spaces are allowed",
       });
       return;
     }
