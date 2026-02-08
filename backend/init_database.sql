@@ -512,8 +512,15 @@ CREATE INDEX ix_app_job_configurations_job_type ON jobs.job_configurations USING
 CREATE UNIQUE INDEX ix_app_job_configurations_name ON jobs.job_configurations USING btree (name);
 
 -- Default Jobs
-INSERT INTO jobs.job_configurations (name, job_type, description, schedule, is_active)
-VALUES ('Match Fetcher', 'MATCH_FETCHER', 'Fetches new matches and updates player''s match history and rank progression', '3600', true)
+INSERT INTO jobs.job_configurations (name, job_type, description, schedule, is_active, config_json)
+VALUES (
+    'Match Fetcher',
+    'MATCH_FETCHER',
+    'Fetches new matches and updates player''s match history and rank progression',
+    '3600',
+    true,
+    '{"interval_seconds": 3600, "enabled_queue_ids": [420, 440, 400, 450]}'::jsonb
+)
 ON CONFLICT (name) DO NOTHING;
 
 INSERT INTO jobs.job_configurations (name, job_type, description, schedule, is_active)

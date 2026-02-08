@@ -1,11 +1,11 @@
 """Job service for managing job configurations and executions."""
 
-from typing import List, Optional
+from typing import Any, List, Optional
 from datetime import datetime, timezone
 import math
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update, func, desc
+from sqlalchemy import select, func, desc
 
 from .models import JobConfiguration, JobExecution, JobStatus, JobType
 from .schemas import (
@@ -13,6 +13,10 @@ from .schemas import (
     JobConfigurationResponse,
     JobExecutionResponse,
     JobExecutionListResponse,
+)
+from .queue_config import (
+    normalize_match_fetcher_config,
+    has_enabled_match_fetcher_queue,
 )
 import structlog
 
@@ -25,6 +29,16 @@ class JobService:
     def __init__(self, db: AsyncSession):
         """Initialize job service with database session."""
         self.db = db
+
+    @staticmethod
+    def _to_job_response(job: JobConfiguration) -> JobConfigurationResponse:
+        """Convert ORM model to response with normalized Match Fetcher config."""
+        response = JobConfigurationResponse.model_validate(job)
+
+        if response.job_type == JobType.MATCH_FETCHER:
+            response.config_json = normalize_match_fetcher_config(response.config_json)
+
+        return response
 
     # === Job Configuration CRUD ===
 
@@ -44,7 +58,7 @@ class JobService:
         job = result.scalar_one_or_none()
 
         if job:
-            return JobConfigurationResponse.model_validate(job)
+            return self._to_job_response(job)
         return None
 
     async def list_job_configurations(
@@ -66,7 +80,7 @@ class JobService:
         result = await self.db.execute(query)
         jobs = result.scalars().all()
 
-        return [JobConfigurationResponse.model_validate(job) for job in jobs]
+        return [self._to_job_response(job) for job in jobs]
 
     async def update_job_configuration(
         self, job_id: int, job_update: JobConfigurationUpdate
@@ -80,33 +94,41 @@ class JobService:
         Returns:
             Updated job configuration if found, None otherwise.
         """
+        query = select(JobConfiguration).where(JobConfiguration.id == job_id)
+        result = await self.db.execute(query)
+        job = result.scalar_one_or_none()
+
+        if not job:
+            return None
+
         update_dict = job_update.model_dump(exclude_unset=True)
         if not update_dict:
-            return await self.get_job_configuration(job_id)
+            return self._to_job_response(job)
+
+        # Match Fetcher queue toggles are stored in config_json and drive active state.
+        if job.job_type == JobType.MATCH_FETCHER and "config_json" in update_dict:
+            incoming_config = update_dict.get("config_json") or {}
+            merged_config: dict[str, Any] = {**(job.config_json or {}), **incoming_config}
+            normalized_config = normalize_match_fetcher_config(merged_config)
+            update_dict["config_json"] = normalized_config
+            update_dict["is_active"] = has_enabled_match_fetcher_queue(normalized_config)
 
         update_dict["updated_at"] = datetime.now(timezone.utc)
 
-        stmt = (
-            update(JobConfiguration)
-            .where(JobConfiguration.id == job_id)
-            .values(**update_dict)
-            .returning(JobConfiguration)
+        for key, value in update_dict.items():
+            setattr(job, key, value)
+
+        await self.db.commit()
+        await self.db.refresh(job)
+
+        logger.info(
+            "Job configuration updated",
+            job_id=job_id,
+            job_name=job.name,
+            updated_fields=list(update_dict.keys()),
+            is_active=job.is_active,
         )
-
-        result = await self.db.execute(stmt)
-        job = result.scalar_one_or_none()
-
-        if job:
-            await self.db.commit()
-            logger.info(
-                "Job configuration updated",
-                job_id=job_id,
-                job_name=job.name,
-                updated_fields=list(update_dict.keys()),
-            )
-            return JobConfigurationResponse.model_validate(job)
-
-        return None
+        return self._to_job_response(job)
 
     # === Job Execution Operations ===
 
@@ -264,5 +286,5 @@ class JobService:
         job = result.scalar_one_or_none()
 
         if job:
-            return JobConfigurationResponse.model_validate(job)
+            return self._to_job_response(job)
         return None

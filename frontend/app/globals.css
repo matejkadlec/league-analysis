@@ -226,6 +226,24 @@
     background-color: #e5e7eb !important;
   }
 
+  .match-history-light-input {
+    background-color: #ddd !important;
+    color: #333 !important;
+  }
+
+  .match-history-light-input::placeholder {
+    color: #999 !important;
+  }
+
+  .dark .match-history-light-input {
+    background-color: #ccc !important;
+    color: #333 !important;
+  }
+
+  .dark .match-history-light-input::placeholder {
+    color: #777 !important;
+  }
+
   /* Remove focus outline from logo */
   aside a[href="/"] {
     outline: none !important;

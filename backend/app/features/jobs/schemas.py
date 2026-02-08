@@ -24,7 +24,7 @@ class JobConfigurationBase(BaseModel):
     is_active: bool = Field(default=True, description="Whether the job is active")
     config_json: Optional[Dict[str, Any]] = Field(
         None,
-        description="Job-specific configuration (e.g. interval_seconds, batch_size)",
+        description="Job-specific configuration (e.g. interval_seconds, enabled_queue_ids)",
     )
 
 

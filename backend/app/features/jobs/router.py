@@ -80,6 +80,11 @@ async def update_job_configuration(
                 status_code=404,
                 detail=f"Job configuration with ID {job_id} not found",
             )
+
+        # Keep APScheduler in sync with DB changes immediately.
+        from .scheduler import sync_job_configuration
+
+        await sync_job_configuration(job.id)
         return job
     except HTTPException:
         raise

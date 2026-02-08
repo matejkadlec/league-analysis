@@ -173,7 +173,6 @@ function ProfileContent({ puuid }: { puuid: string }) {
       ) : player ? (
         <MatchHistory
           puuid={puuid}
-          queueFilter={420}
           lastUpdated={player.updated_at}
         />
       ) : null}

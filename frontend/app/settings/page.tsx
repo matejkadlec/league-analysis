@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   api,
@@ -381,6 +381,7 @@ function UserSettingsCard() {
   const queryClient = useQueryClient();
   const { user, checkAuth } = useAuth();
   const userId = user?.id;
+  const checkboxCooldownRef = useRef(0);
   const [draftDisplayName, setDraftDisplayName] = useState<string | null>(null);
   const currentDisplayName = user?.display_name ?? "";
   const displayName = draftDisplayName ?? currentDisplayName;
@@ -451,7 +452,18 @@ function UserSettingsCard() {
     },
   });
 
-  const handleToggle = (field: keyof UserSettingsUpdate, value: boolean) => {
+  const handleToggle = (
+    field: keyof UserSettingsUpdate,
+    value: boolean,
+    timestamp: number,
+  ) => {
+    const now = timestamp;
+    if (now < checkboxCooldownRef.current) {
+      toast.error("You need to wait a few seconds to repeat this action");
+      return;
+    }
+
+    checkboxCooldownRef.current = now + 2000;
     updateMutation.mutate({ [field]: value });
   };
 
@@ -673,7 +685,11 @@ function UserSettingsCard() {
                 type="checkbox"
                 checked={userSettings?.save_playstyle_url || false}
                 onChange={(e) =>
-                  handleToggle("save_playstyle_url", e.target.checked)
+                  handleToggle(
+                    "save_playstyle_url",
+                    e.target.checked,
+                    e.timeStamp,
+                  )
                 }
                 className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
                 disabled={updateMutation.isPending}
@@ -692,7 +708,11 @@ function UserSettingsCard() {
                 type="checkbox"
                 checked={userSettings?.save_matchmaking_url || false}
                 onChange={(e) =>
-                  handleToggle("save_matchmaking_url", e.target.checked)
+                  handleToggle(
+                    "save_matchmaking_url",
+                    e.target.checked,
+                    e.timeStamp,
+                  )
                 }
                 className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
                 disabled={updateMutation.isPending}

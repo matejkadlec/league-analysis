@@ -1,8 +1,6 @@
-import asyncio
-from typing import List, Set
+from typing import List
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
 
 from app.features.jobs.base import BaseJob
 from app.features.players.service import PlayerService
@@ -10,11 +8,10 @@ from app.features.players.schemas import PlayerResponse
 from app.features.matches.service import MatchService
 from app.core.riot_api.client import RiotAPIClient, APICallRecord
 from app.core.riot_api.db_rate_limiter import DBRateLimiter, RateLimitComponent
-from app.core.config import settings, get_riot_api_key
-from app.core.riot_api.constants import get_region_by_platform, QueueType, Region
+from app.core.config import get_riot_api_key
 from app.core.riot_api.errors import AuthenticationError
-from app.features.matches.models import Match
 from app.features.players.models import Player
+from app.features.jobs.queue_config import get_enabled_match_fetcher_queue_ids
 
 logger = structlog.get_logger(__name__)
 
@@ -47,6 +44,20 @@ class MatchFetcherJob(BaseJob):
 
     async def execute(self, db: AsyncSession) -> None:
         """Execute the match fetcher job."""
+        if not self.job_config:
+            raise RuntimeError("Match Fetcher missing job configuration")
+
+        enabled_queue_ids = get_enabled_match_fetcher_queue_ids(
+            self.job_config.config_json
+        )
+        self.add_log_entry("enabled_queue_ids", enabled_queue_ids)
+
+        if not enabled_queue_ids:
+            logger.info(
+                "Skipping Match Fetcher - no queues enabled",
+                job_config_id=self.job_config_id,
+            )
+            return
 
         # Initialize services
         # Retrieve API key dynamically (DB prioritized > Env fallback)
@@ -78,6 +89,7 @@ class MatchFetcherJob(BaseJob):
                             match_service,
                             riot_client,
                             rate_limiter,
+                            enabled_queue_ids,
                         )
                     except Exception as e:
                         error_msg = str(e)
@@ -110,6 +122,7 @@ class MatchFetcherJob(BaseJob):
         match_service: MatchService,
         riot_client: RiotAPIClient,
         rate_limiter: DBRateLimiter,
+        enabled_queue_ids: list[int],
     ) -> None:
         """Fetch and sync matches for a single player, then update their league.
 
@@ -118,7 +131,10 @@ class MatchFetcherJob(BaseJob):
         """
         # Fetch new matches with rate limiting
         count = await match_service.sync_matches_for_player(
-            riot_client, player, rate_limiter
+            riot_client,
+            player,
+            rate_limiter,
+            enabled_queue_ids=enabled_queue_ids,
         )
         self.metrics["records_created"] += count
 

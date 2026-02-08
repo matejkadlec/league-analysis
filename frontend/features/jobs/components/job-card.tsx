@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { validatedPost, validatedGet, validatedPut } from "@/lib/core/api";
 import {
@@ -138,6 +138,43 @@ function getJobDescription(jobType: string): string {
   );
 }
 
+const MATCH_FETCHER_QUEUE_OPTIONS: Array<{ id: number; label: string }> = [
+  { id: 420, label: "Ranked Solo/Duo" },
+  { id: 440, label: "Ranked Flex" },
+  { id: 400, label: "Normal Draft" },
+  { id: 450, label: "ARAM" },
+];
+
+const MATCH_FETCHER_DEFAULT_QUEUE_IDS = [420, 440, 400, 450];
+const TOGGLE_COOLDOWN_MS = 2000;
+
+function getEnabledQueueIds(config: JobConfiguration["config_json"]): number[] {
+  const rawQueueIds = config?.enabled_queue_ids;
+  if (!Array.isArray(rawQueueIds)) {
+    return [...MATCH_FETCHER_DEFAULT_QUEUE_IDS];
+  }
+
+  if (rawQueueIds.length === 0) {
+    return [];
+  }
+
+  const rawSet = new Set(
+    rawQueueIds
+      .map((value) => Number(value))
+      .filter((value) =>
+        MATCH_FETCHER_DEFAULT_QUEUE_IDS.includes(value),
+      ),
+  );
+
+  if (rawSet.size === 0) {
+    return [...MATCH_FETCHER_DEFAULT_QUEUE_IDS];
+  }
+
+  return MATCH_FETCHER_DEFAULT_QUEUE_IDS.filter((queueId) =>
+    rawSet.has(queueId),
+  );
+}
+
 export function JobCard({ job, onExecutionClick }: JobCardProps) {
   const [showHistory, setShowHistory] = useState(false);
   const [showConfigDialog, setShowConfigDialog] = useState(false);
@@ -146,6 +183,9 @@ export function JobCard({ job, onExecutionClick }: JobCardProps) {
   );
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const queueToggleCooldownRef = useRef(0);
+  const isMatchFetcher = job.job_type === "MATCH_FETCHER";
+  const enabledQueueIds = isMatchFetcher ? getEnabledQueueIds(job.config_json) : [];
 
   // Fetch latest 5 executions for this job (for history display)
   const { data: executionsResult } = useQuery({
@@ -257,6 +297,36 @@ export function JobCard({ job, onExecutionClick }: JobCardProps) {
     },
   });
 
+  const updateMatchFetcherQueuesMutation = useMutation({
+    mutationFn: (queueIds: number[]) =>
+      validatedPut(JobConfigurationSchema, `/jobs/${job.id}`, {
+        config_json: { enabled_queue_ids: queueIds },
+      }),
+    onSuccess: (result) => {
+      if (result.success) {
+        toast({
+          title: "Configuration Updated",
+          description: "Match queues were updated successfully",
+        });
+        queryClient.invalidateQueries({ queryKey: ["jobs"] });
+        queryClient.invalidateQueries({ queryKey: ["job-status"] });
+      } else {
+        toast({
+          title: "Failed to Update Configuration",
+          description: result.error.message,
+          variant: "error",
+        });
+      }
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error?.message || "Failed to update match queues",
+        variant: "error",
+      });
+    },
+  });
+
   const handleTrigger = () => {
     triggerMutation.mutate();
   };
@@ -278,6 +348,30 @@ export function JobCard({ job, onExecutionClick }: JobCardProps) {
     }
   };
 
+  const handleQueueToggle = (
+    queueId: number,
+    checked: boolean,
+    timestamp: number,
+  ) => {
+    const now = timestamp;
+    if (now < queueToggleCooldownRef.current) {
+      toast({
+        title: "Please wait",
+        description: "You need to wait a few seconds to repeat this action",
+        variant: "error",
+      });
+      return;
+    }
+
+    queueToggleCooldownRef.current = now + TOGGLE_COOLDOWN_MS;
+
+    const nextQueueIds = checked
+      ? [...new Set([...enabledQueueIds, queueId])]
+      : enabledQueueIds.filter((id) => id !== queueId);
+
+    updateMatchFetcherQueuesMutation.mutate(nextQueueIds);
+  };
+
   return (
     <Card className="transition-shadow hover:shadow-md">
       <CardHeader>
@@ -296,49 +390,81 @@ export function JobCard({ job, onExecutionClick }: JobCardProps) {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* Schedule */}
-        <div className="flex items-start gap-2 text-sm">
-          <CalendarClock className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-          <div className="flex-1">
-            <p className="font-medium">Schedule</p>
-            <p className="text-muted-foreground">
-              {formatScheduleInterval(job.schedule)}
-            </p>
-          </div>
-        </div>
+        <div className={isMatchFetcher ? "grid gap-4 md:grid-cols-2" : ""}>
+          <div className="space-y-4">
+            {/* Schedule */}
+            <div className="flex items-start gap-2 text-sm">
+              <CalendarClock className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+              <div className="flex-1">
+                <p className="font-medium">Schedule</p>
+                <p className="text-muted-foreground">
+                  {formatScheduleInterval(job.schedule)}
+                </p>
+              </div>
+            </div>
 
-        {/* Last Execution */}
-        <div className="flex items-start gap-2 text-sm">
-          <Clock className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-          <div className="flex-1">
-            <p className="font-medium">Last Execution</p>
-            {lastExecution ? (
-              <div className="flex items-center gap-2">
-                <Badge
-                  variant={
-                    lastExecution.status === "SUCCESS"
-                      ? "default"
-                      : lastExecution.status === "FAILED"
-                        ? "destructive"
-                        : "secondary"
-                  }
-                  className="text-xs"
-                >
-                  {lastExecution.status}
-                </Badge>
-                <span className="text-muted-foreground">
-                  {formatRelativeTime(lastExecution.started_at)}
-                </span>
-                {duration && (
-                  <span className="text-muted-foreground">
-                    • {formatDuration(duration)}
-                  </span>
+            {/* Last Execution */}
+            <div className="flex items-start gap-2 text-sm">
+              <Clock className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+              <div className="flex-1">
+                <p className="font-medium">Last Execution</p>
+                {lastExecution ? (
+                  <div className="flex items-center gap-2">
+                    <Badge
+                      variant={
+                        lastExecution.status === "SUCCESS"
+                          ? "default"
+                          : lastExecution.status === "FAILED"
+                            ? "destructive"
+                            : "secondary"
+                      }
+                      className="text-xs"
+                    >
+                      {lastExecution.status}
+                    </Badge>
+                    <span className="text-muted-foreground">
+                      {formatRelativeTime(lastExecution.started_at)}
+                    </span>
+                    {duration && (
+                      <span className="text-muted-foreground">
+                        • {formatDuration(duration)}
+                      </span>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-muted-foreground">Never</p>
                 )}
               </div>
-            ) : (
-              <p className="text-muted-foreground">Never</p>
-            )}
+            </div>
           </div>
+
+          {isMatchFetcher && (
+            <div className="rounded-md border">
+              <div className="grid h-full grid-rows-4">
+                {MATCH_FETCHER_QUEUE_OPTIONS.map((queueOption) => (
+                  <label
+                    key={queueOption.id}
+                    className="flex min-h-[44px] items-center justify-between px-3 text-sm border-b last:border-b-0"
+                  >
+                    <span className="font-medium">{queueOption.label}</span>
+                    <input
+                      type="checkbox"
+                      checked={enabledQueueIds.includes(queueOption.id)}
+                      onChange={(event) =>
+                        handleQueueToggle(
+                          queueOption.id,
+                          event.target.checked,
+                          event.timeStamp,
+                        )
+                      }
+                      className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                      disabled={updateMatchFetcherQueuesMutation.isPending}
+                    />
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Configuration Section */}

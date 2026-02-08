@@ -7,6 +7,7 @@ import structlog
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from apscheduler.executors.asyncio import AsyncIOExecutor
+from apscheduler.jobstores.base import JobLookupError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import get_global_settings
@@ -336,6 +337,65 @@ def _schedule_job(
         job_type=job_type.value if isinstance(job_type, JobType) else str(job_type),
         interval_seconds=interval_seconds,
     )
+
+
+async def sync_job_configuration(job_config_id: int) -> None:
+    """Sync a single job configuration with the running scheduler.
+
+    - Active job: schedule or reschedule with current settings
+    - Inactive/missing job: remove scheduled task if it exists
+    """
+    if _scheduler is None:
+        logger.debug(
+            "Scheduler not initialized, skipping job sync",
+            job_config_id=job_config_id,
+        )
+        return
+
+    scheduler_job_id = f"job_{job_config_id}"
+
+    try:
+        from sqlalchemy import select
+
+        async with db_manager.get_session() as db:
+            stmt = select(JobConfiguration).where(JobConfiguration.id == job_config_id)
+            result = await db.execute(stmt)
+            job_config = result.scalar_one_or_none()
+
+        if job_config is None or not job_config.is_active:
+            try:
+                _scheduler.remove_job(scheduler_job_id)
+                logger.info(
+                    "Removed job from scheduler",
+                    job_id=job_config_id,
+                    reason="inactive_or_missing",
+                )
+            except JobLookupError:
+                logger.debug(
+                    "Job not present in scheduler during removal",
+                    job_id=job_config_id,
+                )
+            return
+
+        registry = _get_job_registry()
+        job_type = _convert_job_type(job_config)
+        if not job_type:
+            return
+
+        job_class = _get_job_class(job_type, job_config, registry)
+        if not job_class:
+            return
+
+        interval_seconds = _resolve_interval_seconds(job_config)
+        _schedule_job(job_config, job_class, interval_seconds)
+
+    except Exception as e:
+        logger.error(
+            "Failed to sync job configuration with scheduler",
+            job_id=job_config_id,
+            error=str(e),
+            error_type=type(e).__name__,
+        )
 
 
 async def _check_and_run_overdue_jobs() -> None:

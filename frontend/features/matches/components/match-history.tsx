@@ -38,13 +38,13 @@ import {
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
 
 interface MatchHistoryProps {
   puuid: string;
-  queueFilter?: number;
   lastUpdated?: string | null;
 }
 
@@ -80,6 +80,15 @@ const QUEUE_NAMES: Record<number, string> = {
   430: "Normal Blind",
   450: "ARAM",
 };
+
+type MatchHistoryQueueFilter = "ALL" | 420 | 440 | 400;
+
+const MATCH_HISTORY_QUEUE_FILTERS = [
+  { id: "ALL" as const, label: "All Queues", widthClass: "w-[96px]" },
+  { id: 420 as const, label: "Ranked Solo/Duo", widthClass: "w-[140px]" },
+  { id: 440 as const, label: "Ranked Flex", widthClass: "w-[96px]" },
+  { id: 400 as const, label: "Normal Draft", widthClass: "w-[100px]" },
+];
 
 // Format time as "H:MM AM/PM"
 function formatTime(timestamp: number): string {
@@ -189,20 +198,32 @@ function MatchRow({
     ? (opponent.total_cs / (match.game_duration / 60)).toFixed(1)
     : "0";
 
-  // Format damage numbers (e.g., 15234 -> "15.2k")
-  const formatDamage = (damage: number): string => {
-    if (damage >= 1000) {
-      return `${(damage / 1000).toFixed(1)}k`;
-    }
-    return String(damage);
-  };
-
   // Get player's team stats (blue or red based on team_id)
   const getBlueTeamStats = () => teamStats?.blue_team || null;
   const getRedTeamStats = () => teamStats?.red_team || null;
 
   const blueTeamStats = getBlueTeamStats();
   const redTeamStats = getRedTeamStats();
+  const playerTeamStats =
+    participant?.team_id === 100 ? blueTeamStats : redTeamStats;
+  const enemyTeamStats =
+    participant?.team_id === 100
+      ? redTeamStats
+      : participant?.team_id === 200
+        ? blueTeamStats
+        : null;
+  const isRemake = Boolean(participant?.remake || match.early_surrender);
+  const displayedLpChange = match.lp_change ?? (isRemake ? 0 : null);
+
+  const killParticipation =
+    participant && playerTeamStats && playerTeamStats.kills > 0
+      ? ((participant.kills + participant.assists) / playerTeamStats.kills) *
+        100
+      : null;
+  const enemyKillParticipation =
+    opponent && enemyTeamStats && enemyTeamStats.kills > 0
+      ? ((opponent.kills + opponent.assists) / enemyTeamStats.kills) * 100
+      : null;
 
   // Render summoner spell icon - bigger and with border radius
   const renderSummonerSpell = (spellId: number | null | undefined) => {
@@ -437,13 +458,15 @@ function MatchRow({
             </span>
             <span className="mt-0.5">
               <span className="font-medium">{participant.vision_score}</span>{" "}
-              Vision
+              Vision Score
             </span>
             <span className="mt-0.5">
               <span className="font-medium">
-                {formatDamage(participant.total_damage_dealt_to_champions || 0)}
+                {killParticipation !== null
+                  ? `${killParticipation.toFixed(0)}%`
+                  : "—"}
               </span>{" "}
-              DMG
+              Kill Particip.
             </span>
           </div>
         )}
@@ -590,13 +613,15 @@ function MatchRow({
             </span>
             <span className="mt-0.5">
               <span className="font-medium">{opponent.vision_score}</span>{" "}
-              Vision
+              Vision Score
             </span>
             <span className="mt-0.5">
               <span className="font-medium">
-                {formatDamage(opponent.total_damage_dealt_to_champions || 0)}
+                {enemyKillParticipation !== null
+                  ? `${enemyKillParticipation.toFixed(0)}%`
+                  : "—"}
               </span>{" "}
-              DMG
+              Kill Particip.
             </span>
           </div>
         )}
@@ -608,18 +633,24 @@ function MatchRow({
 
         {/* Column 7: LP Change */}
         <div className="w-12 mr-2 shrink-0 text-center flex flex-col justify-center">
-          {match.lp_change !== null && match.lp_change !== undefined ? (
+          {displayedLpChange !== null && displayedLpChange !== undefined ? (
             <span
               className={`text-xs font-medium ${
-                match.lp_change > 0
+                displayedLpChange > 0
                   ? "text-emerald-500"
-                  : match.lp_change < 0
+                  : displayedLpChange < 0
                     ? "text-rose-500"
                     : "text-muted-foreground"
               }`}
             >
-              {match.lp_change > 0 ? "+" : ""}
-              {match.lp_change} LP
+              {displayedLpChange > 0
+                ? `+${displayedLpChange}`
+                : displayedLpChange < 0
+                  ? displayedLpChange
+                  : isRemake
+                    ? "+0"
+                    : "0"}{" "}
+              LP
             </span>
           ) : null}
         </div>
@@ -672,31 +703,34 @@ function MatchRow({
   );
 }
 
-export function MatchHistory({
-  puuid,
-  queueFilter = 420,
-  lastUpdated,
-}: MatchHistoryProps) {
+export function MatchHistory({ puuid, lastUpdated }: MatchHistoryProps) {
   const PAGE_SIZE = 20;
   const loadMoreRef = useRef<HTMLDivElement>(null);
-  const previousMatchCount = useRef(0);
   const queryClient = useQueryClient();
   const router = useRouter();
 
-  const [displayCount, setDisplayCount] = useState(20);
+  const [displayCount, setDisplayCount] = useState(PAGE_SIZE);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [activeQueueFilter, setActiveQueueFilter] =
+    useState<MatchHistoryQueueFilter>("ALL");
+  const [championSearch, setChampionSearch] = useState("");
+  const activeFilterConfig =
+    MATCH_HISTORY_QUEUE_FILTERS.find(
+      (filterOption) => filterOption.id === activeQueueFilter,
+    ) ?? MATCH_HISTORY_QUEUE_FILTERS[0];
+  const queueQueryParam =
+    activeFilterConfig.id === "ALL" ? undefined : activeFilterConfig.id;
+  const excludeAramFromQuery = activeFilterConfig.id === "ALL";
 
-  // Fetch match stats for total wins/losses
   const { data: statsResult } = useQuery({
-    queryKey: ["match-history-stats", puuid, queueFilter],
+    queryKey: ["match-history-stats", puuid, activeQueueFilter],
     queryFn: () =>
       validatedGet(MatchStatsResponseSchema, `/matches/player/${puuid}/stats`, {
-        queue: queueFilter,
+        queue: queueQueryParam,
+        exclude_aram: excludeAramFromQuery || undefined,
       }),
     enabled: !!puuid,
   });
-
-  const stats = statsResult?.success ? statsResult.data : null;
 
   const {
     data: response,
@@ -705,14 +739,15 @@ export function MatchHistory({
     isFetching,
     refetch,
   } = useQuery({
-    queryKey: ["matchHistoryDetailed", puuid, queueFilter, displayCount],
+    queryKey: ["matchHistoryDetailed", puuid, activeQueueFilter, displayCount],
     queryFn: async () => {
       try {
         const result = await validatedGet(
           MatchListWithPlayerDataResponseSchema,
           `/matches/player/${puuid}/detailed`,
           {
-            queue: queueFilter,
+            queue: queueQueryParam,
+            exclude_aram: excludeAramFromQuery || undefined,
             start: 0,
             count: displayCount,
           },
@@ -777,7 +812,6 @@ export function MatchHistory({
       setTimeout(async () => {
         await Promise.all([
           refetch(),
-          queryClient.invalidateQueries({ queryKey: ["match-history-stats"] }),
           queryClient.invalidateQueries({ queryKey: ["player"] }),
           queryClient.invalidateQueries({ queryKey: ["player-league"] }),
           queryClient.invalidateQueries({ queryKey: ["player-stats"] }),
@@ -791,25 +825,40 @@ export function MatchHistory({
     }
   };
 
+  const handleQueueFilterSelect = (queueId: MatchHistoryQueueFilter) => {
+    if (queueId === activeQueueFilter) {
+      return;
+    }
+
+    setDisplayCount(PAGE_SIZE);
+    setActiveQueueFilter(queueId);
+  };
+
+  const handleChampionSearchChange = (value: string) => {
+    setChampionSearch(value);
+  };
+
   const data = response?.success ? response.data : null;
   const allMatches = data?.matches || [];
-  const totalMatches = data?.total || 0;
-  const hasMore = allMatches.length < totalMatches;
+  const apiTotalMatches = data?.total || 0;
+  const stats = statsResult?.success ? statsResult.data : null;
+  const totalMatches = stats?.total_matches ?? apiTotalMatches;
+  const wins = stats?.wins ?? 0;
+  const losses = stats?.losses ?? 0;
 
-  // Use stats for total wins/losses display
-  const wins = stats?.wins || 0;
-  const losses = stats?.losses || 0;
-
-  useEffect(() => {
-    if (
-      allMatches.length > previousMatchCount.current &&
-      previousMatchCount.current > 0
-    ) {
-      previousMatchCount.current = allMatches.length;
-    } else if (allMatches.length > 0) {
-      previousMatchCount.current = allMatches.length;
+  const normalizedChampionSearch = championSearch.trim().toLowerCase();
+  const filteredMatches = allMatches.filter((match) => {
+    if (!normalizedChampionSearch) {
+      return true;
     }
-  }, [allMatches.length]);
+
+    const championName = match.player_participant?.champion_name ?? "";
+    return championName.toLowerCase().includes(normalizedChampionSearch);
+  });
+
+  const hasMore = allMatches.length < apiTotalMatches;
+
+  const hasActiveSearch = normalizedChampionSearch.length > 0;
 
   const loadMore = useCallback(() => {
     if (!isFetching && hasMore) {
@@ -818,6 +867,10 @@ export function MatchHistory({
   }, [isFetching, hasMore]);
 
   useEffect(() => {
+    if (!hasMore) {
+      return;
+    }
+
     const observer = new IntersectionObserver(
       (entries) => {
         const first = entries[0];
@@ -838,7 +891,7 @@ export function MatchHistory({
         observer.unobserve(currentRef);
       }
     };
-  }, [loadMore]);
+  }, [hasMore, loadMore]);
 
   if (isLoading) {
     return (
@@ -925,33 +978,69 @@ export function MatchHistory({
   return (
     <Card id="match-history">
       <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-2">
-            <ListRestart className="h-5 w-5 text-primary" />
-            Match History
-          </CardTitle>
-          <div className="flex items-center gap-2">
-            <Button
-              onClick={handleUpdate}
-              disabled={isUpdating}
-              variant="outline"
-              size="sm"
-              className="button-small"
-            >
-              {isUpdating ? (
-                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-              ) : (
-                <RefreshCw className="h-4 w-4 mr-1" />
-              )}
-              Update
-            </Button>
+        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+          <div className="justify-self-start">
+            <CardTitle className="flex items-center gap-2">
+              <ListRestart className="h-5 w-5 text-primary" />
+              Match History
+            </CardTitle>
           </div>
+
+          <div className="justify-self-center flex items-center text-sm">
+            {MATCH_HISTORY_QUEUE_FILTERS.map((queueOption, index) => {
+              const isSelected = queueOption.id === activeQueueFilter;
+
+              return (
+                <div key={queueOption.id} className="flex items-center">
+                  <button
+                    type="button"
+                    onClick={() => handleQueueFilterSelect(queueOption.id)}
+                    className={`${queueOption.widthClass} text-center transition-colors ${
+                      isSelected
+                        ? "cursor-default font-semibold text-foreground"
+                        : "cursor-pointer text-[#aaa]"
+                    }`}
+                  >
+                    {queueOption.label}
+                  </button>
+                  {index < MATCH_HISTORY_QUEUE_FILTERS.length - 1 && (
+                    <span className="text-muted-foreground">|</span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          <Button
+            onClick={handleUpdate}
+            disabled={isUpdating}
+            variant="outline"
+            size="sm"
+            className="button-small justify-self-end"
+          >
+            {isUpdating ? (
+              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+            ) : (
+              <RefreshCw className="h-4 w-4 mr-1" />
+            )}
+            Update
+          </Button>
         </div>
-        {totalMatches > 0 && (
-          <div className="text-sm mt-1">
-            {totalMatches} games analyzed ({wins}W / {losses}L)
-          </div>
-        )}
+
+        <div className="mt-1 flex items-center justify-between gap-3">
+          <Input
+            value={championSearch}
+            onChange={(event) => handleChampionSearchChange(event.target.value)}
+            placeholder="Search by champion..."
+            className="match-history-light-input h-7 w-[160px] !text-xs"
+          />
+          {totalMatches > 0 && (
+            <div className="text-sm text-right">
+              {totalMatches} total matches ({wins}W / {losses}L)
+            </div>
+          )}
+        </div>
+
         {lastUpdated && (
           <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
             <Clock className="h-3 w-3" />
@@ -960,24 +1049,38 @@ export function MatchHistory({
         )}
       </CardHeader>
       <CardContent>
-        {allMatches.length === 0 ? (
+        {filteredMatches.length === 0 ? (
           <Alert>
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
-              <p className="font-medium">
-                This player has no matches in the database.
-              </p>
-              <p className="mt-2 text-sm text-muted-foreground">
-                Tracked players matches will appear here as a background job
-                fetches them from the Riot API. If player is tracked and matches
-                are not appearing even after a few minutes, something is wrong.
-                For non-tracked players, use the <b>Update</b> button.
-              </p>
+              {hasActiveSearch ? (
+                <p className="font-medium">
+                  No matches found for champion search: &quot;{championSearch}
+                  &quot;.
+                </p>
+              ) : activeQueueFilter !== "ALL" ? (
+                <p className="font-medium">
+                  No matches found for {getQueueName(activeQueueFilter)}.
+                </p>
+              ) : (
+                <div>
+                  <p className="font-medium">
+                    This player has no matches in the database.
+                  </p>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    Tracked players matches will appear here as a background job
+                    fetches them from the Riot API. If player is tracked and
+                    matches are not appearing even after a few minutes,
+                    something is wrong. For non-tracked players, use the{" "}
+                    <b>Update</b> button.
+                  </p>
+                </div>
+              )}
             </AlertDescription>
           </Alert>
         ) : (
           <div className="rounded-md border">
-            {allMatches.map((match) => (
+            {filteredMatches.map((match) => (
               <MatchRow
                 key={match.match_id}
                 match={match}
@@ -997,12 +1100,13 @@ export function MatchHistory({
                   </div>
                 ) : (
                   <div className="text-sm text-muted-foreground">
-                    Showing {allMatches.length} of {totalMatches} matches
+                    Showing {allMatches.length} of {totalMatches} fetched
+                    matches
                   </div>
                 )}
               </div>
             )}
-            {!hasMore && allMatches.length > 0 && (
+            {!hasMore && filteredMatches.length > 0 && (
               <div className="flex justify-center py-4 border-t bg-background/50">
                 <div className="text-sm text-muted-foreground">
                   All {totalMatches} matches loaded

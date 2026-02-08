@@ -10,7 +10,12 @@ from .schemas import (
     JobStatusResponse,
     JobTriggerResponse,
 )
-from .scheduler import start_scheduler, shutdown_scheduler, get_scheduler
+from .scheduler import (
+    start_scheduler,
+    shutdown_scheduler,
+    get_scheduler,
+    sync_job_configuration,
+)
 from .log_capture import job_log_capture
 
 __all__ = [
@@ -33,6 +38,7 @@ __all__ = [
     "start_scheduler",
     "shutdown_scheduler",
     "get_scheduler",
+    "sync_job_configuration",
     # Utilities
     "job_log_capture",
 ]

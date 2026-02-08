@@ -34,7 +34,7 @@ from app.core.riot_api.errors import (
     ForbiddenError,
     NotFoundError,
 )
-from app.core.riot_api.constants import get_region_by_platform, QueueType
+from app.core.riot_api.constants import get_region_by_platform
 from app.core.riot_api.db_rate_limiter import DBRateLimiter, RateLimitComponent
 
 if TYPE_CHECKING:
@@ -45,6 +45,8 @@ logger = structlog.get_logger(__name__)
 
 class MatchService:
     """Service for handling match data operations."""
+
+    SUPPORTED_SYNC_QUEUE_IDS: tuple[int, ...] = (420, 440, 400, 450)
 
     def __init__(self, db: AsyncSession):
         """Initialize match service with database session only."""
@@ -59,6 +61,7 @@ class MatchService:
         queue: Optional[int] = None,
         start_time: Optional[int] = None,
         end_time: Optional[int] = None,
+        exclude_aram: bool = False,
     ) -> MatchListResponse:
         """
         Get match history for a player from database only.
@@ -73,6 +76,7 @@ class MatchService:
             queue: Filter by queue ID
             start_time: Start timestamp
             end_time: End timestamp
+            exclude_aram: Whether to exclude queue 450 (ARAM)
 
         Returns:
             MatchListResponse with matches from database
@@ -80,17 +84,17 @@ class MatchService:
         try:
             # Get matches from database only
             db_matches = await self._get_matches_from_db(
-                puuid, start, count, queue, start_time, end_time
+                puuid, start, count, queue, start_time, end_time, exclude_aram
             )
 
             # Get total count of matches for pagination
             total_count = await self._count_matches_from_db(
-                puuid, queue, start_time, end_time
+                puuid, queue, start_time, end_time, exclude_aram
             )
 
             # Get total analyzed matches count
             total_analyzed = await self._count_analyzed_matches_from_db(
-                puuid, queue, start_time, end_time
+                puuid, queue, start_time, end_time, exclude_aram
             )
 
             match_responses = [
@@ -132,6 +136,7 @@ class MatchService:
         start: int = 0,
         count: int = 20,
         queue: Optional[int] = None,
+        exclude_aram: bool = False,
     ) -> MatchListWithPlayerDataResponse:
         """
         Get match history for a player with participant data.
@@ -144,6 +149,7 @@ class MatchService:
             start: Start index for pagination
             count: Number of matches to return
             queue: Filter by queue ID
+            exclude_aram: Whether to exclude queue 450 (ARAM)
 
         Returns:
             MatchListWithPlayerDataResponse with detailed match data
@@ -151,7 +157,7 @@ class MatchService:
         try:
             # Get matches from database
             db_matches = await self._get_matches_from_db(
-                puuid, start, count, queue, None, None
+                puuid, start, count, queue, None, None, exclude_aram
             )
 
             if not db_matches:
@@ -165,9 +171,11 @@ class MatchService:
                 )
 
             # Get total counts
-            total_count = await self._count_matches_from_db(puuid, queue, None, None)
+            total_count = await self._count_matches_from_db(
+                puuid, queue, None, None, exclude_aram
+            )
             total_analyzed = await self._count_analyzed_matches_from_db(
-                puuid, queue, None, None
+                puuid, queue, None, None, exclude_aram
             )
 
             # Get all match IDs
@@ -626,7 +634,11 @@ class MatchService:
         )
 
     async def get_player_stats(
-        self, puuid: str, queue: Optional[int] = None, limit: Optional[int] = None
+        self,
+        puuid: str,
+        queue: Optional[int] = None,
+        limit: Optional[int] = None,
+        exclude_aram: bool = False,
     ) -> MatchStatsResponse:
         """
         Calculate player statistics from recent matches.
@@ -635,6 +647,7 @@ class MatchService:
             puuid: Player PUUID
             queue: Filter by queue ID
             limit: Number of matches to analyze. If None, analyze all matches.
+            exclude_aram: Whether to exclude queue 450 (ARAM)
 
         Returns:
             MatchStatsResponse with player statistics
@@ -644,7 +657,10 @@ class MatchService:
             fetch_limit = limit if limit is not None else 10000
             # Get recent matches for the player
             matches = await self.get_player_matches(
-                puuid, count=fetch_limit, queue=queue
+                puuid,
+                count=fetch_limit,
+                queue=queue,
+                exclude_aram=exclude_aram,
             )
 
             if not matches.matches:
@@ -1160,6 +1176,7 @@ class MatchService:
         queue: Optional[int],
         start_time: Optional[int],
         end_time: Optional[int],
+        exclude_aram: bool = False,
     ) -> List[Match]:
         """Get matches from database."""
         query = (
@@ -1173,6 +1190,8 @@ class MatchService:
 
         if queue:
             query = query.where(Match.queue_id == queue)
+        if exclude_aram:
+            query = query.where(Match.queue_id != 450)
         if start_time:
             query = query.where(Match.game_start_timestamp >= start_time)
         if end_time:
@@ -1187,6 +1206,7 @@ class MatchService:
         queue: Optional[int],
         start_time: Optional[int],
         end_time: Optional[int],
+        exclude_aram: bool = False,
     ) -> int:
         """Count total matches for a player from database."""
         query = (
@@ -1197,6 +1217,8 @@ class MatchService:
 
         if queue:
             query = query.where(Match.queue_id == queue)
+        if exclude_aram:
+            query = query.where(Match.queue_id != 450)
         if start_time:
             query = query.where(Match.game_start_timestamp >= start_time)
         if end_time:
@@ -1211,6 +1233,7 @@ class MatchService:
         queue: Optional[int],
         start_time: Optional[int],
         end_time: Optional[int],
+        exclude_aram: bool = False,
     ) -> int:
         """Count total analyzed matches for a player from database."""
         query = (
@@ -1222,6 +1245,8 @@ class MatchService:
 
         if queue:
             query = query.where(Match.queue_id == queue)
+        if exclude_aram:
+            query = query.where(Match.queue_id != 450)
         if start_time:
             query = query.where(Match.game_start_timestamp >= start_time)
         if end_time:
@@ -1787,6 +1812,7 @@ class MatchService:
         riot_client: "RiotAPIClient",
         player: Any,
         rate_limiter: Optional[DBRateLimiter] = None,
+        enabled_queue_ids: Optional[list[int]] = None,
     ) -> int:
         """
         Sync matches for a player from Riot API (Current Season).
@@ -1796,6 +1822,7 @@ class MatchService:
             riot_client: The Riot API client
             player: Player object with puuid and platform
             rate_limiter: Optional DB rate limiter for coordinated rate limiting
+            enabled_queue_ids: Optional queue IDs to fetch. Default: [420]
         """
         puuid = getattr(player, "puuid", None)
         platform = getattr(player, "platform", None)
@@ -1805,97 +1832,175 @@ class MatchService:
             return 0
 
         region = get_region_by_platform(platform)
+        queue_ids = self._normalize_sync_queue_ids(enabled_queue_ids)
+        if not queue_ids:
+            logger.info(
+                "Skipping match sync - no queues enabled",
+                puuid=puuid,
+                platform=platform,
+            )
+            return 0
+
+        logger.info(
+            "Starting match sync",
+            puuid=puuid,
+            platform=platform,
+            enabled_queue_ids=queue_ids,
+        )
+
+        total_stored = 0
+        for queue_id in queue_ids:
+            try:
+                queue_stored = await self._sync_single_queue_for_player(
+                    riot_client=riot_client,
+                    puuid=puuid,
+                    region=region,
+                    queue_id=queue_id,
+                    rate_limiter=rate_limiter,
+                )
+                total_stored += queue_stored
+            except Exception as e:
+                logger.warning(
+                    "Queue sync failed, continuing with next queue",
+                    puuid=puuid,
+                    queue_id=queue_id,
+                    error=str(e),
+                )
+                continue
+
+        return total_stored
+
+    def _normalize_sync_queue_ids(
+        self, queue_ids: Optional[list[int]]
+    ) -> list[int]:
+        """Normalize enabled queue IDs for sync operations."""
+        if queue_ids is None:
+            return [420]
+
+        if len(queue_ids) == 0:
+            return []
+
+        normalized: list[int] = []
+        seen: set[int] = set()
+
+        for raw_queue_id in queue_ids:
+            try:
+                queue_id = int(raw_queue_id)
+            except (TypeError, ValueError):
+                continue
+
+            if queue_id not in self.SUPPORTED_SYNC_QUEUE_IDS or queue_id in seen:
+                continue
+
+            normalized.append(queue_id)
+            seen.add(queue_id)
+
+        # If caller provided a non-empty list but none were valid, fall back safely.
+        if not normalized:
+            return [420]
+
+        return normalized
+
+    async def _sync_single_queue_for_player(
+        self,
+        riot_client: "RiotAPIClient",
+        puuid: str,
+        region: Any,
+        queue_id: int,
+        rate_limiter: Optional[DBRateLimiter],
+    ) -> int:
+        """Sync one queue for a single player."""
         start = 0
         count = 100
-        total_stored = 0
+        queue_stored = 0
         keep_fetching = True
 
-        # Track updated game name/tag if retrieved from API
-        updated_game_name = None
-        updated_tag_line = None
-
-        logger.info("Starting match sync", puuid=puuid, platform=platform)
+        logger.info(
+            "Starting queue sync",
+            puuid=puuid,
+            queue_id=queue_id,
+        )
 
         while keep_fetching:
             try:
-                # Use DB rate limiter if provided
                 if rate_limiter:
                     can_proceed = await rate_limiter.acquire()
                     if not can_proceed:
                         logger.warning(
-                            "Rate limit exceeded, stopping match sync",
+                            "Rate limit exceeded, stopping queue sync",
                             puuid=puuid,
+                            queue_id=queue_id,
                         )
                         break
 
-                # 1. Fetch match IDs
                 match_list_dto = await riot_client.get_match_list_by_puuid(
                     puuid=puuid,
                     region=region,
                     start=start,
                     count=count,
-                    queue=QueueType.RANKED_SOLO_5X5,
+                    queue=queue_id,
                 )
 
-                # Record the request if using rate limiter
                 if rate_limiter:
                     await rate_limiter.record_request()
 
             except Exception as e:
-                logger.error("Failed to fetch match IDs", puuid=puuid, error=str(e))
+                logger.error(
+                    "Failed to fetch match IDs",
+                    puuid=puuid,
+                    queue_id=queue_id,
+                    error=str(e),
+                )
                 break
 
             if not match_list_dto or not match_list_dto.match_ids:
                 break
 
             ids_list = match_list_dto.match_ids
-
             stmt = select(Match.match_id).where(
                 Match.match_id.in_(ids_list), Match.fully_analyzed == True
             )
             result = await self.db.execute(stmt)
             analyzed_ids = set(result.scalars().all())
-
-            # Process matches that are either NEW or NOT FULLY ANALYZED
             ids_to_process = [mid for mid in ids_list if mid not in analyzed_ids]
 
             for match_id in ids_to_process:
                 try:
-                    # Use DB rate limiter for coordinated rate limiting
                     if rate_limiter:
                         can_proceed = await rate_limiter.acquire()
                         if not can_proceed:
                             logger.warning(
                                 "Rate limit exceeded during match fetch",
                                 puuid=puuid,
+                                queue_id=queue_id,
                                 match_id=match_id,
                             )
                             keep_fetching = False
                             break
 
-                    # 2. Fetch match details
                     match_dto = await riot_client.get_match(match_id, region=region)
 
-                    # Record the request if using rate limiter
                     if rate_limiter:
                         await rate_limiter.record_request()
 
                     if not match_dto:
                         continue
 
+                    # Match IDs are sorted newest->oldest per queue, so we can stop at first older season.
                     if not match_dto.info.game_version.startswith("16."):
                         keep_fetching = False
                         break
 
-                    # Use reprocess to ensure fully_analyzed=True and consistent logic
                     await self._reprocess_match(match_dto)
-                    # _reprocess_match commits internally
-
-                    total_stored += 1
+                    queue_stored += 1
 
                 except Exception as e:
                     logger.warning(
-                        "Error syncing match", match_id=match_id, error=str(e)
+                        "Error syncing match",
+                        puuid=puuid,
+                        queue_id=queue_id,
+                        match_id=match_id,
+                        error=str(e),
                     )
                     continue
 
@@ -1904,4 +2009,10 @@ class MatchService:
 
             start += count
 
-        return total_stored
+        logger.info(
+            "Completed queue sync",
+            puuid=puuid,
+            queue_id=queue_id,
+            stored=queue_stored,
+        )
+        return queue_stored

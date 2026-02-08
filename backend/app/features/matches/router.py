@@ -30,6 +30,7 @@ async def get_player_matches(
     puuid: str,
     match_service: MatchServiceDep,
     queue: Optional[int] = Query(None, description="Queue ID filter"),
+    exclude_aram: bool = Query(False, description="Exclude queue 450 (ARAM)"),
     start: int = Query(0, ge=0, description="Start index"),
     count: int = Query(20, ge=1, le=100, description="Number of matches to return"),
 ):
@@ -41,6 +42,7 @@ async def get_player_matches(
         start=start,
         count=count,
         queue=queue,
+        exclude_aram=exclude_aram,
     )
 
 
@@ -49,6 +51,7 @@ async def get_player_matches_detailed(
     puuid: str,
     match_service: MatchServiceDep,
     queue: Optional[int] = Query(None, description="Queue ID filter"),
+    exclude_aram: bool = Query(False, description="Exclude queue 450 (ARAM)"),
     start: int = Query(0, ge=0, description="Start index"),
     count: int = Query(20, ge=1, le=100, description="Number of matches to return"),
 ):
@@ -61,6 +64,7 @@ async def get_player_matches_detailed(
         start=start,
         count=count,
         queue=queue,
+        exclude_aram=exclude_aram,
     )
 
 
@@ -69,6 +73,7 @@ async def get_player_stats(
     puuid: str,
     match_service: MatchServiceDep,
     queue: Optional[int] = Query(None, description="Queue ID filter"),
+    exclude_aram: bool = Query(False, description="Exclude queue 450 (ARAM)"),
     limit: Optional[int] = Query(
         None,
         ge=1,
@@ -83,6 +88,7 @@ async def get_player_stats(
         puuid=puuid,
         queue=queue,
         limit=limit,
+        exclude_aram=exclude_aram,
     )
 
 
