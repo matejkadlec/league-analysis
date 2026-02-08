@@ -34,7 +34,6 @@ from .endpoints import RiotAPIEndpoints
 
 __all__ = [
     "RiotAPIClient",
-    "RiotDataManager",
     "RateLimiter",
     "DBRateLimiter",
     "RateLimitComponent",

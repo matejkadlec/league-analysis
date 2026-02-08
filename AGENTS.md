@@ -87,6 +87,9 @@ league-analysis/
 
 **Source of Truth**: `backend/init_database.sql`
 
+**Tracked Players Model**: User-specific tracking lives in `auth.user_tracked_players`
+(`user_id` ↔ `puuid`). `core.players.is_tracked` is a derived global flag used by jobs.
+
 ### Schema Change Workflow
 
 1. Update SQLAlchemy models in `backend/app/features/*/models.py`
@@ -152,7 +155,17 @@ Common issues visible in logs:
 
 ### Quality Assurance
 
-After modifying code, run `get_errors` tool on changed files to catch:
+After modifying code, run these checks by default:
+
+```bash
+cd frontend && npm run lint
+cd frontend && npx tsc --noEmit
+cd backend && uv run pyright
+```
+
+All checks must finish with **0 errors and 0 warnings** before considering the task done.
+
+Also run `get_errors` on changed files to catch:
 
 - TypeScript type errors
 - Python syntax errors
@@ -166,12 +179,13 @@ After modifying code, run `get_errors` tool on changed files to catch:
 2. **Check logs on errors** - Auto-check `logs/backend.log` and `logs/frontend.log`
 3. **Update documentation** - Keep AGENTS.md files, README.md and files in `docs/` up to date
 4. **Summarize changes** - End responses with a concise overview of changes made
-5. **Verify with tools** - Use `get_errors` after edits to catch issues early
-6. **Use PSQL console** - If you need to run an SQL command (i.e. after modifying `init_database.sql`
+5. **Verify with tools** - Run frontend `npm run lint` + `npx tsc --noEmit` and backend `uv run pyright`; fix all warnings/errors
+6. **Use get_errors too** - Use `get_errors` after edits to catch file-level issues early
+7. **Use PSQL console** - If you need to run an SQL command (i.e. after modifying `init_database.sql`
    to keep the actual DB synced), use psql console. You will always need admin pw which is in `.env`.
-7. **Server shutdown** - Don't do server restart unless it's really needed. If you really need to do so,
+8. **Server shutdown** - Don't do server restart unless it's really needed. If you really need to do so,
    shutdown the currently running session (I'm running the server locally all the time while coding),
    and only after this run the server; otherwise it won't work and you will need to shut current
    session anyway + it might cause issues if you don't do the shutdown first.
-8. **Restart is needed** - If a server restart is need in order for your changes to apply, prompt the
+9. **Restart is needed** - If a server restart is need in order for your changes to apply, prompt the
    user to do so at the very end of your response.

@@ -3,22 +3,13 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Search,
   User,
   AlertCircle,
   UserPlus,
   Loader2,
-  X,
-  EqualApproximately,
-  Trash2,
-  Trash,
-  Eraser,
-  EraserIcon,
-  LucideEraser,
-  LucideCross,
-  RefreshCcw,
 } from "lucide-react";
 import { z } from "zod";
 
@@ -58,14 +49,9 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import {
-  Cross1Icon,
-  Cross2Icon,
-  CrossCircledIcon,
   ReloadIcon,
-  ResetIcon,
-  TrashIcon,
-  UpdateIcon,
 } from "@radix-ui/react-icons";
+import { useAuth } from "@/features/auth";
 
 // Constants for autocomplete behavior
 const SUGGESTION_DEBOUNCE_MS = 300;
@@ -99,6 +85,9 @@ export function PlayerSearch({
   onClear,
   showClear,
 }: PlayerSearchProps) {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const userId = user?.id;
   const [showTrackOption, setShowTrackOption] = useState(false);
   const [lastSearchParams, setLastSearchParams] =
     useState<PlayerSearchForm | null>(null);
@@ -277,6 +266,11 @@ export function PlayerSearch({
     onSuccess: (player) => {
       if (player) {
         setShowTrackOption(false);
+        queryClient.invalidateQueries({ queryKey: ["tracked-players", userId] });
+        queryClient.invalidateQueries({
+          queryKey: ["tracking-status", userId, player.puuid],
+        });
+        queryClient.invalidateQueries({ queryKey: ["player", player.puuid] });
         onPlayerFound(player);
         form.reset({
           searchValue: "",

@@ -65,7 +65,7 @@ class Player(Base):
         nullable=False,
         default=False,
         index=True,
-        comment="Whether this player is being actively tracked for continuous updates",
+        comment="Whether this player is tracked by at least one user for continuous updates",
     )
 
     # Timestamps

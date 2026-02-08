@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import Image from "next/image";
@@ -43,15 +43,8 @@ const navItems: NavItem[] = [
 
 export function SidebarNav() {
   const [menuOpen, setMenuOpen] = useState(false);
-  const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
   const pathname = usePathname();
   const { user, logout, isAuthenticated, isLoading } = useAuth();
-
-  // Auto open/close dropdown when visiting/leaving My Profile page
-  useEffect(() => {
-    const isOnMyProfile = pathname === "/my-profile";
-    setProfileDropdownOpen(isOnMyProfile);
-  }, [pathname]);
 
   // Hide sidebar on sign-in page or when not authenticated
   if (pathname === "/sign-in" || isLoading || !isAuthenticated) {
@@ -63,13 +56,6 @@ export function SidebarNav() {
       return pathname === "/";
     }
     return pathname.startsWith(path);
-  };
-
-  const handleDropdownClick = (e: React.MouseEvent, item: NavItem) => {
-    if (item.hasDropdown && isActive(item.path)) {
-      e.preventDefault();
-      setProfileDropdownOpen(!profileDropdownOpen);
-    }
   };
 
   const handleAnchorClick = (anchor: string) => {
@@ -132,12 +118,8 @@ export function SidebarNav() {
                     <div>
                       <Link
                         href={item.path}
-                        onClick={(e) => {
-                          if (isActive(item.path)) {
-                            handleDropdownClick(e, item);
-                          } else {
-                            setMenuOpen(false);
-                          }
+                        onClick={() => {
+                          setMenuOpen(false);
                         }}
                         className={`flex items-center justify-between border-l-4 px-6 py-3 text-white transition-all duration-300 hover:bg-white/10 ${
                           isActive(item.path)
@@ -155,17 +137,17 @@ export function SidebarNav() {
                         >
                           {item.name}
                         </span>
-                        <ChevronDown
-                          className={`h-6 w-6 text-[#cfa93a] transition-transform duration-300 ${
-                            profileDropdownOpen ? "rotate-180" : ""
-                          }`}
-                        />
+                          <ChevronDown
+                            className={`h-6 w-6 text-[#cfa93a] transition-transform duration-300 ${
+                              isActive(item.path) ? "rotate-180" : ""
+                            }`}
+                          />
                       </Link>
                       {/* Dropdown items */}
                       {isActive(item.path) && (
                         <div
-                          className={`overflow-hidden transition-all duration-300 ease-in-out ${
-                            profileDropdownOpen
+                            className={`overflow-hidden transition-all duration-300 ease-in-out ${
+                            isActive(item.path)
                               ? "max-h-64 opacity-100"
                               : "max-h-0 opacity-0"
                           }`}

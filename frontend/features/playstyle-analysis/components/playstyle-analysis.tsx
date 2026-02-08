@@ -5,7 +5,6 @@ import {
   Activity,
   Clock,
   RefreshCw,
-  Target,
   AlertCircle,
   Loader2,
 } from "lucide-react";
@@ -34,7 +33,6 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Separator } from "@/components/ui/separator";
 
 interface PlaystyleAnalysisProps {
   puuid: string;
@@ -80,6 +78,11 @@ export function PlaystyleAnalysis({
   analyzedMatchCount, // Destructure new prop
 }: PlaystyleAnalysisProps) {
   const queryClient = useQueryClient();
+  const analyzedMatches = analyzedMatchCount ?? 0;
+  const analysisAvailabilityText =
+    typeof matchCount === "number" && matchCount > 0
+      ? `(${analyzedMatches}/${matchCount} fetched matches analyzed)`
+      : `(${analyzedMatches}/10 analyzed)`;
 
   const { data: analysis, isLoading: isLoadingAnalysis } = useQuery({
     queryKey: ["playstyle-analysis", puuid],
@@ -216,7 +219,7 @@ export function PlaystyleAnalysis({
             </div>
             <div className="text-center">
               {/* Check if we have enough FULLY ANALYZED matches */}
-              {(analyzedMatchCount ?? 0) < 10 ? (
+              {analyzedMatches < 10 ? (
                 <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -230,7 +233,7 @@ export function PlaystyleAnalysis({
                     <TooltipContent>
                       <p>
                         This player doesn&apos;t have enough matches for the
-                        analysis ({analyzedMatchCount}/10 analyzed).
+                        analysis {analysisAvailabilityText}.
                       </p>
                     </TooltipContent>
                   </Tooltip>

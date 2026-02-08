@@ -1,6 +1,6 @@
 """Scheduler module for managing automated background jobs."""
 
-from typing import Dict, Optional, Type
+from typing import Any, Dict, Optional, Type
 from datetime import datetime
 
 import structlog
@@ -72,7 +72,7 @@ def _resolve_interval_seconds(job_config: JobConfiguration) -> int:
     )
 
 
-def _parse_interval_from_config(custom_value: any) -> Optional[int]:
+def _parse_interval_from_config(custom_value: Any) -> Optional[int]:
     """Parse interval from config JSON value.
 
     :param custom_value: Value from config_json['interval_seconds'].
@@ -316,6 +316,9 @@ def _schedule_job(
     """
     job_instance = job_class(job_config.id)
     job_type = job_config.job_type
+
+    if _scheduler is None:
+        raise RuntimeError("Scheduler is not initialized")
 
     _scheduler.add_job(
         job_instance.run,

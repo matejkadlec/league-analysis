@@ -3,14 +3,12 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth, ProtectedRoute } from "@/features/auth";
 import {
-  Player,
   PlayerSchema,
   ChampionStatsResponseSchema,
   LaneStatsResponseSchema,
 } from "@/lib/core/schemas";
 import { validatedGet } from "@/lib/core/api";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Link2 } from "lucide-react";
 import { PlayerCard } from "@/features/players";

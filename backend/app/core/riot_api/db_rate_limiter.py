@@ -19,7 +19,7 @@ Higher priority components can "bump" lower priority ones, causing them to wait.
 import asyncio
 from datetime import datetime, timezone, timedelta
 from enum import Enum
-from typing import Optional
+from typing import Any, Callable, Optional
 
 import structlog
 from sqlalchemy import String, Integer, Boolean, DateTime as SQLDateTime, select, update
@@ -422,7 +422,7 @@ class DBRateLimiter:
 
     async def acquire_with_wait_callback(
         self,
-        wait_callback: Optional[callable] = None,
+        wait_callback: Optional[Callable[[datetime | None], Any]] = None,
     ) -> bool:
         """Try to acquire permission with callback for wait status updates.
 

@@ -28,6 +28,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { toast } from "sonner";
+import { useAuth } from "@/features/auth";
 
 // Server to flag mapping
 const SERVER_FLAGS: Record<string, string> = {
@@ -94,6 +95,8 @@ type AddTrackedPlayerFormValues = z.infer<typeof addTrackedPlayerFormSchema>;
 export function AddTrackedPlayer() {
   const queryClient = useQueryClient();
   const gameNameInputRef = useRef<HTMLInputElement>(null);
+  const { user } = useAuth();
+  const userId = user?.id;
 
   const form = useForm<AddTrackedPlayerFormValues>({
     resolver: zodResolver(addTrackedPlayerFormSchema),
@@ -110,6 +113,7 @@ export function AddTrackedPlayer() {
     gameNameInputRef.current?.focus();
   }, []);
 
+  // eslint-disable-next-line react-hooks/incompatible-library -- React Hook Form watch() is intentionally not memoizable
   const gameName = form.watch("gameName");
   const tagLine = form.watch("tagLine");
 
@@ -154,7 +158,11 @@ export function AddTrackedPlayer() {
       return parsed.data;
     },
     onSuccess: (player) => {
-      queryClient.invalidateQueries({ queryKey: ["tracked-players"] });
+      queryClient.invalidateQueries({ queryKey: ["tracked-players", userId] });
+      queryClient.invalidateQueries({
+        queryKey: ["tracking-status", userId, player.puuid],
+      });
+      queryClient.invalidateQueries({ queryKey: ["player", player.puuid] });
       toast.success(
         `Successfully added ${player.game_name} to tracked players!`,
       );

@@ -296,9 +296,13 @@ class TeamStatsComposition(BaseModel):
     """Schema for both team statistics."""
 
     blue_team: TeamStats = Field(
-        default_factory=TeamStats, description="Blue team stats"
+        default_factory=lambda: TeamStats.model_validate({}),
+        description="Blue team stats",
     )
-    red_team: TeamStats = Field(default_factory=TeamStats, description="Red team stats")
+    red_team: TeamStats = Field(
+        default_factory=lambda: TeamStats.model_validate({}),
+        description="Red team stats",
+    )
 
     model_config = ConfigDict(from_attributes=True)
 

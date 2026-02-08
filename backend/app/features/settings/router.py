@@ -146,8 +146,8 @@ async def test_riot_api_key(
 
 @router.get("/user", response_model=UserSettingsResponse)
 async def get_user_settings(
+    settings_service: SettingsServiceDep,
     current_user: User = Depends(get_current_active_user),
-    settings_service: SettingsServiceDep = None,
 ):
     """
     Get the current user's settings.
@@ -169,8 +169,8 @@ async def get_user_settings(
 @router.put("/user", response_model=UserSettingsResponse)
 async def update_user_settings(
     update: UserSettingsUpdate,
+    settings_service: SettingsServiceDep,
     current_user: User = Depends(get_current_active_user),
-    settings_service: SettingsServiceDep = None,
 ):
     """
     Update the current user's settings.

@@ -1,14 +1,16 @@
 """Player service for handling player data operations."""
 
-from typing import List, Any, TYPE_CHECKING
+from typing import List, Any, Sequence, TYPE_CHECKING
 from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update, func, and_, or_
+from sqlalchemy import select, update, delete, func, and_, or_
+from sqlalchemy.dialects.postgresql import insert
 from Levenshtein import distance as levenshtein_distance
 import structlog
 
 from .models import Player
 from .schemas import PlayerResponse
+from app.features.auth.user_tracked_player import UserTrackedPlayer
 from app.core.exceptions import (
     PlayerServiceError,
 )
@@ -28,6 +30,52 @@ class PlayerService:
     def __init__(self, db: AsyncSession):
         """Initialize player service with database session only."""
         self.db = db
+
+    async def _is_player_tracked_by_user(self, puuid: str, user_id: int) -> bool:
+        """Check whether a player is tracked by a specific user."""
+        stmt = (
+            select(UserTrackedPlayer.user_id)
+            .where(
+                UserTrackedPlayer.user_id == user_id,
+                UserTrackedPlayer.puuid == puuid,
+            )
+            .limit(1)
+        )
+        result = await self.db.execute(stmt)
+        return result.scalar_one_or_none() is not None
+
+    async def _get_user_tracked_puuids(
+        self, user_id: int, puuids: list[str]
+    ) -> set[str]:
+        """Get subset of PUUIDs tracked by a specific user."""
+        if not puuids:
+            return set()
+
+        stmt = select(UserTrackedPlayer.puuid).where(
+            UserTrackedPlayer.user_id == user_id,
+            UserTrackedPlayer.puuid.in_(puuids),
+        )
+        result = await self.db.execute(stmt)
+        return set(result.scalars().all())
+
+    async def _update_global_tracking_flag(self, puuid: str) -> bool:
+        """Update core.players.is_tracked based on all user mappings."""
+        count_stmt = select(func.count()).select_from(UserTrackedPlayer).where(
+            UserTrackedPlayer.puuid == puuid
+        )
+        count_result = await self.db.execute(count_stmt)
+        is_globally_tracked = (count_result.scalar() or 0) > 0
+
+        await self.db.execute(
+            update(Player)
+            .where(Player.puuid == puuid)
+            .values(
+                is_tracked=is_globally_tracked,
+                updated_at=datetime.now(timezone.utc),
+            )
+        )
+
+        return is_globally_tracked
 
     @service_error_handler("PlayerService")
     @input_validation(
@@ -92,7 +140,7 @@ class PlayerService:
         return PlayerResponse.model_validate(player)
 
     def _find_exact_game_name_match(
-        self, players: list[Player], safe_game_name: str
+        self, players: Sequence[Player], safe_game_name: str
     ) -> Player | None:
         """Find exact game name match from list of players."""
         for player in players:
@@ -195,9 +243,10 @@ class PlayerService:
 
         # No matches found
         self._handle_no_game_name_matches(safe_game_name, normalized_platform)
+        raise AssertionError("Unreachable after _handle_no_game_name_matches")
 
     async def get_player_by_puuid(
-        self, puuid: str, platform: str = "eun1"
+        self, puuid: str, platform: str = "eun1", user_id: int | None = None
     ) -> PlayerResponse:
         """Get player by PUUID from database only. Never calls Riot API."""
         # Query database only
@@ -243,6 +292,10 @@ class PlayerService:
         response = PlayerResponse.model_validate(player)
         response.total_matches = total_matches
         response.analyzed_matches = analyzed_matches
+
+        if user_id is not None:
+            response.is_tracked = await self._is_player_tracked_by_user(puuid, user_id)
+
         return response
 
     @staticmethod
@@ -317,10 +370,10 @@ class PlayerService:
     @staticmethod
     def _check_exact_match(player: Player, game_name: str, tag_line: str) -> bool:
         """Check if player is an exact match."""
-        return (
-            player.game_name
+        return bool(
+            player.game_name is not None
             and player.game_name.lower() == game_name.lower()
-            and player.tag_line
+            and player.tag_line is not None
             and player.tag_line.lower() == tag_line.lower()
         )
 
@@ -443,7 +496,7 @@ class PlayerService:
 
     def _score_and_sort_players(
         self,
-        players: list[Player],
+        players: Sequence[Player],
         search_type: str,
         query_lower: str,
         game_name: str | None,
@@ -466,7 +519,7 @@ class PlayerService:
         return scored_players[:limit]
 
     async def fuzzy_search_players(
-        self, query: str, platform: str, limit: int = 10
+        self, query: str, platform: str, limit: int = 10, user_id: int | None = None
     ) -> List[PlayerResponse]:
         """
         Search for players using fuzzy matching with Levenshtein distance.
@@ -521,7 +574,21 @@ class PlayerService:
             results_returned=len(top_players),
         )
 
-        return [PlayerResponse.model_validate(p["player"]) for p in top_players]
+        user_tracked_puuids: set[str] = set()
+        if user_id is not None:
+            top_puuids = [item["player"].puuid for item in top_players]
+            user_tracked_puuids = await self._get_user_tracked_puuids(
+                user_id, top_puuids
+            )
+
+        responses: list[PlayerResponse] = []
+        for item in top_players:
+            response = PlayerResponse.model_validate(item["player"])
+            if user_id is not None:
+                response.is_tracked = item["player"].puuid in user_tracked_puuids
+            responses.append(response)
+
+        return responses
 
     @service_error_handler("PlayerService")
     @input_validation(validate_non_empty=["puuid"], validate_positive=["limit"])
@@ -557,7 +624,9 @@ class PlayerService:
             .join(MatchParticipant, Player.puuid == MatchParticipant.puuid)
             .where(
                 and_(
-                    MatchParticipant.match_id.in_(recent_matches_subq),
+                    MatchParticipant.match_id.in_(
+                        select(recent_matches_subq.c.match_id)
+                    ),
                     MatchParticipant.puuid != puuid,
                     Player.game_name.isnot(None),
                     Player.game_name != "",
@@ -586,21 +655,23 @@ class PlayerService:
         riot_client: "RiotAPIClient",
         game_name: str,
         tag_line: str,
+        user_id: int,
         platform: str = "eun1",
     ) -> PlayerResponse:
         """
-        Fetch player from Riot API and immediately track them.
+        Fetch player from Riot API and track them.
 
-        Combines get_player + track_player in one transaction.
+        Combines player upsert + tracking in one flow.
 
         Args:
             riot_client: RiotAPIClient instance
             game_name: Riot game name
             tag_line: Riot tag line
             platform: Platform code (default: eun1)
+            user_id: User ID for user-scoped tracking
 
         Returns:
-            PlayerResponse with is_tracked=True
+            PlayerResponse
 
         Raises:
             ValueError: If player not found
@@ -649,11 +720,10 @@ class PlayerService:
                 player.platform = platform
                 player.summoner_level = summoner.summoner_level
                 player.profile_icon_id = summoner.profile_icon_id
-                player.is_tracked = True
                 player.updated_at = datetime.now(timezone.utc)
 
                 logger.info(
-                    "Player updated and tracked",
+                    "Player updated",
                     puuid=player.puuid,
                     game_name=player.game_name,
                 )
@@ -666,12 +736,12 @@ class PlayerService:
                     platform=platform,
                     summoner_level=summoner.summoner_level,
                     profile_icon_id=summoner.profile_icon_id,
-                    is_tracked=True,
+                    is_tracked=False,
                 )
                 self.db.add(player)
 
                 logger.info(
-                    "Player created and tracked",
+                    "Player created",
                     puuid=player.puuid,
                     game_name=player.game_name,
                 )
@@ -679,7 +749,7 @@ class PlayerService:
             await self.db.commit()
             await self.db.refresh(player)
 
-            return PlayerResponse.model_validate(player)
+            return await self.track_player(player.puuid, user_id)
 
         except Exception as e:
             # Check if it is a 404 from Riot API (usually comes as exception from client)
@@ -687,11 +757,12 @@ class PlayerService:
             logger.error("add_and_track_player_failed", error=str(e))
             raise e
 
-    async def track_player(self, puuid: str) -> PlayerResponse:
-        """Mark a player as tracked for automated monitoring.
+    async def track_player(self, puuid: str, user_id: int) -> PlayerResponse:
+        """Mark a player as tracked by a specific user.
 
         Args:
             puuid: Player's PUUID to track.
+            user_id: User who is tracking the player.
 
         Returns:
             Updated player data.
@@ -699,35 +770,39 @@ class PlayerService:
         Raises:
             ValueError: If player not found.
         """
-        # Update player to tracked status
-        stmt = (
-            update(Player)
-            .where(Player.puuid == puuid)
-            .values(is_tracked=True, updated_at=datetime.now(timezone.utc))
-            .returning(Player)
-        )
-
-        result = await self.db.execute(stmt)
-        player = result.scalar_one_or_none()
+        player = await self.db.get(Player, puuid)
 
         if not player:
             raise ValueError(f"Player not found: {puuid}")
 
+        stmt = (
+            insert(UserTrackedPlayer)
+            .values(user_id=user_id, puuid=puuid)
+            .on_conflict_do_nothing(index_elements=["user_id", "puuid"])
+        )
+        await self.db.execute(stmt)
+
+        await self._update_global_tracking_flag(puuid)
         await self.db.commit()
+        await self.db.refresh(player)
 
         logger.info(
             "Player marked as tracked",
             puuid=puuid,
+            user_id=user_id,
             game_name=player.game_name,
         )
 
-        return PlayerResponse.model_validate(player)
+        response = PlayerResponse.model_validate(player)
+        response.is_tracked = True
+        return response
 
-    async def untrack_player(self, puuid: str) -> PlayerResponse:
-        """Remove a player from tracked status.
+    async def untrack_player(self, puuid: str, user_id: int) -> PlayerResponse:
+        """Remove a player from a user's tracked list.
 
         Args:
             puuid: Player's PUUID to untrack.
+            user_id: User removing the player from tracking.
 
         Returns:
             Updated player data.
@@ -735,37 +810,66 @@ class PlayerService:
         Raises:
             ValueError: If player not found.
         """
-        stmt = (
-            update(Player)
-            .where(Player.puuid == puuid)
-            .values(is_tracked=False, updated_at=datetime.now(timezone.utc))
-            .returning(Player)
-        )
-
-        result = await self.db.execute(stmt)
-        player = result.scalar_one_or_none()
+        player = await self.db.get(Player, puuid)
 
         if not player:
             raise ValueError(f"Player not found: {puuid}")
 
+        stmt = delete(UserTrackedPlayer).where(
+            UserTrackedPlayer.user_id == user_id,
+            UserTrackedPlayer.puuid == puuid,
+        )
+        await self.db.execute(stmt)
+
+        is_globally_tracked = await self._update_global_tracking_flag(puuid)
         await self.db.commit()
+        await self.db.refresh(player)
 
         logger.info(
             "Player unmarked as tracked",
             puuid=puuid,
+            user_id=user_id,
+            is_globally_tracked=is_globally_tracked,
             game_name=player.game_name,
         )
 
-        return PlayerResponse.model_validate(player)
+        response = PlayerResponse.model_validate(player)
+        response.is_tracked = False
+        return response
 
-    async def get_tracked_players(self) -> List[PlayerResponse]:
-        """Get all players currently marked for tracking.
+    async def get_player_tracking_status(self, puuid: str, user_id: int) -> bool:
+        """Get user-specific tracking status for a player."""
+        player = await self.db.get(Player, puuid)
+        if not player:
+            raise ValueError(f"Player not found: {puuid}")
+
+        return await self._is_player_tracked_by_user(puuid, user_id)
+
+    async def get_tracked_players(self, user_id: int) -> List[PlayerResponse]:
+        """Get all players tracked by a specific user.
 
         Returns:
             List of tracked players.
         """
         query = (
-            select(Player).where(Player.is_tracked == True).order_by(Player.game_name)
+            select(Player)
+            .join(UserTrackedPlayer, UserTrackedPlayer.puuid == Player.puuid)
+            .where(UserTrackedPlayer.user_id == user_id)
+            .order_by(Player.game_name)
+        )
+
+        result = await self.db.execute(query)
+        players = result.scalars().all()
+
+        responses = [PlayerResponse.model_validate(player) for player in players]
+        for response in responses:
+            response.is_tracked = True
+        return responses
+
+    async def get_globally_tracked_players(self) -> List[PlayerResponse]:
+        """Get all players tracked by at least one user."""
+        query = (
+            select(Player).where(Player.is_tracked.is_(True)).order_by(Player.game_name)
         )
 
         result = await self.db.execute(query)

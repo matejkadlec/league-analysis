@@ -7,7 +7,7 @@ import math
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, func, desc
 
-from .models import JobConfiguration, JobExecution, JobStatus
+from .models import JobConfiguration, JobExecution, JobStatus, JobType
 from .schemas import (
     JobConfigurationUpdate,
     JobConfigurationResponse,
@@ -223,7 +223,7 @@ class JobService:
         result = await self.db.execute(query)
         return result.scalar() or 0
 
-    async def is_job_running(self, job_type: "JobType") -> bool:
+    async def is_job_running(self, job_type: JobType) -> bool:
         """Check if a job of the given type is currently running.
 
         Args:
@@ -232,8 +232,6 @@ class JobService:
         Returns:
             True if a job of this type is running, False otherwise.
         """
-        from .models import JobType as JT  # Avoid circular import
-
         query = (
             select(func.count())
             .select_from(JobExecution)
@@ -247,7 +245,7 @@ class JobService:
         return count > 0
 
     async def get_job_config_by_type(
-        self, job_type: "JobType"
+        self, job_type: JobType
     ) -> Optional[JobConfigurationResponse]:
         """Get job configuration by job type.
 

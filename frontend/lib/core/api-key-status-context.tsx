@@ -7,6 +7,7 @@ import {
   useCallback,
   ReactNode,
   useMemo,
+  useEffect,
 } from "react";
 
 interface ApiKeyStatusContextType {
@@ -52,9 +53,20 @@ export function ApiKeyStatusProvider({ children }: { children: ReactNode }) {
     setIsApiKeyInvalid(false);
   }, []);
 
-  // Register global references for interceptor access
-  globalMarkInvalid = markApiKeyInvalid;
-  globalMarkValid = markApiKeyValid;
+  useEffect(() => {
+    // Register global references for interceptor access.
+    globalMarkInvalid = markApiKeyInvalid;
+    globalMarkValid = markApiKeyValid;
+
+    return () => {
+      if (globalMarkInvalid === markApiKeyInvalid) {
+        globalMarkInvalid = null;
+      }
+      if (globalMarkValid === markApiKeyValid) {
+        globalMarkValid = null;
+      }
+    };
+  }, [markApiKeyInvalid, markApiKeyValid]);
 
   const value = useMemo(
     () => ({

@@ -52,6 +52,13 @@ export function MatchmakingAnalysis({ puuid }: MatchmakingAnalysisProps) {
   const queryClient = useQueryClient();
   const [phase, setPhase] = useState<UIPhase>("idle");
   const [animProgress, setAnimProgress] = useState<number | null>(null);
+  const [nowTimestamp, setNowTimestamp] = useState(() => Date.now());
+  const [recentlyStartedTime, setRecentlyStartedTime] = useState<number | null>(
+    null,
+  );
+  const [currentAnalysisCreatedAt, setCurrentAnalysisCreatedAt] = useState<
+    string | null
+  >(null);
   const [notEnoughMatches, setNotEnoughMatches] = useState<{
     show: boolean;
     found: number;
@@ -60,8 +67,14 @@ export function MatchmakingAnalysis({ puuid }: MatchmakingAnalysisProps) {
   // Track if we ever saw in_progress this session
   const sawInProgressRef = useRef(false);
   const lastBackendProgressRef = useRef(0);
-  const recentlyStartedTimeRef = useRef<number | null>(null);
-  const currentAnalysisCreatedAtRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      setNowTimestamp(Date.now());
+    }, 1000);
+
+    return () => clearInterval(intervalId);
+  }, []);
 
   // Query for the latest analysis
   const {
@@ -105,14 +118,30 @@ export function MatchmakingAnalysis({ puuid }: MatchmakingAnalysisProps) {
   const validStatusUpdate =
     shouldPoll &&
     statusUpdate &&
-    currentAnalysisCreatedAtRef.current &&
-    statusUpdate.created_at === currentAnalysisCreatedAtRef.current
+    currentAnalysisCreatedAt &&
+    statusUpdate.created_at === currentAnalysisCreatedAt
       ? statusUpdate
       : null;
   const latestMatchesCurrent =
-    Boolean(currentAnalysisCreatedAtRef.current) &&
-    latestAnalysis?.created_at === currentAnalysisCreatedAtRef.current;
+    Boolean(currentAnalysisCreatedAt) &&
+    latestAnalysis?.created_at === currentAnalysisCreatedAt;
   const latestForCurrent = latestMatchesCurrent ? latestAnalysis : null;
+
+  const finalizeCompletion = useCallback(async () => {
+    queryClient.removeQueries({
+      queryKey: ["matchmaking-analysis-status", puuid],
+    });
+    queryClient.invalidateQueries({
+      queryKey: ["matchmaking-analysis-results", puuid],
+    });
+    queryClient.invalidateQueries({
+      queryKey: ["matchmaking-analysis-history", puuid],
+    });
+    await refetch();
+    setCurrentAnalysisCreatedAt(null);
+    setAnimProgress(null);
+    setPhase("completed");
+  }, [queryClient, puuid, refetch]);
 
   // Detect phase transitions based on backend status
   useEffect(() => {
@@ -138,6 +167,7 @@ export function MatchmakingAnalysis({ puuid }: MatchmakingAnalysisProps) {
     if (currentStatus === "in_progress") {
       sawInProgressRef.current = true;
       if (phase === "starting") {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- Transitioning UI state based on polled backend status.
         setPhase("running");
       }
       if (phase === "running" || phase === "starting") {
@@ -155,7 +185,7 @@ export function MatchmakingAnalysis({ puuid }: MatchmakingAnalysisProps) {
         // Reset tracking for next run
         sawInProgressRef.current = false;
         lastBackendProgressRef.current = 0;
-        recentlyStartedTimeRef.current = null;
+        setRecentlyStartedTime(null);
 
         if (isFast) {
           setPhase("completing-fast");
@@ -183,6 +213,8 @@ export function MatchmakingAnalysis({ puuid }: MatchmakingAnalysisProps) {
   }, [
     validStatusUpdate?.status,
     validStatusUpdate?.progress,
+    latestForCurrent?.status,
+    latestForCurrent?.progress,
     latestAnalysis?.status,
     latestAnalysis?.progress,
     phase,
@@ -219,23 +251,7 @@ export function MatchmakingAnalysis({ puuid }: MatchmakingAnalysisProps) {
     }
 
     return () => clearTimeout(timer);
-  }, [phase, animProgress]);
-
-  const finalizeCompletion = useCallback(async () => {
-    queryClient.removeQueries({
-      queryKey: ["matchmaking-analysis-status", puuid],
-    });
-    queryClient.invalidateQueries({
-      queryKey: ["matchmaking-analysis-results", puuid],
-    });
-    queryClient.invalidateQueries({
-      queryKey: ["matchmaking-analysis-history", puuid],
-    });
-    await refetch();
-    currentAnalysisCreatedAtRef.current = null;
-    setAnimProgress(null);
-    setPhase("completed");
-  }, [queryClient, puuid, refetch]);
+  }, [phase, animProgress, finalizeCompletion]);
 
   // Initialize phase from existing data on mount
   useEffect(() => {
@@ -245,13 +261,14 @@ export function MatchmakingAnalysis({ puuid }: MatchmakingAnalysisProps) {
     if (phase !== "idle") return;
 
     if (latestAnalysis?.status === "completed") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Initial UI state is derived from backend response.
       setPhase("completed");
     } else if (latestAnalysis?.status === "in_progress") {
       sawInProgressRef.current = true;
-      currentAnalysisCreatedAtRef.current = latestAnalysis.created_at;
+      setCurrentAnalysisCreatedAt(latestAnalysis.created_at);
       setPhase("running");
     } else if (latestAnalysis?.status === "pending") {
-      currentAnalysisCreatedAtRef.current = latestAnalysis.created_at;
+      setCurrentAnalysisCreatedAt(latestAnalysis.created_at);
       setPhase("starting");
     }
   }, [isLoading, latestAnalysis?.status, latestAnalysis?.created_at, phase]);
@@ -295,14 +312,14 @@ export function MatchmakingAnalysis({ puuid }: MatchmakingAnalysisProps) {
       setAnimProgress(null);
       sawInProgressRef.current = false;
       lastBackendProgressRef.current = 0;
-      recentlyStartedTimeRef.current = Date.now();
-      currentAnalysisCreatedAtRef.current = null;
+      setRecentlyStartedTime(Date.now());
+      setCurrentAnalysisCreatedAt(null);
     },
     onSuccess: (data) => {
       toast.success("Matchmaking analysis started");
       queryClient.setQueryData(["matchmaking-analysis", puuid], data);
       // Track the created_at of this new analysis
-      currentAnalysisCreatedAtRef.current = data.created_at;
+      setCurrentAnalysisCreatedAt(data.created_at);
     },
     onError: (error: Error) => {
       if (error.message !== "Not enough matches") {
@@ -342,8 +359,8 @@ export function MatchmakingAnalysis({ puuid }: MatchmakingAnalysisProps) {
       });
       sawInProgressRef.current = false;
       lastBackendProgressRef.current = 0;
-      recentlyStartedTimeRef.current = null;
-      currentAnalysisCreatedAtRef.current = null;
+      setRecentlyStartedTime(null);
+      setCurrentAnalysisCreatedAt(null);
       setAnimProgress(null);
       setPhase("idle");
     },
@@ -375,8 +392,7 @@ export function MatchmakingAnalysis({ puuid }: MatchmakingAnalysisProps) {
 
   // Check if we should hide cancel button (recently started)
   const hideCancel =
-    recentlyStartedTimeRef.current !== null &&
-    Date.now() - recentlyStartedTimeRef.current < 5000;
+    recentlyStartedTime !== null && nowTimestamp - recentlyStartedTime < 5000;
 
   // Loading state
   if (isLoading) {
@@ -410,14 +426,14 @@ export function MatchmakingAnalysis({ puuid }: MatchmakingAnalysisProps) {
             Analyze matchmaking fairness of this player based on average of sum
             of average win rates of the last 10 matches{" "}
             <b>at the time of the match with current player</b> of all players
-            in this player's last 10 matches. Visual representation of the
+            in this player&apos;s last 10 matches. Visual representation of the
             calculation is under the Calculation Flowchart card.
           </p>
           {notEnoughMatches?.show && (
             <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
-                Player doesn't have enough matches for this analysis. Found{" "}
+                Player doesn&apos;t have enough matches for this analysis. Found{" "}
                 {notEnoughMatches.found} matches, need at least 10.
               </AlertDescription>
             </Alert>
@@ -461,7 +477,7 @@ export function MatchmakingAnalysis({ puuid }: MatchmakingAnalysisProps) {
             Analyze matchmaking fairness of this player based on average of sum
             of average win rates of the last 10 matches{" "}
             <b>at the time of the match with current player</b> of all players
-            in this player's last 10 matches. Visual representation of the
+            in this player&apos;s last 10 matches. Visual representation of the
             calculation is under the Calculation Flowchart card.
           </p>
 
@@ -512,7 +528,7 @@ export function MatchmakingAnalysis({ puuid }: MatchmakingAnalysisProps) {
     const resetAt = displayData?.rate_limit_reset_at;
     if (resetAt) {
       const resetTime = new Date(resetAt).getTime();
-      const now = Date.now();
+      const now = nowTimestamp;
       const waitSeconds = Math.max(0, Math.ceil((resetTime - now) / 1000));
       if (waitSeconds > 0) {
         const secondLabel = waitSeconds === 1 ? "second" : "seconds";

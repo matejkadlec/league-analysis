@@ -121,6 +121,22 @@ ALTER TABLE ONLY auth.user_settings
 ALTER TABLE ONLY auth.user_settings
     ADD CONSTRAINT fk_user_settings_user_id FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
 
+-- [table] auth.user_tracked_players
+
+CREATE TABLE auth.user_tracked_players (
+    user_id bigint NOT NULL,
+    puuid character varying(78) NOT NULL,
+    tracked_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+ALTER TABLE ONLY auth.user_tracked_players
+    ADD CONSTRAINT pk_user_tracked_players PRIMARY KEY (user_id, puuid);
+
+ALTER TABLE ONLY auth.user_tracked_players
+    ADD CONSTRAINT fk_user_tracked_players_user_id FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
+
+CREATE INDEX idx_user_tracked_players_puuid ON auth.user_tracked_players USING btree (puuid);
+
 -- [trigger] auth.create_user_settings_on_user_insert
 -- Automatically creates a user_settings record when a new user is inserted
 
@@ -157,6 +173,8 @@ CREATE TABLE core.players (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL
 );
+
+COMMENT ON COLUMN core.players.is_tracked IS 'Derived global flag: TRUE when at least one user tracks this player.';
 
 ALTER TABLE ONLY core.players
     ADD CONSTRAINT pk_players PRIMARY KEY (puuid);
@@ -576,3 +594,6 @@ ALTER TABLE ONLY core.player_leagues
 
 ALTER TABLE ONLY jobs.job_executions
     ADD CONSTRAINT fk_job_executions_job_config_id_job_configurations FOREIGN KEY (job_config_id) REFERENCES jobs.job_configurations(id) ON DELETE CASCADE;
+
+ALTER TABLE ONLY auth.user_tracked_players
+    ADD CONSTRAINT fk_user_tracked_players_puuid_players FOREIGN KEY (puuid) REFERENCES core.players(puuid) ON DELETE CASCADE;

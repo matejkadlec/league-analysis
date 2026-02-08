@@ -64,7 +64,7 @@ class PlayerUpdaterJob(BaseJob):
             request_callback=self._track_api_request,
         ) as riot_client:
             # Get tracked players
-            tracked_players = await player_service.get_tracked_players()
+            tracked_players = await player_service.get_globally_tracked_players()
             logger.info(
                 "Starting player updater job", tracked_count=len(tracked_players)
             )

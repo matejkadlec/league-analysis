@@ -5,6 +5,7 @@ import { Star, StarOff, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/lib/core/hooks";
 import { trackPlayer, untrackPlayer, getTrackingStatus } from "@/lib/core/api";
+import { useAuth } from "@/features/auth";
 
 interface TrackPlayerButtonProps {
   puuid: string;
@@ -22,10 +23,12 @@ export function TrackPlayerButton({
   className,
 }: TrackPlayerButtonProps) {
   const { toast } = useToast();
+  const { user } = useAuth();
   const queryClient = useQueryClient();
+  const userId = user?.id;
 
   const { data: trackingStatus, isLoading: isLoadingStatus } = useQuery({
-    queryKey: ["tracking-status", puuid],
+    queryKey: ["tracking-status", userId, puuid],
     queryFn: async () => {
       const response = await getTrackingStatus(puuid);
       if (!response.success) {
@@ -33,6 +36,7 @@ export function TrackPlayerButton({
       }
       return response.data;
     },
+    enabled: !!userId,
     retry: 1,
     staleTime: 30000,
   });
@@ -48,7 +52,9 @@ export function TrackPlayerButton({
       return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["tracking-status", puuid] });
+      queryClient.invalidateQueries({ queryKey: ["tracking-status", userId, puuid] });
+      queryClient.invalidateQueries({ queryKey: ["tracked-players", userId] });
+      queryClient.invalidateQueries({ queryKey: ["player", puuid] });
       toast({
         title: "Player tracked",
         description: `${
@@ -75,7 +81,9 @@ export function TrackPlayerButton({
       return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["tracking-status", puuid] });
+      queryClient.invalidateQueries({ queryKey: ["tracking-status", userId, puuid] });
+      queryClient.invalidateQueries({ queryKey: ["tracked-players", userId] });
+      queryClient.invalidateQueries({ queryKey: ["player", puuid] });
       toast({
         title: "Player untracked",
         description: `${playerName || "Player"} is no longer being tracked.`,

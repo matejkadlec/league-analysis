@@ -226,7 +226,7 @@ class BaseJob(ABC):
             self._log_completion_details(success, duration)
 
             # Prepare detailed logs for database storage
-            detailed_logs: Dict[str, Any] = {}
+            detailed_logs: Dict[str, Any] | None = {}
             if logs:
                 detailed_logs["logs"] = self._strip_redundant_fields(logs)
 
@@ -337,12 +337,17 @@ class BaseJob(ABC):
             try:
                 # Load fresh configuration before execution
                 await self._refresh_config(db)
+                if self.job_config is None:
+                    raise RuntimeError(
+                        f"Job configuration {self.job_config_id} was not loaded"
+                    )
+                job_config = self.job_config
 
                 if self.job_execution:
                     structlog_contextvars.bind_contextvars(
                         job_execution_id=self.job_execution.id,
-                        job_name=self.job_config.name,
-                        job_type=self.job_config.job_type.value,
+                        job_name=job_config.name,
+                        job_type=job_config.job_type.value,
                     )
 
                 await self.execute(db)
@@ -352,7 +357,7 @@ class BaseJob(ABC):
                 logger.warning(
                     "Job stopped due to rate limit",
                     job_config_id=self.job_config_id,
-                    job_name=self.job_config.name,
+                    job_name=self.job_config.name if self.job_config else None,
                     retry_after=rate_limit_signal.retry_after,
                 )
                 job_logs = self._get_job_logs()
@@ -485,12 +490,18 @@ class BaseJob(ABC):
 
     def _log_completion_details(self, success: bool, duration: float) -> None:
         """Log completion details to structured logger."""
+        if self.job_config is None or self.job_execution is None:
+            raise RuntimeError("Job context missing during completion logging")
+
+        job_config = self.job_config
+        job_execution = self.job_execution
+
         logger.debug(
             "Job execution completed",
             job_config_id=self.job_config_id,
-            job_type=self.job_config.job_type.value,
-            job_name=self.job_config.name,
-            execution_id=self.job_execution.id,
+            job_type=job_config.job_type.value,
+            job_name=job_config.name,
+            execution_id=job_execution.id,
             status=JobStatus.SUCCESS.value if success else JobStatus.FAILED.value,
             duration_seconds=duration,
             api_requests=self.metrics["api_requests_made"],
@@ -510,6 +521,9 @@ class BaseJob(ABC):
     ):
         """Build SQLAlchemy update statement for job completion."""
         from sqlalchemy import update
+
+        if self.job_execution is None:
+            raise RuntimeError("Job execution is missing during completion update")
 
         # Use explicit status if provided, otherwise derive from success
         final_status = (
@@ -536,6 +550,8 @@ class BaseJob(ABC):
 
     async def _execute_completion_update(self, db: AsyncSession, stmt) -> None:
         """Execute the completion update with retry logic."""
+        execution_id = self.job_execution.id if self.job_execution else None
+
         try:
             await db.execute(stmt)
             if await self.safe_commit(db, "job completion"):
@@ -544,7 +560,7 @@ class BaseJob(ABC):
             logger.error(
                 "Failed to execute job completion update",
                 job_config_id=self.job_config_id,
-                execution_id=self.job_execution.id,
+                execution_id=execution_id,
                 error=str(execute_error),
                 error_type=type(execute_error).__name__,
             )
@@ -556,18 +572,18 @@ class BaseJob(ABC):
             if await self.safe_commit(db, "job completion retry"):
                 logger.info(
                     "Successfully committed job completion on retry",
-                    execution_id=self.job_execution.id,
+                    execution_id=execution_id,
                 )
             else:
                 logger.warning(
                     "Job completion retry commit failed - job may remain stuck",
-                    execution_id=self.job_execution.id,
+                    execution_id=execution_id,
                 )
         except Exception as retry_error:
             logger.error(
                 "Failed to execute job completion retry - job may remain stuck",
                 job_config_id=self.job_config_id,
-                execution_id=self.job_execution.id,
+                execution_id=execution_id,
                 error=str(retry_error),
                 error_type=type(retry_error).__name__,
             )

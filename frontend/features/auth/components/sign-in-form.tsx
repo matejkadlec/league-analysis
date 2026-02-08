@@ -32,6 +32,7 @@ export function SignInForm() {
   });
 
   // Watch form values to enable/disable submit button
+  // eslint-disable-next-line react-hooks/incompatible-library -- React Hook Form watch() is intentionally not memoizable
   const email = form.watch("email");
   const password = form.watch("password");
   const isFormValid = email.trim().length > 0 && password.trim().length > 0;

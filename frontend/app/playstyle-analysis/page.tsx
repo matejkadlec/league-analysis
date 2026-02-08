@@ -7,7 +7,7 @@ import { Player, PlayerSchema, UserSettingsSchema } from "@/lib/core/schemas";
 import { validatedGet, validatedPut } from "@/lib/core/api";
 import { PlayerSearch, PlayerCard } from "@/features/players";
 import { PlaystyleAnalysis } from "@/features/playstyle-analysis";
-import { ProtectedRoute } from "@/features/auth";
+import { ProtectedRoute, useAuth } from "@/features/auth";
 
 import {
   PlayerCardSkeleton,
@@ -17,6 +17,8 @@ import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
 
 export default function PlaystyleAnalysisPage() {
+  const { user } = useAuth();
+  const userId = user?.id;
   const searchParams = useSearchParams();
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -27,8 +29,9 @@ export default function PlaystyleAnalysisPage() {
 
   // Fetch user settings for URL persistence
   const { data: userSettingsResult } = useQuery({
-    queryKey: ["user-settings"],
+    queryKey: ["user-settings", userId],
     queryFn: () => validatedGet(UserSettingsSchema, "/settings/user"),
+    enabled: !!userId,
     staleTime: 60000,
   });
 
@@ -48,7 +51,7 @@ export default function PlaystyleAnalysisPage() {
       return result.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["user-settings"] });
+      queryClient.invalidateQueries({ queryKey: ["user-settings", userId] });
     },
   });
 

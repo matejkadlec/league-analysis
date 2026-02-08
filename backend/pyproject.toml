@@ -39,3 +39,8 @@ include = ["app"]
 exclude = ["**/__pycache__", "**/.pytest_cache", "**/tests", ".venv"]
 reportMissingImports = true
 reportMissingTypeStubs = "none"
+
+[dependency-groups]
+dev = [
+    "pyright>=1.1.408",
+]

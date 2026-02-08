@@ -131,9 +131,19 @@ class Settings(BaseSettings):
 
 def get_settings() -> Settings:
     """Get application settings instance."""
-    # Pydantic v2 will automatically load from environment variables
-    # This allows lazy loading when the module is imported
-    return Settings()
+    def require_env(name: str) -> str:
+        value = os.getenv(name)
+        if value is None or value.strip() == "":
+            raise ValueError(f"Missing required environment variable: {name}")
+        return value
+
+    return Settings(
+        postgres_db=require_env("POSTGRES_DB"),
+        postgres_user=require_env("POSTGRES_USER"),
+        postgres_password=require_env("POSTGRES_PASSWORD"),
+        postgres_host=require_env("POSTGRES_HOST"),
+        postgres_port=int(require_env("POSTGRES_PORT")),
+    )
 
 
 # Create a global settings instance lazily

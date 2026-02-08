@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   validatedGet,
@@ -12,7 +12,6 @@ import {
   SettingSchema,
   SettingTestResponseSchema,
   UserSettingsSchema,
-  UserSettings,
   UserSettingsUpdate,
   UserResponseSchema,
   UserProfileUpdate,
@@ -36,10 +35,7 @@ import {
   Loader2,
   Check,
   X,
-  Save,
   Link2,
-  CheckIcon,
-  CheckCheckIcon,
 } from "lucide-react";
 import {
   Tooltip,
@@ -356,20 +352,18 @@ function SettingsPageContent() {
 function UserSettingsCard() {
   const queryClient = useQueryClient();
   const { user, checkAuth } = useAuth();
-  const [displayName, setDisplayName] = useState("");
-  const [displayNameDirty, setDisplayNameDirty] = useState(false);
-
-  // Initialize display name from user
-  useEffect(() => {
-    if (user?.display_name && !displayNameDirty) {
-      setDisplayName(user.display_name);
-    }
-  }, [user?.display_name, displayNameDirty]);
+  const userId = user?.id;
+  const [draftDisplayName, setDraftDisplayName] = useState<string | null>(null);
+  const currentDisplayName = user?.display_name ?? "";
+  const displayName = draftDisplayName ?? currentDisplayName;
+  const displayNameDirty =
+    draftDisplayName !== null && draftDisplayName !== currentDisplayName;
 
   // Fetch user settings
   const { data: userSettingsResult, isLoading } = useQuery({
-    queryKey: ["user-settings"],
+    queryKey: ["user-settings", userId],
     queryFn: () => validatedGet(UserSettingsSchema, "/settings/user"),
+    enabled: !!userId,
   });
 
   const userSettings = userSettingsResult?.success
@@ -390,7 +384,7 @@ function UserSettingsCard() {
       return result.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["user-settings"] });
+      queryClient.invalidateQueries({ queryKey: ["user-settings", userId] });
       toast.success("Settings saved", {
         duration: 1000,
       });
@@ -417,7 +411,7 @@ function UserSettingsCard() {
     },
     onSuccess: () => {
       checkAuth(); // Refresh user data
-      setDisplayNameDirty(false);
+      setDraftDisplayName(null);
       toast.success("Display name updated", {
         duration: 1000,
       });
@@ -434,8 +428,10 @@ function UserSettingsCard() {
   };
 
   const handleDisplayNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setDisplayName(e.target.value);
-    setDisplayNameDirty(e.target.value !== user?.display_name);
+    const nextDisplayName = e.target.value;
+    setDraftDisplayName(
+      nextDisplayName === currentDisplayName ? null : nextDisplayName,
+    );
   };
 
   const handleSaveDisplayName = () => {

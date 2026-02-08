@@ -34,7 +34,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { Link2, AlertCircle, X } from "lucide-react";
+import { Link2, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 
 // Server to flag mapping
@@ -136,6 +136,7 @@ export function ConnectRiotAccountDialog({
     }
   }, [open]);
 
+  // eslint-disable-next-line react-hooks/incompatible-library -- React Hook Form watch() is intentionally not memoizable
   const gameName = form.watch("gameName");
   const tagLine = form.watch("tagLine");
 

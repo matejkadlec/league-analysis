@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { X, AlertTriangle, AlertOctagon, Info } from "lucide-react";
+import { X, AlertTriangle, AlertOctagon } from "lucide-react";
 import { useAuth } from "@/features/auth";
 import { api } from "@/lib/core/api";
 import { useApiKeyStatus } from "@/lib/core/api-key-status-context";
@@ -18,23 +18,24 @@ interface APIKeyStatus {
 export function HeaderMessages() {
   const { user, isAuthenticated, isLoading: isAuthLoading } = useAuth();
   const { isApiKeyInvalid } = useApiKeyStatus();
-  // Store closed keys as an array of identifiers
-  // For env keys: "env_key_{identifier}"
-  const [closedMessages, setClosedMessages] = useState<string[]>([]);
-  const [mounted, setMounted] = useState(false);
+  // Store closed keys as an array of identifiers.
+  // For env keys: "env_key_{identifier}".
+  const [closedMessages, setClosedMessages] = useState<string[]>(() => {
+    if (typeof window === "undefined") {
+      return [];
+    }
 
-  // Handle mounting to avoid hydration mismatch with localStorage
-  useEffect(() => {
-    setMounted(true);
     try {
       const stored = localStorage.getItem("header_messages_closed");
       if (stored) {
-        setClosedMessages(JSON.parse(stored));
+        return JSON.parse(stored);
       }
-    } catch (e) {
-      console.error(e);
+    } catch {
+      return [];
     }
-  }, []);
+
+    return [];
+  });
 
   const closeMessage = (id: string) => {
     const newClosed = [...closedMessages, id];
@@ -53,8 +54,6 @@ export function HeaderMessages() {
     staleTime: 60 * 1000,
     refetchOnWindowFocus: false,
   });
-
-  if (!mounted) return null;
 
   // Don't show any messages while auth is loading or if not authenticated
   // AuthGate will redirect non-authenticated users

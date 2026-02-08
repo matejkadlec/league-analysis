@@ -25,6 +25,14 @@ if TYPE_CHECKING:
 
 router = APIRouter()
 
+# TODO: Locate all unused functions in this file, and delete them. If there is unused function that
+# you think will be *most likely used in near future*, keep it but add comment. Note that registration
+# via FE is not planned in next few months. Also while reviewing the functions, check whether their
+# description is valid and makes sense (even for currently used functions), as this was created
+# months ago and not updated since then. Also it was created with far worse AI. And if the description
+# is outdated, update it. You can also update function names, but don't forget to update them repo-wide
+# After you are done, delete this whole comment.
+
 
 @router.post("/login", response_model=Token)
 @limiter.limit("5/minute")
@@ -137,9 +145,9 @@ async def list_users(
 async def connect_riot_account(
     request: Request,
     link_request: LinkRiotAccountRequest,
+    riot_client: Annotated["RiotAPIClient", Depends(get_riot_client)],
     current_user: User = Depends(get_current_active_user),
     auth_service: AuthService = Depends(get_auth_service),
-    riot_client: Annotated["RiotAPIClient", Depends(get_riot_client)] = None,
 ) -> User:
     """Link a Riot account to the current user.
 
@@ -156,6 +164,7 @@ async def connect_riot_account(
             game_name=link_request.game_name,
             tag_line=link_request.tag_line,
             platform=link_request.platform,
+            user_id=current_user.id,
         )
     except Exception as e:
         error_msg = str(e)

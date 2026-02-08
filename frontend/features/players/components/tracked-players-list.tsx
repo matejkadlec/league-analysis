@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Users, Loader2, UserMinus, Eye } from "lucide-react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@/features/auth";
 
 const TrackedPlayersSchema = z.array(PlayerSchema);
 
@@ -21,9 +22,11 @@ interface TrackedPlayersListProps {
 export function TrackedPlayersList({ onViewPlayer }: TrackedPlayersListProps) {
   const queryClient = useQueryClient();
   const router = useRouter();
+  const { user } = useAuth();
+  const userId = user?.id;
 
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ["tracked-players"],
+    queryKey: ["tracked-players", userId],
     queryFn: async () => {
       const result = await validatedGet(
         TrackedPlayersSchema,
@@ -36,6 +39,7 @@ export function TrackedPlayersList({ onViewPlayer }: TrackedPlayersListProps) {
 
       return result.data;
     },
+    enabled: !!userId,
     refetchInterval: 10000, // Refetch every 10 seconds
   });
 
@@ -46,7 +50,9 @@ export function TrackedPlayersList({ onViewPlayer }: TrackedPlayersListProps) {
     },
     onSuccess: (_, puuid) => {
       // Invalidate and refetch tracked players
-      queryClient.invalidateQueries({ queryKey: ["tracked-players"] });
+      queryClient.invalidateQueries({ queryKey: ["tracked-players", userId] });
+      queryClient.invalidateQueries({ queryKey: ["tracking-status", userId, puuid] });
+      queryClient.invalidateQueries({ queryKey: ["player", puuid] });
 
       // Find player name for toast
       const player = data?.find((p) => p.puuid === puuid);

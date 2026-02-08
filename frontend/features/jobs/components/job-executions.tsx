@@ -126,7 +126,7 @@ export function JobExecutions({
   selectedExecutionId,
   onExecutionSelect,
 }: JobExecutionsProps) {
-  const [internalSelectedExecution, setInternalSelectedExecution] =
+  const [selectedExecutionState, setSelectedExecutionState] =
     useState<JobExecution | null>(null);
   const [displayCount, setDisplayCount] = useState(20);
   const [expandedApiCalls, setExpandedApiCalls] = useState<Set<string>>(
@@ -176,16 +176,15 @@ export function JobExecutions({
   );
   const totalExecutions = data?.total || 0;
   const hasMore = allExecutions.length < totalExecutions;
-
-  // Handle external selection (from job card)
-  useEffect(() => {
+  const internalSelectedExecution = useMemo(() => {
     if (selectedExecutionId !== undefined && selectedExecutionId !== null) {
-      const execution = allExecutions.find((e) => e.id === selectedExecutionId);
-      if (execution) {
-        setInternalSelectedExecution(execution);
-      }
+      return (
+        allExecutions.find((execution) => execution.id === selectedExecutionId) ??
+        null
+      );
     }
-  }, [selectedExecutionId, allExecutions]);
+    return selectedExecutionState;
+  }, [selectedExecutionId, allExecutions, selectedExecutionState]);
 
   // Check for API key errors in job executions and trigger header notification
   useEffect(() => {
@@ -234,12 +233,12 @@ export function JobExecutions({
   };
 
   const handleSelectExecution = (execution: JobExecution) => {
-    setInternalSelectedExecution(execution);
+    setSelectedExecutionState(execution);
     onExecutionSelect?.(execution.id);
   };
 
   const handleCloseDialog = () => {
-    setInternalSelectedExecution(null);
+    setSelectedExecutionState(null);
     onExecutionSelect?.(null);
   };
 

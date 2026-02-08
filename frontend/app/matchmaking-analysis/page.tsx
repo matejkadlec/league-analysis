@@ -12,13 +12,15 @@ import {
   MatchmakingAnalysisHistory,
   MatchmakingExplanationCard,
 } from "@/features/matchmaking";
-import { ProtectedRoute } from "@/features/auth";
+import { ProtectedRoute, useAuth } from "@/features/auth";
 
 import { Card } from "@/components/ui/card";
 import { PlayerCardSkeleton } from "@/components/loading-skeleton";
 import { Skeleton } from "@/components/ui/skeleton";
 
 function MatchmakingAnalysisContent() {
+  const { user } = useAuth();
+  const userId = user?.id;
   const router = useRouter();
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
@@ -28,8 +30,9 @@ function MatchmakingAnalysisContent() {
 
   // Fetch user settings for URL persistence
   const { data: userSettingsResult } = useQuery({
-    queryKey: ["user-settings"],
+    queryKey: ["user-settings", userId],
     queryFn: () => validatedGet(UserSettingsSchema, "/settings/user"),
+    enabled: !!userId,
     staleTime: 60000,
   });
 
@@ -49,7 +52,7 @@ function MatchmakingAnalysisContent() {
       return result.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["user-settings"] });
+      queryClient.invalidateQueries({ queryKey: ["user-settings", userId] });
     },
   });
 

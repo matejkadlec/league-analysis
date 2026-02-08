@@ -40,7 +40,7 @@ class PlayerResponse(PlayerBase):
 
     is_tracked: bool = Field(
         default=False,
-        description="Whether this player is being tracked for automated updates",
+        description="Whether this player is tracked by the current user",
     )
     total_matches: int = Field(
         default=0,

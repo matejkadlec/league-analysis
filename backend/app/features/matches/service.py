@@ -1,6 +1,6 @@
 """Match service for handling match data operations."""
 
-from typing import Optional, List, Dict, Any, TYPE_CHECKING
+from typing import Optional, List, Dict, Any, TYPE_CHECKING, cast
 import structlog
 import asyncio
 
@@ -23,6 +23,8 @@ from .schemas import (
     TeamComposition,
     TeamStats,
     TeamStatsComposition,
+    ChampionStatsResponse,
+    LaneStatsResponse,
 )
 from app.core.riot_api.transformers import MatchTransformer
 from app.core.riot_api.errors import (
@@ -344,7 +346,7 @@ class MatchService:
                                 or 0,
                                 summoner1_id=p.summoner1_id,
                                 summoner2_id=p.summoner2_id,
-                                runes=p.runes,
+                                runes=cast(Any, p.runes),
                             )
                             break
 
@@ -504,7 +506,7 @@ class MatchService:
                         or 0,
                         summoner1_id=player_participant.summoner1_id,
                         summoner2_id=player_participant.summoner2_id,
-                        runes=player_participant.runes,
+                        runes=cast(Any, player_participant.runes),
                     )
 
                 # Calculate LP change based on league snapshots
@@ -692,7 +694,7 @@ class MatchService:
         puuid: str,
         queue: Optional[int] = None,
         limit: int = 20,
-    ) -> "ChampionStatsResponse":
+    ) -> ChampionStatsResponse:
         """
         Get player statistics grouped by champion.
 
@@ -787,7 +789,7 @@ class MatchService:
         self,
         puuid: str,
         queue: Optional[int] = None,
-    ) -> "LaneStatsResponse":
+    ) -> LaneStatsResponse:
         """
         Get player statistics grouped by lane/position.
 
@@ -831,9 +833,11 @@ class MatchService:
                 return LaneStatsResponse(puuid=puuid, total_lanes=0, lanes=[])
 
             # Aggregate stats by lane
-            lane_data: dict = {}
+            lane_data: dict[str, dict[str, int]] = {}
             for p in participants:
                 lane = p.team_position
+                if not lane:
+                    continue
                 if lane not in lane_data:
                     lane_data[lane] = {
                         "games": 0,

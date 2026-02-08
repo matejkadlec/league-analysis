@@ -2,6 +2,7 @@
 
 import asyncio
 import re
+from enum import Enum
 from dataclasses import dataclass, field
 from typing import Optional, Dict, Any, List, Union, Callable
 import httpx
@@ -330,7 +331,9 @@ class RiotAPIClient:
     @staticmethod
     def _enum_str(value: Union[Region, Platform, str]) -> str:
         """Extract string value from enum or return as-is."""
-        return value.value if hasattr(value, "value") else value
+        if isinstance(value, Enum):
+            return str(value.value)
+        return value
 
     # Account endpoints
     async def get_account_by_riot_id(
@@ -411,7 +414,7 @@ class RiotAPIClient:
         else:
             match_ids = response_data.get("matchIds", [])
 
-        return MatchListDTO(match_ids=match_ids, start=start, count=count, puuid=puuid)
+        return MatchListDTO(matchIds=match_ids, start=start, count=count, puuid=puuid)
 
     async def get_match(
         self, match_id: str, region: Optional[Region] = None

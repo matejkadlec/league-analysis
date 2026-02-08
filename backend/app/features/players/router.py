@@ -24,6 +24,8 @@ from app.core.database import db_manager
 from app.features.matches.service import MatchService
 from app.features.players.service import PlayerService
 from app.core.config import settings
+from app.features.auth.dependencies import get_current_active_user
+from app.features.auth.models import User
 
 logger = structlog.get_logger(__name__)
 
@@ -68,6 +70,7 @@ def _validate_tag_line(tag_line: str) -> None:
 async def search_player(
     request: Request,
     player_service: PlayerServiceDep,
+    current_user: User = Depends(get_current_active_user),
     query: str = Query(
         ...,
         min_length=3,
@@ -89,6 +92,7 @@ async def search_player(
             query=query,
             platform=platform.value,
             limit=10,
+            user_id=current_user.id,
         )
         if not results:
             logger.debug(
@@ -115,6 +119,7 @@ async def search_player(
 async def get_player_suggestions(
     request: Request,
     player_service: PlayerServiceDep,
+    current_user: User = Depends(get_current_active_user),
     q: str = Query(
         ...,
         min_length=0,
@@ -159,6 +164,7 @@ async def get_player_suggestions(
             query=q,
             platform=platform.value,
             limit=limit,
+            user_id=current_user.id,
         )
         if not results:
             logger.debug(
@@ -181,9 +187,13 @@ async def get_player_suggestions(
 
 
 @router.get("/{puuid}", response_model=PlayerResponse)
-async def get_player_by_puuid(puuid: str, player_service: PlayerServiceDep):
+async def get_player_by_puuid(
+    puuid: str,
+    player_service: PlayerServiceDep,
+    current_user: User = Depends(get_current_active_user),
+):
     """Get player information by PUUID."""
-    player = await player_service.get_player_by_puuid(puuid)
+    player = await player_service.get_player_by_puuid(puuid, user_id=current_user.id)
     if not player:
         raise HTTPException(status_code=404, detail="Player not found")
     return player
@@ -204,7 +214,11 @@ async def get_player_recent_opponents(
 
 
 @router.post("/{puuid}/track", response_model=PlayerResponse)
-async def track_player(puuid: str, player_service: PlayerServiceDep):
+async def track_player(
+    puuid: str,
+    player_service: PlayerServiceDep,
+    current_user: User = Depends(get_current_active_user),
+):
     """
     Mark a player for automated tracking and monitoring.
 
@@ -219,7 +233,7 @@ async def track_player(puuid: str, player_service: PlayerServiceDep):
         400: Maximum tracked players limit reached
     """
     try:
-        player = await player_service.track_player(puuid)
+        player = await player_service.track_player(puuid, current_user.id)
         return player
     except ValueError as e:
         if "not found" in str(e).lower():
@@ -236,7 +250,11 @@ async def track_player(puuid: str, player_service: PlayerServiceDep):
 
 
 @router.delete("/{puuid}/track", response_model=PlayerResponse)
-async def untrack_player(puuid: str, player_service: PlayerServiceDep):
+async def untrack_player(
+    puuid: str,
+    player_service: PlayerServiceDep,
+    current_user: User = Depends(get_current_active_user),
+):
     """
     Remove a player from automated tracking.
 
@@ -250,7 +268,7 @@ async def untrack_player(puuid: str, player_service: PlayerServiceDep):
         404: Player not found
     """
     try:
-        player = await player_service.untrack_player(puuid)
+        player = await player_service.untrack_player(puuid, current_user.id)
         return player
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -263,7 +281,11 @@ async def untrack_player(puuid: str, player_service: PlayerServiceDep):
 
 
 @router.get("/{puuid}/tracking-status")
-async def get_tracking_status(puuid: str, player_service: PlayerServiceDep):
+async def get_tracking_status(
+    puuid: str,
+    player_service: PlayerServiceDep,
+    current_user: User = Depends(get_current_active_user),
+):
     """
     Get the tracking status for a player.
 
@@ -274,8 +296,10 @@ async def get_tracking_status(puuid: str, player_service: PlayerServiceDep):
         404: Player not found
     """
     try:
-        player = await player_service.get_player_by_puuid(puuid)
-        return {"is_tracked": player.is_tracked}
+        is_tracked = await player_service.get_player_tracking_status(
+            puuid, current_user.id
+        )
+        return {"is_tracked": is_tracked}
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
@@ -289,7 +313,10 @@ async def get_tracking_status(puuid: str, player_service: PlayerServiceDep):
 
 
 @router.get("/tracked/list", response_model=list[PlayerResponse])
-async def get_tracked_players(player_service: PlayerServiceDep):
+async def get_tracked_players(
+    player_service: PlayerServiceDep,
+    current_user: User = Depends(get_current_active_user),
+):
     """
     Get all players currently marked for tracking.
 
@@ -297,7 +324,7 @@ async def get_tracked_players(player_service: PlayerServiceDep):
         List of tracked players with their current data
     """
     try:
-        players = await player_service.get_tracked_players()
+        players = await player_service.get_tracked_players(current_user.id)
         return players
     except Exception as e:
         logger.error("get_tracked_players_failed", error=str(e), exc_info=True)
@@ -485,6 +512,7 @@ async def add_tracked_player(
     player_service: PlayerServiceDep,
     riot_client: Annotated[RiotAPIClient, Depends(get_riot_client)],
     background_tasks: BackgroundTasks,
+    current_user: User = Depends(get_current_active_user),
     game_name: str = Query(..., description="Game name"),
     tag_line: str = Query(..., description="Tag line (without #)"),
     platform: str = Query("eun1", description="Platform platform"),
@@ -515,6 +543,7 @@ async def add_tracked_player(
             game_name=game_name,
             tag_line=tag_line,
             platform=platform,
+            user_id=current_user.id,
         )
 
         # Trigger background match fetch

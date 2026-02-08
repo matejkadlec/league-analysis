@@ -10,13 +10,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { User, Trophy, RefreshCw, Loader2, Clock, StarOff } from "lucide-react";
-import { TrackPlayerButton } from "./track-player-button";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { validatedGet, api, untrackPlayer } from "@/lib/core/api";
 import { getPlatformDisplayName } from "@/lib/core/platform-utils";
 import { getProfileIconUrl } from "@/lib/core/data-dragon";
 import { toast } from "sonner";
 import { useState } from "react";
+import { useAuth } from "@/features/auth";
 
 interface PlayerCardProps {
   player: Player;
@@ -179,6 +179,8 @@ function formatRelativeTime(dateString: string | null | undefined): string {
 
 export function PlayerCard({ player, onRefreshAll }: PlayerCardProps) {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const userId = user?.id;
   const [isUpdating, setIsUpdating] = useState(false);
   const [isHoveringTracked, setIsHoveringTracked] = useState(false);
 
@@ -269,7 +271,10 @@ export function PlayerCard({ player, onRefreshAll }: PlayerCardProps) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["player", player.puuid] });
-      queryClient.invalidateQueries({ queryKey: ["tracked-players"] });
+      queryClient.invalidateQueries({ queryKey: ["tracked-players", userId] });
+      queryClient.invalidateQueries({
+        queryKey: ["tracking-status", userId, player.puuid],
+      });
       toast.success("Player untracked");
     },
     onError: (error: Error) => {

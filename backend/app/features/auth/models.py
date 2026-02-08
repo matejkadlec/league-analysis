@@ -17,6 +17,7 @@ from app.core.models import Base
 
 if TYPE_CHECKING:
     from .user_settings import UserSettings
+    from .user_tracked_player import UserTrackedPlayer
 
 
 class User(Base):
@@ -130,6 +131,11 @@ class User(Base):
         "UserSettings",
         back_populates="user",
         uselist=False,
+        cascade="all, delete-orphan",
+    )
+    tracked_players: Mapped[list["UserTrackedPlayer"]] = relationship(
+        "UserTrackedPlayer",
+        back_populates="user",
         cascade="all, delete-orphan",
     )
 

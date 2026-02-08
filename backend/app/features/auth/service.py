@@ -144,15 +144,18 @@ class AuthService:
                 self.settings.jwt_secret_key,
                 algorithms=[self.settings.jwt_algorithm],
             )
-            email: str = payload.get("sub")
-            user_id: int = payload.get("user_id")
+            email = payload.get("sub")
+            user_id = payload.get("user_id")
 
-            if email is None or user_id is None:
+            if not isinstance(email, str) or not isinstance(user_id, int):
                 raise credentials_exception
 
             token_data = TokenData(email=email, user_id=user_id)
 
         except JWTError:
+            raise credentials_exception
+
+        if token_data.user_id is None:
             raise credentials_exception
 
         user = await self.get_user_by_id(token_data.user_id)

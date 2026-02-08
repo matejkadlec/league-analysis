@@ -8,6 +8,7 @@ import {
   useCallback,
   ReactNode,
 } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { getToken, setToken, removeToken } from "../utils/token-manager";
 import type { User, LoginCredentials, AuthContextType } from "../types";
@@ -23,6 +24,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (typeof window === "undefined") return true;
     return !!getToken();
   });
+  const queryClient = useQueryClient();
   const router = useRouter();
 
   // Check authentication status on mount and after login
@@ -33,6 +35,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(null);
       setIsLoading(false);
       removeToken(); // Ensure both localStorage and cookie are cleared
+      queryClient.clear();
       return;
     }
 
@@ -67,6 +70,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Only remove token on auth errors, not on other errors
         removeToken();
         setUser(null);
+        queryClient.clear();
       } else {
         // Other errors (500, etc.) - keep token, just set user to null temporarily
         if (process.env.NODE_ENV === "development") {
@@ -81,10 +85,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       removeToken();
       setUser(null);
+      queryClient.clear();
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [queryClient]);
 
   // Initialize auth state on mount
   useEffect(() => {
@@ -116,6 +121,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       // Store token using centralized token manager
       setToken(data.access_token);
+      queryClient.clear();
 
       // Fetch user data
       await checkAuth();
@@ -130,6 +136,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = () => {
     removeToken(); // Use centralized token removal
+    queryClient.clear();
     setUser(null);
     router.push("/sign-in");
   };
