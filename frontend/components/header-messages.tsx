@@ -18,6 +18,7 @@ interface APIKeyStatus {
 interface JobExecutionStatus {
   status: string;
   has_api_key_error: boolean;
+  started_at?: string;
 }
 
 interface JobStatusOverview {
@@ -26,7 +27,7 @@ interface JobStatusOverview {
 
 export function HeaderMessages() {
   const { user, isAuthenticated, isLoading: isAuthLoading } = useAuth();
-  const { isApiKeyInvalid } = useApiKeyStatus();
+  const { isApiKeyInvalid, lastApiKeyValidatedAt } = useApiKeyStatus();
   // Store closed keys as an array of identifiers.
   // For env keys: "env_key_{identifier}".
   const [closedMessages, setClosedMessages] = useState<string[]>(() => {
@@ -70,7 +71,7 @@ export function HeaderMessages() {
       const res = await api.get<JobStatusOverview>("/jobs/status/overview");
       return res.data;
     },
-    enabled: !!isAuthenticated,
+    enabled: !!isAuthenticated && !!user?.is_admin,
     refetchInterval: 15000,
     refetchOnWindowFocus: false,
   });
@@ -88,7 +89,18 @@ export function HeaderMessages() {
     latestJobStatus?.last_execution?.status === "FAILED" &&
     latestJobStatus.last_execution.has_api_key_error;
 
-  if (isApiKeyInvalid || hasLatestJobApiKeyFailure) {
+  const latestJobFailureTimestamp = latestJobStatus?.last_execution?.started_at
+    ? new Date(latestJobStatus.last_execution.started_at).getTime()
+    : null;
+
+  const hasFreshJobApiKeyFailure =
+    hasLatestJobApiKeyFailure &&
+    (lastApiKeyValidatedAt === null ||
+      latestJobFailureTimestamp === null ||
+      Number.isNaN(latestJobFailureTimestamp) ||
+      latestJobFailureTimestamp > lastApiKeyValidatedAt);
+
+  if (isApiKeyInvalid || hasFreshJobApiKeyFailure) {
     return (
       <div className="w-full h-[40px] fixed top-0 left-0 z-[100] flex items-center justify-center bg-red-600/75 backdrop-blur-sm shadow-md border-b border-red-800/50">
         <div className="flex items-center gap-2 text-sm font-semibold text-red-100 px-4 text-center">

@@ -12,7 +12,7 @@ from .schemas import (
     UserSettingsUpdate,
 )
 from .dependencies import SettingsServiceDep
-from app.features.auth.dependencies import get_current_active_user
+from app.features.auth.dependencies import get_current_active_user, get_current_admin_user
 from app.features.auth.models import User
 
 logger = structlog.get_logger(__name__)
@@ -23,6 +23,7 @@ router = APIRouter(prefix="/settings", tags=["settings"])
 @router.get("/riot_api_key/status", response_model=APIKeyStatusResponse)
 async def get_riot_api_key_status(
     settings_service: SettingsServiceDep,
+    _current_user: User = Depends(get_current_admin_user),
 ):
     """
     Get the status of the Riot API key configuration.
@@ -35,6 +36,7 @@ async def get_riot_api_key_status(
 @router.get("/riot_api_key", response_model=SettingResponse)
 async def get_riot_api_key(
     settings_service: SettingsServiceDep,
+    _current_user: User = Depends(get_current_admin_user),
 ):
     """Get current Riot API key (value is masked for security)."""
     try:
@@ -62,6 +64,7 @@ async def get_riot_api_key(
 async def update_riot_api_key(
     update: SettingUpdate,
     settings_service: SettingsServiceDep,
+    _current_user: User = Depends(get_current_admin_user),
 ):
     """
     Update the Riot API key.
@@ -113,6 +116,7 @@ async def update_riot_api_key(
 async def test_riot_api_key(
     update: SettingUpdate,
     settings_service: SettingsServiceDep,
+    _current_user: User = Depends(get_current_admin_user),
 ):
     """
     Test a Riot API key without saving it.

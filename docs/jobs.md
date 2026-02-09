@@ -37,6 +37,12 @@ When the backend starts, the scheduler automatically:
 
 This ensures the system automatically recovers from downtime without manual intervention.
 
+### Access Control
+
+- `/jobs` API endpoints are **admin-only** (`is_admin=true`)
+- Non-admin users are redirected away from the `/jobs` frontend page and cannot
+  trigger jobs through API calls
+
 ---
 
 ## Match Fetcher Job
@@ -222,6 +228,7 @@ The system retrieves the Riot API key with database priority:
 - `jobs.job_executions.has_api_key_error` is stored as `true` for the failed run
 - Error logged: "Authentication failure during {operation}"
 - Frontend header warning (red banner) is triggered when latest execution in
-  `/jobs/status/overview` is `FAILED` with `has_api_key_error=true`
+  `/jobs/status/overview` is `FAILED` with `has_api_key_error=true` and no
+  newer successful key validation/save has occurred in the active session
 
 **Resolution:** Update API key in Settings page or `.env` file

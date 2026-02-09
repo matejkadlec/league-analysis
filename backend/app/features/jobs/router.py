@@ -1,7 +1,7 @@
 """Job management API endpoints."""
 
 from typing import Optional
-from fastapi import APIRouter, HTTPException, Query, BackgroundTasks
+from fastapi import APIRouter, HTTPException, Query, BackgroundTasks, Depends
 
 from .models import JobStatus, JobType
 from .schemas import (
@@ -12,6 +12,7 @@ from .schemas import (
     JobTriggerResponse,
 )
 from .dependencies import JobServiceDep
+from app.features.auth.dependencies import get_current_admin_user
 
 from .implementations.match_fetcher import MatchFetcherJob
 from .implementations.player_updater import PlayerUpdaterJob
@@ -19,7 +20,11 @@ import structlog
 
 logger = structlog.get_logger(__name__)
 
-router = APIRouter(prefix="/jobs", tags=["jobs"])
+router = APIRouter(
+    prefix="/jobs",
+    tags=["jobs"],
+    dependencies=[Depends(get_current_admin_user)],
+)
 
 
 def _create_job_instance(job, triggered_by: str = "system"):

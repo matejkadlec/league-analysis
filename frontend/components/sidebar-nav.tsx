@@ -151,16 +151,18 @@ export function SidebarNav() {
                   <p className="font-medium">{user.display_name}</p>
                 </div>
 
-                <Link
-                  href="/jobs"
-                  onClick={() => setMenuOpen(false)}
-                  className={`flex items-center gap-2 px-4 py-2 text-white cursor-pointer transition-colors duration-300 hover:text-[#cfa93a] ${
-                    isActive("/jobs") ? "text-[#cfa93a] font-medium" : ""
-                  }`}
-                >
-                  <Wrench className="h-4 w-4 text-[#cfa93a]" />
-                  Jobs
-                </Link>
+                {user.is_admin && (
+                  <Link
+                    href="/jobs"
+                    onClick={() => setMenuOpen(false)}
+                    className={`flex items-center gap-2 px-4 py-2 text-white cursor-pointer transition-colors duration-300 hover:text-[#cfa93a] ${
+                      isActive("/jobs") ? "text-[#cfa93a] font-medium" : ""
+                    }`}
+                  >
+                    <Wrench className="h-4 w-4 text-[#cfa93a]" />
+                    Jobs
+                  </Link>
+                )}
 
                 <Link
                   href="/settings"

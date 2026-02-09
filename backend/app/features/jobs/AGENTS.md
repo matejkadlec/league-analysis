@@ -11,7 +11,7 @@ Background task scheduling with APScheduler. See [docs/jobs.md](../../../../docs
 | `base.py`           | `BaseJob` abstract class with metrics and logging |
 | `scheduler.py`      | APScheduler setup and lifecycle                   |
 | `service.py`        | Job management (start/stop/status)                |
-| `router.py`         | REST endpoints (`/api/jobs`)                      |
+| `router.py`         | Admin-only REST endpoints (`/api/jobs`)           |
 | `error_handling.py` | `@handle_riot_api_errors` decorator               |
 | `log_capture.py`    | Execution log capture                             |
 | `implementations/`  | Concrete job implementations                      |

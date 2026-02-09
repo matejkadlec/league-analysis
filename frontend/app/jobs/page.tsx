@@ -21,7 +21,7 @@ const REFRESH_INTERVAL = 15000; // 15 seconds
 
 export default function JobsPage() {
   return (
-    <ProtectedRoute>
+    <ProtectedRoute requireAdmin>
       <JobsPageContent />
     </ProtectedRoute>
   );

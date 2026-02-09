@@ -13,6 +13,8 @@ import {
 interface ApiKeyStatusContextType {
   /** Whether the API key has been detected as invalid/expired */
   isApiKeyInvalid: boolean;
+  /** Epoch timestamp (ms) of the latest successful API key validation signal */
+  lastApiKeyValidatedAt: number | null;
   /** Mark the API key as invalid (called on 401 errors) */
   markApiKeyInvalid: () => void;
   /** Mark the API key as valid (called on successful API calls) */
@@ -44,6 +46,9 @@ export function notifyApiKeyValid() {
 
 export function ApiKeyStatusProvider({ children }: { children: ReactNode }) {
   const [isApiKeyInvalid, setIsApiKeyInvalid] = useState(false);
+  const [lastApiKeyValidatedAt, setLastApiKeyValidatedAt] = useState<
+    number | null
+  >(null);
 
   const markApiKeyInvalid = useCallback(() => {
     setIsApiKeyInvalid(true);
@@ -51,6 +56,7 @@ export function ApiKeyStatusProvider({ children }: { children: ReactNode }) {
 
   const markApiKeyValid = useCallback(() => {
     setIsApiKeyInvalid(false);
+    setLastApiKeyValidatedAt(Date.now());
   }, []);
 
   useEffect(() => {
@@ -71,10 +77,16 @@ export function ApiKeyStatusProvider({ children }: { children: ReactNode }) {
   const value = useMemo(
     () => ({
       isApiKeyInvalid,
+      lastApiKeyValidatedAt,
       markApiKeyInvalid,
       markApiKeyValid,
     }),
-    [isApiKeyInvalid, markApiKeyInvalid, markApiKeyValid],
+    [
+      isApiKeyInvalid,
+      lastApiKeyValidatedAt,
+      markApiKeyInvalid,
+      markApiKeyValid,
+    ],
   );
 
   return (

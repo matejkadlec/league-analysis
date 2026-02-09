@@ -73,13 +73,15 @@ interface APIKeyStatus {
 
 export default function SettingsPage() {
   return (
-    <ProtectedRoute requireAdmin>
+    <ProtectedRoute>
       <SettingsPageContent />
     </ProtectedRoute>
   );
 }
 
 function SettingsPageContent() {
+  const { user } = useAuth();
+  const isAdmin = !!user?.is_admin;
   const [apiKey, setApiKey] = useState("");
   const [testingKey, setTestingKey] = useState(false);
   const [testResult, setTestResult] = useState<{
@@ -96,6 +98,7 @@ function SettingsPageContent() {
   } = useQuery({
     queryKey: ["settings", "riot_api_key"],
     queryFn: () => validatedGet(SettingSchema, "/settings/riot_api_key"),
+    enabled: isAdmin,
   });
 
   const setting = settingResult?.success ? settingResult.data : null;
@@ -106,6 +109,7 @@ function SettingsPageContent() {
       const response = await api.get<APIKeyStatus>("/settings/riot_api_key/status");
       return response.data;
     },
+    enabled: isAdmin,
     staleTime: 60 * 1000,
     refetchOnWindowFocus: false,
   });
@@ -213,171 +217,177 @@ function SettingsPageContent() {
             <h1 className="text-2xl font-semibold">Settings</h1>
           </div>
           <p className="text-sm leading-relaxed">
-            Configure your user settings as well as global system settings
+            {isAdmin
+              ? "Configure your user settings as well as global system settings"
+              : "Configure your user settings"}
           </p>
         </Card>
 
         {/* Two-column grid for settings cards */}
         <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-5">
-          {/* User Settings - Left Column (40% width) */}
-          <UserSettingsCard />
+          <UserSettingsCard className={isAdmin ? "lg:col-span-2" : "lg:col-span-5"} />
 
-          {/* Riot API Configuration - Right Column (60% width) */}
-          <Card className="p-6 lg:col-span-3">
-            <h2 className="mb-4 text-lg font-semibold">
-              Riot API Configuration
-            </h2>
+          {isAdmin && (
+            <Card className="p-6 lg:col-span-3">
+              <h2 className="mb-4 text-lg font-semibold">
+                Riot API Configuration
+              </h2>
 
-            {isLoading || isApiKeyStatusLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {/* Current API Key Display */}
-                {setting && (
-                  <div>
-                    <Label>Current API Key</Label>
-                    <div className="mt-1.5 rounded-md border bg-muted/50 px-3 py-2 text-sm font-mono">
-                      {setting.masked_value}
+              {isLoading || isApiKeyStatusLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {/* Current API Key Display */}
+                  {setting && (
+                    <div>
+                      <Label>Current API Key</Label>
+                      <div className="mt-1.5 rounded-md border bg-muted/50 px-3 py-2 text-sm font-mono">
+                        {setting.masked_value}
+                      </div>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Last updated:{" "}
+                        {new Date(setting.updated_at).toLocaleString()}
+                      </p>
                     </div>
+                  )}
+
+                  {!setting && keyStatus?.active_source === "none" && (
+                    <Alert className="border-red-700 bg-red-950/40 text-red-200">
+                      <p className="text-sm">
+                        No active Riot API Key found! System cannot function.
+                        Please configure it in settings
+                        {process.env.NODE_ENV === "production" ? " " : " or .env "}
+                        immediately.
+                      </p>
+                    </Alert>
+                  )}
+
+                  {!setting && keyStatus?.active_source === "env" && (
+                    <Alert className="border-amber-700 bg-amber-950/40 text-amber-200">
+                      <p className="text-sm">
+                        Using Riot API Key from environment variables. Consider
+                        adding it to database for better management.
+                      </p>
+                    </Alert>
+                  )}
+
+                  {/* New API Key Input */}
+                  <div>
+                    <Label htmlFor="api-key">New Riot API Key</Label>
+                    <Input
+                      id="api-key"
+                      type="text"
+                      placeholder="RGAPI-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                      value={apiKey}
+                      onChange={(e) => {
+                        setApiKey(e.target.value);
+                        setTestResult(null);
+                      }}
+                      className="mt-1.5 font-mono text-sm"
+                    />
                     <p className="mt-1 text-xs text-muted-foreground">
-                      Last updated:{" "}
-                      {new Date(setting.updated_at).toLocaleString()}
+                      Get your API key from{" "}
+                      <a
+                        href="https://developer.riotgames.com"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary underline"
+                      >
+                        developer.riotgames.com
+                      </a>
                     </p>
                   </div>
-                )}
 
-                {!setting && keyStatus?.active_source === "none" && (
-                  <Alert className="border-red-700 bg-red-950/40 text-red-200">
-                    <p className="text-sm">
-                      No active Riot API Key found! System cannot function.
-                      Please configure it in settings
-                      {process.env.NODE_ENV === "production" ? " " : " or .env "}
-                      immediately.
-                    </p>
-                  </Alert>
-                )}
-
-                {!setting && keyStatus?.active_source === "env" && (
-                  <Alert className="border-amber-700 bg-amber-950/40 text-amber-200">
-                    <p className="text-sm">
-                      Using Riot API Key from environment variables. Consider
-                      adding it to database for better management.
-                    </p>
-                  </Alert>
-                )}
-
-                {/* New API Key Input */}
-                <div>
-                  <Label htmlFor="api-key">New Riot API Key</Label>
-                  <Input
-                    id="api-key"
-                    type="text"
-                    placeholder="RGAPI-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-                    value={apiKey}
-                    onChange={(e) => {
-                      setApiKey(e.target.value);
-                      setTestResult(null);
-                    }}
-                    className="mt-1.5 font-mono text-sm"
-                  />
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Get your API key from{" "}
-                    <a
-                      href="https://developer.riotgames.com"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-primary underline"
+                  {/* Test Result */}
+                  {testResult && (
+                    <Alert
+                      className={
+                        testResult.success
+                          ? "border-green-500/50 bg-green-500/10"
+                          : "border-red-500/50 bg-red-500/10"
+                      }
                     >
-                      developer.riotgames.com
-                    </a>
-                  </p>
-                </div>
-
-                {/* Test Result */}
-                {testResult && (
-                  <Alert
-                    className={
-                      testResult.success
-                        ? "border-green-500/50 bg-green-500/10"
-                        : "border-red-500/50 bg-red-500/10"
-                    }
-                  >
-                    <div className="flex items-start gap-2">
-                      {testResult.success ? (
-                        <Check className="h-4 w-4 text-green-500" />
-                      ) : (
-                        <X className="h-4 w-4 text-red-500" />
-                      )}
-                      <div>
-                        <p className="text-sm font-medium">
-                          {testResult.message}
-                        </p>
+                      <div className="flex items-start gap-2">
+                        {testResult.success ? (
+                          <Check className="h-4 w-4 text-green-500" />
+                        ) : (
+                          <X className="h-4 w-4 text-red-500" />
+                        )}
+                        <div>
+                          <p className="text-sm font-medium">
+                            {testResult.message}
+                          </p>
+                        </div>
                       </div>
-                    </div>
+                    </Alert>
+                  )}
+
+                  {/* Action Buttons */}
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={handleTestKey}
+                      variant="outline"
+                      disabled={
+                        !apiKey.trim() || testingKey || testMutation.isPending
+                      }
+                    >
+                      {testingKey || testMutation.isPending ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Testing...
+                        </>
+                      ) : (
+                        "Test Key"
+                      )}
+                    </Button>
+
+                    <Button
+                      onClick={handleSaveKey}
+                      disabled={
+                        !apiKey.trim() ||
+                        updateMutation.isPending ||
+                        (testResult !== null && !testResult.success)
+                      }
+                    >
+                      {updateMutation.isPending ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Saving...
+                        </>
+                      ) : (
+                        "Save & Apply"
+                      )}
+                    </Button>
+                  </div>
+
+                  {/* Info Note */}
+                  <Alert>
+                    <p className="text-sm">
+                      <strong>Note:</strong> The API key will be validated before
+                      saving. Newly generated keys usually{" "}
+                      <b>need a minute or two </b>
+                      before they start working. Development keys (starting with
+                      RGAPI-) expire every 24 hours and need to be renewed.
+                    </p>
                   </Alert>
-                )}
-
-                {/* Action Buttons */}
-                <div className="flex gap-2">
-                  <Button
-                    onClick={handleTestKey}
-                    variant="outline"
-                    disabled={
-                      !apiKey.trim() || testingKey || testMutation.isPending
-                    }
-                  >
-                    {testingKey || testMutation.isPending ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Testing...
-                      </>
-                    ) : (
-                      "Test Key"
-                    )}
-                  </Button>
-
-                  <Button
-                    onClick={handleSaveKey}
-                    disabled={
-                      !apiKey.trim() ||
-                      updateMutation.isPending ||
-                      (testResult !== null && !testResult.success)
-                    }
-                  >
-                    {updateMutation.isPending ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Saving...
-                      </>
-                    ) : (
-                      "Save & Apply"
-                    )}
-                  </Button>
                 </div>
-
-                {/* Info Note */}
-                <Alert>
-                  <p className="text-sm">
-                    <strong>Note:</strong> The API key will be validated before
-                    saving. Newly generated keys usually{" "}
-                    <b>need a minute or two </b>
-                    before they start working. Development keys (starting with
-                    RGAPI-) expire every 24 hours and need to be renewed.
-                  </p>
-                </Alert>
-              </div>
-            )}
-          </Card>
+              )}
+            </Card>
+          )}
         </div>
       </div>
     </div>
   );
 }
 
+interface UserSettingsCardProps {
+  className?: string;
+}
+
 // User Settings Card Component
-function UserSettingsCard() {
+function UserSettingsCard({ className = "lg:col-span-2" }: UserSettingsCardProps) {
   const queryClient = useQueryClient();
   const { user, checkAuth } = useAuth();
   const userId = user?.id;
@@ -520,7 +530,7 @@ function UserSettingsCard() {
   };
 
   return (
-    <Card className="p-6 lg:col-span-2 h-full">
+    <Card className={`p-6 h-full ${className}`}>
       <h2 className="mb-4 text-lg font-semibold">User Settings</h2>
 
       {isLoading ? (
