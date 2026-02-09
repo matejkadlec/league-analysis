@@ -499,8 +499,11 @@ class MatchmakingAnalysisService:
             expected_other_players = self.MATCHES_TO_ANALYZE * 9
             expected_players = expected_other_players + 1
             expected_match_details_per_other = max(1, self.MATCHES_FOR_WINRATE - 1)
+
+            # Basis size shown in UI:
+            # 10 (current player's matches) + 90 players * 10 matches each = 910
             expected_matches_analyzed = self.MATCHES_TO_ANALYZE + (
-                expected_other_players * expected_match_details_per_other
+                expected_other_players * self.MATCHES_FOR_WINRATE
             )
 
             results = {
@@ -515,7 +518,9 @@ class MatchmakingAnalysisService:
             #   - 1 call for current player's spine IDs
             #   - expected_other_players calls for other players' match IDs
             #   - MATCHES_TO_ANALYZE match details for spine matches
-            #   - expected_other_players * (MATCHES_FOR_WINRATE - 1) match details
+            #   - expected_other_players * (MATCHES_FOR_WINRATE - 1) additional
+            #     match details (1 of each player's 10 matches is the already-known
+            #     spine match)
             match_list_calls = 1 + expected_other_players
             match_detail_calls = self.MATCHES_TO_ANALYZE + (
                 expected_other_players * expected_match_details_per_other

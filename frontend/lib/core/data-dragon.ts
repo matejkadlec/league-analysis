@@ -10,6 +10,8 @@
 const DDRAGON_VERSION = "15.2.1";
 
 const DDRAGON_BASE_URL = `https://ddragon.leagueoflegends.com/cdn/${DDRAGON_VERSION}`;
+const CDRAGON_BASE_URL =
+  "https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default";
 
 /**
  * Get the URL for a champion's square icon.
@@ -50,7 +52,17 @@ export function getChampionLoadingUrl(
  * @returns URL to the profile icon image
  */
 export function getProfileIconUrl(profileIconId: number): string {
-  return `${DDRAGON_BASE_URL}/img/profileicon/${profileIconId}.png`;
+  return `${CDRAGON_BASE_URL}/v1/profile-icons/${profileIconId}.jpg`;
+}
+
+/**
+ * Get fallback URL for a summoner profile icon from CommunityDragon.
+ *
+ * CommunityDragon uses latest game assets and is useful when Data Dragon
+ * versioning lags behind newer icon IDs.
+ */
+export function getProfileIconFallbackUrl(profileIconId: number): string {
+  return `${CDRAGON_BASE_URL}/v1/profile-icons/${profileIconId}.jpg`;
 }
 
 /**
@@ -203,9 +215,6 @@ export function getSummonerSpellIconUrlById(spellId: number): string | null {
 /**
  * Community Dragon base URL for game data assets
  */
-const CDRAGON_BASE_URL =
-  "https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default";
-
 /**
  * Rune style ID to icon path mapping for Community Dragon.
  * These are the main rune tree styles - paths from perkstyles.json iconPath.

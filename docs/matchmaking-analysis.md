@@ -455,7 +455,8 @@ Get completed analysis history.
 
 Notes:
 - With 10 spine matches, `players_analyzed` is recorded as 91 (current player + 9 others per match).
-- `matches_analyzed` is recorded as 820 as a workload metric (10 spine matches + 90 participants * 9 additional non-spine matches).
+- `matches_analyzed` is recorded as 910 (10 + 90*10) to represent the basis size shown in the UI.
+- The internal additional-match workload remains 820 (10 spine matches + 90 participants * 9 additional non-spine matches).
 
 ---
 

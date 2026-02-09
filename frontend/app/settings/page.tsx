@@ -528,7 +528,7 @@ function UserSettingsCard() {
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-3">
           {/* Display Name Setting */}
           <div className="flex items-center justify-between gap-4">
             <div className="flex-1">
@@ -672,7 +672,7 @@ function UserSettingsCard() {
           </div>
 
           {/* URL Save Toggles - 3/4 column layout for tighter checkbox alignment */}
-          <div className="grid grid-cols-4 gap-x-4 gap-y-3 pt-2">
+          <div className="grid grid-cols-4 gap-x-4 gap-y-3">
             {/* Save Playstyle URL Toggle */}
             <div className="col-span-3">
               <Label>Save Playstyle Analysis Search</Label>
@@ -710,6 +710,29 @@ function UserSettingsCard() {
                 onChange={(e) =>
                   handleToggle(
                     "save_matchmaking_url",
+                    e.target.checked,
+                    e.timeStamp,
+                  )
+                }
+                className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                disabled={updateMutation.isPending}
+              />
+            </div>
+
+            {/* Save Tracked Players URL Toggle */}
+            <div className="col-span-3">
+              <Label>Save Viewed Tracked Player</Label>
+              <p className="text-xs text-muted-foreground">
+                Saves viewed player in Tracked Players
+              </p>
+            </div>
+            <div className="flex items-center justify-end">
+              <input
+                type="checkbox"
+                checked={userSettings?.save_tracked_url || false}
+                onChange={(e) =>
+                  handleToggle(
+                    "save_tracked_url",
                     e.target.checked,
                     e.timeStamp,
                   )

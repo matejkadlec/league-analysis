@@ -40,6 +40,8 @@ erDiagram
         string saved_playstyle_puuid
         boolean save_matchmaking_url
         string saved_matchmaking_puuid
+        boolean save_tracked_url
+        string saved_tracked_puuid
         string default_platform
         string created_at
         string updated_at

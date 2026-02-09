@@ -490,6 +490,8 @@ export const UserSettingsSchema = z.object({
   saved_playstyle_puuid: z.string().nullable(),
   save_matchmaking_url: z.boolean(),
   saved_matchmaking_puuid: z.string().nullable(),
+  save_tracked_url: z.boolean(),
+  saved_tracked_puuid: z.string().nullable(),
   default_platform: z.string().nullable(),
   created_at: z.string(),
   updated_at: z.string(),
@@ -501,6 +503,8 @@ export const UserSettingsUpdateSchema = z.object({
   saved_playstyle_puuid: z.string().nullable().optional(),
   save_matchmaking_url: z.boolean().optional(),
   saved_matchmaking_puuid: z.string().nullable().optional(),
+  save_tracked_url: z.boolean().optional(),
+  saved_tracked_puuid: z.string().nullable().optional(),
   default_platform: z.string().nullable().optional(),
 });
 

@@ -110,6 +110,8 @@ CREATE TABLE auth.user_settings (
     saved_playstyle_puuid character varying(78),
     save_matchmaking_url boolean DEFAULT false NOT NULL,
     saved_matchmaking_puuid character varying(78),
+    save_tracked_url boolean DEFAULT false NOT NULL,
+    saved_tracked_puuid character varying(78),
     default_platform character varying(4) DEFAULT 'eun1'::character varying,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL

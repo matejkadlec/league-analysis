@@ -84,6 +84,12 @@ class UserSettingsResponse(BaseModel):
     saved_matchmaking_puuid: Optional[str] = Field(
         None, description="Saved PUUID for matchmaking analysis"
     )
+    save_tracked_url: bool = Field(
+        ..., description="Whether to save tracked players viewed PUUID in URL"
+    )
+    saved_tracked_puuid: Optional[str] = Field(
+        None, description="Saved PUUID for tracked players page"
+    )
     default_platform: Optional[str] = Field(
         "eun1", description="Default server/platform"
     )
@@ -108,6 +114,12 @@ class UserSettingsUpdate(BaseModel):
     )
     saved_matchmaking_puuid: Optional[str] = Field(
         None, max_length=78, description="Saved matchmaking PUUID"
+    )
+    save_tracked_url: Optional[bool] = Field(
+        None, description="Save tracked players viewed PUUID in URL"
+    )
+    saved_tracked_puuid: Optional[str] = Field(
+        None, max_length=78, description="Saved tracked players PUUID"
     )
     default_platform: Optional[str] = Field(
         None, max_length=4, description="Default server/platform"

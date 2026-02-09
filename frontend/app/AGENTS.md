@@ -11,7 +11,7 @@ Next.js App Router pages.
 | `/`                     | `page.tsx`                      | Home landing page          |
 | `/playstyle-analysis`   | `playstyle-analysis/page.tsx`   | Player playstyle analysis  |
 | `/matchmaking-analysis` | `matchmaking-analysis/page.tsx` | Match fairness analysis    |
-| `/tracked-players`      | `tracked-players/page.tsx`      | Tracked player list        |
+| `/tracked-players`      | `tracked-players/page.tsx`      | Tracked list + in-page player profile view |
 | `/jobs`                 | `jobs/page.tsx`                 | Background jobs monitoring |
 | `/settings`             | `settings/page.tsx`             | App settings               |
 | `/sign-in`              | `sign-in/page.tsx`              | Authentication             |

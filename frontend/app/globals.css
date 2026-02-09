@@ -406,6 +406,44 @@
     filter: saturate(0.5) brightness(0.7) !important;
   }
 
+  /*
+    Medium Gold Button
+    - Same styling as button-medium but larger and no rotation
+    - For cards where the button is main part of the card
+  */
+  .button-full {
+    @apply inline-flex items-center justify-center whitespace-nowrap rounded-md font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring opacity-90 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-5 [&_svg]:shrink-0 shadow h-10 cursor-pointer text-primary-foreground;
+    background: linear-gradient(
+      105deg,
+      rgb(242, 215, 119) 0%,
+      rgb(207, 169, 58) 10%,
+      rgb(157, 125, 34) 80%,
+      rgb(119, 94, 24) 90%
+    );
+    color: oklch(11.2% 0.045 285.88);
+    font-size: 14px !important;
+    padding: 8px 20px !important;
+    gap: 8px !important;
+    width: 100%;
+    transition: filter 0.75s ease !important;
+    filter: saturate(1) brightness(1);
+  }
+
+  .button-full:hover {
+    filter: saturate(1.15) brightness(1.15);
+    color: oklch(11.2% 0.045 285.88) !important;
+  }
+
+  .button-full:disabled {
+    cursor: not-allowed !important;
+    opacity: 0.5 !important;
+    filter: saturate(0.5) brightness(0.7) !important;
+  }
+
+  .button-full:disabled:hover {
+    filter: saturate(0.5) brightness(0.7) !important;
+  }
+
   /* Icon circle button (gold gradient, perfect circle, no padding) */
   .icon-circle {
     @apply inline-flex items-center justify-center rounded-full cursor-pointer;
@@ -428,5 +466,15 @@
   .icon-circle svg {
     width: 14px;
     height: 14px;
+  }
+
+  /* Vertical gold gradient utility */
+  .vertical-gradient {
+    background: linear-gradient(
+      180deg,
+      rgb(242, 215, 119) 0%,
+      rgb(207, 169, 58) 10%,
+      rgb(157, 125, 34) 90%
+    );
   }
 }

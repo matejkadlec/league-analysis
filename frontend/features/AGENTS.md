@@ -12,7 +12,7 @@ Domain-specific UI components. Each feature is self-contained with its own compo
 | `jobs/`               | Job monitoring components          |
 | `matches/`            | Match history display              |
 | `matchmaking/`        | Match fairness analysis            |
-| `players/`            | Player search, cards, tracking     |
+| `players/`            | Player search, cards, tracking, tracked-list controls |
 | `playstyle-analysis/` | Playstyle analysis results         |
 
 ## Structure

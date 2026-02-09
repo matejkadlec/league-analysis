@@ -74,6 +74,19 @@ class UserSettings(Base):
         comment="Saved PUUID for matchmaking analysis URL persistence",
     )
 
+    save_tracked_url: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        comment="Whether to remember the viewed tracked player PUUID in tracked players URL",
+    )
+
+    saved_tracked_puuid: Mapped[Optional[str]] = mapped_column(
+        String(78),
+        nullable=True,
+        comment="Saved PUUID for tracked players URL persistence",
+    )
+
     # Default platform preference
     default_platform: Mapped[Optional[str]] = mapped_column(
         String(4),

@@ -195,7 +195,7 @@ export function AddTrackedPlayer() {
   };
 
   return (
-    <Card>
+    <Card id="add-tracked-player">
       <CardHeader>
         <div className="flex items-center space-x-2">
           <UserPlus className="h-5 w-5 text-primary" />
@@ -403,7 +403,7 @@ export function AddTrackedPlayer() {
 
             <Button
               type="submit"
-              className="w-full"
+              className="button-full"
               disabled={isPending || gameNameOverLimit || tagOverLimit}
               tabIndex={4}
             >
