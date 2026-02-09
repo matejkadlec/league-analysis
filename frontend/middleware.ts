@@ -1,16 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-// Routes that don't require authentication
-const PUBLIC_ROUTES = ["/sign-in", "/privacy-policy", "/license"];
-
-// Check if path is a public route
-function isPublicRoute(pathname: string): boolean {
-  return PUBLIC_ROUTES.some(
-    (route) => pathname === route || pathname.startsWith(`${route}/`),
-  );
-}
-
 // Check if path is a static asset or internal Next.js route
 function isStaticOrInternal(pathname: string): boolean {
   return (
@@ -29,22 +19,7 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Skip middleware for public routes
-  if (isPublicRoute(pathname)) {
-    return NextResponse.next();
-  }
-
-  // Check for auth token in cookies
-  const token = request.cookies.get("auth_token")?.value;
-
-  // If no token, redirect to sign-in
-  if (!token) {
-    const signInUrl = new URL("/sign-in", request.url);
-    return NextResponse.redirect(signInUrl);
-  }
-
-  // Token exists, allow the request to proceed
-  // Note: Token validation happens client-side via AuthProvider
+  // Authentication and route protection are enforced client-side by AuthGate.
   return NextResponse.next();
 }
 

@@ -1,9 +1,9 @@
-"""Authentication router with login, logout, and user management endpoints."""
+"""Authentication router with login, refresh, logout, and user management endpoints."""
 
-from datetime import timedelta
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import select
 
@@ -13,25 +13,25 @@ from .dependencies import get_current_active_user, get_current_admin_user
 from .models import User
 from .schemas import (
     Token,
+    RefreshTokenRequest,
     UserCreate,
     UserResponse,
     LinkRiotAccountRequest,
     UserProfileUpdate,
 )
-from .service import AuthService, get_auth_service
+from .service import (
+    AccountLockedError,
+    AuthService,
+    CaptchaRequiredError,
+    CaptchaVerificationError,
+    get_auth_service,
+    oauth2_scheme,
+)
 
 if TYPE_CHECKING:
     from app.core.riot_api.client import RiotAPIClient
 
 router = APIRouter()
-
-# TODO: Locate all unused functions in this file, and delete them. If there is unused function that
-# you think will be *most likely used in near future*, keep it but add comment. Note that registration
-# via FE is not planned in next few months. Also while reviewing the functions, check whether their
-# description is valid and makes sense (even for currently used functions), as this was created
-# months ago and not updated since then. Also it was created with far worse AI. And if the description
-# is outdated, update it. You can also update function names, but don't forget to update them repo-wide
-# After you are done, delete this whole comment.
 
 
 @router.post("/login", response_model=Token)
@@ -39,15 +39,47 @@ router = APIRouter()
 async def login(
     request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
+    captcha_token: str | None = Form(default=None),
     auth_service: AuthService = Depends(get_auth_service),
 ) -> Token:
-    """Login endpoint using OAuth2 password flow.
+    """Authenticate user credentials and issue an access token.
 
-    Authenticates user with email and password, returns JWT access token.
-    Updates last_login timestamp on successful authentication.
+    Includes brute-force protections:
+    - temporary account lockout after repeated failed attempts
+    - adaptive CAPTCHA requirement once failure threshold is reached
     """
-    # Authenticate user
-    user = await auth_service.authenticate_user(form_data.username, form_data.password)
+    try:
+        user = await auth_service.authenticate_user(
+            email=form_data.username,
+            password=form_data.password,
+            captcha_token=captcha_token,
+            remote_ip=request.client.host if request.client else None,
+        )
+    except AccountLockedError as e:
+        raise HTTPException(
+            status_code=status.HTTP_423_LOCKED,
+            detail={
+                "code": "ACCOUNT_LOCKED",
+                "message": "Account is temporarily locked after repeated failed sign-in attempts.",
+                "locked_until": e.locked_until.astimezone(timezone.utc).isoformat(),
+            },
+        )
+    except CaptchaRequiredError:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "CAPTCHA_REQUIRED",
+                "message": "Complete CAPTCHA verification to continue signing in.",
+            },
+        )
+    except CaptchaVerificationError:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "CAPTCHA_INVALID",
+                "message": "CAPTCHA verification failed. Please try again.",
+            },
+        )
 
     if not user:
         raise HTTPException(
@@ -62,43 +94,85 @@ async def login(
             detail="Inactive user account",
         )
 
-    # Create access token
-    access_token_expires = timedelta(
-        minutes=auth_service.settings.jwt_access_token_expire_minutes
-    )
-    access_token = auth_service.create_access_token(
-        data={"sub": user.email, "user_id": user.id},
-        expires_delta=access_token_expires,
+    access_token, access_expires_at, refresh_token, refresh_expires_at = (
+        await auth_service.issue_token_pair(
+            user=user,
+            remote_ip=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+        )
     )
 
-    # Update last login timestamp
     await auth_service.update_last_login(user.id)
+    await auth_service.cleanup_expired_token_state()
 
-    return Token(access_token=access_token, token_type="bearer")  # nosec B106
+    now = datetime.now(timezone.utc)
+    return Token(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        token_type="bearer",
+        expires_in_seconds=max(0, int((access_expires_at - now).total_seconds())),
+        refresh_expires_in_seconds=max(
+            0,
+            int((refresh_expires_at - now).total_seconds()),
+        ),
+    )  # nosec B106
+
+
+@router.post("/refresh", response_model=Token)
+@limiter.limit("20/minute")
+async def refresh_access_token(
+    request: Request,
+    refresh_request: RefreshTokenRequest,
+    auth_service: AuthService = Depends(get_auth_service),
+) -> Token:
+    """Rotate refresh token and issue a new access token pair."""
+    rotated = await auth_service.rotate_refresh_token(
+        raw_refresh_token=refresh_request.refresh_token,
+        remote_ip=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+    )
+    if rotated is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={
+                "code": "INVALID_REFRESH_TOKEN",
+                "message": "Refresh token is invalid, expired, or already revoked.",
+            },
+        )
+
+    user, access_token, access_expires_at, refresh_token, refresh_expires_at = rotated
+    if not user.is_active:
+        await auth_service.revoke_all_refresh_tokens_for_user(user.id)
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Inactive user account",
+        )
+
+    await auth_service.cleanup_expired_token_state()
+
+    now = datetime.now(timezone.utc)
+    return Token(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        token_type="bearer",
+        expires_in_seconds=max(0, int((access_expires_at - now).total_seconds())),
+        refresh_expires_in_seconds=max(
+            0,
+            int((refresh_expires_at - now).total_seconds()),
+        ),
+    )  # nosec B106
 
 
 @router.post("/logout")
 async def logout(
+    token: str = Depends(oauth2_scheme),
     current_user: User = Depends(get_current_active_user),
+    auth_service: AuthService = Depends(get_auth_service),
 ) -> dict[str, str]:
-    """Logout endpoint (placeholder).
-
-    NOTE: This is a placeholder endpoint. Since we're using stateless JWT tokens,
-    logout is currently handled client-side by deleting the token.
-
-    For proper logout functionality, implement token revocation/blacklisting.
-    See docs/tasks/improve-auth.md for implementation details.
-
-    TODO:
-    - Implement JWT token blacklist (Redis cache recommended)
-    - Store revoked tokens with expiration timestamps
-    - Check blacklist in authentication middleware
-    - Revoke tokens on password change and admin actions
-    """
-    # This endpoint exists to:
-    # 1. Verify the user is authenticated
-    # 2. Provide a standardized API for future token revocation
-    # 3. Track last activity (could update last_login timestamp here)
+    """Revoke current access token and all active refresh tokens for the user."""
+    await auth_service.revoke_access_token(token, reason="logout")
+    await auth_service.revoke_all_refresh_tokens_for_user(current_user.id)
+    await auth_service.cleanup_expired_token_state()
     return {"message": "Successfully logged out"}
 
 

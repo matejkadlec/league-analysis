@@ -8,7 +8,7 @@ Domain-specific business logic organized by feature. Each feature is self-contai
 
 | Feature                 | Description                                             |
 | ----------------------- | ------------------------------------------------------- |
-| `auth/`                 | User authentication, JWT                                |
+| `auth/`                 | User auth, JWT revocation blacklist, refresh rotation, lockout, adaptive CAPTCHA |
 | `players/`              | Search, tracking, rank info                             |
 | `matches/`              | Match history, stats                                    |
 | `playstyle_analysis/`   | Playstyle analysis                                      |

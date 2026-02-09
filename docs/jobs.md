@@ -219,6 +219,9 @@ The system retrieves the Riot API key with database priority:
 - First API call returns `401 Unauthorized` or `403 Forbidden`
 - Job raises `AuthenticationError`
 - Job terminates with `FAILED` status
+- `jobs.job_executions.has_api_key_error` is stored as `true` for the failed run
 - Error logged: "Authentication failure during {operation}"
+- Frontend header warning (red banner) is triggered when latest execution in
+  `/jobs/status/overview` is `FAILED` with `has_api_key_error=true`
 
 **Resolution:** Update API key in Settings page or `.env` file

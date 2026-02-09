@@ -18,6 +18,11 @@ import {
   notifyApiKeyInvalid,
   notifyApiKeyValid,
 } from "./api-key-status-context";
+import {
+  getAccessToken,
+  refreshAccessToken,
+  removeAuthTokens,
+} from "@/features/auth/utils/token-manager";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -29,11 +34,9 @@ export const api = axios.create({
 
 // Add auth token to all requests if available
 api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
-  if (typeof window !== "undefined") {
-    const token = localStorage.getItem("auth_token");
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
+  const token = getAccessToken();
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
   }
   return config;
 });
@@ -91,13 +94,42 @@ api.interceptors.response.use(
     }
     return response;
   },
-  (error: AxiosError) => {
+  async (error: AxiosError) => {
     // Check ALL responses for API key errors (503 with specific code)
     // This ensures any endpoint that internally uses Riot API will trigger the header
     if (isApiKeyError(error.response)) {
       notifyApiKeyInvalid();
     }
-    return Promise.reject(error);
+
+    const originalRequest = error.config as
+      | (InternalAxiosRequestConfig & { _retry?: boolean })
+      | undefined;
+    const status = error.response?.status;
+
+    if (!originalRequest || status !== 401 || originalRequest._retry) {
+      return Promise.reject(error);
+    }
+
+    const requestUrl = originalRequest.url ?? "";
+    if (requestUrl.includes("/auth/login") || requestUrl.includes("/auth/refresh")) {
+      return Promise.reject(error);
+    }
+
+    originalRequest._retry = true;
+    const refreshedToken = await refreshAccessToken();
+    if (!refreshedToken) {
+      removeAuthTokens();
+      return Promise.reject(error);
+    }
+
+    if (typeof originalRequest.headers.set === "function") {
+      originalRequest.headers.set("Authorization", `Bearer ${refreshedToken}`);
+    } else {
+      (
+        originalRequest.headers as unknown as Record<string, string>
+      ).Authorization = `Bearer ${refreshedToken}`;
+    }
+    return api(originalRequest);
   },
 );
 function formatError(error: unknown): ApiError {

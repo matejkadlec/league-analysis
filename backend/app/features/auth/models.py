@@ -95,6 +95,25 @@ class User(Base):
         comment="When the user last logged in",
     )
 
+    failed_login_attempts: Mapped[int] = mapped_column(
+        default=0,
+        nullable=False,
+        comment="Consecutive failed login attempts since last successful login",
+    )
+
+    last_failed_login: Mapped[Optional[datetime]] = mapped_column(
+        SQLDateTime(timezone=True),
+        nullable=True,
+        comment="When the most recent failed login happened",
+    )
+
+    locked_until: Mapped[Optional[datetime]] = mapped_column(
+        SQLDateTime(timezone=True),
+        nullable=True,
+        index=True,
+        comment="Account lock expiration timestamp after too many failed logins",
+    )
+
     # Riot Account Connection
     riot_account_connected: Mapped[bool] = mapped_column(
         Boolean,
@@ -148,5 +167,6 @@ class User(Base):
 Index("idx_users_is_active_is_admin", User.is_active, User.is_admin)
 Index("idx_users_email_is_active", User.email, User.is_active)
 Index("idx_users_last_login", User.last_login)
+Index("idx_users_locked_until", User.locked_until)
 Index("idx_users_created_at", User.created_at)
 Index("ix_users_puuid", User.puuid)

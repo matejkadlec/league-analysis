@@ -242,13 +242,42 @@ User authentication and authorization.
 | --------------- | ------------ | ------------------------------ |
 | `id`            | bigint       | Primary key                    |
 | `email`         | varchar(255) | Unique email                   |
-| `password_hash` | text         | bcrypt hash                    |
+| `password_hash` | text         | Argon2id password hash         |
 | `display_name`  | varchar(128) | User display name              |
 | `is_active`     | boolean      | Account enabled                |
 | `is_admin`      | boolean      | Admin privileges               |
+| `failed_login_attempts` | int  | Consecutive failed login attempts |
+| `last_failed_login` | timestamptz | Latest failed login timestamp |
+| `locked_until` | timestamptz | Temporary lock expiration after too many failures |
 | `puuid`         | varchar(78)  | Linked Riot account (optional) |
 
 **Trigger**: `trg_create_user_settings_after_user_insert` automatically creates `user_settings` record.
+
+### `auth.refresh_tokens`
+
+Rotating refresh-token session store.
+
+| Column       | Type        | Description                                         |
+| ------------ | ----------- | --------------------------------------------------- |
+| `id`         | bigint      | Primary key                                         |
+| `user_id`    | bigint      | FK to `auth.users.id`                               |
+| `token_id`   | varchar(36) | Refresh token identifier                            |
+| `token_hash` | text        | SHA-256 hash of raw refresh token                   |
+| `expires_at` | timestamptz | Expiration time                                     |
+| `revoked_at` | timestamptz | Revocation time (`NULL` when active)                |
+
+### `auth.revoked_access_tokens`
+
+Blacklist for JWT access token revocation by `jti`.
+
+| Column       | Type        | Description                              |
+| ------------ | ----------- | ---------------------------------------- |
+| `id`         | bigint      | Primary key                              |
+| `user_id`    | bigint      | FK to `auth.users.id`                    |
+| `token_id`   | varchar(36) | Revoked JWT `jti` claim                  |
+| `revoked_at` | timestamptz | When token was revoked                   |
+| `expires_at` | timestamptz | Original token expiration                |
+| `reason`     | varchar(64) | Revocation reason (`logout`, `security`) |
 
 ### `auth.user_tracked_players`
 

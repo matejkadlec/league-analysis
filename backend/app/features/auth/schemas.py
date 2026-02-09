@@ -88,7 +88,10 @@ class Token(BaseModel):
     """Schema for JWT token response."""
 
     access_token: str
+    refresh_token: str
     token_type: str = "bearer"
+    expires_in_seconds: int
+    refresh_expires_in_seconds: int
 
 
 class TokenData(BaseModel):
@@ -96,6 +99,15 @@ class TokenData(BaseModel):
 
     email: Optional[str] = None
     user_id: Optional[int] = None
+    token_id: Optional[str] = None
+    token_type: Optional[str] = None
+    exp: Optional[int] = None
+
+
+class RefreshTokenRequest(BaseModel):
+    """Schema for refreshing an access token using refresh token rotation."""
+
+    refresh_token: str = Field(..., min_length=20)
 
 
 class LinkRiotAccountRequest(BaseModel):

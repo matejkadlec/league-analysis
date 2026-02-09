@@ -60,3 +60,7 @@ Key settings (from `.env`):
 - `postgres_*` - Database connection
 - `cors_origins` - CORS for frontend
 - `jwt_secret_key` - JWT signing
+- `jwt_access_token_expire_minutes` / `jwt_refresh_token_expire_days` - Access/refresh lifetimes
+- `auth_lockout_max_attempts` / `auth_lockout_minutes` - Login lockout policy
+- `auth_captcha_after_failures` - Failed-attempt threshold for CAPTCHA
+- `turnstile_secret_key` - Server-side Turnstile verification secret

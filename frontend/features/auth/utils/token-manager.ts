@@ -1,93 +1,111 @@
 /**
- * Centralized token management for authentication.
+ * Centralized auth token management.
  *
- * This module provides a single source of truth for managing JWT tokens,
- * ensuring localStorage and cookies stay in sync to prevent auth state bugs.
- *
- * Usage:
- *   import { setToken, removeToken, getToken } from '@/features/auth/utils/token-manager'
- *
- *   // On login:
- *   setToken(jwtToken)
- *
- *   // On logout:
- *   removeToken()
- *
- *   // Check for existing token:
- *   const token = getToken()
+ * Security design:
+ * - Uses localStorage only (no auth cookies) to avoid mixed storage behavior.
+ * - Refresh token rotation is handled via /api/v1/auth/refresh.
  */
 
-const TOKEN_KEY = "auth_token";
-const TOKEN_MAX_AGE = 7 * 24 * 60 * 60; // 7 days in seconds
+const ACCESS_TOKEN_KEY = "auth_access_token";
+const REFRESH_TOKEN_KEY = "auth_refresh_token";
 
-/**
- * Set authentication token in both localStorage and cookie.
- *
- * @param token - JWT access token
- */
-export function setToken(token: string): void {
-  if (typeof window === "undefined") {
-    return; // Skip on server-side rendering
-  }
+let refreshInFlight: Promise<string | null> | null = null;
 
-  // Store in localStorage for client-side access
-  localStorage.setItem(TOKEN_KEY, token);
-
-  // Store in cookie for ProtectedRoute and API calls
-  document.cookie = `${TOKEN_KEY}=${token}; path=/; max-age=${TOKEN_MAX_AGE}; SameSite=Lax`;
+function isBrowser(): boolean {
+  return typeof window !== "undefined";
 }
 
-/**
- * Remove authentication token from both localStorage and cookie.
- */
-export function removeToken(): void {
-  if (typeof window === "undefined") {
-    return; // Skip on server-side rendering
-  }
-
-  // Remove from localStorage
-  localStorage.removeItem(TOKEN_KEY);
-
-  // Remove cookie by setting expiration to past date
-  document.cookie = `${TOKEN_KEY}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+function getApiBaseUrl(): string {
+  return process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 }
 
-/**
- * Get authentication token with priority: localStorage > cookie.
- *
- * @returns JWT token if found, null otherwise
- */
-export function getToken(): string | null {
-  if (typeof window === "undefined") {
-    return null; // Skip on server-side rendering
+export function setAuthTokens(accessToken: string, refreshToken: string): void {
+  if (!isBrowser()) {
+    return;
   }
 
-  // Try localStorage first (primary source)
-  const localStorageToken = localStorage.getItem(TOKEN_KEY);
-  if (localStorageToken) {
-    return localStorageToken;
-  }
-
-  // Fallback to cookie if localStorage is empty
-  const cookieMatch = document.cookie
-    .split("; ")
-    .find((row) => row.startsWith(`${TOKEN_KEY}=`));
-
-  if (cookieMatch) {
-    const token = cookieMatch.split("=")[1];
-    // Sync to localStorage if found in cookie but not localStorage
-    localStorage.setItem(TOKEN_KEY, token);
-    return token;
-  }
-
-  return null;
+  localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
+  localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
 }
 
-/**
- * Check if a valid token exists.
- *
- * @returns true if token exists, false otherwise
- */
-export function hasToken(): boolean {
-  return getToken() !== null;
+export function removeAuthTokens(): void {
+  if (!isBrowser()) {
+    return;
+  }
+
+  localStorage.removeItem(ACCESS_TOKEN_KEY);
+  localStorage.removeItem(REFRESH_TOKEN_KEY);
+}
+
+export function getAccessToken(): string | null {
+  if (!isBrowser()) {
+    return null;
+  }
+  return localStorage.getItem(ACCESS_TOKEN_KEY);
+}
+
+export function getRefreshToken(): string | null {
+  if (!isBrowser()) {
+    return null;
+  }
+  return localStorage.getItem(REFRESH_TOKEN_KEY);
+}
+
+export async function refreshAccessToken(): Promise<string | null> {
+  if (!isBrowser()) {
+    return null;
+  }
+
+  if (refreshInFlight) {
+    return refreshInFlight;
+  }
+
+  const refreshToken = getRefreshToken();
+  if (!refreshToken) {
+    return null;
+  }
+
+  const runRefresh = async (): Promise<string | null> => {
+    try {
+      const response = await fetch(`${getApiBaseUrl()}/api/v1/auth/refresh`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+      });
+
+      if (!response.ok) {
+        removeAuthTokens();
+        return null;
+      }
+
+      const payload: unknown = await response.json();
+      if (
+        !payload ||
+        typeof payload !== "object" ||
+        typeof (payload as { access_token?: unknown }).access_token !== "string" ||
+        typeof (payload as { refresh_token?: unknown }).refresh_token !== "string"
+      ) {
+        removeAuthTokens();
+        return null;
+      }
+
+      const newAccessToken = (payload as { access_token: string }).access_token;
+      const newRefreshToken = (payload as { refresh_token: string }).refresh_token;
+      setAuthTokens(newAccessToken, newRefreshToken);
+      return newAccessToken;
+    } catch {
+      return null;
+    } finally {
+      refreshInFlight = null;
+    }
+  };
+
+  refreshInFlight = runRefresh();
+  return refreshInFlight;
+}
+
+export function hasAuthTokens(): boolean {
+  return getAccessToken() !== null && getRefreshToken() !== null;
 }

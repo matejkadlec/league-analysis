@@ -7,21 +7,28 @@ This document tracks known security flaws and planned improvements for the Leagu
 ### Refresh Tokens
 
 **Priority:** High
-**Status:** Planned
+**Status:** ✅ Completed (2026-02-09)
 **Description:** Implement refresh token mechanism for long-lived sessions without compromising security.
 
-**Current State:**
+**Implemented State:**
 
-- JWT access tokens have 7-day expiration
-- No refresh token implementation
-- Logout is client-side only (no token revocation)
+- Access tokens are short-lived (`JWT_ACCESS_TOKEN_EXPIRE_MINUTES`, default `30`)
+- Refresh tokens are persisted in `auth.refresh_tokens` and rotated on `/auth/refresh`
+- Refresh tokens are one-time use; reuse attempts trigger session revocation
 
-**Proposed Solution:**
+**Implementation Details:**
 
-- Implement short-lived access tokens (15-60 minutes)
-- Add refresh token system with rotation
-- Store refresh tokens in database with expiration tracking
-- Implement token revocation on logout
+- New endpoint: `POST /api/v1/auth/refresh`
+- Login now returns both access + refresh token pair
+- Refresh rotates token and returns a brand new pair
+- Logout revokes all active refresh tokens for current user
+
+**Code Locations:**
+
+- `backend/app/features/auth/service.py`
+- `backend/app/features/auth/router.py`
+- `backend/app/features/auth/refresh_token.py`
+- `backend/init_database.sql`
 
 **References:**
 
@@ -33,70 +40,105 @@ This document tracks known security flaws and planned improvements for the Leagu
 ### JWT Token Revocation / Blacklisting
 
 **Priority:** High
-**Status:** Planned
+**Status:** ✅ Completed (2026-02-09)
 **Description:** Implement token revocation mechanism to invalidate JWTs before expiration.
 
-**Current State:**
+**Implemented State:**
 
-- JWTs are stateless and cannot be revoked
-- Logout endpoint is placeholder (`backend/app/features/auth/router.py:58`)
-- Compromised tokens remain valid until expiration
+- Access tokens include `jti` claim
+- Revoked access tokens are persisted in `auth.revoked_access_tokens`
+- Auth middleware path checks blacklist in `get_current_user`
+- Logout revokes current access token + all active refresh sessions
 
-**Proposed Solution:**
+**Implementation Details:**
 
-- Implement Redis-based token blacklist
-- Add revoked token check in authentication middleware
-- Revoke tokens on logout, password change, and admin actions
-- Automatic cleanup of expired blacklist entries
+- Revocation table stores token ID and expiration time
+- Expired revocation/refresh rows are cleaned up opportunistically during auth flows
 
-**Alternative:**
+**Code Locations:**
 
-- Use short-lived tokens + refresh tokens (see above)
-- Token rotation on each request
+- `backend/app/features/auth/revoked_access_token.py`
+- `backend/app/features/auth/service.py`
+- `backend/init_database.sql`
 
 ---
 
 ### Account Lockout Mechanism
 
 **Priority:** Medium
-**Status:** Planned
+**Status:** ✅ Completed (2026-02-09)
 **Description:** Implement account lockout after multiple failed login attempts to prevent brute force attacks.
 
-**Current State:**
+**Implemented State:**
 
 - Rate limiting implemented (5 login attempts/minute per IP)
-- No per-account lockout mechanism
-- Attackers can try slowly over time
+- Per-account failed login counters stored in `auth.users`
+- Temporary lockout after configurable failure threshold
+- Lockout metadata automatically reset on successful login
 
-**Proposed Solution:**
+**Implementation Details:**
 
-- Track failed login attempts per user account in database
-- Lock account after N failed attempts (e.g., 5 attempts)
-- Implement time-based unlock (e.g., 15 minutes) or require admin unlock
-- Send email notification on account lockout
-- Reset failed attempt counter on successful login
+- Added columns:
+  - `failed_login_attempts`
+  - `last_failed_login`
+  - `locked_until`
+- Login protection rules:
+  - Lock account after `AUTH_LOCKOUT_MAX_ATTEMPTS` failures (default `5`)
+  - Lock duration controlled by `AUTH_LOCKOUT_MINUTES` (default `15`)
+  - Clear lock metadata after successful login or when lock expires
+- Backend returns structured error code `ACCOUNT_LOCKED` with `locked_until` timestamp.
 
-**Database Changes:**
+**Code Locations:**
 
-```sql
-ALTER TABLE auth.users ADD COLUMN failed_login_attempts INTEGER DEFAULT 0;
-ALTER TABLE auth.users ADD COLUMN locked_until TIMESTAMP;
-ALTER TABLE auth.users ADD COLUMN last_failed_login TIMESTAMP;
-```
+- `backend/app/features/auth/service.py`
+- `backend/app/features/auth/router.py`
+- `backend/app/features/auth/models.py`
+- `backend/init_database.sql`
+
+---
+
+### Adaptive CAPTCHA on Sign-In
+
+**Priority:** Medium
+**Status:** ✅ Completed (2026-02-09)
+**Description:** Require CAPTCHA only after suspicious/repeated failed login attempts to reduce brute-force risk without adding friction to normal logins.
+
+**Implemented State:**
+
+- Cloudflare Turnstile integrated into sign-in flow
+- CAPTCHA not shown by default
+- CAPTCHA required only after configurable failed-attempt threshold
+- Backend verifies Turnstile token server-side using secret key
+
+**Configuration:**
+
+- Backend:
+  - `TURNSTILE_SECRET_KEY`
+  - `TURNSTILE_SITEVERIFY_URL` (optional override)
+  - `AUTH_CAPTCHA_AFTER_FAILURES` (default `2`)
+- Frontend:
+  - `NEXT_PUBLIC_TURNSTILE_SITE_KEY`
+
+**Code Locations:**
+
+- `frontend/features/auth/components/sign-in-form.tsx`
+- `frontend/features/auth/context/auth-context.tsx`
+- `backend/app/features/auth/service.py`
+- `backend/app/features/auth/router.py`
 
 ---
 
 ### JWT Secret Key Validation
 
 **Priority:** High
-**Status:** Research Completed
+**Status:** ✅ Completed
 **Description:** Implement runtime validation for JWT secret key in production.
 
-**Current State:**
+**Implemented State:**
 
-- Default JWT secret includes warning message (`backend/app/core/config.py:65-67`)
-- No runtime check if secret is changed in production
-- Risk of deploying with default secret
+- Runtime validation is enforced in `backend/app/core/config.py`
+- Production deployments fail fast on weak/default JWT secrets
+- Minimum recommended secret length is enforced (32+ chars)
 
 **Research Findings (2025):**
 
@@ -156,7 +198,7 @@ ALTER TABLE auth.users ADD COLUMN last_failed_login TIMESTAMP;
 
 ## Secrets Management
 
-This section what abotu DOcker secrets, but we are not using Docker anymore. Either update or delete this section.
+This section contains optional production-grade approaches and is currently not required for local WSL deployment.
 
 ---
 
@@ -347,29 +389,21 @@ Users with API key in `.env` should:
 ### CSRF Protection
 
 **Priority:** Medium
-**Status:** Planned
+**Status:** ✅ Completed (2026-02-09)
 **Description:** Implement CSRF protection for state-changing operations.
 
-**Current State:**
+**Implemented State:**
 
-- JWT tokens stored in both localStorage AND cookies
-- Cookies do not have `httpOnly` or `secure` flags set
-- No CSRF token implementation
-
-**Proposed Solution:**
-
-- Choose ONE storage mechanism (localStorage or cookies, not both)
-- If using cookies:
-  - Enable `httpOnly` flag (prevent XSS)
-  - Enable `secure` flag (HTTPS only)
-  - Implement CSRF tokens for state-changing operations
-- If using localStorage:
-  - Remove cookie storage entirely
-  - Accept XSS risk (mitigated by CSP headers)
+- Chosen model: localStorage-only auth token storage
+- Removed auth cookie synchronization from frontend token manager
+- Removed cookie-based auth routing check in Next middleware
+- CSRF risk from browser cookie auth is eliminated for API calls using bearer tokens
 
 **Code Locations:**
 
-- `frontend/features/auth/context/auth-context.tsx:52-54, 105-107`
+- `frontend/features/auth/utils/token-manager.ts`
+- `frontend/features/auth/context/auth-context.tsx`
+- `frontend/middleware.ts`
 
 ---
 

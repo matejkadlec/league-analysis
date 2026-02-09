@@ -1,6 +1,6 @@
 -- League Analysis Database Schema
 -- Single Source of Truth
--- Generated: 2026-02-01
+-- Generated: 2026-02-09
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -78,6 +78,9 @@ CREATE TABLE auth.users (
     email_verified boolean DEFAULT false NOT NULL,
     email_verified_at timestamp with time zone,
     last_login timestamp with time zone,
+    failed_login_attempts integer DEFAULT 0 NOT NULL,
+    last_failed_login timestamp with time zone,
+    locked_until timestamp with time zone,
     riot_account_connected boolean DEFAULT false NOT NULL,
     puuid character varying(78),
     created_at timestamp with time zone DEFAULT now() NOT NULL,
@@ -99,7 +102,74 @@ CREATE INDEX ix_users_email ON auth.users USING btree (email);
 CREATE INDEX ix_users_is_active ON auth.users USING btree (is_active);
 CREATE INDEX ix_users_is_admin ON auth.users USING btree (is_admin);
 CREATE INDEX ix_users_last_login ON auth.users USING btree (last_login);
+CREATE INDEX ix_users_locked_until ON auth.users USING btree (locked_until);
 CREATE INDEX ix_users_puuid ON auth.users USING btree (puuid) WHERE puuid IS NOT NULL;
+
+-- [table] auth.refresh_tokens
+
+CREATE SEQUENCE auth.refresh_tokens_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+CREATE TABLE auth.refresh_tokens (
+    id bigint DEFAULT nextval('auth.refresh_tokens_id_seq'::regclass) NOT NULL,
+    user_id bigint NOT NULL,
+    token_id character varying(36) NOT NULL,
+    token_hash text NOT NULL,
+    issued_at timestamp with time zone DEFAULT now() NOT NULL,
+    expires_at timestamp with time zone NOT NULL,
+    revoked_at timestamp with time zone,
+    replaced_by_token_id character varying(36),
+    created_from_ip character varying(45),
+    user_agent character varying(255)
+);
+
+ALTER SEQUENCE auth.refresh_tokens_id_seq OWNED BY auth.refresh_tokens.id;
+
+ALTER TABLE ONLY auth.refresh_tokens
+    ADD CONSTRAINT pk_refresh_tokens PRIMARY KEY (id);
+
+ALTER TABLE ONLY auth.refresh_tokens
+    ADD CONSTRAINT uq_refresh_tokens_token_id UNIQUE (token_id);
+
+ALTER TABLE ONLY auth.refresh_tokens
+    ADD CONSTRAINT uq_refresh_tokens_token_hash UNIQUE (token_hash);
+
+CREATE INDEX idx_refresh_tokens_user_active ON auth.refresh_tokens USING btree (user_id, revoked_at);
+CREATE INDEX ix_refresh_tokens_expires_at ON auth.refresh_tokens USING btree (expires_at);
+CREATE INDEX ix_refresh_tokens_revoked_at ON auth.refresh_tokens USING btree (revoked_at);
+
+-- [table] auth.revoked_access_tokens
+
+CREATE SEQUENCE auth.revoked_access_tokens_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+CREATE TABLE auth.revoked_access_tokens (
+    id bigint DEFAULT nextval('auth.revoked_access_tokens_id_seq'::regclass) NOT NULL,
+    user_id bigint NOT NULL,
+    token_id character varying(36) NOT NULL,
+    revoked_at timestamp with time zone DEFAULT now() NOT NULL,
+    expires_at timestamp with time zone NOT NULL,
+    reason character varying(64) DEFAULT 'logout'::character varying NOT NULL
+);
+
+ALTER SEQUENCE auth.revoked_access_tokens_id_seq OWNED BY auth.revoked_access_tokens.id;
+
+ALTER TABLE ONLY auth.revoked_access_tokens
+    ADD CONSTRAINT pk_revoked_access_tokens PRIMARY KEY (id);
+
+ALTER TABLE ONLY auth.revoked_access_tokens
+    ADD CONSTRAINT uq_revoked_access_tokens_token_id UNIQUE (token_id);
+
+CREATE INDEX idx_revoked_access_tokens_expires_at ON auth.revoked_access_tokens USING btree (expires_at);
+CREATE INDEX ix_revoked_access_tokens_user_id ON auth.revoked_access_tokens USING btree (user_id);
 
 -- [table] auth.user_settings
 
@@ -136,6 +206,12 @@ ALTER TABLE ONLY auth.user_tracked_players
 
 ALTER TABLE ONLY auth.user_tracked_players
     ADD CONSTRAINT fk_user_tracked_players_user_id FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
+
+ALTER TABLE ONLY auth.refresh_tokens
+    ADD CONSTRAINT fk_refresh_tokens_user_id FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
+
+ALTER TABLE ONLY auth.revoked_access_tokens
+    ADD CONSTRAINT fk_revoked_access_tokens_user_id FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
 
 CREATE INDEX idx_user_tracked_players_puuid ON auth.user_tracked_players USING btree (puuid);
 

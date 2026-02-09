@@ -15,6 +15,15 @@ interface APIKeyStatus {
   env_key_identifier?: string;
 }
 
+interface JobExecutionStatus {
+  status: string;
+  has_api_key_error: boolean;
+}
+
+interface JobStatusOverview {
+  last_execution?: JobExecutionStatus | null;
+}
+
 export function HeaderMessages() {
   const { user, isAuthenticated, isLoading: isAuthLoading } = useAuth();
   const { isApiKeyInvalid } = useApiKeyStatus();
@@ -55,15 +64,31 @@ export function HeaderMessages() {
     refetchOnWindowFocus: false,
   });
 
+  const { data: latestJobStatus } = useQuery({
+    queryKey: ["job-status-api-key-monitor"],
+    queryFn: async () => {
+      const res = await api.get<JobStatusOverview>("/jobs/status/overview");
+      return res.data;
+    },
+    enabled: !!isAuthenticated,
+    refetchInterval: 15000,
+    refetchOnWindowFocus: false,
+  });
+
   // Don't show any messages while auth is loading or if not authenticated
   // AuthGate will redirect non-authenticated users
   if (isAuthLoading || !isAuthenticated) {
     return null;
   }
 
-  // 2. HIGHEST PRIORITY: API Key Invalid/Expired (detected dynamically from API calls)
+  // 2. HIGHEST PRIORITY: API Key Invalid/Expired
+  // Detected from Riot API request failures and background job execution failures.
   // This takes precedence over all other admin messages
-  if (isApiKeyInvalid) {
+  const hasLatestJobApiKeyFailure =
+    latestJobStatus?.last_execution?.status === "FAILED" &&
+    latestJobStatus.last_execution.has_api_key_error;
+
+  if (isApiKeyInvalid || hasLatestJobApiKeyFailure) {
     return (
       <div className="w-full h-[40px] fixed top-0 left-0 z-[100] flex items-center justify-center bg-red-600/75 backdrop-blur-sm shadow-md border-b border-red-800/50">
         <div className="flex items-center gap-2 text-sm font-semibold text-red-100 px-4 text-center">

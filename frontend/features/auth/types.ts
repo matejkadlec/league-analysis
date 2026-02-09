@@ -20,16 +20,28 @@ export interface LoginCredentials {
   password: string;
 }
 
+export interface LoginRequest extends LoginCredentials {
+  captchaToken?: string | null;
+}
+
 export interface AuthResponse {
   access_token: string;
+  refresh_token: string;
   token_type: string;
+  expires_in_seconds: number;
+  refresh_expires_in_seconds: number;
+}
+
+export interface AuthLoginError extends Error {
+  code?: string;
+  lockedUntil?: string;
 }
 
 export interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (credentials: LoginCredentials) => Promise<void>;
+  login: (credentials: LoginRequest) => Promise<void>;
   logout: () => void;
   checkAuth: () => Promise<void>;
 }
