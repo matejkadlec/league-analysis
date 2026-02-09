@@ -15,6 +15,7 @@ PostgreSQL database schema for League Analysis. This document is auto-generated 
 ```mermaid
 erDiagram
     users ||--|| user_settings : "1:1"
+    users ||--o| email_change_requests : "1:0..1"
     users ||--o{ user_tracked_players : "1:M"
 
     users {
@@ -51,6 +52,17 @@ erDiagram
         int user_id PK, FK
         string puuid PK, FK
         string tracked_at
+    }
+
+    email_change_requests {
+        int user_id PK, FK
+        string pending_email
+        string verification_code_hash
+        string code_expires_at
+        int failed_attempts
+        string locked_until
+        string created_at
+        string updated_at
     }
 ```
 
@@ -291,6 +303,21 @@ User-specific tracked player mappings.
 
 **Primary Key**: (`user_id`, `puuid`)  
 **Behavior**: Jobs process players tracked by any user (distinct `puuid` set).
+
+### `auth.email_change_requests`
+
+Per-user state for the change-email verification workflow.
+
+| Column                   | Type         | Description                                              |
+| ------------------------ | ------------ | -------------------------------------------------------- |
+| `user_id`                | bigint       | PK + FK to `auth.users.id`                              |
+| `pending_email`          | varchar(255) | New email waiting for code verification                 |
+| `verification_code_hash` | varchar(64)  | SHA-256 hash of the active 6-digit code                |
+| `code_expires_at`        | timestamptz  | Code expiration timestamp                               |
+| `failed_attempts`        | int          | Failed attempts for current code                        |
+| `locked_until`           | timestamptz  | Lock expiry after too many failed attempts              |
+
+**Behavior**: Locks email-change verification for 5 minutes after 3 failed code attempts.
 
 ### `core.players`
 

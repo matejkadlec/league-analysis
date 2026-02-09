@@ -90,6 +90,28 @@ class Settings(BaseSettings):
         description="Cloudflare Turnstile verification endpoint",
     )
 
+    smtp_host: str = Field(
+        default="",
+        description="SMTP host used for transactional emails (email change verification)",
+    )
+    smtp_port: int = Field(default=587, description="SMTP port")
+    smtp_username: str = Field(
+        default="",
+        description="SMTP username (optional for local/dev mail relays)",
+    )
+    smtp_password: str = Field(
+        default="",
+        description="SMTP password (optional for local/dev mail relays)",
+    )
+    smtp_from_email: str = Field(
+        default="",
+        description="Sender email address used for transactional emails",
+    )
+    smtp_use_tls: bool = Field(
+        default=True,
+        description="Whether SMTP client should call STARTTLS before sending",
+    )
+
     @field_validator("jwt_secret_key")
     @classmethod
     def validate_jwt_secret(cls, v: str) -> str:

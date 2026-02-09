@@ -535,6 +535,19 @@ export const UserProfileUpdateSchema = z.object({
 
 export type UserProfileUpdate = z.infer<typeof UserProfileUpdateSchema>;
 
+export const MessageResponseSchema = z.object({
+  message: z.string(),
+});
+
+export type MessageResponse = z.infer<typeof MessageResponseSchema>;
+
+export const EmailChangeCodeResponseSchema = z.object({
+  message: z.string(),
+  expires_at: z.string(),
+});
+
+export type EmailChangeCodeResponse = z.infer<typeof EmailChangeCodeResponseSchema>;
+
 // ===== MATCHMAKING ANALYSIS SCHEMAS =====
 export const MatchmakingAnalysisResultsSchema = z.object({
   team_avg_winrate: z.number().min(0).max(1),

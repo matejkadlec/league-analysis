@@ -193,6 +193,28 @@ ALTER TABLE ONLY auth.user_settings
 ALTER TABLE ONLY auth.user_settings
     ADD CONSTRAINT fk_user_settings_user_id FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
 
+-- [table] auth.email_change_requests
+
+CREATE TABLE auth.email_change_requests (
+    user_id bigint NOT NULL,
+    pending_email character varying(255),
+    verification_code_hash character varying(64),
+    code_expires_at timestamp with time zone,
+    failed_attempts integer DEFAULT 0 NOT NULL,
+    locked_until timestamp with time zone,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+ALTER TABLE ONLY auth.email_change_requests
+    ADD CONSTRAINT pk_email_change_requests PRIMARY KEY (user_id);
+
+ALTER TABLE ONLY auth.email_change_requests
+    ADD CONSTRAINT fk_email_change_requests_user_id FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
+
+CREATE INDEX idx_email_change_requests_pending_email ON auth.email_change_requests USING btree (pending_email);
+CREATE INDEX ix_email_change_requests_locked_until ON auth.email_change_requests USING btree (locked_until);
+
 -- [table] auth.user_tracked_players
 
 CREATE TABLE auth.user_tracked_players (

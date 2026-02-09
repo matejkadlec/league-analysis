@@ -13,7 +13,7 @@ Next.js App Router pages.
 | `/matchmaking-analysis` | `matchmaking-analysis/page.tsx` | Match fairness analysis    |
 | `/tracked-players`      | `tracked-players/page.tsx`      | Tracked list + in-page player profile view |
 | `/jobs`                 | `jobs/page.tsx`                 | Background jobs monitoring (admin only) |
-| `/settings`             | `settings/page.tsx`             | User settings for all users + Riot API config for admins |
+| `/settings`             | `settings/page.tsx`             | Application + account settings for all users, Riot API config for admins |
 | `/sign-in`              | `sign-in/page.tsx`              | Authentication             |
 
 ## Key Files

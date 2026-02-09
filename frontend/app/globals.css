@@ -151,7 +151,7 @@
   }
 
   /* Matchmaking analysis cancel button (red gradient) */
-  .dark .matchmaking-cancel-btn {
+  .dark .red-gradient {
     background: linear-gradient(
       105deg,
       #ff6b6b 0%,
@@ -368,6 +368,21 @@
 
   .button-medium:hover {
     filter: saturate(1.15) brightness(1.15);
+    color: oklch(11.2% 0.045 285.88) !important;
+  }
+
+  .button-medium.lighter {
+    padding: 8px 16px !important;
+    background: linear-gradient(
+      105deg,
+      rgb(242, 215, 119) 10%,
+      rgb(233, 191, 66) 50%,
+      rgb(157, 125, 34) 100%
+    );
+  }
+
+  .button-medium.lighter:hover {
+    filter: saturate(1) brightness(1);
     color: oklch(11.2% 0.045 285.88) !important;
   }
 

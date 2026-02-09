@@ -71,6 +71,25 @@ export function MyComponent({ puuid }: MyComponentProps) {
 }
 ```
 
+### Dialog Template Pattern
+
+Use this shared structure for user-action dialogs across frontend features.
+
+- Overlay and behavior:
+  - Use shadcn `Dialog` + `DialogContent` (darkened background handled by overlay)
+  - Keep default close interactions enabled: top-right `X`, outside click, and explicit cancel button
+- Layout:
+  - Header with icon + title, optional short description
+  - Body contains feature-specific fields and inline validation messages
+  - Footer uses `flex` + `justify-between` for split actions
+- Actions:
+  - Left action = `Cancel` with `variant=\"destructive\"`, `cursor-pointer`, and icon
+  - Right action = submit CTA with `className=\"button-medium no-rotation\"` and icon
+  - Card-level action buttons outside dialogs should use `className=\"button-full\"` and icon
+- Validation UX:
+  - Show errors directly under the related field
+  - Keep field-specific messages concise and deterministic
+
 ## Rules
 
 - TypeScript strict mode (no `any`)

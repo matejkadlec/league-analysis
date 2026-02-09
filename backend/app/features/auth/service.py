@@ -1,8 +1,11 @@
 """Authentication service for user management, JWT access tokens, and refresh sessions."""
 
+import asyncio
 from datetime import datetime, timedelta, timezone
 import hashlib
 import secrets
+import smtplib
+from email.message import EmailMessage
 from typing import Optional
 from uuid import uuid4
 
@@ -11,12 +14,13 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from passlib.context import CryptContext
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 import structlog
 
 from app.core.database import get_db
 from app.core.config import get_global_settings
+from .email_change_request import EmailChangeRequest
 from .models import User
 from .refresh_token import RefreshToken
 from .revoked_access_token import RevokedAccessToken
@@ -33,6 +37,11 @@ logger = structlog.get_logger(__name__)
 # Pre-computed Argon2 hash of "dummy_password_for_timing_protection"
 DUMMY_PASSWORD_HASH = "$argon2id$v=19$m=65536,t=3,p=4$qNVaS2lNCcH4vzfG+P9fSw$VpLQUmDVmdNQm7w0VIYso0IyglZSf1VDJ7qtaRkmnNQ"
 
+EMAIL_CHANGE_CODE_LENGTH = 6
+EMAIL_CHANGE_CODE_EXPIRY_MINUTES = 10
+EMAIL_CHANGE_MAX_FAILED_ATTEMPTS = 3
+EMAIL_CHANGE_LOCK_MINUTES = 5
+
 
 class AccountLockedError(Exception):
     """Raised when a user account is temporarily locked after failed logins."""
@@ -48,6 +57,38 @@ class CaptchaRequiredError(Exception):
 
 class CaptchaVerificationError(Exception):
     """Raised when a CAPTCHA token is missing, invalid, or cannot be verified."""
+
+
+class EmailChangeLockedError(Exception):
+    """Raised when email-change actions are temporarily locked for a user."""
+
+    def __init__(self, locked_until: datetime):
+        self.locked_until = locked_until
+        super().__init__("Email change is temporarily locked")
+
+
+class EmailAlreadyRegisteredError(Exception):
+    """Raised when the target email is already used by another account."""
+
+
+class EmailUnchangedError(Exception):
+    """Raised when a user requests to change to the currently active email."""
+
+
+class InvalidEmailVerificationCodeError(Exception):
+    """Raised when an email verification code does not match."""
+
+    def __init__(self, attempts_remaining: int):
+        self.attempts_remaining = attempts_remaining
+        super().__init__("Verification code is incorrect")
+
+
+class EmailVerificationCodeExpiredError(Exception):
+    """Raised when the verification code is no longer valid."""
+
+
+class EmailVerificationRequestNotFoundError(Exception):
+    """Raised when there is no pending email verification request."""
 
 
 class AuthService:
@@ -73,10 +114,34 @@ class AuthService:
         result = await self.db.execute(select(User).where(User.email == email))
         return result.scalar_one_or_none()
 
+    async def get_user_by_email_case_insensitive(self, email: str) -> Optional[User]:
+        """Get a user by email address using case-insensitive comparison."""
+        normalized_email = email.strip().lower()
+        result = await self.db.execute(
+            select(User).where(func.lower(User.email) == normalized_email)
+        )
+        return result.scalar_one_or_none()
+
     async def get_user_by_id(self, user_id: int) -> Optional[User]:
         """Get a user by ID."""
         result = await self.db.execute(select(User).where(User.id == user_id))
         return result.scalar_one_or_none()
+
+    async def _get_or_create_email_change_request(
+        self, user_id: int
+    ) -> EmailChangeRequest:
+        """Get or create email-change verification state for a user."""
+        result = await self.db.execute(
+            select(EmailChangeRequest).where(EmailChangeRequest.user_id == user_id)
+        )
+        request = result.scalar_one_or_none()
+        if request is not None:
+            return request
+
+        request = EmailChangeRequest(user_id=user_id)
+        self.db.add(request)
+        await self.db.flush()
+        return request
 
     @staticmethod
     def _hash_refresh_token(raw_token: str) -> str:
@@ -84,9 +149,73 @@ class AuthService:
         return hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
 
     @staticmethod
+    def _hash_email_verification_code(raw_code: str) -> str:
+        """Hash email verification code before storing it."""
+        return hashlib.sha256(raw_code.encode("utf-8")).hexdigest()
+
+    @staticmethod
+    def _generate_email_verification_code() -> str:
+        """Generate random 6-digit numeric verification code."""
+        return f"{secrets.randbelow(1_000_000):0{EMAIL_CHANGE_CODE_LENGTH}d}"
+
+    @staticmethod
     def _generate_token_id() -> str:
         """Generate a unique token identifier (jti)."""
         return str(uuid4())
+
+    def _is_smtp_configured(self) -> bool:
+        """Return True when SMTP delivery settings are configured."""
+        return bool(self.settings.smtp_host and self.settings.smtp_from_email)
+
+    async def _send_email_verification_code(
+        self,
+        *,
+        target_email: str,
+        code: str,
+    ) -> None:
+        """Send email-change verification code.
+
+        Falls back to structured logs when SMTP is not configured.
+        """
+        if not self._is_smtp_configured():
+            logger.warning(
+                "smtp_not_configured_email_code_logged",
+                target_email=target_email,
+                code=code,
+                note="Set SMTP_* variables in .env to send real emails",
+            )
+            return
+
+        smtp_host = self.settings.smtp_host
+        smtp_port = self.settings.smtp_port
+        smtp_username = self.settings.smtp_username
+        smtp_password = self.settings.smtp_password
+        smtp_from_email = self.settings.smtp_from_email
+        smtp_use_tls = self.settings.smtp_use_tls
+
+        subject = "League Analysis - Verify Your New Email"
+        body = (
+            "Your verification code is: "
+            f"{code}\n\n"
+            f"This code expires in {EMAIL_CHANGE_CODE_EXPIRY_MINUTES} minutes.\n"
+            "If you did not request this change, you can safely ignore this email."
+        )
+
+        message = EmailMessage()
+        message["Subject"] = subject
+        message["From"] = smtp_from_email
+        message["To"] = target_email
+        message.set_content(body)
+
+        def send_blocking() -> None:
+            with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as smtp:
+                if smtp_use_tls:
+                    smtp.starttls()
+                if smtp_username:
+                    smtp.login(smtp_username, smtp_password)
+                smtp.send_message(message)
+
+        await asyncio.to_thread(send_blocking)
 
     async def cleanup_expired_token_state(self) -> None:
         """Delete expired refresh and revoked access tokens."""
@@ -457,6 +586,153 @@ class AuthService:
         await self.db.refresh(user)
 
         return user
+
+    async def request_email_change_code(
+        self,
+        *,
+        current_user: User,
+        new_email: str,
+    ) -> datetime:
+        """Generate and send a verification code for changing user email."""
+        now = datetime.now(timezone.utc)
+        normalized_email = new_email.strip().lower()
+
+        if normalized_email == current_user.email.strip().lower():
+            raise EmailUnchangedError
+
+        existing_user = await self.get_user_by_email_case_insensitive(normalized_email)
+        if existing_user is not None and existing_user.id != current_user.id:
+            raise EmailAlreadyRegisteredError
+
+        email_change_request = await self._get_or_create_email_change_request(
+            current_user.id
+        )
+
+        if (
+            email_change_request.locked_until is not None
+            and email_change_request.locked_until > now
+        ):
+            raise EmailChangeLockedError(email_change_request.locked_until)
+
+        verification_code = self._generate_email_verification_code()
+        verification_code_hash = self._hash_email_verification_code(verification_code)
+        expires_at = now + timedelta(minutes=EMAIL_CHANGE_CODE_EXPIRY_MINUTES)
+
+        await self._send_email_verification_code(
+            target_email=normalized_email,
+            code=verification_code,
+        )
+
+        email_change_request.pending_email = normalized_email
+        email_change_request.verification_code_hash = verification_code_hash
+        email_change_request.code_expires_at = expires_at
+        email_change_request.failed_attempts = 0
+        email_change_request.locked_until = None
+        email_change_request.updated_at = now
+
+        await self.db.commit()
+
+        logger.info(
+            "email_change_code_requested",
+            user_id=current_user.id,
+            target_email=normalized_email,
+            expires_at=expires_at.isoformat(),
+        )
+
+        return expires_at
+
+    async def verify_email_change_code(
+        self,
+        *,
+        current_user: User,
+        code: str,
+    ) -> User:
+        """Validate the code and update current user's email on success."""
+        now = datetime.now(timezone.utc)
+        email_change_request = await self._get_or_create_email_change_request(
+            current_user.id
+        )
+
+        if (
+            email_change_request.locked_until is not None
+            and email_change_request.locked_until > now
+        ):
+            raise EmailChangeLockedError(email_change_request.locked_until)
+
+        if (
+            email_change_request.pending_email is None
+            or email_change_request.verification_code_hash is None
+            or email_change_request.code_expires_at is None
+        ):
+            raise EmailVerificationRequestNotFoundError
+
+        if email_change_request.code_expires_at <= now:
+            email_change_request.verification_code_hash = None
+            email_change_request.code_expires_at = None
+            email_change_request.failed_attempts = 0
+            email_change_request.updated_at = now
+            await self.db.commit()
+            raise EmailVerificationCodeExpiredError
+
+        submitted_hash = self._hash_email_verification_code(code)
+        is_match = secrets.compare_digest(
+            email_change_request.verification_code_hash,
+            submitted_hash,
+        )
+
+        if not is_match:
+            email_change_request.failed_attempts += 1
+            attempts_remaining = max(
+                0,
+                EMAIL_CHANGE_MAX_FAILED_ATTEMPTS - email_change_request.failed_attempts,
+            )
+            email_change_request.updated_at = now
+
+            if email_change_request.failed_attempts >= EMAIL_CHANGE_MAX_FAILED_ATTEMPTS:
+                locked_until = now + timedelta(minutes=EMAIL_CHANGE_LOCK_MINUTES)
+                email_change_request.pending_email = None
+                email_change_request.verification_code_hash = None
+                email_change_request.code_expires_at = None
+                email_change_request.failed_attempts = 0
+                email_change_request.locked_until = locked_until
+                await self.db.commit()
+                raise EmailChangeLockedError(locked_until)
+
+            await self.db.commit()
+            raise InvalidEmailVerificationCodeError(attempts_remaining)
+
+        existing_user = await self.get_user_by_email_case_insensitive(
+            email_change_request.pending_email
+        )
+        if existing_user is not None and existing_user.id != current_user.id:
+            raise EmailAlreadyRegisteredError
+
+        current_user.email = email_change_request.pending_email
+        current_user.email_verified = True
+        current_user.email_verified_at = now
+        current_user.updated_at = now
+
+        email_change_request.pending_email = None
+        email_change_request.verification_code_hash = None
+        email_change_request.code_expires_at = None
+        email_change_request.failed_attempts = 0
+        email_change_request.locked_until = None
+        email_change_request.updated_at = now
+
+        await self.db.commit()
+        await self.db.refresh(current_user)
+
+        logger.info("email_changed", user_id=current_user.id)
+        return current_user
+
+    async def change_password(self, *, current_user: User, new_password: str) -> None:
+        """Change current user's password hash."""
+        now = datetime.now(timezone.utc)
+        current_user.password_hash = self.get_password_hash(new_password)
+        current_user.updated_at = now
+        await self.db.commit()
+
+        logger.info("password_changed", user_id=current_user.id)
 
     async def update_last_login(self, user_id: int) -> None:
         """Update successful-login metadata and clear lockout counters."""

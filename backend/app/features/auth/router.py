@@ -18,12 +18,23 @@ from .schemas import (
     UserResponse,
     LinkRiotAccountRequest,
     UserProfileUpdate,
+    EmailChangeRequest,
+    EmailChangeVerifyRequest,
+    EmailChangeCodeResponse,
+    PasswordChangeRequest,
+    MessageResponse,
 )
 from .service import (
     AccountLockedError,
     AuthService,
     CaptchaRequiredError,
     CaptchaVerificationError,
+    EmailChangeLockedError,
+    EmailAlreadyRegisteredError,
+    EmailUnchangedError,
+    InvalidEmailVerificationCodeError,
+    EmailVerificationCodeExpiredError,
+    EmailVerificationRequestNotFoundError,
     get_auth_service,
     oauth2_scheme,
 )
@@ -288,3 +299,130 @@ async def update_current_user_profile(
     await auth_service.db.refresh(current_user)
 
     return current_user
+
+
+@router.post("/change-email/request-code", response_model=EmailChangeCodeResponse)
+@limiter.limit("10/minute")
+async def request_email_change_code(
+    request: Request,
+    payload: EmailChangeRequest,
+    current_user: User = Depends(get_current_active_user),
+    auth_service: AuthService = Depends(get_auth_service),
+) -> EmailChangeCodeResponse:
+    """Send a 6-digit verification code to a new email address."""
+    _ = request
+    try:
+        expires_at = await auth_service.request_email_change_code(
+            current_user=current_user,
+            new_email=payload.new_email,
+        )
+        return EmailChangeCodeResponse(
+            message="Verification code sent to your new email.",
+            expires_at=expires_at,
+        )
+    except EmailUnchangedError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "EMAIL_UNCHANGED",
+                "message": "New email must be different from your current email.",
+            },
+        )
+    except EmailAlreadyRegisteredError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "EMAIL_ALREADY_REGISTERED",
+                "message": "This email is already registered.",
+            },
+        )
+    except EmailChangeLockedError as e:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail={
+                "code": "EMAIL_CHANGE_LOCKED",
+                "message": "Too many failed attempts. Try again in 5 minutes.",
+                "locked_until": e.locked_until.astimezone(timezone.utc).isoformat(),
+            },
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to send verification code: {str(e)}",
+        )
+
+
+@router.post("/change-email/verify", response_model=UserResponse)
+@limiter.limit("15/minute")
+async def verify_email_change_code(
+    request: Request,
+    payload: EmailChangeVerifyRequest,
+    current_user: User = Depends(get_current_active_user),
+    auth_service: AuthService = Depends(get_auth_service),
+) -> User:
+    """Verify submitted email-change code and update current user email."""
+    _ = request
+    try:
+        return await auth_service.verify_email_change_code(
+            current_user=current_user,
+            code=payload.code,
+        )
+    except EmailVerificationRequestNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "EMAIL_CHANGE_REQUEST_NOT_FOUND",
+                "message": "No pending email change request found.",
+            },
+        )
+    except EmailVerificationCodeExpiredError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "EMAIL_CHANGE_CODE_EXPIRED",
+                "message": "Verification code expired. Request a new code.",
+            },
+        )
+    except InvalidEmailVerificationCodeError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "EMAIL_CHANGE_INVALID_CODE",
+                "message": "This code is incorrect.",
+                "attempts_remaining": e.attempts_remaining,
+            },
+        )
+    except EmailChangeLockedError as e:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail={
+                "code": "EMAIL_CHANGE_TOO_MANY_ATTEMPTS",
+                "message": "Too many failed attempts. Try again in 5 minutes.",
+                "locked_until": e.locked_until.astimezone(timezone.utc).isoformat(),
+            },
+        )
+    except EmailAlreadyRegisteredError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "EMAIL_ALREADY_REGISTERED",
+                "message": "This email is already registered.",
+            },
+        )
+
+
+@router.post("/change-password", response_model=MessageResponse)
+@limiter.limit("10/minute")
+async def change_password(
+    request: Request,
+    payload: PasswordChangeRequest,
+    current_user: User = Depends(get_current_active_user),
+    auth_service: AuthService = Depends(get_auth_service),
+) -> MessageResponse:
+    """Change password for the current authenticated user."""
+    _ = request
+    await auth_service.change_password(
+        current_user=current_user,
+        new_password=payload.new_password,
+    )
+    return MessageResponse(message="Password changed successfully.")

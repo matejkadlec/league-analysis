@@ -1,9 +1,36 @@
 """Pydantic schemas for authentication."""
 
 from datetime import datetime
-from typing import Optional
-from pydantic import BaseModel, EmailStr, Field, field_validator
 import re
+from typing import Optional
+
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
+
+
+SPECIAL_CHARACTER_PATTERN = r"[!@#$%^&*(),.?\":{}|<>\-_+=\[\]\\/;'`~]"
+
+
+def validate_password_strength(value: str) -> str:
+    """Validate password strength requirements."""
+    if len(value) < 8:
+        raise ValueError("Password must be at least 8 characters long")
+
+    if not re.search(r"[a-z]", value):
+        raise ValueError("Password must contain at least one lowercase letter")
+
+    if not re.search(r"[A-Z]", value):
+        raise ValueError("Password must contain at least one uppercase letter")
+
+    if not re.search(r"\d", value):
+        raise ValueError("Password must contain at least one digit")
+
+    if not re.search(SPECIAL_CHARACTER_PATTERN, value):
+        raise ValueError(
+            "Password must contain at least one special character "
+            r"(!@#$%^&*(),.?\":{}|<>-_+=[]\/;'`~)"
+        )
+
+    return value
 
 
 class UserBase(BaseModel):
@@ -34,27 +61,7 @@ class UserCreate(UserBase):
         consider integrating zxcvbn library in the future. Current validation uses
         regex-based rules which are adequate for basic security requirements.
         """
-        if len(v) < 8:
-            raise ValueError("Password must be at least 8 characters long")
-
-        if not re.search(r"[a-z]", v):
-            raise ValueError("Password must contain at least one lowercase letter")
-
-        if not re.search(r"[A-Z]", v):
-            raise ValueError("Password must contain at least one uppercase letter")
-
-        if not re.search(r"\d", v):
-            raise ValueError("Password must contain at least one digit")
-
-        # Expanded special character set to support password managers
-        # Includes common symbols: !@#$%^&*(),.?":{}|<>-_+=[]\/;'`~
-        if not re.search(r"[!@#$%^&*(),.?\":{}|<>\-_+=\[\]\\/;'`~]", v):
-            raise ValueError(
-                "Password must contain at least one special character "
-                r"(!@#$%^&*(),.?\":{}|<>-_+=[]\/;'`~)"
-            )
-
-        return v
+        return validate_password_strength(v)
 
 
 class UserResponse(UserBase):
@@ -122,3 +129,48 @@ class UserProfileUpdate(BaseModel):
     """Schema for updating user profile fields."""
 
     display_name: Optional[str] = Field(None, min_length=1, max_length=128)
+
+
+class EmailChangeRequest(BaseModel):
+    """Schema for requesting an email-change verification code."""
+
+    new_email: EmailStr
+
+
+class EmailChangeVerifyRequest(BaseModel):
+    """Schema for verifying an email-change code."""
+
+    code: str = Field(..., pattern=r"^\d{6}$")
+
+
+class EmailChangeCodeResponse(BaseModel):
+    """Schema for email-code request responses."""
+
+    message: str
+    expires_at: datetime
+
+
+class PasswordChangeRequest(BaseModel):
+    """Schema for changing password for the current authenticated user."""
+
+    new_password: str = Field(..., min_length=8, max_length=128)
+    repeat_password: str = Field(..., min_length=8, max_length=128)
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_new_password(cls, value: str) -> str:
+        """Validate new password against security policy."""
+        return validate_password_strength(value)
+
+    @model_validator(mode="after")
+    def validate_password_match(self) -> "PasswordChangeRequest":
+        """Ensure repeated password exactly matches."""
+        if self.new_password != self.repeat_password:
+            raise ValueError("Passwords do not match")
+        return self
+
+
+class MessageResponse(BaseModel):
+    """Simple message response for mutation endpoints."""
+
+    message: str

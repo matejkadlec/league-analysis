@@ -16,6 +16,7 @@ from sqlalchemy.sql import func
 from app.core.models import Base
 
 if TYPE_CHECKING:
+    from .email_change_request import EmailChangeRequest
     from .user_settings import UserSettings
     from .user_tracked_player import UserTrackedPlayer
 
@@ -155,6 +156,11 @@ class User(Base):
     tracked_players: Mapped[list["UserTrackedPlayer"]] = relationship(
         "UserTrackedPlayer",
         back_populates="user",
+        cascade="all, delete-orphan",
+    )
+    email_change_request: Mapped[Optional["EmailChangeRequest"]] = relationship(
+        "EmailChangeRequest",
+        uselist=False,
         cascade="all, delete-orphan",
     )
 

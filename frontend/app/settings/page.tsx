@@ -1,22 +1,24 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  type ApiError,
   api,
   validatedGet,
-  validatedPut,
-  validatedPost,
   validatedPatch,
+  validatedPost,
+  validatedPut,
 } from "@/lib/core/api";
 import {
+  EmailChangeCodeResponseSchema,
+  MessageResponseSchema,
   SettingSchema,
   SettingTestResponseSchema,
-  UserSettingsSchema,
-  UserSettingsUpdate,
   UserResponseSchema,
-  UserProfileUpdate,
+  UserSettingsSchema,
 } from "@/lib/core/schemas";
+import type { UserProfileUpdate, UserSettingsUpdate } from "@/lib/core/schemas";
 import { ProtectedRoute, useAuth } from "@/features/auth";
 import { ConnectRiotAccountDialog } from "@/features/profile";
 import { Card } from "@/components/ui/card";
@@ -25,27 +27,45 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert } from "@/components/ui/alert";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-
 import {
-  Loader2,
-  Check,
-  X,
-  Link2,
-} from "lucide-react";
-import {
-  Tooltip,
-  TooltipContent,
   TooltipProvider,
-  TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { cn } from "@/lib/core/utils";
 import { toast } from "sonner";
 import { notifyApiKeyValid } from "@/lib/core/api-key-status-context";
+import {
+  Check,
+  CircleCheck,
+  CircleX,
+  Eye,
+  EyeOff,
+  FlaskConical,
+  KeyRound,
+  Link2,
+  Loader2,
+  Mail,
+  RefreshCcw,
+  Save,
+  Send,
+  Settings2,
+  ShieldCheck,
+  StopCircle,
+  UserCog,
+  X,
+} from "lucide-react";
 
 // Server to flag mapping (same as player-search.tsx)
 const SERVER_FLAGS: Record<string, string> = {
@@ -64,11 +84,86 @@ const SERVER_FLAGS: Record<string, string> = {
   vn2: "🇻🇳",
 };
 
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const EMAIL_CODE_LENGTH = 6;
+const PASSWORD_REQUIREMENTS_TEXT =
+  "Password must be at least 8 characters long and include at least one uppercase letter, lowercase letter, number, and special character.";
+const ACCOUNT_ACTION_BUTTON_CLASS =
+  "button-medium no-rotation !h-9 !px-3 !py-2 w-36 justify-center";
+
 interface APIKeyStatus {
   has_db_key: boolean;
   has_env_key: boolean;
   active_source: "db" | "env" | "none";
   env_key_identifier?: string;
+}
+
+interface BackendErrorDetail {
+  code?: string;
+  message?: string;
+  locked_until?: string;
+  attempts_remaining?: number;
+}
+
+interface MutationError extends Error {
+  code?: string;
+  lockedUntil?: string;
+  attemptsRemaining?: number;
+  status?: number;
+}
+
+function isPasswordStrong(password: string): boolean {
+  if (password.length < 8) {
+    return false;
+  }
+
+  const hasLowercase = /[a-z]/.test(password);
+  const hasUppercase = /[A-Z]/.test(password);
+  const hasNumber = /\d/.test(password);
+  const hasSpecialCharacter = /[!@#$%^&*(),.?":{}|<>\-_+=\[\]\\/;'`~]/.test(
+    password,
+  );
+
+  return hasLowercase && hasUppercase && hasNumber && hasSpecialCharacter;
+}
+
+function parseBackendErrorDetail(
+  apiError: ApiError,
+): BackendErrorDetail | null {
+  if (!apiError.details || typeof apiError.details !== "object") {
+    return null;
+  }
+
+  const detailContainer = apiError.details as { detail?: unknown };
+  if (!detailContainer.detail || typeof detailContainer.detail !== "object") {
+    return null;
+  }
+
+  const detail = detailContainer.detail as Record<string, unknown>;
+  return {
+    code: typeof detail.code === "string" ? detail.code : undefined,
+    message: typeof detail.message === "string" ? detail.message : undefined,
+    locked_until:
+      typeof detail.locked_until === "string" ? detail.locked_until : undefined,
+    attempts_remaining:
+      typeof detail.attempts_remaining === "number"
+        ? detail.attempts_remaining
+        : undefined,
+  };
+}
+
+function toMutationError(apiError: ApiError): MutationError {
+  const detail = parseBackendErrorDetail(apiError);
+  const error = new Error(detail?.message ?? apiError.message) as MutationError;
+  error.code = detail?.code;
+  error.lockedUntil = detail?.locked_until;
+  error.attemptsRemaining = detail?.attempts_remaining;
+  error.status = apiError.status;
+  return error;
+}
+
+function emptyCodeDigits(): string[] {
+  return Array.from({ length: EMAIL_CODE_LENGTH }, () => "");
 }
 
 export default function SettingsPage() {
@@ -92,10 +187,7 @@ function SettingsPageContent() {
   const queryClient = useQueryClient();
 
   // Fetch current API key
-  const {
-    data: settingResult,
-    isLoading,
-  } = useQuery({
+  const { data: settingResult, isLoading } = useQuery({
     queryKey: ["settings", "riot_api_key"],
     queryFn: () => validatedGet(SettingSchema, "/settings/riot_api_key"),
     enabled: isAdmin,
@@ -106,7 +198,9 @@ function SettingsPageContent() {
   const { data: keyStatus, isLoading: isApiKeyStatusLoading } = useQuery({
     queryKey: ["apiKeyStatus"],
     queryFn: async () => {
-      const response = await api.get<APIKeyStatus>("/settings/riot_api_key/status");
+      const response = await api.get<APIKeyStatus>(
+        "/settings/riot_api_key/status",
+      );
       return response.data;
     },
     enabled: isAdmin,
@@ -126,12 +220,11 @@ function SettingsPageContent() {
         queryClient.invalidateQueries({
           queryKey: ["settings", "riot_api_key"],
         });
-        // Clear the "API key invalid" header message since we now have a new key
         notifyApiKeyValid();
         queryClient.invalidateQueries({
           queryKey: ["apiKeyStatus"],
         });
-        setApiKey(""); // Clear input
+        setApiKey("");
         setTestResult(null);
       } else {
         toast.error("Failed to update API key", {
@@ -162,7 +255,6 @@ function SettingsPageContent() {
           toast.success("API key is valid!", {
             description: result.data.message,
           });
-          // Note: Don't clear the header message here since the key hasn't been saved yet
         } else {
           toast.error("API key is invalid", {
             description: result.data.message,
@@ -194,7 +286,6 @@ function SettingsPageContent() {
       return;
     }
 
-    // Validate format
     if (!apiKey.startsWith("RGAPI-")) {
       toast.error("Invalid API key format", {
         description: "Riot API keys must start with 'RGAPI-'",
@@ -208,7 +299,6 @@ function SettingsPageContent() {
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="mb-6 space-y-6">
-        {/* Header */}
         <Card
           id="header-card"
           className="bg-[#152b56] p-6 text-white dark:bg-[#0a1428]"
@@ -218,18 +308,18 @@ function SettingsPageContent() {
           </div>
           <p className="text-sm leading-relaxed">
             {isAdmin
-              ? "Configure your user settings as well as global system settings"
-              : "Configure your user settings"}
+              ? "Configure application settings, account security, and global Riot API configuration"
+              : "Configure application settings and account security"}
           </p>
         </Card>
 
-        {/* Two-column grid for settings cards */}
-        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-5">
-          <UserSettingsCard className={isAdmin ? "lg:col-span-2" : "lg:col-span-5"} />
+        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-3">
+          <UserSettingsCard className="lg:col-span-1" />
 
           {isAdmin && (
-            <Card className="p-6 lg:col-span-3">
-              <h2 className="mb-4 text-lg font-semibold">
+            <Card className="h-full p-6 lg:col-span-2">
+              <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-white">
+                <ShieldCheck className="h-5 w-5 text-[#cfa93a]" />
                 Riot API Configuration
               </h2>
 
@@ -238,15 +328,14 @@ function SettingsPageContent() {
                   <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                 </div>
               ) : (
-                <div className="space-y-4">
-                  {/* Current API Key Display */}
+                <div className="space-y-4 text-left">
                   {setting && (
-                    <div>
+                    <div className="space-y-1.5">
                       <Label>Current API Key</Label>
-                      <div className="mt-1.5 rounded-md border bg-muted/50 px-3 py-2 text-sm font-mono">
+                      <div className="rounded-md border bg-muted/50 px-3 py-2 text-sm font-mono">
                         {setting.masked_value}
                       </div>
-                      <p className="mt-1 text-xs text-muted-foreground">
+                      <p className="text-xs text-muted-foreground">
                         Last updated:{" "}
                         {new Date(setting.updated_at).toLocaleString()}
                       </p>
@@ -256,10 +345,12 @@ function SettingsPageContent() {
                   {!setting && keyStatus?.active_source === "none" && (
                     <Alert className="border-red-700 bg-red-950/40 text-red-200">
                       <p className="text-sm">
-                        No active Riot API Key found! System cannot function.
+                        No active Riot API Key found. System cannot function.
                         Please configure it in settings
-                        {process.env.NODE_ENV === "production" ? " " : " or .env "}
-                        immediately.
+                        {process.env.NODE_ENV === "production"
+                          ? ""
+                          : " or .env"}
+                        .
                       </p>
                     </Alert>
                   )}
@@ -273,21 +364,20 @@ function SettingsPageContent() {
                     </Alert>
                   )}
 
-                  {/* New API Key Input */}
-                  <div>
+                  <div className="space-y-1.5">
                     <Label htmlFor="api-key">New Riot API Key</Label>
                     <Input
                       id="api-key"
                       type="text"
                       placeholder="RGAPI-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
                       value={apiKey}
-                      onChange={(e) => {
-                        setApiKey(e.target.value);
+                      onChange={(event) => {
+                        setApiKey(event.target.value);
                         setTestResult(null);
                       }}
-                      className="mt-1.5 font-mono text-sm"
+                      className="font-mono text-sm"
                     />
-                    <p className="mt-1 text-xs text-muted-foreground">
+                    <p className="text-xs text-muted-foreground">
                       Get your API key from{" "}
                       <a
                         href="https://developer.riotgames.com"
@@ -300,7 +390,6 @@ function SettingsPageContent() {
                     </p>
                   </div>
 
-                  {/* Test Result */}
                   {testResult && (
                     <Alert
                       className={
@@ -324,8 +413,7 @@ function SettingsPageContent() {
                     </Alert>
                   )}
 
-                  {/* Action Buttons */}
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
                     <Button
                       onClick={handleTestKey}
                       variant="outline"
@@ -339,7 +427,10 @@ function SettingsPageContent() {
                           Testing...
                         </>
                       ) : (
-                        "Test Key"
+                        <>
+                          <FlaskConical className="h-4 w-4" />
+                          Test Key
+                        </>
                       )}
                     </Button>
 
@@ -357,25 +448,29 @@ function SettingsPageContent() {
                           Saving...
                         </>
                       ) : (
-                        "Save & Apply"
+                        <>
+                          <Save className="h-4 w-4" />
+                          Save & Apply
+                        </>
                       )}
                     </Button>
                   </div>
 
-                  {/* Info Note */}
                   <Alert>
                     <p className="text-sm">
-                      <strong>Note:</strong> The API key will be validated before
-                      saving. Newly generated keys usually{" "}
-                      <b>need a minute or two </b>
-                      before they start working. Development keys (starting with
-                      RGAPI-) expire every 24 hours and need to be renewed.
+                      <strong>Note:</strong> The API key will be validated
+                      before saving. Newly generated keys usually{" "}
+                      <b>need a minute or two</b> before they start working.
+                      Development keys (starting with RGAPI-) expire every 24
+                      hours and need to be renewed.
                     </p>
                   </Alert>
                 </div>
               )}
             </Card>
           )}
+
+          <AccountSettingsCard className="lg:col-span-1" />
         </div>
       </div>
     </div>
@@ -386,19 +481,14 @@ interface UserSettingsCardProps {
   className?: string;
 }
 
-// User Settings Card Component
-function UserSettingsCard({ className = "lg:col-span-2" }: UserSettingsCardProps) {
+function UserSettingsCard({
+  className = "lg:col-span-1",
+}: UserSettingsCardProps) {
   const queryClient = useQueryClient();
-  const { user, checkAuth } = useAuth();
+  const { user } = useAuth();
   const userId = user?.id;
   const checkboxCooldownRef = useRef(0);
-  const [draftDisplayName, setDraftDisplayName] = useState<string | null>(null);
-  const currentDisplayName = user?.display_name ?? "";
-  const displayName = draftDisplayName ?? currentDisplayName;
-  const displayNameDirty =
-    draftDisplayName !== null && draftDisplayName !== currentDisplayName;
 
-  // Fetch user settings
   const { data: userSettingsResult, isLoading } = useQuery({
     queryKey: ["user-settings", userId],
     queryFn: () => validatedGet(UserSettingsSchema, "/settings/user"),
@@ -409,7 +499,6 @@ function UserSettingsCard({ className = "lg:col-span-2" }: UserSettingsCardProps
     ? userSettingsResult.data
     : null;
 
-  // Update user settings mutation
   const updateMutation = useMutation({
     mutationFn: async (update: UserSettingsUpdate) => {
       const result = await validatedPut(
@@ -435,33 +524,6 @@ function UserSettingsCard({ className = "lg:col-span-2" }: UserSettingsCardProps
     },
   });
 
-  // Update display name mutation
-  const updateDisplayNameMutation = useMutation({
-    mutationFn: async (update: UserProfileUpdate) => {
-      const result = await validatedPatch(
-        UserResponseSchema,
-        "/auth/me",
-        update,
-      );
-      if (!result.success) {
-        throw new Error(result.error.message);
-      }
-      return result.data;
-    },
-    onSuccess: () => {
-      checkAuth(); // Refresh user data
-      setDraftDisplayName(null);
-      toast.success("Display name updated", {
-        duration: 1000,
-      });
-    },
-    onError: (error: Error) => {
-      toast.error("Failed to update display name", {
-        description: error.message,
-      });
-    },
-  });
-
   const handleToggle = (
     field: keyof UserSettingsUpdate,
     value: boolean,
@@ -477,146 +539,24 @@ function UserSettingsCard({ className = "lg:col-span-2" }: UserSettingsCardProps
     updateMutation.mutate({ [field]: value });
   };
 
-  const handleDisplayNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const nextDisplayName = e.target.value;
-    setDraftDisplayName(
-      nextDisplayName === currentDisplayName ? null : nextDisplayName,
-    );
-  };
-
-  const handleSaveDisplayName = () => {
-    const trimmed = displayName.trim();
-
-    if (!trimmed) {
-      toast.error("Display name cannot be empty");
-      return;
-    }
-
-    if (trimmed.length < 3) {
-      toast.error("Display name too short", {
-        description: "Must be at least 3 characters",
-      });
-      return;
-    }
-
-    // Allow letters from any language, underscores, and spaces.
-    const validPattern = /^[\p{L}](?:[\p{L}\p{M}_ ]*[\p{L}])?$/u;
-    if (!validPattern.test(trimmed)) {
-      toast.error("Invalid display name", {
-        description:
-          "Must only contain letters (including language-specific characters), underscores, and spaces. Cannot start or end with space or underscore.",
-      });
-      return;
-    }
-
-    // Additional check for invalid characters
-    if (!/^[\p{L}\p{M}_ ]+$/u.test(trimmed)) {
-      toast.error("Invalid characters", {
-        description:
-          "Only letters (including language-specific characters), underscores, and spaces are allowed",
-      });
-      return;
-    }
-
-    updateDisplayNameMutation.mutate({ display_name: trimmed });
-  };
-
-  // Handler for riot account update success
-  const handleRiotAccountUpdated = () => {
-    checkAuth(); // Refresh user data to get new puuid
-    queryClient.invalidateQueries({ queryKey: ["player"] });
-    queryClient.invalidateQueries({ queryKey: ["champion-stats"] });
-    queryClient.invalidateQueries({ queryKey: ["lane-stats"] });
-  };
-
   return (
-    <Card className={`p-6 h-full ${className}`}>
-      <h2 className="mb-4 text-lg font-semibold">User Settings</h2>
+    <Card className={cn("h-full p-6 text-left", className)}>
+      <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-white">
+        <Settings2 className="h-5 w-5 text-[#cfa93a]" />
+        Application Settings
+      </h2>
 
       {isLoading ? (
         <div className="flex items-center justify-center py-8">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
       ) : (
-        <div className="space-y-3">
-          {/* Display Name Setting */}
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex-1">
-              <Label>Display Name</Label>
-              <p className="text-xs text-muted-foreground">
-                Name shown across the website
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <Input
-                value={displayName}
-                onChange={handleDisplayNameChange}
-                className="w-40"
-                maxLength={128}
-                disabled={updateDisplayNameMutation.isPending}
-              />
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      size="icon"
-                      variant={displayNameDirty ? "default" : "outline"}
-                      className="h-9 w-9 button-small no-rotation cursor-pointer"
-                      onClick={handleSaveDisplayName}
-                      disabled={
-                        !displayNameDirty || updateDisplayNameMutation.isPending
-                      }
-                    >
-                      {updateDisplayNameMutation.isPending ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Check className="h-5 w-5" strokeWidth={3} />
-                      )}
-                    </Button>
-                  </TooltipTrigger>
-                  {displayNameDirty && (
-                    <TooltipContent>
-                      <p>Save changes</p>
-                    </TooltipContent>
-                  )}
-                </Tooltip>
-              </TooltipProvider>
-            </div>
-          </div>
-
-          {/* Connected Riot Account Setting */}
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex-1">
-              <Label>Connected Riot Account</Label>
-              <p className="text-xs text-muted-foreground">
-                {user?.riot_account_connected
-                  ? "Update your connected account for My Profile"
-                  : "Connect an account to view your profile"}
-              </p>
-            </div>
-            <ConnectRiotAccountDialog
-              trigger={
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="flex items-center gap-2 button-small opacity-90 w-50"
-                >
-                  <Link2 className="h-4 w-4" />
-                  {user?.riot_account_connected ? "Update" : "Connect"}
-                </Button>
-              }
-              onSuccess={handleRiotAccountUpdated}
-            />
-          </div>
-
-          {/* Theme Selection - Disabled for now */}
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <Label>Theme</Label>
-              <p className="text-xs text-muted-foreground">
-                Theme selection coming soon
-              </p>
-            </div>
+        <div className="space-y-4">
+          <div className="space-y-1.5">
+            <Label>Theme</Label>
+            <p className="text-xs text-muted-foreground">
+              Theme selection coming soon
+            </p>
             <Select
               value={userSettings?.theme || "DARK"}
               disabled
@@ -624,7 +564,7 @@ function UserSettingsCard({ className = "lg:col-span-2" }: UserSettingsCardProps
                 updateMutation.mutate({ theme: value as "LIGHT" | "DARK" })
               }
             >
-              <SelectTrigger className="w-50">
+              <SelectTrigger className="w-full">
                 <SelectValue placeholder="Select theme" />
               </SelectTrigger>
               <SelectContent>
@@ -634,14 +574,11 @@ function UserSettingsCard({ className = "lg:col-span-2" }: UserSettingsCardProps
             </Select>
           </div>
 
-          {/* Default Server - Disabled for now */}
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <Label>Default Server</Label>
-              <p className="text-xs text-muted-foreground">
-                Default server coming soon
-              </p>
-            </div>
+          <div className="space-y-1.5">
+            <Label>Default Server</Label>
+            <p className="text-xs text-muted-foreground">
+              Default server coming soon
+            </p>
             <Select
               value={userSettings?.default_platform || "eun1"}
               disabled
@@ -649,7 +586,7 @@ function UserSettingsCard({ className = "lg:col-span-2" }: UserSettingsCardProps
                 updateMutation.mutate({ default_platform: value })
               }
             >
-              <SelectTrigger className="w-50">
+              <SelectTrigger className="w-full">
                 <SelectValue placeholder="Select server" />
               </SelectTrigger>
               <SelectContent>
@@ -681,73 +618,69 @@ function UserSettingsCard({ className = "lg:col-span-2" }: UserSettingsCardProps
             </Select>
           </div>
 
-          {/* URL Save Toggles - 3/4 column layout for tighter checkbox alignment */}
-          <div className="grid grid-cols-4 gap-x-4 gap-y-3">
-            {/* Save Playstyle URL Toggle */}
-            <div className="col-span-3">
-              <Label>Save Playstyle Analysis Search</Label>
-              <p className="text-xs text-muted-foreground">
-                Saves searched player in Playstyle Analysis
-              </p>
-            </div>
-            <div className="flex items-center justify-end">
+          <div className="space-y-3">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <Label>Save Playstyle Analysis Search</Label>
+                <p className="text-xs text-muted-foreground">
+                  Saves searched player in Playstyle Analysis
+                </p>
+              </div>
               <input
                 type="checkbox"
                 checked={userSettings?.save_playstyle_url || false}
-                onChange={(e) =>
+                onChange={(event) =>
                   handleToggle(
                     "save_playstyle_url",
-                    e.target.checked,
-                    e.timeStamp,
+                    event.target.checked,
+                    event.timeStamp,
                   )
                 }
-                className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                className="mt-1 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
                 disabled={updateMutation.isPending}
               />
             </div>
 
-            {/* Save Matchmaking URL Toggle */}
-            <div className="col-span-3">
-              <Label>Save Matchmaking Analysis Search</Label>
-              <p className="text-xs text-muted-foreground">
-                Saves searched player in Matchmaking Analysis
-              </p>
-            </div>
-            <div className="flex items-center justify-end">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <Label>Save Matchmaking Analysis Search</Label>
+                <p className="text-xs text-muted-foreground">
+                  Saves searched player in Matchmaking Analysis
+                </p>
+              </div>
               <input
                 type="checkbox"
                 checked={userSettings?.save_matchmaking_url || false}
-                onChange={(e) =>
+                onChange={(event) =>
                   handleToggle(
                     "save_matchmaking_url",
-                    e.target.checked,
-                    e.timeStamp,
+                    event.target.checked,
+                    event.timeStamp,
                   )
                 }
-                className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                className="mt-1 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
                 disabled={updateMutation.isPending}
               />
             </div>
 
-            {/* Save Tracked Players URL Toggle */}
-            <div className="col-span-3">
-              <Label>Save Viewed Tracked Player</Label>
-              <p className="text-xs text-muted-foreground">
-                Saves viewed player in Tracked Players
-              </p>
-            </div>
-            <div className="flex items-center justify-end">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <Label>Save Viewed Tracked Player</Label>
+                <p className="text-xs text-muted-foreground">
+                  Saves viewed player in Tracked Players
+                </p>
+              </div>
               <input
                 type="checkbox"
                 checked={userSettings?.save_tracked_url || false}
-                onChange={(e) =>
+                onChange={(event) =>
                   handleToggle(
                     "save_tracked_url",
-                    e.target.checked,
-                    e.timeStamp,
+                    event.target.checked,
+                    event.timeStamp,
                   )
                 }
-                className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                className="mt-1 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
                 disabled={updateMutation.isPending}
               />
             </div>
@@ -755,5 +688,789 @@ function UserSettingsCard({ className = "lg:col-span-2" }: UserSettingsCardProps
         </div>
       )}
     </Card>
+  );
+}
+
+interface AccountSettingsCardProps {
+  className?: string;
+}
+
+function AccountSettingsCard({
+  className = "lg:col-span-1",
+}: AccountSettingsCardProps) {
+  const queryClient = useQueryClient();
+  const { user, checkAuth } = useAuth();
+
+  const [draftDisplayName, setDraftDisplayName] = useState<string | null>(null);
+  const [newPassword, setNewPassword] = useState("");
+  const [repeatPassword, setRepeatPassword] = useState("");
+  const [showNewPassword, setShowNewPassword] = useState(false);
+
+  const [emailDialogOpen, setEmailDialogOpen] = useState(false);
+  const [emailDialogStep, setEmailDialogStep] = useState<"email" | "code">(
+    "email",
+  );
+  const [newEmail, setNewEmail] = useState("");
+  const [newEmailError, setNewEmailError] = useState<string | null>(null);
+  const [emailCodeDigits, setEmailCodeDigits] =
+    useState<string[]>(emptyCodeDigits());
+  const [emailCodeError, setEmailCodeError] = useState<string | null>(null);
+  const [emailChangeLockedUntil, setEmailChangeLockedUntil] =
+    useState<Date | null>(null);
+  const [lockCheckTimestamp, setLockCheckTimestamp] = useState(0);
+  const emailCodeInputRefs = useRef<Array<HTMLInputElement | null>>([]);
+
+  const currentDisplayName = user?.display_name ?? "";
+  const displayName = draftDisplayName ?? currentDisplayName;
+  const displayNameDirty =
+    draftDisplayName !== null && draftDisplayName !== currentDisplayName;
+
+  const isPasswordStrongEnough = useMemo(
+    () => isPasswordStrong(newPassword),
+    [newPassword],
+  );
+  const passwordsMatch =
+    newPassword.length > 0 && newPassword === repeatPassword;
+  const canChangePassword =
+    isPasswordStrongEnough && passwordsMatch && repeatPassword.length > 0;
+
+  const isEmailChangeLocked =
+    emailChangeLockedUntil !== null &&
+    emailChangeLockedUntil.getTime() > lockCheckTimestamp;
+
+  useEffect(() => {
+    if (!isEmailChangeLocked || emailChangeLockedUntil === null) {
+      return;
+    }
+
+    const lockDurationMs =
+      emailChangeLockedUntil.getTime() - lockCheckTimestamp;
+    if (lockDurationMs <= 0) {
+      return;
+    }
+
+    const unlockTimer = window.setTimeout(() => {
+      setLockCheckTimestamp(Date.now());
+    }, lockDurationMs);
+
+    return () => window.clearTimeout(unlockTimer);
+  }, [emailChangeLockedUntil, isEmailChangeLocked, lockCheckTimestamp]);
+
+  useEffect(() => {
+    if (!emailDialogOpen || emailDialogStep !== "code") {
+      return;
+    }
+
+    const focusTimer = window.setTimeout(() => {
+      emailCodeInputRefs.current[0]?.focus();
+    }, 60);
+
+    return () => window.clearTimeout(focusTimer);
+  }, [emailDialogOpen, emailDialogStep]);
+
+  const resetEmailDialogState = () => {
+    setEmailDialogStep("email");
+    setNewEmail("");
+    setNewEmailError(null);
+    setEmailCodeDigits(emptyCodeDigits());
+    setEmailCodeError(null);
+  };
+
+  const handleEmailDialogOpenChange = (open: boolean) => {
+    if (!open) {
+      resetEmailDialogState();
+    }
+    setEmailDialogOpen(open);
+  };
+
+  const updateDisplayNameMutation = useMutation({
+    mutationFn: async (update: UserProfileUpdate) => {
+      const result = await validatedPatch(
+        UserResponseSchema,
+        "/auth/me",
+        update,
+      );
+      if (!result.success) {
+        throw toMutationError(result.error);
+      }
+      return result.data;
+    },
+    onSuccess: () => {
+      void checkAuth();
+      setDraftDisplayName(null);
+      toast.success("Display name updated", {
+        duration: 1000,
+      });
+    },
+    onError: (error: Error) => {
+      toast.error("Failed to update display name", {
+        description: error.message,
+      });
+    },
+  });
+
+  const requestEmailCodeMutation = useMutation({
+    mutationFn: async (targetEmail: string) => {
+      const result = await validatedPost(
+        EmailChangeCodeResponseSchema,
+        "/auth/change-email/request-code",
+        { new_email: targetEmail },
+      );
+      if (!result.success) {
+        throw toMutationError(result.error);
+      }
+      return result.data;
+    },
+    onSuccess: () => {
+      setNewEmailError(null);
+      setEmailCodeError(null);
+      setEmailCodeDigits(emptyCodeDigits());
+      setEmailDialogStep("code");
+      toast.success("Verification code sent", {
+        description: "Check your new email inbox for the 6-digit code.",
+      });
+    },
+    onError: (error: Error) => {
+      const mutationError = error as MutationError;
+
+      if (mutationError.code === "EMAIL_UNCHANGED") {
+        setNewEmailError(
+          "New email must be different from your current email address.",
+        );
+        return;
+      }
+
+      if (mutationError.code === "EMAIL_ALREADY_REGISTERED") {
+        setNewEmailError("This email address is already registered.");
+        return;
+      }
+
+      if (
+        mutationError.code === "EMAIL_CHANGE_LOCKED" ||
+        mutationError.code === "EMAIL_CHANGE_TOO_MANY_ATTEMPTS"
+      ) {
+        if (mutationError.lockedUntil) {
+          setEmailChangeLockedUntil(new Date(mutationError.lockedUntil));
+          setLockCheckTimestamp(Date.now());
+        }
+        handleEmailDialogOpenChange(false);
+        toast.error("Too many failed attempts.", {
+          description: "Try again in 5 minutes.",
+        });
+        return;
+      }
+
+      toast.error("Failed to send verification code", {
+        description: mutationError.message,
+      });
+    },
+  });
+
+  const verifyEmailCodeMutation = useMutation({
+    mutationFn: async (code: string) => {
+      const result = await validatedPost(
+        UserResponseSchema,
+        "/auth/change-email/verify",
+        {
+          code,
+        },
+      );
+      if (!result.success) {
+        throw toMutationError(result.error);
+      }
+      return result.data;
+    },
+    onSuccess: () => {
+      setEmailChangeLockedUntil(null);
+      handleEmailDialogOpenChange(false);
+      toast.success("Email updated successfully.");
+      void checkAuth();
+    },
+    onError: (error: Error) => {
+      const mutationError = error as MutationError;
+
+      if (mutationError.code === "EMAIL_CHANGE_INVALID_CODE") {
+        setEmailCodeError("This code is incorrect.");
+        return;
+      }
+
+      if (mutationError.code === "EMAIL_CHANGE_CODE_EXPIRED") {
+        setEmailCodeError(
+          "This code has expired. Use 'Resend the code.' to get a new one.",
+        );
+        return;
+      }
+
+      if (mutationError.code === "EMAIL_CHANGE_REQUEST_NOT_FOUND") {
+        setEmailCodeError("No active code found. Please resend the code.");
+        return;
+      }
+
+      if (
+        mutationError.code === "EMAIL_CHANGE_TOO_MANY_ATTEMPTS" ||
+        mutationError.code === "EMAIL_CHANGE_LOCKED"
+      ) {
+        if (mutationError.lockedUntil) {
+          setEmailChangeLockedUntil(new Date(mutationError.lockedUntil));
+          setLockCheckTimestamp(Date.now());
+        }
+        handleEmailDialogOpenChange(false);
+        toast.error("Too many failed attempts.", {
+          description: "Try again in 5 minutes.",
+        });
+        return;
+      }
+
+      toast.error("Failed to verify code", {
+        description: mutationError.message,
+      });
+    },
+  });
+
+  const changePasswordMutation = useMutation({
+    mutationFn: async () => {
+      const result = await validatedPost(
+        MessageResponseSchema,
+        "/auth/change-password",
+        {
+          new_password: newPassword,
+          repeat_password: repeatPassword,
+        },
+      );
+
+      if (!result.success) {
+        throw toMutationError(result.error);
+      }
+
+      return result.data;
+    },
+    onSuccess: () => {
+      setNewPassword("");
+      setRepeatPassword("");
+      setShowNewPassword(false);
+      toast.success("Password changed successfully.");
+    },
+    onError: (error: Error) => {
+      toast.error("Failed to change password", {
+        description: error.message,
+      });
+    },
+  });
+
+  const handleDisplayNameChange = (
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    const nextDisplayName = event.target.value;
+    setDraftDisplayName(
+      nextDisplayName === currentDisplayName ? null : nextDisplayName,
+    );
+  };
+
+  const handleSaveDisplayName = () => {
+    const trimmed = displayName.trim();
+
+    if (!trimmed) {
+      toast.error("Display name cannot be empty");
+      return;
+    }
+
+    if (trimmed.length < 3) {
+      toast.error("Display name too short", {
+        description: "Must be at least 3 characters",
+      });
+      return;
+    }
+
+    const validPattern = /^[\p{L}](?:[\p{L}\p{M}_ ]*[\p{L}])?$/u;
+    if (!validPattern.test(trimmed)) {
+      toast.error("Invalid display name", {
+        description:
+          "Must only contain letters, underscores, and spaces. Cannot start or end with space or underscore.",
+      });
+      return;
+    }
+
+    if (!/^[\p{L}\p{M}_ ]+$/u.test(trimmed)) {
+      toast.error("Invalid characters", {
+        description:
+          "Only letters, underscores, and spaces are allowed in display name",
+      });
+      return;
+    }
+
+    updateDisplayNameMutation.mutate({ display_name: trimmed });
+  };
+
+  const handleRiotAccountUpdated = () => {
+    void checkAuth();
+    queryClient.invalidateQueries({ queryKey: ["player"] });
+    queryClient.invalidateQueries({ queryKey: ["champion-stats"] });
+    queryClient.invalidateQueries({ queryKey: ["lane-stats"] });
+  };
+
+  const handleOpenEmailDialog = () => {
+    if (isEmailChangeLocked) {
+      toast.error("Too many failed attempts.", {
+        description: "Try again in 5 minutes.",
+      });
+      return;
+    }
+
+    setEmailDialogOpen(true);
+  };
+
+  const handleRequestEmailCode = () => {
+    const normalizedEmail = newEmail.trim().toLowerCase();
+    if (!EMAIL_REGEX.test(normalizedEmail)) {
+      setNewEmailError("The email address is invalid, check your input.");
+      return;
+    }
+
+    setNewEmail(normalizedEmail);
+    setNewEmailError(null);
+    requestEmailCodeMutation.mutate(normalizedEmail);
+  };
+
+  const handleVerifyEmailCode = () => {
+    const combinedCode = emailCodeDigits.join("");
+    if (combinedCode.length !== EMAIL_CODE_LENGTH) {
+      setEmailCodeError("Enter all 6 digits.");
+      return;
+    }
+
+    setEmailCodeError(null);
+    verifyEmailCodeMutation.mutate(combinedCode);
+  };
+
+  const handleEmailDialogSubmit = () => {
+    if (emailDialogStep === "email") {
+      handleRequestEmailCode();
+      return;
+    }
+
+    handleVerifyEmailCode();
+  };
+
+  const handleResendCode = () => {
+    if (!newEmail) {
+      return;
+    }
+
+    setEmailCodeError(null);
+    requestEmailCodeMutation.mutate(newEmail);
+  };
+
+  const handleEmailCodePaste = (
+    event: React.ClipboardEvent<HTMLInputElement>,
+  ) => {
+    event.preventDefault();
+
+    const pastedText = event.clipboardData
+      .getData("text")
+      .replace(/\D/g, "")
+      .slice(0, EMAIL_CODE_LENGTH);
+
+    if (!pastedText) {
+      return;
+    }
+
+    const nextCode = emptyCodeDigits();
+    pastedText.split("").forEach((digit, index) => {
+      nextCode[index] = digit;
+    });
+
+    setEmailCodeDigits(nextCode);
+    setEmailCodeError(null);
+
+    const focusIndex = Math.min(pastedText.length, EMAIL_CODE_LENGTH) - 1;
+    emailCodeInputRefs.current[Math.max(focusIndex, 0)]?.focus();
+  };
+
+  const handleEmailCodeInputChange = (index: number, value: string) => {
+    const digitsOnly = value.replace(/\D/g, "");
+
+    if (!digitsOnly) {
+      setEmailCodeDigits((previousCode) => {
+        const nextCode = [...previousCode];
+        nextCode[index] = "";
+        return nextCode;
+      });
+      return;
+    }
+
+    setEmailCodeError(null);
+
+    if (digitsOnly.length > 1) {
+      setEmailCodeDigits((previousCode) => {
+        const nextCode = [...previousCode];
+        digitsOnly
+          .slice(0, EMAIL_CODE_LENGTH - index)
+          .split("")
+          .forEach((digit, offset) => {
+            nextCode[index + offset] = digit;
+          });
+        return nextCode;
+      });
+
+      const nextFocusIndex = Math.min(
+        EMAIL_CODE_LENGTH - 1,
+        index + digitsOnly.length,
+      );
+      emailCodeInputRefs.current[nextFocusIndex]?.focus();
+      return;
+    }
+
+    setEmailCodeDigits((previousCode) => {
+      const nextCode = [...previousCode];
+      nextCode[index] = digitsOnly;
+      return nextCode;
+    });
+
+    if (index < EMAIL_CODE_LENGTH - 1) {
+      emailCodeInputRefs.current[index + 1]?.focus();
+    }
+  };
+
+  const handleEmailCodeKeyDown = (
+    index: number,
+    event: React.KeyboardEvent<HTMLInputElement>,
+  ) => {
+    if (
+      event.key === "Backspace" &&
+      emailCodeDigits[index] === "" &&
+      index > 0
+    ) {
+      emailCodeInputRefs.current[index - 1]?.focus();
+      return;
+    }
+
+    if (event.key === "ArrowLeft" && index > 0) {
+      event.preventDefault();
+      emailCodeInputRefs.current[index - 1]?.focus();
+      return;
+    }
+
+    if (event.key === "ArrowRight" && index < EMAIL_CODE_LENGTH - 1) {
+      event.preventDefault();
+      emailCodeInputRefs.current[index + 1]?.focus();
+    }
+  };
+
+  const handleChangePassword = () => {
+    if (!canChangePassword || changePasswordMutation.isPending) {
+      return;
+    }
+
+    changePasswordMutation.mutate();
+  };
+
+  const isEmailDialogSubmitting =
+    requestEmailCodeMutation.isPending || verifyEmailCodeMutation.isPending;
+
+  return (
+    <>
+      <Card className={cn("h-full p-6 text-left", className)}>
+        <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-white">
+          <UserCog className="h-5 w-5 text-[#cfa93a]" />
+          Account Settings
+        </h2>
+
+        <TooltipProvider>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="display-name">Display Name</Label>
+              <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,1fr)] items-center gap-3">
+                <Input
+                  id="display-name"
+                  value={displayName}
+                  onChange={handleDisplayNameChange}
+                  maxLength={128}
+                  disabled={updateDisplayNameMutation.isPending}
+                  className="w-full"
+                />
+                <div className="flex items-center justify-end">
+                  <button
+                    type="button"
+                    onClick={handleSaveDisplayName}
+                    className={ACCOUNT_ACTION_BUTTON_CLASS}
+                    disabled={
+                      !displayNameDirty || updateDisplayNameMutation.isPending
+                    }
+                  >
+                    {updateDisplayNameMutation.isPending ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      <>
+                        <Save className="h-4 w-4" />
+                        Save
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,1fr)] items-end gap-3">
+              <div className="space-y-1.5">
+                <Label>Connected Riot Account</Label>
+                <p className="text-xs text-muted-foreground">
+                  {user?.riot_account_connected
+                    ? "Update your connected account for My Profile"
+                    : "Connect an account to view your profile"}
+                </p>
+              </div>
+              <div className="flex items-center justify-end">
+                <ConnectRiotAccountDialog
+                  trigger={
+                    <Button className={ACCOUNT_ACTION_BUTTON_CLASS}>
+                      <Link2 className="h-4 w-4" />
+                      {user?.riot_account_connected ? "Update" : "Connect"}
+                    </Button>
+                  }
+                  onSuccess={handleRiotAccountUpdated}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="current-email">Current Email</Label>
+              <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,1fr)] items-center gap-3">
+                <Input
+                  id="current-email"
+                  type="email"
+                  value={user?.email ?? ""}
+                  disabled
+                  className="w-full"
+                />
+                <div className="flex items-center justify-end">
+                  <button
+                    type="button"
+                    className={ACCOUNT_ACTION_BUTTON_CLASS}
+                    onClick={handleOpenEmailDialog}
+                    disabled={isEmailDialogSubmitting || isEmailChangeLocked}
+                  >
+                    <Mail className="h-4 w-4" />
+                    Change
+                  </button>
+                </div>
+              </div>
+              {isEmailChangeLocked && (
+                <p className="text-xs text-red-500">
+                  Too many failed attempts. Try again in 5 minutes.
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-2">
+                <Label htmlFor="new-password">New Password</Label>
+              </div>
+              <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,1fr)] items-center gap-3">
+                <div className="relative">
+                  <Input
+                    id="new-password"
+                    type={showNewPassword ? "text" : "password"}
+                    value={newPassword}
+                    onChange={(event) => setNewPassword(event.target.value)}
+                    className="w-full pr-10"
+                    disabled={changePasswordMutation.isPending}
+                  />
+                  <button
+                    type="button"
+                    className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-muted-foreground hover:text-foreground cursor-pointer"
+                    onClick={() => setShowNewPassword((previous) => !previous)}
+                    disabled={changePasswordMutation.isPending}
+                    aria-label={
+                      showNewPassword ? "Hide password" : "Show password"
+                    }
+                  >
+                    {showNewPassword ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
+                  </button>
+                </div>
+                <div className="flex items-center justify-end">
+                  <div aria-hidden className="h-9 w-36" />
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="repeat-password">Repeat Password</Label>
+              <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,1fr)] items-center gap-3">
+                <div className="relative">
+                  <Input
+                    id="repeat-password"
+                    type="password"
+                    value={repeatPassword}
+                    onChange={(event) => setRepeatPassword(event.target.value)}
+                    className="w-full pr-10"
+                    disabled={changePasswordMutation.isPending}
+                  />
+                  <div className="pointer-events-none absolute inset-y-0 right-0 flex w-10 items-center justify-center">
+                    {canChangePassword ? (
+                      <CircleCheck className="h-4 w-4 text-green-500" />
+                    ) : (
+                      <CircleX className="h-4 w-4 text-red-500" />
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center justify-end">
+                  <button
+                    type="button"
+                    className={ACCOUNT_ACTION_BUTTON_CLASS}
+                    onClick={handleChangePassword}
+                    disabled={
+                      !canChangePassword || changePasswordMutation.isPending
+                    }
+                  >
+                    {changePasswordMutation.isPending ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Changing...
+                      </>
+                    ) : (
+                      <>
+                        <KeyRound className="h-4 w-4" />
+                        Change
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground pt-3">
+                {PASSWORD_REQUIREMENTS_TEXT}
+              </p>
+            </div>
+          </div>
+        </TooltipProvider>
+      </Card>
+
+      <Dialog open={emailDialogOpen} onOpenChange={handleEmailDialogOpenChange}>
+        <DialogContent className="sm:max-w-[540px]">
+          <DialogHeader className="text-left">
+            <DialogTitle className="flex items-center gap-2">
+              <Mail className="h-5 w-5 text-[#cfa93a]" />
+              Change Email
+            </DialogTitle>
+            <DialogDescription>
+              Verify ownership of your new email address before applying the
+              change.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 text-left">
+            {emailDialogStep === "email" ? (
+              <div className="space-y-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="new-email">New email</Label>
+                  <Input
+                    id="new-email"
+                    type="email"
+                    placeholder="john.doe@email.com"
+                    value={newEmail}
+                    onChange={(event) => {
+                      setNewEmail(event.target.value);
+                      setNewEmailError(null);
+                    }}
+                    disabled={isEmailDialogSubmitting}
+                    className="w-full"
+                  />
+                </div>
+                {newEmailError && (
+                  <p className="text-sm text-red-500">{newEmailError}</p>
+                )}
+                <p className="text-sm text-muted-foreground">
+                  We will send a code to your new email to verify it.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <div className="space-y-1.5">
+                  <Label>Code</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {emailCodeDigits.map((digit, index) => (
+                      <Input
+                        key={index}
+                        inputMode="numeric"
+                        maxLength={EMAIL_CODE_LENGTH}
+                        className="h-10 w-10 text-center"
+                        value={digit}
+                        onChange={(event) =>
+                          handleEmailCodeInputChange(index, event.target.value)
+                        }
+                        onPaste={handleEmailCodePaste}
+                        onKeyDown={(event) =>
+                          handleEmailCodeKeyDown(index, event)
+                        }
+                        ref={(element) => {
+                          emailCodeInputRefs.current[index] = element;
+                        }}
+                        disabled={isEmailDialogSubmitting}
+                      />
+                    ))}
+                  </div>
+                </div>
+
+                {emailCodeError && (
+                  <p className="text-sm text-red-500">{emailCodeError}</p>
+                )}
+
+                <button
+                  type="button"
+                  className={cn(
+                    "text-sm text-muted-foreground cursor-pointer hover:underline",
+                    requestEmailCodeMutation.isPending && "opacity-50",
+                  )}
+                  onClick={handleResendCode}
+                  disabled={requestEmailCodeMutation.isPending}
+                >
+                  <span className="inline-flex items-center gap-1">
+                    <RefreshCcw className="h-4 w-4" />
+                    Resend the code.
+                  </span>
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div className="mt-4 flex items-center justify-between gap-2">
+            <Button
+              type="button"
+              className="red-gradient h-10"
+              onClick={() => handleEmailDialogOpenChange(false)}
+              disabled={isEmailDialogSubmitting}
+            >
+              <StopCircle className="h-4 w-4" />
+              Cancel
+            </Button>
+
+            <button
+              type="button"
+              className="button-medium lighter no-rotation"
+              onClick={handleEmailDialogSubmit}
+              disabled={isEmailDialogSubmitting}
+            >
+              {isEmailDialogSubmitting ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Submitting...
+                </>
+              ) : (
+                <>
+                  <Send className="h-4 w-4" />
+                  Submit
+                </>
+              )}
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

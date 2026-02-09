@@ -78,7 +78,8 @@ function isSameAnalysisInstance(
   }
 
   return (
-    Math.abs(firstTimestamp - secondTimestamp) <= ANALYSIS_TIME_MATCH_TOLERANCE_MS
+    Math.abs(firstTimestamp - secondTimestamp) <=
+    ANALYSIS_TIME_MATCH_TOLERANCE_MS
   );
 }
 
@@ -161,7 +162,10 @@ export function MatchmakingAnalysis({ puuid }: MatchmakingAnalysisProps) {
       : null;
   const latestMatchesCurrent =
     Boolean(currentAnalysisCreatedAt) &&
-    isSameAnalysisInstance(latestAnalysis?.created_at, currentAnalysisCreatedAt);
+    isSameAnalysisInstance(
+      latestAnalysis?.created_at,
+      currentAnalysisCreatedAt,
+    );
   const latestForCurrent = latestMatchesCurrent ? latestAnalysis : null;
 
   useEffect(() => {
@@ -169,8 +173,12 @@ export function MatchmakingAnalysis({ puuid }: MatchmakingAnalysisProps) {
       return;
     }
     if (
-      isSameAnalysisInstance(statusUpdate.created_at, currentAnalysisCreatedAt) ||
-      (statusUpdate.status !== "pending" && statusUpdate.status !== "in_progress")
+      isSameAnalysisInstance(
+        statusUpdate.created_at,
+        currentAnalysisCreatedAt,
+      ) ||
+      (statusUpdate.status !== "pending" &&
+        statusUpdate.status !== "in_progress")
     ) {
       return;
     }
@@ -213,10 +221,10 @@ export function MatchmakingAnalysis({ puuid }: MatchmakingAnalysisProps) {
 
     // Only trust validStatusUpdate when actively polling, otherwise use latestAnalysis
     const currentStatus = shouldPoll
-      ? validStatusUpdate?.status ?? latestForCurrent?.status
+      ? (validStatusUpdate?.status ?? latestForCurrent?.status)
       : latestAnalysis?.status;
     const currentProgress = shouldPoll
-      ? validStatusUpdate?.progress ?? latestForCurrent?.progress ?? 0
+      ? (validStatusUpdate?.progress ?? latestForCurrent?.progress ?? 0)
       : latestAnalysis?.progress || 0;
 
     // Track in_progress status - only transition to running from starting phase
@@ -432,7 +440,7 @@ export function MatchmakingAnalysis({ puuid }: MatchmakingAnalysisProps) {
 
   // Determine current display data
   const displayData = shouldPoll
-    ? validStatusUpdate ?? latestForCurrent
+    ? (validStatusUpdate ?? latestForCurrent)
     : latestAnalysis;
 
   // Calculate progress percentage
@@ -701,7 +709,7 @@ export function MatchmakingAnalysis({ puuid }: MatchmakingAnalysisProps) {
             onClick={() => cancelMutation.mutate()}
             disabled={cancelMutation.isPending}
             variant="destructive"
-            className="w-full matchmaking-cancel-btn"
+            className="w-full red-gradient"
           >
             {cancelMutation.isPending ? (
               <>
