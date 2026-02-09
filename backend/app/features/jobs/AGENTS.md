@@ -30,6 +30,9 @@ Background task scheduling with APScheduler. See [docs/jobs.md](../../../../docs
 - If `enabled_queue_ids` is missing/invalid, backend defaults to all queues enabled
 - If `enabled_queue_ids` is empty, `is_active` is auto-set to `false`
 - Any `/jobs/{id}` update now triggers immediate scheduler sync (add/remove/reschedule) without restart
+- Match Fetcher performs one extra Riot call per processed match:
+  `/lol/match/v5/matches/{matchId}/timeline` and stores objective aggregates in
+  `core.match_timelines`
 
 ## Job States
 

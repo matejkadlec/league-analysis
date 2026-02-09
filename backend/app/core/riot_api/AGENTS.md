@@ -24,6 +24,7 @@ from app.core.riot_api import RiotAPIClient
 async with RiotAPIClient(api_key=api_key) as client:
     account = await client.get_account_by_puuid(puuid)
     matches = await client.get_match_list_by_puuid(puuid, queue=420)
+    timeline = await client.get_match_timeline("EUN1_123456789")
 ```
 
 ## Rate Limiting

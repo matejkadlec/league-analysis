@@ -13,17 +13,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-
-import { Label } from "@/components/ui/label";
-import {
   Play,
   History,
   Clock,
@@ -31,7 +20,6 @@ import {
   ChevronDown,
   ChevronUp,
   Loader2,
-  Settings,
 } from "lucide-react";
 import { useToast } from "@/lib/core/hooks";
 import cronstrue from "cronstrue";
@@ -177,10 +165,6 @@ function getEnabledQueueIds(config: JobConfiguration["config_json"]): number[] {
 
 export function JobCard({ job, onExecutionClick }: JobCardProps) {
   const [showHistory, setShowHistory] = useState(false);
-  const [showConfigDialog, setShowConfigDialog] = useState(false);
-  const [configJson, setConfigJson] = useState(
-    JSON.stringify(job.config_json || {}, null, 2),
-  );
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const queueToggleCooldownRef = useRef(0);
@@ -265,38 +249,6 @@ export function JobCard({ job, onExecutionClick }: JobCardProps) {
     },
   });
 
-  // Update job config mutation
-  const updateConfigMutation = useMutation({
-    mutationFn: (config: Record<string, unknown>) =>
-      validatedPut(JobConfigurationSchema, `/jobs/${job.id}`, {
-        config_json: config,
-      }),
-    onSuccess: (result) => {
-      if (result.success) {
-        toast({
-          title: "Configuration Updated",
-          description: "Job configuration has been updated successfully",
-        });
-        setShowConfigDialog(false);
-        // Invalidate queries to refresh data
-        queryClient.invalidateQueries({ queryKey: ["jobs"] });
-      } else {
-        toast({
-          title: "Failed to Update Configuration",
-          description: result.error.message,
-          variant: "error",
-        });
-      }
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error?.message || "Failed to update configuration",
-        variant: "error",
-      });
-    },
-  });
-
   const updateMatchFetcherQueuesMutation = useMutation({
     mutationFn: (queueIds: number[]) =>
       validatedPut(JobConfigurationSchema, `/jobs/${job.id}`, {
@@ -333,19 +285,6 @@ export function JobCard({ job, onExecutionClick }: JobCardProps) {
 
   const toggleHistory = () => {
     setShowHistory(!showHistory);
-  };
-
-  const handleUpdateConfig = () => {
-    try {
-      const parsed = JSON.parse(configJson);
-      updateConfigMutation.mutate(parsed);
-    } catch {
-      toast({
-        title: "Invalid JSON",
-        description: "Please check your configuration JSON syntax",
-        variant: "error",
-      });
-    }
   };
 
   const handleQueueToggle = (
@@ -466,82 +405,6 @@ export function JobCard({ job, onExecutionClick }: JobCardProps) {
             </div>
           )}
         </div>
-
-        {/* Configuration Section */}
-        {job.config_json && Object.keys(job.config_json).length > 0 && (
-          <div className="rounded-md border p-3">
-            <div className="mb-2 flex items-center justify-between">
-              <p className="text-sm font-medium">Configuration</p>
-              <Dialog
-                open={showConfigDialog}
-                onOpenChange={setShowConfigDialog}
-              >
-                <DialogTrigger asChild>
-                  <Button size="sm" variant="ghost" className="h-7 px-2">
-                    <Settings className="h-3.5 w-3.5" />
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="max-w-2xl">
-                  <DialogHeader>
-                    <DialogTitle>Edit Job Configuration</DialogTitle>
-                    <DialogDescription>
-                      Update the JSON configuration for {job.name}. Changes take
-                      effect on the next job run.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="config-json">Configuration JSON</Label>
-                      <textarea
-                        id="config-json"
-                        value={configJson}
-                        onChange={(e) => setConfigJson(e.target.value)}
-                        className="min-h-[300px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                        placeholder='{\n  "key": "value"\n}'
-                      />
-                    </div>
-                  </div>
-                  <DialogFooter>
-                    <Button
-                      variant="outline"
-                      onClick={() => setShowConfigDialog(false)}
-                      disabled={updateConfigMutation.isPending}
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      onClick={handleUpdateConfig}
-                      disabled={updateConfigMutation.isPending}
-                    >
-                      {updateConfigMutation.isPending ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Saving...
-                        </>
-                      ) : (
-                        "Save Changes"
-                      )}
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
-            </div>
-            <div className="space-y-1">
-              {Object.entries(job.config_json).map(([key, value]) => (
-                <div key={key} className="flex items-baseline gap-2 text-xs">
-                  <span className="font-medium text-muted-foreground">
-                    {key}:
-                  </span>
-                  <span className="font-mono">
-                    {typeof value === "object"
-                      ? JSON.stringify(value)
-                      : String(value)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
 
         {/* Action Buttons */}
         <div className="flex gap-2">

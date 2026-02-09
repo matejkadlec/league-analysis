@@ -93,6 +93,13 @@ class RiotAPIEndpoints:
         base_url = self.get_base_url(region)
         return f"{base_url}/lol/match/v5/matches/{match_id}"
 
+    def match_timeline_by_id(
+        self, match_id: str, region: Optional[Region] = None
+    ) -> str:
+        """Get match timeline by ID endpoint."""
+        base_url = self.get_base_url(region)
+        return f"{base_url}/lol/match/v5/matches/{match_id}/timeline"
+
     # League endpoints (Platform)
     def league_entries_by_summoner_id(
         self, summoner_id: str, platform: Optional[Platform] = None

@@ -166,21 +166,41 @@ class RiotAPIClient:
         elif status == 404:
             raise NotFoundError("Resource not found", status_code=status)
 
+    @staticmethod
+    def _normalize_headers(headers: dict[str, Any]) -> dict[str, str]:
+        """Normalize HTTP header keys to lowercase for case-insensitive lookups."""
+        return {str(k).lower(): str(v) for k, v in headers.items()}
+
+    @staticmethod
+    def _parse_retry_after(headers: dict[str, str], default_seconds: int = 120) -> int:
+        """Parse Retry-After header with a safe fallback."""
+        raw_retry_after = headers.get("retry-after")
+        if raw_retry_after is None:
+            return default_seconds
+
+        try:
+            retry_after = int(float(raw_retry_after))
+        except (TypeError, ValueError):
+            return default_seconds
+
+        return max(retry_after, 1)
+
     def _handle_rate_limit(
-        self, headers: dict, attempt: int, max_retries: int
+        self, headers: dict[str, str], attempt: int, max_retries: int
     ) -> tuple[bool, int]:
         """Handle rate limit (429) with retry logic."""
-        retry_after = int(headers.get("Retry-After", 1))
+        retry_after = self._parse_retry_after(headers)
 
         # Log the detailed rate limit headers for debugging
-        app_limit = headers.get("X-App-Rate-Limit", "unknown")
-        app_count = headers.get("X-App-Rate-Limit-Count", "unknown")
-        method_limit = headers.get("X-Method-Rate-Limit", "unknown")
+        app_limit = headers.get("x-app-rate-limit", "unknown")
+        app_count = headers.get("x-app-rate-limit-count", "unknown")
+        method_limit = headers.get("x-method-rate-limit", "unknown")
         logger.warning(
             "Rate limit hit",
             retry_after=retry_after,
             app_limit=app_limit,
             current_usage=app_count,
+            method_limit=method_limit,
         )
 
         if attempt < max_retries:
@@ -189,8 +209,8 @@ class RiotAPIClient:
             "Rate limit exceeded",
             status_code=429,
             retry_after=retry_after,
-            app_rate_limit=headers.get("X-App-Rate-Limit"),
-            method_rate_limit=headers.get("X-Method-Rate-Limit"),
+            app_rate_limit=headers.get("x-app-rate-limit"),
+            method_rate_limit=headers.get("x-method-rate-limit"),
         )
 
     def _handle_server_error(
@@ -205,7 +225,7 @@ class RiotAPIClient:
             raise RiotAPIError(f"Server error {status}", status_code=status)
 
     async def _handle_http_error_status(
-        self, status: int, headers: dict, attempt: int, max_retries: int
+        self, status: int, headers: dict[str, str], attempt: int, max_retries: int
     ) -> tuple[bool, int]:
         """
         Handle HTTP error status codes.
@@ -244,20 +264,19 @@ class RiotAPIClient:
             raise RiotAPIError("Session not initialized")
 
         response = await self.session.request(method, url, params=params, json=data)
+        response_headers = self._normalize_headers(dict(response.headers))
 
         # Track all API requests (successful or failed) - every HTTP call counts
         if self.request_callback:
             self.request_callback("requests_made", 1)
 
         try:
-            self.rate_limiter.update_limits(
-                dict(response.headers), endpoint_path, method
-            )
+            self.rate_limiter.update_limits(response_headers, endpoint_path, method)
 
             # Handle error status codes
             if response.status_code != 200:
                 should_retry, sleep_seconds = await self._handle_http_error_status(
-                    response.status_code, dict(response.headers), attempt, max_retries
+                    response.status_code, response_headers, attempt, max_retries
                 )
                 if should_retry:
                     await asyncio.sleep(sleep_seconds)
@@ -429,6 +448,24 @@ class RiotAPIClient:
         url = self.endpoints.match_by_id(match_id, region)
         response = await self._make_request(url)
         return MatchDTO(**response)
+
+    async def get_match_timeline(
+        self, match_id: str, region: Optional[Region] = None
+    ) -> dict:
+        """Get match timeline by match ID."""
+        used_region = region or self.region
+        self._record_api_call(
+            "/lol/match/v5/matches/{matchId}/timeline",
+            self._enum_str(used_region),
+            {"matchId": match_id},
+        )
+        url = self.endpoints.match_timeline_by_id(match_id, region)
+        response = await self._make_request(url)
+        if not isinstance(response, dict):
+            raise RiotAPIError(
+                f"Expected object response for match timeline, got {type(response)}"
+            )
+        return response
 
     # League endpoints
     async def get_league_entries_by_summoner_id(

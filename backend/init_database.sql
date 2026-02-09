@@ -323,6 +323,69 @@ COMMENT ON COLUMN core.match_participants.advanced_stats IS 'Full Challenges JSO
 Contains granular stats like damagePerMinute, healFromMapSources, skillshotsDodged, etc.
 Kept as full JSON to avoid frequent schema migrations when Riot adds new challenges.';
 
+-- [table] core.match_timelines
+
+CREATE TABLE core.match_timelines (
+    match_id character varying(20) NOT NULL,
+    puuid character varying(78) NOT NULL,
+    participant_id integer NOT NULL,
+    team_id integer NOT NULL,
+    frame_interval_ms integer,
+    frame_count integer,
+    objective_takedowns_total integer DEFAULT 0 NOT NULL,
+    objective_last_hits_total integer DEFAULT 0 NOT NULL,
+    turret_takedowns integer DEFAULT 0 NOT NULL,
+    turret_last_hits integer DEFAULT 0 NOT NULL,
+    inhibitor_takedowns integer DEFAULT 0 NOT NULL,
+    inhibitor_last_hits integer DEFAULT 0 NOT NULL,
+    dragon_takedowns integer DEFAULT 0 NOT NULL,
+    dragon_last_hits integer DEFAULT 0 NOT NULL,
+    rift_herald_takedowns integer DEFAULT 0 NOT NULL,
+    rift_herald_last_hits integer DEFAULT 0 NOT NULL,
+    baron_takedowns integer DEFAULT 0 NOT NULL,
+    baron_last_hits integer DEFAULT 0 NOT NULL,
+    voidgrub_takedowns integer DEFAULT 0 NOT NULL,
+    voidgrub_last_hits integer DEFAULT 0 NOT NULL,
+    atakhan_takedowns integer DEFAULT 0 NOT NULL,
+    atakhan_last_hits integer DEFAULT 0 NOT NULL,
+    turret_takedowns_by_lane jsonb DEFAULT '{}'::jsonb NOT NULL,
+    inhibitor_takedowns_by_lane jsonb DEFAULT '{}'::jsonb NOT NULL,
+    dragon_takedowns_by_subtype jsonb DEFAULT '{}'::jsonb NOT NULL,
+    other_epic_monster_takedowns jsonb DEFAULT '{}'::jsonb NOT NULL,
+    team_turrets_destroyed integer DEFAULT 0 NOT NULL,
+    team_inhibitors_destroyed integer DEFAULT 0 NOT NULL,
+    team_dragons_slain integer DEFAULT 0 NOT NULL,
+    team_rift_heralds_slain integer DEFAULT 0 NOT NULL,
+    team_barons_slain integer DEFAULT 0 NOT NULL,
+    team_voidgrubs_slain integer DEFAULT 0 NOT NULL,
+    team_atakhan_slain integer DEFAULT 0 NOT NULL,
+    team_other_epic_monsters_slain jsonb DEFAULT '{}'::jsonb NOT NULL,
+    objective_events jsonb DEFAULT '[]'::jsonb NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+COMMENT ON TABLE core.match_timelines IS 'Objective-focused match timeline aggregates.
+Stores one row per participant with objective takedowns and team objective totals.';
+
+COMMENT ON COLUMN core.match_timelines.objective_events IS 'Compact objective event log.
+Each object uses short keys: t=timestamp, o=objective, r=role(K/A), optional l=lane, s=subtype, m=monsterType.';
+
+ALTER TABLE ONLY core.match_timelines
+    ADD CONSTRAINT pk_match_timelines PRIMARY KEY (match_id, puuid);
+
+ALTER TABLE ONLY core.match_timelines
+    ADD CONSTRAINT uq_match_timelines_match_participant UNIQUE (match_id, participant_id);
+
+ALTER TABLE ONLY core.match_timelines
+    ADD CONSTRAINT ck_match_timelines_participant_id_range CHECK (participant_id BETWEEN 1 AND 10);
+
+ALTER TABLE ONLY core.match_timelines
+    ADD CONSTRAINT ck_match_timelines_team_id_valid CHECK (team_id IN (100, 200));
+
+CREATE INDEX idx_match_timelines_puuid ON core.match_timelines USING btree (puuid);
+CREATE INDEX idx_match_timelines_match_team ON core.match_timelines USING btree (match_id, team_id);
+
 -- [table] core.matchmaking_analyses
 -- Immutable table - new records are inserted for each analysis, never updated
 
@@ -589,6 +652,12 @@ ALTER TABLE ONLY core.match_participants
 
 ALTER TABLE ONLY core.match_participants
     ADD CONSTRAINT fk_match_participants_puuid_players FOREIGN KEY (puuid) REFERENCES core.players(puuid) ON DELETE CASCADE;
+
+ALTER TABLE ONLY core.match_timelines
+    ADD CONSTRAINT fk_match_timelines_match_id_matches FOREIGN KEY (match_id) REFERENCES core.matches(match_id) ON DELETE CASCADE;
+
+ALTER TABLE ONLY core.match_timelines
+    ADD CONSTRAINT fk_match_timelines_puuid_players FOREIGN KEY (puuid) REFERENCES core.players(puuid) ON DELETE CASCADE;
 
 ALTER TABLE ONLY core.matchmaking_analyses
     ADD CONSTRAINT fk_matchmaking_analyses_puuid_players FOREIGN KEY (puuid) REFERENCES core.players(puuid) ON DELETE CASCADE;

@@ -235,18 +235,20 @@ class RateLimiter:
             method: HTTP method used
         """
         try:
+            normalized_headers = {k.lower(): v for k, v in headers.items()}
+
             # Process app rate limits
             self._process_rate_limit_pair(
-                headers.get("X-App-Rate-Limit", ""),
-                headers.get("X-App-Rate-Limit-Count", ""),
+                normalized_headers.get("x-app-rate-limit", ""),
+                normalized_headers.get("x-app-rate-limit-count", ""),
                 scope="app",
             )
 
             # Process method rate limits
             endpoint_key = self._get_endpoint_key(endpoint, method)
             self._process_rate_limit_pair(
-                headers.get("X-Method-Rate-Limit", ""),
-                headers.get("X-Method-Rate-Limit-Count", ""),
+                normalized_headers.get("x-method-rate-limit", ""),
+                normalized_headers.get("x-method-rate-limit-count", ""),
                 scope="method",
                 endpoint_key=endpoint_key,
             )
@@ -258,7 +260,8 @@ class RateLimiter:
                 headers={
                     k: v
                     for k, v in headers.items()
-                    if k.startswith("X-App-Rate") or k.startswith("X-Method-Rate")
+                    if k.lower().startswith("x-app-rate")
+                    or k.lower().startswith("x-method-rate")
                 },
             )
 

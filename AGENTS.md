@@ -90,6 +90,9 @@ league-analysis/
 **Tracked Players Model**: User-specific tracking lives in `auth.user_tracked_players`
 (`user_id` ↔ `puuid`). `core.players.is_tracked` is a derived global flag used by jobs.
 
+**Timeline Aggregates**: Objective timeline aggregates live in `core.match_timelines`
+(`match_id`, `puuid` PK). Match Fetcher fills this from Riot `/lol/match/v5/matches/{matchId}/timeline`.
+
 ### Schema Change Workflow
 
 1. Update SQLAlchemy models in `backend/app/features/*/models.py`

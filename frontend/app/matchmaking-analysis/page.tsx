@@ -190,6 +190,7 @@ function MatchmakingAnalysisContent() {
                 <>
                   <MatchmakingAnalysis puuid={selectedPlayer.puuid} />
                   <MatchmakingAnalysisResults puuid={selectedPlayer.puuid} />
+                  <MatchmakingExplanationCard />
                 </>
               ) : null}
             </div>
@@ -204,7 +205,6 @@ function MatchmakingAnalysisContent() {
                     <PlayerCard player={selectedPlayer} />
                   </Suspense>
                   <MatchmakingAnalysisHistory puuid={selectedPlayer.puuid} />
-                  <MatchmakingExplanationCard />
                 </>
               ) : null}
             </div>

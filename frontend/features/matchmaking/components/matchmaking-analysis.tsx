@@ -48,11 +48,47 @@ type UIPhase =
   | "completed"
   | "cancelling";
 
+const ANALYSIS_TIME_MATCH_TOLERANCE_MS = 1000;
+
+function parseIsoTimestamp(value: string | null | undefined): number | null {
+  if (!value) {
+    return null;
+  }
+
+  const timestamp = new Date(value).getTime();
+  return Number.isFinite(timestamp) ? timestamp : null;
+}
+
+function isSameAnalysisInstance(
+  first: string | null | undefined,
+  second: string | null | undefined,
+): boolean {
+  if (!first || !second) {
+    return false;
+  }
+
+  if (first === second) {
+    return true;
+  }
+
+  const firstTimestamp = parseIsoTimestamp(first);
+  const secondTimestamp = parseIsoTimestamp(second);
+  if (firstTimestamp === null || secondTimestamp === null) {
+    return false;
+  }
+
+  return (
+    Math.abs(firstTimestamp - secondTimestamp) <= ANALYSIS_TIME_MATCH_TOLERANCE_MS
+  );
+}
+
 export function MatchmakingAnalysis({ puuid }: MatchmakingAnalysisProps) {
   const queryClient = useQueryClient();
   const [phase, setPhase] = useState<UIPhase>("idle");
   const [animProgress, setAnimProgress] = useState<number | null>(null);
   const [nowTimestamp, setNowTimestamp] = useState(() => Date.now());
+  const [estimatedRateLimitWindowSeconds, setEstimatedRateLimitWindowSeconds] =
+    useState(60);
   const [recentlyStartedTime, setRecentlyStartedTime] = useState<number | null>(
     null,
   );
@@ -67,6 +103,7 @@ export function MatchmakingAnalysis({ puuid }: MatchmakingAnalysisProps) {
   // Track if we ever saw in_progress this session
   const sawInProgressRef = useRef(false);
   const lastBackendProgressRef = useRef(0);
+  const wasRateLimitedRef = useRef(false);
 
   useEffect(() => {
     const intervalId = setInterval(() => {
@@ -118,14 +155,34 @@ export function MatchmakingAnalysis({ puuid }: MatchmakingAnalysisProps) {
   const validStatusUpdate =
     shouldPoll &&
     statusUpdate &&
-    currentAnalysisCreatedAt &&
-    statusUpdate.created_at === currentAnalysisCreatedAt
+    (!currentAnalysisCreatedAt ||
+      isSameAnalysisInstance(statusUpdate.created_at, currentAnalysisCreatedAt))
       ? statusUpdate
       : null;
   const latestMatchesCurrent =
     Boolean(currentAnalysisCreatedAt) &&
-    latestAnalysis?.created_at === currentAnalysisCreatedAt;
+    isSameAnalysisInstance(latestAnalysis?.created_at, currentAnalysisCreatedAt);
   const latestForCurrent = latestMatchesCurrent ? latestAnalysis : null;
+
+  useEffect(() => {
+    if (!shouldPoll || !statusUpdate?.created_at || !currentAnalysisCreatedAt) {
+      return;
+    }
+    if (
+      isSameAnalysisInstance(statusUpdate.created_at, currentAnalysisCreatedAt) ||
+      (statusUpdate.status !== "pending" && statusUpdate.status !== "in_progress")
+    ) {
+      return;
+    }
+
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Resync tracking key when remount receives equivalent analysis with different datetime string format.
+    setCurrentAnalysisCreatedAt(statusUpdate.created_at);
+  }, [
+    shouldPoll,
+    statusUpdate?.created_at,
+    statusUpdate?.status,
+    currentAnalysisCreatedAt,
+  ]);
 
   const finalizeCompletion = useCallback(async () => {
     queryClient.removeQueries({
@@ -314,6 +371,8 @@ export function MatchmakingAnalysis({ puuid }: MatchmakingAnalysisProps) {
       lastBackendProgressRef.current = 0;
       setRecentlyStartedTime(Date.now());
       setCurrentAnalysisCreatedAt(null);
+      setEstimatedRateLimitWindowSeconds(60);
+      wasRateLimitedRef.current = false;
     },
     onSuccess: (data) => {
       toast.success("Matchmaking analysis started");
@@ -393,6 +452,52 @@ export function MatchmakingAnalysis({ puuid }: MatchmakingAnalysisProps) {
   // Check if we should hide cancel button (recently started)
   const hideCancel =
     recentlyStartedTime !== null && nowTimestamp - recentlyStartedTime < 5000;
+
+  useEffect(() => {
+    const resetAt = displayData?.rate_limit_reset_at;
+    if (!resetAt) {
+      wasRateLimitedRef.current = false;
+      return;
+    }
+
+    const resetTimeMs = new Date(resetAt).getTime();
+    if (!Number.isFinite(resetTimeMs)) {
+      return;
+    }
+
+    const secondsRemaining = Math.max(
+      1,
+      Math.ceil((resetTimeMs - nowTimestamp) / 1000),
+    );
+
+    if (!wasRateLimitedRef.current) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Captures a stable per-hit wait window for ETA calculations.
+      setEstimatedRateLimitWindowSeconds((previousSeconds) =>
+        Math.max(previousSeconds, secondsRemaining),
+      );
+      wasRateLimitedRef.current = true;
+    }
+  }, [displayData?.rate_limit_reset_at, nowTimestamp]);
+
+  const getEstimatedMinutesRemaining = (): number | null => {
+    if (!displayData) {
+      return null;
+    }
+
+    const totalPlayers = displayData.total_puuids || EXPECTED_PLAYERS;
+    const processedPlayers = displayData.progress || 0;
+    const remainingPlayers = Math.max(0, totalPlayers - processedPlayers);
+    if (remainingPlayers <= 0) {
+      return null;
+    }
+
+    // Estimate requests from remaining players:
+    // roughly 1 match-list call + up to 10 match-detail calls per player.
+    const estimatedRemainingRequests = remainingPlayers * 11;
+    const estimatedSeconds =
+      (estimatedRemainingRequests / 100) * estimatedRateLimitWindowSeconds;
+    return Math.max(1, Math.round(estimatedSeconds / 60));
+  };
 
   // Loading state
   if (isLoading) {
@@ -528,20 +633,25 @@ export function MatchmakingAnalysis({ puuid }: MatchmakingAnalysisProps) {
     const resetAt = displayData?.rate_limit_reset_at;
     if (resetAt) {
       const resetTime = new Date(resetAt).getTime();
-      const now = nowTimestamp;
-      const waitSeconds = Math.max(0, Math.ceil((resetTime - now) / 1000));
-      if (waitSeconds > 0) {
+      if (Number.isFinite(resetTime)) {
+        const now = nowTimestamp;
+        const waitSeconds = Math.max(1, Math.ceil((resetTime - now) / 1000));
         const secondLabel = waitSeconds === 1 ? "second" : "seconds";
         return `Waiting for rate limit to reset... (${waitSeconds} ${secondLabel} remaining)`;
       }
     }
 
     if (displayData?.total_puuids && displayData.total_puuids > 0) {
+      const minutesRemaining = getEstimatedMinutesRemaining();
+      const minutesLabel = minutesRemaining === 1 ? "minute" : "minutes";
+      const remainingText = minutesRemaining
+        ? ` (~${minutesRemaining} ${minutesLabel} remaining)`
+        : "";
       const savedText =
         (displayData.requests_saved ?? 0) > 0
           ? ` (${displayData.requests_saved} requests saved)`
           : "";
-      return `Analyzing player win rates... ${displayData.progress || 0} of 100 players completed${savedText}`;
+      return `Analyzing player win rates... ${displayData.progress || 0} of 100 players completed${remainingText}${savedText}`;
     }
 
     return "Starting analysis...";

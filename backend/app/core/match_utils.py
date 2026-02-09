@@ -6,6 +6,7 @@ instead of implementing its own storage logic. This handles:
 - Matches not yet in DB → fetch from API and store with fully_analyzed=True
 - Matches in DB with fully_analyzed=False → re-fetch from API and update
 - Matches in DB with fully_analyzed=True → no-op (already complete)
+- Timeline objective aggregates are fetched and stored when available
 """
 
 from typing import Optional, TYPE_CHECKING
@@ -16,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.features.matches.models import Match
 from app.features.matches.participants import MatchParticipant
+from app.features.matches.timeline import replace_match_timeline_rows
 from app.features.players.models import Player
 
 if TYPE_CHECKING:
@@ -58,15 +60,30 @@ async def ensure_match_fully_analyzed(
     if match_dto is None:
         return row is not None
 
-    await _upsert_match(db, match_dto)
+    timeline_payload = None
+    try:
+        timeline_payload = await riot_client.get_match_timeline(match_id)
+    except Exception as timeline_error:
+        logger.warning(
+            "Failed to fetch timeline for re-analysis",
+            match_id=match_id,
+            error=str(timeline_error),
+        )
+
+    await _upsert_match(db, match_dto, timeline_payload=timeline_payload)
     return True
 
 
-async def _upsert_match(db: AsyncSession, match_dto) -> None:
+async def _upsert_match(
+    db: AsyncSession,
+    match_dto,
+    timeline_payload: Optional[dict] = None,
+) -> None:
     """Upsert a match and its participants with fully_analyzed=True.
 
     Uses SQLAlchemy merge (upsert) to handle both insert and update cases.
-    Creates skeletal Player records for FK satisfaction if missing.
+    Creates skeletal Player records for FK satisfaction if missing and stores
+    objective timeline aggregates when timeline payload is available.
     """
     from app.features.matches.transformers import MatchDTOTransformer
 
@@ -131,6 +148,8 @@ async def _upsert_match(db: AsyncSession, match_dto) -> None:
                 **participant_data,
             )
             await db.merge(match_participant)
+
+        await replace_match_timeline_rows(db, match_dto, timeline_payload)
 
         await db.commit()
 

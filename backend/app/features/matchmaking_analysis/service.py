@@ -70,6 +70,7 @@ class MatchmakingAnalysisService:
         self.rate_limiter: Optional[DBRateLimiter] = None
         self.requests_saved: int = 0
         self.api_calls_made: int = 0  # Track actual API calls for savings calculation
+        self._is_waiting_for_rate_limit: bool = False
         self._current_analysis_puuid: Optional[str] = None
         self._current_analysis_created_at: Optional[datetime] = None
         self._winrate_cache: Dict[str, Optional[float]] = {}
@@ -805,6 +806,7 @@ class MatchmakingAnalysisService:
                     await self.rate_limiter.record_request()
 
                 self.api_calls_made += 1
+                await self._clear_rate_limit_wait_if_active()
                 return match_list.match_ids
 
             except RateLimitError as e:
@@ -844,6 +846,7 @@ class MatchmakingAnalysisService:
                     await self.rate_limiter.record_request()
 
                 self.api_calls_made += 1
+                await self._clear_rate_limit_wait_if_active()
                 return dto
 
             except RateLimitError as e:
@@ -871,9 +874,12 @@ class MatchmakingAnalysisService:
         """Callback from DBRateLimiter.acquire_with_wait_callback.
 
         Called with the absolute window_end datetime when rate limited,
-        or None when the wait is complete. Sets rate_limit_reset_at in DB
-        so the frontend can show a countdown.
+        or None when the wait-loop iteration ends. We only persist reset times
+        when actively rate-limited, and clear after a successful API call.
         """
+        if reset_at is None:
+            return
+        self._is_waiting_for_rate_limit = True
         await self._set_rate_limit_reset(reset_at)
 
     async def _wait_for_rate_limit(self, retry_after: int) -> None:
@@ -882,11 +888,22 @@ class MatchmakingAnalysisService:
         reset_at = datetime.now(timezone.utc) + timedelta(seconds=wait_time)
 
         logger.info("Waiting for rate limit", wait_seconds=wait_time, reset_at=reset_at)
+        self._is_waiting_for_rate_limit = True
         await self._set_rate_limit_reset(reset_at)
         await asyncio.sleep(wait_time)
-        await self._set_rate_limit_reset(None)
 
-    async def _set_rate_limit_reset(self, reset_at: Optional[datetime]) -> None:
+    async def _clear_rate_limit_wait_if_active(self) -> None:
+        """Clear rate-limit countdown once requests can proceed again."""
+        if not self._is_waiting_for_rate_limit:
+            return
+        self._is_waiting_for_rate_limit = False
+        await self._set_rate_limit_reset(None, force_clear=True)
+
+    async def _set_rate_limit_reset(
+        self,
+        reset_at: Optional[datetime],
+        force_clear: bool = False,
+    ) -> None:
         """Update rate_limit_reset_at in DB so frontend can show countdown."""
         if not self._current_analysis_puuid or not self._current_analysis_created_at:
             return
@@ -904,11 +921,11 @@ class MatchmakingAnalysisService:
             now = datetime.now(timezone.utc)
 
             next_reset = reset_at
-            if reset_at is None:
-                # Don't clear a future reset time (e.g., longer sustained limit still active)
+            if reset_at is None and not force_clear:
+                # Keep future reset time if another wait cycle is still active.
                 if current_reset and current_reset > now:
                     next_reset = current_reset
-            elif current_reset and current_reset > reset_at:
+            elif reset_at is not None and current_reset and current_reset > reset_at:
                 # Keep the later reset time if one is already set
                 next_reset = current_reset
 

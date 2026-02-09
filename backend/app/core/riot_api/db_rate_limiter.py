@@ -218,6 +218,51 @@ class DBRateLimiter:
         total = result.scalar_one_or_none()
         return total or 0
 
+    async def _calculate_wait_time_until_capacity(self, now: datetime) -> float:
+        """Calculate how long to wait until aggregate requests drop below capacity.
+
+        Uses all component windows, not just the current component window. This avoids
+        short repeated waits when another component owns the newest active window.
+        """
+        result = await self.db.execute(
+            select(
+                RateLimitState.requests_made,
+                RateLimitState.window_start,
+                RateLimitState.window_size_seconds,
+            ).where(RateLimitState.requests_made > 0)
+        )
+        rows = result.all()
+        if not rows:
+            return 0.0
+
+        windows: list[tuple[datetime, int]] = []
+        for requests_made, window_start, window_size_seconds in rows:
+            if not requests_made or not window_start:
+                continue
+
+            window_end = window_start + timedelta(seconds=window_size_seconds)
+            if window_end <= now:
+                continue
+
+            windows.append((window_end, int(requests_made)))
+
+        if not windows:
+            return 0.0
+
+        total_requests = sum(requests_made for _, requests_made in windows)
+        if total_requests < self.max_requests:
+            return 0.0
+
+        remaining_requests = total_requests
+        for window_end, requests_made in sorted(windows, key=lambda item: item[0]):
+            remaining_requests -= requests_made
+            if remaining_requests < self.max_requests:
+                wait_seconds = (window_end - now).total_seconds()
+                return max(wait_seconds, 0.0)
+
+        latest_window_end = max(window_end for window_end, _ in windows)
+        return max((latest_window_end - now).total_seconds(), 0.0)
+
     async def _reset_window_if_expired(self, state: RateLimitState) -> RateLimitState:
         """Reset the window if it has expired."""
         now = datetime.now(timezone.utc)
@@ -339,12 +384,8 @@ class DBRateLimiter:
 
                 return True
 
-            # Calculate wait time until window resets
             now = datetime.now(timezone.utc)
-            window_end = state.window_start + timedelta(
-                seconds=state.window_size_seconds
-            )
-            wait_time = (window_end - now).total_seconds()
+            wait_time = await self._calculate_wait_time_until_capacity(now)
 
             if wait_time <= 0:
                 # Window just expired, retry
@@ -435,6 +476,7 @@ class DBRateLimiter:
             True if the request can proceed, False if rate limited/timed out
         """
         total_waited = 0
+        waiting_for_rate_limit = False
 
         while total_waited < self.max_wait:
             state = await self._get_or_create_state()
@@ -460,7 +502,7 @@ class DBRateLimiter:
                 await self._wait_for_burst_limit()
 
                 # Notify callback that wait is over
-                if wait_callback:
+                if waiting_for_rate_limit and wait_callback:
                     try:
                         await wait_callback(None)
                     except Exception:
@@ -470,10 +512,7 @@ class DBRateLimiter:
 
             # Calculate wait time until window resets
             now = datetime.now(timezone.utc)
-            window_end = state.window_start + timedelta(
-                seconds=state.window_size_seconds
-            )
-            wait_time = (window_end - now).total_seconds()
+            wait_time = await self._calculate_wait_time_until_capacity(now)
 
             if wait_time <= 0:
                 continue
@@ -490,9 +529,10 @@ class DBRateLimiter:
             # Notify callback with absolute window_end time (set once)
             if wait_callback:
                 try:
-                    await wait_callback(window_end)
+                    await wait_callback(now + timedelta(seconds=wait_time))
                 except Exception:
                     pass
+            waiting_for_rate_limit = True
 
             logger.info(
                 "Rate limit reached, waiting for window reset",
@@ -509,13 +549,11 @@ class DBRateLimiter:
                 total_waited += sleep_time
                 remaining -= sleep_time
 
-            # Notify callback that wait is complete
-            if wait_callback:
-                try:
-                    await wait_callback(None)
-                except Exception:
-                    pass
-
+        if waiting_for_rate_limit and wait_callback:
+            try:
+                await wait_callback(None)
+            except Exception:
+                pass
         return False
 
     async def get_status(self) -> dict:

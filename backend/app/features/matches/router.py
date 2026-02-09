@@ -143,7 +143,7 @@ async def _run_analysis_task(
     """Background task for analysis.
 
     Scenarios:
-    1. Fetch last 100 matches from Riot API (Queue 420)
+    1. Fetch last 100 matches per queue from Riot API (queues: 420/440/400)
     2. Upsert them to DB
     3. Update job status
     """
@@ -210,12 +210,13 @@ async def _run_analysis_task(
                     file=sys.stderr,
                 )
 
-                # We specifically request count=100 and queue=420 (Ranked Solo)
+                # Analyze ranked + normal draft queues (no ARAM).
                 count = await match_service.analyze_match_history(
                     client,
                     puuid,
                     progress_callback=progress_callback,
                     should_cancel=should_cancel,
+                    queue_ids=[420, 440, 400],
                 )
 
                 # Check if we finished due to cancellation

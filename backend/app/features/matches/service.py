@@ -9,6 +9,7 @@ from sqlalchemy import select, func, desc
 
 from .models import Match
 from .participants import MatchParticipant
+from .timeline import MatchTimeline, replace_match_timeline_rows
 from app.features.players.models import Player
 from app.features.players.leagues import PlayerLeague
 from .schemas import (
@@ -205,6 +206,34 @@ class MatchService:
                     participants_by_match[p.match_id] = []
                 participants_by_match[p.match_id].append(p)
 
+            # Load timeline objective aggregates (if available).
+            timeline_stmt = select(MatchTimeline).where(
+                MatchTimeline.match_id.in_(match_ids),
+            )
+            timeline_result = await self.db.execute(timeline_stmt)
+            timeline_rows = list(timeline_result.scalars().all())
+
+            timelines_by_match_team: Dict[str, Dict[int, MatchTimeline]] = {}
+            for timeline_row in timeline_rows:
+                match_teams = timelines_by_match_team.setdefault(
+                    timeline_row.match_id, {}
+                )
+                # Store one row per team (team totals are repeated on each participant row).
+                if timeline_row.team_id not in match_teams:
+                    match_teams[timeline_row.team_id] = timeline_row
+
+            def advanced_int(advanced_stats: Any, key: str) -> int:
+                """Safely read integer-like advanced_stats values."""
+                if not isinstance(advanced_stats, dict):
+                    return 0
+                raw_value = advanced_stats.get(key, 0)
+                if raw_value is None:
+                    return 0
+                try:
+                    return int(raw_value)
+                except (TypeError, ValueError):
+                    return 0
+
             # Get player leagues for LP change calculation (ordered by created_at DESC - newest first)
             leagues_stmt = (
                 select(PlayerLeague)
@@ -369,30 +398,56 @@ class MatchService:
                 }
                 blue_team = []
                 red_team = []
+
+                timeline_by_team = timelines_by_match_team.get(match.match_id, {})
+                blue_timeline = timeline_by_team.get(100)
+                red_timeline = timeline_by_team.get(200)
+                blue_has_timeline = blue_timeline is not None
+                red_has_timeline = red_timeline is not None
+
                 blue_stats = {
                     "kills": 0,
                     "deaths": 0,
                     "assists": 0,
-                    "turrets": None,  # Unknown without timeline data
-                    "inhibitors": None,  # Unknown: lostAnInhibitor is per-player takedown stat
-                    "dragons": None,  # Unknown without timeline data
-                    "barons": 0,
-                    "rift_heralds": 0,
-                    "voidgrubs": None,  # Unknown: voidMonsterKill is per-player takedown stat
+                    "turrets": blue_timeline.team_turrets_destroyed
+                    if blue_timeline
+                    else None,
+                    "inhibitors": blue_timeline.team_inhibitors_destroyed
+                    if blue_timeline
+                    else None,
+                    "dragons": blue_timeline.team_dragons_slain if blue_timeline else None,
+                    "barons": blue_timeline.team_barons_slain if blue_timeline else 0,
+                    "rift_heralds": blue_timeline.team_rift_heralds_slain
+                    if blue_timeline
+                    else 0,
+                    "voidgrubs": blue_timeline.team_voidgrubs_slain
+                    if blue_timeline
+                    else None,
                 }
                 red_stats = {
                     "kills": 0,
                     "deaths": 0,
                     "assists": 0,
-                    "turrets": None,  # Unknown without timeline data
-                    "inhibitors": None,  # Unknown: lostAnInhibitor is per-player takedown stat
-                    "dragons": None,  # Unknown without timeline data
-                    "barons": 0,
-                    "rift_heralds": 0,
-                    "voidgrubs": None,  # Unknown: voidMonsterKill is per-player takedown stat
+                    "turrets": red_timeline.team_turrets_destroyed
+                    if red_timeline
+                    else None,
+                    "inhibitors": red_timeline.team_inhibitors_destroyed
+                    if red_timeline
+                    else None,
+                    "dragons": red_timeline.team_dragons_slain if red_timeline else None,
+                    "barons": red_timeline.team_barons_slain if red_timeline else 0,
+                    "rift_heralds": red_timeline.team_rift_heralds_slain
+                    if red_timeline
+                    else 0,
+                    "voidgrubs": red_timeline.team_voidgrubs_slain
+                    if red_timeline
+                    else None,
                 }
+                blue_void_monster_max = 0
+                red_void_monster_max = 0
 
-                # First pass: aggregate using MAX for shared objectives
+                # First pass: aggregate kills/deaths/assists and team composition.
+                # Fallback to advanced_stats only when timeline data is not available.
                 for p in match_participants:
                     team_champ = TeamChampion(
                         champion_id=p.champion_id,
@@ -403,34 +458,84 @@ class MatchService:
 
                     # Extract objective stats from advanced_stats
                     advanced = p.advanced_stats or {}
-                    # Note: turretTakedowns, dragonTakedowns, lostAnInhibitor, and voidMonsterKill
-                    # are per-player participation/takedown stats. Cannot accurately determine
-                    # team totals without match_timeline data.
-                    team_baron_kills = advanced.get("teamBaronKills", 0) or 0
-                    team_rift_herald_kills = advanced.get("teamRiftHeraldKills", 0) or 0
+                    team_baron_kills = advanced_int(advanced, "teamBaronKills")
+                    team_rift_herald_kills = advanced_int(
+                        advanced,
+                        "teamRiftHeraldKills",
+                    )
+                    dragon_takedowns = advanced_int(advanced, "dragonTakedowns")
+                    void_monster_kills = advanced_int(advanced, "voidMonsterKill")
 
                     if p.team_id == 100:  # Blue team
                         blue_team.append(team_champ)
                         blue_stats["kills"] += p.kills or 0
                         blue_stats["deaths"] += p.deaths or 0
                         blue_stats["assists"] += p.assists or 0
-                        # Use MAX for team-wide objective stats
-                        blue_stats["barons"] = max(
-                            blue_stats["barons"], team_baron_kills
-                        )
-                        blue_stats["rift_heralds"] = max(
-                            blue_stats["rift_heralds"], team_rift_herald_kills
-                        )
+                        if not blue_has_timeline:
+                            blue_stats["turrets"] = (blue_stats["turrets"] or 0) + (
+                                p.turret_kills or 0
+                            )
+                            blue_stats["inhibitors"] = (
+                                blue_stats["inhibitors"] or 0
+                            ) + (p.inhibitor_kills or 0)
+                            blue_stats["dragons"] = max(
+                                blue_stats["dragons"] or 0,
+                                dragon_takedowns,
+                            )
+                            blue_stats["barons"] = max(
+                                blue_stats["barons"], team_baron_kills
+                            )
+                            blue_stats["rift_heralds"] = max(
+                                blue_stats["rift_heralds"], team_rift_herald_kills
+                            )
+                            blue_void_monster_max = max(
+                                blue_void_monster_max,
+                                void_monster_kills,
+                            )
                     else:  # Red team (200)
                         red_team.append(team_champ)
                         red_stats["kills"] += p.kills or 0
                         red_stats["deaths"] += p.deaths or 0
                         red_stats["assists"] += p.assists or 0
-                        # Use MAX for team-wide objective stats
-                        red_stats["barons"] = max(red_stats["barons"], team_baron_kills)
-                        red_stats["rift_heralds"] = max(
-                            red_stats["rift_heralds"], team_rift_herald_kills
-                        )
+                        if not red_has_timeline:
+                            red_stats["turrets"] = (red_stats["turrets"] or 0) + (
+                                p.turret_kills or 0
+                            )
+                            red_stats["inhibitors"] = (red_stats["inhibitors"] or 0) + (
+                                p.inhibitor_kills or 0
+                            )
+                            red_stats["dragons"] = max(
+                                red_stats["dragons"] or 0,
+                                dragon_takedowns,
+                            )
+                            red_stats["barons"] = max(
+                                red_stats["barons"], team_baron_kills
+                            )
+                            red_stats["rift_heralds"] = max(
+                                red_stats["rift_heralds"], team_rift_herald_kills
+                            )
+                            red_void_monster_max = max(
+                                red_void_monster_max,
+                                void_monster_kills,
+                            )
+
+                if not blue_has_timeline:
+                    # Riot exposes team baron/herald totals directly, while grubs are only
+                    # available via combined void-monster stats in match participants.
+                    blue_stats["voidgrubs"] = max(
+                        0,
+                        blue_void_monster_max
+                        - blue_stats["barons"]
+                        - blue_stats["rift_heralds"],
+                    )
+
+                if not red_has_timeline:
+                    red_stats["voidgrubs"] = max(
+                        0,
+                        red_void_monster_max
+                        - red_stats["barons"]
+                        - red_stats["rift_heralds"],
+                    )
 
                 # Sort by role
                 blue_team.sort(key=lambda x: role_order.get(x.team_position or "", 5))
@@ -1049,8 +1154,20 @@ class MatchService:
         try:
             match_dto = await riot_api_client.get_match(match_id)
             if match_dto:
+                timeline_payload: Optional[Dict[str, Any]] = None
+                try:
+                    timeline_payload = await riot_api_client.get_match_timeline(match_id)
+                except Exception as timeline_error:
+                    logger.warning(
+                        "Failed to fetch match timeline, storing match without timeline",
+                        match_id=match_id,
+                        error=str(timeline_error),
+                    )
                 # Use new storage method via DTO directly
-                await self.store_match_from_dto(match_dto)
+                await self.store_match_from_dto(
+                    match_dto,
+                    timeline_payload=timeline_payload,
+                )
                 # Commit is required as store_match_from_dto doesn't commit
                 await self.db.commit()
                 return True
@@ -1358,7 +1475,10 @@ class MatchService:
     # ============================================
 
     async def store_match_from_dto(
-        self, match_dto: Any, default_platform: str = "EUN1"
+        self,
+        match_dto: Any,
+        default_platform: str = "EUN1",
+        timeline_payload: Optional[Dict[str, Any]] = None,
     ) -> Match:
         """Store match and participants from Riot API DTO.
 
@@ -1370,6 +1490,7 @@ class MatchService:
         Args:
             match_dto: Match DTO from Riot API
             default_platform: Default platform if not in DTO
+            timeline_payload: Optional timeline payload from /timeline endpoint
 
         Returns:
             Stored Match object
@@ -1448,10 +1569,17 @@ class MatchService:
                 )
                 self.db.add(match_participant)
 
+            timeline_rows = await replace_match_timeline_rows(
+                self.db,
+                match_dto,
+                timeline_payload,
+            )
+
             logger.debug(
                 "Stored match from DTO",
                 match_id=match_dto.metadata.match_id,
                 participant_count=len(match_dto.info.participants),
+                timeline_rows=timeline_rows,
             )
 
             return match
@@ -1537,16 +1665,18 @@ class MatchService:
         puuid: str,
         progress_callback: Optional[Any] = None,
         should_cancel: Optional[Any] = None,
+        queue_ids: Optional[list[int]] = None,
     ) -> int:
         """
         Smart match history analysis: fetches only NEW matches and re-analyzes failed ones.
 
         Workflow:
-        1. Get match IDs from Riot API (queue=420, count=100)
+        1. Get match IDs from Riot API for target queues (count=100 per queue)
         2. Get existing analyzed match IDs from DB for this player
         3. Get match IDs with fully_analyzed=false from DB
-        4. Fetch only: (new matches NOT in DB) + (matches with fully_analyzed=false)
-        5. Skip Season 15 matches (gameVersion not starting with "16.")
+        4. Detect matches missing timeline aggregates for this player
+        5. Fetch only: new + needs_reanalysis + missing_timeline
+        6. Skip Season 15 matches (gameVersion not starting with "16.")
 
         Args:
             riot_api_client: Initialized client
@@ -1566,17 +1696,31 @@ class MatchService:
                 logger.info("Analysis cancelled before fetching list", puuid=puuid)
                 return 0
 
-            # 1. Get recent match IDs from Riot API
-            match_list = await riot_api_client.get_match_list_by_puuid(
-                puuid=puuid, count=100, queue=420
-            )
+            target_queue_ids = self._normalize_sync_queue_ids(queue_ids)
+            target_queue_ids = [qid for qid in target_queue_ids if qid != 450]
+            if not target_queue_ids:
+                target_queue_ids = [420, 440, 400]
 
-            api_match_ids = []
-            if match_list:
-                if hasattr(match_list, "match_ids"):
-                    api_match_ids = list(match_list.match_ids)
-                elif isinstance(match_list, list):
-                    api_match_ids = match_list
+            # 1. Get recent match IDs from Riot API for each target queue.
+            api_match_ids: list[str] = []
+            seen_match_ids: set[str] = set()
+            for queue_id in target_queue_ids:
+                match_list = await riot_api_client.get_match_list_by_puuid(
+                    puuid=puuid, count=100, queue=queue_id
+                )
+
+                queue_match_ids: list[str] = []
+                if match_list:
+                    if hasattr(match_list, "match_ids"):
+                        queue_match_ids = list(match_list.match_ids)
+                    elif isinstance(match_list, list):
+                        queue_match_ids = match_list
+
+                for match_id in queue_match_ids:
+                    if match_id in seen_match_ids:
+                        continue
+                    seen_match_ids.add(match_id)
+                    api_match_ids.append(match_id)
 
             print(
                 f"DEBUG: Riot API returned {len(api_match_ids)} matches for PUUID {puuid}",
@@ -1614,12 +1758,25 @@ class MatchService:
             # 4. Calculate matches to fetch:
             #    - New matches: in API list but NOT in our fully analyzed set
             #    - Plus: any that need re-analysis
+            #    - Plus: analyzed matches without timeline aggregates
             new_match_ids = [
                 mid for mid in api_match_ids if mid not in existing_analyzed_ids
             ]
 
-            # Combine: new + needs_reanalysis (deduplicate)
-            matches_to_process = list(set(new_match_ids) | needs_reanalysis_ids)
+            existing_timeline_stmt = select(MatchTimeline.match_id).where(
+                MatchTimeline.match_id.in_(api_match_ids),
+                MatchTimeline.puuid == puuid,
+            )
+            result = await self.db.execute(existing_timeline_stmt)
+            timeline_present_ids = set(result.scalars().all())
+            missing_timeline_ids = {
+                mid for mid in api_match_ids if mid not in timeline_present_ids
+            }
+
+            # Combine: new + needs_reanalysis + missing timeline (deduplicate)
+            matches_to_process = list(
+                set(new_match_ids) | needs_reanalysis_ids | missing_timeline_ids
+            )
 
             # Preserve order from API (newer first) for new matches
             ordered_to_process = [
@@ -1633,16 +1790,19 @@ class MatchService:
             logger.info(
                 "Smart match analysis starting",
                 puuid=puuid,
+                queue_ids=target_queue_ids,
                 api_matches=len(api_match_ids),
                 already_analyzed=len(existing_analyzed_ids),
                 new_matches=len(new_match_ids),
                 needs_reanalysis=len(needs_reanalysis_ids),
+                missing_timeline=len(missing_timeline_ids),
                 to_process=len(ordered_to_process),
             )
 
             print(
                 f"DEBUG: Processing {len(ordered_to_process)} matches "
-                f"({len(new_match_ids)} new, {len(needs_reanalysis_ids)} re-analysis)",
+                f"({len(new_match_ids)} new, {len(needs_reanalysis_ids)} re-analysis, "
+                f"{len(missing_timeline_ids)} missing timeline)",
                 file=sys.stderr,
             )
 
@@ -1690,8 +1850,23 @@ class MatchService:
                         skipped_season += 1
                         continue
 
+                    timeline_payload: Optional[Dict[str, Any]] = None
+                    try:
+                        timeline_payload = await riot_api_client.get_match_timeline(
+                            match_id
+                        )
+                    except Exception as timeline_error:
+                        logger.warning(
+                            "Failed to fetch timeline during analysis, continuing without timeline",
+                            match_id=match_id,
+                            error=str(timeline_error),
+                        )
+
                     # Reprocess (Upsert)
-                    await self._reprocess_match(match_dto)
+                    await self._reprocess_match(
+                        match_dto,
+                        timeline_payload=timeline_payload,
+                    )
                     processed += 1
                 except Exception as e:
                     logger.error(
@@ -1715,7 +1890,11 @@ class MatchService:
             logger.error("Match history analysis failed", puuid=puuid, error=str(e))
             raise
 
-    async def _reprocess_match(self, match_dto: Any) -> None:
+    async def _reprocess_match(
+        self,
+        match_dto: Any,
+        timeline_payload: Optional[Dict[str, Any]] = None,
+    ) -> None:
         """Update existing match or insert new match using merge (upsert)."""
         from .transformers import MatchDTOTransformer
 
@@ -1800,6 +1979,12 @@ class MatchService:
                     **participant_data,
                 )
                 await self.db.merge(match_participant)
+
+            await replace_match_timeline_rows(
+                self.db,
+                match_dto,
+                timeline_payload,
+            )
 
             await self.db.commit()
 
@@ -1962,10 +2147,110 @@ class MatchService:
             )
             result = await self.db.execute(stmt)
             analyzed_ids = set(result.scalars().all())
-            ids_to_process = [mid for mid in ids_list if mid not in analyzed_ids]
+
+            timeline_counts_stmt = (
+                select(MatchTimeline.match_id, func.count(MatchTimeline.puuid))
+                .where(MatchTimeline.match_id.in_(ids_list))
+                .group_by(MatchTimeline.match_id)
+            )
+            timeline_counts_result = await self.db.execute(timeline_counts_stmt)
+            timeline_complete_ids = {
+                match_id
+                for match_id, participant_rows in timeline_counts_result.all()
+                if participant_rows >= 10
+            }
+
+            ids_to_process = [
+                mid
+                for mid in ids_list
+                if mid not in analyzed_ids or mid not in timeline_complete_ids
+            ]
+            timeline_only_ids = {
+                mid for mid in ids_list if mid in analyzed_ids and mid not in timeline_complete_ids
+            }
 
             for match_id in ids_to_process:
                 try:
+                    if match_id in timeline_only_ids:
+                        timeline_payload: Optional[Dict[str, Any]] = None
+                        timeline_request_attempted = False
+
+                        try:
+                            if rate_limiter:
+                                can_proceed = await rate_limiter.acquire()
+                                if not can_proceed:
+                                    logger.warning(
+                                        "Rate limit exceeded during timeline-only backfill",
+                                        puuid=puuid,
+                                        queue_id=queue_id,
+                                        match_id=match_id,
+                                    )
+                                    keep_fetching = False
+                                    break
+
+                            timeline_request_attempted = True
+                            timeline_payload = await riot_client.get_match_timeline(
+                                match_id,
+                                region=region,
+                            )
+                        except Exception as timeline_error:
+                            logger.warning(
+                                "Timeline-only fetch failed",
+                                puuid=puuid,
+                                queue_id=queue_id,
+                                match_id=match_id,
+                                error=str(timeline_error),
+                            )
+                            continue
+                        finally:
+                            if rate_limiter and timeline_request_attempted:
+                                await rate_limiter.record_request()
+
+                        if not timeline_payload:
+                            continue
+
+                        participants_stmt = select(MatchParticipant).where(
+                            MatchParticipant.match_id == match_id
+                        )
+                        participants_result = await self.db.execute(participants_stmt)
+                        participants = list(participants_result.scalars().all())
+
+                        if len(participants) < 10:
+                            logger.warning(
+                                "Skipping timeline-only backfill due to missing participants",
+                                puuid=puuid,
+                                queue_id=queue_id,
+                                match_id=match_id,
+                                participants_found=len(participants),
+                            )
+                            continue
+
+                        from types import SimpleNamespace
+
+                        synthetic_match_dto = SimpleNamespace(
+                            metadata=SimpleNamespace(match_id=match_id),
+                            info=SimpleNamespace(
+                                participants=[
+                                    SimpleNamespace(
+                                        participant_id=participant.participant_id,
+                                        team_id=participant.team_id,
+                                        puuid=participant.puuid,
+                                    )
+                                    for participant in participants
+                                ]
+                            ),
+                        )
+
+                        timeline_rows = await replace_match_timeline_rows(
+                            self.db,
+                            synthetic_match_dto,
+                            timeline_payload,
+                        )
+                        if timeline_rows > 0:
+                            await self.db.commit()
+                            queue_stored += 1
+                        continue
+
                     if rate_limiter:
                         can_proceed = await rate_limiter.acquire()
                         if not can_proceed:
@@ -1991,7 +2276,43 @@ class MatchService:
                         keep_fetching = False
                         break
 
-                    await self._reprocess_match(match_dto)
+                    timeline_payload: Optional[Dict[str, Any]] = None
+                    timeline_request_attempted = False
+
+                    try:
+                        if rate_limiter:
+                            can_proceed = await rate_limiter.acquire()
+                            if not can_proceed:
+                                logger.warning(
+                                    "Rate limit exceeded during timeline fetch",
+                                    puuid=puuid,
+                                    queue_id=queue_id,
+                                    match_id=match_id,
+                                )
+                                keep_fetching = False
+                                break
+
+                        timeline_request_attempted = True
+                        timeline_payload = await riot_client.get_match_timeline(
+                            match_id,
+                            region=region,
+                        )
+                    except Exception as timeline_error:
+                        logger.warning(
+                            "Timeline fetch failed, storing match without timeline",
+                            puuid=puuid,
+                            queue_id=queue_id,
+                            match_id=match_id,
+                            error=str(timeline_error),
+                        )
+                    finally:
+                        if rate_limiter and timeline_request_attempted:
+                            await rate_limiter.record_request()
+
+                    await self._reprocess_match(
+                        match_dto,
+                        timeline_payload=timeline_payload,
+                    )
                     queue_stored += 1
 
                 except Exception as e:

@@ -271,22 +271,26 @@ class TeamStats(BaseModel):
     kda: Optional[float] = Field(None, description="Team KDA")
     turrets: Optional[int] = Field(
         None,
-        description="Total turrets destroyed (null = unknown without timeline data)",
+        description="Total turrets destroyed (null when timeline data is missing)",
     )
     inhibitors: Optional[int] = Field(
         None,
-        description="Total inhibitors destroyed (null = lostAnInhibitor is per-player takedown stat)",
+        description="Total inhibitors destroyed (null when timeline data is missing)",
     )
     dragons: Optional[int] = Field(
-        None, description="Total dragons killed (null = unknown without timeline data)"
+        None, description="Total dragons killed (null when timeline data is missing)"
     )
-    barons: int = Field(0, description="Total barons killed (from teamBaronKills)")
+    barons: int = Field(
+        0,
+        description="Total barons killed (timeline-backed, fallback to participant stats)",
+    )
     rift_heralds: int = Field(
-        0, description="Total rift heralds killed (from teamRiftHeraldKills)"
+        0,
+        description="Total rift heralds killed (timeline-backed, fallback to participant stats)",
     )
     voidgrubs: Optional[int] = Field(
         None,
-        description="Total voidgrubs killed (null = voidMonsterKill is per-player takedown stat)",
+        description="Total voidgrubs killed (null when timeline data is missing)",
     )
 
     model_config = ConfigDict(from_attributes=True)
