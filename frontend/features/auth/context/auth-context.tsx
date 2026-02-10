@@ -12,7 +12,6 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import {
   getAccessToken,
-  hasAuthTokens,
   refreshAccessToken,
   removeAuthTokens,
   setAuthTokens,
@@ -71,11 +70,8 @@ function createAuthLoginError(payload: unknown): AuthLoginError {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  // Check for token synchronously on initialization to avoid flash
-  const [isLoading, setIsLoading] = useState(() => {
-    if (typeof window === "undefined") return true;
-    return hasAuthTokens();
-  });
+  // Keep initial render consistent between SSR and client hydration.
+  const [isLoading, setIsLoading] = useState(true);
   const queryClient = useQueryClient();
   const router = useRouter();
 

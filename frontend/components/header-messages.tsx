@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { X, AlertTriangle, AlertOctagon } from "lucide-react";
 import { useAuth } from "@/features/auth";
@@ -28,6 +29,7 @@ interface JobStatusOverview {
 export function HeaderMessages() {
   const { user, isAuthenticated, isLoading: isAuthLoading } = useAuth();
   const { isApiKeyInvalid, lastApiKeyValidatedAt } = useApiKeyStatus();
+  const pathname = usePathname();
   // Store closed keys as an array of identifiers.
   // For env keys: "env_key_{identifier}".
   const [closedMessages, setClosedMessages] = useState<string[]>(() => {
@@ -76,10 +78,31 @@ export function HeaderMessages() {
     refetchOnWindowFocus: false,
   });
 
-  // Don't show any messages while auth is loading or if not authenticated
-  // AuthGate will redirect non-authenticated users
-  if (isAuthLoading || !isAuthenticated) {
+  // Wait until auth state is known
+  if (isAuthLoading) {
     return null;
+  }
+
+  // Signed-out recruitment banner (shown on public signed-out pages except Join Us)
+  if (
+    !isAuthenticated &&
+    !(pathname === "/join-us" || pathname.startsWith("/join-us/"))
+  ) {
+    return (
+      <div className="fixed left-0 top-0 z-[100] flex min-h-[40px] w-full items-center justify-center border-b border-emerald-800/50 bg-emerald-400/50 px-2 py-1 shadow-md backdrop-blur-lg">
+        <div className="px-4 text-center text-xs font-semibold leading-tight text-emerald-100 sm:text-sm">
+          We are opening volunteer Beta Tester and Full-Stack Developer
+          positions. Interested? Apply{" "}
+          <Link
+            href="/join-us"
+            className="font-bold underline transition-colors hover:text-white"
+          >
+            here
+          </Link>
+          .
+        </div>
+      </div>
+    );
   }
 
   // 2. HIGHEST PRIORITY: API Key Invalid/Expired

@@ -46,6 +46,16 @@ export default function Home() {
           <CardContent className="px-8 pt-0 pb-6">
             <ul className="list-disc space-y-3 pl-6 text-sm leading-relaxed marker:text-[#cfa93a]">
               <li>
+                Extended Match History component.
+                <ul className="list-disc space-y-1 pl-6 marker:text-[#cfa93a]/80">
+                  <li>Individual matches will be clickable and expandable.</li>
+                  <li>
+                    When expanded, far more match info will be shown to the user
+                    (exact statistics are subject to discussion).
+                  </li>
+                </ul>
+              </li>
+              <li>
                 Playstyle Analysis page overhaul.
                 <ul className="list-disc space-y-1 pl-6 marker:text-[#cfa93a]/80">
                   <li>Will be renamed to Player Analysis.</li>
@@ -56,8 +66,8 @@ export default function Home() {
                 </ul>
               </li>
               <li>
-                Comprehensive meta analysis with toggleable parameters, and
-                what will not be toggleable will be known to the user.
+                Comprehensive meta analysis with toggleable parameters, and what
+                will not be toggleable will be known to the user.
                 <ul className="list-disc space-y-1 pl-6 marker:text-[#cfa93a]/80">
                   <li>Possible multiple approaches on how to analyze meta.</li>
                   <li>

@@ -16,6 +16,7 @@ from .schemas import (
     RefreshTokenRequest,
     UserCreate,
     UserResponse,
+    JoinUsContactRequest,
     LinkRiotAccountRequest,
     UserProfileUpdate,
     EmailChangeRequest,
@@ -35,6 +36,12 @@ from .service import (
     InvalidEmailVerificationCodeError,
     EmailVerificationCodeExpiredError,
     EmailVerificationRequestNotFoundError,
+    JoinUsCaptchaRequiredError,
+    JoinUsCaptchaVerificationError,
+    JoinUsEmailNotConfiguredError,
+    JoinUsEmailDeliveryError,
+    JoinUsBodyTooShortError,
+    JoinUsRateLimitExceededError,
     get_auth_service,
     oauth2_scheme,
 )
@@ -214,6 +221,79 @@ async def register_user(
     - At least one special character
     """
     return await auth_service.create_user(user_create)
+
+
+@router.post("/join-us/contact", response_model=MessageResponse)
+@limiter.limit("5/minute")
+async def submit_join_us_contact(
+    request: Request,
+    payload: JoinUsContactRequest,
+    auth_service: AuthService = Depends(get_auth_service),
+) -> MessageResponse:
+    """Submit Join Us contact form and send a numbered recruitment email."""
+    try:
+        await auth_service.submit_join_us_contact_request(
+            subject=payload.subject,
+            body=payload.body,
+            captcha_token=payload.captcha_token,
+            remote_ip=request.client.host if request.client else None,
+        )
+    except JoinUsCaptchaRequiredError:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "CONTACT_CAPTCHA_REQUIRED",
+                "message": "Complete CAPTCHA verification before submitting the form.",
+            },
+        )
+    except JoinUsCaptchaVerificationError:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "CONTACT_CAPTCHA_INVALID",
+                "message": "CAPTCHA verification failed. Please try again.",
+            },
+        )
+    except JoinUsBodyTooShortError:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "code": "CONTACT_BODY_TOO_SHORT",
+                "message": "Message must contain at least 300 characters unless it ends with #nl.",
+            },
+        )
+    except JoinUsRateLimitExceededError as e:
+        retry_minutes = max(1, (e.retry_after_seconds + 59) // 60)
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail={
+                "code": "CONTACT_RATE_LIMITED",
+                "message": (
+                    "Too many submissions from this source. "
+                    f"Please wait about {retry_minutes} minute(s) before trying again."
+                ),
+                "retry_after_seconds": e.retry_after_seconds,
+            },
+            headers={"Retry-After": str(e.retry_after_seconds)},
+        )
+    except JoinUsEmailNotConfiguredError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "code": "CONTACT_EMAIL_NOT_CONFIGURED",
+                "message": "Contact form email delivery is not configured yet.",
+            },
+        )
+    except JoinUsEmailDeliveryError:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail={
+                "code": "CONTACT_EMAIL_DELIVERY_FAILED",
+                "message": "Failed to send your message. Please try again later.",
+            },
+        )
+
+    return MessageResponse(message="Your message has been sent successfully.")
 
 
 @router.get("/users", response_model=list[UserResponse])

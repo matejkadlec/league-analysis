@@ -3,4 +3,5 @@
 export { AuthProvider, useAuth } from "./context/auth-context";
 export { ProtectedRoute } from "./components/protected-route";
 export { SignInForm } from "./components/sign-in-form";
+export { JoinUsForm } from "./components/join-us-form";
 export type { User, AuthContextType } from "./types";

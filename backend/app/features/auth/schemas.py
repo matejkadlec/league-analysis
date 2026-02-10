@@ -1,6 +1,7 @@
 """Pydantic schemas for authentication."""
 
 from datetime import datetime
+from enum import Enum
 import re
 from typing import Optional
 
@@ -174,3 +175,28 @@ class MessageResponse(BaseModel):
     """Simple message response for mutation endpoints."""
 
     message: str
+
+
+class JoinUsSubject(str, Enum):
+    """Supported Join Us contact subjects."""
+
+    BETA_TESTER = "beta_tester"
+    FULL_STACK_DEVELOPER = "full_stack_developer"
+    OTHER = "other"
+
+
+class JoinUsContactRequest(BaseModel):
+    """Schema for public Join Us contact form submissions."""
+
+    subject: JoinUsSubject
+    body: str = Field(..., min_length=1, max_length=5000)
+    captcha_token: str | None = Field(default=None, min_length=1, max_length=4096)
+
+    @field_validator("body")
+    @classmethod
+    def normalize_body(cls, value: str) -> str:
+        """Trim body and enforce non-empty payload."""
+        normalized = value.strip()
+        if len(normalized) == 0:
+            raise ValueError("Message cannot be empty")
+        return normalized

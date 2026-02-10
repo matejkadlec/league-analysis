@@ -10,7 +10,7 @@ Shared layout/infrastructure components. Feature-specific components go in `feat
 | ---------------------- | ----------------------------------------------- |
 | `ui/`                  | shadcn/ui primitives (**DO NOT edit manually**) |
 | `sidebar-nav.tsx`      | Navigation sidebar (My Profile currently renders as a regular link; anchor dropdown metadata is preserved for future use) |
-| `header-messages.tsx`  | System messages banner                          |
+| `header-messages.tsx`  | System/admin banners (includes signed-out recruiting notice) |
 | `theme-provider.tsx`   | Theme context                                   |
 | `theme-toggle.tsx`     | Dark mode toggle                                |
 | `providers.tsx`        | TanStack Query provider                         |

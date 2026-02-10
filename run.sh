@@ -6,8 +6,36 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # Load environment variables from .env file
+# Supports quoted values and preserves special characters.
 if [ -f "$SCRIPT_DIR/.env" ]; then
-    export $(grep -v '^#' "$SCRIPT_DIR/.env" | grep -v '^$' | xargs)
+    while IFS= read -r line || [ -n "$line" ]; do
+        # Trim leading whitespace
+        line="${line#"${line%%[![:space:]]*}"}"
+
+        # Skip blank lines and comments
+        if [ -z "$line" ] || [[ "$line" == \#* ]]; then
+            continue
+        fi
+
+        key="${line%%=*}"
+        value="${line#*=}"
+
+        # Trim key trailing whitespace and value leading whitespace
+        key="${key%"${key##*[![:space:]]}"}"
+        value="${value#"${value%%[![:space:]]*}"}"
+
+        # Strip optional surrounding quotes
+        if [[ "$value" == \"*\" && "$value" == *\" ]]; then
+            value="${value:1:${#value}-2}"
+        elif [[ "$value" == \'*\' && "$value" == *\' ]]; then
+            value="${value:1:${#value}-2}"
+        fi
+
+        # Export only valid shell variable names
+        if [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+            export "$key=$value"
+        fi
+    done < "$SCRIPT_DIR/.env"
 fi
 
 # Color codes for output

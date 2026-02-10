@@ -6,6 +6,7 @@ You don't need to be experienced, but not a complete beginner either.
 ## You should have experience with
 
 - Python, JavaScript/TypeScript, HTML/CSS, Git, GitHub, SQL
+- You are keeping up with AI trends and can code with AI agent effectively and responsibly
 - And that's it from the technicalities
 
 ## Nice to have experience with
@@ -21,7 +22,6 @@ You don't need to be experienced, but not a complete beginner either.
 - You can work both independently and as part of a team
 - You have will to learn, not giving up easily, thinking of solutions rather than excuses
 - You are open and communicative, there is no such thing as a "dumb question"
-- You can code with AI agent effectively and responsibly
 - You focus on the process rather than the outcome
 - You have creative mind and can bring your own ideas to this project
 - You can dedicate ~10+ hours a week on average

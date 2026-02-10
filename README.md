@@ -90,6 +90,15 @@ AUTH_LOCKOUT_MINUTES=15
 AUTH_CAPTCHA_AFTER_FAILURES=2
 TURNSTILE_SECRET_KEY=
 
+# SMTP config (Gmail example; use your provider values in real setup)
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USERNAME=your.account@gmail.com
+SMTP_PASSWORD=your_gmail_app_password
+SMTP_FROM_EMAIL="League Analysis <your.account@gmail.com>"
+SMTP_USE_TLS=true
+SMTP_USE_SSL=false
+
 # Next.js config
 NEXT_PUBLIC_API_URL=http://localhost:8000
 NEXT_PUBLIC_TURNSTILE_SITE_KEY=
@@ -123,6 +132,7 @@ Logs are available at [backend.log](logs/backend.log) and [frontend.log](logs/fr
 
 - Backend: http://localhost:8000 (API docs: `/redoc`)
 - Frontend: http://localhost:3000
+- Public Join Us page: http://localhost:3000/join-us
 
 ## Documentation
 

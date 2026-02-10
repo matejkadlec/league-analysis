@@ -64,3 +64,4 @@ Key settings (from `.env`):
 - `auth_lockout_max_attempts` / `auth_lockout_minutes` - Login lockout policy
 - `auth_captcha_after_failures` - Failed-attempt threshold for CAPTCHA
 - `turnstile_secret_key` - Server-side Turnstile verification secret
+- `smtp_*` + `smtp_use_tls` / `smtp_use_ssl` - Outbound SMTP transport for verification/contact emails

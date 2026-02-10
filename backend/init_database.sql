@@ -1,6 +1,6 @@
 -- League Analysis Database Schema
 -- Single Source of Truth
--- Generated: 2026-02-09
+-- Generated: 2026-02-10
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -214,6 +214,57 @@ ALTER TABLE ONLY auth.email_change_requests
 
 CREATE INDEX idx_email_change_requests_pending_email ON auth.email_change_requests USING btree (pending_email);
 CREATE INDEX ix_email_change_requests_locked_until ON auth.email_change_requests USING btree (locked_until);
+
+-- [table] auth.subject_counts
+
+CREATE TABLE auth.subject_counts (
+    id smallint NOT NULL,
+    beta_tester integer DEFAULT 0 NOT NULL,
+    full_stack_developer integer DEFAULT 0 NOT NULL,
+    other integer DEFAULT 0 NOT NULL
+);
+
+ALTER TABLE ONLY auth.subject_counts
+    ADD CONSTRAINT pk_subject_counts PRIMARY KEY (id);
+
+ALTER TABLE ONLY auth.subject_counts
+    ADD CONSTRAINT ck_subject_counts_singleton CHECK (id = 1);
+
+ALTER TABLE ONLY auth.subject_counts
+    ADD CONSTRAINT ck_subject_counts_non_negative CHECK (
+        beta_tester >= 0
+        AND full_stack_developer >= 0
+        AND other >= 0
+    );
+
+INSERT INTO auth.subject_counts (id, beta_tester, full_stack_developer, other)
+VALUES (1, 0, 0, 0);
+
+-- [table] auth.join_us_contact_submissions
+
+CREATE SEQUENCE auth.join_us_contact_submissions_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+CREATE TABLE auth.join_us_contact_submissions (
+    id bigint DEFAULT nextval('auth.join_us_contact_submissions_id_seq'::regclass) NOT NULL,
+    remote_ip character varying(45) NOT NULL,
+    subject character varying(32) NOT NULL,
+    is_test boolean DEFAULT false NOT NULL,
+    submitted_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+ALTER SEQUENCE auth.join_us_contact_submissions_id_seq OWNED BY auth.join_us_contact_submissions.id;
+
+ALTER TABLE ONLY auth.join_us_contact_submissions
+    ADD CONSTRAINT pk_join_us_contact_submissions PRIMARY KEY (id);
+
+CREATE INDEX idx_join_us_contact_submissions_ip_time ON auth.join_us_contact_submissions USING btree (remote_ip, submitted_at);
+CREATE INDEX ix_join_us_contact_submissions_remote_ip ON auth.join_us_contact_submissions USING btree (remote_ip);
+CREATE INDEX ix_join_us_contact_submissions_submitted_at ON auth.join_us_contact_submissions USING btree (submitted_at);
 
 -- [table] auth.user_tracked_players
 

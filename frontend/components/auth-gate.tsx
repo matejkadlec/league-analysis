@@ -5,7 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "@/features/auth";
 
 // Routes that don't require authentication
-const PUBLIC_ROUTES = ["/sign-in", "/privacy-policy", "/license"];
+const PUBLIC_ROUTES = ["/sign-in", "/join-us", "/privacy-policy", "/license"];
 
 interface AuthGateProps {
   children: React.ReactNode;

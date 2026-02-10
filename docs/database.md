@@ -64,6 +64,21 @@ erDiagram
         string created_at
         string updated_at
     }
+
+    subject_counts {
+        int id PK
+        int beta_tester
+        int full_stack_developer
+        int other
+    }
+
+    join_us_contact_submissions {
+        int id PK
+        string remote_ip
+        string subject
+        boolean is_test
+        string submitted_at
+    }
 ```
 
 ### Core Schema
@@ -318,6 +333,33 @@ Per-user state for the change-email verification workflow.
 | `locked_until`           | timestamptz  | Lock expiry after too many failed attempts              |
 
 **Behavior**: Locks email-change verification for 5 minutes after 3 failed code attempts.
+
+### `auth.subject_counts`
+
+Singleton counter row for Join Us contact-form email sequencing.
+
+| Column                 | Type     | Description                                                 |
+| ---------------------- | -------- | ----------------------------------------------------------- |
+| `id`                   | smallint | Singleton primary key (`1`)                                |
+| `beta_tester`          | int      | Number of submitted Beta Tester forms                      |
+| `full_stack_developer` | int      | Number of submitted Full-Stack Developer forms             |
+| `other`                | int      | Number of submitted forms with subject `Other`             |
+
+**Behavior**: Contact emails use `League Analysis <Subject> #<counter>` based on these values.
+
+### `auth.join_us_contact_submissions`
+
+Join Us submission metadata used for anti-spam checks.
+
+| Column         | Type         | Description                                         |
+| -------------- | ------------ | --------------------------------------------------- |
+| `id`           | bigint       | Primary key                                         |
+| `remote_ip`    | varchar(45)  | Source IP address                                   |
+| `subject`      | varchar(32)  | Submitted subject (`beta_tester`, etc.)             |
+| `is_test`      | boolean      | `TRUE` when body ends with `#nl` test suffix        |
+| `submitted_at` | timestamptz  | Accepted submission timestamp                        |
+
+**Behavior**: Regular (non-test) Join Us submissions are capped at 3 per hour per IP.
 
 ### `core.players`
 

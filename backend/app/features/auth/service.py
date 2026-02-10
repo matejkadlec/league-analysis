@@ -21,10 +21,12 @@ import structlog
 from app.core.database import get_db
 from app.core.config import get_global_settings
 from .email_change_request import EmailChangeRequest
+from .join_us_contact_submission import JoinUsContactSubmission
 from .models import User
 from .refresh_token import RefreshToken
 from .revoked_access_token import RevokedAccessToken
-from .schemas import TokenData, UserCreate
+from .subject_counts import SubjectCounts
+from .schemas import JoinUsSubject, TokenData, UserCreate
 
 # Password hashing context using Argon2id
 pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
@@ -41,6 +43,16 @@ EMAIL_CHANGE_CODE_LENGTH = 6
 EMAIL_CHANGE_CODE_EXPIRY_MINUTES = 10
 EMAIL_CHANGE_MAX_FAILED_ATTEMPTS = 3
 EMAIL_CHANGE_LOCK_MINUTES = 5
+JOIN_US_CONTACT_RECIPIENT = "mat.kadlec@email.cz"
+JOIN_US_TEST_SUFFIX = "#nl"
+JOIN_US_MIN_BODY_LENGTH = 300
+JOIN_US_MAX_REGULAR_PER_HOUR = 3
+
+JOIN_US_SUBJECT_LABELS: dict[JoinUsSubject, str] = {
+    JoinUsSubject.BETA_TESTER: "Beta Tester",
+    JoinUsSubject.FULL_STACK_DEVELOPER: "Full-Stack Developer",
+    JoinUsSubject.OTHER: "Other",
+}
 
 
 class AccountLockedError(Exception):
@@ -89,6 +101,34 @@ class EmailVerificationCodeExpiredError(Exception):
 
 class EmailVerificationRequestNotFoundError(Exception):
     """Raised when there is no pending email verification request."""
+
+
+class JoinUsCaptchaRequiredError(Exception):
+    """Raised when Join Us form submission requires CAPTCHA but none is provided."""
+
+
+class JoinUsCaptchaVerificationError(Exception):
+    """Raised when Join Us CAPTCHA verification fails."""
+
+
+class JoinUsEmailNotConfiguredError(Exception):
+    """Raised when SMTP is not configured for Join Us form delivery."""
+
+
+class JoinUsEmailDeliveryError(Exception):
+    """Raised when Join Us form email delivery fails."""
+
+
+class JoinUsBodyTooShortError(Exception):
+    """Raised when a regular Join Us submission does not meet min body length."""
+
+
+class JoinUsRateLimitExceededError(Exception):
+    """Raised when regular Join Us submissions exceed per-hour IP limit."""
+
+    def __init__(self, retry_after_seconds: int):
+        self.retry_after_seconds = retry_after_seconds
+        super().__init__("Join Us submission rate limit exceeded")
 
 
 class AuthService:
@@ -167,6 +207,34 @@ class AuthService:
         """Return True when SMTP delivery settings are configured."""
         return bool(self.settings.smtp_host and self.settings.smtp_from_email)
 
+    async def _send_smtp_message(self, message: EmailMessage) -> None:
+        """Send an email message using configured SMTP transport mode."""
+        smtp_host = self.settings.smtp_host
+        smtp_port = self.settings.smtp_port
+        smtp_username = self.settings.smtp_username
+        smtp_password = self.settings.smtp_password
+        smtp_use_tls = self.settings.smtp_use_tls
+        smtp_use_ssl = self.settings.smtp_use_ssl
+
+        def send_blocking() -> None:
+            if smtp_use_ssl:
+                with smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=10) as smtp:
+                    if smtp_username:
+                        smtp.login(smtp_username, smtp_password)
+                    smtp.send_message(message)
+                return
+
+            with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as smtp:
+                if smtp_use_tls:
+                    smtp.ehlo()
+                    smtp.starttls()
+                    smtp.ehlo()
+                if smtp_username:
+                    smtp.login(smtp_username, smtp_password)
+                smtp.send_message(message)
+
+        await asyncio.to_thread(send_blocking)
+
     async def _send_email_verification_code(
         self,
         *,
@@ -186,12 +254,7 @@ class AuthService:
             )
             return
 
-        smtp_host = self.settings.smtp_host
-        smtp_port = self.settings.smtp_port
-        smtp_username = self.settings.smtp_username
-        smtp_password = self.settings.smtp_password
         smtp_from_email = self.settings.smtp_from_email
-        smtp_use_tls = self.settings.smtp_use_tls
 
         subject = "League Analysis - Verify Your New Email"
         body = (
@@ -207,15 +270,231 @@ class AuthService:
         message["To"] = target_email
         message.set_content(body)
 
-        def send_blocking() -> None:
-            with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as smtp:
-                if smtp_use_tls:
-                    smtp.starttls()
-                if smtp_username:
-                    smtp.login(smtp_username, smtp_password)
-                smtp.send_message(message)
+        await self._send_smtp_message(message)
 
-        await asyncio.to_thread(send_blocking)
+    async def _get_subject_counts_for_update(self) -> SubjectCounts:
+        """Fetch singleton subject counter row with a write lock."""
+        result = await self.db.execute(
+            select(SubjectCounts)
+            .where(SubjectCounts.id == 1)
+            .with_for_update()
+        )
+        subject_counts = result.scalar_one_or_none()
+        if subject_counts is not None:
+            return subject_counts
+
+        subject_counts = SubjectCounts(
+            id=1,
+            beta_tester=0,
+            full_stack_developer=0,
+            other=0,
+        )
+        self.db.add(subject_counts)
+        await self.db.flush()
+        return subject_counts
+
+    async def _reserve_join_us_sequence_number(self, subject: JoinUsSubject) -> int:
+        """Increment and persist the per-subject sequence counter."""
+        subject_counts = await self._get_subject_counts_for_update()
+
+        if subject == JoinUsSubject.BETA_TESTER:
+            subject_counts.beta_tester += 1
+            sequence_number = subject_counts.beta_tester
+        elif subject == JoinUsSubject.FULL_STACK_DEVELOPER:
+            subject_counts.full_stack_developer += 1
+            sequence_number = subject_counts.full_stack_developer
+        else:
+            subject_counts.other += 1
+            sequence_number = subject_counts.other
+
+        await self.db.commit()
+        return sequence_number
+
+    @staticmethod
+    def _is_join_us_test_submission(body: str) -> bool:
+        """Return True when payload ends with #nl test suffix."""
+        return body.lower().endswith(JOIN_US_TEST_SUFFIX)
+
+    @staticmethod
+    def _strip_join_us_test_suffix(body: str) -> str:
+        """Remove #nl suffix used for test submissions."""
+        if not body.lower().endswith(JOIN_US_TEST_SUFFIX):
+            return body
+        return body[: -len(JOIN_US_TEST_SUFFIX)].rstrip()
+
+    async def _enforce_join_us_regular_rate_limit(self, remote_ip: str | None) -> None:
+        """Allow at most N regular submissions per hour for one IP."""
+        if not remote_ip:
+            return
+
+        now = datetime.now(timezone.utc)
+        window_start = now - timedelta(hours=1)
+
+        recent_count_result = await self.db.execute(
+            select(func.count(JoinUsContactSubmission.id)).where(
+                JoinUsContactSubmission.remote_ip == remote_ip,
+                JoinUsContactSubmission.is_test.is_(False),
+                JoinUsContactSubmission.submitted_at >= window_start,
+            )
+        )
+        recent_count = int(recent_count_result.scalar_one() or 0)
+        if recent_count < JOIN_US_MAX_REGULAR_PER_HOUR:
+            return
+
+        oldest_in_window_result = await self.db.execute(
+            select(JoinUsContactSubmission.submitted_at)
+            .where(
+                JoinUsContactSubmission.remote_ip == remote_ip,
+                JoinUsContactSubmission.is_test.is_(False),
+                JoinUsContactSubmission.submitted_at >= window_start,
+            )
+            .order_by(JoinUsContactSubmission.submitted_at.asc())
+            .limit(1)
+        )
+        oldest_in_window = oldest_in_window_result.scalar_one_or_none()
+
+        retry_after_seconds = 3600
+        if oldest_in_window is not None:
+            retry_at = oldest_in_window + timedelta(hours=1)
+            retry_after_seconds = max(1, int((retry_at - now).total_seconds()))
+
+        raise JoinUsRateLimitExceededError(retry_after_seconds=retry_after_seconds)
+
+    async def _record_join_us_submission(
+        self,
+        *,
+        remote_ip: str | None,
+        subject: JoinUsSubject,
+        is_test: bool,
+    ) -> None:
+        """Persist accepted Join Us submissions for anti-spam accounting."""
+        if not remote_ip:
+            return
+
+        self.db.add(
+            JoinUsContactSubmission(
+                remote_ip=remote_ip,
+                subject=subject.value,
+                is_test=is_test,
+            )
+        )
+        await self.db.commit()
+
+    @staticmethod
+    def _build_join_us_email_subject(
+        subject: JoinUsSubject,
+        *,
+        sequence_number: int | None,
+        is_test: bool,
+    ) -> str:
+        """Build mailbox subject line for Join Us requests."""
+        subject_label = JOIN_US_SUBJECT_LABELS[subject]
+        if is_test:
+            return f"League Analysis {subject_label} [TEST]"
+        if sequence_number is None:
+            raise ValueError("sequence_number is required for non-test submissions")
+        return f"League Analysis {subject_label} #{sequence_number}"
+
+    async def _send_join_us_contact_email(
+        self,
+        *,
+        subject: JoinUsSubject,
+        sequence_number: int | None,
+        is_test: bool,
+        body: str,
+        remote_ip: str | None,
+    ) -> str:
+        """Deliver a Join Us email and return the final email subject line."""
+        if not self._is_smtp_configured():
+            raise JoinUsEmailNotConfiguredError
+
+        smtp_from_email = self.settings.smtp_from_email
+
+        subject_line = self._build_join_us_email_subject(
+            subject,
+            sequence_number=sequence_number,
+            is_test=is_test,
+        )
+        subject_label = JOIN_US_SUBJECT_LABELS[subject]
+        sequence_label = "[TEST]" if is_test else f"#{sequence_number}"
+        message_body = (
+            "New Join Us submission\n\n"
+            f"Position: {subject_label}\n"
+            f"Sequence: {sequence_label}\n"
+            f"Submitted At (UTC): {datetime.now(timezone.utc).isoformat()}\n"
+            f"Remote IP: {remote_ip or 'unknown'}\n\n"
+            "Message:\n"
+            f"{body}\n"
+        )
+
+        message = EmailMessage()
+        message["Subject"] = subject_line
+        message["From"] = smtp_from_email
+        message["To"] = JOIN_US_CONTACT_RECIPIENT
+        message.set_content(message_body)
+
+        try:
+            await self._send_smtp_message(message)
+        except (smtplib.SMTPException, OSError) as e:
+            logger.error("join_us_email_delivery_failed", error=str(e))
+            raise JoinUsEmailDeliveryError from e
+
+        return subject_line
+
+    async def submit_join_us_contact_request(
+        self,
+        *,
+        subject: JoinUsSubject,
+        body: str,
+        captcha_token: str | None = None,
+        remote_ip: str | None = None,
+    ) -> str:
+        """Validate and deliver Join Us contact submissions."""
+        normalized_body = body.strip()
+        is_test_submission = self._is_join_us_test_submission(normalized_body)
+        message_body = self._strip_join_us_test_suffix(normalized_body)
+
+        if not is_test_submission and len(normalized_body) < JOIN_US_MIN_BODY_LENGTH:
+            raise JoinUsBodyTooShortError
+
+        sequence_number: int | None = None
+        if not is_test_submission:
+            await self._enforce_join_us_regular_rate_limit(remote_ip)
+
+            if self.is_captcha_enabled():
+                if not captcha_token:
+                    raise JoinUsCaptchaRequiredError
+                captcha_valid = await self.verify_turnstile_token(
+                    captcha_token,
+                    remote_ip,
+                )
+                if not captcha_valid:
+                    raise JoinUsCaptchaVerificationError
+
+            sequence_number = await self._reserve_join_us_sequence_number(subject)
+
+        subject_line = await self._send_join_us_contact_email(
+            subject=subject,
+            sequence_number=sequence_number,
+            is_test=is_test_submission,
+            body=message_body,
+            remote_ip=remote_ip,
+        )
+
+        await self._record_join_us_submission(
+            remote_ip=remote_ip,
+            subject=subject,
+            is_test=is_test_submission,
+        )
+
+        logger.info(
+            "join_us_contact_submitted",
+            subject=subject.value,
+            sequence_number=sequence_number if sequence_number is not None else "[TEST]",
+            is_test=is_test_submission,
+            recipient=JOIN_US_CONTACT_RECIPIENT,
+        )
+        return subject_line
 
     async def cleanup_expired_token_state(self) -> None:
         """Delete expired refresh and revoked access tokens."""

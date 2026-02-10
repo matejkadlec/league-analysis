@@ -8,7 +8,7 @@ Domain-specific UI components. Each feature is self-contained with its own compo
 
 | Feature               | Description                        |
 | --------------------- | ---------------------------------- |
-| `auth/`               | Authentication context, rotating refresh tokens, adaptive Turnstile CAPTCHA |
+| `auth/`               | Authentication context, rotating refresh tokens, adaptive Turnstile CAPTCHA, public Join Us page/contact form |
 | `jobs/`               | Job monitoring components          |
 | `matches/`            | Match history display              |
 | `matchmaking/`        | Match fairness analysis            |

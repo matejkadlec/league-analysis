@@ -47,8 +47,13 @@ export function SidebarNav() {
   const pathname = usePathname();
   const { user, logout, isAuthenticated, isLoading } = useAuth();
 
-  // Hide sidebar on sign-in page or when not authenticated
-  if (pathname === "/sign-in" || isLoading || !isAuthenticated) {
+  // Hide sidebar on public auth pages or when not authenticated
+  if (
+    pathname === "/sign-in" ||
+    pathname === "/join-us" ||
+    isLoading ||
+    !isAuthenticated
+  ) {
     return null;
   }
 

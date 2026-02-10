@@ -15,6 +15,7 @@ Next.js App Router pages.
 | `/jobs`                 | `jobs/page.tsx`                 | Background jobs monitoring (admin only) |
 | `/settings`             | `settings/page.tsx`             | Application + account settings for all users, Riot API config for admins |
 | `/sign-in`              | `sign-in/page.tsx`              | Authentication             |
+| `/join-us`              | `join-us/page.tsx`              | Public recruitment + contact form |
 
 ## Key Files
 

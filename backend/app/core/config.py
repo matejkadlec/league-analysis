@@ -111,6 +111,10 @@ class Settings(BaseSettings):
         default=True,
         description="Whether SMTP client should call STARTTLS before sending",
     )
+    smtp_use_ssl: bool = Field(
+        default=False,
+        description="Whether SMTP client should use implicit TLS via SMTP_SSL",
+    )
 
     @field_validator("jwt_secret_key")
     @classmethod
