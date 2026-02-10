@@ -3,7 +3,9 @@
 from datetime import datetime
 from typing import Union
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends, Request
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from .schemas import (
     MatchmakingAnalysisRequest,
@@ -13,16 +15,24 @@ from .schemas import (
     NotEnoughMatchesResponse,
 )
 from .dependencies import MatchmakingServiceDep
+from app.features.auth.dependencies import get_current_active_user
 
-router = APIRouter(prefix="/matchmaking-analysis", tags=["matchmaking-analysis"])
+limiter = Limiter(key_func=get_remote_address)
+router = APIRouter(
+    prefix="/matchmaking-analysis",
+    tags=["matchmaking-analysis"],
+    dependencies=[Depends(get_current_active_user)],
+)
 
 
 @router.post(
     "/check-matches",
     response_model=Union[dict, NotEnoughMatchesResponse],
 )
+@limiter.limit("20/minute")
 async def check_player_matches(
-    request: MatchmakingAnalysisRequest,
+    request: Request,
+    payload: MatchmakingAnalysisRequest,
     service: MatchmakingServiceDep,
 ):
     """
@@ -32,7 +42,7 @@ async def check_player_matches(
     """
     try:
         has_enough, match_count = await service.check_player_has_enough_matches(
-            request.puuid
+            payload.puuid
         )
         if has_enough:
             return {"success": True, "matches_found": match_count}
@@ -42,8 +52,10 @@ async def check_player_matches(
 
 
 @router.post("/start", response_model=MatchmakingAnalysisResponse)
+@limiter.limit("10/minute")
 async def start_analysis(
-    request: MatchmakingAnalysisRequest,
+    request: Request,
+    payload: MatchmakingAnalysisRequest,
     service: MatchmakingServiceDep,
 ):
     """
@@ -58,7 +70,7 @@ async def start_analysis(
     try:
         # First check if player has enough matches
         has_enough, match_count = await service.check_player_has_enough_matches(
-            request.puuid
+            payload.puuid
         )
         if not has_enough:
             raise HTTPException(
@@ -66,7 +78,7 @@ async def start_analysis(
                 detail=f"Player doesn't have enough matches for this analysis. Found {match_count}, need 10.",
             )
 
-        return await service.start_analysis(request.puuid)
+        return await service.start_analysis(payload.puuid)
     except HTTPException:
         raise
     except Exception as e:

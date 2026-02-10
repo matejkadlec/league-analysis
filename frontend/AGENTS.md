@@ -15,6 +15,7 @@ frontend/
 │   └── ui/              # shadcn/ui primitives (DO NOT EDIT)
 ├── features/            # Domain UI (see features/AGENTS.md)
 │   ├── auth/
+│   ├── cookie-consent/
 │   ├── jobs/
 │   ├── matches/
 │   ├── matchmaking/

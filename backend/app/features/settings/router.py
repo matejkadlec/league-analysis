@@ -8,8 +8,11 @@ from .schemas import (
     SettingUpdate,
     SettingTestResponse,
     APIKeyStatusResponse,
+    ServiceStatusResponse,
     UserSettingsResponse,
     UserSettingsUpdate,
+    UserCookieConsentResponse,
+    UserCookieConsentUpdate,
 )
 from .dependencies import SettingsServiceDep
 from app.features.auth.dependencies import get_current_active_user, get_current_admin_user
@@ -31,6 +34,22 @@ async def get_riot_api_key_status(
     Used for UI header messages.
     """
     return await settings_service.get_api_key_status()
+
+
+@router.get("/service-status", response_model=ServiceStatusResponse)
+async def get_service_status(
+    settings_service: SettingsServiceDep,
+    _current_user: User = Depends(get_current_active_user),
+):
+    """Get user-facing maintenance status."""
+    try:
+        return await settings_service.get_service_status()
+    except Exception as e:
+        logger.error("failed_to_get_service_status", error=str(e), exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail="Internal server error retrieving service status",
+        )
 
 
 @router.get("/riot_api_key", response_model=SettingResponse)
@@ -190,4 +209,45 @@ async def update_user_settings(
         raise HTTPException(
             status_code=500,
             detail="Failed to update user settings",
+        )
+
+
+@router.get("/user/cookie-consent", response_model=UserCookieConsentResponse | None)
+async def get_user_cookie_consent(
+    settings_service: SettingsServiceDep,
+    current_user: User = Depends(get_current_active_user),
+):
+    """Get authenticated user's latest cookie-consent selection."""
+    try:
+        consent = await settings_service.get_user_cookie_consent(current_user.id)
+        return consent
+    except Exception as e:
+        logger.error("failed_to_get_user_cookie_consent", error=str(e), exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to get user cookie consent",
+        )
+
+
+@router.put("/user/cookie-consent", response_model=UserCookieConsentResponse)
+async def update_user_cookie_consent(
+    update: UserCookieConsentUpdate,
+    settings_service: SettingsServiceDep,
+    current_user: User = Depends(get_current_active_user),
+):
+    """Create or update authenticated user's cookie-consent selection."""
+    try:
+        consent = await settings_service.upsert_user_cookie_consent(
+            current_user.id, update
+        )
+        return consent
+    except Exception as e:
+        logger.error(
+            "failed_to_update_user_cookie_consent",
+            error=str(e),
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to update user cookie consent",
         )

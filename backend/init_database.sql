@@ -52,6 +52,11 @@ CREATE TYPE auth.theme_enum AS ENUM (
     'DARK'
 );
 
+CREATE TYPE auth.cookie_consent_level_enum AS ENUM (
+    'necessary',
+    'all'
+);
+
 SET default_tablespace = '';
 SET default_table_access_method = heap;
 
@@ -192,6 +197,23 @@ ALTER TABLE ONLY auth.user_settings
 
 ALTER TABLE ONLY auth.user_settings
     ADD CONSTRAINT fk_user_settings_user_id FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
+
+-- [table] auth.user_cookie_consents
+
+CREATE TABLE auth.user_cookie_consents (
+    user_id bigint NOT NULL,
+    consent_level auth.cookie_consent_level_enum NOT NULL,
+    consent_version character varying(16) DEFAULT 'v1'::character varying NOT NULL,
+    consent_source character varying(32) DEFAULT 'banner'::character varying NOT NULL,
+    consented_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+ALTER TABLE ONLY auth.user_cookie_consents
+    ADD CONSTRAINT pk_user_cookie_consents PRIMARY KEY (user_id);
+
+ALTER TABLE ONLY auth.user_cookie_consents
+    ADD CONSTRAINT fk_user_cookie_consents_user_id FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
 
 -- [table] auth.email_change_requests
 

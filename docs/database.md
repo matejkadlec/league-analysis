@@ -15,6 +15,7 @@ PostgreSQL database schema for League Analysis. This document is auto-generated 
 ```mermaid
 erDiagram
     users ||--|| user_settings : "1:1"
+    users ||--o| user_cookie_consents : "1:0..1"
     users ||--o| email_change_requests : "1:0..1"
     users ||--o{ user_tracked_players : "1:M"
 
@@ -45,6 +46,15 @@ erDiagram
         string saved_tracked_puuid
         string default_platform
         string created_at
+        string updated_at
+    }
+
+    user_cookie_consents {
+        int user_id PK, FK
+        string consent_level
+        string consent_version
+        string consent_source
+        string consented_at
         string updated_at
     }
 
@@ -257,6 +267,11 @@ erDiagram
 - `LIGHT`
 - `DARK`
 
+### `auth.cookie_consent_level_enum`
+
+- `necessary`
+- `all`
+
 ---
 
 ## Key Tables
@@ -318,6 +333,19 @@ User-specific tracked player mappings.
 
 **Primary Key**: (`user_id`, `puuid`)  
 **Behavior**: Jobs process players tracked by any user (distinct `puuid` set).
+
+### `auth.user_cookie_consents`
+
+Authenticated user cookie-consent audit record.
+
+| Column            | Type        | Description                                      |
+| ----------------- | ----------- | ------------------------------------------------ |
+| `user_id`         | bigint      | PK + FK to `auth.users.id`                       |
+| `consent_level`   | enum        | `necessary` or `all`                             |
+| `consent_version` | varchar(16) | Consent policy/version identifier (for re-prompt logic) |
+| `consent_source`  | varchar(32) | Where consent was captured (`banner`, `settings`) |
+| `consented_at`    | timestamptz | Last explicit consent timestamp                  |
+| `updated_at`      | timestamptz | Last row update timestamp                        |
 
 ### `auth.email_change_requests`
 

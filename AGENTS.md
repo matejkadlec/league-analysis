@@ -29,6 +29,9 @@ tail -f logs/frontend.log # Frontend logs
 | [docs/database.md](docs/database.md)     | Database schema, tables, relationships |
 | [docs/riot-api.md](docs/riot-api.md)     | Riot API endpoints, usage, rate limits |
 | [docs/jobs.md](docs/jobs.md)             | Background jobs (Match Fetcher, etc.)  |
+| [docs/prod-requirements.md](docs/prod-requirements.md) | Riot production-launch checklist and current readiness status |
+| [docs/cookie-consent-compliance.md](docs/cookie-consent-compliance.md) | EU cookie-consent legal baseline and implementation mapping |
+| [backend/COOKIE_CONSENT_AGENTS.md](backend/COOKIE_CONSENT_AGENTS.md) | AI implementation checklist for cookie-consent compliance |
 | [backend/AGENTS.md](backend/AGENTS.md)   | Backend architecture, code patterns    |
 | [frontend/AGENTS.md](frontend/AGENTS.md) | Frontend architecture, components      |
 
@@ -38,6 +41,7 @@ tail -f logs/frontend.log # Frontend logs
 - [backend/app/core/riot_api/AGENTS.md](backend/app/core/riot_api/AGENTS.md) - Riot API client
 - [backend/app/features/AGENTS.md](backend/app/features/AGENTS.md) - Feature patterns
 - [backend/app/features/jobs/AGENTS.md](backend/app/features/jobs/AGENTS.md) - Job implementation
+- [backend/COOKIE_CONSENT_AGENTS.md](backend/COOKIE_CONSENT_AGENTS.md) - Cookie-consent rules and checklist for AI agents
 - [frontend/app/AGENTS.md](frontend/app/AGENTS.md) - Page patterns
 - [frontend/components/AGENTS.md](frontend/components/AGENTS.md) - Shared components
 - [frontend/features/AGENTS.md](frontend/features/AGENTS.md) - Feature components

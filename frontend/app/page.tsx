@@ -46,6 +46,20 @@ export default function Home() {
           <CardContent className="px-8 pt-0 pb-6">
             <ul className="list-disc space-y-3 pl-6 text-sm leading-relaxed marker:text-[#cfa93a]">
               <li>
+                Add per-user configuration to cards where it&apos;s applicable.
+                <ul className="list-disc space-y-1 pl-6 marker:text-[#cfa93a]/80">
+                  <li>
+                    Mostly for cards that have some hard-coded threshhold, like
+                    performance trends.
+                  </li>
+                  <li>
+                    As well as specific configurations, like show only champions
+                    with X%+ winrate/X+ KDA/played on mid only in Top Champions
+                    card.
+                  </li>
+                </ul>
+              </li>
+              <li>
                 Extended Match History component.
                 <ul className="list-disc space-y-1 pl-6 marker:text-[#cfa93a]/80">
                   <li>Individual matches will be clickable and expandable.</li>
@@ -66,13 +80,27 @@ export default function Home() {
                 </ul>
               </li>
               <li>
-                Comprehensive meta analysis with toggleable parameters, and what
-                will not be toggleable will be known to the user.
+                Smurfing/boosting detection tool.
                 <ul className="list-disc space-y-1 pl-6 marker:text-[#cfa93a]/80">
-                  <li>Possible multiple approaches on how to analyze meta.</li>
                   <li>
-                    Users can participate on the final formulas and
-                    calculations.
+                    Will analyze player&apos;s match history and check several
+                    factors, thresholds of the factors will be configurable
+                    per-user.
+                  </li>
+                  <li>
+                    For example, hard-stuck account starts rapidly climbing, or
+                    the opposite, a high win rate account suddenly begin to lose
+                    a lot more.
+                  </li>
+                </ul>
+              </li>
+              <li>
+                Comprehensive meta analysis with configurable weights.
+                <ul className="list-disc space-y-1 pl-6 marker:text-[#cfa93a]/80">
+                  <li>Multiple approaches on how to analyze meta.</li>
+                  <li>
+                    Configurable weights of what important is e.g. Win Rate vs
+                    Pick Rate, with some pre-configured sets.
                   </li>
                 </ul>
               </li>

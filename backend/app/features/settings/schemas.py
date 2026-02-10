@@ -65,6 +65,26 @@ class APIKeyStatusResponse(BaseModel):
     )
 
 
+class ServiceStatusResponse(BaseModel):
+    """Response schema for user-facing service maintenance status."""
+
+    is_under_maintenance: bool
+    reason: str = Field(
+        ..., description="Maintenance reason identifier, e.g. 'ok', 'api_key_issue'"
+    )
+    no_active_key_configured: bool
+    latest_job_has_api_key_failure: bool
+    has_recent_recovery: bool = Field(
+        ..., description="Whether a previously failing API-key state is now resolved"
+    )
+    recovery_notice_key: Optional[str] = Field(
+        None,
+        description=(
+            "Unique key for the latest recovery event, used by frontend for dismiss persistence"
+        ),
+    )
+
+
 # ===== USER SETTINGS SCHEMAS =====
 
 
@@ -123,4 +143,43 @@ class UserSettingsUpdate(BaseModel):
     )
     default_platform: Optional[str] = Field(
         None, max_length=4, description="Default server/platform"
+    )
+
+
+class CookieConsentLevel(str, PyEnum):
+    """Cookie-consent levels exposed in settings API."""
+
+    NECESSARY = "necessary"
+    ALL = "all"
+
+
+class UserCookieConsentResponse(BaseModel):
+    """Schema for authenticated user cookie-consent state."""
+
+    consent_level: CookieConsentLevel = Field(
+        ..., description="Selected consent level for non-essential storage"
+    )
+    consent_version: str = Field(
+        ..., min_length=1, max_length=16, description="Consent policy version"
+    )
+    consent_source: str = Field(
+        ..., min_length=1, max_length=32, description="Consent capture source"
+    )
+    consented_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class UserCookieConsentUpdate(BaseModel):
+    """Schema for updating authenticated user cookie consent."""
+
+    consent_level: CookieConsentLevel = Field(
+        ..., description="Selected consent level for non-essential storage"
+    )
+    consent_version: str = Field(
+        default="v1", min_length=1, max_length=16, description="Consent policy version"
+    )
+    consent_source: str = Field(
+        default="banner", min_length=1, max_length=32, description="Consent capture source"
     )

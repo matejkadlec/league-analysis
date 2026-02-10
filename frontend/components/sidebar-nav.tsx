@@ -209,6 +209,13 @@ export function SidebarNav() {
               >
                 Privacy Policy
               </Link>
+              {" | "}
+              <Link
+                href="/cookie-policy"
+                className="underline transition-colors duration-300 hover:text-[#cfa93a]"
+              >
+                Cookie Policy
+              </Link>
             </p>
           </div>
         </div>

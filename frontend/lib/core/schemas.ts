@@ -511,6 +511,28 @@ export const UserSettingsUpdateSchema = z.object({
 export type UserSettings = z.infer<typeof UserSettingsSchema>;
 export type UserSettingsUpdate = z.infer<typeof UserSettingsUpdateSchema>;
 
+export const CookieConsentLevelSchema = z.enum(["necessary", "all"]);
+export type CookieConsentLevel = z.infer<typeof CookieConsentLevelSchema>;
+
+export const UserCookieConsentSchema = z.object({
+  consent_level: CookieConsentLevelSchema,
+  consent_version: z.string().min(1).max(16),
+  consent_source: z.string().min(1).max(32),
+  consented_at: z.string(),
+  updated_at: z.string(),
+});
+
+export const UserCookieConsentUpdateSchema = z.object({
+  consent_level: CookieConsentLevelSchema,
+  consent_version: z.string().min(1).max(16).default("v1"),
+  consent_source: z.string().min(1).max(32).default("banner"),
+});
+
+export type UserCookieConsent = z.infer<typeof UserCookieConsentSchema>;
+export type UserCookieConsentUpdate = z.infer<
+  typeof UserCookieConsentUpdateSchema
+>;
+
 // ===== USER PROFILE SCHEMAS =====
 export const UserResponseSchema = z.object({
   id: z.number(),

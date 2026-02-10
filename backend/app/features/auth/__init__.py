@@ -6,6 +6,7 @@ from .join_us_contact_submission import JoinUsContactSubmission
 from .refresh_token import RefreshToken
 from .revoked_access_token import RevokedAccessToken
 from .subject_counts import SubjectCounts
+from .user_cookie_consent import UserCookieConsent, CookieConsentLevel
 from .user_settings import UserSettings, ThemeEnum
 from .user_tracked_player import UserTrackedPlayer
 from .schemas import (
@@ -33,8 +34,10 @@ __all__ = [
     "RefreshToken",
     "RevokedAccessToken",
     "SubjectCounts",
+    "UserCookieConsent",
     "UserSettings",
     "UserTrackedPlayer",
+    "CookieConsentLevel",
     "ThemeEnum",
     "UserResponse",
     "UserCreate",

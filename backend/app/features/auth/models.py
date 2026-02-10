@@ -17,6 +17,7 @@ from app.core.models import Base
 
 if TYPE_CHECKING:
     from .email_change_request import EmailChangeRequest
+    from .user_cookie_consent import UserCookieConsent
     from .user_settings import UserSettings
     from .user_tracked_player import UserTrackedPlayer
 
@@ -153,6 +154,12 @@ class User(Base):
         uselist=False,
         cascade="all, delete-orphan",
     )
+    cookie_consent: Mapped[Optional["UserCookieConsent"]] = relationship(
+        "UserCookieConsent",
+        back_populates="user",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
     tracked_players: Mapped[list["UserTrackedPlayer"]] = relationship(
         "UserTrackedPlayer",
         back_populates="user",
@@ -176,3 +183,6 @@ Index("idx_users_last_login", User.last_login)
 Index("idx_users_locked_until", User.locked_until)
 Index("idx_users_created_at", User.created_at)
 Index("ix_users_puuid", User.puuid)
+
+# Ensure consent mapper is registered even when this module is imported directly.
+from .user_cookie_consent import UserCookieConsent  # noqa: F401,E402

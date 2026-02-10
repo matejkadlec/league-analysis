@@ -1,6 +1,7 @@
 """Service for managing system settings."""
 
-from sqlalchemy import select
+from datetime import datetime, timezone
+from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
 import structlog
@@ -12,6 +13,8 @@ from .schemas import (
     SettingValidationResponse,
     SettingTestResponse,
     APIKeyStatusResponse,
+    UserCookieConsentUpdate,
+    ServiceStatusResponse,
 )
 from app.core.riot_api.client import RiotAPIClient
 from app.core.config import settings
@@ -102,6 +105,113 @@ class SettingsService:
             env_key_identifier=env_key_identifier,
         )
 
+    async def get_service_status(self) -> ServiceStatusResponse:
+        """Get user-facing maintenance status based on API key health signals."""
+        from app.features.jobs.models import JobExecution, JobStatus
+
+        api_key_status = await self.get_api_key_status()
+        no_active_key_configured = api_key_status.active_source == "none"
+        latest_active_db_key = None
+        key_resolved_at = None
+        if api_key_status.active_source == "db":
+            latest_active_db_key_result = await self.db.execute(
+                select(RiotAPIKey)
+                .where(RiotAPIKey.is_active == True)
+                .order_by(RiotAPIKey.added_at.desc())
+                .limit(1)
+            )
+            latest_active_db_key = latest_active_db_key_result.scalar_one_or_none()
+            if latest_active_db_key is not None:
+                key_resolved_at = (
+                    latest_active_db_key.last_used_at or latest_active_db_key.added_at
+                )
+
+        latest_api_health_signal_result = await self.db.execute(
+            select(
+                JobExecution.status,
+                JobExecution.has_api_key_error,
+                JobExecution.started_at,
+            )
+            .where(
+                or_(
+                    and_(
+                        JobExecution.status == JobStatus.FAILED,
+                        JobExecution.has_api_key_error.is_(True),
+                    ),
+                    JobExecution.status == JobStatus.SUCCESS,
+                )
+            )
+            .order_by(JobExecution.started_at.desc())
+            .limit(1)
+        )
+        latest_api_health_signal = latest_api_health_signal_result.first()
+
+        has_unresolved_api_key_failure = False
+        if latest_api_health_signal is not None:
+            latest_status, has_api_key_error, latest_signal_started_at = (
+                latest_api_health_signal
+            )
+            has_unresolved_api_key_failure = (
+                latest_status == JobStatus.FAILED and bool(has_api_key_error)
+            )
+            # Treat stale failures as resolved when a key was validated successfully after that failure.
+            if has_unresolved_api_key_failure and latest_active_db_key is not None:
+                if (
+                    key_resolved_at is not None
+                    and latest_signal_started_at is not None
+                    and key_resolved_at > latest_signal_started_at
+                ):
+                    has_unresolved_api_key_failure = False
+
+        is_under_maintenance = (
+            no_active_key_configured or has_unresolved_api_key_failure
+        )
+
+        latest_api_key_failure_result = await self.db.execute(
+            select(JobExecution.started_at)
+            .where(
+                and_(
+                    JobExecution.status == JobStatus.FAILED,
+                    JobExecution.has_api_key_error.is_(True),
+                )
+            )
+            .order_by(JobExecution.started_at.desc())
+            .limit(1)
+        )
+        latest_api_key_failure_at = latest_api_key_failure_result.scalar_one_or_none()
+
+        latest_success_result = await self.db.execute(
+            select(JobExecution.started_at)
+            .where(JobExecution.status == JobStatus.SUCCESS)
+            .order_by(JobExecution.started_at.desc())
+            .limit(1)
+        )
+        latest_success_at = latest_success_result.scalar_one_or_none()
+
+        recovery_reference_at = None
+        if latest_api_key_failure_at is not None:
+            if latest_success_at is not None and latest_success_at > latest_api_key_failure_at:
+                recovery_reference_at = latest_success_at
+            if key_resolved_at is not None and key_resolved_at > latest_api_key_failure_at:
+                if recovery_reference_at is None or key_resolved_at > recovery_reference_at:
+                    recovery_reference_at = key_resolved_at
+
+        has_recent_recovery = (
+            recovery_reference_at is not None and not is_under_maintenance
+        )
+        recovery_notice_key = (
+            recovery_reference_at.isoformat() if recovery_reference_at else None
+        )
+
+        return ServiceStatusResponse(
+            is_under_maintenance=is_under_maintenance,
+            reason="api_key_issue" if is_under_maintenance else "ok",
+            no_active_key_configured=no_active_key_configured,
+            latest_job_has_api_key_failure=has_unresolved_api_key_failure,
+            has_recent_recovery=has_recent_recovery,
+            recovery_notice_key=recovery_notice_key,
+        )
+
     async def update_setting(self, key: str, update: SettingUpdate) -> SettingResponse:
         """Update a setting value."""
         if key != "riot_api_key":
@@ -124,8 +234,11 @@ class SettingsService:
 
         if existing_key_entry and existing_key_entry.is_active:
             # No-op: The key is already active and the same
+            existing_key_entry.last_used_at = datetime.now(timezone.utc)
             val = existing_key_entry.key_value
             masked = f"{val[:6]}...{val[-4:]}"
+            await self.db.commit()
+            await self.db.refresh(existing_key_entry)
             return SettingResponse(
                 key="riot_api_key",
                 masked_value=masked,
@@ -155,6 +268,7 @@ class SettingsService:
             self.db.add(new_key)
             target_key = new_key
 
+        target_key.last_used_at = datetime.now(timezone.utc)
         await self.db.commit()
         await self.db.refresh(target_key)
 
@@ -349,3 +463,53 @@ class SettingsService:
         )
 
         return settings
+
+    async def get_user_cookie_consent(self, user_id: int):
+        """Get authenticated user's stored cookie-consent record."""
+        from app.features.auth.user_cookie_consent import UserCookieConsent
+
+        stmt = select(UserCookieConsent).where(UserCookieConsent.user_id == user_id)
+        result = await self.db.execute(stmt)
+        return result.scalar_one_or_none()
+
+    async def upsert_user_cookie_consent(
+        self, user_id: int, update: UserCookieConsentUpdate
+    ):
+        """Create or update authenticated user's cookie-consent record."""
+        from app.features.auth.user_cookie_consent import (
+            UserCookieConsent,
+            CookieConsentLevel,
+        )
+
+        stmt = select(UserCookieConsent).where(UserCookieConsent.user_id == user_id)
+        result = await self.db.execute(stmt)
+        consent = result.scalar_one_or_none()
+
+        consent_level = CookieConsentLevel(update.consent_level.value)
+
+        if consent is None:
+            consent = UserCookieConsent(
+                user_id=user_id,
+                consent_level=consent_level,
+                consent_version=update.consent_version,
+                consent_source=update.consent_source,
+            )
+            self.db.add(consent)
+        else:
+            consent.consent_level = consent_level
+            consent.consent_version = update.consent_version
+            consent.consent_source = update.consent_source
+            consent.consented_at = datetime.now(timezone.utc)
+
+        await self.db.commit()
+        await self.db.refresh(consent)
+
+        logger.info(
+            "updated_user_cookie_consent",
+            user_id=user_id,
+            consent_level=consent.consent_level.value,
+            consent_version=consent.consent_version,
+            consent_source=consent.consent_source,
+        )
+
+        return consent

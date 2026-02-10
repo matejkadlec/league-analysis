@@ -12,6 +12,9 @@ from .schemas import (
     SettingUpdate,
     SettingTestResponse,
     SettingValidationResponse,
+    ServiceStatusResponse,
+    UserCookieConsentResponse,
+    UserCookieConsentUpdate,
 )
 from .dependencies import get_settings_service, SettingsServiceDep
 
@@ -25,6 +28,9 @@ __all__ = [
     "SettingUpdate",
     "SettingTestResponse",
     "SettingValidationResponse",
+    "ServiceStatusResponse",
+    "UserCookieConsentResponse",
+    "UserCookieConsentUpdate",
     # Dependencies
     "get_settings_service",
     "SettingsServiceDep",

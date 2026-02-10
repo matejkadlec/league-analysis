@@ -20,6 +20,7 @@ import {
 } from "@/lib/core/schemas";
 import type { UserProfileUpdate, UserSettingsUpdate } from "@/lib/core/schemas";
 import { ProtectedRoute, useAuth } from "@/features/auth";
+import { requestCookieConsentPreferences } from "@/features/cookie-consent";
 import { ConnectRiotAccountDialog } from "@/features/profile";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -40,9 +41,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  TooltipProvider,
-} from "@/components/ui/tooltip";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { cn } from "@/lib/core/utils";
 import { toast } from "sonner";
 import { notifyApiKeyValid } from "@/lib/core/api-key-status-context";
@@ -1407,6 +1406,25 @@ function AccountSettingsCard({
               <p className="text-xs text-muted-foreground pt-3">
                 {PASSWORD_REQUIREMENTS_TEXT}
               </p>
+            </div>
+
+            <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,1fr)] items-end gap-3">
+              <div className="space-y-1.5">
+                <Label>Cookie settings</Label>
+                <p className="text-xs text-muted-foreground">
+                  Review and update your cookie preferences.
+                </p>
+              </div>
+              <div className="flex items-center justify-end">
+                <Button
+                  type="button"
+                  className={ACCOUNT_ACTION_BUTTON_CLASS}
+                  onClick={requestCookieConsentPreferences}
+                >
+                  <Eye className="h-4 w-4" />
+                  View
+                </Button>
+              </div>
             </div>
           </div>
         </TooltipProvider>

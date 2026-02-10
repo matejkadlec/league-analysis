@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import Link from "next/link";
 import { LegalPageShell } from "@/components/legal-page-shell";
 import {
   AUTH_STATE_COOKIE_NAME,
@@ -48,6 +49,21 @@ export default async function PrivacyPolicyPage() {
         All data is stored securely and is only accessible to authenticated
         users of the application. We do not share, sell, or distribute your
         data to third parties.
+      </p>
+
+      <h2 className="text-2xl font-semibold mt-6 mb-3">Cookies and Storage</h2>
+      <p className="leading-relaxed">
+        We use strictly necessary cookies/local storage for authentication and
+        security. Optional preference storage is only enabled after explicit
+        consent via the cookie dialog.
+      </p>
+      <p className="leading-relaxed">
+        For the full storage list, retention periods, and preference controls,
+        see our{" "}
+        <Link href="/cookie-policy" className="underline hover:text-[#cfa93a]">
+          Cookie Policy
+        </Link>
+        .
       </p>
 
       <h2 className="text-2xl font-semibold mt-6 mb-3">Your Rights</h2>

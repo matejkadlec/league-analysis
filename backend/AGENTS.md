@@ -83,3 +83,4 @@ uv run pyright             # Type check
 - [core/riot_api/AGENTS.md](app/core/riot_api/AGENTS.md) - Riot API client
 - [features/AGENTS.md](app/features/AGENTS.md) - Feature patterns
 - [features/jobs/AGENTS.md](app/features/jobs/AGENTS.md) - Job implementation
+- [COOKIE_CONSENT_AGENTS.md](COOKIE_CONSENT_AGENTS.md) - Cookie-consent compliance and implementation checklist

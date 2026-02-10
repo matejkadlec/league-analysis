@@ -607,10 +607,13 @@ def _handle_tracking_unexpected_error(
 
 
 @router.post("/{puuid}/refresh-league", response_model=PlayerLeagueResponse | None)
+@limiter.limit("30/minute")
 async def refresh_player_league(
+    request: Request,
     puuid: str,
     player_service: PlayerServiceDep,
     riot_client: Annotated["RiotAPIClient", Depends(get_riot_client)],
+    _current_user: User = Depends(get_current_active_user),
     queue_type: str = Query(
         "RANKED_SOLO_5x5", description="Queue type to refresh league for"
     ),

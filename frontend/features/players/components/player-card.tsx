@@ -13,7 +13,10 @@ import { User, Trophy, RefreshCw, Loader2, Clock, StarOff } from "lucide-react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { validatedGet, api, untrackPlayer } from "@/lib/core/api";
 import { getPlatformDisplayName } from "@/lib/core/platform-utils";
-import { getProfileIconUrl } from "@/lib/core/data-dragon";
+import {
+  getProfileIconUrl,
+  getProfileIconFallbackUrl,
+} from "@/lib/core/data-dragon";
 import { toast } from "sonner";
 import { useState } from "react";
 import { useAuth } from "@/features/auth";
@@ -93,6 +96,16 @@ export function PlayerCard({ player, onRefreshAll }: PlayerCardProps) {
   const userId = user?.id;
   const [isUpdating, setIsUpdating] = useState(false);
   const [isHoveringTracked, setIsHoveringTracked] = useState(false);
+  const [failedProfileIconKey, setFailedProfileIconKey] = useState<string | null>(
+    null,
+  );
+  const profileIconId =
+    typeof player.profile_icon_id === "number" ? player.profile_icon_id : 29;
+  const profileIconKey = `${player.puuid}:${profileIconId}`;
+  const hasFailedProfileIcon = failedProfileIconKey === profileIconKey;
+  const profileIconSrc = hasFailedProfileIcon
+    ? getProfileIconFallbackUrl(profileIconId)
+    : getProfileIconUrl(profileIconId);
 
   // Fetch player league
   const { data: league, refetch: refetchLeague } = useQuery({
@@ -212,11 +225,15 @@ export function PlayerCard({ player, onRefreshAll }: PlayerCardProps) {
           >
             {player.profile_icon_id ? (
               <Image
-                src={getProfileIconUrl(player.profile_icon_id)}
+                key={profileIconKey}
+                src={profileIconSrc}
                 alt="Profile Icon"
                 fill
                 className="object-cover"
                 sizes="72px"
+                onError={() => {
+                  setFailedProfileIconKey(profileIconKey);
+                }}
               />
             ) : (
               <div className="flex h-full w-full items-center justify-center">

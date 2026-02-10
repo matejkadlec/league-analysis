@@ -15,15 +15,18 @@ Next.js App Router pages.
 | `/jobs`                 | `jobs/page.tsx`                 | Background jobs monitoring (admin only) |
 | `/settings`             | `settings/page.tsx`             | Application + account settings for all users, Riot API config for admins |
 | `/sign-in`              | `sign-in/page.tsx`              | Authentication (signed-in users are redirected to `/`) |
-| `/join-us`              | `join-us/page.tsx`              | Public recruitment + contact form (auth-aware back button + public footer) |
+| `/join-us`              | `join-us/page.tsx`              | Temporarily hidden route (redirects signed-in users to `/`, signed-out users to `/sign-in`) |
 | `/license`              | `license/page.tsx`              | Legal terms page (public; signed-in and signed-out layouts share same URL) |
 | `/privacy-policy`       | `privacy-policy/page.tsx`       | Privacy page (public; signed-in and signed-out layouts share same URL) |
+| `/cookie-policy`        | `cookie-policy/page.tsx`        | Cookie/storage policy page (public; signed-in and signed-out layouts share same URL) |
 
 ## Key Files
 
 | File            | Purpose                           |
 | --------------- | --------------------------------- |
 | `layout.tsx`    | Root layout with providers        |
+| `robots.ts`     | Robots rules (`/robots.txt`) for crawler indexing control |
+| `sitemap.ts`    | Sitemap generator (`/sitemap.xml`) for public routes |
 | `globals.css`   | Global styles + Tailwind + shadcn |
 | `error.tsx`     | Error boundary                    |
 | `loading.tsx`   | Root loading state                |

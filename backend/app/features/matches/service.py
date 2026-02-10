@@ -1666,6 +1666,7 @@ class MatchService:
         progress_callback: Optional[Any] = None,
         should_cancel: Optional[Any] = None,
         queue_ids: Optional[list[int]] = None,
+        rate_limiter: Optional[DBRateLimiter] = None,
     ) -> int:
         """
         Smart match history analysis: fetches only NEW matches and re-analyzes failed ones.
@@ -1683,6 +1684,7 @@ class MatchService:
             puuid: Player PUUID
             progress_callback: Optional async callback(current, total)
             should_cancel: Optional callable returning bool. If True, stops processing.
+            rate_limiter: Optional DB-backed limiter for coordinated API throttling.
 
         Returns:
             Number of matches processed
@@ -1705,9 +1707,23 @@ class MatchService:
             api_match_ids: list[str] = []
             seen_match_ids: set[str] = set()
             for queue_id in target_queue_ids:
+                if rate_limiter:
+                    can_proceed = await rate_limiter.acquire()
+                    if not can_proceed:
+                        logger.warning(
+                            "Rate limit reached before match-list fetch in analysis",
+                            puuid=puuid,
+                            queue_id=queue_id,
+                        )
+                        break
+
+                match_list_requested = False
                 match_list = await riot_api_client.get_match_list_by_puuid(
                     puuid=puuid, count=100, queue=queue_id
                 )
+                match_list_requested = True
+                if rate_limiter and match_list_requested:
+                    await rate_limiter.record_request()
 
                 queue_match_ids: list[str] = []
                 if match_list:
@@ -1835,7 +1851,19 @@ class MatchService:
 
                 try:
                     # Fetch match details
+                    if rate_limiter:
+                        can_proceed = await rate_limiter.acquire()
+                        if not can_proceed:
+                            logger.warning(
+                                "Rate limit reached during analysis match fetch",
+                                puuid=puuid,
+                                match_id=match_id,
+                            )
+                            break
+
                     match_dto = await riot_api_client.get_match(match_id)
+                    if rate_limiter:
+                        await rate_limiter.record_request()
                     if not match_dto:
                         continue
 
@@ -1852,9 +1880,23 @@ class MatchService:
 
                     timeline_payload: Optional[Dict[str, Any]] = None
                     try:
+                        timeline_requested = False
+                        if rate_limiter:
+                            can_proceed = await rate_limiter.acquire()
+                            if not can_proceed:
+                                logger.warning(
+                                    "Rate limit reached during analysis timeline fetch",
+                                    puuid=puuid,
+                                    match_id=match_id,
+                                )
+                                break
+
                         timeline_payload = await riot_api_client.get_match_timeline(
                             match_id
                         )
+                        timeline_requested = True
+                        if rate_limiter and timeline_requested:
+                            await rate_limiter.record_request()
                     except Exception as timeline_error:
                         logger.warning(
                             "Failed to fetch timeline during analysis, continuing without timeline",

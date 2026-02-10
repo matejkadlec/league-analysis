@@ -10,6 +10,11 @@ import {
   Clock,
   ListRestart,
   Swords,
+  Crown,
+  Eye,
+  Flame,
+  Landmark,
+  Shield,
 } from "lucide-react";
 import { toast } from "sonner";
 import Image from "next/image";
@@ -26,8 +31,6 @@ import {
   getChampionIconUrl,
   getChampionDisplayName,
   getSummonerSpellIconUrlById,
-  getRuneStyleIconUrl,
-  getObjectiveIconUrl,
 } from "@/lib/core/data-dragon";
 import {
   Tooltip,
@@ -89,6 +92,14 @@ const MATCH_HISTORY_QUEUE_FILTERS = [
   { id: 440 as const, label: "Ranked Flex", widthClass: "w-[96px]" },
   { id: 400 as const, label: "Normal Draft", widthClass: "w-[100px]" },
 ];
+
+const RUNE_STYLE_BADGE_MAP: Record<number, { label: string; bgClass: string }> = {
+  8000: { label: "P", bgClass: "bg-amber-500/85" }, // Precision
+  8100: { label: "D", bgClass: "bg-rose-500/85" }, // Domination
+  8200: { label: "S", bgClass: "bg-blue-500/85" }, // Sorcery
+  8300: { label: "I", bgClass: "bg-cyan-500/85" }, // Inspiration
+  8400: { label: "R", bgClass: "bg-emerald-500/85" }, // Resolve
+};
 
 // Format time as "H:MM AM/PM"
 function formatTime(timestamp: number): string {
@@ -264,39 +275,33 @@ function MatchRow({
     }
 
     // Use primary_style for primary rune icon (not keystone)
-    const primaryStyleUrl = runes.primary_style
-      ? getRuneStyleIconUrl(runes.primary_style)
-      : null;
-    const subStyleUrl = runes.sub_style
-      ? getRuneStyleIconUrl(runes.sub_style)
-      : null;
+    const primaryStyleBadge = runes.primary_style
+      ? RUNE_STYLE_BADGE_MAP[runes.primary_style]
+      : undefined;
+    const subStyleBadge = runes.sub_style
+      ? RUNE_STYLE_BADGE_MAP[runes.sub_style]
+      : undefined;
 
     return (
       <div className="flex flex-col gap-0.5 items-center">
-        {/* Primary style rune - bigger, CIRCLE, no background */}
         <div className="relative h-7 w-7 rounded-full overflow-hidden shrink-0 mb-1">
-          {primaryStyleUrl ? (
-            <Image
-              src={primaryStyleUrl}
-              alt="Primary Rune"
-              fill
-              className="object-cover"
-              unoptimized
-            />
+          {primaryStyleBadge ? (
+            <div
+              className={`flex h-full w-full items-center justify-center rounded-full text-[10px] font-bold text-white ${primaryStyleBadge.bgClass}`}
+            >
+              {primaryStyleBadge.label}
+            </div>
           ) : (
             <div className="h-full w-full bg-muted" />
           )}
         </div>
-        {/* Secondary tree - square with border radius, no background */}
         <div className="relative h-4 w-4 rounded overflow-hidden shrink-0">
-          {subStyleUrl ? (
-            <Image
-              src={subStyleUrl}
-              alt="Secondary Rune"
-              fill
-              className="object-cover"
-              unoptimized
-            />
+          {subStyleBadge ? (
+            <div
+              className={`flex h-full w-full items-center justify-center rounded text-[9px] font-bold text-white ${subStyleBadge.bgClass}`}
+            >
+              {subStyleBadge.label}
+            </div>
           ) : (
             <div className="h-full w-full bg-muted" />
           )}
@@ -336,6 +341,8 @@ function MatchRow({
     // Turret gets 30% bigger size
     const isTurret = objective === "turret";
     const iconSizeClass = isTurret ? "h-[26px] w-[26px]" : "h-5 w-5";
+    const objectiveColorClass =
+      team === "blue" ? "text-cyan-400" : "text-rose-500";
 
     // Display '?' for null/undefined counts (timeline data unavailable)
     const displayCount =
@@ -350,15 +357,23 @@ function MatchRow({
         {objective === "voidgrub" ? (
           <VoidgrubIcon color={team === "blue" ? "#0A96AA" : "#BE1E37"} />
         ) : (
-          <div className={`relative ${iconSizeClass}`}>
-            <Image
-              src={getObjectiveIconUrl(objective, team)}
-              alt={title}
-              fill
-              className="object-cover"
-              unoptimized
-            />
-          </div>
+          <>
+            {objective === "turret" && (
+              <Landmark className={`${iconSizeClass} ${objectiveColorClass}`} />
+            )}
+            {objective === "inhibitor" && (
+              <Shield className={`${iconSizeClass} ${objectiveColorClass}`} />
+            )}
+            {objective === "dragon" && (
+              <Flame className={`${iconSizeClass} ${objectiveColorClass}`} />
+            )}
+            {objective === "herald" && (
+              <Eye className={`${iconSizeClass} ${objectiveColorClass}`} />
+            )}
+            {objective === "baron" && (
+              <Crown className={`${iconSizeClass} ${objectiveColorClass}`} />
+            )}
+          </>
         )}
         {/* Added 'w-5' and 'text-center' to reserve fixed space for 1 or 2 digits */}
         <span className="w-5 text-center text-xs">{displayCount}</span>

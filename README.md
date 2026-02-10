@@ -133,7 +133,7 @@ Logs are available at [backend.log](logs/backend.log) and [frontend.log](logs/fr
 - Backend: http://localhost:8000 (API docs: `/redoc`)
 - Frontend: http://localhost:3000
 - Public Join Us page: http://localhost:3000/join-us
-- Public legal pages: http://localhost:3000/license and http://localhost:3000/privacy-policy
+- Public legal pages: http://localhost:3000/license, http://localhost:3000/privacy-policy and http://localhost:3000/cookie-policy
 
 ## Documentation
 
@@ -141,9 +141,10 @@ See [AGENTS.md](AGENTS.md) for main documentation index, individual folders then
 specific `AGENTS.md` file. Though these file are primarily for AI agents, not for humans.
 
 More readable documentation, as well as TODO tasks and Riot API response examples can be found
-in the [docs](docs) folder, though it's incomplete and currently there are only 3 markdown files.
+in the [docs](docs) folder.
 
 - `database.md`
+- `cookie-consent-compliance.md`
 - `jobs.md`
 - `riot-api.md`
 

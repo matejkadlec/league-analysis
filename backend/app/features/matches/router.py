@@ -1,9 +1,18 @@
 """Match API endpoints for the Riot API application."""
 
-from fastapi import APIRouter, HTTPException, Query, BackgroundTasks, Depends
+from fastapi import (
+    APIRouter,
+    HTTPException,
+    Query,
+    BackgroundTasks,
+    Depends,
+    Request,
+)
 from typing import Optional, Dict, Any
 import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 from app.core.database import get_db
 
 from .schemas import (
@@ -17,9 +26,13 @@ from .dependencies import (
     MatchServiceDep,
     get_match_service,
 )
+from app.core.riot_api.db_rate_limiter import DBRateLimiter, RateLimitComponent
+from app.features.auth.dependencies import get_current_active_user
+from app.features.auth.models import User
 
 router = APIRouter(prefix="/matches", tags=["matches"])
 router.get_match_service = get_match_service  # type: ignore[attr-defined]
+limiter = Limiter(key_func=get_remote_address)
 
 # In-memory job store for analysis tasks
 analysis_jobs: Dict[str, Dict[str, Any]] = {}
@@ -162,6 +175,8 @@ async def _run_analysis_task(
 
     logger = logging.getLogger(__name__)
 
+    rate_limiter: DBRateLimiter | None = None
+
     try:
         from app.core.riot_api.client import RiotAPIClient
         from app.features.matches.service import MatchService
@@ -201,6 +216,9 @@ async def _run_analysis_task(
             match_service = MatchService(session)
 
             async with RiotAPIClient(api_key) as client:
+                rate_limiter = DBRateLimiter(
+                    session, RateLimitComponent.MATCHMAKING_ANALYSIS
+                )
                 # 1. Fetch and update match data
                 analysis_jobs[job_id][
                     "message"
@@ -217,6 +235,7 @@ async def _run_analysis_task(
                     progress_callback=progress_callback,
                     should_cancel=should_cancel,
                     queue_ids=[420, 440, 400],
+                    rate_limiter=rate_limiter,
                 )
 
                 # Check if we finished due to cancellation
@@ -259,13 +278,25 @@ async def _run_analysis_task(
         if job_id in analysis_jobs:
             analysis_jobs[job_id]["status"] = "failed"
             analysis_jobs[job_id]["error"] = error_msg
+    finally:
+        if rate_limiter is not None:
+            try:
+                await rate_limiter.release()
+            except Exception as release_error:
+                logger.warning(
+                    "Failed to release DB rate limiter after analysis task: %s",
+                    release_error,
+                )
 
 
 @router.post("/analyze/{puuid}")
+@limiter.limit("5/minute")
 async def analyze_match_history(
+    request: Request,
     puuid: str,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
 ):
     """Start match history analysis background job."""
     import os
@@ -283,6 +314,7 @@ async def analyze_match_history(
 
     job_id = str(uuid.uuid4())
     analysis_jobs[job_id] = {
+        "user_id": current_user.id,
         "status": "pending",
         "progress": 0,
         "total": 0,
@@ -296,10 +328,15 @@ async def analyze_match_history(
 
 
 @router.post("/analyze/cancel/{job_id}")
-async def cancel_analysis_job(job_id: str):
+async def cancel_analysis_job(
+    job_id: str,
+    current_user: User = Depends(get_current_active_user),
+):
     """Cancel a running analysis job."""
     if job_id not in analysis_jobs:
         raise HTTPException(status_code=404, detail="Job not found")
+    if analysis_jobs[job_id].get("user_id") != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized for this job")
 
     analysis_jobs[job_id]["cancelled"] = True
     analysis_jobs[job_id]["status"] = "cancelling"
@@ -309,8 +346,13 @@ async def cancel_analysis_job(job_id: str):
 
 
 @router.get("/analyze/status/{job_id}")
-async def get_analysis_status(job_id: str):
+async def get_analysis_status(
+    job_id: str,
+    current_user: User = Depends(get_current_active_user),
+):
     """Get status of match history analysis job."""
     if job_id not in analysis_jobs:
         raise HTTPException(status_code=404, detail="Job not found")
+    if analysis_jobs[job_id].get("user_id") != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized for this job")
     return analysis_jobs[job_id]

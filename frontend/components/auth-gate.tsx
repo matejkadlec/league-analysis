@@ -6,7 +6,13 @@ import { useAuth } from "@/features/auth";
 import { hasAuthTokens } from "@/features/auth/utils/token-manager";
 
 // Routes that don't require authentication
-const PUBLIC_ROUTES = ["/sign-in", "/join-us", "/privacy-policy", "/license"];
+const PUBLIC_ROUTES = [
+  "/sign-in",
+  "/join-us",
+  "/privacy-policy",
+  "/cookie-policy",
+  "/license",
+];
 
 interface AuthGateProps {
   children: React.ReactNode;

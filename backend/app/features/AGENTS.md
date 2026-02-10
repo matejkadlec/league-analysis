@@ -8,7 +8,7 @@ Domain-specific business logic organized by feature. Each feature is self-contai
 
 | Feature                 | Description                                             |
 | ----------------------- | ------------------------------------------------------- |
-| `auth/`                 | User auth, JWT revocation blacklist, refresh rotation, lockout, adaptive CAPTCHA, self-service email updates, password changes with current-password verification, public Join Us contact flow with subject counters and IP anti-spam |
+| `auth/`                 | User auth, JWT revocation blacklist, refresh rotation, lockout, adaptive CAPTCHA, self-service email updates, password changes with current-password verification, cookie-consent audit persistence, public Join Us contact flow with subject counters and IP anti-spam |
 | `players/`              | Search, tracking, rank info                             |
 | `matches/`              | Match history, stats                                    |
 | `playstyle_analysis/`   | Playstyle analysis                                      |

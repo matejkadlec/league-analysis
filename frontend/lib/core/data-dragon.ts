@@ -10,8 +10,6 @@
 const DDRAGON_VERSION = "15.2.1";
 
 const DDRAGON_BASE_URL = `https://ddragon.leagueoflegends.com/cdn/${DDRAGON_VERSION}`;
-const CDRAGON_BASE_URL =
-  "https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default";
 
 /**
  * Get the URL for a champion's square icon.
@@ -52,17 +50,16 @@ export function getChampionLoadingUrl(
  * @returns URL to the profile icon image
  */
 export function getProfileIconUrl(profileIconId: number): string {
-  return `${CDRAGON_BASE_URL}/v1/profile-icons/${profileIconId}.jpg`;
+  return `${DDRAGON_BASE_URL}/img/profileicon/${profileIconId}.png`;
 }
 
 /**
- * Get fallback URL for a summoner profile icon from CommunityDragon.
- *
- * CommunityDragon uses latest game assets and is useful when Data Dragon
- * versioning lags behind newer icon IDs.
+ * Get fallback URL for a summoner profile icon.
+ * Uses default icon 29 when the target icon is unavailable.
  */
 export function getProfileIconFallbackUrl(profileIconId: number): string {
-  return `${CDRAGON_BASE_URL}/v1/profile-icons/${profileIconId}.jpg`;
+  void profileIconId;
+  return `${DDRAGON_BASE_URL}/img/profileicon/29.png`;
 }
 
 /**
@@ -215,50 +212,13 @@ export function getSummonerSpellIconUrlById(spellId: number): string | null {
 /**
  * Community Dragon base URL for game data assets
  */
-/**
- * Rune style ID to icon path mapping for Community Dragon.
- * These are the main rune tree styles - paths from perkstyles.json iconPath.
- * API IDs (8000-8400) map to CDN icon names (7200-7204).
- */
-export const RUNE_STYLE_MAP: Record<number, { name: string; icon: string }> = {
-  8000: { name: "Precision", icon: "7201_precision" },
-  8100: { name: "Domination", icon: "7200_domination" },
-  8200: { name: "Sorcery", icon: "7202_sorcery" },
-  8300: { name: "Inspiration", icon: "7203_whimsy" },
-  8400: { name: "Resolve", icon: "7204_resolve" },
+export const RUNE_STYLE_MAP: Record<number, { name: string }> = {
+  8000: { name: "Precision" },
+  8100: { name: "Domination" },
+  8200: { name: "Sorcery" },
+  8300: { name: "Inspiration" },
+  8400: { name: "Resolve" },
 };
-
-/**
- * Alternative CDN URLs for rune icons (in case primary doesn't work):
- * 1. https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/perk-images/styles/{icon}.png
- * 2. https://ddragon.leagueoflegends.com/cdn/img/perk-images/Styles/{style}/{icon}.png (Data Dragon)
- * 3. https://cdn.communitydragon.org/latest/perk-images/Styles/{icon}.png
- */
-
-/**
- * Get the URL for a rune style (tree) icon.
- *
- * @param styleId - The rune style ID (8000, 8100, 8200, 8300, 8400)
- * @returns URL to the rune style icon, or null if not found
- */
-export function getRuneStyleIconUrl(styleId: number): string | null {
-  const style = RUNE_STYLE_MAP[styleId];
-  if (!style) {
-    return null;
-  }
-  return `${CDRAGON_BASE_URL}/v1/perk-images/styles/${style.icon}.png`;
-}
-
-/**
- * Get the URL for a primary rune style icon (same as getRuneStyleIconUrl).
- * Use primary_style from the runes data, NOT the keystone perk ID.
- *
- * @param styleId - The primary style ID (8000, 8100, 8200, 8300, 8400)
- * @returns URL to the rune style icon, or null if not found
- */
-export function getPrimaryRuneStyleIconUrl(styleId: number): string | null {
-  return getRuneStyleIconUrl(styleId);
-}
 
 /**
  * Get the name of a rune style.
@@ -268,49 +228,4 @@ export function getPrimaryRuneStyleIconUrl(styleId: number): string | null {
  */
 export function getRuneStyleName(styleId: number): string | null {
   return RUNE_STYLE_MAP[styleId]?.name ?? null;
-}
-
-/**
- * Match History CDN base URL for objective icons
- */
-const MATCH_HISTORY_CDN =
-  "https://raw.communitydragon.org/latest/plugins/rcp-fe-lol-match-history/global/default";
-
-/**
- * Objective icon URLs from Community Dragon match history assets (Blue team - 100)
- */
-export const OBJECTIVE_ICONS_BLUE = {
-  turret: `${MATCH_HISTORY_CDN}/tower-100.png`,
-  inhibitor: `${MATCH_HISTORY_CDN}/inhibitor-100.png`,
-  dragon: `${MATCH_HISTORY_CDN}/dragon-100.png`,
-  herald: `${MATCH_HISTORY_CDN}/herald-100.png`,
-  baron: `${MATCH_HISTORY_CDN}/baron-100.png`,
-} as const;
-
-/**
- * Objective icon URLs from Community Dragon match history assets (Red team - 200)
- */
-export const OBJECTIVE_ICONS_RED = {
-  turret: `${MATCH_HISTORY_CDN}/tower-200.png`,
-  inhibitor: `${MATCH_HISTORY_CDN}/inhibitor-200.png`,
-  dragon: `${MATCH_HISTORY_CDN}/dragon-200.png`,
-  herald: `${MATCH_HISTORY_CDN}/herald-200.png`,
-  baron: `${MATCH_HISTORY_CDN}/baron-200.png`,
-} as const;
-
-export type ObjectiveType = keyof typeof OBJECTIVE_ICONS_BLUE;
-
-/**
- * Get the URL for an objective icon based on team color
- *
- * @param objective - The objective type (turret, inhibitor, dragon, herald, baron)
- * @param team - The team color ("blue" or "red")
- * @returns URL to the objective icon, or null for voidgrub (which uses SVG)
- */
-export function getObjectiveIconUrl(
-  objective: ObjectiveType,
-  team: "blue" | "red" = "blue",
-): string {
-  const icons = team === "blue" ? OBJECTIVE_ICONS_BLUE : OBJECTIVE_ICONS_RED;
-  return icons[objective];
 }
