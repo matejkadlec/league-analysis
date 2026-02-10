@@ -133,6 +133,7 @@ Logs are available at [backend.log](logs/backend.log) and [frontend.log](logs/fr
 - Backend: http://localhost:8000 (API docs: `/redoc`)
 - Frontend: http://localhost:3000
 - Public Join Us page: http://localhost:3000/join-us
+- Public legal pages: http://localhost:3000/license and http://localhost:3000/privacy-policy
 
 ## Documentation
 

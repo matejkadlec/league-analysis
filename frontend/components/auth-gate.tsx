@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "@/features/auth";
+import { hasAuthTokens } from "@/features/auth/utils/token-manager";
 
 // Routes that don't require authentication
 const PUBLIC_ROUTES = ["/sign-in", "/join-us", "/privacy-policy", "/license"];
@@ -20,10 +21,20 @@ export function AuthGate({ children }: AuthGateProps) {
   const { isAuthenticated, isLoading } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
+  const hasAuthTokenHint = hasAuthTokens();
 
   const isPublicRoute = PUBLIC_ROUTES.some(
     (route) => pathname === route || pathname.startsWith(`${route}/`),
   );
+  const isSignInRoute =
+    pathname === "/sign-in" || pathname.startsWith("/sign-in/");
+
+  // Redirect authenticated users away from sign-in page.
+  useEffect(() => {
+    if (!isLoading && isAuthenticated && isSignInRoute) {
+      router.replace("/");
+    }
+  }, [isLoading, isAuthenticated, isSignInRoute, router]);
 
   // Redirect to sign-in if not authenticated and not on a public route
   useEffect(() => {
@@ -32,7 +43,20 @@ export function AuthGate({ children }: AuthGateProps) {
     }
   }, [isLoading, isAuthenticated, isPublicRoute, router]);
 
-  // If on a public route, always render children
+  // Hide sign-in page while auth state resolves and during redirect.
+  if (isSignInRoute) {
+    if (isAuthenticated) {
+      return null;
+    }
+
+    if (isLoading && hasAuthTokenHint) {
+      return null;
+    }
+
+    return <>{children}</>;
+  }
+
+  // If on another public route, always render children
   if (isPublicRoute) {
     return <>{children}</>;
   }

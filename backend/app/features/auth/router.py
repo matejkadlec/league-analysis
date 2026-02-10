@@ -36,6 +36,7 @@ from .service import (
     InvalidEmailVerificationCodeError,
     EmailVerificationCodeExpiredError,
     EmailVerificationRequestNotFoundError,
+    InvalidCurrentPasswordError,
     JoinUsCaptchaRequiredError,
     JoinUsCaptchaVerificationError,
     JoinUsEmailNotConfiguredError,
@@ -501,8 +502,19 @@ async def change_password(
 ) -> MessageResponse:
     """Change password for the current authenticated user."""
     _ = request
-    await auth_service.change_password(
-        current_user=current_user,
-        new_password=payload.new_password,
-    )
+    try:
+        await auth_service.change_password(
+            current_user=current_user,
+            current_password=payload.current_password,
+            new_password=payload.new_password,
+        )
+    except InvalidCurrentPasswordError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "CURRENT_PASSWORD_INVALID",
+                "message": "Current password is invalid.",
+            },
+        )
+
     return MessageResponse(message="Password changed successfully.")

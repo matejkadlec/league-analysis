@@ -1,10 +1,9 @@
 "use client";
 
 import { useRef, useState, type FormEvent } from "react";
-import Link from "next/link";
 import axios from "axios";
 import { Turnstile, type TurnstileInstance } from "@marsidev/react-turnstile";
-import { ArrowLeft, Code2, Puzzle, UserCheck, Users } from "lucide-react";
+import { Code2, Puzzle, UserCheck, Users } from "lucide-react";
 import { toast } from "sonner";
 
 import { api } from "@/lib/core/api";
@@ -19,6 +18,9 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
+import { PublicBackButton } from "@/components/public-back-button";
+import { PublicPageFooter } from "@/components/public-page-footer";
+import { useAuth } from "../context/auth-context";
 
 type JoinUsSubject = "beta_tester" | "full_stack_developer" | "other";
 
@@ -104,7 +106,12 @@ function resolveApiErrorMessage(error: unknown): string {
   );
 }
 
-export function JoinUsForm() {
+interface JoinUsFormProps {
+  isAuthenticatedHint?: boolean;
+}
+
+export function JoinUsForm({ isAuthenticatedHint = false }: JoinUsFormProps) {
+  const { isAuthenticated, isLoading } = useAuth();
   const [subject, setSubject] = useState<JoinUsSubject | "">("");
   const [body, setBody] = useState("");
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
@@ -131,6 +138,12 @@ export function JoinUsForm() {
     !isTurnstileConfigured ||
     (captchaToken !== null && captchaToken.length > 0);
   const canSubmit = isSubjectValid && isBodyValid && isCaptchaSatisfied;
+  const isAuthenticatedForBackButton =
+    isAuthenticated || (isLoading && isAuthenticatedHint);
+  const backButtonHref = isAuthenticatedForBackButton ? "/" : "/sign-in";
+  const backButtonLabel = isAuthenticatedForBackButton
+    ? "Back to Home page"
+    : "Back to Sign In page";
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -172,295 +185,289 @@ export function JoinUsForm() {
   };
 
   return (
-    <div className="min-h-screen px-4 pb-16 pt-16">
-      <div className="fixed left-4 top-16 z-[90]">
-        <Button
-          asChild
-          variant="outline"
-          className="h-10 rounded-lg border border-white/30 bg-[#0a1428]/95 px-4 text-sm font-semibold text-white shadow-md backdrop-blur hover:bg-[#0f1f3a]"
-        >
-          <Link href="/sign-in">
-            <ArrowLeft className="h-4 w-4" />
-            Back to Sign In page
-          </Link>
-        </Button>
-      </div>
+    <div className="flex min-h-screen flex-col">
+      <div className="relative flex-1 px-4 pb-16 pt-16">
+        <PublicBackButton href={backButtonHref} label={backButtonLabel} />
 
-      <div className="mx-auto flex w-full max-w-[1200px] flex-col gap-8 xl:w-3/4">
-        <Card className="border-white/15 bg-[#0a1428]/95 text-white shadow-xl">
-          <CardHeader className="space-y-3 p-6">
-            <CardTitle className="flex items-center gap-3 text-2xl font-semibold">
-              <Users className="h-6 w-6 text-[#cfa93a]" />
-              Join League Analysis
-            </CardTitle>
-            <CardDescription className="text-sm text-white/80">
-              We are currently looking for volunteer Beta Testers and Full-Stack
-              Developers who want to build better League analytics with us.
-            </CardDescription>
-          </CardHeader>
-        </Card>
-
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 lg:items-start">
+        <div className="mx-auto flex w-full max-w-[1200px] flex-col gap-8 xl:w-3/4">
           <Card className="border-white/15 bg-[#0a1428]/95 text-white shadow-xl">
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2 text-xl">
-                <Code2 className="h-5 w-5 text-[#cfa93a]" />
-                Full-Stack Developer
+            <CardHeader className="space-y-3 p-6">
+              <CardTitle className="flex items-center gap-3 text-2xl font-semibold">
+                <Users className="h-6 w-6 text-[#cfa93a]" />
+                Join League Analysis
               </CardTitle>
               <CardDescription className="text-sm text-white/80">
-                Love-hate League of Legends? Passionate about data and software
-                engineering? Join us.
+                We are actively looking for volunteer full-stack developers and
+                beta testers who want to build better League analytics with us.
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-5 text-sm text-white/90">
-              <div>
-                <h3 className="mb-2 font-semibold">
-                  You must have experience with
-                </h3>
-                <ul className="list-disc space-y-1.5 pl-5 marker:text-[#cfa93a]">
-                  {DEVELOPER_REQUIRED.map((item) => (
-                    <li key={item}>{item}</li>
-                  ))}
-                </ul>
-              </div>
-
-              <div>
-                <h3 className="mb-2 font-semibold">
-                  Nice to have experience with
-                </h3>
-                <ul className="list-disc space-y-1.5 pl-5 marker:text-[#cfa93a]">
-                  {DEVELOPER_NICE_TO_HAVE.map((item) => (
-                    <li key={item}>{item}</li>
-                  ))}
-                </ul>
-              </div>
-
-              <div>
-                <h3 className="mb-2 font-semibold">The real deal-breaker</h3>
-                <ul className="list-disc space-y-1.5 pl-5 marker:text-[#cfa93a]">
-                  {DEVELOPER_DEAL_BREAKER.map((item) => (
-                    <li key={item}>{item}</li>
-                  ))}
-                </ul>
-              </div>
-
-              <div>
-                <h3 className="mb-2 font-semibold">Why join us</h3>
-                <ul className="list-disc space-y-1.5 pl-5 marker:text-[#cfa93a]">
-                  {DEVELOPER_BENEFITS.map((item) => (
-                    <li key={item}>{item}</li>
-                  ))}
-                </ul>
-              </div>
-
-              <p className="rounded-md border border-red-400/45 bg-red-950/45 p-3 text-xs leading-relaxed text-red-100">
-                Note that the project is currently non-profit and only long-term
-                (3+ months) contributors are welcomed.
-              </p>
-            </CardContent>
           </Card>
 
-          <div className="flex flex-col gap-6">
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 lg:items-start">
             <Card className="border-white/15 bg-[#0a1428]/95 text-white shadow-xl">
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2 text-xl">
-                  <UserCheck className="h-5 w-5 text-[#cfa93a]" />
-                  Beta Tester
+                  <Code2 className="h-5 w-5 text-[#cfa93a]" />
+                  Full-Stack Developer
                 </CardTitle>
                 <CardDescription className="text-sm text-white/80">
-                  Help us polish the product before wider release.
+                  Love-hate League of Legends? Passionate about data and
+                  software engineering? Join us.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-5 text-sm text-white/90">
                 <div>
-                  <h3 className="mb-2 font-semibold">Must have</h3>
+                  <h3 className="mb-2 font-semibold">
+                    You must have experience with
+                  </h3>
                   <ul className="list-disc space-y-1.5 pl-5 marker:text-[#cfa93a]">
-                    {BETA_REQUIREMENTS.map((item) => (
+                    {DEVELOPER_REQUIRED.map((item) => (
                       <li key={item}>{item}</li>
                     ))}
                   </ul>
                 </div>
 
                 <div>
-                  <h3 className="mb-2 font-semibold">Nice to have</h3>
+                  <h3 className="mb-2 font-semibold">
+                    Nice to have experience with
+                  </h3>
                   <ul className="list-disc space-y-1.5 pl-5 marker:text-[#cfa93a]">
-                    {BETA_NICE_TO_HAVE.map((item) => (
+                    {DEVELOPER_NICE_TO_HAVE.map((item) => (
                       <li key={item}>{item}</li>
                     ))}
                   </ul>
                 </div>
 
-                <p className="rounded-md border border-amber-300/45 bg-amber-900/35 p-3 text-xs leading-relaxed text-amber-100">
-                  The project is currently non-profit. For beta testing,
-                  reliable participation matters most; long-term availability is
-                  welcome but not strictly required.
+                <div>
+                  <h3 className="mb-2 font-semibold">The real deal-breaker</h3>
+                  <ul className="list-disc space-y-1.5 pl-5 marker:text-[#cfa93a]">
+                    {DEVELOPER_DEAL_BREAKER.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                </div>
+
+                <div>
+                  <h3 className="mb-2 font-semibold">Why join us</h3>
+                  <ul className="list-disc space-y-1.5 pl-5 marker:text-[#cfa93a]">
+                    {DEVELOPER_BENEFITS.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                </div>
+
+                <p className="rounded-md border border-red-400/45 bg-red-950/45 p-3 text-xs leading-relaxed text-red-100">
+                  Note that the project is currently non-profit and only
+                  long-term (3+ months) contributors are welcomed.
                 </p>
               </CardContent>
             </Card>
 
+            <div className="flex flex-col gap-6">
+              <Card className="border-white/15 bg-[#0a1428]/95 text-white shadow-xl">
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center gap-2 text-xl">
+                    <UserCheck className="h-5 w-5 text-[#cfa93a]" />
+                    Beta Tester
+                  </CardTitle>
+                  <CardDescription className="text-sm text-white/80">
+                    Help us polish the product before wider release.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-5 text-sm text-white/90">
+                  <div>
+                    <h3 className="mb-2 font-semibold">Must have</h3>
+                    <ul className="list-disc space-y-1.5 pl-5 marker:text-[#cfa93a]">
+                      {BETA_REQUIREMENTS.map((item) => (
+                        <li key={item}>{item}</li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  <div>
+                    <h3 className="mb-2 font-semibold">Nice to have</h3>
+                    <ul className="list-disc space-y-1.5 pl-5 marker:text-[#cfa93a]">
+                      {BETA_NICE_TO_HAVE.map((item) => (
+                        <li key={item}>{item}</li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  <p className="rounded-md border border-amber-300/45 bg-amber-900/35 p-3 text-xs leading-relaxed text-amber-100">
+                    The project is currently non-profit. For beta testing,
+                    reliable participation matters most; long-term availability
+                    is welcome but not strictly required.
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card className="border-white/15 bg-[#0a1428]/95 text-white shadow-xl">
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center gap-2 text-xl">
+                    <Puzzle className="h-5 w-5 text-[#cfa93a]" />
+                    Other
+                  </CardTitle>
+                  <CardDescription className="text-sm text-white/80">
+                    Want to participate, but neither listed position fits you?
+                    No problem.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4 text-sm text-white/90">
+                  <p>
+                    Select{" "}
+                    <span className="font-semibold text-[#cfa93a]">Other</span>{" "}
+                    in the contact form below and describe how you would like to
+                    contribute.
+                  </p>
+                  <ul className="list-disc space-y-1.5 pl-5 marker:text-[#cfa93a]">
+                    <li>Documentation and content improvements.</li>
+                    <li>
+                      UI/UX feedback, exploratory testing, and bug triage.
+                    </li>
+                    <li>Data validation, analysis ideas, and process help.</li>
+                    <li>Anything else worth of discussion.</li>
+                  </ul>
+                  <p className="rounded-md border border-white/20 bg-[#00091a]/70 p-3 text-xs leading-relaxed text-white/80">
+                    If you can bring value and communicate clearly, we are open
+                    to discussing the role with you.
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+
+          <div className="mx-auto w-full max-w-3xl">
             <Card className="border-white/15 bg-[#0a1428]/95 text-white shadow-xl">
-              <CardHeader className="pb-3">
-                <CardTitle className="flex items-center gap-2 text-xl">
-                  <Puzzle className="h-5 w-5 text-[#cfa93a]" />
-                  Other
-                </CardTitle>
+              <CardHeader>
+                <CardTitle className="text-xl">Contact Form</CardTitle>
                 <CardDescription className="text-sm text-white/80">
-                  Want to participate, but neither listed position fits you? No
-                  problem.
+                  Tell us about yourself, your experience, motivation, and why
+                  you would be a good fit for the project.
+                  <br />
+                  Do not describe where you studied or worked, as it is not
+                  important. Also no CV required nor wanted.
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4 text-sm text-white/90">
-                <p>
-                  Select{" "}
-                  <span className="font-semibold text-[#cfa93a]">Other</span> in
-                  the contact form below and describe how you would like to
-                  contribute.
-                </p>
-                <ul className="list-disc space-y-1.5 pl-5 marker:text-[#cfa93a]">
-                  <li>Documentation and content improvements.</li>
-                  <li>UI/UX feedback, exploratory testing, and bug triage.</li>
-                  <li>Data validation, analysis ideas, and process help.</li>
-                  <li>Anything else worth of discussion.</li>
-                </ul>
-                <p className="rounded-md border border-white/20 bg-[#00091a]/70 p-3 text-xs leading-relaxed text-white/80">
-                  If you can bring value and communicate clearly, we are open to
-                  discussing the role with you.
-                </p>
+              <CardContent>
+                <form onSubmit={handleSubmit} className="space-y-5">
+                  <div className="space-y-2">
+                    <Label className="text-white">Subject</Label>
+                    <div className="relative">
+                      <select
+                        value={subject}
+                        onChange={(event) =>
+                          setSubject(event.target.value as JoinUsSubject | "")
+                        }
+                        disabled={isSubmitting}
+                        className="h-9 w-full appearance-none rounded-md border border-white/25 bg-[#00091a] px-3 py-2 pr-10 text-sm text-white shadow-sm outline-none focus:border-[#cfa93a] focus:ring-2 focus:ring-[#cfa93a]/30 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        <option value="" className="bg-[#0a1428] text-white">
+                          Choose an option
+                        </option>
+                        {SUBJECT_OPTIONS.map((option) => (
+                          <option
+                            key={option.value}
+                            value={option.value}
+                            className="bg-[#0a1428] text-white"
+                          >
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                      <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-white/60">
+                        ▾
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-white">Body</Label>
+                    <textarea
+                      value={body}
+                      onChange={(event) => setBody(event.target.value)}
+                      disabled={isSubmitting}
+                      placeholder="Share some info about you, your relevant experience, how you approach collaboration and problem-solving, and why you want to join us."
+                      className="min-h-[220px] w-full resize-y rounded-md border border-white/25 bg-[#00091a] px-3 py-2 text-sm text-white shadow-sm outline-none placeholder:text-white/45 focus:border-[#cfa93a] focus:ring-2 focus:ring-[#cfa93a]/30"
+                    />
+                    <p
+                      className={cn(
+                        "text-xs",
+                        isBodyValid ? "text-emerald-300" : "text-white/65",
+                      )}
+                    >
+                      {isNoLimitTestSubmission
+                        ? "Test mode enabled (#nl detected): minimum length and captcha checks are bypassed."
+                        : `Message must be at least ${MESSAGE_MIN_LENGTH} characters.${
+                            remainingChars > 0
+                              ? ` ${remainingChars} more required.`
+                              : " Requirement met."
+                          }`}
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-white">Captcha</Label>
+                    {isNoLimitTestSubmission ? (
+                      <Alert className="border-sky-400/70 bg-sky-900/30 text-sky-100">
+                        <AlertDescription>
+                          Test mode is enabled via #nl, so captcha is bypassed
+                          for this submission.
+                        </AlertDescription>
+                      </Alert>
+                    ) : isTurnstileConfigured ? (
+                      <div className="rounded-md border border-white/20 bg-[#00091a]/75 p-3">
+                        <Turnstile
+                          ref={turnstileRef}
+                          siteKey={turnstileSiteKey}
+                          onSuccess={(token) => {
+                            setCaptchaToken(token);
+                          }}
+                          onExpire={() => {
+                            setCaptchaToken(null);
+                          }}
+                          onError={() => {
+                            setCaptchaToken(null);
+                          }}
+                          options={{
+                            action: "join_us_contact",
+                            theme: "dark",
+                            size: "flexible",
+                            appearance: "always",
+                            refreshExpired: "auto",
+                          }}
+                        />
+                      </div>
+                    ) : (
+                      <Alert className="border-amber-400/70 bg-amber-900/35 text-amber-100">
+                        <AlertDescription>
+                          Captcha is disabled in this environment.
+                        </AlertDescription>
+                      </Alert>
+                    )}
+                  </div>
+
+                  {submitError && (
+                    <Alert className="border-red-500/70 bg-red-950/45 text-red-100">
+                      <AlertDescription>{submitError}</AlertDescription>
+                    </Alert>
+                  )}
+
+                  <div className="flex justify-end">
+                    <Button
+                      type="submit"
+                      disabled={isSubmitting || !canSubmit}
+                      className="button-medium no-rotation min-w-[200px]"
+                    >
+                      {isSubmitting ? "Sending..." : "Submit"}
+                    </Button>
+                  </div>
+                </form>
               </CardContent>
             </Card>
           </div>
         </div>
-
-        <div className="mx-auto w-full max-w-3xl">
-          <Card className="border-white/15 bg-[#0a1428]/95 text-white shadow-xl">
-            <CardHeader>
-              <CardTitle className="text-xl">Contact Form</CardTitle>
-              <CardDescription className="text-sm text-white/80">
-                Tell us about yourself, your experience, motivation, and why you
-                would be a good fit for the project.
-                <br />
-                Do not describe where you studied or worked, as it is not
-                important. Also no CV required nor wanted.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleSubmit} className="space-y-5">
-                <div className="space-y-2">
-                  <Label className="text-white">Subject</Label>
-                  <div className="relative">
-                    <select
-                      value={subject}
-                      onChange={(event) =>
-                        setSubject(event.target.value as JoinUsSubject | "")
-                      }
-                      disabled={isSubmitting}
-                      className="h-9 w-full appearance-none rounded-md border border-white/25 bg-[#00091a] px-3 py-2 pr-10 text-sm text-white shadow-sm outline-none focus:border-[#cfa93a] focus:ring-2 focus:ring-[#cfa93a]/30 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      <option value="" className="bg-[#0a1428] text-white">
-                        Choose an option
-                      </option>
-                      {SUBJECT_OPTIONS.map((option) => (
-                        <option
-                          key={option.value}
-                          value={option.value}
-                          className="bg-[#0a1428] text-white"
-                        >
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                    <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-white/60">
-                      ▾
-                    </span>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="text-white">Body</Label>
-                  <textarea
-                    value={body}
-                    onChange={(event) => setBody(event.target.value)}
-                    disabled={isSubmitting}
-                    placeholder="Share some info about you, your relevant experience, how you approach collaboration and problem-solving, and why you want to join us."
-                    className="min-h-[220px] w-full resize-y rounded-md border border-white/25 bg-[#00091a] px-3 py-2 text-sm text-white shadow-sm outline-none placeholder:text-white/45 focus:border-[#cfa93a] focus:ring-2 focus:ring-[#cfa93a]/30"
-                  />
-                  <p
-                    className={cn(
-                      "text-xs",
-                      isBodyValid ? "text-emerald-300" : "text-white/65",
-                    )}
-                  >
-                    {isNoLimitTestSubmission
-                      ? "Test mode enabled (#nl detected): minimum length and captcha checks are bypassed."
-                      : `Message must be at least ${MESSAGE_MIN_LENGTH} characters.${
-                          remainingChars > 0
-                            ? ` ${remainingChars} more required.`
-                            : " Requirement met."
-                        }`}
-                  </p>
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="text-white">Captcha</Label>
-                  {isNoLimitTestSubmission ? (
-                    <Alert className="border-sky-400/70 bg-sky-900/30 text-sky-100">
-                      <AlertDescription>
-                        Test mode is enabled via #nl, so captcha is bypassed for
-                        this submission.
-                      </AlertDescription>
-                    </Alert>
-                  ) : isTurnstileConfigured ? (
-                    <div className="rounded-md border border-white/20 bg-[#00091a]/75 p-3">
-                      <Turnstile
-                        ref={turnstileRef}
-                        siteKey={turnstileSiteKey}
-                        onSuccess={(token) => {
-                          setCaptchaToken(token);
-                        }}
-                        onExpire={() => {
-                          setCaptchaToken(null);
-                        }}
-                        onError={() => {
-                          setCaptchaToken(null);
-                        }}
-                        options={{
-                          action: "join_us_contact",
-                          theme: "dark",
-                          size: "flexible",
-                          appearance: "always",
-                          refreshExpired: "auto",
-                        }}
-                      />
-                    </div>
-                  ) : (
-                    <Alert className="border-amber-400/70 bg-amber-900/35 text-amber-100">
-                      <AlertDescription>
-                        Captcha is disabled in this environment.
-                      </AlertDescription>
-                    </Alert>
-                  )}
-                </div>
-
-                {submitError && (
-                  <Alert className="border-red-500/70 bg-red-950/45 text-red-100">
-                    <AlertDescription>{submitError}</AlertDescription>
-                  </Alert>
-                )}
-
-                <div className="flex justify-end">
-                  <Button
-                    type="submit"
-                    disabled={isSubmitting || !canSubmit}
-                    className="button-medium no-rotation min-w-[200px]"
-                  >
-                    {isSubmitting ? "Sending..." : "Submit"}
-                  </Button>
-                </div>
-              </form>
-            </CardContent>
-          </Card>
-        </div>
       </div>
+      <PublicPageFooter />
     </div>
   );
 }

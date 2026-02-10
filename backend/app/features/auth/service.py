@@ -103,6 +103,10 @@ class EmailVerificationRequestNotFoundError(Exception):
     """Raised when there is no pending email verification request."""
 
 
+class InvalidCurrentPasswordError(Exception):
+    """Raised when the submitted current password does not match."""
+
+
 class JoinUsCaptchaRequiredError(Exception):
     """Raised when Join Us form submission requires CAPTCHA but none is provided."""
 
@@ -1004,8 +1008,17 @@ class AuthService:
         logger.info("email_changed", user_id=current_user.id)
         return current_user
 
-    async def change_password(self, *, current_user: User, new_password: str) -> None:
+    async def change_password(
+        self,
+        *,
+        current_user: User,
+        current_password: str,
+        new_password: str,
+    ) -> None:
         """Change current user's password hash."""
+        if not self.verify_password(current_password, current_user.password_hash):
+            raise InvalidCurrentPasswordError
+
         now = datetime.now(timezone.utc)
         current_user.password_hash = self.get_password_hash(new_password)
         current_user.updated_at = now

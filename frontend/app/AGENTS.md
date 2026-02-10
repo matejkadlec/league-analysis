@@ -14,8 +14,10 @@ Next.js App Router pages.
 | `/tracked-players`      | `tracked-players/page.tsx`      | Tracked list + in-page player profile view |
 | `/jobs`                 | `jobs/page.tsx`                 | Background jobs monitoring (admin only) |
 | `/settings`             | `settings/page.tsx`             | Application + account settings for all users, Riot API config for admins |
-| `/sign-in`              | `sign-in/page.tsx`              | Authentication             |
-| `/join-us`              | `join-us/page.tsx`              | Public recruitment + contact form |
+| `/sign-in`              | `sign-in/page.tsx`              | Authentication (signed-in users are redirected to `/`) |
+| `/join-us`              | `join-us/page.tsx`              | Public recruitment + contact form (auth-aware back button + public footer) |
+| `/license`              | `license/page.tsx`              | Legal terms page (public; signed-in and signed-out layouts share same URL) |
+| `/privacy-policy`       | `privacy-policy/page.tsx`       | Privacy page (public; signed-in and signed-out layouts share same URL) |
 
 ## Key Files
 

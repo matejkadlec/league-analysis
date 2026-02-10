@@ -2,9 +2,16 @@
  * Centralized auth token management.
  *
  * Security design:
- * - Uses localStorage only (no auth cookies) to avoid mixed storage behavior.
+ * - Uses localStorage for auth tokens.
+ * - Uses a non-sensitive cookie hint for server-side route UX redirects.
  * - Refresh token rotation is handled via /api/v1/auth/refresh.
  */
+
+import {
+  AUTH_STATE_COOKIE_MAX_AGE_SECONDS,
+  AUTH_STATE_COOKIE_NAME,
+  AUTH_STATE_COOKIE_VALUE,
+} from "./auth-state-cookie";
 
 const ACCESS_TOKEN_KEY = "auth_access_token";
 const REFRESH_TOKEN_KEY = "auth_refresh_token";
@@ -19,6 +26,25 @@ function getApiBaseUrl(): string {
   return process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 }
 
+function setAuthStateCookie(): void {
+  if (!isBrowser()) {
+    return;
+  }
+
+  document.cookie =
+    `${AUTH_STATE_COOKIE_NAME}=${AUTH_STATE_COOKIE_VALUE}; ` +
+    `Path=/; Max-Age=${AUTH_STATE_COOKIE_MAX_AGE_SECONDS}; SameSite=Lax`;
+}
+
+function clearAuthStateCookie(): void {
+  if (!isBrowser()) {
+    return;
+  }
+
+  document.cookie =
+    `${AUTH_STATE_COOKIE_NAME}=; Path=/; Max-Age=0; SameSite=Lax`;
+}
+
 export function setAuthTokens(accessToken: string, refreshToken: string): void {
   if (!isBrowser()) {
     return;
@@ -26,6 +52,7 @@ export function setAuthTokens(accessToken: string, refreshToken: string): void {
 
   localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
   localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+  setAuthStateCookie();
 }
 
 export function removeAuthTokens(): void {
@@ -35,13 +62,22 @@ export function removeAuthTokens(): void {
 
   localStorage.removeItem(ACCESS_TOKEN_KEY);
   localStorage.removeItem(REFRESH_TOKEN_KEY);
+  clearAuthStateCookie();
 }
 
 export function getAccessToken(): string | null {
   if (!isBrowser()) {
     return null;
   }
-  return localStorage.getItem(ACCESS_TOKEN_KEY);
+
+  const accessToken = localStorage.getItem(ACCESS_TOKEN_KEY);
+  const refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
+
+  if (accessToken && refreshToken) {
+    setAuthStateCookie();
+  }
+
+  return accessToken;
 }
 
 export function getRefreshToken(): string | null {

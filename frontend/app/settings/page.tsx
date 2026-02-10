@@ -702,9 +702,14 @@ function AccountSettingsCard({
   const { user, checkAuth } = useAuth();
 
   const [draftDisplayName, setDraftDisplayName] = useState<string | null>(null);
+  const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [repeatPassword, setRepeatPassword] = useState("");
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
+  const [currentPasswordError, setCurrentPasswordError] = useState<
+    string | null
+  >(null);
 
   const [emailDialogOpen, setEmailDialogOpen] = useState(false);
   const [emailDialogStep, setEmailDialogStep] = useState<"email" | "code">(
@@ -732,7 +737,10 @@ function AccountSettingsCard({
   const passwordsMatch =
     newPassword.length > 0 && newPassword === repeatPassword;
   const canChangePassword =
-    isPasswordStrongEnough && passwordsMatch && repeatPassword.length > 0;
+    currentPassword.length > 0 &&
+    isPasswordStrongEnough &&
+    passwordsMatch &&
+    repeatPassword.length > 0;
 
   const isEmailChangeLocked =
     emailChangeLockedUntil !== null &&
@@ -933,6 +941,7 @@ function AccountSettingsCard({
         MessageResponseSchema,
         "/auth/change-password",
         {
+          current_password: currentPassword,
           new_password: newPassword,
           repeat_password: repeatPassword,
         },
@@ -945,12 +954,21 @@ function AccountSettingsCard({
       return result.data;
     },
     onSuccess: () => {
+      setCurrentPassword("");
       setNewPassword("");
       setRepeatPassword("");
+      setShowCurrentPassword(false);
       setShowNewPassword(false);
+      setCurrentPasswordError(null);
       toast.success("Password changed successfully.");
     },
     onError: (error: Error) => {
+      const mutationError = error as MutationError;
+      if (mutationError.code === "CURRENT_PASSWORD_INVALID") {
+        setCurrentPasswordError("Current password is invalid.");
+        return;
+      }
+
       toast.error("Failed to change password", {
         description: error.message,
       });
@@ -1161,6 +1179,7 @@ function AccountSettingsCard({
       return;
     }
 
+    setCurrentPasswordError(null);
     changePasswordMutation.mutate();
   };
 
@@ -1261,6 +1280,48 @@ function AccountSettingsCard({
                 <p className="text-xs text-red-500">
                   Too many failed attempts. Try again in 5 minutes.
                 </p>
+              )}
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="current-password">Current Password</Label>
+              <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,1fr)] items-center gap-3">
+                <div className="relative">
+                  <Input
+                    id="current-password"
+                    type={showCurrentPassword ? "text" : "password"}
+                    value={currentPassword}
+                    onChange={(event) => {
+                      setCurrentPassword(event.target.value);
+                      setCurrentPasswordError(null);
+                    }}
+                    className="w-full pr-10"
+                    disabled={changePasswordMutation.isPending}
+                  />
+                  <button
+                    type="button"
+                    className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-muted-foreground hover:text-foreground cursor-pointer"
+                    onClick={() =>
+                      setShowCurrentPassword((previous) => !previous)
+                    }
+                    disabled={changePasswordMutation.isPending}
+                    aria-label={
+                      showCurrentPassword ? "Hide password" : "Show password"
+                    }
+                  >
+                    {showCurrentPassword ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
+                  </button>
+                </div>
+                <div className="flex items-center justify-end">
+                  <div aria-hidden className="h-9 w-36" />
+                </div>
+              </div>
+              {currentPasswordError && (
+                <p className="text-xs text-red-500">{currentPasswordError}</p>
               )}
             </div>
 

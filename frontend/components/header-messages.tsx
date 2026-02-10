@@ -89,10 +89,11 @@ export function HeaderMessages() {
     !(pathname === "/join-us" || pathname.startsWith("/join-us/"))
   ) {
     return (
-      <div className="fixed left-0 top-0 z-[100] flex min-h-[40px] w-full items-center justify-center border-b border-emerald-800/50 bg-emerald-400/50 px-2 py-1 shadow-md backdrop-blur-lg">
+      <div className="fixed left-0 top-0 z-[100] flex min-h-[40px] w-full items-center justify-center border-b border-emerald-800/50 bg-emerald-600/60 px-2 py-1 shadow-md backdrop-blur-lg">
         <div className="px-4 text-center text-xs font-semibold leading-tight text-emerald-100 sm:text-sm">
-          We are opening volunteer Beta Tester and Full-Stack Developer
-          positions. Interested? Apply{" "}
+          League Analysis is in closed beta and we are actively looking for
+          volunteer full-stack developers and beta testers to join our project.
+          Interested? Apply{" "}
           <Link
             href="/join-us"
             className="font-bold underline transition-colors hover:text-white"
