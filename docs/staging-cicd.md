@@ -22,10 +22,15 @@ This project supports automated staging deployment on every push to `master` (in
 
 ## Required GitHub repository secrets
 
-- `STAGING_SSH_HOST` = `142.93.173.113`
-- `STAGING_SSH_USER` = `ops`
+- `STAGING_SSH_HOST` = staging server host/IP (current value: `142.93.173.113`)
+- `STAGING_SSH_USER` = deploy user (current value: `ops`)
 - `STAGING_SSH_PRIVATE_KEY` = private key for a dedicated deploy key
-- `STAGING_SSH_KNOWN_HOSTS` = output of `ssh-keyscan -H 142.93.173.113`
+
+Note:
+
+- Host/user are read from GitHub secrets so IP/user rotations do not require a repo change.
+- `known_hosts` is generated in workflow via `ssh-keyscan`.
+- Rsync sync step uses `--no-times --omit-dir-times` to avoid deploy failures when file ownership differs.
 
 ## Server prerequisites
 

@@ -53,6 +53,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     needs: quality
+    env:
+      STAGING_HOST: ${{ secrets.STAGING_SSH_HOST }}
+      STAGING_USER: ${{ secrets.STAGING_SSH_USER }}
 
     steps:
       - name: Checkout
@@ -61,33 +64,37 @@ jobs:
       - name: Configure SSH
         env:
           STAGING_SSH_PRIVATE_KEY: ${{ secrets.STAGING_SSH_PRIVATE_KEY }}
-          STAGING_SSH_KNOWN_HOSTS: ${{ secrets.STAGING_SSH_KNOWN_HOSTS }}
         run: |
+          test -n "$STAGING_HOST"
+          test -n "$STAGING_USER"
+          test -n "$STAGING_SSH_PRIVATE_KEY"
           install -m 700 -d ~/.ssh
-          printf '%s\n' "$STAGING_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          printf '%s\n' "$STAGING_SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/staging_deploy_key
+          chmod 600 ~/.ssh/staging_deploy_key
+          ssh-keyscan -H "$STAGING_HOST" > ~/.ssh/known_hosts
           chmod 644 ~/.ssh/known_hosts
 
-          eval "$(ssh-agent -s)"
-          ssh-add - <<< "$STAGING_SSH_PRIVATE_KEY"
+      - name: Verify SSH access
+        run: |
+          ssh -i ~/.ssh/staging_deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$STAGING_USER@$STAGING_HOST" 'echo ssh_ok'
 
       - name: Sync repository to server
-        env:
-          STAGING_SSH_HOST: ${{ secrets.STAGING_SSH_HOST }}
-          STAGING_SSH_USER: ${{ secrets.STAGING_SSH_USER }}
         run: |
           rsync -az --delete \
+            --no-times --omit-dir-times \
+            -e "ssh -i ~/.ssh/staging_deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes" \
             --exclude='.git/' \
             --exclude='untracked/' \
             --exclude='logs/' \
+            --exclude='backups/' \
+            --exclude='.cache/' \
+            --exclude='.local/' \
             --exclude='.env' \
             --exclude='frontend/node_modules/' \
             --exclude='frontend/.next/' \
             --exclude='backend/.venv/' \
-            ./ "${STAGING_SSH_USER}@${STAGING_SSH_HOST}:/srv/league-analysis/"
+            ./ "${STAGING_USER}@${STAGING_HOST}:/srv/league-analysis/"
 
       - name: Build and restart services on server
-        env:
-          STAGING_SSH_HOST: ${{ secrets.STAGING_SSH_HOST }}
-          STAGING_SSH_USER: ${{ secrets.STAGING_SSH_USER }}
         run: |
-          ssh "${STAGING_SSH_USER}@${STAGING_SSH_HOST}" 'sudo /usr/local/bin/league-deploy.sh'
+          ssh -i ~/.ssh/staging_deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "${STAGING_USER}@${STAGING_HOST}" 'sudo /usr/local/bin/league-deploy.sh'
