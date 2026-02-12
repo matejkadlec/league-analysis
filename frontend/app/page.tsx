@@ -46,7 +46,22 @@ export default function Home() {
           <CardContent className="px-8 pt-0 pb-6">
             <ul className="list-disc space-y-3 pl-6 text-sm leading-relaxed marker:text-[#cfa93a]">
               <li>
-                Add per-user configuration to cards where it&apos;s applicable.
+                Smurfing/boosting detection tool.
+                <ul className="list-disc space-y-1 pl-6 marker:text-[#cfa93a]/80">
+                  <li>
+                    Will analyze player&apos;s match history and check several
+                    factors, thresholds of the factors will be configurable
+                    per-user.
+                  </li>
+                  <li>
+                    For example, hard-stuck account starts rapidly climbing, or
+                    the opposite, a high win rate account suddenly begin to lose
+                    a lot more.
+                  </li>
+                </ul>
+              </li>
+              <li>
+                Custom user configuration to cards where it&apos;s applicable.
                 <ul className="list-disc space-y-1 pl-6 marker:text-[#cfa93a]/80">
                   <li>
                     Mostly for cards that have some hard-coded threshhold, like
@@ -80,21 +95,6 @@ export default function Home() {
                 </ul>
               </li>
               <li>
-                Smurfing/boosting detection tool.
-                <ul className="list-disc space-y-1 pl-6 marker:text-[#cfa93a]/80">
-                  <li>
-                    Will analyze player&apos;s match history and check several
-                    factors, thresholds of the factors will be configurable
-                    per-user.
-                  </li>
-                  <li>
-                    For example, hard-stuck account starts rapidly climbing, or
-                    the opposite, a high win rate account suddenly begin to lose
-                    a lot more.
-                  </li>
-                </ul>
-              </li>
-              <li>
                 Comprehensive meta analysis with configurable weights.
                 <ul className="list-disc space-y-1 pl-6 marker:text-[#cfa93a]/80">
                   <li>Multiple approaches on how to analyze meta.</li>
@@ -103,10 +103,6 @@ export default function Home() {
                     Pick Rate, with some pre-configured sets.
                   </li>
                 </ul>
-              </li>
-              <li>
-                Users will be able to create their own analysis and statistics
-                cards (with limitations) and share them with other users.
               </li>
               <li>
                 A page with toggleable cards, so users can create their own

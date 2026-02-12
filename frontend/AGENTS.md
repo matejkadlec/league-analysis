@@ -98,6 +98,7 @@ Use this shared structure for user-action dialogs across frontend features.
 - TanStack Query for all data fetching
 - Handle loading/error/success states
 - Features expose public APIs via `index.ts`
+- Use Next.js `proxy.ts` file convention (not `middleware.ts`)
 
 ## Commands
 

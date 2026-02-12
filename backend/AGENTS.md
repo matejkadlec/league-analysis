@@ -4,7 +4,7 @@
 
 ## Tech Stack
 
-Python 3.13, FastAPI, SQLAlchemy 2.0+, Pydantic v2, structlog, APScheduler, httpx
+Python 3.14.2, FastAPI, SQLAlchemy 2.0+, Pydantic v2, structlog, APScheduler, httpx
 
 ## Structure
 

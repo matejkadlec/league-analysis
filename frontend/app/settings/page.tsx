@@ -344,8 +344,8 @@ function SettingsPageContent() {
                   {!setting && keyStatus?.active_source === "none" && (
                     <Alert className="border-red-700 bg-red-950/40 text-red-200">
                       <p className="text-sm">
-                        No active Riot API Key found. System cannot function.
-                        Please configure it in settings
+                        No active Riot API Key found, insert a valid key into
+                        the field below to restore functionality.
                         {process.env.NODE_ENV === "production"
                           ? ""
                           : " or .env"}

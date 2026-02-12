@@ -52,7 +52,7 @@ tail -f logs/frontend.log # Frontend logs
 
 | Layer        | Technologies                                                             |
 | ------------ | ------------------------------------------------------------------------ |
-| **Backend**  | Python 3.13, FastAPI, SQLAlchemy 2.0, PostgreSQL 18, uv                  |
+| **Backend**  | Python 3.14.2, FastAPI, SQLAlchemy 2.0, PostgreSQL 18, uv                |
 | **Frontend** | Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS 4, shadcn/ui |
 | **Data**     | TanStack Query, Zod, Axios                                               |
 | **External** | Riot Games API                                                           |

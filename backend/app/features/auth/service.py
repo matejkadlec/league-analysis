@@ -12,7 +12,8 @@ from uuid import uuid4
 import httpx
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from jose import JWTError, jwt
+import jwt
+from jwt import InvalidTokenError
 from passlib.context import CryptContext
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -761,7 +762,7 @@ class AuthService:
                 algorithms=[self.settings.jwt_algorithm],
                 options={"verify_exp": False},
             )
-        except JWTError:
+        except InvalidTokenError:
             return
 
         token_id = payload.get("jti")
@@ -1074,7 +1075,7 @@ class AuthService:
                 exp=exp,
             )
 
-        except JWTError:
+        except InvalidTokenError:
             raise credentials_exception
 
         if token_data.user_id is None or token_data.token_id is None:
