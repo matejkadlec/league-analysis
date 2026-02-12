@@ -180,21 +180,35 @@ class SettingsService:
         )
         latest_api_key_failure_at = latest_api_key_failure_result.scalar_one_or_none()
 
-        latest_success_result = await self.db.execute(
-            select(JobExecution.started_at)
-            .where(JobExecution.status == JobStatus.SUCCESS)
-            .order_by(JobExecution.started_at.desc())
-            .limit(1)
-        )
-        latest_success_at = latest_success_result.scalar_one_or_none()
-
         recovery_reference_at = None
         if latest_api_key_failure_at is not None:
-            if latest_success_at is not None and latest_success_at > latest_api_key_failure_at:
-                recovery_reference_at = latest_success_at
-            if key_resolved_at is not None and key_resolved_at > latest_api_key_failure_at:
-                if recovery_reference_at is None or key_resolved_at > recovery_reference_at:
-                    recovery_reference_at = key_resolved_at
+            first_success_after_failure_result = await self.db.execute(
+                select(JobExecution.started_at)
+                .where(
+                    and_(
+                        JobExecution.status == JobStatus.SUCCESS,
+                        JobExecution.started_at > latest_api_key_failure_at,
+                    )
+                )
+                .order_by(JobExecution.started_at.asc())
+                .limit(1)
+            )
+            first_success_after_failure_at = (
+                first_success_after_failure_result.scalar_one_or_none()
+            )
+
+            recovery_candidates: list[datetime] = []
+            if first_success_after_failure_at is not None:
+                recovery_candidates.append(first_success_after_failure_at)
+            if (
+                key_resolved_at is not None
+                and key_resolved_at > latest_api_key_failure_at
+            ):
+                recovery_candidates.append(key_resolved_at)
+
+            if recovery_candidates:
+                # Keep a stable key per recovery event so dismiss persists.
+                recovery_reference_at = min(recovery_candidates)
 
         has_recent_recovery = (
             recovery_reference_at is not None and not is_under_maintenance
