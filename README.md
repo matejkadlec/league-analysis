@@ -147,6 +147,7 @@ in the [docs](docs) folder.
 - `cookie-consent-compliance.md`
 - `jobs.md`
 - `riot-api.md`
+- `staging-cicd.md`
 
 ## Tech Stack
 

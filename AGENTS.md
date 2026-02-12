@@ -30,6 +30,7 @@ tail -f logs/frontend.log # Frontend logs
 | [docs/riot-api.md](docs/riot-api.md)     | Riot API endpoints, usage, rate limits |
 | [docs/jobs.md](docs/jobs.md)             | Background jobs (Match Fetcher, etc.)  |
 | [docs/prod-requirements.md](docs/prod-requirements.md) | Riot production-launch checklist and current readiness status |
+| [docs/staging-cicd.md](docs/staging-cicd.md) | GitHub Actions staging deploy pipeline and server prerequisites |
 | [docs/cookie-consent-compliance.md](docs/cookie-consent-compliance.md) | EU cookie-consent legal baseline and implementation mapping |
 | [backend/COOKIE_CONSENT_AGENTS.md](backend/COOKIE_CONSENT_AGENTS.md) | AI implementation checklist for cookie-consent compliance |
 | [backend/AGENTS.md](backend/AGENTS.md)   | Backend architecture, code patterns    |
