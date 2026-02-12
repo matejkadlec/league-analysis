@@ -31,6 +31,7 @@ Note:
 - Host/user are read from GitHub secrets so IP/user rotations do not require a repo change.
 - `known_hosts` is generated in workflow via `ssh-keyscan`.
 - Rsync sync step uses `--no-times --omit-dir-times` to avoid deploy failures when file ownership differs.
+- Workflow removes backend `__pycache__` before sync and excludes bytecode paths from rsync.
 
 ## Server prerequisites
 

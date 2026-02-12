@@ -78,6 +78,11 @@ jobs:
         run: |
           ssh -i ~/.ssh/staging_deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$STAGING_USER@$STAGING_HOST" 'echo ssh_ok'
 
+      - name: Cleanup Python bytecode caches on server
+        run: |
+          ssh -i ~/.ssh/staging_deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "${STAGING_USER}@${STAGING_HOST}" \
+            'sudo find /srv/league-analysis/backend/app -type d -name __pycache__ -prune -exec rm -rf {} +'
+
       - name: Sync repository to server
         run: |
           rsync -az --delete \
@@ -93,6 +98,8 @@ jobs:
             --exclude='frontend/node_modules/' \
             --exclude='frontend/.next/' \
             --exclude='backend/.venv/' \
+            --exclude='**/__pycache__/' \
+            --exclude='**/*.pyc' \
             ./ "${STAGING_USER}@${STAGING_HOST}:/srv/league-analysis/"
 
       - name: Build and restart services on server
