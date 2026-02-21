@@ -4,159 +4,47 @@
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.118+-20232a?style=for-the-badge&logo=fastapi&logoColor=009688)
 ![React](https://img.shields.io/badge/React-19-20232a?style=for-the-badge&logo=react&logoColor=61DAFB)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-18+-20232a?style=for-the-badge&logo=postgresql&logoColor=white)
-![SQLAlchemy](https://img.shields.io/badge/SQLAlchemy-2.0+-20232a?style=for-the-badge&logo=sqlalchemy&logoColor=D71F00)
+![Status](https://img.shields.io/badge/status-inactive-red?style=for-the-badge)
 
-League of Legends web application for advanced player tracking, various statistics, playstyle and a
-matchmaking analysis. Under active develoment.
+League Analysis is a full-stack League of Legends analytics platform prototype that combines tracked-player monitoring, match history processing, playstyle signals, and matchmaking-quality analysis in one app.
 
-## Quick Start
+This repository is public as a portfolio snapshot. Active development in this repository is currently paused.
 
-All commands below must be done from the project root folder in order to work.
+## Product Highlights
 
-### Backend Setup (Python)
-
-```bash
-# Navigate to backend directory
-cd /backend
-
-# Install uv (Python package manager)
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# Create virtual environment and install dependencies
-uv venv
-source .venv/bin/activate
-uv pip install -e .
-```
-
-### Frontend Setup (Node.js/React/Next.js)
-
-```bash
-# Navigate to frontend directory
-cd /frontend
-
-# Install Node.js dependencies
-npm install
-# or
-pnpm install
-# or
-yarn install
-```
-
-### PostgreSQL 18 Setup
-
-```bash
-# Add PostgreSQL APT repository
-sudo apt install -y postgresql-common
-sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh
-
-# Install PostgreSQL 18
-sudo apt update
-sudo apt install -y postgresql-18 postgresql-contrib-18
-
-# Start PostgreSQL service and enable start on boot
-sudo systemctl start postgresql
-sudo systemctl enable postgresql
-
-# Switch to postgres user and create database
-sudo -u postgres psql -c "CREATE USER admin WITH PASSWORD 'your_password_here';"
-sudo -u postgres psql -c "CREATE DATABASE \"league-analysis\" OWNER admin;"
-sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE \"league-analysis\" TO admin;"
-
-# Initialize database schema
-sudo -u postgres psql -d league-analysis -f backend/init_database.sql
-```
-
-### Environment Configuration
-
-The `.env` file should be placed in the **project root**. You can ask another dev to send it to you
-or setup it yourself:
-
-```bash
-cat > .env << 'EOF'
-# Local DB config
-POSTGRES_DB=league-analysis
-POSTGRES_USER=admin
-POSTGRES_PASSWORD=your_password_here
-POSTGRES_HOST=localhost
-POSTGRES_PORT=5432
-
-# App config
-LOG_LEVEL=INFO
-JWT_SECRET_KEY=your-secret-key-here
-JWT_ACCESS_TOKEN_EXPIRE_MINUTES=30
-JWT_REFRESH_TOKEN_EXPIRE_DAYS=30
-AUTH_LOCKOUT_MAX_ATTEMPTS=5
-AUTH_LOCKOUT_MINUTES=15
-AUTH_CAPTCHA_AFTER_FAILURES=2
-TURNSTILE_SECRET_KEY=
-
-# SMTP config (Gmail example; use your provider values in real setup)
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USERNAME=your.account@gmail.com
-SMTP_PASSWORD=your_gmail_app_password
-SMTP_FROM_EMAIL="League Analysis <your.account@gmail.com>"
-SMTP_USE_TLS=true
-SMTP_USE_SSL=false
-
-# Next.js config
-NEXT_PUBLIC_API_URL=http://localhost:8000
-NEXT_PUBLIC_TURNSTILE_SITE_KEY=
-NODE_ENV=development
-
-# CORS config
-CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
-
-# Riot API Key (optional fallback; API keys should be stored in DB)
-RIOT_API_KEY=RGAPI-your-key-here
-
-# API endpoints test parameters (optional)
-REGION=EUROPE
-PLATFORM=EUN1
-GAME_NAME="John Doe"
-TAG_LINE=EUNE
-PUUID=your-puuid-here
-MATCH_ID=EUN1_1234567890
-EOF
-```
-
-### Run The Project
-
-```bash
-./run.sh
-```
-
-Logs are available at [backend.log](logs/backend.log) and [frontend.log](logs/frontend.log).
-
-**Services**:
-
-- Backend: http://localhost:8000 (API docs: `/redoc`)
-- Frontend: http://localhost:3000
-- Public Join Us page: http://localhost:3000/join-us
-- Public legal pages: http://localhost:3000/license, http://localhost:3000/privacy-policy and http://localhost:3000/cookie-policy
-
-## Documentation
-
-See [AGENTS.md](AGENTS.md) for main documentation index, individual folders then have their
-specific `AGENTS.md` file. Though these file are primarily for AI agents, not for humans.
-
-More readable documentation, as well as TODO tasks and Riot API response examples can be found
-in the [docs](docs) folder.
-
-- `database.md`
-- `cookie-consent-compliance.md`
-- `jobs.md`
-- `riot-api.md`
-- `staging-cicd.md`
+- Tracked players dashboard with aggregated match history and rank trends
+- Matchmaking analysis workflow with transparent scoring and history comparisons
+- Profile-level analysis for recent performance, champion patterns, and role tendencies
+- Background job orchestration for periodic data refresh from Riot APIs
 
 ## Tech Stack
 
-| Layer        | Technologies                                                |
-| ------------ | ----------------------------------------------------------- |
-| **Backend**  | Python 3.14.2, FastAPI, SQLAlchemy 2.0, PostgreSQL 18       |
-| **Frontend** | Next.js 16, React 19, TypeScript, Tailwind CSS 4, shadcn/ui |
-| **Data**     | TanStack Query, Zod, Axios                                  |
+| Layer        | Technologies                                                     |
+| ------------ | ---------------------------------------------------------------- |
+| **Backend**  | Python, FastAPI, SQLAlchemy, PostgreSQL                          |
+| **Frontend** | Next.js (App Router), React, TypeScript, Tailwind CSS, shadcn/ui |
+| **Data**     | TanStack Query, Zod, Axios                                       |
+| **External** | Riot Games API                                                   |
+
+## Riot API Notes
+
+- Riot API keys are intentionally excluded from the repository.
+- Required Riot legal boilerplate is present in the product legal page (`frontend/app/license/page.tsx`).
+- Public source code visibility is allowed, but any running public product must use the correct Riot key type and follow Riot policy updates.
+
+## Repository Policy
+
+- No external development contributions are accepted.
+- Pull requests are not reviewed or merged.
+- No code/data sharing rights are granted outside explicit written permission.
+
+## Disable PRs Without Archiving
+
+1. Open repository `Settings`.
+2. Under `General` -> `Features`, disable `Pull requests`.
+3. Optional: disable `Issues` and `Discussions` in the same `Features` section.
+4. Optional: disable `Actions` in `Settings` -> `Actions` -> `General`.
 
 ## License
 
-**All Rights Reserved** © 2026 Matěj Kadlec.
+**All Rights Reserved** © 2026 League Analysis.

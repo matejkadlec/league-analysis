@@ -189,11 +189,11 @@ export function JoinUsForm({ isAuthenticatedHint = false }: JoinUsFormProps) {
       <div className="relative flex-1 px-4 pb-16 pt-16">
         <PublicBackButton href={backButtonHref} label={backButtonLabel} />
 
-        <div className="mx-auto flex w-full max-w-[1200px] flex-col gap-8 xl:w-3/4">
-          <Card className="border-white/15 bg-[#0a1428]/95 text-white shadow-xl">
+        <div className="mx-auto flex w-full max-w-300 flex-col gap-8 xl:w-3/4">
+          <Card className="border-white/15 bg-slate-950/95 text-white shadow-xl">
             <CardHeader className="space-y-3 p-6">
               <CardTitle className="flex items-center gap-3 text-2xl font-semibold">
-                <Users className="h-6 w-6 text-[#cfa93a]" />
+                <Users className="h-6 w-6 text-amber-400" />
                 Join League Analysis
               </CardTitle>
               <CardDescription className="text-sm text-white/80">
@@ -204,10 +204,10 @@ export function JoinUsForm({ isAuthenticatedHint = false }: JoinUsFormProps) {
           </Card>
 
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 lg:items-start">
-            <Card className="border-white/15 bg-[#0a1428]/95 text-white shadow-xl">
+            <Card className="border-white/15 bg-slate-950/95 text-white shadow-xl">
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2 text-xl">
-                  <Code2 className="h-5 w-5 text-[#cfa93a]" />
+                  <Code2 className="h-5 w-5 text-amber-400" />
                   Full-Stack Developer
                 </CardTitle>
                 <CardDescription className="text-sm text-white/80">
@@ -220,7 +220,7 @@ export function JoinUsForm({ isAuthenticatedHint = false }: JoinUsFormProps) {
                   <h3 className="mb-2 font-semibold">
                     You must have experience with
                   </h3>
-                  <ul className="list-disc space-y-1.5 pl-5 marker:text-[#cfa93a]">
+                  <ul className="list-disc space-y-1.5 pl-5 marker:text-amber-400">
                     {DEVELOPER_REQUIRED.map((item) => (
                       <li key={item}>{item}</li>
                     ))}
@@ -231,7 +231,7 @@ export function JoinUsForm({ isAuthenticatedHint = false }: JoinUsFormProps) {
                   <h3 className="mb-2 font-semibold">
                     Nice to have experience with
                   </h3>
-                  <ul className="list-disc space-y-1.5 pl-5 marker:text-[#cfa93a]">
+                  <ul className="list-disc space-y-1.5 pl-5 marker:text-amber-400">
                     {DEVELOPER_NICE_TO_HAVE.map((item) => (
                       <li key={item}>{item}</li>
                     ))}
@@ -240,7 +240,7 @@ export function JoinUsForm({ isAuthenticatedHint = false }: JoinUsFormProps) {
 
                 <div>
                   <h3 className="mb-2 font-semibold">The real deal-breaker</h3>
-                  <ul className="list-disc space-y-1.5 pl-5 marker:text-[#cfa93a]">
+                  <ul className="list-disc space-y-1.5 pl-5 marker:text-amber-400">
                     {DEVELOPER_DEAL_BREAKER.map((item) => (
                       <li key={item}>{item}</li>
                     ))}
@@ -249,7 +249,7 @@ export function JoinUsForm({ isAuthenticatedHint = false }: JoinUsFormProps) {
 
                 <div>
                   <h3 className="mb-2 font-semibold">Why join us</h3>
-                  <ul className="list-disc space-y-1.5 pl-5 marker:text-[#cfa93a]">
+                  <ul className="list-disc space-y-1.5 pl-5 marker:text-amber-400">
                     {DEVELOPER_BENEFITS.map((item) => (
                       <li key={item}>{item}</li>
                     ))}
@@ -264,10 +264,10 @@ export function JoinUsForm({ isAuthenticatedHint = false }: JoinUsFormProps) {
             </Card>
 
             <div className="flex flex-col gap-6">
-              <Card className="border-white/15 bg-[#0a1428]/95 text-white shadow-xl">
+              <Card className="border-white/15 bg-slate-950/95 text-white shadow-xl">
                 <CardHeader className="pb-3">
                   <CardTitle className="flex items-center gap-2 text-xl">
-                    <UserCheck className="h-5 w-5 text-[#cfa93a]" />
+                    <UserCheck className="h-5 w-5 text-amber-400" />
                     Beta Tester
                   </CardTitle>
                   <CardDescription className="text-sm text-white/80">
@@ -277,7 +277,7 @@ export function JoinUsForm({ isAuthenticatedHint = false }: JoinUsFormProps) {
                 <CardContent className="space-y-5 text-sm text-white/90">
                   <div>
                     <h3 className="mb-2 font-semibold">Must have</h3>
-                    <ul className="list-disc space-y-1.5 pl-5 marker:text-[#cfa93a]">
+                    <ul className="list-disc space-y-1.5 pl-5 marker:text-amber-400">
                       {BETA_REQUIREMENTS.map((item) => (
                         <li key={item}>{item}</li>
                       ))}
@@ -286,7 +286,7 @@ export function JoinUsForm({ isAuthenticatedHint = false }: JoinUsFormProps) {
 
                   <div>
                     <h3 className="mb-2 font-semibold">Nice to have</h3>
-                    <ul className="list-disc space-y-1.5 pl-5 marker:text-[#cfa93a]">
+                    <ul className="list-disc space-y-1.5 pl-5 marker:text-amber-400">
                       {BETA_NICE_TO_HAVE.map((item) => (
                         <li key={item}>{item}</li>
                       ))}
@@ -301,10 +301,10 @@ export function JoinUsForm({ isAuthenticatedHint = false }: JoinUsFormProps) {
                 </CardContent>
               </Card>
 
-              <Card className="border-white/15 bg-[#0a1428]/95 text-white shadow-xl">
+              <Card className="border-white/15 bg-slate-950/95 text-white shadow-xl">
                 <CardHeader className="pb-3">
                   <CardTitle className="flex items-center gap-2 text-xl">
-                    <Puzzle className="h-5 w-5 text-[#cfa93a]" />
+                    <Puzzle className="h-5 w-5 text-amber-400" />
                     Other
                   </CardTitle>
                   <CardDescription className="text-sm text-white/80">
@@ -315,11 +315,11 @@ export function JoinUsForm({ isAuthenticatedHint = false }: JoinUsFormProps) {
                 <CardContent className="space-y-4 text-sm text-white/90">
                   <p>
                     Select{" "}
-                    <span className="font-semibold text-[#cfa93a]">Other</span>{" "}
+                    <span className="font-semibold text-amber-400">Other</span>{" "}
                     in the contact form below and describe how you would like to
                     contribute.
                   </p>
-                  <ul className="list-disc space-y-1.5 pl-5 marker:text-[#cfa93a]">
+                  <ul className="list-disc space-y-1.5 pl-5 marker:text-amber-400">
                     <li>Documentation and content improvements.</li>
                     <li>
                       UI/UX feedback, exploratory testing, and bug triage.
@@ -327,7 +327,7 @@ export function JoinUsForm({ isAuthenticatedHint = false }: JoinUsFormProps) {
                     <li>Data validation, analysis ideas, and process help.</li>
                     <li>Anything else worth of discussion.</li>
                   </ul>
-                  <p className="rounded-md border border-white/20 bg-[#00091a]/70 p-3 text-xs leading-relaxed text-white/80">
+                  <p className="rounded-md border border-white/20 bg-slate-950/70 p-3 text-xs leading-relaxed text-white/80">
                     If you can bring value and communicate clearly, we are open
                     to discussing the role with you.
                   </p>
@@ -337,7 +337,7 @@ export function JoinUsForm({ isAuthenticatedHint = false }: JoinUsFormProps) {
           </div>
 
           <div className="mx-auto w-full max-w-3xl">
-            <Card className="border-white/15 bg-[#0a1428]/95 text-white shadow-xl">
+            <Card className="border-white/15 bg-slate-950/95 text-white shadow-xl">
               <CardHeader>
                 <CardTitle className="text-xl">Contact Form</CardTitle>
                 <CardDescription className="text-sm text-white/80">
@@ -359,16 +359,16 @@ export function JoinUsForm({ isAuthenticatedHint = false }: JoinUsFormProps) {
                           setSubject(event.target.value as JoinUsSubject | "")
                         }
                         disabled={isSubmitting}
-                        className="h-9 w-full appearance-none rounded-md border border-white/25 bg-[#00091a] px-3 py-2 pr-10 text-sm text-white shadow-sm outline-none focus:border-[#cfa93a] focus:ring-2 focus:ring-[#cfa93a]/30 disabled:cursor-not-allowed disabled:opacity-60"
+                        className="h-9 w-full appearance-none rounded-md border border-white/25 bg-slate-950 px-3 py-2 pr-10 text-sm text-white shadow-sm outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-400/30 disabled:cursor-not-allowed disabled:opacity-60"
                       >
-                        <option value="" className="bg-[#0a1428] text-white">
+                        <option value="" className="bg-slate-950 text-white">
                           Choose an option
                         </option>
                         {SUBJECT_OPTIONS.map((option) => (
                           <option
                             key={option.value}
                             value={option.value}
-                            className="bg-[#0a1428] text-white"
+                            className="bg-slate-950 text-white"
                           >
                             {option.label}
                           </option>
@@ -387,7 +387,7 @@ export function JoinUsForm({ isAuthenticatedHint = false }: JoinUsFormProps) {
                       onChange={(event) => setBody(event.target.value)}
                       disabled={isSubmitting}
                       placeholder="Share some info about you, your relevant experience, how you approach collaboration and problem-solving, and why you want to join us."
-                      className="min-h-[220px] w-full resize-y rounded-md border border-white/25 bg-[#00091a] px-3 py-2 text-sm text-white shadow-sm outline-none placeholder:text-white/45 focus:border-[#cfa93a] focus:ring-2 focus:ring-[#cfa93a]/30"
+                      className="min-h-56 w-full resize-y rounded-md border border-white/25 bg-slate-950 px-3 py-2 text-sm text-white shadow-sm outline-none placeholder:text-white/45 focus:border-amber-400 focus:ring-2 focus:ring-amber-400/30"
                     />
                     <p
                       className={cn(
@@ -415,7 +415,7 @@ export function JoinUsForm({ isAuthenticatedHint = false }: JoinUsFormProps) {
                         </AlertDescription>
                       </Alert>
                     ) : isTurnstileConfigured ? (
-                      <div className="rounded-md border border-white/20 bg-[#00091a]/75 p-3">
+                      <div className="rounded-md border border-white/20 bg-slate-950/75 p-3">
                         <Turnstile
                           ref={turnstileRef}
                           siteKey={turnstileSiteKey}
@@ -456,7 +456,7 @@ export function JoinUsForm({ isAuthenticatedHint = false }: JoinUsFormProps) {
                     <Button
                       type="submit"
                       disabled={isSubmitting || !canSubmit}
-                      className="button-medium no-rotation min-w-[200px]"
+                      className="button-medium no-rotation min-w-50"
                     >
                       {isSubmitting ? "Sending..." : "Submit"}
                     </Button>

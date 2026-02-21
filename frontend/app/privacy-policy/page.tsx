@@ -31,12 +31,14 @@ export default async function PrivacyPolicyPage() {
         purpose of providing analysis and insights within the application.
       </p>
 
-      <h2 className="text-2xl font-semibold mt-6 mb-3">
-        How We Use Your Data
-      </h2>
-      <p className="leading-relaxed">The data collected is used exclusively to:</p>
+      <h2 className="text-2xl font-semibold mt-6 mb-3">How We Use Your Data</h2>
+      <p className="leading-relaxed">
+        The data collected is used exclusively to:
+      </p>
       <ul className="list-disc pl-6 space-y-2">
-        <li>Provide playstyle analysis and account anomaly detection services</li>
+        <li>
+          Provide playstyle analysis and account anomaly detection services
+        </li>
         <li>Display match history and performance statistics</li>
         <li>Track player rank progression and metrics</li>
         <li>Generate matchmaking analysis reports</li>
@@ -47,8 +49,8 @@ export default async function PrivacyPolicyPage() {
       </h2>
       <p className="leading-relaxed">
         All data is stored securely and is only accessible to authenticated
-        users of the application. We do not share, sell, or distribute your
-        data to third parties.
+        users of the application. We do not share, sell, or distribute your data
+        to third parties.
       </p>
 
       <h2 className="text-2xl font-semibold mt-6 mb-3">Cookies and Storage</h2>
@@ -60,7 +62,7 @@ export default async function PrivacyPolicyPage() {
       <p className="leading-relaxed">
         For the full storage list, retention periods, and preference controls,
         see our{" "}
-        <Link href="/cookie-policy" className="underline hover:text-[#cfa93a]">
+        <Link href="/cookie-policy" className="underline hover:text-gold-base">
           Cookie Policy
         </Link>
         .
@@ -81,7 +83,7 @@ export default async function PrivacyPolicyPage() {
       </p>
 
       <p className="leading-relaxed text-sm mt-8 text-center">
-        © 2026 Matěj Kadlec. All rights reserved.
+        Copyright © 2026 Matěj Kadlec. All rights reserved.
       </p>
     </LegalPageShell>
   );
