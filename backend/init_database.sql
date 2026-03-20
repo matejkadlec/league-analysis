@@ -5,7 +5,14 @@
 SET statement_timeout = 0;
 SET lock_timeout = 0;
 SET idle_in_transaction_session_timeout = 0;
-SET transaction_timeout = 0;
+DO $$
+BEGIN
+    -- PostgreSQL compatibility: transaction_timeout exists only in newer versions.
+    IF current_setting('transaction_timeout', true) IS NOT NULL THEN
+        EXECUTE 'SET transaction_timeout = 0';
+    END IF;
+END;
+$$;
 SET client_encoding = 'UTF8';
 SET standard_conforming_strings = on;
 SELECT pg_catalog.set_config('search_path', '', false);
