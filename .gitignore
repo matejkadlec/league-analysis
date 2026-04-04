@@ -53,4 +53,5 @@ backend/build/
 frontend/build/
 
 # Untracked
+docs/
 untracked/
