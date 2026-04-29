@@ -71,6 +71,7 @@ class PlayerUpdaterJob(BaseJob):
 
             try:
                 for player in tracked_players:
+                    await self.check_control_state(db)
                     try:
                         await self._update_player_profile(
                             db, player, player_service, riot_client, rate_limiter

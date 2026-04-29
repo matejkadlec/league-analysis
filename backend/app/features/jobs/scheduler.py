@@ -133,42 +133,63 @@ async def _mark_stale_jobs_as_failed(db: AsyncSession) -> None:
     shut down ungracefully. On startup, we mark ALL running jobs as failed
     since no jobs should be running during application startup.
 
+    Also resets is_paused on all job configurations, since pause state is a
+    runtime concept that becomes meaningless after a restart.
+
     Args:
         db: Database session for updating job records.
     """
     try:
         from sqlalchemy import select, update
 
-        # Find ALL running jobs (none should exist during startup)
-        stmt = select(JobExecution).where(JobExecution.status == JobStatus.RUNNING)
+        # Reset is_paused on ALL job configurations — pause is a runtime-only
+        # concept and must not survive across restarts.
+        reset_paused_stmt = (
+            update(JobConfiguration)
+            .where(JobConfiguration.is_paused.is_(True))
+            .values(is_paused=False)
+        )
+        pause_result = await db.execute(reset_paused_stmt)
+        rows_reset = pause_result.rowcount or 0  # type: ignore[union-attr]
+        if rows_reset:
+            logger.info(
+                "Reset paused state on job configurations at startup",
+                count=rows_reset,
+            )
+
+        # Find ALL running or paused jobs (none should exist during startup)
+        stmt = select(JobExecution).where(
+            JobExecution.status.in_([JobStatus.RUNNING, JobStatus.PAUSED])
+        )
         result = await db.execute(stmt)
         stale_jobs = result.scalars().all()
 
         if stale_jobs:
             logger.warning(
-                "Found jobs stuck in running state on startup",
+                "Found jobs stuck in running/paused state on startup",
                 count=len(stale_jobs),
                 job_ids=[job.id for job in stale_jobs],
             )
 
-            # Update them to failed status
+            # Update them to cancelled status — they were interrupted by shutdown
             update_stmt = (
                 update(JobExecution)
-                .where(JobExecution.status == JobStatus.RUNNING)
+                .where(JobExecution.status.in_([JobStatus.RUNNING, JobStatus.PAUSED]))
                 .values(
-                    status=JobStatus.FAILED,
+                    status=JobStatus.CANCELLED,
                     completed_at=datetime.now(),
-                    error_message="Job marked as failed - was still running during application startup (likely ungraceful shutdown or crash)",
+                    error_message="Job cancelled - was still running during application startup (likely ungraceful shutdown or crash)",
                 )
             )
             await db.execute(update_stmt)
             await db.commit()
 
             logger.info(
-                "Marked stale jobs as failed",
+                "Marked stale jobs as cancelled",
                 count=len(stale_jobs),
             )
         else:
+            await db.commit()
             logger.info("No stale jobs found on startup")
 
     except Exception as e:

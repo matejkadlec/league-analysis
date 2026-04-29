@@ -2,7 +2,7 @@
 
 from .router import router as jobs_router
 from .service import JobService
-from .models import JobConfiguration, JobExecution, JobStatus, JobType
+from .models import JobConfiguration, JobExecution, JobStatus, JobType, ExecutionType
 from .schemas import (
     JobConfigurationResponse,
     JobConfigurationUpdate,
@@ -28,6 +28,7 @@ __all__ = [
     "JobExecution",
     "JobStatus",
     "JobType",
+    "ExecutionType",
     # Schemas
     "JobConfigurationResponse",
     "JobConfigurationUpdate",

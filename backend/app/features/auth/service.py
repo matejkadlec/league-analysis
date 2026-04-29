@@ -280,9 +280,7 @@ class AuthService:
     async def _get_subject_counts_for_update(self) -> SubjectCounts:
         """Fetch singleton subject counter row with a write lock."""
         result = await self.db.execute(
-            select(SubjectCounts)
-            .where(SubjectCounts.id == 1)
-            .with_for_update()
+            select(SubjectCounts).where(SubjectCounts.id == 1).with_for_update()
         )
         subject_counts = result.scalar_one_or_none()
         if subject_counts is not None:
@@ -495,7 +493,9 @@ class AuthService:
         logger.info(
             "join_us_contact_submitted",
             subject=subject.value,
-            sequence_number=sequence_number if sequence_number is not None else "[TEST]",
+            sequence_number=(
+                sequence_number if sequence_number is not None else "[TEST]"
+            ),
             is_test=is_test_submission,
             recipient=JOIN_US_CONTACT_RECIPIENT,
         )
@@ -507,7 +507,9 @@ class AuthService:
         await self.db.execute(
             delete(RevokedAccessToken).where(RevokedAccessToken.expires_at <= now)
         )
-        await self.db.execute(delete(RefreshToken).where(RefreshToken.expires_at <= now))
+        await self.db.execute(
+            delete(RefreshToken).where(RefreshToken.expires_at <= now)
+        )
         await self.db.commit()
 
     def is_captcha_enabled(self) -> bool:
@@ -641,7 +643,9 @@ class AuthService:
         if expires_delta:
             expires_at = now + expires_delta
         else:
-            expires_at = now + timedelta(days=self.settings.jwt_refresh_token_expire_days)
+            expires_at = now + timedelta(
+                days=self.settings.jwt_refresh_token_expire_days
+            )
 
         record = RefreshToken(
             user_id=user_id,
@@ -713,7 +717,9 @@ class AuthService:
         new_refresh_token = secrets.token_urlsafe(64)
         new_token_id = self._generate_token_id()
         new_token_hash = self._hash_refresh_token(new_refresh_token)
-        refresh_expires_at = now + timedelta(days=self.settings.jwt_refresh_token_expire_days)
+        refresh_expires_at = now + timedelta(
+            days=self.settings.jwt_refresh_token_expire_days
+        )
 
         token_record.replaced_by_token_id = new_token_id
         replacement = RefreshToken(
@@ -729,7 +735,13 @@ class AuthService:
         await self.db.commit()
 
         access_token, access_expires_at, _ = self.create_access_token(user)
-        return user, access_token, access_expires_at, new_refresh_token, refresh_expires_at
+        return (
+            user,
+            access_token,
+            access_expires_at,
+            new_refresh_token,
+            refresh_expires_at,
+        )
 
     async def revoke_all_refresh_tokens_for_user(self, user_id: int) -> None:
         """Revoke all active refresh tokens for a user."""
@@ -818,7 +830,7 @@ class AuthService:
         reveal valid email addresses. Always hashes the password even when
         the user doesn't exist.
         """
-        user = await self.get_user_by_email(email)
+        user = await self.get_user_by_email_case_insensitive(email)
 
         # Always hash password to prevent timing attacks
         # If user doesn't exist, hash against a dummy value
@@ -847,7 +859,7 @@ class AuthService:
     async def create_user(self, user_create: UserCreate) -> User:
         """Create a new user."""
         # Check if user already exists
-        existing_user = await self.get_user_by_email(user_create.email)
+        existing_user = await self.get_user_by_email_case_insensitive(user_create.email)
         if existing_user:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,

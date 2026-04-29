@@ -36,14 +36,21 @@ CREATE SCHEMA jobs;
 CREATE TYPE jobs.job_status_enum AS ENUM (
     'PENDING',
     'RUNNING',
+    'PAUSED',
     'SUCCESS',
     'FAILED',
+    'CANCELLED',
     'RATE_LIMITED'
 );
 
 CREATE TYPE jobs.job_type_enum AS ENUM (
     'MATCH_FETCHER',
     'PLAYER_UPDATER'
+);
+
+CREATE TYPE jobs.execution_type_enum AS ENUM (
+    'REGULAR',
+    'TEST'
 );
 
 CREATE TYPE core.analysis_status_enum AS ENUM (
@@ -739,6 +746,7 @@ CREATE TABLE jobs.job_configurations (
     description text,
     schedule character varying(256) NOT NULL,
     is_active boolean NOT NULL,
+    is_paused boolean DEFAULT false NOT NULL,
     config_json jsonb,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL
@@ -793,7 +801,8 @@ CREATE TABLE jobs.job_executions (
     execution_log jsonb,
     detailed_logs jsonb,
     triggered_by character varying(16) DEFAULT 'system' NOT NULL,
-    has_api_key_error boolean DEFAULT false NOT NULL
+    has_api_key_error boolean DEFAULT false NOT NULL,
+    execution_type jobs.execution_type_enum DEFAULT 'REGULAR' NOT NULL
 );
 
 ALTER SEQUENCE jobs.job_executions_id_seq OWNED BY jobs.job_executions.id;

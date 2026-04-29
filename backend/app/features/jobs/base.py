@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 from collections import defaultdict
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
+import asyncio
 from typing import Any, Callable, Dict, List, Optional
 
 import structlog
@@ -11,12 +12,26 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import db_manager
-from .models import JobConfiguration, JobExecution, JobStatus
+from .models import JobConfiguration, JobExecution, JobStatus, ExecutionType
 from structlog import contextvars as structlog_contextvars
 from .log_capture import job_log_capture
 from .error_handling import RateLimitSignal
+from .control import (
+    get_runtime_control_snapshot,
+    is_runtime_job_running,
+    register_runtime_control,
+    unregister_runtime_control,
+)
 
 logger = structlog.get_logger(__name__)
+
+
+class JobStopSignal(Exception):
+    """Signal used for graceful/forced user-requested stop."""
+
+    def __init__(self, force: bool = False):
+        self.force = force
+        super().__init__("Job stop requested by user")
 
 
 def _format_api_calls_for_storage(api_calls: List[Any]) -> List[Dict[str, Any]]:
@@ -92,15 +107,22 @@ class BaseJob(ABC):
     - execute(): The main job logic
     """
 
-    def __init__(self, job_config_id: int, triggered_by: str = "system"):
+    def __init__(
+        self,
+        job_config_id: int,
+        triggered_by: str = "system",
+        execution_type: ExecutionType = ExecutionType.REGULAR,
+    ):
         """Initialize the job with its configuration ID.
 
         Args:
             job_config_id: ID of job configuration from database.
             triggered_by: Who triggered the job: 'system' (scheduler) or 'user' (manual).
+            execution_type: Type of execution: REGULAR or TEST.
         """
         self.job_config_id = job_config_id
         self.triggered_by = triggered_by
+        self.execution_type = execution_type
         self.job_config: Optional[JobConfiguration] = None
         self.job_execution: Optional[JobExecution] = None
         self.metrics = defaultdict(int)
@@ -117,6 +139,13 @@ class BaseJob(ABC):
         self._has_api_key_error: bool = False
         # Track API call records for detailed logging
         self._api_call_records: List[Any] = []
+
+    @property
+    def runtime_key(self) -> int:
+        """Runtime control key. Negative for TEST runs to avoid conflicts with regular runs."""
+        if self.execution_type == ExecutionType.TEST:
+            return -self.job_config_id
+        return self.job_config_id
 
     @abstractmethod
     async def execute(self, db: AsyncSession) -> None:
@@ -137,12 +166,19 @@ class BaseJob(ABC):
     async def _refresh_config(self, db: AsyncSession) -> None:
         """Load fresh job configuration from database.
 
+        Expires any cached ORM state first so changes committed by other
+        sessions (e.g. the API router setting is_paused) are visible.
+
         Args:
             db: Database session for querying configuration.
 
         Raises:
             Exception: If configuration is missing or invalid.
         """
+        # Expire cached state so the SELECT actually hits the DB
+        if self.job_config is not None:
+            db.expire(self.job_config)
+
         stmt = select(JobConfiguration).where(JobConfiguration.id == self.job_config_id)
         result = await db.execute(stmt)
         job_config = result.scalar_one_or_none()
@@ -173,6 +209,7 @@ class BaseJob(ABC):
                 execution_log={},
                 detailed_logs=None,  # Will be populated on completion
                 triggered_by=self.triggered_by,
+                execution_type=self.execution_type,
             )
             db.add(self.job_execution)
             if not await self.safe_commit(db, "job start"):
@@ -264,14 +301,31 @@ class BaseJob(ABC):
             await self._handle_completion_error(db, e)
 
     async def is_already_running(self, db: AsyncSession) -> bool:
-        """Check if this job is already running."""
+        """Check if this job is already running.
+
+        Uses in-memory runtime controls as the source of truth.
+        If the DB has a RUNNING record but no runtime control exists,
+        the record is orphaned and gets cleaned up automatically.
+
+        Test runs use a separate runtime key so they never conflict
+        with regular runs.
+        """
+        if is_runtime_job_running(self.runtime_key):
+            logger.info(
+                "Job is already running (runtime control active), skipping execution",
+                job_config_id=self.job_config_id,
+                runtime_key=self.runtime_key,
+            )
+            return True
+
         from sqlalchemy import select
 
         stmt = (
             select(JobExecution)
             .where(
                 JobExecution.job_config_id == self.job_config_id,
-                JobExecution.status == JobStatus.RUNNING,
+                JobExecution.status.in_([JobStatus.RUNNING, JobStatus.PAUSED]),
+                JobExecution.execution_type == self.execution_type,
             )
             .limit(1)
         )
@@ -279,17 +333,22 @@ class BaseJob(ABC):
         running_job = result.scalar_one_or_none()
 
         if running_job:
-            logger.info(
-                "Job is already running, skipping execution",
+            logger.warning(
+                "Found orphaned RUNNING/PAUSED execution without runtime control, cleaning up",
                 job_config_id=self.job_config_id,
-                running_execution_id=running_job.id,
+                orphaned_execution_id=running_job.id,
                 running_since=(
                     running_job.started_at.isoformat()
                     if running_job.started_at
                     else None
                 ),
             )
-            return True
+            running_job.status = JobStatus.FAILED
+            running_job.completed_at = datetime.now(timezone.utc)
+            running_job.error_message = (
+                "Execution orphaned - no active runtime control found"
+            )
+            await self.safe_commit(db, "orphaned execution cleanup")
 
         return False
 
@@ -334,6 +393,11 @@ class BaseJob(ABC):
                 )
                 return
 
+            register_runtime_control(
+                self.runtime_key,
+                asyncio.current_task(),
+            )
+
             try:
                 # Load fresh configuration before execution
                 await self._refresh_config(db)
@@ -350,8 +414,32 @@ class BaseJob(ABC):
                         job_type=job_config.job_type.value,
                     )
 
+                await self.check_control_state(db)
                 await self.execute(db)
 
+            except JobStopSignal as stop_signal:
+                self.add_log_entry("stopped_early", True)
+                self.add_log_entry(
+                    "stop_mode",
+                    "force" if stop_signal.force else "graceful",
+                )
+                job_logs = self._get_job_logs()
+                await self.log_completion(
+                    db,
+                    success=True,
+                    logs=job_logs,
+                    status=JobStatus.CANCELLED,
+                )
+            except asyncio.CancelledError:
+                self.add_log_entry("stopped_early", True)
+                self.add_log_entry("stop_mode", "force")
+                job_logs = self._get_job_logs()
+                await self.log_completion(
+                    db,
+                    success=True,
+                    logs=job_logs,
+                    status=JobStatus.CANCELLED,
+                )
             except RateLimitSignal as rate_limit_signal:
                 # Rate limit hit - save progress and mark as rate limited
                 logger.warning(
@@ -399,7 +487,51 @@ class BaseJob(ABC):
                         logs=job_logs,
                     )
             finally:
+                unregister_runtime_control(self.runtime_key)
                 structlog_contextvars.clear_contextvars()
+
+    async def check_control_state(self, db: AsyncSession) -> None:
+        """Check pause/stop state and block while paused."""
+        await self._refresh_config(db)
+        runtime_state = get_runtime_control_snapshot(self.runtime_key)
+
+        if runtime_state["force_stop_requested"]:
+            raise JobStopSignal(force=True)
+
+        if runtime_state["stop_requested"]:
+            raise JobStopSignal(force=False)
+
+        if not self.job_config or not self.job_config.is_paused:
+            return
+
+        logger.info(
+            "Job paused, waiting for resume",
+            job_config_id=self.job_config_id,
+            runtime_key=self.runtime_key,
+        )
+
+        # Mark execution as PAUSED in the database
+        await self._set_execution_status(db, JobStatus.PAUSED)
+
+        while True:
+            await asyncio.sleep(1)
+            await self._refresh_config(db)
+            runtime_state = get_runtime_control_snapshot(self.runtime_key)
+
+            if runtime_state["force_stop_requested"]:
+                raise JobStopSignal(force=True)
+
+            if runtime_state["stop_requested"]:
+                raise JobStopSignal(force=False)
+
+            if self.job_config and not self.job_config.is_paused:
+                logger.info(
+                    "Job resumed",
+                    job_config_id=self.job_config_id,
+                )
+                # Restore execution to RUNNING status
+                await self._set_execution_status(db, JobStatus.RUNNING)
+                return
 
     async def safe_commit(
         self,
@@ -427,6 +559,13 @@ class BaseJob(ABC):
                 execution_id=self.job_execution.id if self.job_execution else None,
             )
             return False
+
+    async def _set_execution_status(self, db: AsyncSession, status: JobStatus) -> None:
+        """Update the current execution's status in the database."""
+        if self.job_execution is None:
+            return
+        self.job_execution.status = status
+        await self.safe_commit(db, f"set execution status to {status.value}")
 
     def _get_job_logs(self) -> List[Dict[str, Any]]:
         """Extract logs for this job execution."""

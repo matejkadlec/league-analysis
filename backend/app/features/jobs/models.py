@@ -33,9 +33,18 @@ class JobStatus(str, PyEnum):
 
     PENDING = "PENDING"
     RUNNING = "RUNNING"
+    PAUSED = "PAUSED"
     SUCCESS = "SUCCESS"
     FAILED = "FAILED"
+    CANCELLED = "CANCELLED"
     RATE_LIMITED = "RATE_LIMITED"
+
+
+class ExecutionType(str, PyEnum):
+    """Enumeration of job execution types."""
+
+    REGULAR = "REGULAR"
+    TEST = "TEST"
 
 
 class JobConfiguration(Base):
@@ -88,6 +97,13 @@ class JobConfiguration(Base):
         default=True,
         index=True,
         comment="Whether this job is active and should be scheduled",
+    )
+
+    is_paused: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        comment="Whether a currently running job execution is paused",
     )
 
     config_json: Mapped[Optional[Dict[str, Any]]] = mapped_column(
@@ -230,6 +246,16 @@ class JobExecution(Base):
         nullable=False,
         default=False,
         comment="Whether this execution encountered an API key authentication error",
+    )
+
+    # Execution type (regular scheduled/manual run vs test run)
+    execution_type: Mapped[ExecutionType] = mapped_column(
+        ENUM(
+            ExecutionType, name="execution_type_enum", create_type=False, schema="jobs"
+        ),
+        nullable=False,
+        default=ExecutionType.REGULAR,
+        comment="Type of execution: REGULAR (normal run) or TEST (API health-check run)",
     )
 
     # Relationships

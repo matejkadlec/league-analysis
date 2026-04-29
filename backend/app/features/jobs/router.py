@@ -1,10 +1,17 @@
 """Job management API endpoints."""
 
+from datetime import datetime, timezone
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Query, BackgroundTasks, Depends
 
-from .models import JobStatus, JobType
+from .models import JobStatus, JobType, ExecutionType
+from .control import (
+    get_runtime_control_snapshot,
+    is_runtime_job_running,
+    request_job_stop,
+)
 from .schemas import (
+    JobControlActionResponse,
     JobConfigurationUpdate,
     JobConfigurationResponse,
     JobExecutionListResponse,
@@ -16,6 +23,8 @@ from app.features.auth.dependencies import get_current_admin_user
 
 from .implementations.match_fetcher import MatchFetcherJob
 from .implementations.player_updater import PlayerUpdaterJob
+from .implementations.test_runner import TestMatchFetcherJob, TestPlayerUpdaterJob
+from .base import BaseJob
 import structlog
 
 logger = structlog.get_logger(__name__)
@@ -49,6 +58,26 @@ def _create_job_instance(job, triggered_by: str = "system"):
             detail=f"Job type {job.job_type} implementation not found.",
         )
     return job_class(job.id, triggered_by=triggered_by)
+
+
+def _create_test_job_instance(job):
+    """Create a test job instance based on job type.
+
+    Returns:
+        Test job instance that calls API endpoints without writing data.
+    """
+    test_type_mapping = {
+        JobType.MATCH_FETCHER: TestMatchFetcherJob,
+        JobType.PLAYER_UPDATER: TestPlayerUpdaterJob,
+    }
+
+    test_class = test_type_mapping.get(job.job_type)
+    if not test_class:
+        raise HTTPException(
+            status_code=501,
+            detail=f"Test runner for job type {job.job_type} not implemented.",
+        )
+    return test_class(job.id)
 
 
 # === Job Configuration Endpoints ===
@@ -116,6 +145,9 @@ async def get_job_executions(
     page: int = Query(1, ge=1, description="Page number"),
     size: int = Query(20, ge=1, le=100, description="Page size"),
     status: Optional[JobStatus] = Query(None, description="Filter by status"),
+    execution_type: Optional[ExecutionType] = Query(
+        None, description="Filter by execution type"
+    ),
 ):
     """
     Get execution history for a specific job.
@@ -125,6 +157,7 @@ async def get_job_executions(
         page: Page number (1-indexed).
         size: Number of executions per page.
         status: Optional status filter.
+        execution_type: Optional execution type filter (REGULAR or TEST).
 
     Returns:
         Paginated list of job executions.
@@ -133,6 +166,7 @@ async def get_job_executions(
         executions = await job_service.list_job_executions(
             job_config_id=job_id,
             status=status,
+            execution_type=execution_type,
             page=page,
             size=size,
         )
@@ -156,6 +190,9 @@ async def list_all_executions(
     page: int = Query(1, ge=1, description="Page number"),
     size: int = Query(20, ge=1, le=100, description="Page size"),
     status: Optional[JobStatus] = Query(None, description="Filter by status"),
+    execution_type: Optional[ExecutionType] = Query(
+        None, description="Filter by execution type"
+    ),
 ):
     """
     Get execution history for all jobs.
@@ -164,6 +201,7 @@ async def list_all_executions(
         page: Page number (1-indexed).
         size: Number of executions per page.
         status: Optional status filter.
+        execution_type: Optional execution type filter (REGULAR or TEST).
 
     Returns:
         Paginated list of all job executions.
@@ -171,6 +209,7 @@ async def list_all_executions(
     try:
         executions = await job_service.list_job_executions(
             status=status,
+            execution_type=execution_type,
             page=page,
             size=size,
         )
@@ -225,6 +264,16 @@ async def trigger_job(
                 detail=f"Job '{job.name}' is not active and cannot be triggered",
             )
 
+        # If a test run is active (non-suspended), stop it so the real run
+        # can proceed.
+        test_runtime_key = -job.id
+        if is_runtime_job_running(test_runtime_key):
+            request_job_stop(test_runtime_key, force=True)
+            logger.info(
+                "Stopped test run to allow regular trigger",
+                job_id=job_id,
+            )
+
         # Check if job is already running (prevent concurrent runs)
         is_running = await job_service.is_job_running(job.job_type)
         if is_running:
@@ -269,6 +318,425 @@ async def trigger_job(
         raise HTTPException(
             status_code=500,
             detail="Internal server error triggering job",
+        )
+
+
+@router.get("/{job_id}/control-state", response_model=JobControlActionResponse)
+async def get_job_control_state(
+    job_id: int,
+    job_service: JobServiceDep,
+):
+    """Get pause/stop runtime state for a job."""
+    try:
+        state = await job_service.get_job_control_state(job_id)
+        if not state:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Job configuration with ID {job_id} not found",
+            )
+        return state
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            "Failed to get job control state",
+            job_id=job_id,
+            error=str(e),
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=500,
+            detail="Internal server error retrieving job control state",
+        )
+
+
+@router.post("/{job_id}/pause", response_model=JobControlActionResponse)
+async def pause_job(
+    job_id: int,
+    job_service: JobServiceDep,
+):
+    """Pause a running job execution."""
+    try:
+        state = await job_service.set_job_paused(job_id, paused=True)
+        if not state:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Job configuration with ID {job_id} not found",
+            )
+        if not state.success:
+            raise HTTPException(status_code=409, detail=state.message)
+        return state
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            "Failed to pause job",
+            job_id=job_id,
+            error=str(e),
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=500,
+            detail="Internal server error pausing job",
+        )
+
+
+@router.post("/{job_id}/resume", response_model=JobControlActionResponse)
+async def resume_job(
+    job_id: int,
+    job_service: JobServiceDep,
+):
+    """Resume a paused running job execution."""
+    try:
+        state = await job_service.set_job_paused(job_id, paused=False)
+        if not state:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Job configuration with ID {job_id} not found",
+            )
+        if not state.success:
+            raise HTTPException(status_code=409, detail=state.message)
+        return state
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            "Failed to resume job",
+            job_id=job_id,
+            error=str(e),
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=500,
+            detail="Internal server error resuming job",
+        )
+
+
+@router.post("/{job_id}/stop", response_model=JobControlActionResponse)
+async def stop_job(
+    job_id: int,
+    job_service: JobServiceDep,
+    force: bool = Query(False, description="Force stop immediately"),
+):
+    """Request graceful or forced stop for a running job execution."""
+    try:
+        state = await job_service.request_job_stop_action(job_id, force=force)
+        if not state:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Job configuration with ID {job_id} not found",
+            )
+        if not state.success:
+            raise HTTPException(status_code=409, detail=state.message)
+        return state
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            "Failed to stop job",
+            job_id=job_id,
+            force=force,
+            error=str(e),
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=500,
+            detail="Internal server error stopping job",
+        )
+
+
+# === Test Run Endpoints ===
+
+
+@router.post("/{job_id}/test", response_model=JobTriggerResponse)
+async def trigger_test_run(
+    job_id: int,
+    background_tasks: BackgroundTasks,
+    job_service: JobServiceDep,
+    suspend_regular: bool = Query(
+        False,
+        description="Whether to suspend regular scheduled runs during the test",
+    ),
+):
+    """Start a test run for a job.
+
+    The test run calls all Riot API endpoints the real job uses once per
+    minute.  It never writes data to the database (except the execution
+    record itself).  Runs for up to 1 hour or until stopped.
+
+    Args:
+        job_id: Job configuration ID.
+        suspend_regular: If True, the scheduled job is paused for the duration.
+    """
+    try:
+        job = await job_service.get_job_configuration(job_id)
+        if not job:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Job configuration with ID {job_id} not found",
+            )
+
+        if not job.is_active:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Job '{job.name}' is not active and cannot be tested",
+            )
+
+        # Check if a test run is already active (negative key = test)
+        test_runtime_key = -job.id
+        if is_runtime_job_running(test_runtime_key):
+            return JobTriggerResponse(
+                success=False,
+                message=f"A test run for '{job.name}' is already active.",
+                execution_id=None,
+            )
+
+        # Suspend scheduled runs if requested
+        if suspend_regular:
+            from .scheduler import get_scheduler
+            from apscheduler.jobstores.base import JobLookupError
+
+            scheduler = get_scheduler()
+            scheduler_job_id = f"job_{job.id}"
+            if scheduler and scheduler.running:
+                try:
+                    scheduler.pause_job(scheduler_job_id)
+                    logger.info(
+                        "Suspended scheduled runs for test",
+                        job_id=job_id,
+                        scheduler_job_id=scheduler_job_id,
+                    )
+                except JobLookupError:
+                    pass  # job not in scheduler — nothing to suspend
+
+        test_instance = _create_test_job_instance(job)
+        # Store suspend_regular flag so test completion can resume the scheduler
+        test_instance._suspend_regular = suspend_regular
+        background_tasks.add_task(
+            _run_test_job_with_cleanup,
+            test_instance,
+            job.id,
+            suspend_regular,
+        )
+
+        logger.info(
+            "Test run triggered",
+            job_id=job_id,
+            job_name=job.name,
+            suspend_regular=suspend_regular,
+        )
+
+        return JobTriggerResponse(
+            success=True,
+            message=f"Test run for '{job.name}' started",
+            execution_id=None,
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            "Failed to trigger test run",
+            job_id=job_id,
+            error=str(e),
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=500,
+            detail="Internal server error triggering test run",
+        )
+
+
+async def _run_test_job_with_cleanup(
+    test_instance: BaseJob,
+    job_id: int,
+    suspend_regular: bool,
+) -> None:
+    """Run the test job and resume the scheduler job when it finishes."""
+    try:
+        await test_instance.run()
+    finally:
+        if suspend_regular:
+            from .scheduler import get_scheduler
+            from apscheduler.jobstores.base import JobLookupError
+
+            scheduler = get_scheduler()
+            scheduler_job_id = f"job_{job_id}"
+            if scheduler and scheduler.running:
+                try:
+                    scheduler.resume_job(scheduler_job_id)
+                    logger.info(
+                        "Resumed scheduled runs after test",
+                        job_id=job_id,
+                    )
+                except JobLookupError:
+                    pass
+
+
+@router.post("/{job_id}/test/stop", response_model=JobControlActionResponse)
+async def stop_test_run(
+    job_id: int,
+    job_service: JobServiceDep,
+    force: bool = Query(False, description="Force stop immediately"),
+):
+    """Stop a running test for a job."""
+    try:
+        job = await job_service.get_job_configuration(job_id)
+        if not job:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Job configuration with ID {job_id} not found",
+            )
+
+        test_runtime_key = -job.id
+        was_applied = request_job_stop(test_runtime_key, force=force)
+        test_state = get_runtime_control_snapshot(test_runtime_key)
+
+        if not was_applied:
+            return JobControlActionResponse(
+                success=False,
+                message="No test run is active for this job",
+                is_running=False,
+                is_paused=False,
+                is_stopping=False,
+                is_force_stopping=False,
+            )
+
+        return JobControlActionResponse(
+            success=True,
+            message=(
+                f"Force stop requested for test run of '{job.name}'"
+                if force
+                else f"Stop requested for test run of '{job.name}'"
+            ),
+            is_running=test_state["is_running"],
+            is_paused=False,
+            is_stopping=test_state["stop_requested"],
+            is_force_stopping=test_state["force_stop_requested"],
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            "Failed to stop test run",
+            job_id=job_id,
+            error=str(e),
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=500,
+            detail="Internal server error stopping test run",
+        )
+
+
+@router.post("/{job_id}/test/pause", response_model=JobControlActionResponse)
+async def pause_test_run(
+    job_id: int,
+    job_service: JobServiceDep,
+):
+    """Pause a running test execution."""
+    try:
+        job_model = await job_service.get_job_configuration_model(job_id)
+        if not job_model:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Job configuration with ID {job_id} not found",
+            )
+
+        test_runtime_key = -job_model.id
+        if not is_runtime_job_running(test_runtime_key):
+            return JobControlActionResponse(
+                success=False,
+                message="No test run is active for this job",
+                is_running=False,
+                is_paused=False,
+                is_stopping=False,
+                is_force_stopping=False,
+            )
+
+        job_model.is_paused = True
+        job_model.updated_at = datetime.now(timezone.utc)
+        await job_service.db.commit()
+        await job_service.db.refresh(job_model)
+
+        test_state = get_runtime_control_snapshot(test_runtime_key)
+        return JobControlActionResponse(
+            success=True,
+            message=f"Test run for '{job_model.name}' paused",
+            is_running=test_state["is_running"],
+            is_paused=True,
+            is_stopping=test_state["stop_requested"],
+            is_force_stopping=test_state["force_stop_requested"],
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            "Failed to pause test run",
+            job_id=job_id,
+            error=str(e),
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=500,
+            detail="Internal server error pausing test run",
+        )
+
+
+@router.post("/{job_id}/test/resume", response_model=JobControlActionResponse)
+async def resume_test_run(
+    job_id: int,
+    job_service: JobServiceDep,
+):
+    """Resume a paused test execution."""
+    try:
+        job_model = await job_service.get_job_configuration_model(job_id)
+        if not job_model:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Job configuration with ID {job_id} not found",
+            )
+
+        test_runtime_key = -job_model.id
+        if not is_runtime_job_running(test_runtime_key):
+            return JobControlActionResponse(
+                success=False,
+                message="No test run is active for this job",
+                is_running=False,
+                is_paused=False,
+                is_stopping=False,
+                is_force_stopping=False,
+            )
+
+        job_model.is_paused = False
+        job_model.updated_at = datetime.now(timezone.utc)
+        await job_service.db.commit()
+        await job_service.db.refresh(job_model)
+
+        test_state = get_runtime_control_snapshot(test_runtime_key)
+        return JobControlActionResponse(
+            success=True,
+            message=f"Test run for '{job_model.name}' resumed",
+            is_running=test_state["is_running"],
+            is_paused=False,
+            is_stopping=test_state["stop_requested"],
+            is_force_stopping=test_state["force_stop_requested"],
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            "Failed to resume test run",
+            job_id=job_id,
+            error=str(e),
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=500,
+            detail="Internal server error resuming test run",
         )
 
 

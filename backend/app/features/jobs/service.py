@@ -7,10 +7,11 @@ import math
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, desc
 
-from .models import JobConfiguration, JobExecution, JobStatus, JobType
+from .models import JobConfiguration, JobExecution, JobStatus, JobType, ExecutionType
 from .schemas import (
     JobConfigurationUpdate,
     JobConfigurationResponse,
+    JobControlActionResponse,
     JobExecutionResponse,
     JobExecutionListResponse,
 )
@@ -19,6 +20,11 @@ from .queue_config import (
     has_enabled_match_fetcher_queue,
 )
 import structlog
+from .control import (
+    get_runtime_control_snapshot,
+    is_runtime_job_running,
+    request_job_stop,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -37,6 +43,19 @@ class JobService:
 
         if response.job_type == JobType.MATCH_FETCHER:
             response.config_json = normalize_match_fetcher_config(response.config_json)
+
+        runtime_state = get_runtime_control_snapshot(job.id)
+        response.is_running = runtime_state["is_running"]
+        response.is_stopping = runtime_state["stop_requested"]
+        response.is_force_stopping = runtime_state["force_stop_requested"]
+
+        # Test runs use negative config ID as runtime key
+        test_runtime_state = get_runtime_control_snapshot(-job.id)
+        response.is_test_running = test_runtime_state["is_running"]
+        response.is_test_stopping = test_runtime_state["stop_requested"]
+        response.is_test_force_stopping = test_runtime_state["force_stop_requested"]
+        # Re-read is_paused from the ORM model to reflect current DB state
+        response.is_paused = bool(job.is_paused)
 
         return response
 
@@ -60,6 +79,14 @@ class JobService:
         if job:
             return self._to_job_response(job)
         return None
+
+    async def get_job_configuration_model(
+        self, job_id: int
+    ) -> Optional[JobConfiguration]:
+        """Get the ORM model for a job configuration by ID."""
+        query = select(JobConfiguration).where(JobConfiguration.id == job_id)
+        result = await self.db.execute(query)
+        return result.scalar_one_or_none()
 
     async def list_job_configurations(
         self, active_only: bool = False
@@ -108,10 +135,15 @@ class JobService:
         # Match Fetcher queue toggles are stored in config_json and drive active state.
         if job.job_type == JobType.MATCH_FETCHER and "config_json" in update_dict:
             incoming_config = update_dict.get("config_json") or {}
-            merged_config: dict[str, Any] = {**(job.config_json or {}), **incoming_config}
+            merged_config: dict[str, Any] = {
+                **(job.config_json or {}),
+                **incoming_config,
+            }
             normalized_config = normalize_match_fetcher_config(merged_config)
             update_dict["config_json"] = normalized_config
-            update_dict["is_active"] = has_enabled_match_fetcher_queue(normalized_config)
+            update_dict["is_active"] = has_enabled_match_fetcher_queue(
+                normalized_config
+            )
 
         update_dict["updated_at"] = datetime.now(timezone.utc)
 
@@ -133,19 +165,26 @@ class JobService:
     # === Job Execution Operations ===
 
     def _apply_execution_filters(
-        self, query, job_config_id: Optional[int], status: Optional[JobStatus]
+        self,
+        query,
+        job_config_id: Optional[int],
+        status: Optional[JobStatus],
+        execution_type: Optional[ExecutionType] = None,
     ):
         """Apply filters to a job execution query."""
         if job_config_id:
             query = query.where(JobExecution.job_config_id == job_config_id)
         if status:
             query = query.where(JobExecution.status == status)
+        if execution_type:
+            query = query.where(JobExecution.execution_type == execution_type)
         return query
 
     async def list_job_executions(
         self,
         job_config_id: Optional[int] = None,
         status: Optional[JobStatus] = None,
+        execution_type: Optional[ExecutionType] = None,
         page: int = 1,
         size: int = 20,
     ) -> JobExecutionListResponse:
@@ -154,6 +193,7 @@ class JobService:
         Args:
             job_config_id: Filter by job configuration ID.
             status: Filter by execution status.
+            execution_type: Filter by execution type (REGULAR or TEST).
             page: Page number (1-indexed).
             size: Page size.
 
@@ -162,11 +202,15 @@ class JobService:
         """
         # Build base query
         query = select(JobExecution).order_by(desc(JobExecution.started_at))
-        query = self._apply_execution_filters(query, job_config_id, status)
+        query = self._apply_execution_filters(
+            query, job_config_id, status, execution_type
+        )
 
         # Get total count
         count_query = select(func.count()).select_from(JobExecution)
-        count_query = self._apply_execution_filters(count_query, job_config_id, status)
+        count_query = self._apply_execution_filters(
+            count_query, job_config_id, status, execution_type
+        )
 
         total_result = await self.db.execute(count_query)
         total = total_result.scalar() or 0
@@ -193,15 +237,20 @@ class JobService:
     async def get_latest_execution(
         self, job_config_id: Optional[int] = None
     ) -> Optional[JobExecutionResponse]:
-        """Get the most recent job execution.
+        """Get the most recent regular job execution.
 
         Args:
             job_config_id: Optional job configuration ID to filter by.
 
         Returns:
-            Most recent job execution if found, None otherwise.
+            Most recent regular job execution if found, None otherwise.
         """
-        query = select(JobExecution).order_by(desc(JobExecution.started_at)).limit(1)
+        query = (
+            select(JobExecution)
+            .where(JobExecution.execution_type == ExecutionType.REGULAR)
+            .order_by(desc(JobExecution.started_at))
+            .limit(1)
+        )
 
         if job_config_id:
             query = query.where(JobExecution.job_config_id == job_config_id)
@@ -230,16 +279,64 @@ class JobService:
         result = await self.db.execute(query)
         return result.scalar() or 0
 
-    async def get_running_execution_count(self) -> int:
-        """Get count of currently running job executions.
+    async def _cleanup_orphaned_running_executions(self) -> int:
+        """Mark RUNNING/PAUSED executions as FAILED if no in-memory runtime control exists.
+
+        This handles cases where a job execution record is stuck in RUNNING or PAUSED
+        state (e.g. due to a race condition during startup or a failed completion update)
+        but the job is no longer actually running in memory.
 
         Returns:
-            Number of running executions.
+            Number of orphaned executions cleaned up.
         """
+        query = select(JobExecution).where(
+            JobExecution.status.in_([JobStatus.RUNNING, JobStatus.PAUSED])
+        )
+        result = await self.db.execute(query)
+        running_executions = result.scalars().all()
+
+        cleaned = 0
+        for execution in running_executions:
+            # Test runs register under negative key; regular under positive
+            runtime_key = (
+                -execution.job_config_id
+                if execution.execution_type == ExecutionType.TEST
+                else execution.job_config_id
+            )
+            if not is_runtime_job_running(runtime_key):
+                execution.status = JobStatus.FAILED
+                execution.completed_at = datetime.now(timezone.utc)
+                execution.error_message = (
+                    "Execution orphaned - no active runtime control found"
+                )
+                cleaned += 1
+
+        if cleaned > 0:
+            await self.db.commit()
+            logger.warning(
+                "Cleaned up orphaned running executions",
+                count=cleaned,
+            )
+
+        return cleaned
+
+    async def get_running_execution_count(self) -> int:
+        """Get count of currently running regular job executions.
+
+        Cross-references DB records with in-memory runtime controls.
+        Automatically cleans up orphaned RUNNING records.
+        Test runs are excluded from the count.
+
+        Returns:
+            Number of truly running regular executions.
+        """
+        await self._cleanup_orphaned_running_executions()
+
         query = (
             select(func.count())
             .select_from(JobExecution)
-            .where(JobExecution.status == JobStatus.RUNNING)
+            .where(JobExecution.status.in_([JobStatus.RUNNING, JobStatus.PAUSED]))
+            .where(JobExecution.execution_type == ExecutionType.REGULAR)
         )
 
         result = await self.db.execute(query)
@@ -265,6 +362,103 @@ class JobService:
         result = await self.db.execute(query)
         count = result.scalar() or 0
         return count > 0
+
+    async def get_job_control_state(
+        self, job_id: int
+    ) -> Optional[JobControlActionResponse]:
+        """Get runtime control state for a specific job configuration."""
+        job = await self.get_job_configuration_model(job_id)
+        if not job:
+            return None
+
+        runtime_state = get_runtime_control_snapshot(job_id)
+        return JobControlActionResponse(
+            success=True,
+            message="Job control state loaded",
+            is_running=runtime_state["is_running"],
+            is_paused=bool(job.is_paused),
+            is_stopping=runtime_state["stop_requested"],
+            is_force_stopping=runtime_state["force_stop_requested"],
+        )
+
+    async def set_job_paused(
+        self,
+        job_id: int,
+        paused: bool,
+    ) -> Optional[JobControlActionResponse]:
+        """Pause or resume a running job execution."""
+        job = await self.get_job_configuration_model(job_id)
+        if not job:
+            return None
+
+        runtime_state = get_runtime_control_snapshot(job_id)
+        if not runtime_state["is_running"]:
+            return JobControlActionResponse(
+                success=False,
+                message="Job is not running",
+                is_running=False,
+                is_paused=bool(job.is_paused),
+                is_stopping=runtime_state["stop_requested"],
+                is_force_stopping=runtime_state["force_stop_requested"],
+            )
+
+        job.is_paused = paused
+        job.updated_at = datetime.now(timezone.utc)
+        await self.db.commit()
+        await self.db.refresh(job)
+
+        action = "paused" if paused else "resumed"
+        return JobControlActionResponse(
+            success=True,
+            message=f"Job '{job.name}' {action}",
+            is_running=True,
+            is_paused=bool(job.is_paused),
+            is_stopping=runtime_state["stop_requested"],
+            is_force_stopping=runtime_state["force_stop_requested"],
+        )
+
+    async def request_job_stop_action(
+        self,
+        job_id: int,
+        force: bool,
+    ) -> Optional[JobControlActionResponse]:
+        """Request graceful or forced stop for a running job execution."""
+        job = await self.get_job_configuration_model(job_id)
+        if not job:
+            return None
+
+        was_applied = request_job_stop(job_id, force=force)
+        runtime_state = get_runtime_control_snapshot(job_id)
+
+        if not was_applied:
+            return JobControlActionResponse(
+                success=False,
+                message="Job is not running",
+                is_running=False,
+                is_paused=bool(job.is_paused),
+                is_stopping=False,
+                is_force_stopping=False,
+            )
+
+        # Ensure paused flag does not remain stuck when stopping.
+        if job.is_paused:
+            job.is_paused = False
+            job.updated_at = datetime.now(timezone.utc)
+            await self.db.commit()
+            await self.db.refresh(job)
+
+        return JobControlActionResponse(
+            success=True,
+            message=(
+                f"Force stop requested for '{job.name}'"
+                if force
+                else f"Graceful stop requested for '{job.name}'"
+            ),
+            is_running=runtime_state["is_running"],
+            is_paused=bool(job.is_paused),
+            is_stopping=runtime_state["stop_requested"],
+            is_force_stopping=runtime_state["force_stop_requested"],
+        )
 
     async def get_job_config_by_type(
         self, job_type: JobType

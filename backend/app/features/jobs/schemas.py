@@ -5,7 +5,7 @@ from typing import Any, Dict, Optional
 
 from pydantic import BaseModel, Field, ConfigDict
 
-from .models import JobStatus, JobType
+from .models import JobStatus, JobType, ExecutionType
 
 
 class JobConfigurationBase(BaseModel):
@@ -22,6 +22,10 @@ class JobConfigurationBase(BaseModel):
         ..., min_length=1, max_length=256, description="Job schedule (cron or interval)"
     )
     is_active: bool = Field(default=True, description="Whether the job is active")
+    is_paused: bool = Field(
+        default=False,
+        description="Whether the currently running execution is paused",
+    )
     config_json: Optional[Dict[str, Any]] = Field(
         None,
         description="Job-specific configuration (e.g. interval_seconds, enabled_queue_ids)",
@@ -41,6 +45,7 @@ class JobConfigurationUpdate(BaseModel):
     description: Optional[str] = Field(None)
     schedule: Optional[str] = Field(None, min_length=1, max_length=256)
     is_active: Optional[bool] = None
+    is_paused: Optional[bool] = None
     config_json: Optional[Dict[str, Any]] = None
 
 
@@ -50,6 +55,30 @@ class JobConfigurationResponse(JobConfigurationBase):
     id: int = Field(..., description="Unique identifier")
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
+    is_running: bool = Field(
+        default=False,
+        description="Whether this job currently has a running execution",
+    )
+    is_stopping: bool = Field(
+        default=False,
+        description="Whether this job is in graceful stop mode",
+    )
+    is_force_stopping: bool = Field(
+        default=False,
+        description="Whether this job has a force-stop request",
+    )
+    is_test_running: bool = Field(
+        default=False,
+        description="Whether a test run is currently active for this job",
+    )
+    is_test_stopping: bool = Field(
+        default=False,
+        description="Whether the test run is in graceful stop mode",
+    )
+    is_test_force_stopping: bool = Field(
+        default=False,
+        description="Whether the test run has a force-stop request",
+    )
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -81,6 +110,10 @@ class JobExecutionResponse(BaseModel):
     has_api_key_error: bool = Field(
         default=False, description="Whether this execution encountered an API key error"
     )
+    execution_type: ExecutionType = Field(
+        default=ExecutionType.REGULAR,
+        description="Type of execution: REGULAR or TEST",
+    )
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -109,6 +142,17 @@ class JobTriggerResponse(BaseModel):
     execution_id: Optional[int] = Field(
         None, description="ID of created execution record"
     )
+
+
+class JobControlActionResponse(BaseModel):
+    """Schema for pause/resume/stop action responses."""
+
+    success: bool = Field(..., description="Whether the control action succeeded")
+    message: str = Field(..., description="Result message")
+    is_running: bool = Field(..., description="Whether the job is currently running")
+    is_paused: bool = Field(..., description="Whether the job is paused")
+    is_stopping: bool = Field(..., description="Whether graceful stop was requested")
+    is_force_stopping: bool = Field(..., description="Whether force stop was requested")
 
 
 class JobExecutionListResponse(BaseModel):

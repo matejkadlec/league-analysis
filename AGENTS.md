@@ -8,9 +8,11 @@
 **Database**: `league-analysis` (user: `admin`, password in `.env`)
 
 ```bash
-./run.sh                  # Start backend + frontend (hot reload)
-tail -f logs/backend.log  # Backend logs
-tail -f logs/frontend.log # Frontend logs
+./run.sh                         # Start backend + frontend (hot reload)
+./run.sh [fe-port] [be-port]     # Start on custom ports, e.g. ./run.sh 3001 8001
+./run.sh --help                  # Show usage
+tail -f logs/backend.log         # Backend logs
+tail -f logs/frontend.log        # Frontend logs
 ```
 
 **Services**:
@@ -24,15 +26,15 @@ tail -f logs/frontend.log # Frontend logs
 
 ## Documentation Index
 
-| Document                                 | Description                            |
-| ---------------------------------------- | -------------------------------------- |
-| [docs/database.md](docs/database.md)     | Database schema, tables, relationships |
-| [docs/riot-api.md](docs/riot-api.md)     | Riot API endpoints, usage, rate limits |
-| [docs/jobs.md](docs/jobs.md)             | Background jobs (Match Fetcher, etc.)  |
+| Document                                                               | Description                                                 |
+| ---------------------------------------------------------------------- | ----------------------------------------------------------- |
+| [docs/database.md](docs/database.md)                                   | Database schema, tables, relationships                      |
+| [docs/riot-api.md](docs/riot-api.md)                                   | Riot API endpoints, usage, rate limits                      |
+| [docs/jobs.md](docs/jobs.md)                                           | Background jobs (Match Fetcher, etc.)                       |
 | [docs/cookie-consent-compliance.md](docs/cookie-consent-compliance.md) | EU cookie-consent legal baseline and implementation mapping |
-| [backend/COOKIE_CONSENT_AGENTS.md](backend/COOKIE_CONSENT_AGENTS.md) | AI implementation checklist for cookie-consent compliance |
-| [backend/AGENTS.md](backend/AGENTS.md)   | Backend architecture, code patterns    |
-| [frontend/AGENTS.md](frontend/AGENTS.md) | Frontend architecture, components      |
+| [backend/COOKIE_CONSENT_AGENTS.md](backend/COOKIE_CONSENT_AGENTS.md)   | AI implementation checklist for cookie-consent compliance   |
+| [backend/AGENTS.md](backend/AGENTS.md)                                 | Backend architecture, code patterns                         |
+| [frontend/AGENTS.md](frontend/AGENTS.md)                               | Frontend architecture, components                           |
 
 ### Feature-Level Documentation
 
@@ -183,7 +185,10 @@ Also run `get_errors` on changed files to catch:
 
 1. **Read relevant AGENTS.md first** - Before working on a feature, read the corresponding AGENTS.md file
 2. **Check logs on errors** - Auto-check `logs/backend.log` and `logs/frontend.log`
-3. **Update documentation** - Keep AGENTS.md files, README.md and files in `docs/` up to date
+3. **Update documentation** - After adding or changing functionality, update the relevant AGENTS.md
+   so it clearly explains **what the feature does, how it works, and what the key implementation
+   details are** (architecture, data flow, API surface, frontend behavior). Keep `docs/` files
+   in sync too.
 4. **Summarize changes** - End responses with a concise overview of changes made
 5. **Verify with tools** - Run frontend `npm run lint` + `npx tsc --noEmit` and backend `uv run pyright`; fix all warnings/errors
 6. **Use get_errors too** - Use `get_errors` after edits to catch file-level issues early

@@ -137,8 +137,8 @@
     cursor: pointer;
   }
 
-  /* Matchmaking analysis start button (gold gradient) */
-  .dark .matchmaking-start-btn {
+  /* Gold gradient — primary CTA (confirm, start, submit) */
+  .dark .gold-gradient {
     background: linear-gradient(
       105deg,
       #f2d777 0%,
@@ -150,13 +150,26 @@
     border: none;
   }
 
-  /* Matchmaking analysis cancel button (red gradient) */
+  /* Red gradient — destructive actions (cancel, delete, stop) */
   .dark .red-gradient {
     background: linear-gradient(
       105deg,
       #ff6b6b 0%,
       #ee5a6f 10%,
       #c92a2a 90%
+    ) !important;
+    color: #ffffff !important;
+    cursor: pointer;
+    border: none;
+  }
+
+  /* Blue gradient — neutral/secondary actions (decline, dismiss) */
+  .dark .blue-gradient {
+    background: linear-gradient(
+      105deg,
+      #203a6e 0%,
+      #1c3f85 10%,
+      #082358 90%
     ) !important;
     color: #ffffff !important;
     cursor: pointer;
@@ -190,12 +203,21 @@
     background: transparent;
   }
 
+  /* All interactive elements must have pointer cursor */
+  button,
+  a,
+  [role="button"],
+  [role="tab"],
+  [role="option"],
+  label[for],
+  summary {
+    cursor: pointer;
+  }
+
   /* Disabled button styles */
   button:disabled {
     cursor: not-allowed !important;
     opacity: 0.5 !important;
-    /* This should be done via JS instead, as it disabled the not-allowed cursor */
-    /* pointer-events: none !important; */
   }
 
   button:disabled:hover {
@@ -271,6 +293,11 @@
   button:focus-visible {
     --tw-ring-color: transparent !important;
     --tw-ring-offset-width: 0px !important;
+  }
+
+  /* White border for dialogs — improves visibility against dark backgrounds */
+  .dialog-white-border {
+    border: 1px solid #e2e2e2;
   }
 }
 

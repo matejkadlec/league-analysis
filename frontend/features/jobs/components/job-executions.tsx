@@ -25,12 +25,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  AlertCircle,
-  FileText,
-  Loader2,
-  ChevronUp,
-} from "lucide-react";
+import { AlertCircle, FileText, Loader2, ChevronUp } from "lucide-react";
 
 interface JobExecutionsProps {
   executions: JobExecutionListResponse | null;
@@ -194,8 +189,9 @@ export function JobExecutions({
   const internalSelectedExecution = useMemo(() => {
     if (selectedExecutionId !== undefined && selectedExecutionId !== null) {
       return (
-        allExecutions.find((execution) => execution.id === selectedExecutionId) ??
-        null
+        allExecutions.find(
+          (execution) => execution.id === selectedExecutionId,
+        ) ?? null
       );
     }
     return selectedExecutionState;
@@ -298,6 +294,7 @@ export function JobExecutions({
               <TableHeader>
                 <TableRow>
                   <TableHead>Job Name</TableHead>
+                  <TableHead>Type</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Triggered By</TableHead>
                   <TableHead>Started At</TableHead>
@@ -317,6 +314,18 @@ export function JobExecutions({
                       {getJobName(execution.job_config_id)}
                     </TableCell>
                     <TableCell>
+                      {execution.execution_type === "TEST" ? (
+                        <Badge
+                          variant="outline"
+                          className="bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-900/30 dark:text-blue-200 dark:border-blue-800"
+                        >
+                          Test
+                        </Badge>
+                      ) : (
+                        <span className="text-sm">Regular</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
                       <Badge
                         variant={
                           execution.status === "SUCCESS"
@@ -330,7 +339,11 @@ export function JobExecutions({
                         className={
                           execution.status === "RATE_LIMITED"
                             ? "bg-yellow-100 text-yellow-800 border-yellow-300 dark:bg-yellow-900/30 dark:text-yellow-200 dark:border-yellow-800"
-                            : ""
+                            : execution.status === "CANCELLED"
+                              ? "bg-purple-100 text-primary-foreground border-purple-300 dark:bg-purple-900/30 dark:text-white dark:border-purple-800"
+                              : execution.status === "PAUSED"
+                                ? "bg-orange-100 text-white border-orange-300 dark:bg-orange-900/30 dark:text-white dark:border-orange-800"
+                                : ""
                         }
                       >
                         {execution.status.replace("_", " ")}
@@ -361,10 +374,12 @@ export function JobExecutions({
                           Riot API requests: {execution.api_requests_made}
                         </span>
                         <span className="text-xs text-muted-foreground">
-                          {formatRecordsSummary(
-                            execution.records_created,
-                            execution.records_updated,
-                          )}
+                          {execution.execution_type === "TEST"
+                            ? "Test run — no records created or updated"
+                            : formatRecordsSummary(
+                                execution.records_created,
+                                execution.records_updated,
+                              )}
                         </span>
                       </div>
                     </TableCell>
@@ -421,7 +436,11 @@ export function JobExecutions({
                     className={
                       internalSelectedExecution.status === "RATE_LIMITED"
                         ? "bg-yellow-100 text-yellow-800 border-yellow-300 dark:bg-yellow-900/30 dark:text-yellow-200 dark:border-yellow-800"
-                        : ""
+                        : internalSelectedExecution.status === "CANCELLED"
+                          ? "bg-purple-100 text-primary-foreground border-purple-300 dark:bg-purple-900/30 dark:text-white dark:border-purple-800"
+                          : internalSelectedExecution.status === "PAUSED"
+                            ? "bg-orange-100 text-white border-orange-300 dark:bg-orange-900/30 dark:text-white dark:border-orange-800"
+                            : ""
                     }
                   >
                     {internalSelectedExecution.status.replace("_", " ")}
@@ -574,8 +593,10 @@ export function JobExecutions({
                                       </span>
                                     ) : (
                                       <span className="break-all">
-                                        {formatApiCallParamLabel(call.param_key)}:{" "}
-                                        {call.first_param}, ...,{" "}
+                                        {formatApiCallParamLabel(
+                                          call.param_key,
+                                        )}
+                                        : {call.first_param}, ...,{" "}
                                         {call.last_param}
                                       </span>
                                     )}

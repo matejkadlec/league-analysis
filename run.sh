@@ -45,6 +45,63 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
+print_help() {
+    echo -e "${BLUE}=============================================${NC}"
+    echo -e "${BLUE}📊 League Analysis - Development Environment${NC}"
+    echo -e "${BLUE}=============================================${NC}"
+    echo ""
+    echo -e "${GREEN}Usage:${NC}"
+    echo -e "  ${YELLOW}./run.sh${NC}                    Start with default ports"
+    echo -e "  ${YELLOW}./run.sh 3001${NC}               Start frontend on port 3001"
+    echo -e "  ${YELLOW}./run.sh 3001 8001${NC}          Start frontend on 3001 and backend on 8001"
+    echo -e "  ${YELLOW}./run.sh --help${NC}             Show this help"
+    echo ""
+    echo -e "${GREEN}Arguments:${NC}"
+    echo -e "  ${BLUE}frontend-port${NC}  Optional. Defaults to ${GREEN}3000${NC}."
+    echo -e "  ${BLUE}backend-port${NC}   Optional. Defaults to ${GREEN}8000${NC}."
+    echo ""
+    echo -e "${GREEN}Examples:${NC}"
+    echo -e "  ${YELLOW}./run.sh${NC}"
+    echo -e "  ${YELLOW}./run.sh 3001 8001${NC}"
+}
+
+validate_port() {
+    local name="$1"
+    local port="$2"
+
+    if ! [[ "$port" =~ ^[0-9]+$ ]] || [ "$port" -lt 1 ] || [ "$port" -gt 65535 ]; then
+        echo -e "${RED}ERROR: $name port must be a number between 1 and 65535. Got: $port${NC}"
+        echo ""
+        print_help
+        exit 1
+    fi
+}
+
+if [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
+    print_help
+    exit 0
+fi
+
+if [ "$#" -gt 2 ]; then
+    echo -e "${RED}ERROR: Too many arguments.${NC}"
+    echo ""
+    print_help
+    exit 1
+fi
+
+FRONTEND_PORT="${1:-3000}"
+BACKEND_PORT="${2:-8000}"
+
+validate_port "Frontend" "$FRONTEND_PORT"
+validate_port "Backend" "$BACKEND_PORT"
+
+LOCAL_CORS_ORIGINS="http://localhost:$FRONTEND_PORT,http://127.0.0.1:$FRONTEND_PORT"
+if [ -n "${CORS_ORIGINS:-}" ]; then
+    RUN_CORS_ORIGINS="$CORS_ORIGINS,$LOCAL_CORS_ORIGINS"
+else
+    RUN_CORS_ORIGINS="$LOCAL_CORS_ORIGINS"
+fi
+
 # Function to cleanup background processes on exit
 cleanup() {
     echo ""
@@ -73,6 +130,9 @@ echo -e "${BLUE}=============================================${NC}"
 echo -e "${BLUE}📊 League Analysis - Development Environment${NC}"
 echo -e "${BLUE}=============================================${NC}"
 echo ""
+echo -e "${GREEN}Frontend port:${NC} $FRONTEND_PORT"
+echo -e "${GREEN}Backend port:${NC}  $BACKEND_PORT"
+echo ""
 
 # Check PostgreSQL connection
 echo -e "${YELLOW}Checking PostgreSQL connection...${NC}"
@@ -89,18 +149,18 @@ echo -e "${BLUE}=============================================${NC}"
 echo -e "${BLUE}⚙️  Starting Backend (FastAPI)${NC}"
 echo -e "${BLUE}=============================================${NC}"
 cd "$SCRIPT_DIR/backend"
-uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload > "$SCRIPT_DIR/logs/backend.log" 2>&1 &
+CORS_ORIGINS="$RUN_CORS_ORIGINS" uv run uvicorn app.main:app --host 0.0.0.0 --port "$BACKEND_PORT" --reload > "$SCRIPT_DIR/logs/backend.log" 2>&1 &
 BACKEND_PID=$!
 echo -e "${GREEN}✓ Backend started (PID: $BACKEND_PID)${NC}"
-echo -e "${GREEN}  App: http://localhost:8000${NC}"
-echo -e "${GREEN}  API Docs: http://localhost:8000/api${NC}"
+echo -e "${GREEN}  App: http://localhost:$BACKEND_PORT${NC}"
+echo -e "${GREEN}  API Docs: http://localhost:$BACKEND_PORT/api${NC}"
 echo -e "${GREEN}  Logs: logs/backend.log${NC}"
 echo ""
 
 # Wait for backend to be ready
 echo -e "${YELLOW}Waiting for backend to be ready...${NC}"
 for i in {1..30}; do
-    if curl -s http://localhost:8000/api > /dev/null 2>&1; then
+    if curl -s "http://localhost:$BACKEND_PORT/api" > /dev/null 2>&1; then
         echo -e "${GREEN}✓ Backend is ready!${NC}"
         break
     fi
@@ -125,7 +185,7 @@ fi
 echo -e "${BLUE}=============================================${NC}"
 echo -e "${BLUE}⚙️  Starting Frontend (Next.js)${NC}"
 echo -e "${BLUE}=============================================${NC}"
-npm run dev > "$SCRIPT_DIR/logs/frontend.log" 2>&1 &
+NEXT_PUBLIC_API_URL="http://localhost:$BACKEND_PORT" npm run dev -- --port "$FRONTEND_PORT" > "$SCRIPT_DIR/logs/frontend.log" 2>&1 &
 FRONTEND_PID=$!
 echo -e "${GREEN}✓ Frontend started (PID: $FRONTEND_PID)${NC}"
 
@@ -138,7 +198,7 @@ if ! ps -p $FRONTEND_PID > /dev/null; then
     cleanup
 fi
 
-echo -e "${GREEN}  App: http://localhost:3000${NC}"
+echo -e "${GREEN}  App: http://localhost:$FRONTEND_PORT${NC}"
 echo -e "${GREEN}  Logs: logs/frontend.log${NC}"
 echo ""
 
@@ -147,9 +207,9 @@ echo -e "${GREEN}🚀 Development environment is running!${NC}"
 echo -e "${GREEN}=============================================${NC}"
 echo ""
 echo -e "${BLUE}Services:${NC}"
-echo -e "  ${GREEN}Frontend:${NC} http://localhost:3000"
-echo -e "  ${GREEN}Backend:${NC}  http://localhost:8000"
-echo -e "  ${GREEN}API Docs:${NC} http://localhost:8000/api"
+echo -e "  ${GREEN}Frontend:${NC} http://localhost:$FRONTEND_PORT"
+echo -e "  ${GREEN}Backend:${NC}  http://localhost:$BACKEND_PORT"
+echo -e "  ${GREEN}API Docs:${NC} http://localhost:$BACKEND_PORT/api"
 echo -e "  ${GREEN}Database:${NC} PostgreSQL on localhost:5432"
 echo ""
 echo -e "${BLUE}Logs:${NC}"

@@ -24,7 +24,6 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-  DialogFooter,
 } from "@/components/ui/dialog";
 import {
   Form,
@@ -34,7 +33,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { Link2, AlertCircle } from "lucide-react";
+import { Link2, AlertCircle, StopCircle } from "lucide-react";
 import { toast } from "sonner";
 
 // Server to flag mapping
@@ -224,10 +223,10 @@ export function ConnectRiotAccountDialog({
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-[500px] dialog-white-border">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Link2 className="h-5 w-5 text-primary" />
+            <Link2 className="h-5 w-5 text-[#cfa93a]" />
             Connect Riot Account
           </DialogTitle>
           <DialogDescription>
@@ -423,13 +422,14 @@ export function ConnectRiotAccountDialog({
               </Alert>
             )}
 
-            <DialogFooter className="gap-2 sm:gap-0">
+            <div className="mt-4 flex items-center justify-between gap-2">
               <Button
                 type="button"
-                variant="outline"
+                className="red-gradient py-2 px-4"
                 onClick={() => handleOpenChange(false)}
                 disabled={isPending}
               >
+                <StopCircle className="h-4 w-4" />
                 Cancel
               </Button>
               <button
@@ -449,7 +449,7 @@ export function ConnectRiotAccountDialog({
                   </>
                 )}
               </button>
-            </DialogFooter>
+            </div>
           </form>
         </Form>
       </DialogContent>

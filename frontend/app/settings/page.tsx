@@ -1431,7 +1431,7 @@ function AccountSettingsCard({
       </Card>
 
       <Dialog open={emailDialogOpen} onOpenChange={handleEmailDialogOpenChange}>
-        <DialogContent className="sm:max-w-[540px]">
+        <DialogContent className="sm:max-w-[540px] dialog-white-border">
           <DialogHeader className="text-left">
             <DialogTitle className="flex items-center gap-2">
               <Mail className="h-5 w-5 text-[#cfa93a]" />

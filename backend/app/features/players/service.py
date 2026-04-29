@@ -60,8 +60,10 @@ class PlayerService:
 
     async def _update_global_tracking_flag(self, puuid: str) -> bool:
         """Update core.players.is_tracked based on all user mappings."""
-        count_stmt = select(func.count()).select_from(UserTrackedPlayer).where(
-            UserTrackedPlayer.puuid == puuid
+        count_stmt = (
+            select(func.count())
+            .select_from(UserTrackedPlayer)
+            .where(UserTrackedPlayer.puuid == puuid)
         )
         count_result = await self.db.execute(count_stmt)
         is_globally_tracked = (count_result.scalar() or 0) > 0
@@ -1179,6 +1181,18 @@ class PlayerService:
                 return False
 
         except Exception as e:
+            from app.core.riot_api.errors import RiotAPIError
+
+            if isinstance(e, RiotAPIError):
+                logger.warning(
+                    "Riot API error while updating player profile - propagating to caller",
+                    puuid=player.puuid,
+                    error_type=type(e).__name__,
+                    status_code=getattr(e, "status_code", None),
+                    error_message=str(e),
+                )
+                raise
+
             logger.error(
                 "Failed to update player profile",
                 puuid=player.puuid,

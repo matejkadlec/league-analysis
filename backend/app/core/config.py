@@ -18,6 +18,11 @@ PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
 ENV_FILE = PROJECT_ROOT / ".env"
 load_dotenv(dotenv_path=ENV_FILE)
 
+# Fallback PUUID used by test job runs when no tracked players exist
+TEST_PUUID = (
+    "PNm-92VrUvdu-cj0KFhqs0_8dNV2g9DsQ2pObEKsJZum-3uISPmVr2xn2eI1ztzq10TJb9M-ZpdbdQ"
+)
+
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
@@ -196,6 +201,7 @@ class Settings(BaseSettings):
 
 def get_settings() -> Settings:
     """Get application settings instance."""
+
     def require_env(name: str) -> str:
         value = os.getenv(name)
         if value is None or value.strip() == "":

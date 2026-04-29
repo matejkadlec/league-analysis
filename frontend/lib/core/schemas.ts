@@ -361,10 +361,15 @@ export const JobTypeSchema = z.enum(["MATCH_FETCHER", "PLAYER_UPDATER"]);
 export const JobStatusSchema = z.enum([
   "PENDING",
   "RUNNING",
+  "PAUSED",
   "SUCCESS",
   "FAILED",
+  "CANCELLED",
   "RATE_LIMITED",
 ]);
+
+// Execution Type Enum (must match backend enum values)
+export const ExecutionTypeSchema = z.enum(["REGULAR", "TEST"]);
 
 // Job Configuration Schema
 export const JobConfigurationSchema = z.object({
@@ -374,6 +379,13 @@ export const JobConfigurationSchema = z.object({
   description: z.string().nullable().optional(),
   schedule: z.string(),
   is_active: z.boolean(),
+  is_paused: z.boolean().default(false),
+  is_running: z.boolean().default(false),
+  is_stopping: z.boolean().default(false),
+  is_force_stopping: z.boolean().default(false),
+  is_test_running: z.boolean().default(false),
+  is_test_stopping: z.boolean().default(false),
+  is_test_force_stopping: z.boolean().default(false),
   config_json: z.record(z.string(), z.any()).nullable().optional(),
   created_at: z.string(),
   updated_at: z.string(),
@@ -394,6 +406,7 @@ export const JobExecutionSchema = z.object({
   detailed_logs: z.record(z.string(), z.any()).nullable().optional(),
   triggered_by: z.string().default("system"),
   has_api_key_error: z.boolean().default(false),
+  execution_type: ExecutionTypeSchema.default("REGULAR"),
 });
 
 // Job Status Response Schema
@@ -412,6 +425,15 @@ export const JobTriggerResponseSchema = z.object({
   execution_id: z.number().nullable().optional(),
 });
 
+export const JobControlActionResponseSchema = z.object({
+  success: z.boolean(),
+  message: z.string(),
+  is_running: z.boolean(),
+  is_paused: z.boolean(),
+  is_stopping: z.boolean(),
+  is_force_stopping: z.boolean(),
+});
+
 // Job Execution List Response Schema
 export const JobExecutionListResponseSchema = z.object({
   executions: z.array(JobExecutionSchema),
@@ -424,10 +446,14 @@ export const JobExecutionListResponseSchema = z.object({
 // Infer TypeScript types for Jobs
 export type JobType = z.infer<typeof JobTypeSchema>;
 export type JobStatus = z.infer<typeof JobStatusSchema>;
+export type ExecutionType = z.infer<typeof ExecutionTypeSchema>;
 export type JobConfiguration = z.infer<typeof JobConfigurationSchema>;
 export type JobExecution = z.infer<typeof JobExecutionSchema>;
 export type JobStatusResponse = z.infer<typeof JobStatusResponseSchema>;
 export type JobTriggerResponse = z.infer<typeof JobTriggerResponseSchema>;
+export type JobControlActionResponse = z.infer<
+  typeof JobControlActionResponseSchema
+>;
 export type JobExecutionListResponse = z.infer<
   typeof JobExecutionListResponseSchema
 >;
@@ -568,7 +594,9 @@ export const EmailChangeCodeResponseSchema = z.object({
   expires_at: z.string(),
 });
 
-export type EmailChangeCodeResponse = z.infer<typeof EmailChangeCodeResponseSchema>;
+export type EmailChangeCodeResponse = z.infer<
+  typeof EmailChangeCodeResponseSchema
+>;
 
 // ===== MATCHMAKING ANALYSIS SCHEMAS =====
 export const MatchmakingAnalysisResultsSchema = z.object({

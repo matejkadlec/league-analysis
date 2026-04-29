@@ -81,6 +81,7 @@ class MatchFetcherJob(BaseJob):
 
             try:
                 for player in tracked_players:
+                    await self.check_control_state(db)
                     try:
                         await self._process_player(
                             db,

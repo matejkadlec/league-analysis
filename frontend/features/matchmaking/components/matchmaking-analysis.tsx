@@ -555,7 +555,7 @@ export function MatchmakingAnalysis({ puuid }: MatchmakingAnalysisProps) {
           <Button
             onClick={() => startMutation.mutate()}
             disabled={startMutation.isPending}
-            className="w-full matchmaking-start-btn button-medium no-rotation"
+            className="w-full gold-gradient button-medium no-rotation"
           >
             {startMutation.isPending ? (
               <>
@@ -597,7 +597,7 @@ export function MatchmakingAnalysis({ puuid }: MatchmakingAnalysisProps) {
           <Button
             onClick={() => startMutation.mutate()}
             disabled={startMutation.isPending}
-            className="w-full matchmaking-start-btn button-medium no-rotation"
+            className="w-full gold-gradient button-medium no-rotation"
           >
             {startMutation.isPending ? (
               <>
@@ -728,10 +728,7 @@ export function MatchmakingAnalysis({ puuid }: MatchmakingAnalysisProps) {
           phase === "cancelling" ||
           isCompleting ||
           (phase === "running" && hideCancel)) && (
-          <Button
-            disabled
-            className="w-full matchmaking-start-btn button-medium"
-          >
+          <Button disabled className="w-full gold-gradient button-medium">
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             {phase === "cancelling" ? "Cancelling..." : "Analyzing..."}
           </Button>

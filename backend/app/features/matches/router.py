@@ -45,7 +45,7 @@ async def get_player_matches(
     queue: Optional[int] = Query(None, description="Queue ID filter"),
     exclude_aram: bool = Query(False, description="Exclude queue 450 (ARAM)"),
     start: int = Query(0, ge=0, description="Start index"),
-    count: int = Query(20, ge=1, le=100, description="Number of matches to return"),
+    count: int = Query(20, ge=1, le=1000, description="Number of matches to return"),
 ):
     """
     Get match history for a player from local database.
@@ -66,7 +66,7 @@ async def get_player_matches_detailed(
     queue: Optional[int] = Query(None, description="Queue ID filter"),
     exclude_aram: bool = Query(False, description="Exclude queue 450 (ARAM)"),
     start: int = Query(0, ge=0, description="Start index"),
-    count: int = Query(20, ge=1, le=100, description="Number of matches to return"),
+    count: int = Query(20, ge=1, le=1000, description="Number of matches to return"),
 ):
     """
     Get detailed match history for a player including champion data,
