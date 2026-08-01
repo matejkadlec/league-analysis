@@ -1,6 +1,13 @@
 # Core Infrastructure (`app/core/`)
 
-> **Keep this file updated** when modifying core infrastructure.
+> **Scope:** Shared backend infrastructure under `backend/app/core/`.
+>
+> **Maintenance:** Update when core modules, dependency direction,
+> configuration, database sessions, validation, or shared infrastructure
+> changes.
+
+Inherits repository-wide rules from [`../../../AGENTS.md`](../../../AGENTS.md)
+and backend rules from [`../../AGENTS.md`](../../AGENTS.md).
 
 Shared infrastructure for all features. Features depend on core, **core NEVER depends on features**.
 
@@ -53,7 +60,9 @@ logger.info("action_completed", puuid=puuid, count=count)
 
 ## Configuration
 
-**⚠️ Riot API key stored in `core.riot_api_keys` table, NOT in env vars**
+Riot API key lookup prefers an active, non-expired row in
+`core.riot_api_keys` and falls back to `RIOT_API_KEY` from `.env` only when no
+valid database key exists. Never expose either value.
 
 Key settings (from `.env`):
 

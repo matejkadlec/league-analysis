@@ -1,20 +1,41 @@
 # Riot API Client (`app/core/riot_api/`)
 
-> **Keep this file updated** when modifying Riot API integration.
+> **Scope:** Riot HTTP client, routing, DTOs, transformations, and rate-limit
+> infrastructure under `backend/app/core/riot_api/`.
+>
+> **Maintenance:** Update when a Riot endpoint, route mapping, response model,
+> error, transformer, credential flow, or rate-limit implementation changes.
 
-HTTP client for Riot Games API with rate limiting and error handling.
+Inherits repository-wide rules from
+[`../../../../AGENTS.md`](../../../../AGENTS.md), backend rules from
+[`../../../AGENTS.md`](../../../AGENTS.md), and core dependency boundaries from
+[`../AGENTS.md`](../AGENTS.md).
 
 ## Modules
 
-| Module            | Description                                   |
-| ----------------- | --------------------------------------------- |
-| `client.py`       | `RiotAPIClient` - async HTTP client with auth |
-| `rate_limiter.py` | Token bucket rate limiter                     |
-| `endpoints.py`    | URL builders for Riot API endpoints           |
-| `constants.py`    | Region, Platform, QueueType enums             |
-| `models.py`       | Pydantic DTOs for API responses               |
-| `errors.py`       | Custom exceptions (RateLimitError, etc.)      |
-| `transformers.py` | API response → DB model conversion            |
+| Module | Responsibility |
+| --- | --- |
+| `client.py` | Async `httpx` client, authentication header, response parsing, and callbacks |
+| `endpoints.py` | Regional/platform URL builders and rate-limit header parsers |
+| `constants.py` | `Region`, `Platform`, `QueueType`, and platform-to-region mapping |
+| `models.py` | Pydantic DTOs for Riot responses |
+| `errors.py` | Riot-specific exception types |
+| `transformers.py` | Riot payload to application-model transformations |
+| `rate_limiter.py` | Per-client adaptive app/method limit tracking from Riot headers |
+| `db_rate_limiter.py` | Cross-component database coordination and priority |
+
+## Boundaries
+
+- Use regional routing for Account-V1 and Match-V5 and platform routing for
+  Summoner-V4 and League-V4.
+- Use PUUID as the durable player identifier.
+- Keep HTTP I/O async and validate responses through the DTO layer.
+- Preserve both rate-limit layers. Do not bypass acquisition/recording,
+  priority, spacing, `Retry-After`, or 429 behavior.
+- Credential lookup is implemented by `app.core.config.get_riot_api_key`: an
+  active, non-expired `core.riot_api_keys` row has priority, with
+  `RIOT_API_KEY` as the development fallback.
+- Never log or expose an API key.
 
 ## Usage
 
@@ -27,22 +48,6 @@ async with RiotAPIClient(api_key=api_key) as client:
     timeline = await client.get_match_timeline("EUN1_123456789")
 ```
 
-## Rate Limiting
-
-- Development keys: 20 req/1s, 100 req/2min
-- Jobs use 1.2s delay between match requests
-- 429 errors trigger `RateLimitError` with `retry_after`
-
-## Constants
-
-```python
-from app.core.riot_api.constants import Platform, Region, QueueType
-
-platform = Platform.EUN1
-region = Region.EUROPE
-queue = QueueType.RANKED_SOLO_5x5  # 420
-```
-
-## Related Docs
-
-See [docs/riot-api.md](../../../../docs/riot-api.md) for full endpoint documentation.
+[`../../../../docs/riot-api.md`](../../../../docs/riot-api.md) is authoritative
+for endpoints, routing, credential precedence, and rate-limit behavior. Update
+it with any integration change.

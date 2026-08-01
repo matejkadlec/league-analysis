@@ -1,202 +1,147 @@
 # League Analysis - AI Agent Guide
 
-> **Keep this file updated**: When making significant changes to the codebase, update this file and related documentation to reflect the current state.
+> **Scope:** Repository-wide instructions. More specific `AGENTS.md` files add
+> subtree guidance but may not weaken these rules.
+>
+> **Maintenance:** Update this file when repository identity, mandatory workflow,
+> top-level structure, or repository-wide safety rules change. Keep detailed
+> architecture and operating notes in [`docs/`](docs/README.md).
+
+## Repository and Project Identity (Mandatory)
+
+- Canonical GitHub repository: `matejkadlec/league-analysis`
+- Default branch: `master`
+- Canonical Jira project: `League Analysis`
+- Jira project key: `LGA`
+- Jira board: `34`
+- Continuous QA issue: `LGA-1`
+
+For work originating from this repository:
+
+- Always scope Jira searches, issue creation, updates, transitions, and comments
+  to project `League Analysis` / key `LGA`.
+- Never mutate another Jira project unless the user explicitly requests a
+  cross-project action.
+- Always target GitHub repository `matejkadlec/league-analysis`.
+- Never mutate another GitHub repository unless the user explicitly requests a
+  cross-repository action.
+- Before every Jira write, verify the project key or issue-key prefix.
+- Before every GitHub write, verify the exact repository target and current
+  `origin` remote.
+- Treat any target mismatch as a blocker. Never guess the intended project or
+  repository from the authenticated account.
+
+Canonical repository URL:
+<https://github.com/matejkadlec/league-analysis>.
+
+## Mandatory Development Workflow
+
+[`docs/ai-development-flow.md`](docs/ai-development-flow.md) is authoritative for
+Jira intake, batching, QA classification, branches/worktrees, pull requests,
+remediation, owner handoff, and the `flow1`, `flow2`, `qa1`, and `qa2`
+shortcuts. Read it before selecting or publishing task work.
+
+Non-negotiable summary:
+
+- Use the verified Jira lifecycle:
+  `TO DO` -> `NEXT` -> `IN PROGRESS` -> optional `PENDING USER QA` ->
+  `PENDING CR` -> `DONE`.
+- Inspect the active sprint, queues, in-flight Jira work, open/draft pull
+  requests, branches, worktrees, current branch, and dirty changes before
+  autonomous selection. Do not force overlapping work.
+- Classify intentional visual changes as User QA. Documentation, backend,
+  schema, infrastructure, security, tests, refactors, and non-visual frontend
+  logic are AI-only unless mixed with inseparable visual scope.
+- Do not push task work directly to `master` unless the user explicitly grants
+  that exception. Normal task work starts from current `origin/master`.
+- An AI-created pull request is ready for review, not draft. Immediately after
+  publishing or updating a ready pull request, transition its issues to
+  `PENDING CR`, report the handoff, and stop. Do not poll, review, merge,
+  deploy, or start another batch without explicit delegation for that pull
+  request.
+- Move an issue to `DONE` only after its pull request is merged into `master`.
+- Never request secrets or complete environment files in chat or Jira.
+
+## Repository Map
+
+| Area | Authority |
+| --- | --- |
+| Documentation map and ownership | [`docs/README.md`](docs/README.md) |
+| Project structure, stack, and commands | [`docs/project-overview.md`](docs/project-overview.md) |
+| AI/Jira/GitHub development lifecycle | [`docs/ai-development-flow.md`](docs/ai-development-flow.md) |
+| Backend conventions | [`backend/AGENTS.md`](backend/AGENTS.md) |
+| Frontend conventions | [`frontend/AGENTS.md`](frontend/AGENTS.md) |
+| Database schema | [`backend/init_database.sql`](backend/init_database.sql) |
+| Database explanation and change workflow | [`docs/database.md`](docs/database.md) |
+| Riot API integration | [`docs/riot-api.md`](docs/riot-api.md) |
+| Background jobs and scheduler | [`docs/jobs.md`](docs/jobs.md) |
+| Cookie/storage consent | [`docs/cookie-consent-compliance.md`](docs/cookie-consent-compliance.md) |
+
+Read the nearest applicable `AGENTS.md` before editing a subtree. Nested guides
+contain local architecture, conventions, and gotchas only. Documentation records
+durable system decisions; Jira records planned and in-flight work.
 
 ## Quick Start
 
-**Environment**: WSL (Windows Subsystem for Linux), PostgreSQL 18 on localhost:5432  
-**Database**: `league-analysis` (user: `admin`, password in `.env`)
+The local environment is WSL with PostgreSQL 18. Configuration is loaded from
+the repository-root `.env`; keep its values secret.
 
 ```bash
-./run.sh                         # Start backend + frontend (hot reload)
-./run.sh [fe-port] [be-port]     # Start on custom ports, e.g. ./run.sh 3001 8001
-./run.sh --help                  # Show usage
-tail -f logs/backend.log         # Backend logs
-tail -f logs/frontend.log        # Frontend logs
-```
-
-**Services**:
-
-- Backend: http://localhost:8000 (`/api` for Swagger docs)
-- Frontend: http://localhost:3000
-
-**⚠️ CRITICAL**: After editing `.env`, restart `run.sh`
-
----
-
-## Documentation Index
-
-| Document                                                               | Description                                                 |
-| ---------------------------------------------------------------------- | ----------------------------------------------------------- |
-| [docs/database.md](docs/database.md)                                   | Database schema, tables, relationships                      |
-| [docs/riot-api.md](docs/riot-api.md)                                   | Riot API endpoints, usage, rate limits                      |
-| [docs/jobs.md](docs/jobs.md)                                           | Background jobs (Match Fetcher, etc.)                       |
-| [docs/cookie-consent-compliance.md](docs/cookie-consent-compliance.md) | EU cookie-consent legal baseline and implementation mapping |
-| [backend/COOKIE_CONSENT_AGENTS.md](backend/COOKIE_CONSENT_AGENTS.md)   | AI implementation checklist for cookie-consent compliance   |
-| [backend/AGENTS.md](backend/AGENTS.md)                                 | Backend architecture, code patterns                         |
-| [frontend/AGENTS.md](frontend/AGENTS.md)                               | Frontend architecture, components                           |
-
-### Feature-Level Documentation
-
-- [backend/app/core/AGENTS.md](backend/app/core/AGENTS.md) - Core infrastructure
-- [backend/app/core/riot_api/AGENTS.md](backend/app/core/riot_api/AGENTS.md) - Riot API client
-- [backend/app/features/AGENTS.md](backend/app/features/AGENTS.md) - Feature patterns
-- [backend/app/features/jobs/AGENTS.md](backend/app/features/jobs/AGENTS.md) - Job implementation
-- [backend/COOKIE_CONSENT_AGENTS.md](backend/COOKIE_CONSENT_AGENTS.md) - Cookie-consent rules and checklist for AI agents
-- [frontend/app/AGENTS.md](frontend/app/AGENTS.md) - Page patterns
-- [frontend/components/AGENTS.md](frontend/components/AGENTS.md) - Shared components
-- [frontend/features/AGENTS.md](frontend/features/AGENTS.md) - Feature components
-
----
-
-## Tech Stack
-
-| Layer        | Technologies                                                             |
-| ------------ | ------------------------------------------------------------------------ |
-| **Backend**  | Python 3.14.2, FastAPI, SQLAlchemy 2.0, PostgreSQL 18, uv                |
-| **Frontend** | Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS 4, shadcn/ui |
-| **Data**     | TanStack Query, Zod, Axios                                               |
-| **External** | Riot Games API                                                           |
-
----
-
-## Project Structure
-
-```
-league-analysis/
-├── backend/
-│   ├── app/
-│   │   ├── core/           # Infrastructure (database, config, Riot API)
-│   │   │   └── riot_api/   # Riot API client
-│   │   └── features/       # Domain features
-│   │       ├── auth/
-│   │       ├── jobs/
-│   │       ├── matches/
-│   │       ├── matchmaking_analysis/
-│   │       ├── players/
-│   │       ├── playstyle_analysis/
-│   │       └── settings/
-│   └── init_database.sql   # Database schema (source of truth)
-├── frontend/
-│   ├── app/                # Next.js pages
-│   ├── components/         # Shared components + shadcn/ui
-│   ├── features/           # Domain UI components
-│   └── lib/core/           # API client, schemas, utilities
-├── docs/                   # Documentation
-└── logs/                   # Runtime logs
-```
-
----
-
-## Database Management
-
-**Source of Truth**: `backend/init_database.sql`
-
-**Tracked Players Model**: User-specific tracking lives in `auth.user_tracked_players`
-(`user_id` ↔ `puuid`). `core.players.is_tracked` is a derived global flag used by jobs.
-
-**Timeline Aggregates**: Objective timeline aggregates live in `core.match_timelines`
-(`match_id`, `puuid` PK). Match Fetcher fills this from Riot `/lol/match/v5/matches/{matchId}/timeline`.
-
-### Schema Change Workflow
-
-1. Update SQLAlchemy models in `backend/app/features/*/models.py`
-2. Update `backend/init_database.sql`
-3. **Incremental Update (PREFERRED)**: Generate and execute `ALTER TABLE` commands
-4. **Full Reset (Last Resort)**: `psql -f backend/init_database.sql`
-
-See [docs/database.md](docs/database.md) for schema details.
-
----
-
-## Code Rules
-
-### Backend
-
-- async/await for all I/O
-- Type hints everywhere
-- structlog with context keys: `logger.info("action", puuid=puuid)`
-- Features depend on core, never reverse
-
-### Frontend
-
-- TypeScript strict mode (no `any`)
-- `"use client"` for hooks/events/browser APIs
-- TanStack Query for all data fetching
-- Handle loading/error/success states
-
-### Both
-
-- Explicit imports only (no wildcards)
-- No "thinking comments" in code
-- Features expose public APIs via `__init__.py` (backend) or `index.ts` (frontend)
-
----
-
-## Constraints
-
-- ❌ **NEVER** commit API keys/secrets
-- ❌ **NEVER** commit for user in general
-- ❌ **NEVER** modify Riot API rate limiting logic
-- ❌ **NEVER** let SQLAlchemy auto-create tables
-- ❌ **NEVER** skip pre-commit hooks
-
----
-
-## Debugging
-
-### Auto-Check Logs
-
-When encountering errors, **always check logs first**:
-
-```bash
+./run.sh                         # Backend 8000 + frontend 3000
+./run.sh 3001 8001              # Custom frontend/backend ports
+./run.sh --help
 tail -50 logs/backend.log
 tail -50 logs/frontend.log
 ```
 
-Common issues visible in logs:
+Backend API docs are at `http://localhost:8000/api`; the frontend is at
+`http://localhost:3000`. After changing `.env`, a restart is required. Do not
+restart an already running development session unless necessary; stop the
+current session first and tell the user at handoff when a restart is required.
 
-- `429 Too Many Requests` - Rate limit hit
-- `401/403` - API key expired
-- `ImportError`, `NameError` - Missing imports
-- Database connection errors
+## Validation
 
-### Quality Assurance
-
-After modifying code, run these checks by default:
+Use validation proportional to the changed scope:
 
 ```bash
+# Documentation-only
+git diff --check
+
+# Frontend behavior
 cd frontend && npm run lint
 cd frontend && npx tsc --noEmit
+
+# Backend behavior
 cd backend && uv run pyright
 ```
 
-All checks must finish with **0 errors and 0 warnings** before considering the task done.
+For application-wide code changes, run all three code checks. Before a commit,
+allow the configured pre-commit hooks to run; never bypass them. See
+[`docs/project-overview.md`](docs/project-overview.md#quality-and-verification)
+for the exact local-versus-GitHub check boundary.
 
-Also run `get_errors` on changed files to catch:
+When an IDE/workspace `get_errors` diagnostic is available, run it on changed
+code files to catch syntax, import, and type errors early; it complements but
+does not replace the configured gates.
 
-- TypeScript type errors
-- Python syntax errors
-- Import issues
+When debugging runtime failures, inspect both logs before changing code.
 
----
+## Repository-Wide Safety and Maintenance
 
-## AI Agent Instructions - follow strictly
-
-1. **Read relevant AGENTS.md first** - Before working on a feature, read the corresponding AGENTS.md file
-2. **Check logs on errors** - Auto-check `logs/backend.log` and `logs/frontend.log`
-3. **Update documentation** - After adding or changing functionality, update the relevant AGENTS.md
-   so it clearly explains **what the feature does, how it works, and what the key implementation
-   details are** (architecture, data flow, API surface, frontend behavior). Keep `docs/` files
-   in sync too.
-4. **Summarize changes** - End responses with a concise overview of changes made
-5. **Verify with tools** - Run frontend `npm run lint` + `npx tsc --noEmit` and backend `uv run pyright`; fix all warnings/errors
-6. **Use get_errors too** - Use `get_errors` after edits to catch file-level issues early
-7. **Use PSQL console** - If you need to run an SQL command (i.e. after modifying `init_database.sql`
-   to keep the actual DB synced), use psql console. You will always need admin pw which is in `.env`.
-8. **Server shutdown** - Don't do server restart unless it's really needed. If you really need to do so,
-   shutdown the currently running session (I'm running the server locally all the time while coding),
-   and only after this run the server; otherwise it won't work and you will need to shut current
-   session anyway + it might cause issues if you don't do the shutdown first.
-9. **Restart is needed** - If a server restart is need in order for your changes to apply, prompt the
-   user to do so at the very end of your response.
+- Never commit credentials, API keys, tokens, or `.env` contents.
+- Do not commit, push, or publish unless the user request or an explicitly named
+  workflow authorizes that delivery step.
+- Never use unsafe force push. Where rebasing a published task branch is
+  authorized, use `--force-with-lease`.
+- Do not modify Riot API rate-limiting behavior unless the task explicitly
+  scopes that work; preserve the boundaries in
+  [`docs/riot-api.md`](docs/riot-api.md).
+- Never let SQLAlchemy create application tables. The schema authority is
+  `backend/init_database.sql`.
+- Apply schema changes incrementally with `psql`; never reset the populated
+  database from the destructive full-schema script.
+- Keep explicit imports, avoid wildcard imports, and do not add stream-of-
+  consciousness comments to code.
+- Runtime behavior changes must update the matching authoritative document and
+  the applicable scoped `AGENTS.md` in the same task.
+- End implementation handoffs with a concise summary of changes and validation.

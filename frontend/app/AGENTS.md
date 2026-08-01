@@ -1,6 +1,13 @@
 # Pages (`app/`)
 
-> **Keep this file updated**: When adding pages, update this documentation.
+> **Scope:** Next.js routes, layouts, and page-level behavior under
+> `frontend/app/`.
+>
+> **Maintenance:** Update when routes, layouts, public/private access, page
+> conventions, or app-level files change.
+
+Inherits repository-wide rules from [`../../AGENTS.md`](../../AGENTS.md) and
+frontend rules from [`../AGENTS.md`](../AGENTS.md).
 
 Next.js App Router pages.
 

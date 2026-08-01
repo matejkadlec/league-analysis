@@ -1,6 +1,15 @@
 # Cookie Consent Implementation Guide (AI)
 
-Use this guide whenever you modify cookie/local-storage behavior in League Analysis.
+> **Scope:** Cookie/local-storage consent implementation across the frontend,
+> authenticated backend persistence, and database schema.
+>
+> **Maintenance:** Update when storage keys, consent versioning, consent API
+> behavior, policy UI, or persistence changes.
+
+Use this guide whenever you modify cookie/local-storage behavior. Repository
+identity, delivery, and safety rules are inherited from
+[`../AGENTS.md`](../AGENTS.md). The maintained compliance boundary is
+[`../docs/cookie-consent-compliance.md`](../docs/cookie-consent-compliance.md).
 
 ## Scope
 

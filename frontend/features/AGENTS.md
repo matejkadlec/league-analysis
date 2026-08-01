@@ -1,6 +1,13 @@
 # Features (`features/`)
 
-> **Keep this file updated**: When adding features or components, update this documentation.
+> **Scope:** Frontend domain-feature organization and conventions under
+> `frontend/features/`.
+>
+> **Maintenance:** Update when feature boundaries, public export patterns,
+> component conventions, or the feature inventory changes.
+
+Inherits repository-wide rules from [`../../AGENTS.md`](../../AGENTS.md) and
+frontend rules from [`../AGENTS.md`](../AGENTS.md).
 
 Domain-specific UI components. Each feature is self-contained with its own components and exports.
 
@@ -15,6 +22,7 @@ Domain-specific UI components. Each feature is self-contained with its own compo
 | `matchmaking/`        | Match fairness analysis            |
 | `players/`            | Player search, cards, tracking, tracked-list controls |
 | `playstyle-analysis/` | Playstyle analysis results         |
+| `profile/`            | Signed-in user's champion, role, and recent-performance summaries |
 
 ## Structure
 

@@ -10,6 +10,9 @@ League Analysis is a full-stack League of Legends analytics platform prototype t
 
 This repository is public as a portfolio snapshot. Active development in this repository is currently paused.
 
+Engineering architecture, workflows, integrations, schema guidance, and local
+commands are indexed in [`docs/README.md`](docs/README.md).
+
 ## Product Highlights
 
 - Tracked players dashboard with aggregated match history and rank trends
@@ -35,7 +38,7 @@ This repository is public as a portfolio snapshot. Active development in this re
 ## Repository Policy
 
 - No external development contributions are accepted.
-- Pull requests are not reviewed or merged.
+- Unsolicited external pull requests are not reviewed or merged.
 - No code/data sharing rights are granted outside explicit written permission.
 
 ## Disable PRs Without Archiving
