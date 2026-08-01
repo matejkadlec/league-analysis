@@ -1,6 +1,7 @@
 """Validation utilities for reducing complexity in API data validation."""
 
 from typing import Any, Dict, List
+
 import structlog
 
 logger = structlog.get_logger(__name__)

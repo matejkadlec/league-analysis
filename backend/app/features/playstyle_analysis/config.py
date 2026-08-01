@@ -4,7 +4,7 @@ Configuration for playstyle analysis service.
 This module contains thresholds and parameters used to identify playstyle tags.
 """
 
-from typing import Dict, Any
+from typing import Any, Dict
 
 # Tag Configuration
 # Each tag has specific parameters used in its formula.

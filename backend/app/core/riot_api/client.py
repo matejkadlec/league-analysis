@@ -1,32 +1,32 @@
 """Riot API HTTP client with proper rate limiting, error handling, and authentication."""
 
 import asyncio
-import re
-from enum import Enum
 from dataclasses import dataclass, field
-from typing import Optional, Dict, Any, List, Union, Callable
+from enum import Enum
+from typing import Any, Callable, Dict, List, Optional, Union
+
 import httpx
 import structlog
 
-from .rate_limiter import RateLimiter
+from .constants import Platform, QueueType, Region
+from .endpoints import RiotAPIEndpoints
 from .errors import (
-    RiotAPIError,
-    RateLimitError,
     AuthenticationError,
+    BadRequestError,
     ForbiddenError,
     NotFoundError,
+    RateLimitError,
+    RiotAPIError,
     ServiceUnavailableError,
-    BadRequestError,
 )
 from .models import (
     AccountDTO,
-    SummonerDTO,
-    MatchListDTO,
-    MatchDTO,
     LeagueEntryDTO,
+    MatchDTO,
+    MatchListDTO,
+    SummonerDTO,
 )
-from .endpoints import RiotAPIEndpoints
-from .constants import Region, Platform, QueueType
+from .rate_limiter import RateLimiter
 
 logger = structlog.get_logger(__name__)
 
@@ -180,7 +180,7 @@ class RiotAPIClient:
 
         try:
             retry_after = int(float(raw_retry_after))
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             return default_seconds
 
         return max(retry_after, 1)
@@ -529,7 +529,7 @@ class RiotAPIClient:
             for queue_type in QueueType:
                 if queue_type.value == queue_int:
                     return queue_type
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             pass
 
         return None

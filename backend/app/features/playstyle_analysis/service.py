@@ -1,20 +1,18 @@
 """Service for playstyle analysis."""
 
 from datetime import datetime, timezone
-import math
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List, Optional
 
-from sqlalchemy import select, delete, update
+import structlog
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
-import structlog
 
 from app.features.matches.models import Match
 from app.features.matches.participants import MatchParticipant
-from app.features.playstyle_analysis.models import PlaystyleAnalysis, AnalysisStatus
-from app.features.playstyle_analysis.config import TAG_CONFIG
 from app.features.players.models import Player
-from app.core.models import Base
+from app.features.playstyle_analysis.config import TAG_CONFIG
+from app.features.playstyle_analysis.models import AnalysisStatus, PlaystyleAnalysis
 
 logger = structlog.get_logger(__name__)
 
@@ -862,12 +860,6 @@ class TagEngine:
             match = self.matches.get(str(p.match_id)) or self.matches.get(p.match_id)
             if not match:
                 continue
-
-            # Get team participants for this match
-            team_participants = [
-                x for x in match.participants if x.team_id == p.team_id
-            ]
-            total_team_kills = sum((x.kills or 0) for x in team_participants)
 
             player_kills = p.kills or 0
             player_assists = p.assists or 0

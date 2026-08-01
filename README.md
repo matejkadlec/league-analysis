@@ -1,10 +1,11 @@
 # League Analysis
 
-![Python](https://img.shields.io/badge/Python-3.14.2-20232a?style=for-the-badge&logo=python&logoColor=3776AB)
+![Python](https://img.shields.io/badge/Python-3.14.6-20232a?style=for-the-badge&logo=python&logoColor=3776AB)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.118+-20232a?style=for-the-badge&logo=fastapi&logoColor=009688)
 ![React](https://img.shields.io/badge/React-19-20232a?style=for-the-badge&logo=react&logoColor=61DAFB)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-18+-20232a?style=for-the-badge&logo=postgresql&logoColor=white)
 ![Status](https://img.shields.io/badge/status-inactive-red?style=for-the-badge)
+[![Quality Checks](https://github.com/matejkadlec/league-analysis/actions/workflows/quality-checks.yml/badge.svg)](https://github.com/matejkadlec/league-analysis/actions/workflows/quality-checks.yml)
 
 League Analysis is a full-stack League of Legends analytics platform prototype that combines tracked-player monitoring, match history processing, playstyle signals, and matchmaking-quality analysis in one app.
 
@@ -34,6 +35,24 @@ commands are indexed in [`docs/README.md`](docs/README.md).
 - Riot API keys are intentionally excluded from the repository.
 - Required Riot legal boilerplate is present in the product legal page (`frontend/app/license/page.tsx`).
 - Public source code visibility is allowed, but any running public product must use the correct Riot key type and follow Riot policy updates.
+
+## Development and Quality
+
+The supported local environment uses the runtime pins in `.nvmrc` and
+`.python-version`, npm for the frontend, and uv for the backend.
+
+```bash
+./run.sh             # Start the local application
+./test.sh -f         # Repository and frontend checks
+./test.sh -b         # Repository and backend checks
+./test.sh            # Complete pre-pull-request quality gate
+```
+
+The complete gate performs deterministic installs, linting, type checks,
+backend and frontend regression tests, a production frontend build, static
+security analysis, ShellCheck, and GitHub workflow validation. GitHub Actions
+runs the same gate and a separate live production dependency audit. No ordinary
+quality check requires a real Riot API key.
 
 ## Repository Policy
 

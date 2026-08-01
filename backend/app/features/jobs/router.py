@@ -2,30 +2,31 @@
 
 from datetime import datetime, timezone
 from typing import Optional
-from fastapi import APIRouter, HTTPException, Query, BackgroundTasks, Depends
 
-from .models import JobStatus, JobType, ExecutionType
+import structlog
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+
+from app.features.auth.dependencies import get_current_admin_user
+
+from .base import BaseJob
 from .control import (
     get_runtime_control_snapshot,
     is_runtime_job_running,
     request_job_stop,
 )
+from .dependencies import JobServiceDep
+from .implementations.match_fetcher import MatchFetcherJob
+from .implementations.player_updater import PlayerUpdaterJob
+from .implementations.test_runner import TestMatchFetcherJob, TestPlayerUpdaterJob
+from .models import ExecutionType, JobStatus, JobType
 from .schemas import (
-    JobControlActionResponse,
-    JobConfigurationUpdate,
     JobConfigurationResponse,
+    JobConfigurationUpdate,
+    JobControlActionResponse,
     JobExecutionListResponse,
     JobStatusResponse,
     JobTriggerResponse,
 )
-from .dependencies import JobServiceDep
-from app.features.auth.dependencies import get_current_admin_user
-
-from .implementations.match_fetcher import MatchFetcherJob
-from .implementations.player_updater import PlayerUpdaterJob
-from .implementations.test_runner import TestMatchFetcherJob, TestPlayerUpdaterJob
-from .base import BaseJob
-import structlog
 
 logger = structlog.get_logger(__name__)
 
@@ -493,8 +494,9 @@ async def trigger_test_run(
 
         # Suspend scheduled runs if requested
         if suspend_regular:
-            from .scheduler import get_scheduler
             from apscheduler.jobstores.base import JobLookupError
+
+            from .scheduler import get_scheduler
 
             scheduler = get_scheduler()
             scheduler_job_id = f"job_{job.id}"
@@ -557,8 +559,9 @@ async def _run_test_job_with_cleanup(
         await test_instance.run()
     finally:
         if suspend_regular:
-            from .scheduler import get_scheduler
             from apscheduler.jobstores.base import JobLookupError
+
+            from .scheduler import get_scheduler
 
             scheduler = get_scheduler()
             scheduler_job_id = f"job_{job_id}"

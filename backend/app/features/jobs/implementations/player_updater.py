@@ -3,14 +3,14 @@
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.features.jobs.base import BaseJob
-from app.features.players.service import PlayerService
-from app.features.players.schemas import PlayerResponse
-from app.core.riot_api.client import RiotAPIClient, APICallRecord
-from app.core.riot_api.db_rate_limiter import DBRateLimiter, RateLimitComponent
 from app.core.config import get_riot_api_key
+from app.core.riot_api.client import APICallRecord, RiotAPIClient
+from app.core.riot_api.db_rate_limiter import DBRateLimiter, RateLimitComponent
 from app.core.riot_api.errors import AuthenticationError
+from app.features.jobs.base import BaseJob
 from app.features.players.models import Player
+from app.features.players.schemas import PlayerResponse
+from app.features.players.service import PlayerService
 
 logger = structlog.get_logger(__name__)
 

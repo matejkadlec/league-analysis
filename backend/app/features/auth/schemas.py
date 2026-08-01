@@ -1,12 +1,18 @@
 """Pydantic schemas for authentication."""
 
+import re
 from datetime import datetime
 from enum import Enum
-import re
 from typing import Optional
 
-from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
-
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    EmailStr,
+    Field,
+    field_validator,
+    model_validator,
+)
 
 SPECIAL_CHARACTER_PATTERN = r"[!@#$%^&*(),.?\":{}|<>\-_+=\[\]\\/;'`~]"
 
@@ -79,10 +85,7 @@ class UserResponse(UserBase):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        """Pydantic config."""
-
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class UserLogin(BaseModel):

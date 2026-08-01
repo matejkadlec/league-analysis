@@ -1,25 +1,26 @@
 """Service for managing system settings."""
 
 from datetime import datetime, timezone
+from typing import Optional
+
+import structlog
 from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import Optional
-import structlog
+
+from app.core.riot_api.client import RiotAPIClient
+from app.core.riot_api.constants import Platform, Region
+from app.core.riot_api.errors import RiotAPIError
 
 from .models import RiotAPIKey
 from .schemas import (
+    APIKeyStatusResponse,
+    ServiceStatusResponse,
     SettingResponse,
+    SettingTestResponse,
     SettingUpdate,
     SettingValidationResponse,
-    SettingTestResponse,
-    APIKeyStatusResponse,
     UserCookieConsentUpdate,
-    ServiceStatusResponse,
 )
-from app.core.riot_api.client import RiotAPIClient
-from app.core.config import settings
-from app.core.riot_api.constants import Region, Platform
-from app.core.riot_api.errors import RiotAPIError
 
 logger = structlog.get_logger(__name__)
 
@@ -38,7 +39,7 @@ class SettingsService:
             # Usually we want the active one.
             stmt = (
                 select(RiotAPIKey)
-                .where(RiotAPIKey.is_active == True)
+                .where(RiotAPIKey.is_active.is_(True))
                 .order_by(RiotAPIKey.added_at.desc())
                 .limit(1)
             )
@@ -65,13 +66,13 @@ class SettingsService:
 
     async def get_api_key_status(self) -> APIKeyStatusResponse:
         """Get the current status of the Riot API key configuration."""
-        import os
         import hashlib
+        import os
 
         # Check DB
         stmt = (
             select(RiotAPIKey)
-            .where(RiotAPIKey.is_active == True)
+            .where(RiotAPIKey.is_active.is_(True))
             .order_by(RiotAPIKey.added_at.desc())
             .limit(1)
         )
@@ -96,7 +97,7 @@ class SettingsService:
         if has_env_key and env_key:
             # Create a short hash of the key to use as identifier (last 8 chars of md5)
             # We don't want to expose any part of the actual key that could be guessed
-            env_key_identifier = hashlib.md5(env_key.encode()).hexdigest()[-8:]
+            env_key_identifier = hashlib.sha256(env_key.encode()).hexdigest()[-8:]
 
         return APIKeyStatusResponse(
             has_db_key=db_key_exists,
@@ -116,7 +117,7 @@ class SettingsService:
         if api_key_status.active_source == "db":
             latest_active_db_key_result = await self.db.execute(
                 select(RiotAPIKey)
-                .where(RiotAPIKey.is_active == True)
+                .where(RiotAPIKey.is_active.is_(True))
                 .order_by(RiotAPIKey.added_at.desc())
                 .limit(1)
             )
@@ -151,8 +152,8 @@ class SettingsService:
             latest_status, has_api_key_error, latest_signal_started_at = (
                 latest_api_health_signal
             )
-            has_unresolved_api_key_failure = (
-                latest_status == JobStatus.FAILED and bool(has_api_key_error)
+            has_unresolved_api_key_failure = latest_status == JobStatus.FAILED and bool(
+                has_api_key_error
             )
             # Treat stale failures as resolved when a key was validated successfully after that failure.
             if has_unresolved_api_key_failure and latest_active_db_key is not None:
@@ -263,7 +264,7 @@ class SettingsService:
             )
 
         # Deactivate all currently active keys
-        stmt_active = select(RiotAPIKey).where(RiotAPIKey.is_active == True)
+        stmt_active = select(RiotAPIKey).where(RiotAPIKey.is_active.is_(True))
         result_active = await self.db.execute(stmt_active)
         active_keys = result_active.scalars().all()
         for k in active_keys:
@@ -452,7 +453,7 @@ class SettingsService:
 
     async def update_user_settings(self, user_id: int, update):
         """Update user settings with provided values."""
-        from app.features.auth.user_settings import UserSettings, ThemeEnum
+        from app.features.auth.user_settings import ThemeEnum
 
         # Get or create settings first
         settings = await self.get_or_create_user_settings(user_id)
@@ -491,8 +492,8 @@ class SettingsService:
     ):
         """Create or update authenticated user's cookie-consent record."""
         from app.features.auth.user_cookie_consent import (
-            UserCookieConsent,
             CookieConsentLevel,
+            UserCookieConsent,
         )
 
         stmt = select(UserCookieConsent).where(UserCookieConsent.user_id == user_id)

@@ -5,10 +5,12 @@ from enum import Enum as PyEnum
 
 from sqlalchemy import (
     BigInteger,
-    DateTime as SQLDateTime,
     Enum,
     ForeignKey,
     String,
+)
+from sqlalchemy import (
+    DateTime as SQLDateTime,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func

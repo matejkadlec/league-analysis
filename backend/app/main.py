@@ -2,30 +2,30 @@
 
 import logging
 from contextlib import asynccontextmanager
-from typing import Dict, Any
+from typing import Any, Dict
 
+import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
+from structlog import contextvars as structlog_contextvars
 
 from app.core import get_global_settings, get_riot_api_key
 from app.core.database import db_manager
 from app.core.rate_limiter import limiter
 from app.features.auth import auth_router
-from app.features.players.router import router as players_router
-from app.features.matches.router import router as matches_router
-from app.features.playstyle_analysis.router import router as playstyle_analysis_router
 from app.features.jobs import (
-    jobs_router,
-    start_scheduler,
-    shutdown_scheduler,
     job_log_capture,
+    jobs_router,
+    shutdown_scheduler,
+    start_scheduler,
 )
-from app.features.settings.router import router as settings_router
+from app.features.matches.router import router as matches_router
 from app.features.matchmaking_analysis.router import router as matchmaking_router
-import structlog
-from structlog import contextvars as structlog_contextvars
+from app.features.players.router import router as players_router
+from app.features.playstyle_analysis.router import router as playstyle_analysis_router
+from app.features.settings.router import router as settings_router
 
 settings = get_global_settings()
 logging.basicConfig(
@@ -195,6 +195,7 @@ if __name__ == "__main__":
 
     uvicorn.run(
         "app.main:app",
+        # Direct execution intentionally serves WSL/LAN clients.
         host="0.0.0.0",
         port=8000,
         reload=settings.debug,

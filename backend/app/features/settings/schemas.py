@@ -1,10 +1,10 @@
 """Pydantic schemas for system settings."""
 
 from datetime import datetime
-from typing import Optional
 from enum import Enum as PyEnum
+from typing import Optional
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ThemeEnum(str, PyEnum):
@@ -181,5 +181,8 @@ class UserCookieConsentUpdate(BaseModel):
         default="v1", min_length=1, max_length=16, description="Consent policy version"
     )
     consent_source: str = Field(
-        default="banner", min_length=1, max_length=32, description="Consent capture source"
+        default="banner",
+        min_length=1,
+        max_length=32,
+        description="Consent capture source",
     )

@@ -5,9 +5,11 @@ from datetime import datetime
 from sqlalchemy import (
     BigInteger,
     Boolean,
-    DateTime as SQLDateTime,
     Index,
     String,
+)
+from sqlalchemy import (
+    DateTime as SQLDateTime,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func

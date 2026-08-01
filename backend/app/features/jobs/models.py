@@ -6,15 +6,16 @@ from typing import Any, Dict, Optional
 
 from sqlalchemy import (
     Boolean,
-    DateTime as SQLDateTime,
     ForeignKey,
     Index,
     Integer,
     String,
     Text,
 )
-from sqlalchemy.dialects.postgresql import ENUM
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import (
+    DateTime as SQLDateTime,
+)
+from sqlalchemy.dialects.postgresql import ENUM, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 

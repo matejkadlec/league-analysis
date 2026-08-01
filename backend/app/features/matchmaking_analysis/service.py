@@ -29,26 +29,27 @@ Rate Limiting:
 """
 
 import asyncio
-from typing import Optional, List, Dict, Tuple
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
+from typing import Dict, List, Optional, Tuple
+
 import structlog
-
+from sqlalchemy import and_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update, and_
 
-from .models import MatchmakingAnalysis
+from app.core import db_manager
+from app.core.riot_api.client import RiotAPIClient
+from app.core.riot_api.db_rate_limiter import DBRateLimiter, RateLimitComponent
+from app.core.riot_api.errors import RateLimitError, RiotAPIError
 from app.features.matches.models import Match
 from app.features.matches.participants import MatchParticipant
+
+from .models import MatchmakingAnalysis
 from .schemas import (
-    MatchmakingAnalysisResponse,
-    MatchmakingAnalysisStatusResponse,
     MatchmakingAnalysisHistoryItem,
     MatchmakingAnalysisHistoryResponse,
+    MatchmakingAnalysisResponse,
+    MatchmakingAnalysisStatusResponse,
 )
-from app.core.riot_api.client import RiotAPIClient
-from app.core.riot_api.errors import RiotAPIError, RateLimitError
-from app.core.riot_api.db_rate_limiter import DBRateLimiter, RateLimitComponent
-from app.core import db_manager
 
 logger = structlog.get_logger(__name__)
 
@@ -643,7 +644,7 @@ class MatchmakingAnalysisService:
                 MatchParticipant.puuid == puuid,
                 Match.queue_id == 420,
                 Match.game_start_timestamp <= anchor_ms,
-                Match.fully_analyzed == True,
+                Match.fully_analyzed.is_(True),
             )
             .order_by(Match.game_start_timestamp.desc())
             .limit(self.MATCHES_FOR_WINRATE)
@@ -738,7 +739,6 @@ class MatchmakingAnalysisService:
 
         Returns True if match was already in DB, False if API call was needed.
         """
-        from app.core.match_utils import ensure_match_fully_analyzed
 
         result = await self.db.execute(
             select(Match.match_id, Match.fully_analyzed).where(

@@ -1,19 +1,19 @@
 """Scheduler module for managing automated background jobs."""
 
-from typing import Any, Dict, Optional, Type
 from datetime import datetime
+from typing import Any, Dict, Optional, Type
 
 import structlog
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from apscheduler.executors.asyncio import AsyncIOExecutor
 from apscheduler.jobstores.base import JobLookupError
+from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core import get_global_settings
-from app.core import db_manager
-from .models import JobExecution, JobStatus, JobConfiguration, JobType
+from app.core import db_manager, get_global_settings
+
 from .base import BaseJob
+from .models import JobConfiguration, JobExecution, JobStatus, JobType
 
 logger = structlog.get_logger(__name__)
 
@@ -431,8 +431,9 @@ async def _check_and_run_overdue_jobs() -> None:
     """
     try:
         logger.info("Checking for overdue jobs at startup")
-        from sqlalchemy import select
         from datetime import timezone
+
+        from sqlalchemy import select
 
         async with db_manager.get_session() as db:
             stmt = select(JobConfiguration).where(JobConfiguration.is_active)
@@ -485,7 +486,7 @@ async def _check_and_run_overdue_jobs() -> None:
                     ).total_seconds()
                     if time_since_last_run > interval_seconds:
                         is_overdue = True
-                        reason = f"last run {int(time_since_last_run/60)} minutes ago (interval: {int(interval_seconds/60)} minutes)"
+                        reason = f"last run {int(time_since_last_run / 60)} minutes ago (interval: {int(interval_seconds / 60)} minutes)"
 
                 if is_overdue:
                     logger.info(

@@ -1,13 +1,13 @@
 """Playstyle analysis API endpoints."""
 
-from fastapi import APIRouter, HTTPException
 import structlog
+from fastapi import APIRouter, HTTPException
 
-from .schemas import (
-    PlaystyleAnalysisResponse,
-    PlaystyleAnalysisRequest,
-)
 from .dependencies import PlaystyleAnalysisServiceDep
+from .schemas import (
+    PlaystyleAnalysisRequest,
+    PlaystyleAnalysisResponse,
+)
 
 logger = structlog.get_logger(__name__)
 

@@ -1,6 +1,6 @@
 """Custom error classes for Riot API client."""
 
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
 
 
 class RiotAPIError(Exception):

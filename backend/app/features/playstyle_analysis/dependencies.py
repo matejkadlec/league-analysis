@@ -1,6 +1,7 @@
 """Dependencies for the playstyle analysis feature."""
 
 from typing import Annotated
+
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 

@@ -4,12 +4,13 @@ from datetime import datetime
 from typing import Optional
 
 from sqlalchemy import (
-    Boolean,
-    DateTime as SQLDateTime,
-    String,
-    Text,
-    Integer,
     BigInteger,
+    Boolean,
+    Integer,
+    String,
+)
+from sqlalchemy import (
+    DateTime as SQLDateTime,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func

@@ -11,14 +11,13 @@ from typing import List, Optional
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import TEST_PUUID, get_riot_api_key
+from app.core.riot_api.client import APICallRecord, RiotAPIClient
+from app.core.riot_api.constants import Platform, get_region_by_platform
+from app.core.riot_api.errors import AuthenticationError
 from app.features.jobs.base import BaseJob
 from app.features.jobs.models import ExecutionType
 from app.features.players.service import PlayerService
-from app.core.riot_api.client import RiotAPIClient, APICallRecord
-from app.core.riot_api.constants import Platform, get_region_by_platform
-from app.core.config import get_riot_api_key, TEST_PUUID
-from app.core.riot_api.errors import AuthenticationError
-from app.features.players.models import Player
 
 logger = structlog.get_logger(__name__)
 

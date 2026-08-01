@@ -1,0 +1,7 @@
+name: Invalid expression fixture
+on: workflow_dispatch
+jobs:
+  invalid:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "${{ definitely.invalid.context }}"

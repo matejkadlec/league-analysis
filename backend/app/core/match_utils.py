@@ -9,7 +9,7 @@ instead of implementing its own storage logic. This handles:
 - Timeline objective aggregates are fetched and stored when available
 """
 
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 import structlog
 from sqlalchemy import select

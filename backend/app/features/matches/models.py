@@ -5,11 +5,13 @@ from typing import Optional
 
 from sqlalchemy import (
     BigInteger,
-    DateTime as SQLDateTime,
-    Integer,
-    String,
     Boolean,
     Index,
+    Integer,
+    String,
+)
+from sqlalchemy import (
+    DateTime as SQLDateTime,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func

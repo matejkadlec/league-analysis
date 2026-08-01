@@ -187,6 +187,8 @@ repository.
    changes.
 5. Run the checks required by
    [`project-overview.md`](project-overview.md#quality-and-verification).
+   Run `./test.sh` before publication; focused `-f`/`-b` modes are for
+   implementation feedback, not substitutes for the complete PR gate.
 6. Inspect the final diff for scope, secrets, generated-file drift, and
    accidental user-change overlap.
 7. Automatically fix safely remediable pre-publication defects within the same
@@ -216,7 +218,7 @@ Use `qa1` after a pass and `qa2` after a failure.
 When publication is authorized by the user or a named workflow:
 
 1. Reconcile with current `origin/master` and resolve task-scope conflicts.
-2. Run the complete applicable local gate.
+2. Run the complete `./test.sh` local gate.
 3. Commit intentionally without bypassing hooks.
 4. Push the focused branch to `matejkadlec/league-analysis`.
 5. Create or update a **ready** pull request, never a draft, targeting

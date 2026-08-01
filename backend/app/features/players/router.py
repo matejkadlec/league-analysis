@@ -1,31 +1,33 @@
 """Player API endpoints for the Riot API application."""
 
-import re
 import os
-from fastapi import APIRouter, HTTPException, Query, Request, Depends, BackgroundTasks
+import re
 from typing import Annotated
+
+import structlog
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from slowapi import Limiter
 from slowapi.util import get_remote_address
-import structlog
 
-from .schemas import (
-    PlayerResponse,
-)
-from .leagues_schemas import PlayerLeagueResponse
+from app.core.config import settings
+from app.core.database import db_manager
+from app.core.dependencies import get_riot_client
+from app.core.riot_api.client import RiotAPIClient
+from app.core.riot_api.constants import Platform
+from app.core.riot_api.errors import AuthenticationError
+from app.features.auth.dependencies import get_current_active_user
+from app.features.auth.models import User
+from app.features.matches.service import MatchService
+from app.features.players.service import PlayerService
+
 from .dependencies import (
     PlayerServiceDep,
     get_player_service,
 )
-from app.core.riot_api.constants import Platform
-from app.core.riot_api.client import RiotAPIClient
-from app.core.riot_api.errors import AuthenticationError
-from app.core.dependencies import get_riot_client
-from app.core.database import db_manager
-from app.features.matches.service import MatchService
-from app.features.players.service import PlayerService
-from app.core.config import settings
-from app.features.auth.dependencies import get_current_active_user
-from app.features.auth.models import User
+from .leagues_schemas import PlayerLeagueResponse
+from .schemas import (
+    PlayerResponse,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -342,13 +344,14 @@ async def run_background_match_sync(puuid: str, platform: str):
     async with db_manager.get_session() as session:
         # 1. Create Job Execution Record
         # We need to find the Match Fetcher job configuration first
+        from sqlalchemy import func, select
+
         from app.features.jobs.models import (
             JobConfiguration,
-            JobType,
             JobExecution,
             JobStatus,
+            JobType,
         )
-        from sqlalchemy import select, func
 
         stmt = (
             select(JobConfiguration)
@@ -414,14 +417,15 @@ async def run_background_player_update(puuid: str, platform: str):
     Also creates a JobExecution entry so it appears in the Jobs dashboard.
     """
     async with db_manager.get_session() as session:
+        from sqlalchemy import func, select
+
         from app.features.jobs.models import (
             JobConfiguration,
-            JobType,
             JobExecution,
             JobStatus,
+            JobType,
         )
         from app.features.players.models import Player
-        from sqlalchemy import select, func
 
         # Find the Player Updater job configuration
         stmt = (
@@ -490,7 +494,7 @@ async def run_background_player_update(puuid: str, platform: str):
                     1 if profile_updated or league_updated else 0
                 )
                 job_execution.detailed_logs = {
-                    "message": f"Updated profile for new player",
+                    "message": "Updated profile for new player",
                     "profile_updated": profile_updated,
                     "league_updated": league_updated,
                 }
@@ -647,9 +651,7 @@ async def refresh_player_league(
         await player_service.update_player_profile(player_model, riot_client)
 
         # Update league from Riot API (adds record to player_service.db session)
-        league_updated = await player_service.update_player_league(
-            player_model, riot_client
-        )
+        await player_service.update_player_league(player_model, riot_client)
 
         # Commit using the same session the service used
         await player_service.db.commit()

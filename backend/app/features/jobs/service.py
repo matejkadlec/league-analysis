@@ -1,29 +1,29 @@
 """Job service for managing job configurations and executions."""
 
-from typing import Any, List, Optional
-from datetime import datetime, timezone
 import math
+from datetime import datetime, timezone
+from typing import Any, List, Optional
 
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, desc
-
-from .models import JobConfiguration, JobExecution, JobStatus, JobType, ExecutionType
-from .schemas import (
-    JobConfigurationUpdate,
-    JobConfigurationResponse,
-    JobControlActionResponse,
-    JobExecutionResponse,
-    JobExecutionListResponse,
-)
-from .queue_config import (
-    normalize_match_fetcher_config,
-    has_enabled_match_fetcher_queue,
-)
 import structlog
+from sqlalchemy import desc, func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from .control import (
     get_runtime_control_snapshot,
     is_runtime_job_running,
     request_job_stop,
+)
+from .models import ExecutionType, JobConfiguration, JobExecution, JobStatus, JobType
+from .queue_config import (
+    has_enabled_match_fetcher_queue,
+    normalize_match_fetcher_config,
+)
+from .schemas import (
+    JobConfigurationResponse,
+    JobConfigurationUpdate,
+    JobControlActionResponse,
+    JobExecutionListResponse,
+    JobExecutionResponse,
 )
 
 logger = structlog.get_logger(__name__)

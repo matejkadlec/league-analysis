@@ -7,41 +7,42 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import select
 
-from app.core.rate_limiter import limiter
 from app.core.dependencies import get_riot_client
+from app.core.rate_limiter import limiter
+
 from .dependencies import get_current_active_user, get_current_admin_user
 from .models import User
 from .schemas import (
-    Token,
-    RefreshTokenRequest,
-    UserCreate,
-    UserResponse,
-    JoinUsContactRequest,
-    LinkRiotAccountRequest,
-    UserProfileUpdate,
+    EmailChangeCodeResponse,
     EmailChangeRequest,
     EmailChangeVerifyRequest,
-    EmailChangeCodeResponse,
-    PasswordChangeRequest,
+    JoinUsContactRequest,
+    LinkRiotAccountRequest,
     MessageResponse,
+    PasswordChangeRequest,
+    RefreshTokenRequest,
+    Token,
+    UserCreate,
+    UserProfileUpdate,
+    UserResponse,
 )
 from .service import (
     AccountLockedError,
     AuthService,
     CaptchaRequiredError,
     CaptchaVerificationError,
-    EmailChangeLockedError,
     EmailAlreadyRegisteredError,
+    EmailChangeLockedError,
     EmailUnchangedError,
-    InvalidEmailVerificationCodeError,
     EmailVerificationCodeExpiredError,
     EmailVerificationRequestNotFoundError,
     InvalidCurrentPasswordError,
+    InvalidEmailVerificationCodeError,
+    JoinUsBodyTooShortError,
     JoinUsCaptchaRequiredError,
     JoinUsCaptchaVerificationError,
-    JoinUsEmailNotConfiguredError,
     JoinUsEmailDeliveryError,
-    JoinUsBodyTooShortError,
+    JoinUsEmailNotConfiguredError,
     JoinUsRateLimitExceededError,
     get_auth_service,
     oauth2_scheme,
@@ -113,12 +114,15 @@ async def login(
             detail="Inactive user account",
         )
 
-    access_token, access_expires_at, refresh_token, refresh_expires_at = (
-        await auth_service.issue_token_pair(
-            user=user,
-            remote_ip=request.client.host if request.client else None,
-            user_agent=request.headers.get("user-agent"),
-        )
+    (
+        access_token,
+        access_expires_at,
+        refresh_token,
+        refresh_expires_at,
+    ) = await auth_service.issue_token_pair(
+        user=user,
+        remote_ip=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
     )
 
     await auth_service.update_last_login(user.id)

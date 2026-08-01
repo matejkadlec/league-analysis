@@ -2,9 +2,11 @@
 Pydantic schemas for playstyle analysis API.
 """
 
-from typing import Optional, Dict, Any
 from datetime import datetime
-from pydantic import BaseModel, Field, ConfigDict
+from typing import Any, Dict
+
+from pydantic import BaseModel, ConfigDict, Field
+
 from .models import AnalysisStatus
 
 

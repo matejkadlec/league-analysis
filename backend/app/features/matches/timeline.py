@@ -7,7 +7,6 @@ from typing import Any, Dict, Optional
 
 from sqlalchemy import (
     CheckConstraint,
-    DateTime as SQLDateTime,
     ForeignKey,
     Index,
     Integer,
@@ -15,6 +14,9 @@ from sqlalchemy import (
     UniqueConstraint,
     delete,
     text,
+)
+from sqlalchemy import (
+    DateTime as SQLDateTime,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -49,7 +51,9 @@ class MatchTimeline(Base):
             "participant_id BETWEEN 1 AND 10",
             name="ck_match_timelines_participant_id_range",
         ),
-        CheckConstraint("team_id IN (100, 200)", name="ck_match_timelines_team_id_valid"),
+        CheckConstraint(
+            "team_id IN (100, 200)", name="ck_match_timelines_team_id_valid"
+        ),
         {"schema": "core"},
     )
 
@@ -115,7 +119,9 @@ class MatchTimeline(Base):
     )
 
     # Team totals are repeated on each participant row for fast reads.
-    team_turrets_destroyed: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    team_turrets_destroyed: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0
+    )
     team_inhibitors_destroyed: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0
     )
@@ -124,7 +130,9 @@ class MatchTimeline(Base):
         Integer, nullable=False, default=0
     )
     team_barons_slain: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    team_voidgrubs_slain: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    team_voidgrubs_slain: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0
+    )
     team_atakhan_slain: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     team_other_epic_monsters_slain: Mapped[Dict[str, int]] = mapped_column(
         JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
@@ -506,7 +514,9 @@ def build_match_timeline_rows(
                         subtype=monster_subtype,
                     )
                 else:
-                    _increment_counter(row["other_epic_monster_takedowns"], monster_type)
+                    _increment_counter(
+                        row["other_epic_monster_takedowns"], monster_type
+                    )
                     _append_compact_objective_event(
                         row=row,
                         timestamp=timestamp,
@@ -536,9 +546,7 @@ def build_match_timeline_rows(
         row["turret_takedowns_by_lane"] = dict(row["turret_takedowns_by_lane"])
         row["inhibitor_takedowns_by_lane"] = dict(row["inhibitor_takedowns_by_lane"])
         row["dragon_takedowns_by_subtype"] = dict(row["dragon_takedowns_by_subtype"])
-        row["other_epic_monster_takedowns"] = dict(
-            row["other_epic_monster_takedowns"]
-        )
+        row["other_epic_monster_takedowns"] = dict(row["other_epic_monster_takedowns"])
         rows.append(row)
 
     return rows

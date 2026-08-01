@@ -1,33 +1,34 @@
 """Authentication service for user management, JWT access tokens, and refresh sessions."""
 
 import asyncio
-from datetime import datetime, timedelta, timezone
 import hashlib
 import secrets
 import smtplib
+from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 from typing import Optional
 from uuid import uuid4
 
 import httpx
+import jwt
+import structlog
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-import jwt
 from jwt import InvalidTokenError
 from passlib.context import CryptContext
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-import structlog
 
-from app.core.database import get_db
 from app.core.config import get_global_settings
+from app.core.database import get_db
+
 from .email_change_request import EmailChangeRequest
 from .join_us_contact_submission import JoinUsContactSubmission
 from .models import User
 from .refresh_token import RefreshToken
 from .revoked_access_token import RevokedAccessToken
-from .subject_counts import SubjectCounts
 from .schemas import JoinUsSubject, TokenData, UserCreate
+from .subject_counts import SubjectCounts
 
 # Password hashing context using Argon2id
 pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")

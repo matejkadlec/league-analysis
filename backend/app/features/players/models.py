@@ -1,21 +1,21 @@
 """Player data model for storing player information."""
 
-from typing import Optional
 from datetime import datetime
+from typing import Optional
 
 from sqlalchemy import (
     Boolean,
-    DateTime as SQLDateTime,
+    Index,
     Integer,
     String,
-    Index,
+)
+from sqlalchemy import (
+    DateTime as SQLDateTime,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
-import sqlalchemy as sa
 
 from app.core.models import Base
-from .leagues import PlayerLeague
 
 
 class Player(Base):
