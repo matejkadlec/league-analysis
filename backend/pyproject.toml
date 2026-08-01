@@ -52,6 +52,9 @@ testpaths = ["tests"]
 [tool.ruff]
 target-version = "py314"
 
+[tool.ruff.per-file-target-version]
+"../scripts/*.py" = "py313"
+
 [tool.ruff.lint]
 select = ["E4", "E7", "E9", "F", "I"]
 

@@ -41,7 +41,7 @@ def main() -> int:
                 errors.append(f"invalid JSON in {relative}: {error}")
         try:
             text = path.read_text(encoding="utf-8")
-        except OSError, UnicodeDecodeError:
+        except (OSError, UnicodeDecodeError):
             continue
         for line_number, line in enumerate(text.splitlines(), start=1):
             if any(line.startswith(marker) for marker in CONFLICT_MARKERS):
