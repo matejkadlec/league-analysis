@@ -1,6 +1,13 @@
 # Features (`app/features/`)
 
-> **Keep this file updated** when adding or modifying features.
+> **Scope:** Backend domain-feature organization and shared conventions under
+> `backend/app/features/`.
+>
+> **Maintenance:** Update when feature boundaries, standard structure,
+> dependency rules, or the feature inventory changes.
+
+Inherits repository-wide rules from [`../../../AGENTS.md`](../../../AGENTS.md)
+and backend rules from [`../../AGENTS.md`](../../AGENTS.md).
 
 Domain-specific business logic organized by feature. Each feature is self-contained.
 

@@ -1,5 +1,16 @@
 # Profile Feature
 
+> **Scope:** My Profile statistics components under
+> `frontend/features/profile/`.
+>
+> **Maintenance:** Update when profile cards, displayed statistics, API
+> dependencies, or feature-specific behavior changes.
+
+Inherits repository-wide rules from
+[`../../../AGENTS.md`](../../../AGENTS.md), frontend rules from
+[`../../AGENTS.md`](../../AGENTS.md), and feature conventions from
+[`../AGENTS.md`](../AGENTS.md).
+
 ## Purpose
 
 Components for the My Profile page displaying user's own League of Legends statistics.

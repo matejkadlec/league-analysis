@@ -1,6 +1,13 @@
 # Shared Components (`components/`)
 
-> **Keep this file updated**: When adding shared components, update this documentation.
+> **Scope:** Shared application components and shadcn/ui primitives under
+> `frontend/components/`.
+>
+> **Maintenance:** Update when shared components, primitive policy, naming, or
+> component-level conventions change.
+
+Inherits repository-wide rules from [`../../AGENTS.md`](../../AGENTS.md) and
+frontend rules from [`../AGENTS.md`](../AGENTS.md).
 
 Shared layout/infrastructure components. Feature-specific components go in `features/`.
 

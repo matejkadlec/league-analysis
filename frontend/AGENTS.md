@@ -1,6 +1,13 @@
 # Frontend (`frontend/`)
 
-> **Keep this file updated** when making frontend changes.
+> **Scope:** Frontend-wide architecture and conventions under `frontend/`.
+>
+> **Maintenance:** Update when the frontend stack, shared patterns, feature
+> layout, global styling system, or frontend commands change.
+
+Repository identity, delivery workflow, and safety rules are inherited from
+[`../AGENTS.md`](../AGENTS.md). This guide may add frontend constraints but may
+not weaken repository-wide rules.
 
 ## Tech Stack
 
@@ -20,7 +27,8 @@ frontend/
 │   ├── matches/
 │   ├── matchmaking/
 │   ├── players/
-│   └── playstyle-analysis/
+│   ├── playstyle-analysis/
+│   └── profile/
 └── lib/core/            # Utilities (api, schemas, utils)
 ```
 

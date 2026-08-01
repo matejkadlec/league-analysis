@@ -1,6 +1,13 @@
 # Backend (`backend/`)
 
-> **Keep this file updated** when making backend changes.
+> **Scope:** Backend-wide architecture and Python conventions under `backend/`.
+>
+> **Maintenance:** Update when the backend stack, feature layout, shared
+> conventions, or backend validation commands change.
+
+Repository identity, delivery workflow, and safety rules are inherited from
+[`../AGENTS.md`](../AGENTS.md). This guide may add backend constraints but may
+not weaken repository-wide rules.
 
 ## Tech Stack
 
@@ -72,10 +79,12 @@ logger.info("action_completed", puuid=puuid, count=count)
 ## Commands
 
 ```bash
-uv run pytest              # Run tests
-uv run pytest --cov=app    # With coverage
-uv run pyright             # Type check
+uv run pyright             # Configured backend type check
 ```
+
+The repository does not currently install `pytest` or define a backend test
+suite. Add tests and their tooling before documenting a test command as a
+required gate.
 
 ## Related Docs
 
@@ -84,3 +93,4 @@ uv run pyright             # Type check
 - [features/AGENTS.md](app/features/AGENTS.md) - Feature patterns
 - [features/jobs/AGENTS.md](app/features/jobs/AGENTS.md) - Job implementation
 - [COOKIE_CONSENT_AGENTS.md](COOKIE_CONSENT_AGENTS.md) - Cookie-consent compliance and implementation checklist
+- [Project overview](../docs/project-overview.md) - Runtime and validation commands
