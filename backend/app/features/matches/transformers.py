@@ -5,8 +5,8 @@ to formats suitable for database storage, validation, and processing.
 """
 
 from typing import Any, Dict, List, Optional
-import structlog
 
+import structlog
 
 logger = structlog.get_logger(__name__)
 

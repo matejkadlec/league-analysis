@@ -1,22 +1,26 @@
 """Settings API endpoints for managing system configuration."""
 
-from fastapi import APIRouter, HTTPException, Depends
 import structlog
+from fastapi import APIRouter, Depends, HTTPException
 
+from app.features.auth.dependencies import (
+    get_current_active_user,
+    get_current_admin_user,
+)
+from app.features.auth.models import User
+
+from .dependencies import SettingsServiceDep
 from .schemas import (
-    SettingResponse,
-    SettingUpdate,
-    SettingTestResponse,
     APIKeyStatusResponse,
     ServiceStatusResponse,
-    UserSettingsResponse,
-    UserSettingsUpdate,
+    SettingResponse,
+    SettingTestResponse,
+    SettingUpdate,
     UserCookieConsentResponse,
     UserCookieConsentUpdate,
+    UserSettingsResponse,
+    UserSettingsUpdate,
 )
-from .dependencies import SettingsServiceDep
-from app.features.auth.dependencies import get_current_active_user, get_current_admin_user
-from app.features.auth.models import User
 
 logger = structlog.get_logger(__name__)
 

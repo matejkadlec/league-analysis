@@ -2,14 +2,16 @@
 
 from datetime import datetime
 from enum import Enum as PyEnum
-from typing import Optional, Dict, Any
+from typing import Any, Dict
 
 from sqlalchemy import (
     DateTime as SQLDateTime,
+)
+from sqlalchemy import (
+    Enum,
     ForeignKey,
     Integer,
     String,
-    Enum,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship

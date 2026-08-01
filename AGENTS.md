@@ -68,6 +68,7 @@ Non-negotiable summary:
 | --- | --- |
 | Documentation map and ownership | [`docs/README.md`](docs/README.md) |
 | Project structure, stack, and commands | [`docs/project-overview.md`](docs/project-overview.md) |
+| Quality gates and GitHub Actions | [`docs/quality-checks.md`](docs/quality-checks.md) |
 | AI/Jira/GitHub development lifecycle | [`docs/ai-development-flow.md`](docs/ai-development-flow.md) |
 | Backend conventions | [`backend/AGENTS.md`](backend/AGENTS.md) |
 | Frontend conventions | [`frontend/AGENTS.md`](frontend/AGENTS.md) |
@@ -107,18 +108,20 @@ Use validation proportional to the changed scope:
 # Documentation-only
 git diff --check
 
-# Frontend behavior
-cd frontend && npm run lint
-cd frontend && npx tsc --noEmit
+# Frontend plus repository tooling
+./test.sh -f
 
-# Backend behavior
-cd backend && uv run pyright
+# Backend plus repository tooling
+./test.sh -b
+
+# Complete pre-publication gate
+./test.sh
 ```
 
-For application-wide code changes, run all three code checks. Before a commit,
-allow the configured pre-commit hooks to run; never bypass them. See
-[`docs/project-overview.md`](docs/project-overview.md#quality-and-verification)
-for the exact local-versus-GitHub check boundary.
+Run the complete gate before every pull request. Before a commit, allow the
+configured pre-commit hooks to run; never bypass them. See
+[`docs/quality-checks.md`](docs/quality-checks.md) for the exact local,
+pre-commit, and GitHub-only boundaries.
 
 When an IDE/workspace `get_errors` diagnostic is available, run it on changed
 code files to catch syntax, import, and type errors early; it complements but

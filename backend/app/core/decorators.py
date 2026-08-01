@@ -2,8 +2,9 @@
 
 import functools
 import inspect
+from typing import Any, Callable, Dict, Optional, ParamSpec, Type, TypeVar
+
 import structlog
-from typing import Any, Callable, Dict, Optional, Type, ParamSpec, TypeVar
 
 from app.core.exceptions import (
     DatabaseError,
@@ -12,10 +13,10 @@ from app.core.exceptions import (
     ValidationError,
 )
 from app.core.riot_api.errors import (
-    RiotAPIError,
-    RateLimitError,
     AuthenticationError,
     ForbiddenError,
+    RateLimitError,
+    RiotAPIError,
 )
 
 logger = structlog.get_logger(__name__)

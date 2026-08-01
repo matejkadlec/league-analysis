@@ -14,7 +14,9 @@ MATCH_FETCHER_DEFAULT_QUEUE_IDS: list[int] = [420, 440, 400, 450]
 MATCH_FETCHER_ENABLED_QUEUE_IDS_KEY = "enabled_queue_ids"
 
 
-def normalize_match_fetcher_config(config_json: dict[str, Any] | None) -> dict[str, Any]:
+def normalize_match_fetcher_config(
+    config_json: dict[str, Any] | None,
+) -> dict[str, Any]:
     """Normalize Match Fetcher config_json with safe queue defaults.
 
     Returns a copy with a guaranteed `enabled_queue_ids` key.
@@ -61,7 +63,7 @@ def _normalize_enabled_queue_ids(raw_queue_ids: Any) -> list[int]:
     for raw_value in raw_queue_ids:
         try:
             queue_id = int(raw_value)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             continue
 
         if queue_id in MATCH_FETCHER_QUEUE_IDS:
@@ -70,4 +72,8 @@ def _normalize_enabled_queue_ids(raw_queue_ids: Any) -> list[int]:
     if not normalized_values:
         return list(MATCH_FETCHER_DEFAULT_QUEUE_IDS)
 
-    return [queue_id for queue_id in MATCH_FETCHER_QUEUE_ORDER if queue_id in normalized_values]
+    return [
+        queue_id
+        for queue_id in MATCH_FETCHER_QUEUE_ORDER
+        if queue_id in normalized_values
+    ]

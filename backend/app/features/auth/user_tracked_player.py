@@ -2,7 +2,8 @@
 
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime as SQLDateTime, ForeignKey, String
+from sqlalchemy import BigInteger, ForeignKey, String
+from sqlalchemy import DateTime as SQLDateTime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 

@@ -3,19 +3,20 @@
 from datetime import datetime
 from typing import Union
 
-from fastapi import APIRouter, HTTPException, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
+from app.features.auth.dependencies import get_current_active_user
+
+from .dependencies import MatchmakingServiceDep
 from .schemas import (
+    MatchmakingAnalysisHistoryResponse,
     MatchmakingAnalysisRequest,
     MatchmakingAnalysisResponse,
     MatchmakingAnalysisStatusResponse,
-    MatchmakingAnalysisHistoryResponse,
     NotEnoughMatchesResponse,
 )
-from .dependencies import MatchmakingServiceDep
-from app.features.auth.dependencies import get_current_active_user
 
 limiter = Limiter(key_func=get_remote_address)
 router = APIRouter(

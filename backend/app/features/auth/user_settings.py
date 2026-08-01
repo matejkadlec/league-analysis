@@ -1,16 +1,18 @@
 """User settings model for per-user preferences."""
 
 from datetime import datetime
-from typing import Optional
 from enum import Enum as PyEnum
+from typing import Optional
 
 from sqlalchemy import (
     BigInteger,
     Boolean,
-    DateTime as SQLDateTime,
+    Enum,
     ForeignKey,
     String,
-    Enum,
+)
+from sqlalchemy import (
+    DateTime as SQLDateTime,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func

@@ -3,9 +3,9 @@
 from datetime import datetime
 from typing import Any, Dict, Optional
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
-from .models import JobStatus, JobType, ExecutionType
+from .models import ExecutionType, JobStatus, JobType
 
 
 class JobConfigurationBase(BaseModel):

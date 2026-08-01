@@ -4,19 +4,18 @@ This module provides system settings management functionality,
 including runtime configuration and Riot API key management.
 """
 
+from .dependencies import SettingsServiceDep, get_settings_service
 from .router import router as settings_router
-from .service import SettingsService
-
 from .schemas import (
-    SettingResponse,
-    SettingUpdate,
-    SettingTestResponse,
-    SettingValidationResponse,
     ServiceStatusResponse,
+    SettingResponse,
+    SettingTestResponse,
+    SettingUpdate,
+    SettingValidationResponse,
     UserCookieConsentResponse,
     UserCookieConsentUpdate,
 )
-from .dependencies import get_settings_service, SettingsServiceDep
+from .service import SettingsService
 
 __all__ = [
     # Router

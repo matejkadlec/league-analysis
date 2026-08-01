@@ -1,7 +1,8 @@
 """Schemas for matchmaking analysis requests and responses."""
 
-from typing import Optional, Dict
 from datetime import datetime
+from typing import Dict, Optional
+
 from pydantic import BaseModel, Field, computed_field
 
 

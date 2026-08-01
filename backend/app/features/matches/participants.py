@@ -1,23 +1,21 @@
 """Match participant model for storing individual player performance in matches."""
 
 from decimal import Decimal
-from typing import Optional, Dict, Any
-from datetime import datetime
+from typing import Any, Dict, Optional
 
 from sqlalchemy import (
-    BigInteger,
     Boolean,
-    DateTime as SQLDateTime,
-    Numeric as SQLDecimal,
+    Computed,
     ForeignKey,
+    Index,
     Integer,
     String,
-    Computed,
-    Index,
+)
+from sqlalchemy import (
+    Numeric as SQLDecimal,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy.sql import func
 
 from app.core.models import Base
 

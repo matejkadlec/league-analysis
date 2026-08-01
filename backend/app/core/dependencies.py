@@ -1,10 +1,11 @@
 """Core dependencies for FastAPI application."""
 
+import os
 from collections.abc import AsyncGenerator
+from typing import Annotated
+
 from fastapi import Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import Annotated
-import os
 
 from . import get_db, get_riot_api_key
 from .riot_api import RiotAPIClient

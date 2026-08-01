@@ -1,0 +1,114 @@
+name: Quality Checks
+
+on:
+  pull_request:
+    branches:
+      - master
+  push:
+    branches:
+      - master
+      # Bootstrap this first workflow before it exists on master.
+      - flow1/lga-14-quality-checks
+  workflow_dispatch:
+
+concurrency:
+  group: quality-checks-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CHANGE_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before || github.sha }}
+  PYTHON_VERSION: "3.14.6"
+
+jobs:
+  quality-gate:
+    name: Deterministic full-project gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_DB: league_analysis_ci
+          POSTGRES_USER: league_analysis_ci
+          POSTGRES_PASSWORD: league-analysis-ci-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U league_analysis_ci -d league_analysis_ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+
+      - name: Install pinned Python
+        run: uv python install "$PYTHON_VERSION"
+
+      - name: Install pinned shell tooling
+        env:
+          SHELLCHECK_BIN_DIR: ${{ runner.temp }}/shellcheck/bin
+          ACTIONLINT_BIN_DIR: ${{ runner.temp }}/actionlint/bin
+        run: |
+          ./scripts/install-shellcheck.sh "$SHELLCHECK_BIN_DIR"
+          ./scripts/install-actionlint.sh "$ACTIONLINT_BIN_DIR"
+          echo "$SHELLCHECK_BIN_DIR" >> "$GITHUB_PATH"
+          echo "$ACTIONLINT_BIN_DIR" >> "$GITHUB_PATH"
+
+      - name: Run deterministic CI gate
+        env:
+          POSTGRES_DB: league_analysis_ci
+          POSTGRES_USER: league_analysis_ci
+          POSTGRES_PASSWORD: league-analysis-ci-password
+          POSTGRES_HOST: 127.0.0.1
+          POSTGRES_PORT: "5432"
+          DEBUG: "false"
+          JWT_SECRET_KEY: league-analysis-ci-jwt-secret-32-characters
+          ENVIRONMENT: test
+          LGA_VALIDATE_MIGRATIONS: "1"
+        run: ./scripts/ci.sh
+
+  dependency-audit:
+    name: Live production dependency audit
+    needs: quality-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+
+      - name: Install pinned Python
+        run: uv python install "$PYTHON_VERSION"
+
+      - name: Run live dependency audit
+        run: ./scripts/dependency-audit.sh "$CHANGE_BASE_SHA"

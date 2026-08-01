@@ -1,34 +1,36 @@
 """Match API endpoints for the Riot API application."""
 
+import uuid
+from typing import Any, Dict, Optional
+
 from fastapi import (
     APIRouter,
-    HTTPException,
-    Query,
     BackgroundTasks,
     Depends,
+    HTTPException,
+    Query,
     Request,
 )
-from typing import Optional, Dict, Any
-import uuid
-from sqlalchemy.ext.asyncio import AsyncSession
 from slowapi import Limiter
 from slowapi.util import get_remote_address
-from app.core.database import get_db
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from .schemas import (
-    MatchListResponse,
-    MatchListWithPlayerDataResponse,
-    MatchStatsResponse,
-    ChampionStatsResponse,
-    LaneStatsResponse,
-)
+from app.core.database import get_db
+from app.core.riot_api.db_rate_limiter import DBRateLimiter, RateLimitComponent
+from app.features.auth.dependencies import get_current_active_user
+from app.features.auth.models import User
+
 from .dependencies import (
     MatchServiceDep,
     get_match_service,
 )
-from app.core.riot_api.db_rate_limiter import DBRateLimiter, RateLimitComponent
-from app.features.auth.dependencies import get_current_active_user
-from app.features.auth.models import User
+from .schemas import (
+    ChampionStatsResponse,
+    LaneStatsResponse,
+    MatchListResponse,
+    MatchListWithPlayerDataResponse,
+    MatchStatsResponse,
+)
 
 router = APIRouter(prefix="/matches", tags=["matches"])
 router.get_match_service = get_match_service  # type: ignore[attr-defined]
@@ -178,9 +180,9 @@ async def _run_analysis_task(
     rate_limiter: DBRateLimiter | None = None
 
     try:
+        from app.core.database import db_manager
         from app.core.riot_api.client import RiotAPIClient
         from app.features.matches.service import MatchService
-        from app.core.database import db_manager
 
         analysis_jobs[job_id]["message"] = "Preparing analysis..."
 
@@ -203,9 +205,9 @@ async def _run_analysis_task(
                     est_minutes = 1
 
                 analysis_jobs[job_id]["estimated_minutes_remaining"] = est_minutes
-                analysis_jobs[job_id][
-                    "message"
-                ] = f"Analysis in progress... Processing {current} of {total} requests"
+                analysis_jobs[job_id]["message"] = (
+                    f"Analysis in progress... Processing {current} of {total} requests"
+                )
 
         # Cancellation check callback
         def should_cancel() -> bool:
@@ -220,9 +222,9 @@ async def _run_analysis_task(
                     session, RateLimitComponent.MATCHMAKING_ANALYSIS
                 )
                 # 1. Fetch and update match data
-                analysis_jobs[job_id][
-                    "message"
-                ] = "Fetching match list from Riot API..."
+                analysis_jobs[job_id]["message"] = (
+                    "Fetching match list from Riot API..."
+                )
                 print(
                     f"DEBUG: Client initialized, fetching matches for {puuid}",
                     file=sys.stderr,
@@ -241,9 +243,9 @@ async def _run_analysis_task(
                 # Check if we finished due to cancellation
                 if should_cancel():
                     analysis_jobs[job_id]["status"] = "cancelled"
-                    analysis_jobs[job_id][
-                        "message"
-                    ] = f"Analysis cancelled. Processed {count} matches."
+                    analysis_jobs[job_id]["message"] = (
+                        f"Analysis cancelled. Processed {count} matches."
+                    )
                     print(
                         f"DEBUG: Analysis cancelled. Processed {count} matches.",
                         file=sys.stderr,
@@ -300,6 +302,7 @@ async def analyze_match_history(
 ):
     """Start match history analysis background job."""
     import os
+
     from app.core.config import get_riot_api_key
 
     try:

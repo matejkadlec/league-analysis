@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import TYPE_CHECKING, List
+
+from dotenv import load_dotenv
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from dotenv import load_dotenv
-from typing import List, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -54,7 +55,7 @@ class Settings(BaseSettings):
         ]
 
     @property
-    def environment(self) -> str:  # noqa: vulture
+    def environment(self) -> str:
         """Get current environment from ENVIRONMENT variable."""
         env = os.getenv("ENVIRONMENT", "").lower()
         return env if env in ["dev", "production"] else "dev"  # Safe default
@@ -242,10 +243,12 @@ async def get_riot_api_key(db: AsyncSession) -> str:
     :returns: Active Riot API key
     :raises ValueError: If no active API key found in DB or .env
     """
-    from sqlalchemy import select
     from datetime import datetime, timezone
-    from app.features.settings.models import RiotAPIKey
+
     import structlog
+    from sqlalchemy import select
+
+    from app.features.settings.models import RiotAPIKey
 
     logger = structlog.get_logger(__name__)
 
@@ -262,7 +265,7 @@ async def get_riot_api_key(db: AsyncSession) -> str:
         # Get the latest active key
         stmt = (
             select(RiotAPIKey)
-            .where(RiotAPIKey.is_active == True)
+            .where(RiotAPIKey.is_active.is_(True))
             .order_by(RiotAPIKey.added_at.desc())
             .limit(1)
         )

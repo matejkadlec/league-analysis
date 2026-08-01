@@ -1,9 +1,10 @@
 """Riot API endpoint definitions and routing information."""
 
 from typing import Dict, List, Optional
+
 import structlog
 
-from .constants import Region, Platform, QueueType
+from .constants import Platform, QueueType, Region
 
 logger = structlog.get_logger(__name__)
 
@@ -136,7 +137,7 @@ def parse_rate_limit_header(header_value: str) -> List[Dict[str, int]]:
         try:
             requests, window = map(int, part.strip().split(":"))
             limits.append({"requests": requests, "window": window})
-        except (ValueError, AttributeError):
+        except ValueError, AttributeError:
             logger.warning(
                 "Failed to parse rate limit part", part=part, header=header_value
             )

@@ -11,7 +11,7 @@ not weaken repository-wide rules.
 
 ## Tech Stack
 
-Python 3.14.2, FastAPI, SQLAlchemy 2.0+, Pydantic v2, structlog, APScheduler, httpx
+Python 3.14.6, FastAPI, SQLAlchemy 2.0+, Pydantic v2, structlog, APScheduler, httpx
 
 ## Structure
 
@@ -79,12 +79,17 @@ logger.info("action_completed", puuid=puuid, count=count)
 ## Commands
 
 ```bash
-uv run pyright             # Configured backend type check
+../test.sh -b              # Repository tooling plus the complete backend gate
+uv run pytest              # Focused backend regression suite
+uv run ruff check app tests ../scripts/*.py
+uv run ruff format --check --exclude '*.md' app tests ../scripts/*.py
+uv run pyright
+uv run bandit --quiet --recursive app --severity-level medium --confidence-level medium --skip B104
 ```
 
-The repository does not currently install `pytest` or define a backend test
-suite. Add tests and their tooling before documenting a test command as a
-required gate.
+The authoritative gate runs dependency sync from `uv.lock` before these checks.
+Tests are network-free and receive safe test-only environment values from the
+gate; they must not depend on a real Riot API key or production credentials.
 
 ## Related Docs
 

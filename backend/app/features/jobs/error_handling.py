@@ -10,10 +10,11 @@ Error Handling Strategy:
 """
 
 from functools import wraps
-from typing import Callable, TypeVar, ParamSpec, Any, Optional
+from typing import Any, Callable, Optional, ParamSpec, TypeVar
+
 import structlog
 
-from app.core.riot_api.errors import RateLimitError, AuthenticationError, ForbiddenError
+from app.core.riot_api.errors import AuthenticationError, ForbiddenError, RateLimitError
 
 logger = structlog.get_logger(__name__)
 

@@ -1,22 +1,23 @@
 """SQLAlchemy base class and common type definitions."""
 
-from typing import Optional
-from typing_extensions import Annotated
-from decimal import Decimal
 from datetime import datetime
+from decimal import Decimal
+from typing import Optional
 
 from sqlalchemy import (
-    String,
-    Integer,
-    Boolean,
-    Numeric,
     BigInteger,
-    DateTime as SQLDateTime,
+    Boolean,
     ForeignKey,
+    Integer,
     MetaData,
+    Numeric,
+    String,
+)
+from sqlalchemy import (
+    DateTime as SQLDateTime,
 )
 from sqlalchemy.orm import DeclarativeBase, mapped_column
-
+from typing_extensions import Annotated
 
 # Create a base class for declarative models using SQLAlchemy 2.0 style
 # Use a custom naming convention for constraints and indexes

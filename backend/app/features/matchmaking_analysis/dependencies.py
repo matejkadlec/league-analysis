@@ -1,12 +1,14 @@
 """Dependencies for the matchmaking analysis feature."""
 
 from typing import Annotated
+
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import get_db
-from app.core.riot_api.client import RiotAPIClient
 from app.core.dependencies import get_riot_client
+from app.core.riot_api.client import RiotAPIClient
+
 from .service import MatchmakingAnalysisService
 
 

@@ -1,42 +1,43 @@
 """Match service for handling match data operations."""
 
-from typing import Optional, List, Dict, Any, TYPE_CHECKING, cast
-import structlog
 import asyncio
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, cast
 
+import structlog
+from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, desc
+
+from app.core.riot_api.constants import get_region_by_platform
+from app.core.riot_api.db_rate_limiter import DBRateLimiter
+from app.core.riot_api.errors import (
+    AuthenticationError,
+    ForbiddenError,
+    NotFoundError,
+    RateLimitError,
+    RiotAPIError,
+)
+from app.core.riot_api.transformers import MatchTransformer
+from app.features.players.leagues import PlayerLeague
+from app.features.players.models import Player
 
 from .models import Match
 from .participants import MatchParticipant
-from .timeline import MatchTimeline, replace_match_timeline_rows
-from app.features.players.models import Player
-from app.features.players.leagues import PlayerLeague
 from .schemas import (
-    MatchResponse,
+    ChampionStatsResponse,
+    EnemyLaneOpponent,
+    LaneStatsResponse,
     MatchListResponse,
+    MatchListWithPlayerDataResponse,
+    MatchResponse,
     MatchStatsResponse,
     MatchWithPlayerData,
-    MatchListWithPlayerDataResponse,
     PlayerMatchParticipant,
-    EnemyLaneOpponent,
     TeamChampion,
     TeamComposition,
     TeamStats,
     TeamStatsComposition,
-    ChampionStatsResponse,
-    LaneStatsResponse,
 )
-from app.core.riot_api.transformers import MatchTransformer
-from app.core.riot_api.errors import (
-    RiotAPIError,
-    RateLimitError,
-    AuthenticationError,
-    ForbiddenError,
-    NotFoundError,
-)
-from app.core.riot_api.constants import get_region_by_platform
-from app.core.riot_api.db_rate_limiter import DBRateLimiter, RateLimitComponent
+from .timeline import MatchTimeline, replace_match_timeline_rows
 
 if TYPE_CHECKING:
     from app.core.riot_api.client import RiotAPIClient
@@ -231,7 +232,7 @@ class MatchService:
                     return 0
                 try:
                     return int(raw_value)
-                except (TypeError, ValueError):
+                except TypeError, ValueError:
                     return 0
 
             # Get player leagues for LP change calculation (ordered by created_at DESC - newest first)
@@ -347,7 +348,7 @@ class MatchService:
 
                     # Each rank is roughly 100 LP apart
                     return rank_diff * 100 + (after_lp - before_lp)
-                except (ValueError, AttributeError):
+                except ValueError, AttributeError:
                     # Tier not found or other error
                     return after_lp - before_lp
 
@@ -415,7 +416,9 @@ class MatchService:
                     "inhibitors": blue_timeline.team_inhibitors_destroyed
                     if blue_timeline
                     else None,
-                    "dragons": blue_timeline.team_dragons_slain if blue_timeline else None,
+                    "dragons": blue_timeline.team_dragons_slain
+                    if blue_timeline
+                    else None,
                     "barons": blue_timeline.team_barons_slain if blue_timeline else 0,
                     "rift_heralds": blue_timeline.team_rift_heralds_slain
                     if blue_timeline
@@ -434,7 +437,9 @@ class MatchService:
                     "inhibitors": red_timeline.team_inhibitors_destroyed
                     if red_timeline
                     else None,
-                    "dragons": red_timeline.team_dragons_slain if red_timeline else None,
+                    "dragons": red_timeline.team_dragons_slain
+                    if red_timeline
+                    else None,
                     "barons": red_timeline.team_barons_slain if red_timeline else 0,
                     "rift_heralds": red_timeline.team_rift_heralds_slain
                     if red_timeline
@@ -827,7 +832,7 @@ class MatchService:
         Returns:
             ChampionStatsResponse with per-champion statistics
         """
-        from .schemas import ChampionStatsResponse, ChampionStatsItem
+        from .schemas import ChampionStatsItem, ChampionStatsResponse
 
         try:
             # Build query for participants
@@ -921,7 +926,7 @@ class MatchService:
         Returns:
             LaneStatsResponse with per-lane statistics
         """
-        from .schemas import LaneStatsResponse, LaneStatsItem
+        from .schemas import LaneStatsItem, LaneStatsResponse
 
         # Lane display name mapping
         lane_names = {
@@ -1029,8 +1034,7 @@ class MatchService:
             Number of new matches stored
         """
         try:
-            # Fetch match IDs (always fetch enough to find new ones)
-            fetch_count = max(count, 50)
+            # Fetch match IDs (the helper requests the stable API batch size).
             match_ids = await self._fetch_match_ids_from_api(
                 riot_api_client, puuid, queue
             )
@@ -1156,7 +1160,9 @@ class MatchService:
             if match_dto:
                 timeline_payload: Optional[Dict[str, Any]] = None
                 try:
-                    timeline_payload = await riot_api_client.get_match_timeline(match_id)
+                    timeline_payload = await riot_api_client.get_match_timeline(
+                        match_id
+                    )
                 except Exception as timeline_error:
                     logger.warning(
                         "Failed to fetch match timeline, storing match without timeline",
@@ -1357,7 +1363,7 @@ class MatchService:
             select(func.count(Match.match_id))
             .join(MatchParticipant)
             .where(MatchParticipant.puuid == puuid)
-            .where(Match.fully_analyzed == True)
+            .where(Match.fully_analyzed.is_(True))
         )
 
         if queue:
@@ -1689,7 +1695,6 @@ class MatchService:
         Returns:
             Number of matches processed
         """
-        import asyncio
         import sys
 
         try:
@@ -1753,7 +1758,7 @@ class MatchService:
                 .join(MatchParticipant, Match.match_id == MatchParticipant.match_id)
                 .where(
                     MatchParticipant.puuid == puuid,
-                    Match.fully_analyzed == True,
+                    Match.fully_analyzed.is_(True),
                 )
             )
             result = await self.db.execute(existing_analyzed_stmt)
@@ -1765,7 +1770,7 @@ class MatchService:
                 .join(MatchParticipant, Match.match_id == MatchParticipant.match_id)
                 .where(
                     MatchParticipant.puuid == puuid,
-                    Match.fully_analyzed == False,
+                    Match.fully_analyzed.is_(False),
                 )
             )
             result = await self.db.execute(needs_reanalysis_stmt)
@@ -2030,7 +2035,7 @@ class MatchService:
 
             await self.db.commit()
 
-        except Exception as e:
+        except Exception:
             await self.db.rollback()
             raise
 
@@ -2097,9 +2102,7 @@ class MatchService:
 
         return total_stored
 
-    def _normalize_sync_queue_ids(
-        self, queue_ids: Optional[list[int]]
-    ) -> list[int]:
+    def _normalize_sync_queue_ids(self, queue_ids: Optional[list[int]]) -> list[int]:
         """Normalize enabled queue IDs for sync operations."""
         if queue_ids is None:
             return [420]
@@ -2113,7 +2116,7 @@ class MatchService:
         for raw_queue_id in queue_ids:
             try:
                 queue_id = int(raw_queue_id)
-            except (TypeError, ValueError):
+            except TypeError, ValueError:
                 continue
 
             if queue_id not in self.SUPPORTED_SYNC_QUEUE_IDS or queue_id in seen:
@@ -2185,7 +2188,7 @@ class MatchService:
 
             ids_list = match_list_dto.match_ids
             stmt = select(Match.match_id).where(
-                Match.match_id.in_(ids_list), Match.fully_analyzed == True
+                Match.match_id.in_(ids_list), Match.fully_analyzed.is_(True)
             )
             result = await self.db.execute(stmt)
             analyzed_ids = set(result.scalars().all())
@@ -2208,7 +2211,9 @@ class MatchService:
                 if mid not in analyzed_ids or mid not in timeline_complete_ids
             ]
             timeline_only_ids = {
-                mid for mid in ids_list if mid in analyzed_ids and mid not in timeline_complete_ids
+                mid
+                for mid in ids_list
+                if mid in analyzed_ids and mid not in timeline_complete_ids
             }
 
             for match_id in ids_to_process:

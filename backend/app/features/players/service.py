@@ -1,24 +1,27 @@
 """Player service for handling player data operations."""
 
-from typing import List, Any, Sequence, TYPE_CHECKING
 from datetime import datetime, timezone
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update, delete, func, and_, or_
-from sqlalchemy.dialects.postgresql import insert
-from Levenshtein import distance as levenshtein_distance
-import structlog
+from typing import TYPE_CHECKING, Any, List, Sequence
 
-from .models import Player
-from .schemas import PlayerResponse
-from app.features.auth.user_tracked_player import UserTrackedPlayer
+import structlog
+from Levenshtein import distance as levenshtein_distance
+from sqlalchemy import and_, delete, func, or_, select, update
+from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.decorators import input_validation, service_error_handler
 from app.core.exceptions import (
     PlayerServiceError,
 )
-from app.core.decorators import service_error_handler, input_validation
-from app.core.riot_api.constants import Region, Platform
+from app.core.riot_api.constants import Platform, Region
+from app.features.auth.user_tracked_player import UserTrackedPlayer
+
+from .models import Player
+from .schemas import PlayerResponse
 
 if TYPE_CHECKING:
     from app.core.riot_api.client import RiotAPIClient
+
     from .leagues import PlayerLeague
 
 logger = structlog.get_logger(__name__)
@@ -264,8 +267,8 @@ class PlayerService:
             )
 
         # Count total matches for this player
-        from app.features.matches.participants import MatchParticipant
         from app.features.matches.models import Match
+        from app.features.matches.participants import MatchParticipant
 
         # Get total matches count
         count_result = await self.db.execute(
@@ -279,7 +282,10 @@ class PlayerService:
         analyzed_count_result = await self.db.execute(
             select(func.count(Match.match_id))
             .join(MatchParticipant, Match.match_id == MatchParticipant.match_id)
-            .where(MatchParticipant.puuid == puuid, Match.fully_analyzed == True)
+            .where(
+                MatchParticipant.puuid == puuid,
+                Match.fully_analyzed.is_(True),
+            )
         )
         analyzed_matches = analyzed_count_result.scalar() or 0
 
@@ -1124,8 +1130,9 @@ class PlayerService:
         Raises:
             ValueError: If player has invalid platform
         """
-        from app.core.riot_api.constants import Platform, Region
         from datetime import datetime, timezone
+
+        from app.core.riot_api.constants import Platform, Region
 
         logger.debug("Updating player profile", puuid=player.puuid)
 
@@ -1220,6 +1227,7 @@ class PlayerService:
             ValueError: If player has invalid platform
         """
         from app.core.riot_api.constants import Platform
+
         from .leagues import PlayerLeague
 
         logger.debug("Updating player league", puuid=player.puuid)
@@ -1308,6 +1316,7 @@ class PlayerService:
             Most recent PlayerLeague or None if no league data exists
         """
         from sqlalchemy import select
+
         from .leagues import PlayerLeague
 
         stmt = (

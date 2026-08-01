@@ -5,11 +5,13 @@ from typing import Optional
 
 from sqlalchemy import (
     Boolean,
-    DateTime as SQLDateTime,
     ForeignKey,
+    Index,
     Integer,
     String,
-    Index,
+)
+from sqlalchemy import (
+    DateTime as SQLDateTime,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func

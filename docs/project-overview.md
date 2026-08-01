@@ -96,7 +96,7 @@ Versions are pinned or constrained by `backend/pyproject.toml`,
 | Backend tooling | `uv`, Pyright |
 | Frontend runtime | Next.js 16.1.6, React 19.2, TypeScript 5, Tailwind CSS 4, shadcn/ui |
 | Frontend data/forms | TanStack Query 5, Zod 4, Axios, React Hook Form |
-| Frontend tooling | npm with `package-lock.json`, ESLint 9, TypeScript compiler |
+| Frontend tooling | Node 20.19.6, npm with `package-lock.json`, ESLint 9, TypeScript compiler, Vitest |
 | Database | PostgreSQL 18, asyncpg for application I/O, psycopg2 for APScheduler |
 | External data | Riot Games API |
 
@@ -130,7 +130,9 @@ over an existing one; stop the running session first.
 
 ## Quality and Verification
 
-Run checks for the code actually changed.
+[`quality-checks.md`](quality-checks.md) is authoritative for the gate design,
+tool pins, test scope, and local-versus-GitHub boundary. Use focused modes while
+implementing and the complete gate before publication.
 
 ### Documentation-only
 
@@ -144,12 +146,11 @@ and repository/project identifiers.
 ### Frontend
 
 ```bash
-cd frontend
-npm run lint
-npx tsc --noEmit
+./test.sh -f
 ```
 
-Both commands must finish with zero errors and zero warnings.
+This selects Node from `.nvmrc`, runs `npm ci`, ESLint with zero warnings,
+TypeScript, Vitest regressions, and a Next.js production build.
 
 Use the workspace `get_errors` diagnostic on changed TypeScript files when it
 is available; it complements ESLint and TypeScript rather than replacing them.
@@ -157,25 +158,31 @@ is available; it complements ESLint and TypeScript rather than replacing them.
 ### Backend
 
 ```bash
-cd backend
-uv run pyright
+./test.sh -b
 ```
 
-Pyright must finish with zero errors and zero warnings. The repository does not
-currently define a backend test suite or install `pytest`; do not present a
-`pytest` command as a required gate unless tests and their tooling are added.
+This syncs the frozen `uv.lock`, validates pre-commit configuration, and runs
+pytest, Ruff lint/format, Pyright, and Bandit at medium severity and confidence.
 Use the workspace `get_errors` diagnostic on changed Python files when it is
 available.
 
+### Complete pre-publication gate
+
+```bash
+./test.sh
+```
+
+This is the authoritative developer gate and the core of `scripts/ci.sh` used
+by GitHub Actions. It runs repository, frontend, and backend checks with clear,
+fail-fast step names.
+
 ### Commits and GitHub
 
-`.pre-commit-config.yaml` applies whitespace/format checks, Ruff, frontend
-ESLint, and frontend TypeScript checks to matching files. Never skip configured
-hooks.
-
-The current repository tree contains issue templates but no GitHub Actions
-workflow. Therefore there is no repository-defined GitHub-only CI gate to
-report as passed. Local validation results are not GitHub check results.
+`.pre-commit-config.yaml` keeps fast whitespace/format checks, Ruff, frontend
+ESLint, and frontend TypeScript checks at commit time. Never skip configured
+hooks. GitHub's `Quality Checks` workflow runs the same deterministic gate with
+PostgreSQL 18, plus a separate live production dependency audit. Local results
+are not GitHub check results.
 
 ## Debugging and Operational Boundaries
 

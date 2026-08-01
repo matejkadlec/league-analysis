@@ -3,9 +3,10 @@
 import asyncio
 import time
 from typing import Dict, Optional
+
 import structlog
 
-from .endpoints import parse_rate_limit_header, parse_rate_count_header
+from .endpoints import parse_rate_count_header, parse_rate_limit_header
 
 logger = structlog.get_logger(__name__)
 

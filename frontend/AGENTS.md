@@ -132,10 +132,18 @@ Use this shared structure for user-action dialogs across frontend features.
 ## Commands
 
 ```bash
+../test.sh -f    # Repository tooling plus the complete frontend gate
 npm run dev      # Start dev server
+npm run lint     # ESLint
+npm run typecheck
+npm test         # Deterministic Vitest regressions
 npm run build    # Production build
 rm -rf .next     # Clear cache
 ```
+
+The authoritative gate selects the Node version from `../.nvmrc`, installs with
+`npm ci`, rejects ESLint warnings, and preserves tracked `next-env.d.ts` content
+across the production build.
 
 ## Related Docs
 

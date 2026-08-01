@@ -1,17 +1,19 @@
 """Matchmaking analysis model for immutable analysis results."""
 
-from typing import Optional
 from datetime import datetime
+from typing import Optional
 
 from sqlalchemy import (
     DateTime as SQLDateTime,
-    String,
-    PrimaryKeyConstraint,
-    Index,
 )
+from sqlalchemy import (
+    Index,
+    PrimaryKeyConstraint,
+    String,
+)
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
-from sqlalchemy.dialects.postgresql import JSONB
 
 from app.core.models import Base
 

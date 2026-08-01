@@ -1,31 +1,33 @@
 """Authentication feature module."""
 
-from .models import User
+from .dependencies import get_current_active_user, get_current_user
 from .email_change_request import EmailChangeRequest
 from .join_us_contact_submission import JoinUsContactSubmission
+from .models import User
 from .refresh_token import RefreshToken
 from .revoked_access_token import RevokedAccessToken
-from .subject_counts import SubjectCounts
-from .user_cookie_consent import UserCookieConsent, CookieConsentLevel
-from .user_settings import UserSettings, ThemeEnum
-from .user_tracked_player import UserTrackedPlayer
+from .router import router as auth_router
 from .schemas import (
-    UserResponse,
-    UserCreate,
+    EmailChangeCodeResponse,
+    EmailChangeVerifyRequest,
+    JoinUsContactRequest,
+    JoinUsSubject,
+    MessageResponse,
+    PasswordChangeRequest,
+    RefreshTokenRequest,
     Token,
     TokenData,
-    RefreshTokenRequest,
-    EmailChangeRequest as EmailChangeRequestSchema,
-    EmailChangeVerifyRequest,
-    EmailChangeCodeResponse,
-    PasswordChangeRequest,
-    MessageResponse,
-    JoinUsSubject,
-    JoinUsContactRequest,
+    UserCreate,
+    UserResponse,
 )
-from .router import router as auth_router
+from .schemas import (
+    EmailChangeRequest as EmailChangeRequestSchema,
+)
 from .service import AuthService
-from .dependencies import get_current_user, get_current_active_user
+from .subject_counts import SubjectCounts
+from .user_cookie_consent import CookieConsentLevel, UserCookieConsent
+from .user_settings import ThemeEnum, UserSettings
+from .user_tracked_player import UserTrackedPlayer
 
 __all__ = [
     "User",

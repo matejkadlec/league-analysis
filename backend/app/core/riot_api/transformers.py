@@ -1,9 +1,10 @@
 """Data transformation utilities for Riot API match data."""
 
-from typing import Dict, List, Any
+from typing import Any, Dict, List
+
 import structlog
 
-from app.core.validation import validate_nested_fields, validate_list_items
+from app.core.validation import validate_list_items, validate_nested_fields
 
 logger = structlog.get_logger(__name__)
 
