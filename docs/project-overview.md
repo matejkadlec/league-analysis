@@ -139,9 +139,9 @@ committed lock before development continues.
 ./run.sh --help
 ```
 
-`run.sh` verifies the database connection, starts Uvicorn with reload, waits for
-the backend, installs frontend dependencies only when `node_modules` is absent,
-and starts Next.js. Defaults:
+`run.sh` creates `logs/` before redirecting output, verifies the database
+connection, starts Uvicorn with reload, waits for the backend, installs frontend
+dependencies only when `node_modules` is absent, and starts Next.js. Defaults:
 
 - Frontend: <http://localhost:3000>
 - Backend: <http://localhost:8000>
