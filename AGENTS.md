@@ -68,6 +68,9 @@ Non-negotiable summary:
   owner-managed immediately: do not poll, review, repair, merge, or deploy it.
   Continue only with independent batches recorded during intake, then provide
   one final ticket-to-PR handoff and stop.
+- Owner-managed review and merge are workflow policy, not an identity control
+  supplied by the zero-approval ruleset. Agents must not merge without explicit
+  owner authorization.
 - Move an issue to `DONE` only after its pull request is merged into `master`.
 - Never request secrets or complete environment files in chat or Jira.
 
@@ -79,6 +82,7 @@ Non-negotiable summary:
 | Project structure, stack, and commands | [`docs/project-overview.md`](docs/project-overview.md) |
 | Quality gates and GitHub Actions | [`docs/quality-checks.md`](docs/quality-checks.md) |
 | AI/Jira/GitHub development lifecycle | [`docs/ai-development-flow.md`](docs/ai-development-flow.md) |
+| GitHub branch governance | [`docs/github-governance.md`](docs/github-governance.md) |
 | Backend conventions | [`backend/AGENTS.md`](backend/AGENTS.md) |
 | Frontend conventions | [`frontend/AGENTS.md`](frontend/AGENTS.md) |
 | Database schema revisions | [`backend/alembic/versions/`](backend/alembic/versions/) |

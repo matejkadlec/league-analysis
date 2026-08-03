@@ -77,7 +77,8 @@ All modes run:
   comments, `contents: read`, credential-safe checkout, concurrency
   cancellation, required triggers, and job timeouts.
 - tracked `master` branch-ruleset desired state, including its exact stable
-  required-check contexts and sole-owner review policy. The deterministic
+  required-check contexts, GitHub Actions integration binding, and zero-review
+  workflow policy. The deterministic
   configuration regression is local; the separate live audit remains read-only
   and requires authenticated GitHub API access.
 - Dependabot v2 configuration coverage for every current package ecosystem,

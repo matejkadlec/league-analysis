@@ -8,6 +8,7 @@ import json
 import shutil
 import subprocess
 import sys
+from fnmatch import fnmatchcase
 from pathlib import Path
 from typing import Any
 
@@ -19,6 +20,7 @@ EXPECTED_CONTEXTS = (
     "Deterministic full-project gate",
     "Live production dependency audit",
 )
+GITHUB_ACTIONS_INTEGRATION_ID = 15368
 EXPECTED_RULE_TYPES = {
     "deletion",
     "non_fast_forward",
@@ -57,19 +59,21 @@ def rules_by_type(configuration: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return mapped_rules
 
 
-def status_contexts(rule: dict[str, Any]) -> tuple[str, ...]:
+def status_checks(rule: dict[str, Any]) -> tuple[tuple[str, int], ...]:
     parameters = rule.get("parameters")
     if not isinstance(parameters, dict):
         fail("required_status_checks rule must include parameters")
     checks = parameters.get("required_status_checks")
     if not isinstance(checks, list):
         fail("required_status_checks must be an array")
-    contexts: list[str] = []
+    configured_checks: list[tuple[str, int]] = []
     for check in checks:
         if not isinstance(check, dict) or not isinstance(check.get("context"), str):
             fail("each required status check must declare a context")
-        contexts.append(check["context"])
-    return tuple(contexts)
+        if not isinstance(check.get("integration_id"), int):
+            fail("each required status check must bind a GitHub integration")
+        configured_checks.append((check["context"], check["integration_id"]))
+    return tuple(configured_checks)
 
 
 def validate_configuration(configuration: dict[str, Any]) -> None:
@@ -117,15 +121,22 @@ def validate_configuration(configuration: dict[str, Any]) -> None:
         fail("status checks must apply to every merge into master")
     if required_status_checks.get("strict_required_status_checks_policy") is not True:
         fail("status checks must require a branch current with master")
-    if status_contexts(rules["required_status_checks"]) != EXPECTED_CONTEXTS:
-        fail("status-check contexts must match the stable Quality Checks jobs")
+    expected_checks = tuple(
+        (context, GITHUB_ACTIONS_INTEGRATION_ID) for context in EXPECTED_CONTEXTS
+    )
+    if status_checks(rules["required_status_checks"]) != expected_checks:
+        fail("status checks must match the stable GitHub Actions jobs and integration")
 
 
 def fetch_live_rulesets(repository: str) -> list[dict[str, Any]]:
     if shutil.which("gh") is None:
         fail("GitHub CLI (gh) is required for the live ruleset audit")
     result = subprocess.run(
-        ["gh", "api", f"repos/{repository}/rulesets?targets=branch&per_page=100"],
+        [
+            "gh",
+            "api",
+            f"repos/{repository}/rulesets?targets=branch&includes_parents=true&per_page=100",
+        ],
         check=False,
         capture_output=True,
         text=True,
@@ -163,6 +174,65 @@ def fetch_live_ruleset(repository: str, ruleset_id: int) -> dict[str, Any]:
     return ruleset
 
 
+def fetch_repository_metadata(repository: str) -> dict[str, Any]:
+    result = subprocess.run(
+        ["gh", "api", f"repos/{repository}"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode:
+        stderr = result.stderr.strip() or "unknown gh API failure"
+        fail(f"cannot read repository metadata for {repository}: {stderr}")
+    try:
+        metadata = json.loads(result.stdout)
+    except json.JSONDecodeError as error:
+        raise ValueError(
+            f"GitHub returned invalid repository metadata JSON: {error}"
+        ) from error
+    if not isinstance(metadata, dict):
+        fail("GitHub repository metadata was not an object")
+    return metadata
+
+
+def pattern_matches_ref(pattern: str, ref: str, default_branch: str) -> bool:
+    if pattern == "~ALL":
+        return True
+    if pattern == "~DEFAULT_BRANCH":
+        return ref == f"refs/heads/{default_branch}"
+    return fnmatchcase(ref, pattern)
+
+
+def ruleset_applies_to_master(ruleset: dict[str, Any], default_branch: str) -> bool:
+    conditions = ruleset.get("conditions")
+    if conditions is None:
+        return True
+    if not isinstance(conditions, dict):
+        fail("active branch ruleset conditions must be an object")
+    ref_name = conditions.get("ref_name")
+    if ref_name is None:
+        return True
+    if not isinstance(ref_name, dict):
+        fail("active branch ruleset ref_name conditions must be an object")
+    include = ref_name.get("include")
+    exclude = ref_name.get("exclude", [])
+    if not isinstance(include, list) or not all(
+        isinstance(item, str) for item in include
+    ):
+        fail("active branch ruleset ref_name include conditions must be strings")
+    if not isinstance(exclude, list) or not all(
+        isinstance(item, str) for item in exclude
+    ):
+        fail("active branch ruleset ref_name exclude conditions must be strings")
+
+    master_ref = "refs/heads/master"
+    return any(
+        pattern_matches_ref(pattern, master_ref, default_branch) for pattern in include
+    ) and not any(
+        pattern_matches_ref(pattern, master_ref, default_branch) for pattern in exclude
+    )
+
+
 def comparable_parameters(rule_type: str, rule: dict[str, Any]) -> Any:
     """Normalize GitHub's omitted disabled/default pull-request properties."""
     parameters = rule.get("parameters")
@@ -178,10 +248,21 @@ def comparable_parameters(rule_type: str, rule: dict[str, Any]) -> Any:
 
 
 def audit_live_ruleset(expected: dict[str, Any], repository: str) -> None:
+    repository_metadata = fetch_repository_metadata(repository)
+    if repository_metadata.get("default_branch") != "master":
+        fail("repository default branch must remain master")
+
+    branch_rulesets: list[dict[str, Any]] = []
+    for listed_ruleset in fetch_live_rulesets(repository):
+        if listed_ruleset.get("target") != "branch":
+            continue
+        ruleset_id = listed_ruleset.get("id")
+        if not isinstance(ruleset_id, int):
+            fail("listed branch ruleset has no numeric id")
+        branch_rulesets.append(fetch_live_ruleset(repository, ruleset_id))
+
     matching = [
-        ruleset
-        for ruleset in fetch_live_rulesets(repository)
-        if ruleset.get("name") == EXPECTED_NAME
+        ruleset for ruleset in branch_rulesets if ruleset.get("name") == EXPECTED_NAME
     ]
     if len(matching) != 1:
         fail(f"expected exactly one {EXPECTED_NAME!r} ruleset, found {len(matching)}")
@@ -203,6 +284,20 @@ def audit_live_ruleset(expected: dict[str, Any], repository: str) -> None:
             rule_type, live_rules[rule_type]
         ) != comparable_parameters(rule_type, expected_rule):
             fail(f"live ruleset parameters drifted: {rule_type}")
+
+    additional_rulesets = [
+        ruleset
+        for ruleset in branch_rulesets
+        if ruleset.get("id") != ruleset_id
+        and ruleset.get("enforcement") == "active"
+        and ruleset_applies_to_master(ruleset, "master")
+    ]
+    if additional_rulesets:
+        identifiers = ", ".join(
+            str(additional_ruleset.get("id"))
+            for additional_ruleset in additional_rulesets
+        )
+        fail(f"additional active branch rulesets apply to master: {identifiers}")
 
     print(f"Live GitHub ruleset audit passed for {repository} (ruleset {ruleset_id}).")
 
