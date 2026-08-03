@@ -5,10 +5,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import shutil
 import subprocess
 import sys
-from fnmatch import fnmatchcase
 from pathlib import Path
 from typing import Any
 
@@ -135,6 +135,7 @@ def fetch_live_rulesets(repository: str) -> list[dict[str, Any]]:
         [
             "gh",
             "api",
+            "--paginate",
             f"repos/{repository}/rulesets?targets=branch&includes_parents=true&per_page=100",
         ],
         check=False,
@@ -145,12 +146,21 @@ def fetch_live_rulesets(repository: str) -> list[dict[str, Any]]:
         stderr = result.stderr.strip() or "unknown gh API failure"
         fail(f"cannot list live rulesets for {repository}: {stderr}")
     try:
-        rulesets = json.loads(result.stdout)
+        decoder = json.JSONDecoder()
+        position = 0
+        pages: list[Any] = []
+        while position < len(result.stdout):
+            while position < len(result.stdout) and result.stdout[position].isspace():
+                position += 1
+            if position == len(result.stdout):
+                break
+            page, position = decoder.raw_decode(result.stdout, position)
+            if not isinstance(page, list):
+                fail("GitHub ruleset listing page was not an array")
+            pages.append(page)
     except json.JSONDecodeError as error:
         raise ValueError(f"GitHub returned invalid ruleset JSON: {error}") from error
-    if not isinstance(rulesets, list):
-        fail("GitHub ruleset listing was not an array")
-    return [ruleset for ruleset in rulesets if isinstance(ruleset, dict)]
+    return [ruleset for page in pages for ruleset in page if isinstance(ruleset, dict)]
 
 
 def fetch_live_ruleset(repository: str, ruleset_id: int) -> dict[str, Any]:
@@ -200,7 +210,31 @@ def pattern_matches_ref(pattern: str, ref: str, default_branch: str) -> bool:
         return True
     if pattern == "~DEFAULT_BRANCH":
         return ref == f"refs/heads/{default_branch}"
-    return fnmatchcase(ref, pattern)
+
+    expression: list[str] = []
+    position = 0
+    while position < len(pattern):
+        character = pattern[position]
+        if character == "*":
+            if position + 1 < len(pattern) and pattern[position + 1] == "*":
+                while position + 1 < len(pattern) and pattern[position + 1] == "*":
+                    position += 1
+                if position + 1 < len(pattern) and pattern[position + 1] == "/":
+                    expression.append("(?:.*/)?")
+                    position += 1
+                else:
+                    expression.append(".*")
+            else:
+                expression.append("[^/]*")
+        elif character == "?":
+            expression.append("[^/]")
+        elif character in "[]":
+            fail("ruleset ref patterns with character classes cannot be audited safely")
+        else:
+            expression.append(re.escape(character))
+        position += 1
+
+    return re.fullmatch("".join(expression), ref) is not None
 
 
 def ruleset_applies_to_master(ruleset: dict[str, Any], default_branch: str) -> bool:

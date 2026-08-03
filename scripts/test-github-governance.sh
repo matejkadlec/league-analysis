@@ -26,6 +26,10 @@ grep -Fq 'Deterministic full-project gate' "$governance_document" || fail 'stabl
 grep -Fq 'Live production dependency audit' "$governance_document" || fail 'stable dependency audit check is undocumented.'
 grep -Fq 'GitHub Actions integration' "$governance_document" || fail 'required check integration is undocumented.'
 grep -Fq 'python3 scripts/verify-github-ruleset.py' "$governance_document" || fail 'live ruleset audit command is undocumented.'
+grep -Fq 'desired-state removal of the old context while keeping both workflow jobs' "$governance_document" \
+  || fail 'context-removal staging is undocumented.'
+grep -Fq 'may then remove the old workflow job' "$governance_document" \
+  || fail 'workflow removal must follow the live requirement removal.'
 grep -Fq 'GitHub branch governance' "$root_guide" || fail 'root guide must map branch governance.'
 
 printf 'GitHub governance regression passed.\n'

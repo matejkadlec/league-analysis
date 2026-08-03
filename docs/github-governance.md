@@ -91,14 +91,17 @@ For an intentional policy change:
    python3 scripts/verify-github-ruleset.py --config-only
    ```
 
-3. When changing a required context, first release a workflow that emits both
-   the old and new contexts, then make the owner-approved live ruleset change
-   to require both. Only after every relevant pull request can satisfy the new
-   context may a later change remove the old context from the ruleset and
-   workflow. This staged migration prevents a required-check deadlock.
-4. After the pull request is merged, make the owner-approved GitHub
-   administration update (including the GitHub Actions integration binding) and
-   rerun the read-only audit.
+3. Replace a required context in four releases: first merge a workflow change
+   that emits both old and new contexts while the ruleset still requires the
+   old one. Next, merge the desired-state change requiring both contexts, then
+   make the owner-approved live ruleset change and audit it. Third, merge the
+   desired-state removal of the old context while keeping both workflow jobs.
+   Only after that merge may the owner remove the old live requirement; a final
+   release may then remove the old workflow job. This order prevents a
+   required-check deadlock.
+4. For any other policy change, after the pull request is merged, make the
+   owner-approved GitHub administration update (including the GitHub Actions
+   integration binding) and rerun the read-only audit.
 5. Record the verified ruleset URL/ID and required contexts in the associated
    LGA issue. Never put access tokens or configuration secrets in the issue.
 

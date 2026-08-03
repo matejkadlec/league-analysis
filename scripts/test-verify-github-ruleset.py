@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import importlib.util
+import subprocess
 import unittest
 from copy import deepcopy
 from pathlib import Path
@@ -101,6 +102,53 @@ class GitHubRulesetVerifierTest(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "parameters drifted"):
             self.audit_with({1: live})
+
+    def test_paginated_ruleset_listing_includes_every_page(self) -> None:
+        result = subprocess.CompletedProcess(
+            args=[],
+            returncode=0,
+            stdout='[{"id": 1}]\n[{"id": 2}]\n',
+            stderr="",
+        )
+        with (
+            patch.object(VERIFIER.shutil, "which", return_value="/usr/bin/gh"),
+            patch.object(VERIFIER.subprocess, "run", return_value=result) as run,
+        ):
+            rulesets = VERIFIER.fetch_live_rulesets("matejkadlec/league-analysis")
+
+        self.assertEqual(rulesets, [{"id": 1}, {"id": 2}])
+        self.assertIn("--paginate", run.call_args.args[0])
+
+    def test_non_array_ruleset_page_fails_closed(self) -> None:
+        result = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout='{"id": 1}', stderr=""
+        )
+        with (
+            patch.object(VERIFIER.shutil, "which", return_value="/usr/bin/gh"),
+            patch.object(VERIFIER.subprocess, "run", return_value=result),
+            self.assertRaisesRegex(ValueError, "listing page was not an array"),
+        ):
+            VERIFIER.fetch_live_rulesets("matejkadlec/league-analysis")
+
+    def test_single_star_does_not_cross_ref_path_segments(self) -> None:
+        self.assertFalse(
+            VERIFIER.pattern_matches_ref("refs/*", "refs/heads/master", "master")
+        )
+        self.assertTrue(
+            VERIFIER.pattern_matches_ref("refs/heads/*", "refs/heads/master", "master")
+        )
+        self.assertTrue(
+            VERIFIER.pattern_matches_ref(
+                "refs/**/master", "refs/heads/master", "master"
+            )
+        )
+
+    def test_single_star_exclusion_does_not_hide_master_ruleset(self) -> None:
+        ruleset = {
+            "conditions": {"ref_name": {"include": ["~ALL"], "exclude": ["refs/*"]}}
+        }
+
+        self.assertTrue(VERIFIER.ruleset_applies_to_master(ruleset, "master"))
 
 
 if __name__ == "__main__":
