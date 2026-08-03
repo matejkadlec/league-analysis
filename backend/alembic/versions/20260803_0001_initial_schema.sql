@@ -1,31 +1,8 @@
--- League Analysis Database Schema
--- Single Source of Truth
--- Generated: 2026-02-10
-
-SET statement_timeout = 0;
-SET lock_timeout = 0;
-SET idle_in_transaction_session_timeout = 0;
-DO $$
-BEGIN
-    -- PostgreSQL compatibility: transaction_timeout exists only in newer versions.
-    IF current_setting('transaction_timeout', true) IS NOT NULL THEN
-        EXECUTE 'SET transaction_timeout = 0';
-    END IF;
-END;
-$$;
-SET client_encoding = 'UTF8';
-SET standard_conforming_strings = on;
-SELECT pg_catalog.set_config('search_path', '', false);
-SET check_function_bodies = false;
-SET xmloption = content;
-SET client_min_messages = warning;
-SET row_security = off;
-
--- [schemas]
-
-DROP SCHEMA IF EXISTS auth CASCADE;
-DROP SCHEMA IF EXISTS core CASCADE;
-DROP SCHEMA IF EXISTS jobs CASCADE;
+-- Immutable DDL payload for Alembic revision 20260803_0001.
+--
+-- This baseline was derived from the historical 2026-02-10 bootstrap script.
+-- Alembic applies it only to a clean database; it never drops or recreates an
+-- existing application schema. Future changes require a new revision.
 
 CREATE SCHEMA auth;
 CREATE SCHEMA core;
@@ -44,8 +21,11 @@ CREATE TYPE jobs.job_status_enum AS ENUM (
 );
 
 CREATE TYPE jobs.job_type_enum AS ENUM (
+    'TRACKED_PLAYER_UPDATER',
     'MATCH_FETCHER',
-    'PLAYER_UPDATER'
+    'PLAYER_UPDATER',
+    'PLAYER_ANALYZER',
+    'BAN_CHECKER'
 );
 
 CREATE TYPE jobs.execution_type_enum AS ENUM (
@@ -71,9 +51,6 @@ CREATE TYPE auth.cookie_consent_level_enum AS ENUM (
     'all'
 );
 
-SET default_tablespace = '';
-SET default_table_access_method = heap;
-
 -- ==================================================================
 -- SCHEMA: auth
 -- ==================================================================
@@ -97,13 +74,13 @@ CREATE TABLE auth.users (
     email_verified boolean DEFAULT false NOT NULL,
     email_verified_at timestamp with time zone,
     last_login timestamp with time zone,
-    failed_login_attempts integer DEFAULT 0 NOT NULL,
-    last_failed_login timestamp with time zone,
-    locked_until timestamp with time zone,
     riot_account_connected boolean DEFAULT false NOT NULL,
     puuid character varying(78),
     created_at timestamp with time zone DEFAULT now() NOT NULL,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    failed_login_attempts integer DEFAULT 0 NOT NULL,
+    last_failed_login timestamp with time zone,
+    locked_until timestamp with time zone
 );
 
 ALTER SEQUENCE auth.users_id_seq OWNED BY auth.users.id;
@@ -199,11 +176,11 @@ CREATE TABLE auth.user_settings (
     saved_playstyle_puuid character varying(78),
     save_matchmaking_url boolean DEFAULT false NOT NULL,
     saved_matchmaking_puuid character varying(78),
-    save_tracked_url boolean DEFAULT false NOT NULL,
-    saved_tracked_puuid character varying(78),
     default_platform character varying(4) DEFAULT 'eun1'::character varying,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    save_tracked_url boolean DEFAULT false NOT NULL,
+    saved_tracked_puuid character varying(78)
 );
 
 ALTER TABLE ONLY auth.user_settings
@@ -224,7 +201,7 @@ CREATE TABLE auth.user_cookie_consents (
 );
 
 ALTER TABLE ONLY auth.user_cookie_consents
-    ADD CONSTRAINT pk_user_cookie_consents PRIMARY KEY (user_id);
+    ADD CONSTRAINT user_cookie_consents_pkey PRIMARY KEY (user_id);
 
 ALTER TABLE ONLY auth.user_cookie_consents
     ADD CONSTRAINT fk_user_cookie_consents_user_id FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
@@ -261,7 +238,7 @@ CREATE TABLE auth.subject_counts (
 );
 
 ALTER TABLE ONLY auth.subject_counts
-    ADD CONSTRAINT pk_subject_counts PRIMARY KEY (id);
+    ADD CONSTRAINT subject_counts_pkey PRIMARY KEY (id);
 
 ALTER TABLE ONLY auth.subject_counts
     ADD CONSTRAINT ck_subject_counts_singleton CHECK (id = 1);
@@ -405,7 +382,7 @@ CREATE TABLE core.match_participants (
     profile_icon integer,
     summoner_level integer,
     team_id integer NOT NULL,
-    team_position character varying(16) NOT NULL,
+    team_position character varying(16),
     champion_id integer NOT NULL,
     champion_name character varying(32) NOT NULL,
     champion_level integer NOT NULL,
@@ -416,8 +393,8 @@ CREATE TABLE core.match_participants (
     deaths integer DEFAULT 0 NOT NULL,
     assists integer DEFAULT 0 NOT NULL,
     kda numeric(5,2) GENERATED ALWAYS AS (
-        CASE WHEN deaths = 0 THEN (kills + assists)::numeric 
-             ELSE ROUND((kills + assists)::numeric / deaths, 2) 
+        CASE WHEN deaths = 0 THEN (kills + assists)::numeric
+             ELSE ROUND((kills + assists)::numeric / deaths, 2)
         END
     ) STORED,
     largest_multi_kill integer DEFAULT 0,
@@ -587,16 +564,12 @@ CREATE TABLE core.matchmaking_analyses (
     rate_limit_reset_at timestamp with time zone
 );
 
-COMMENT ON TABLE core.matchmaking_analyses IS 'Immutable matchmaking analysis results. New records inserted per analysis.';
-COMMENT ON COLUMN core.matchmaking_analyses.puuid_progress IS 'Tracks analyzed PUUIDs: {"<puuid>": true/false} where true=fully analyzed';
-COMMENT ON COLUMN core.matchmaking_analyses.requests_saved IS 'Number of API requests saved due to cached match data in database';
-COMMENT ON COLUMN core.matchmaking_analyses.rate_limit_reset_at IS 'Timestamp when rate limit resets (NULL = not waiting)';
-
 ALTER TABLE ONLY core.matchmaking_analyses
-    ADD CONSTRAINT pk_matchmaking_analyses PRIMARY KEY (puuid, created_at);
+    ADD CONSTRAINT matchmaking_analyses_pkey PRIMARY KEY (puuid, created_at);
 
 CREATE INDEX idx_matchmaking_analyses_puuid ON core.matchmaking_analyses USING btree (puuid);
-CREATE INDEX ix_matchmaking_analyses_created_at ON core.matchmaking_analyses USING btree (created_at DESC);
+CREATE INDEX ix_app_matchmaking_analyses_puuid ON core.matchmaking_analyses USING btree (puuid);
+CREATE INDEX ix_matchmaking_analyses_created_at ON core.matchmaking_analyses USING btree (created_at);
 
 -- [table] core.playstyle_analyses
 
@@ -686,10 +659,10 @@ COMMENT ON COLUMN core.rate_limit_state.is_waiting IS 'True if this component is
 ALTER SEQUENCE core.rate_limit_state_id_seq OWNED BY core.rate_limit_state.id;
 
 ALTER TABLE ONLY core.rate_limit_state
-    ADD CONSTRAINT pk_rate_limit_state PRIMARY KEY (id);
+    ADD CONSTRAINT rate_limit_state_pkey PRIMARY KEY (id);
 
 ALTER TABLE ONLY core.rate_limit_state
-    ADD CONSTRAINT uq_rate_limit_state_component UNIQUE (component);
+    ADD CONSTRAINT rate_limit_state_component_key UNIQUE (component);
 
 CREATE INDEX idx_rate_limit_priority_waiting ON core.rate_limit_state USING btree (priority, is_waiting);
 
@@ -746,10 +719,10 @@ CREATE TABLE jobs.job_configurations (
     description text,
     schedule character varying(256) NOT NULL,
     is_active boolean NOT NULL,
-    is_paused boolean DEFAULT false NOT NULL,
     config_json jsonb,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    is_paused boolean DEFAULT false NOT NULL
 );
 
 ALTER SEQUENCE jobs.job_configurations_id_seq OWNED BY jobs.job_configurations.id;

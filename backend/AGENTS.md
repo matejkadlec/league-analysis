@@ -11,8 +11,8 @@ not weaken repository-wide rules.
 
 ## Tech Stack
 
-Python 3.14.6, FastAPI 0.141+, SQLAlchemy 2.0+, Pydantic v2, structlog 26,
-APScheduler 3.11, httpx 0.28
+Python 3.14.6, FastAPI 0.141+, SQLAlchemy 2.0+, Alembic 1.18+, Pydantic v2,
+structlog 26, APScheduler 3.11, httpx 0.28
 
 ## Structure
 
@@ -82,8 +82,9 @@ logger.info("action_completed", puuid=puuid, count=count)
 ```bash
 ../test.sh -b              # Repository tooling plus the complete backend gate
 uv run pytest              # Focused backend regression suite
-uv run ruff check app tests ../scripts/*.py
-uv run ruff format --check --exclude '*.md' app tests ../scripts/*.py
+uv run python scripts/migrate.py upgrade head
+uv run ruff check app tests scripts ../scripts/*.py
+uv run ruff format --check --exclude '*.md' app tests scripts ../scripts/*.py
 uv run pyright
 uv run bandit --quiet --recursive app --severity-level medium --confidence-level medium --skip B104
 ```
@@ -91,6 +92,12 @@ uv run bandit --quiet --recursive app --severity-level medium --confidence-level
 The authoritative gate runs dependency sync from `uv.lock` before these checks.
 Tests are network-free and receive safe test-only environment values from the
 gate; they must not depend on a real Riot API key or production credentials.
+
+Never call `Base.metadata.create_all()` for application schemas. Create a
+reviewed Alembic revision for every schema/model change, include PostgreSQL-only
+objects explicitly, and apply it through the locked `scripts/migrate.py`
+command. The baseline revision is intentionally non-reversible; restore a
+verified backup rather than dropping a populated application schema.
 
 ## Related Docs
 

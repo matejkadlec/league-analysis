@@ -97,6 +97,9 @@ deterministic and secret-free.
 ### Backend checks
 
 - `uv sync --frozen --all-groups`;
+- Alembic clean-database validation that creates and removes an isolated
+  PostgreSQL database, verifies all schemas/tables/enums/triggers, and exercises
+  async application access plus the user-settings trigger;
 - pytest coverage for authentication/password and active/admin authorization,
   settings schemas, Riot HTTP/rate-limit boundaries, job queue/error behavior,
   core validation, and match/player transformations;
@@ -139,13 +142,12 @@ workflow pull request can validate itself before the definition exists on
 The deterministic job provisions PostgreSQL 18.4 and passes only safe CI values.
 Because the workflow calls `scripts/ci.sh`, which calls the guarded `./test.sh`,
 the Flow 1 and worktree suites run in GitHub Actions without a second workflow
-entry point.
-Until LGA-12 adds `backend/alembic.ini`, `scripts/ci.sh` reports migration
-validation as explicitly skipped. Once the file exists, CI requires
-`LGA_VALIDATE_MIGRATIONS=1` and runs `alembic upgrade head` against the clean
-service database. Docker build/hardening checks remain conditional on LGA-10
-adding deployment artifacts. Dependabot configuration and its dedicated
-regression validator remain owned by LGA-15.
+entry point. The full backend gate validates the initial Alembic baseline in a
+fresh isolated database. CI additionally sets `LGA_VALIDATE_MIGRATIONS=1` and
+applies `backend/scripts/migrate.py upgrade head` to its clean PostgreSQL 18.4
+service database through the same advisory-lock path. Docker build/hardening
+checks remain conditional on LGA-10 adding deployment artifacts. Dependabot
+configuration and its dedicated regression validator remain owned by LGA-15.
 
 The user must supply any current Codex Cloud Setup/Maintenance scripts before
 they can be adapted. Never request or copy a complete `.env`; Cloud should use

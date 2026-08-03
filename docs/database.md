@@ -1,8 +1,9 @@
 # Database Schema
 
 > **Authority:** Maintained explanation of the PostgreSQL model and safe schema
-> change workflow. [`../backend/init_database.sql`](../backend/init_database.sql)
-> is the executable schema source of truth.
+> change workflow. Ordered Alembic revisions in
+> [`../backend/alembic/versions/`](../backend/alembic/versions/) are the
+> executable schema source of truth.
 >
 > **Maintenance:** Update this document with every schema or SQLAlchemy model
 > change.
@@ -518,16 +519,31 @@ Individual job run tracking.
 
 ## Source of Truth
 
-**`backend/init_database.sql`** is the single source of truth for the database schema.
+Reviewed Alembic revisions under **`backend/alembic/versions/`** are the
+single source of truth for the database schema. The initial revision contains a
+SQL payload because it must preserve PostgreSQL schemas, enums, sequences,
+generated columns, JSONB defaults, functions, triggers, constraints, indexes,
+and APScheduler's table exactly. SQLAlchemy metadata supports future revision
+generation but never creates application tables at runtime.
 
 ### Migration Workflow
 
-1. Update the applicable SQLAlchemy models.
-2. Update `backend/init_database.sql`.
-3. Generate and execute the smallest safe incremental `ALTER TABLE` statements
-   in the `psql` console. Database credentials remain private in `.env`.
-4. Verify the live schema and run backend Pyright.
+1. Update the applicable SQLAlchemy models and authoritative documentation.
+2. Generate a draft with `uv run alembic revision --autogenerate -m "scope"`
+   when it is useful, then review and complete the revision manually. Explicitly
+   include PostgreSQL-only objects that autogeneration cannot represent.
+3. Apply the reviewed revision with `uv run python scripts/migrate.py upgrade head`.
+   The command holds a session-scoped PostgreSQL advisory lock so two
+   application containers cannot race migrations.
+4. Run `../test.sh -b` during implementation and the complete `../test.sh`
+   before publication. The backend gate validates the baseline on a clean
+   isolated database and checks async application access.
+5. For a populated database with no Alembic marker, first run `uv run python
+   scripts/adopt_migrations.py --database <verified_local_database>`. Only after
+   its schema-only comparison passes may you repeat it with `--apply`; the
+   command stamps `head` and proves application row counts did not change.
 
-`backend/init_database.sql` drops and recreates the application schemas. Never
-run the full script against the populated local database; it is not a migration
-command.
+The initial baseline revision intentionally has no downgrade because dropping
+the application schemas is unsafe. Restore a verified backup when reversal is
+required. Never use `Base.metadata.create_all()`, direct schema-reset scripts,
+or an unverified `alembic stamp` against a populated database.

@@ -45,6 +45,7 @@ Node 26.5.1, install the pinned npm with
 
 ```bash
 ./run.sh             # Start the local application
+(cd backend && uv run python scripts/migrate.py upgrade head)  # Apply reviewed schema revisions
 ./test.sh -f         # Repository and frontend checks
 ./test.sh -b         # Repository and backend checks
 ./test.sh            # Complete pre-pull-request quality gate

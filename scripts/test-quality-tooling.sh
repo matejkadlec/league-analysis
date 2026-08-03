@@ -42,9 +42,11 @@ grep -Fqx '        run: ./scripts/dependency-audit.sh "$CHANGE_BASE_SHA"' "$work
 [[ "$(grep -Fxc '        run: npm install --global npm@12.0.2 --ignore-scripts' "$workflow")" -eq 2 ]] || fail 'both workflow jobs must install the pinned npm release.'
 [[ "$(grep -Fxc '          version: "0.12.1"' "$workflow")" -eq 2 ]] || fail 'both workflow jobs must install the pinned uv release.'
 grep -Fqx '        image: postgres:18.4' "$workflow" || fail 'the CI database image must use the reviewed PostgreSQL minor.'
+grep -Fqx '    uv run python scripts/migrate.py upgrade head' "$ci_gate" || fail 'CI must use the locked Alembic migration command.'
 grep -Fq '"packageManager": "npm@12.0.2"' "$frontend_package" || fail 'the frontend package-manager pin changed.'
 grep -Fq 'npm run lint -- --max-warnings 0' "$gate" || fail 'frontend lint must reject warnings.'
 grep -Fq 'uv run pytest' "$gate" || fail 'backend pytest is missing from the gate.'
+grep -Fq 'uv run python scripts/validate_migrations.py' "$gate" || fail 'Alembic migration validation is missing from the gate.'
 grep -Fq 'uv run bandit' "$gate" || fail 'backend security analysis is missing from the gate.'
 python3 "$repository_root/scripts/test-dependency-audit.py" >/dev/null || fail 'dependency audit policy regressions failed.'
 if "$repository_root/scripts/run-actionlint.sh" \

@@ -26,9 +26,10 @@ document.
 ## Required Co-Updates
 
 - Runtime behavior changes update the matching topic document in the same task.
-- Schema or SQLAlchemy model changes update `../backend/init_database.sql` and
-  [`database.md`](database.md) together, then apply an incremental `psql`
-  migration when the local database must be synchronized.
+- Schema or SQLAlchemy model changes add a reviewed Alembic revision under
+  `../backend/alembic/versions/` and update [`database.md`](database.md)
+  together. Apply it through `../backend/scripts/migrate.py`; never bypass the
+  advisory-lock migration path or reset a populated schema.
 - Riot API endpoint, routing, credential, or throttling changes update
   [`riot-api.md`](riot-api.md).
 - Job configuration, scheduler, lifecycle, API, or control changes update
