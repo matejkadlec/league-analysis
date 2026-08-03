@@ -113,8 +113,9 @@ left as an untyped dictionary. The validated/transformed data then flows through
 - `backend/app/core/riot_api/transformers.py` and
   `backend/app/features/matches/transformers.py`;
 - `backend/app/features/players/`, `matches/`, and `matchmaking_analysis/`;
-- `backend/init_database.sql`, including match timestamps, participants, league
-  snapshots, rate-limit state, and timeline objective columns/JSON;
+- Alembic revisions under `backend/alembic/versions/`, including match
+  timestamps, participants, league snapshots, rate-limit state, and timeline
+  objective columns/JSON;
 - background jobs in `backend/app/features/jobs/implementations/`;
 - backend response schemas and the frontend profile, player, and match features.
 
@@ -237,8 +238,8 @@ At minimum, implementation review must cover:
   `backend/app/features/matchmaking_analysis/`;
 - `backend/app/features/jobs/implementations/{match_fetcher,player_updater,test_runner}.py`
   and queue configuration;
-- `backend/init_database.sql` and `docs/database.md` for any timestamp/objective
-  schema change;
+- Alembic revisions and `docs/database.md` for any timestamp/objective schema
+  change;
 - `frontend/lib/core/data-dragon.ts`, match/profile/player consumers, and their
   tests;
 - Riot boundary, job, match, timeline, player, and analysis tests plus sanitized

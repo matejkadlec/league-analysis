@@ -34,7 +34,9 @@ league-analysis/
 │   │       ├── players/
 │   │       ├── playstyle_analysis/
 │   │       └── settings/
-│   ├── init_database.sql
+│   ├── alembic/
+│   ├── alembic.ini
+│   ├── scripts/
 │   ├── pyproject.toml
 │   └── uv.lock
 ├── frontend/
@@ -81,8 +83,8 @@ payloads at the frontend boundary.
 
 ### Data
 
-`backend/init_database.sql` is the executable schema source of truth. The
-schemas are:
+Reviewed Alembic revisions under `backend/alembic/versions/` are the executable
+schema source of truth. The schemas are:
 
 - `auth`: users, sessions/tokens, settings, consent, contact metadata, and
   user-to-player tracking.
@@ -262,6 +264,8 @@ Typical evidence includes Riot `429` throttling, expired/invalid API keys,
 import failures, and database connectivity errors.
 
 Do not let SQLAlchemy auto-create application tables. Apply schema changes
-incrementally with `psql`; the full `backend/init_database.sql` script drops
-the application schemas and must not be run against the populated local
-database.
+through `backend/scripts/migrate.py`, which holds one PostgreSQL advisory lock
+for the full Alembic operation. Every model/schema change needs a reviewed
+revision and an update to `docs/database.md`. The initial baseline is
+intentionally non-reversible; recover from a verified backup rather than
+dropping application schemas.

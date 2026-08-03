@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Web app for comprehensive analysis of League of Legends players, matches and more."
 authors = [{ name = "Matěj Kadlec", email = "mat.kadlec@email.cz" }]
 dependencies = [
+    "alembic>=1.17.2",
     "apscheduler>=3.11.3",
     "asyncpg>=0.31.0",
     "email-validator>=2.3.0",

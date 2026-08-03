@@ -14,10 +14,11 @@ if [[ -f "$repository_root/backend/alembic.ini" ]]; then
   fi
   (
     cd "$repository_root/backend"
-    uv run alembic upgrade head
+    uv run python scripts/migrate.py upgrade head
   )
 else
-  printf 'Alembic migration validation skipped: LGA-12 has not added backend/alembic.ini yet.\n'
+  printf 'ERROR: Alembic configuration is required for CI migration validation.\n' >&2
+  exit 1
 fi
 
 printf 'Deterministic CI gate passed.\n'

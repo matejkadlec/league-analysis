@@ -10,7 +10,7 @@ Jira project `LGA` remains the source for task planning and execution state.
 | Quality checks and CI | [`quality-checks.md`](quality-checks.md) | Local/focused gates, test coverage, tool pins, and GitHub-only checks |
 | Runtime/dependency review (2026-08-03) | [`dependency-upgrade-2026-08-03.md`](dependency-upgrade-2026-08-03.md) | Dated version matrix, compatibility decisions, security review, and deferred Cloud handoff |
 | AI development and QA lifecycle | [`ai-development-flow.md`](ai-development-flow.md) | Jira, batching, QA, Git, pull request, and handoff rules |
-| Database schema | [`../backend/init_database.sql`](../backend/init_database.sql) | Executable PostgreSQL schema source of truth |
+| Database schema revisions | [`../backend/alembic/versions/`](../backend/alembic/versions/) | Ordered executable PostgreSQL schema source of truth |
 | Database model and change workflow | [`database.md`](database.md) | Maintained explanation of the schema and safe updates |
 | Riot API integration | [`riot-api.md`](riot-api.md) | Routing, endpoints, credentials, rate limits, and integration boundaries |
 | Riot API compatibility audit (2026-08-03) | [`riot-api-compatibility-2026-08-03.md`](riot-api-compatibility-2026-08-03.md) | Dated endpoint/caller trace, official-contract delta, risks, and remediation order |

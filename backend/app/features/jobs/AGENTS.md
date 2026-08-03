@@ -75,8 +75,8 @@ details. Keep it synchronized with job changes.
 
 ## Adding a Job
 
-1. Add the `JobType` and SQL enum value in both models and
-   `backend/init_database.sql`.
+1. Add the `JobType` and SQL enum value in both models and a reviewed Alembic
+   revision.
 2. Implement a `BaseJob` subclass with metrics and control checkpoints.
 3. Register it in the scheduler and router/test mappings as applicable.
 4. Add a configuration row through an incremental migration.

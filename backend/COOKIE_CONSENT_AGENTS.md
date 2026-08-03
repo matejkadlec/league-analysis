@@ -21,7 +21,7 @@ identity, delivery, and safety rules are inherited from
   - `backend/app/features/settings/router.py` (`/settings/user/cookie-consent`)
   - `backend/app/features/settings/service.py`
 - DB source of truth:
-  - `backend/init_database.sql` (`auth.user_cookie_consents`)
+  - Alembic revisions under `backend/alembic/versions/` (`auth.user_cookie_consents`)
 
 ## Compliance Baseline
 
@@ -61,8 +61,8 @@ If you add any new key:
 ## Backend Rules
 
 - Do not auto-create tables with SQLAlchemy.
-- Keep schema changes in `backend/init_database.sql`.
-- Apply incremental DB updates with `psql` in local/dev.
+- Keep schema changes in a reviewed Alembic revision.
+- Apply incremental DB updates with `backend/scripts/migrate.py` in local/dev.
 - Preserve user data and avoid destructive migrations unless requested.
 
 ## QA Checklist

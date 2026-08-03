@@ -81,7 +81,7 @@ Non-negotiable summary:
 | AI/Jira/GitHub development lifecycle | [`docs/ai-development-flow.md`](docs/ai-development-flow.md) |
 | Backend conventions | [`backend/AGENTS.md`](backend/AGENTS.md) |
 | Frontend conventions | [`frontend/AGENTS.md`](frontend/AGENTS.md) |
-| Database schema | [`backend/init_database.sql`](backend/init_database.sql) |
+| Database schema revisions | [`backend/alembic/versions/`](backend/alembic/versions/) |
 | Database explanation and change workflow | [`docs/database.md`](docs/database.md) |
 | Riot API integration | [`docs/riot-api.md`](docs/riot-api.md) |
 | Background jobs and scheduler | [`docs/jobs.md`](docs/jobs.md) |
@@ -160,10 +160,10 @@ When debugging runtime failures, inspect both logs before changing code.
 - Do not modify Riot API rate-limiting behavior unless the task explicitly
   scopes that work; preserve the boundaries in
   [`docs/riot-api.md`](docs/riot-api.md).
-- Never let SQLAlchemy create application tables. The schema authority is
-  `backend/init_database.sql`.
-- Apply schema changes incrementally with `psql`; never reset the populated
-  database from the destructive full-schema script.
+- Never let SQLAlchemy create application tables. Reviewed Alembic revisions in
+  `backend/alembic/versions/` are the schema authority.
+- Apply schema changes through `backend/scripts/migrate.py` after reviewing a
+  matching Alembic revision; never reset, drop, or recreate populated schemas.
 - Keep explicit imports, avoid wildcard imports, and do not add stream-of-
   consciousness comments to code.
 - Runtime behavior changes must update the matching authoritative document and

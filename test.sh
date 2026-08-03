@@ -111,14 +111,22 @@ run_backend_tests() {
     uv run pytest
 }
 
+run_backend_migration_validation() {
+  cd "$repository_root/backend"
+  DEBUG=false \
+    ENVIRONMENT=test \
+    JWT_SECRET_KEY=league-analysis-test-jwt-secret-32-characters \
+    uv run python scripts/validate_migrations.py
+}
+
 run_backend_ruff_lint() {
   cd "$repository_root/backend"
-  uv run ruff check app tests ../scripts/*.py
+  uv run ruff check app tests scripts ../scripts/*.py
 }
 
 run_backend_ruff_format() {
   cd "$repository_root/backend"
-  uv run ruff format --check --exclude '*.md' app tests ../scripts/*.py
+  uv run ruff format --check --exclude '*.md' app tests scripts ../scripts/*.py
 }
 
 run_backend_pyright() {
@@ -198,6 +206,7 @@ if [[ "$run_backend" == true ]]; then
   run_step 'Backend deterministic sync' run_backend_sync
   run_step 'Pre-commit configuration' run_pre_commit_config_validation
   run_step 'Backend tests' run_backend_tests
+  run_step 'Alembic migration validation' run_backend_migration_validation
   run_step 'Backend Ruff lint' run_backend_ruff_lint
   run_step 'Backend Ruff format' run_backend_ruff_format
   run_step 'Backend Pyright' run_backend_pyright
