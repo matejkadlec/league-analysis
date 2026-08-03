@@ -8,6 +8,7 @@ ci_gate="$repository_root/scripts/ci.sh"
 workflow="$repository_root/.github/workflows/quality-checks.yml"
 pre_commit="$repository_root/.pre-commit-config.yaml"
 frontend_package="$repository_root/frontend/package.json"
+agent_guide="$repository_root/AGENTS.md"
 worktree_guard="$repository_root/scripts/guard-git-worktree-test.sh"
 flow_policy_regression="$repository_root/scripts/test-flow1-policy.sh"
 worktree_regression="$repository_root/scripts/test-worktree-tooling.sh"
@@ -73,6 +74,8 @@ grep -Fq 'frontend-lint' "$pre_commit" || fail 'the fast frontend lint pre-commi
 grep -Fq 'frontend-typecheck' "$pre_commit" || fail 'the fast frontend typecheck pre-commit hook is missing.'
 grep -Fqx '    rev: v0.16.1' "$pre_commit" || fail 'pre-commit Ruff must match the backend tool pin.'
 grep -Fq 'source "$SCRIPT_DIR/scripts/use-project-node.sh"' "$repository_root/run.sh" || fail 'run.sh must select the project Node runtime.'
+grep -Fq 'Each `run.sh` invocation creates `logs/` before redirecting backend or frontend' "$agent_guide" \
+  || fail 'AGENTS.md must document run.sh log-directory creation.'
 [[ "$(grep -Fxc 'mkdir -p "$SCRIPT_DIR/logs"' "$run_script")" -eq 1 ]] \
   || fail 'run.sh must create its log directory exactly once.'
 log_directory_line="$(grep -n -F 'mkdir -p "$SCRIPT_DIR/logs"' "$run_script" | cut -d: -f1)"

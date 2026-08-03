@@ -120,6 +120,9 @@ tail -50 logs/backend.log
 tail -50 logs/frontend.log
 ```
 
+Each `run.sh` invocation creates `logs/` before redirecting backend or frontend
+output, so fresh checkouts do not require manual log-directory setup.
+
 Backend API docs are at `http://localhost:8000/api`; the frontend is at
 `http://localhost:3000`. After changing `.env`, a restart is required. Do not
 restart an already running development session unless necessary; stop the
