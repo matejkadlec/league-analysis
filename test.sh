@@ -183,6 +183,7 @@ run_step 'ShellCheck tooling regression' "$repository_root/scripts/test-shellche
 run_step 'GitHub workflow syntax' "$repository_root/scripts/run-actionlint.sh"
 run_step 'GitHub workflow security policy' python3 "$repository_root/scripts/verify-github-workflows.py"
 run_step 'Dependabot configuration' python3 "$repository_root/scripts/check-dependabot-config.py"
+run_step 'GitHub governance configuration' "$repository_root/scripts/test-github-governance.sh"
 run_step 'Quality tooling regression' "$repository_root/scripts/test-quality-tooling.sh"
 run_step 'Flow 1 policy regression' "$repository_root/scripts/test-flow1-policy.sh"
 run_step 'Worktree tooling regression' "$repository_root/scripts/test-worktree-tooling.sh"
