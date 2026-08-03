@@ -94,7 +94,8 @@ locked pre-commit installation.
 
 - exact Node selection;
 - `npm ci`;
-- ESLint with zero warnings;
+- ESLint 10 with zero warnings; `@eslint/compat` adapts legacy Next.js plugin
+  rule APIs without suppressing any configured lint rules;
 - `tsc --noEmit`;
 - deterministic Vitest regressions for player search validation, platform
   presentation, and rank-style mapping;

@@ -105,7 +105,7 @@ Versions are pinned or constrained by `backend/pyproject.toml`,
 | Backend tooling | uv 0.12.1 in CI, Pyright 1.1.411, Ruff 0.16.1 |
 | Frontend runtime | Next.js 16.2.12, React 19.2.8, TypeScript 7.0.2 native compiler with TypeScript 6.0.2 API compatibility for ESLint, Tailwind CSS 4.3.3, shadcn/ui |
 | Frontend data/forms | TanStack Query 5, Zod 4, Axios, React Hook Form |
-| Frontend tooling | Node 26.5.1, npm 12.0.2 with `package-lock.json`, ESLint 9.39.5, TypeScript 7.0.2 compiler, Vitest 4.1.10 |
+| Frontend tooling | Node 26.5.1, npm 12.0.2 with `package-lock.json`, ESLint 10.8.0 with `@eslint/compat` for Next's legacy plugins, TypeScript 7.0.2 compiler, Vitest 4.1.10 |
 | Database | PostgreSQL 18.4, asyncpg for application I/O, psycopg2 for APScheduler |
 | External data | Riot Games API |
 

@@ -12,10 +12,12 @@ database, action, and tool decisions were cross-checked against their official
 release pages.
 
 Only stable versions were selected. ESLint 10 remains outside several
-`eslint-config-next` plugin peer ranges. TypeScript 7 does not yet expose the
-compiler API expected by `typescript-eslint`, so the frontend runs the native
-TypeScript 7 compiler through `@typescript/native` while the `typescript`
-alias supplies the supported TypeScript 6 API to lint tooling. The unused
+`eslint-config-next` plugin peer ranges, so the flat config applies
+`@eslint/compat` to adapt their legacy rule APIs without disabling rules.
+TypeScript 7 does not yet expose the compiler API expected by
+`typescript-eslint`, so the frontend runs the native TypeScript 7 compiler
+through `@typescript/native` while the `typescript` alias supplies the
+supported TypeScript 6 API to lint tooling. The unused
 `eslint-plugin-react-compiler` RC was removed.
 
 Primary release sources include [Python 3.14.6], [Node.js 26.5.1], the
@@ -128,7 +130,7 @@ breakage would have blocked the target.
 | @types/react | 19.2.14 | 19.2.18 (2026-07-30) | Patch update aligned with React 19. |
 | @types/react-dom | 19.2.3 | 19.2.4 (2026-07-30) | Patch update aligned with React DOM 19. |
 | baseline-browser-mapping | 2.9.19 | 2.11.11 (2026-08-02) | Compatible v2 data update. |
-| ESLint | 9.39.2 | 9.39.5 (2026-07-10) | Latest compatible release. ESLint 10.8.0 is stable but rejected because Next's nested import, JSX a11y, and React plugins do not yet accept it. |
+| ESLint | 9.39.2 | 10.8.0 (2026-08-02) | Stable major update. `@eslint/compat` adapts the removed rule-context APIs used by Next's nested import, JSX a11y, and React plugins while retaining every configured lint rule. |
 | eslint-config-next | 16.1.6 | 16.2.12 (2026-07-25) | Kept exactly aligned with Next.js. |
 | eslint-plugin-react-compiler | 19.1.0-rc.2 | removed | Unused and the registry exposes only RC/experimental releases; removal eliminates an unintended direct prerelease. |
 | eslint-plugin-react-hooks | 7.0.1 | 7.1.1 (2026-04-17) | Compatible v7 update; new effect diagnostics were resolved or narrowly justified. |
