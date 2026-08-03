@@ -479,7 +479,6 @@ export function MatchmakingAnalysis({ puuid }: MatchmakingAnalysisProps) {
     );
 
     if (!wasRateLimitedRef.current) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- Captures a stable per-hit wait window for ETA calculations.
       setEstimatedRateLimitWindowSeconds((previousSeconds) =>
         Math.max(previousSeconds, secondsRemaining),
       );

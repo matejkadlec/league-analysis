@@ -1,7 +1,7 @@
 # League Analysis
 
 ![Python](https://img.shields.io/badge/Python-3.14.6-20232a?style=for-the-badge&logo=python&logoColor=3776AB)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.118+-20232a?style=for-the-badge&logo=fastapi&logoColor=009688)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.141+-20232a?style=for-the-badge&logo=fastapi&logoColor=009688)
 ![React](https://img.shields.io/badge/React-19-20232a?style=for-the-badge&logo=react&logoColor=61DAFB)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-18+-20232a?style=for-the-badge&logo=postgresql&logoColor=white)
 ![Status](https://img.shields.io/badge/status-inactive-red?style=for-the-badge)
@@ -39,7 +39,9 @@ commands are indexed in [`docs/README.md`](docs/README.md).
 ## Development and Quality
 
 The supported local environment uses the runtime pins in `.nvmrc` and
-`.python-version`, npm for the frontend, and uv for the backend.
+`.python-version`, npm for the frontend, and uv for the backend. After selecting
+Node 26.5.1, install the pinned npm with
+`npm install --global npm@12.0.2 --ignore-scripts`.
 
 ```bash
 ./run.sh             # Start the local application

@@ -19,6 +19,8 @@ trap cleanup EXIT
 grep -Fq "git -C \"\$repository_root\" ls-files --cached --others --exclude-standard -z -- '*.sh' '.githooks/*'" "$runner"
 grep -Fq "platform='linux.x86_64'" "$installer"
 grep -Fq "platform='linux.aarch64'" "$installer"
+grep -Fq "shellcheck_version='0.11.0'" "$installer"
+grep -Fq "shellcheck_version='0.11.0'" "$runner"
 
 mismatched_binary="$test_directory/shellcheck"
 printf '%s\n' '#!/usr/bin/env bash' 'printf "version: 0.9.0\n"' > "$mismatched_binary"

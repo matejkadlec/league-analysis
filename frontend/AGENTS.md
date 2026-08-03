@@ -11,7 +11,9 @@ not weaken repository-wide rules.
 
 ## Tech Stack
 
-Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS 4, shadcn/ui (New York), TanStack Query v5, Zod v4, Axios, sonner, lucide-react
+Node 26.5.1, npm 12.0.2, Next.js 16.2 (App Router), React 19,
+TypeScript 6, Tailwind CSS 4, shadcn/ui (New York), TanStack Query v5, Zod v4,
+Axios, sonner, lucide-react
 
 ## Structure
 

@@ -31,8 +31,8 @@ if [ -f "$SCRIPT_DIR/.env" ]; then
             value="${value:1:${#value}-2}"
         fi
 
-        # Export only valid shell variable names
-        if [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+        # Explicit process environment values take precedence over .env.
+        if [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] && [ -z "${!key+x}" ]; then
             export "$key=$value"
         fi
     done < "$SCRIPT_DIR/.env"
@@ -174,6 +174,8 @@ echo ""
 
 # Check if frontend dependencies are installed
 cd "$SCRIPT_DIR/frontend"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/scripts/use-project-node.sh"
 if [ ! -d "node_modules" ]; then
     echo -e "${YELLOW}Installing frontend dependencies...${NC}"
     npm install
@@ -210,7 +212,7 @@ echo -e "${BLUE}Services:${NC}"
 echo -e "  ${GREEN}Frontend:${NC} http://localhost:$FRONTEND_PORT"
 echo -e "  ${GREEN}Backend:${NC}  http://localhost:$BACKEND_PORT"
 echo -e "  ${GREEN}API Docs:${NC} http://localhost:$BACKEND_PORT/api"
-echo -e "  ${GREEN}Database:${NC} PostgreSQL on localhost:5432"
+echo -e "  ${GREEN}Database:${NC} PostgreSQL on $POSTGRES_HOST:$POSTGRES_PORT"
 echo ""
 echo -e "${BLUE}Logs:${NC}"
 echo -e "  ${GREEN}Backend:${NC}  tail -f logs/backend.log"
