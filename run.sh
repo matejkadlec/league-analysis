@@ -102,23 +102,25 @@ else
     RUN_CORS_ORIGINS="$LOCAL_CORS_ORIGINS"
 fi
 
+mkdir -p "$SCRIPT_DIR/logs"
+
 # Function to cleanup background processes on exit
 cleanup() {
     echo ""
     echo -e "${YELLOW}============================================${NC}"
     echo -e "${YELLOW}⚠️  Shutting down services...${NC}"
     echo -e "${YELLOW}============================================${NC}"
-    
+
     if [ ! -z "$BACKEND_PID" ]; then
         echo -e "${BLUE}Stopping backend (PID: $BACKEND_PID)...${NC}"
         kill $BACKEND_PID 2>/dev/null || true
     fi
-    
+
     if [ ! -z "$FRONTEND_PID" ]; then
         echo -e "${BLUE}Stopping frontend (PID: $FRONTEND_PID)...${NC}"
         kill $FRONTEND_PID 2>/dev/null || true
     fi
-    
+
     echo -e "${GREEN}✓ All services stopped${NC}"
     exit 0
 }
@@ -235,7 +237,7 @@ while true; do
         echo -e "${YELLOW}Shutting down frontend...${NC}"
         cleanup
     fi
-    
+
     # Check if frontend is still running
     if ! ps -p $FRONTEND_PID > /dev/null 2>&1; then
         echo ""
@@ -248,6 +250,6 @@ while true; do
         echo -e "${YELLOW}Shutting down backend...${NC}"
         cleanup
     fi
-    
+
     sleep 5
 done

@@ -13,6 +13,7 @@ flow_policy_regression="$repository_root/scripts/test-flow1-policy.sh"
 worktree_regression="$repository_root/scripts/test-worktree-tooling.sh"
 dependabot_validation="$repository_root/scripts/check-dependabot-config.py"
 readme_regression="$repository_root/scripts/test-readme.sh"
+run_script="$repository_root/run.sh"
 
 fail() {
   printf 'Quality tooling regression failed: %s\n' "$1" >&2
@@ -67,5 +68,13 @@ grep -Fq 'frontend-lint' "$pre_commit" || fail 'the fast frontend lint pre-commi
 grep -Fq 'frontend-typecheck' "$pre_commit" || fail 'the fast frontend typecheck pre-commit hook is missing.'
 grep -Fqx '    rev: v0.16.1' "$pre_commit" || fail 'pre-commit Ruff must match the backend tool pin.'
 grep -Fq 'source "$SCRIPT_DIR/scripts/use-project-node.sh"' "$repository_root/run.sh" || fail 'run.sh must select the project Node runtime.'
+[[ "$(grep -Fxc 'mkdir -p "$SCRIPT_DIR/logs"' "$run_script")" -eq 1 ]] \
+  || fail 'run.sh must create its log directory exactly once.'
+log_directory_line="$(grep -n -F 'mkdir -p "$SCRIPT_DIR/logs"' "$run_script" | cut -d: -f1)"
+backend_redirect_line="$(grep -n -F '> "$SCRIPT_DIR/logs/backend.log" 2>&1 &' "$run_script" | cut -d: -f1)"
+frontend_redirect_line="$(grep -n -F '> "$SCRIPT_DIR/logs/frontend.log" 2>&1 &' "$run_script" | cut -d: -f1)"
+if (( log_directory_line >= backend_redirect_line || log_directory_line >= frontend_redirect_line )); then
+  fail 'run.sh must create logs before redirecting either process output.'
+fi
 
 printf 'Quality tooling regression passed.\n'
