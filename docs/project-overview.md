@@ -44,8 +44,15 @@ league-analysis/
 │   ├── lib/core/
 │   ├── package.json
 │   └── package-lock.json
+├── .githooks/
+│   ├── pre-commit
+│   └── post-checkout
 ├── docs/
 ├── logs/
+├── scripts/
+│   ├── guard-git-worktree-test.sh
+│   ├── install-git-hooks.sh
+│   └── provision-worktree-local-files.sh
 └── run.sh
 ```
 
@@ -142,6 +149,49 @@ and starts Next.js. Defaults:
 
 Changing `.env` requires a restart. Do not start a second development session
 over an existing one; stop the running session first.
+
+### Git hooks and worktrees
+
+After clone, and whenever `.githooks/` or the local-file provisioner changes,
+install the reviewed hook generation:
+
+```bash
+./scripts/install-git-hooks.sh
+```
+
+The installer snapshots the pre-commit and post-checkout hooks plus the
+provisioner beneath the shared Git directory, sets restrictive permissions, and
+atomically selects the complete generation through `core.hooksPath`. It records
+ownership in `league-analysis.trustedhookspath` and preserves an unrelated
+custom hooks manager instead of overwriting it. The pre-commit snapshot runs the
+configured pre-commit checks; the post-checkout snapshot never executes hook
+code from the branch being checked out.
+
+New `flow1` work normally starts after fetch/conflict inspection with a focused
+branch and sibling linked worktree:
+
+```bash
+git fetch --prune origin
+git worktree add -b flow1/lga-43-batch-worktrees \
+  ../league-analysis-lga-43 origin/master
+```
+
+Use the actual selected Jira keys and short scope in place of the example.
+Separate planned pull requests use separate branches and worktrees. Never reuse,
+reset, or delete an owner-created worktree without explicit authorization.
+
+When the primary worktree has a regular root `.env`, the trusted post-checkout
+hook may copy that single allowlisted ignored file into a newly created linked
+worktree. The copy uses mode `600`, never overwrites a path or symlink, never
+prints content, requires shared trusted ignore rules for the target and
+temporary-file pattern, and records private provenance so only its own copy can
+be removed later. Missing source files, custom hook managers, or failed safety
+checks leave checkout successful and unprovisioned. Do not manually broaden the
+allowlist to directories or deployment credentials.
+
+Keep worktrees needed for User QA or remediation. Cleanup is appropriate only
+after the branch is safely published, ownership is clear, and the worktree is no
+longer needed; inspect dirty state and PR/merge state first.
 
 ## Quality and Verification
 

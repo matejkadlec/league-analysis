@@ -5,6 +5,12 @@ set -euo pipefail
 repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly repository_root
 
+worktree_guard="$repository_root/scripts/guard-git-worktree-test.sh"
+if [[ "${LGA_GIT_WORKTREE_GUARD_ACTIVE:-}" != "1" ]]; then
+  export LGA_GIT_WORKTREE_GUARD_ACTIVE=1
+  exec "$worktree_guard" --repository "$repository_root" -- "$repository_root/test.sh" "$@"
+fi
+
 run_frontend=true
 run_backend=true
 next_env_file="$repository_root/frontend/next-env.d.ts"
@@ -169,6 +175,8 @@ run_step 'ShellCheck tooling regression' "$repository_root/scripts/test-shellche
 run_step 'GitHub workflow syntax' "$repository_root/scripts/run-actionlint.sh"
 run_step 'GitHub workflow security policy' python3 "$repository_root/scripts/verify-github-workflows.py"
 run_step 'Quality tooling regression' "$repository_root/scripts/test-quality-tooling.sh"
+run_step 'Flow 1 policy regression' "$repository_root/scripts/test-flow1-policy.sh"
+run_step 'Worktree tooling regression' "$repository_root/scripts/test-worktree-tooling.sh"
 
 if [[ "$run_frontend" == true ]]; then
   # shellcheck disable=SC1091

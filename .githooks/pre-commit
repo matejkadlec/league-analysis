@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Trusted snapshot installed outside branch-controlled worktree files.
+set -euo pipefail
+
+repository_root="$(git rev-parse --show-toplevel)"
+cd "$repository_root/backend"
+exec uv run pre-commit run --hook-stage pre-commit

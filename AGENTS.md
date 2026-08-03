@@ -49,16 +49,25 @@ Non-negotiable summary:
 - Inspect the active sprint, queues, in-flight Jira work, open/draft pull
   requests, branches, worktrees, current branch, and dirty changes before
   autonomous selection. Do not force overlapping work.
+- Select the largest safe coherent batch. Planning scale is approximately 3
+  large, 5 medium, or 10 small tickets, or a comparable mixed batch. Record a
+  concrete conflict, dependency, uncertainty, owner boundary, or lack of
+  compatible candidates when the selected batch is materially smaller.
 - Classify intentional visual changes as User QA. Documentation, backend,
   schema, infrastructure, security, tests, refactors, and non-visual frontend
   logic are AI-only unless mixed with inseparable visual scope.
 - Do not push task work directly to `master` unless the user explicitly grants
   that exception. Normal task work starts from current `origin/master`.
-- An AI-created pull request is ready for review, not draft. Immediately after
-  publishing or updating a ready pull request, transition its issues to
-  `PENDING CR`, report the handoff, and stop. Do not poll, review, merge,
-  deploy, or start another batch without explicit delegation for that pull
-  request.
+- New `flow1` work uses a dedicated linked worktree by default. Continuing an
+  existing owning branch/worktree is allowed; using the primary checkout needs
+  a concrete exceptional reason recorded in the batch ledger.
+- An AI-created pull request is ready for review, not draft. Prefer one
+  coherent multi-ticket PR. One preselected invocation may publish up to two
+  independent ready pull requests, or three only when every batch is small,
+  AI-only, mutually independent, and non-overlapping. Each published PR becomes
+  owner-managed immediately: do not poll, review, repair, merge, or deploy it.
+  Continue only with independent batches recorded during intake, then provide
+  one final ticket-to-PR handoff and stop.
 - Move an issue to `DONE` only after its pull request is merged into `master`.
 - Never request secrets or complete environment files in chat or Jira.
 
@@ -86,6 +95,18 @@ durable system decisions; Jira records planned and in-flight work.
 
 The local environment is WSL with PostgreSQL 18. Configuration is loaded from
 the repository-root `.env`; keep its values secret.
+
+Install or refresh the repository's trusted local hooks after cloning or after
+hook changes:
+
+```bash
+./scripts/install-git-hooks.sh
+```
+
+The installed post-checkout snapshot may provision only the ignored root
+`.env` from the primary checkout into a new linked worktree. It never prints
+contents or overwrites an existing file or symlink, and provisioned copies use
+mode `600`. See [`docs/project-overview.md`](docs/project-overview.md#git-hooks-and-worktrees).
 
 ```bash
 ./run.sh                         # Backend 8000 + frontend 3000

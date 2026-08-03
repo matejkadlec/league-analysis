@@ -8,6 +8,9 @@ ci_gate="$repository_root/scripts/ci.sh"
 workflow="$repository_root/.github/workflows/quality-checks.yml"
 pre_commit="$repository_root/.pre-commit-config.yaml"
 frontend_package="$repository_root/frontend/package.json"
+worktree_guard="$repository_root/scripts/guard-git-worktree-test.sh"
+flow_policy_regression="$repository_root/scripts/test-flow1-policy.sh"
+worktree_regression="$repository_root/scripts/test-worktree-tooling.sh"
 
 fail() {
   printf 'Quality tooling regression failed: %s\n' "$1" >&2
@@ -17,9 +20,21 @@ fail() {
 [[ -x "$gate" ]] || fail './test.sh must be executable.'
 [[ -x "$ci_gate" ]] || fail 'scripts/ci.sh must be executable.'
 [[ -x "$repository_root/scripts/dependency-audit.sh" ]] || fail 'dependency audit must be executable.'
+[[ -x "$worktree_guard" ]] || fail 'the worktree integrity guard must be executable.'
+[[ -x "$flow_policy_regression" ]] || fail 'the Flow 1 policy regression must be executable.'
+[[ -x "$worktree_regression" ]] || fail 'the worktree tooling regression must be executable.'
 bash -n "$gate"
 bash -n "$ci_gate"
+bash -n "$worktree_guard"
+bash -n "$flow_policy_regression"
+bash -n "$worktree_regression"
 grep -Fqx '"$repository_root/test.sh"' "$ci_gate" || fail 'CI must invoke the authoritative local gate.'
+[[ "$(grep -Fxc '  exec "$worktree_guard" --repository "$repository_root" -- "$repository_root/test.sh" "$@"' "$gate")" -eq 1 ]] \
+  || fail './test.sh must enter the worktree guard exactly once.'
+grep -Fqx "run_step 'Flow 1 policy regression' \"\$repository_root/scripts/test-flow1-policy.sh\"" "$gate" \
+  || fail 'the authoritative gate must run Flow 1 policy regressions.'
+grep -Fqx "run_step 'Worktree tooling regression' \"\$repository_root/scripts/test-worktree-tooling.sh\"" "$gate" \
+  || fail 'the authoritative gate must run worktree regressions.'
 grep -Fqx '    name: Deterministic full-project gate' "$workflow" || fail 'the stable quality job name changed.'
 grep -Fqx '        run: ./scripts/ci.sh' "$workflow" || fail 'Quality Checks must invoke scripts/ci.sh.'
 grep -Fqx '    name: Live production dependency audit' "$workflow" || fail 'the dependency audit job is missing.'
