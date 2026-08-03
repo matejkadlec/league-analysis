@@ -76,6 +76,11 @@ All modes run:
 - repository workflow policy checks for immutable action pins, version
   comments, `contents: read`, credential-safe checkout, concurrency
   cancellation, required triggers, and job timeouts.
+- Dependabot v2 configuration coverage for every current package ecosystem,
+  manifest directory, update limit, local weekly schedule, labels, and the
+  minor/patch-only version-update group. The validator intentionally detects
+  Dockerfiles, so LGA-10 must add the matching Docker update entry when it
+  introduces deployment artifacts.
 
 The complete/backend gate also validates `.pre-commit-config.yaml` with the
 locked pre-commit installation.
@@ -127,6 +132,25 @@ dependency declarations change; inherited findings do not make unrelated
 changes permanently red. The deterministic gate regression-tests this policy.
 Developers may run the live comparison manually when network access is
 available, but its output is not part of the deterministic local gate.
+
+## Dependabot review policy
+
+`.github/dependabot.yml` checks the current frontend npm, backend uv, and
+GitHub Actions manifests weekly on Monday morning in `Europe/Prague`. A
+maximum of three frontend/backend version-update pull requests and two Actions
+version-update pull requests may be open at once. The `minor-and-patch` group
+reduces routine version-update noise while keeping major version updates
+separate. Security updates are not grouped by that rule and GitHub does not
+subject them to the version-update open-pull-request limit.
+
+Dependabot pull requests target `master` and follow the normal repository
+workflow: inspect the manifest and lockfile changes, rebase when current
+`master` moves, run the complete `./test.sh` gate, wait for the required GitHub
+checks and review, then merge only through the protected pull-request path.
+Do not auto-merge dependency changes or provide Dependabot with real secrets.
+No Docker update block exists yet because LGA-10 has not added Dockerfiles or a
+Compose definition; that ticket must extend this configuration in the same
+change.
 
 ## GitHub Actions behavior
 
