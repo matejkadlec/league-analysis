@@ -14,6 +14,7 @@ worktree_regression="$repository_root/scripts/test-worktree-tooling.sh"
 dependabot_validation="$repository_root/scripts/check-dependabot-config.py"
 readme_regression="$repository_root/scripts/test-readme.sh"
 run_script="$repository_root/run.sh"
+github_governance_regression="$repository_root/scripts/test-github-governance.sh"
 
 fail() {
   printf 'Quality tooling regression failed: %s\n' "$1" >&2
@@ -28,6 +29,7 @@ fail() {
 [[ -x "$worktree_regression" ]] || fail 'the worktree tooling regression must be executable.'
 [[ -f "$dependabot_validation" ]] || fail 'the Dependabot validator must exist.'
 [[ -x "$readme_regression" ]] || fail 'the README regression must be executable.'
+[[ -x "$github_governance_regression" ]] || fail 'the GitHub governance regression must be executable.'
 bash -n "$gate"
 bash -n "$ci_gate"
 bash -n "$worktree_guard"
@@ -43,6 +45,8 @@ grep -Fqx "run_step 'Worktree tooling regression' \"\$repository_root/scripts/te
   || fail 'the authoritative gate must run worktree regressions.'
 grep -Fqx "run_step 'Dependabot configuration' python3 \"\$repository_root/scripts/check-dependabot-config.py\"" "$gate" \
   || fail 'the authoritative gate must validate Dependabot configuration.'
+grep -Fqx "run_step 'GitHub governance configuration' \"\$repository_root/scripts/test-github-governance.sh\"" "$gate" \
+  || fail 'the authoritative gate must validate GitHub governance configuration.'
 grep -Fqx '    name: Deterministic full-project gate' "$workflow" || fail 'the stable quality job name changed.'
 grep -Fqx '        run: ./scripts/ci.sh' "$workflow" || fail 'Quality Checks must invoke scripts/ci.sh.'
 grep -Fqx '    name: Live production dependency audit' "$workflow" || fail 'the dependency audit job is missing.'
@@ -59,6 +63,7 @@ grep -Fq 'uv run bandit' "$gate" || fail 'backend security analysis is missing f
 python3 "$repository_root/scripts/test-dependency-audit.py" >/dev/null || fail 'dependency audit policy regressions failed.'
 python3 "$dependabot_validation" >/dev/null || fail 'Dependabot configuration validation failed.'
 "$readme_regression" >/dev/null || fail 'README regression failed.'
+"$github_governance_regression" >/dev/null || fail 'GitHub governance regression failed.'
 if "$repository_root/scripts/run-actionlint.sh" \
   "$repository_root/tests/fixtures/github-workflows/invalid-expression.yml" \
   >/dev/null 2>&1; then

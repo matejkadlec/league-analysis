@@ -76,6 +76,11 @@ All modes run:
 - repository workflow policy checks for immutable action pins, version
   comments, `contents: read`, credential-safe checkout, concurrency
   cancellation, required triggers, and job timeouts.
+- tracked `master` branch-ruleset desired state, including its exact stable
+  required-check contexts, GitHub Actions integration binding, and zero-review
+  workflow policy. The deterministic
+  configuration regression is local; the separate live audit remains read-only
+  and requires authenticated GitHub API access.
 - Dependabot v2 configuration coverage for every current package ecosystem,
   manifest directory, update limit, local weekly schedule, labels, and the
   minor/patch-only version-update group. The validator intentionally detects
@@ -181,6 +186,7 @@ settings.
 ## Result reporting
 
 A passing local gate proves only local validation. After publication, report
-GitHub checks as passed only from current remote workflow evidence. LGA-17 may
-configure branch protection after these stable job names are merged and
-observed on `master`.
+GitHub checks as passed only from current remote workflow evidence. The `master`
+ruleset requires the two stable check contexts; run
+`python3 scripts/verify-github-ruleset.py` after an authorized GitHub
+administration change to verify that live configuration remains aligned.
