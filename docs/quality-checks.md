@@ -29,14 +29,18 @@ Frontend runs preserve the pre-existing tracked state of
 
 ## Deterministic dependencies and tools
 
-- Node is pinned by `.nvmrc`; `scripts/use-project-node.sh` accepts only that
-  exact runtime and may select it through NVM.
+- Node 26.5.1 is pinned by `.nvmrc`; `scripts/use-project-node.sh` accepts only
+  that exact runtime and may select it through NVM.
+- npm 12.0.2 is recorded in `packageManager`/`devEngines`, installed explicitly
+  in CI, and enforced with exact Node/npm engines. Exact reviewed install
+  scripts are allowlisted and any new unreviewed installer fails.
 - Python is pinned by `.python-version` and constrained by
   `backend/pyproject.toml`.
 - Frontend dependencies install with `npm ci` from `package-lock.json`.
 - Backend and development dependencies install with
   `uv sync --frozen --all-groups` from `uv.lock`.
-- ShellCheck 0.10.0 and actionlint 1.7.12 installers verify both release archive
+- CI pins uv 0.12.1 through the immutable setup-uv 9.0.0 action.
+- ShellCheck 0.11.0 and actionlint 1.7.12 installers verify both release archive
   and extracted binary SHA-256 checksums on Linux x86-64 and ARM64.
 - GitHub third-party actions are pinned by complete commit SHA with a readable
   release comment. Checkout credentials are not persisted.
@@ -116,7 +120,7 @@ workflow pull request can validate itself before the definition exists on
 `master`. Superseded runs are cancelled. Workflow permissions are limited to
 `contents: read`.
 
-The deterministic job provisions PostgreSQL 18 and passes only safe CI values.
+The deterministic job provisions PostgreSQL 18.4 and passes only safe CI values.
 Until LGA-12 adds `backend/alembic.ini`, `scripts/ci.sh` reports migration
 validation as explicitly skipped. Once the file exists, CI requires
 `LGA_VALIDATE_MIGRATIONS=1` and runs `alembic upgrade head` against the clean

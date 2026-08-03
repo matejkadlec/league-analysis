@@ -45,6 +45,7 @@ export function CookieConsentManager() {
     [],
   );
 
+  /* eslint-disable react-hooks/set-state-in-effect -- Consent state initializes from the browser cookie after hydration. */
   useEffect(() => {
     const storedConsent = readCookieConsentFromBrowser();
 
@@ -62,6 +63,7 @@ export function CookieConsentManager() {
     notifyCookieConsentUpdated(storedConsent);
     setIsReady(true);
   }, []);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   useEffect(() => {
     const openPreferences = () => setIsBannerOpen(true);

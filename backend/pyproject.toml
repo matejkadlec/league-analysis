@@ -4,25 +4,25 @@ version = "0.1.0"
 description = "Web app for comprehensive analysis of League of Legends players, matches and more."
 authors = [{ name = "Matěj Kadlec", email = "mat.kadlec@email.cz" }]
 dependencies = [
-    "apscheduler>=3.11.2",
+    "apscheduler>=3.11.3",
     "asyncpg>=0.31.0",
     "email-validator>=2.3.0",
-    "fastapi>=0.128.8",
+    "fastapi>=0.141.1",
     "httpx>=0.28.1",
     "passlib[argon2]>=1.7.4",
-    "psycopg2-binary>=2.9.11",
-    "pydantic>=2.12.5",
-    "pydantic-settings>=2.12.0",
-    "python-dotenv>=1.2.1",
-    "pyjwt[crypto]>=2.10.1",
+    "psycopg2-binary>=2.9.12",
+    "pydantic>=2.13.4",
+    "pydantic-settings>=2.14.2",
+    "python-dotenv>=1.2.2",
+    "pyjwt[crypto]>=2.13.0",
     "python-Levenshtein>=0.27.3",
-    "python-multipart>=0.0.22",
-    "slowapi>=0.1.9",
-    "sqlalchemy>=2.0.46",
-    "structlog>=25.5.0",
-    "uvicorn[standard]>=0.40.0",
+    "python-multipart>=0.0.32",
+    "slowapi>=0.1.10",
+    "sqlalchemy>=2.0.51",
+    "structlog>=26.1.0",
+    "uvicorn[standard]>=0.52.1",
 ]
-requires-python = ">=3.14.2,<3.15"
+requires-python = ">=3.14.6,<3.15"
 license = { text = "All Rights Reserved" }
 
 [build-system]
@@ -60,11 +60,11 @@ select = ["E4", "E7", "E9", "F", "I"]
 
 [dependency-groups]
 dev = [
-    "bandit>=1.8.6",
-    "pip-audit>=2.9.0",
-    "pre-commit>=4.3.0",
-    "pytest>=8.4.2",
-    "pytest-asyncio>=1.2.0",
-    "pyright>=1.1.408",
+    "bandit>=1.9.4",
+    "pip-audit>=2.10.1",
+    "pre-commit>=4.6.1",
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+    "pyright>=1.1.411",
     "ruff==0.16.1",
 ]

@@ -92,22 +92,37 @@ Versions are pinned or constrained by `backend/pyproject.toml`,
 
 | Layer | Current basis |
 | --- | --- |
-| Backend runtime | Python `>=3.14.2,<3.15`, FastAPI, SQLAlchemy 2, Pydantic 2, structlog, APScheduler, httpx |
-| Backend tooling | `uv`, Pyright |
-| Frontend runtime | Next.js 16.1.6, React 19.2, TypeScript 5, Tailwind CSS 4, shadcn/ui |
+| Backend runtime | Python `>=3.14.6,<3.15`, FastAPI 0.141.1, SQLAlchemy 2.0.51, Pydantic 2.13, structlog 26.1, APScheduler 3.11, httpx 0.28 |
+| Backend tooling | uv 0.12.1 in CI, Pyright 1.1.411, Ruff 0.16.1 |
+| Frontend runtime | Next.js 16.2.12, React 19.2.8, TypeScript 6.0.3, Tailwind CSS 4.3.3, shadcn/ui |
 | Frontend data/forms | TanStack Query 5, Zod 4, Axios, React Hook Form |
-| Frontend tooling | Node 20.19.6, npm with `package-lock.json`, ESLint 9, TypeScript compiler, Vitest |
-| Database | PostgreSQL 18, asyncpg for application I/O, psycopg2 for APScheduler |
+| Frontend tooling | Node 26.5.1, npm 12.0.2 with `package-lock.json`, ESLint 9.39.5, TypeScript compiler, Vitest 4.1.10 |
+| Database | PostgreSQL 18.4, asyncpg for application I/O, psycopg2 for APScheduler |
 | External data | Riot Games API |
 
 Use `uv` for backend dependencies and commands. Use npm for frontend
 dependencies and commands; do not introduce a second package manager.
+The dated selection and security rationale is recorded in
+[`dependency-upgrade-2026-08-03.md`](dependency-upgrade-2026-08-03.md).
 
 ## Local Environment
 
-The supported local setup is WSL with PostgreSQL 18. The repository-root `.env`
-provides database and runtime configuration. Never print, paste, commit, or
-copy its secret values into documentation or Jira.
+The supported local setup is WSL with PostgreSQL 18.4. The repository-root
+`.env` provides database and runtime configuration; explicit process
+environment values take precedence. Never print, paste, commit, or copy its
+secret values into documentation or Jira.
+
+Install/select the exact frontend tools before the first npm command:
+
+```bash
+nvm install 26.5.1
+nvm use 26.5.1
+npm install --global npm@12.0.2 --ignore-scripts
+```
+
+CI pins uv 0.12.1. Local uv 0.12.1 can be installed through the official
+installer or selected package manager; `uv lock --check` must accept the
+committed lock before development continues.
 
 ```bash
 ./run.sh
@@ -181,7 +196,7 @@ fail-fast step names.
 `.pre-commit-config.yaml` keeps fast whitespace/format checks, Ruff, frontend
 ESLint, and frontend TypeScript checks at commit time. Never skip configured
 hooks. GitHub's `Quality Checks` workflow runs the same deterministic gate with
-PostgreSQL 18, plus a separate live production dependency audit. Local results
+PostgreSQL 18.4, plus a separate live production dependency audit. Local results
 are not GitHub check results.
 
 ## Debugging and Operational Boundaries

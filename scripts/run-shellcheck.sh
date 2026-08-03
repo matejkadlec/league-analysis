@@ -3,7 +3,7 @@
 set -euo pipefail
 
 repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-readonly repository_root shellcheck_version='0.10.0'
+readonly repository_root shellcheck_version='0.11.0'
 shellcheck_binary="${SHELLCHECK_BINARY:-shellcheck}"
 
 if ! command -v "$shellcheck_binary" >/dev/null 2>&1; then

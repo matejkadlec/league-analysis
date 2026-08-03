@@ -7,6 +7,7 @@ gate="$repository_root/test.sh"
 ci_gate="$repository_root/scripts/ci.sh"
 workflow="$repository_root/.github/workflows/quality-checks.yml"
 pre_commit="$repository_root/.pre-commit-config.yaml"
+frontend_package="$repository_root/frontend/package.json"
 
 fail() {
   printf 'Quality tooling regression failed: %s\n' "$1" >&2
@@ -23,6 +24,10 @@ grep -Fqx '    name: Deterministic full-project gate' "$workflow" || fail 'the s
 grep -Fqx '        run: ./scripts/ci.sh' "$workflow" || fail 'Quality Checks must invoke scripts/ci.sh.'
 grep -Fqx '    name: Live production dependency audit' "$workflow" || fail 'the dependency audit job is missing.'
 grep -Fqx '        run: ./scripts/dependency-audit.sh "$CHANGE_BASE_SHA"' "$workflow" || fail 'the workflow must use the maintained comparative dependency audit.'
+[[ "$(grep -Fxc '        run: npm install --global npm@12.0.2 --ignore-scripts' "$workflow")" -eq 2 ]] || fail 'both workflow jobs must install the pinned npm release.'
+[[ "$(grep -Fxc '          version: "0.12.1"' "$workflow")" -eq 2 ]] || fail 'both workflow jobs must install the pinned uv release.'
+grep -Fqx '        image: postgres:18.4' "$workflow" || fail 'the CI database image must use the reviewed PostgreSQL minor.'
+grep -Fq '"packageManager": "npm@12.0.2"' "$frontend_package" || fail 'the frontend package-manager pin changed.'
 grep -Fq 'npm run lint -- --max-warnings 0' "$gate" || fail 'frontend lint must reject warnings.'
 grep -Fq 'uv run pytest' "$gate" || fail 'backend pytest is missing from the gate.'
 grep -Fq 'uv run bandit' "$gate" || fail 'backend security analysis is missing from the gate.'
@@ -35,5 +40,6 @@ fi
 grep -Fq 'frontend-lint' "$pre_commit" || fail 'the fast frontend lint pre-commit hook is missing.'
 grep -Fq 'frontend-typecheck' "$pre_commit" || fail 'the fast frontend typecheck pre-commit hook is missing.'
 grep -Fqx '    rev: v0.16.1' "$pre_commit" || fail 'pre-commit Ruff must match the backend tool pin.'
+grep -Fq 'source "$SCRIPT_DIR/scripts/use-project-node.sh"' "$repository_root/run.sh" || fail 'run.sh must select the project Node runtime.'
 
 printf 'Quality tooling regression passed.\n'

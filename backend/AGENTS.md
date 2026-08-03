@@ -11,7 +11,8 @@ not weaken repository-wide rules.
 
 ## Tech Stack
 
-Python 3.14.6, FastAPI, SQLAlchemy 2.0+, Pydantic v2, structlog, APScheduler, httpx
+Python 3.14.6, FastAPI 0.141+, SQLAlchemy 2.0+, Pydantic v2, structlog 26,
+APScheduler 3.11, httpx 0.28
 
 ## Structure
 

@@ -2,7 +2,7 @@
 # Install the pinned ShellCheck binary after archive and binary verification.
 set -euo pipefail
 
-readonly shellcheck_version='0.10.0'
+readonly shellcheck_version='0.11.0'
 readonly release_directory="shellcheck-v${shellcheck_version}"
 
 fail() {
@@ -21,13 +21,13 @@ destination_directory="${1:-${SHELLCHECK_BIN_DIR:-$HOME/.local/bin}}"
 case "$(uname -m)" in
   x86_64|amd64)
     platform='linux.x86_64'
-    archive_sha256='6c881ab0698e4e6ea235245f22832860544f17ba386442fe7e9d629f8cbedf87'
-    binary_sha256='f35ae15a4677945428bdfe61ccc297490d89dd1e544cc06317102637638c6deb'
+    archive_sha256='8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198'
+    binary_sha256='4da528ddb3a4d1b7b24a59d4e16eb2f5fd960f4bd9a3708a15baddbdf1d5a55b'
     ;;
   aarch64|arm64)
     platform='linux.aarch64'
-    archive_sha256='324a7e89de8fa2aed0d0c28f3dab59cf84c6d74264022c00c22af665ed1a09bb'
-    binary_sha256='4111c09318d10b93653a42179381273f31061b34987978346fbd19a6e81a74c3'
+    archive_sha256='12b331c1d2db6b9eb13cfca64306b1b157a86eb69db83023e261eaa7e7c14588'
+    binary_sha256='127f13925eadd52c341bca0ebaf9ab0dbd78c6468f30a8f262a528bf8de47546'
     ;;
   *)
     fail "unsupported Linux architecture '$(uname -m)'."
