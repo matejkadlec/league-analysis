@@ -12,6 +12,7 @@ worktree_guard="$repository_root/scripts/guard-git-worktree-test.sh"
 flow_policy_regression="$repository_root/scripts/test-flow1-policy.sh"
 worktree_regression="$repository_root/scripts/test-worktree-tooling.sh"
 dependabot_validation="$repository_root/scripts/check-dependabot-config.py"
+github_governance_regression="$repository_root/scripts/test-github-governance.sh"
 
 fail() {
   printf 'Quality tooling regression failed: %s\n' "$1" >&2
@@ -25,6 +26,7 @@ fail() {
 [[ -x "$flow_policy_regression" ]] || fail 'the Flow 1 policy regression must be executable.'
 [[ -x "$worktree_regression" ]] || fail 'the worktree tooling regression must be executable.'
 [[ -f "$dependabot_validation" ]] || fail 'the Dependabot validator must exist.'
+[[ -x "$github_governance_regression" ]] || fail 'the GitHub governance regression must be executable.'
 bash -n "$gate"
 bash -n "$ci_gate"
 bash -n "$worktree_guard"
@@ -39,6 +41,8 @@ grep -Fqx "run_step 'Worktree tooling regression' \"\$repository_root/scripts/te
   || fail 'the authoritative gate must run worktree regressions.'
 grep -Fqx "run_step 'Dependabot configuration' python3 \"\$repository_root/scripts/check-dependabot-config.py\"" "$gate" \
   || fail 'the authoritative gate must validate Dependabot configuration.'
+grep -Fqx "run_step 'GitHub governance configuration' \"\$repository_root/scripts/test-github-governance.sh\"" "$gate" \
+  || fail 'the authoritative gate must validate GitHub governance configuration.'
 grep -Fqx '    name: Deterministic full-project gate' "$workflow" || fail 'the stable quality job name changed.'
 grep -Fqx '        run: ./scripts/ci.sh' "$workflow" || fail 'Quality Checks must invoke scripts/ci.sh.'
 grep -Fqx '    name: Live production dependency audit' "$workflow" || fail 'the dependency audit job is missing.'
@@ -54,6 +58,7 @@ grep -Fq 'uv run python scripts/validate_migrations.py' "$gate" || fail 'Alembic
 grep -Fq 'uv run bandit' "$gate" || fail 'backend security analysis is missing from the gate.'
 python3 "$repository_root/scripts/test-dependency-audit.py" >/dev/null || fail 'dependency audit policy regressions failed.'
 python3 "$dependabot_validation" >/dev/null || fail 'Dependabot configuration validation failed.'
+"$github_governance_regression" >/dev/null || fail 'GitHub governance regression failed.'
 if "$repository_root/scripts/run-actionlint.sh" \
   "$repository_root/tests/fixtures/github-workflows/invalid-expression.yml" \
   >/dev/null 2>&1; then
