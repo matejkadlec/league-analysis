@@ -1,5 +1,6 @@
 # Environment variables
 .env
+.worktree-local-file.*
 
 # Python
 __pycache__/

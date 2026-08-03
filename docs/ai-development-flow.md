@@ -145,34 +145,123 @@ Do not take or force overlapping work when ownership is unclear.
 
 ## Selection and Batching
 
-Build one safe, coherent batch using:
+Select the largest safe coherent batch available within the active sprint and
+curated `NEXT` queue. Expected planning scale is approximately **3 large**, **5
+medium**, or **10 small** tickets, or a sensible mixed batch with comparable
+total complexity. These are planning expectations, not hard quotas or
+changed-line budgets.
+
+Build each coherent batch using:
 
 - active-sprint priority and `NEXT` order;
-- QA mode;
-- domain and implementation similarity;
+- QA mode and any distinct owner judgment;
 - dependencies and prerequisite order;
+- shared domains and overlapping files;
 - conflict and ownership boundaries;
-- shared verification scope.
+- verification path, reviewability, and rollback safety.
 
-Ticket counts are guidance, not quotas. Never use a changed-line budget as a
-selection or stopping rule. Split work when it would mix unrelated behavior,
-independent risk, conflicting ownership, or distinct owner judgments.
+Compatible AI-only tickets from different areas may share one pull request when
+they do not conflict, remain reviewable, and one reliable gate validates them.
+Split work when combining it would mix distinct owner judgments, introduce an
+unsafe dependency, stack unrelated risk, or make review and rollback materially
+worse. A small changed-line count is never by itself a reason to stop after one
+ticket.
+
+When selecting materially fewer tickets than the expected scale, state the
+concrete dependency, conflict, uncertainty, owner boundary, or lack of
+compatible candidates. Maintain an explicit batch ledger from intake through
+handoff with:
+
+- selected ticket keys and their QA mode;
+- excluded candidates and concrete reasons;
+- planned pull-request grouping and dependency bases;
+- branch and worktree for every planned pull request;
+- validation performed and final ticket-to-PR mapping.
 
 When the user names existing issues, use that exact scope and reconcile it
-against live state instead of autonomously replacing it.
+against live state instead of autonomously replacing it. Record that hard scope
+as the reason when it makes the selected batch materially smaller.
+
+### Independent pull requests in one invocation
+
+Prefer one coherent multi-ticket pull request. If independently reviewable work
+should not share a rollback or review boundary, one `flow1` invocation may
+publish up to **2 ready pull requests** by default. A third ready pull request is
+allowed only when all three batches are small, AI-only, mutually independent,
+and non-overlapping.
+
+- Preselect every planned batch and its PR mapping during intake.
+- Give each pull request its own focused branch and linked worktree from the
+  verified current `origin/master`, unless a real dependency requires a
+  documented stacked base.
+- Do not stack pull requests merely for convenience.
+- A published PR becomes owner-managed immediately. Do not poll CI or review,
+  request review, inspect or remediate published feedback, merge, or deploy it.
+- Continue after publication only with independent batches recorded in the
+  intake ledger; do not add opportunistic work.
+- Stop the remaining invocation immediately if it encounters User QA, a
+  secret/provider action, destructive uncertainty, an architecture/product
+  decision, a conflict, a baseline failure, or another genuine owner boundary.
+- Final handoff maps every selected ticket to its pull request and reports all
+  validation and owner actions once, after the last preselected batch.
+
+### Representative dry run
+
+This non-live example demonstrates the decision, not real Jira assignments:
+
+| Example tickets | Decision | Reason |
+| --- | --- | --- |
+| `LGA-101` through `LGA-106` | PR 1 | Six small AI-only workflow/docs checks share files, one gate, and one rollback boundary. |
+| `LGA-107` through `LGA-109` | PR 2 | Three small AI-only ingestion fixes are independent but would materially complicate review and rollback if mixed with repository workflow tooling. |
+| `LGA-110` | Excluded from this invocation | Its intentional UI change requires a separate User QA judgment. |
+
+The nine selected small tickets are near the planning expectation, use two
+independent worktrees, and remain below the default two-PR ceiling.
 
 ## Branch and Worktree Lifecycle
 
 - Do not push task work directly to `master` without an explicit user
   exception.
 - Start normal work from current `origin/master`.
-- Use a focused branch named for the task or coherent batch.
-- Prefer a Git worktree when another branch must remain available for review,
-  User QA, or parallel non-overlapping work.
+- Newly selected `flow1` task work uses a dedicated linked worktree by default.
+  Continuing an existing branch/worktree is allowed when it already owns the
+  exact scope. Working in the primary checkout requires a concrete exceptional
+  reason in the batch ledger.
+- Use deterministic names: branch `flow1/<jira-keys>-<scope>` and a sibling
+  worktree directory derived from the repository, Jira keys, and short scope.
+  Lowercase keys in Git names and keep the scope filesystem-safe.
+- Fetch and inspect conflicts first, then create each new branch/worktree from
+  current `origin/master`. Independent pull requests use separate worktrees and
+  do not share a task branch.
 - Never overwrite or clean unrelated dirty changes.
+- Treat stale or abandoned branches/worktrees as ownership evidence until their
+  PR, merge, dirty state, and owner are verified. Never delete or reset an
+  owner-created worktree without explicit authorization.
 - Rebase a stale branch before publication. If a published branch must be
   updated after rebase, use `--force-with-lease`; never use unsafe force push.
+- Preserve a worktree through User QA and any expected remediation. Cleanup is
+  allowed only after its branch is safely published and the worktree is no
+  longer needed for User QA or remediation; do not infer that from elapsed time.
 - Keep commits coherent and reviewable. Do not bypass pre-commit hooks.
+
+Run `./scripts/install-git-hooks.sh` after clone and after hook-source changes.
+It installs atomic trusted snapshots beneath the shared Git directory rather
+than executing branch-controlled hook files. The post-checkout snapshot may
+copy only the allowlisted root `.env` from the verified primary worktree to a
+new linked worktree. It:
+
+- requires `.env` and `.worktree-local-file.*` to be ignored by shared
+  `$GIT_COMMON_DIR/info/exclude`, even when branch rules differ;
+- accepts only a regular non-symlink source and never overwrites any target,
+  including a broken symlink;
+- copies privately with mode `600` without printing contents;
+- stores private inode provenance beneath the linked worktree Git directory;
+- removes only a matching provisioned copy if a later branch exposes it;
+- exits successfully without copying when any safety prerequisite is missing.
+
+The allowlist initially contains root `.env` only. Never add directories,
+deployment credentials, or provider bundles. The installer preserves an
+unrelated custom `core.hooksPath` rather than replacing it.
 
 Before any GitHub write, re-verify the current `origin` remote and exact target
 repository.
@@ -225,12 +314,16 @@ When publication is authorized by the user or a named workflow:
    `master`.
 6. Include issue keys, scope, validation, and any owner-relevant limitations.
 7. Transition the associated `LGA` issues to `PENDING CR`.
-8. Return control to the owner immediately.
+8. Mark this PR owner-managed immediately. Continue only if the intake ledger
+   contains another preselected independent AI-only batch; otherwise provide
+   the final handoff and return control to the owner.
 
 After publishing or updating the ready pull request, do not poll review or CI,
 request automated review, delegate repair, resolve unrelated review threads,
-merge, deploy, or select another batch unless the owner explicitly delegates
-those actions for that exact pull request.
+merge, or deploy it. The narrow multi-PR exception permits work only on another
+independent batch preselected during the same intake; it never permits managing
+the published PR. After the final preselected PR, report the complete ledger and
+stop.
 
 A later `continue` or `resume` requires fresh inspection of GitHub, Jira,
 `origin/master`, CI/CD state, and relevant runtime/live state before
@@ -267,22 +360,31 @@ or Jira.
 
 ### `flow1`
 
-Purpose: autonomously select and deliver one safe coherent batch from existing
+Purpose: autonomously select and deliver the largest safe coherent batch, or a
+bounded set of preselected independent AI-only batches, from existing
 active-sprint work.
 
 1. Run the full intake and conflict-control inspection.
-2. Select from the active sprint and curated `NEXT` queue using priority, QA
-   mode, similarity, dependencies, conflicts, and verification scope.
+2. Maximize the safe selection from the active sprint and curated `NEXT` queue
+   using expected scale, priority, QA mode, dependencies, conflicts,
+   verification, reviewability, and rollback scope. Record the batch ledger and
+   concrete reasons for exclusions or an undersized selection.
 3. Move selected work through `TO DO` -> `NEXT` -> `IN PROGRESS` as needed.
-4. Create/use a focused branch or worktree from current `origin/master`.
+4. Create/use a dedicated focused branch and linked worktree from current
+   `origin/master` for every planned PR.
 5. Implement, update documentation, validate, inspect the diff, and remediate
    safe pre-publication defects.
 6. If User QA is required, transition to `PENDING USER QA`, update `LGA-1`,
    provide the visual checklist, and stop.
-7. Otherwise commit, push, open/update a ready pull request, transition to
-   `PENDING CR`, hand off to the owner, and stop immediately.
+7. Otherwise commit, push, open/update each preselected ready pull request, and
+   transition its issues to `PENDING CR`. Treat every published PR as
+   owner-managed immediately; continue only with another preselected
+   independent AI-only batch within the two/three-PR limits.
+8. Provide one final ledger mapping tickets, branches/worktrees, validation, and
+   pull requests, then stop.
 
-`flow1` completes at visual handoff or ready-pull-request handoff, not at merge.
+`flow1` completes at the first visual/owner-boundary handoff or the final
+ready-pull-request handoff, not at merge.
 
 ### `flow2`
 

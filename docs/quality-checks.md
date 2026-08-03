@@ -24,6 +24,18 @@ publication. Every step is named and fail-fast. The script resolves its own
 worktree root, so it is safe to call from the main checkout, another directory,
 or a Git worktree.
 
+Every invocation enters `scripts/guard-git-worktree-test.sh` exactly once before
+running a check. The guard verifies before and after the child process that the
+repository is still a non-bare worktree, its worktree/common Git directory
+identity is unchanged, and protected local/worktree configuration is unchanged.
+Protected keys include `core.bare`, `core.worktree`, `core.gitdir`,
+`core.hooksPath`, `extensions.worktreeConfig`, and the
+`league-analysis.trustedhookspath` ownership marker. Signals terminate the
+guarded process group, integrity failures fail closed with before/after
+diagnostics, and an ordinary test failure keeps its original status. The
+`LGA_GIT_WORKTREE_GUARD_ACTIVE` variable is an internal recursion marker; do not
+set it to bypass the guard.
+
 Frontend runs preserve the pre-existing tracked state of
 `frontend/next-env.d.ts`; ignored build/cache outputs stay outside the diff.
 
@@ -56,6 +68,10 @@ All modes run:
 - ShellCheck over every tracked shell script;
 - regression checks for the ShellCheck installer/runner, Node selector, and CI
   entry-point coupling;
+- Flow 1 policy regressions for expected batch scale, undersized-batch reasons,
+  bounded independent PRs, worktree defaults, and final handoff behavior;
+- trusted-hook, local `.env` provisioning, primary/linked worktree identity,
+  signal handling, and worktree-integrity guard regressions;
 - actionlint syntax and expression validation;
 - repository workflow policy checks for immutable action pins, version
   comments, `contents: read`, credential-safe checkout, concurrency
@@ -121,6 +137,9 @@ workflow pull request can validate itself before the definition exists on
 `contents: read`.
 
 The deterministic job provisions PostgreSQL 18.4 and passes only safe CI values.
+Because the workflow calls `scripts/ci.sh`, which calls the guarded `./test.sh`,
+the Flow 1 and worktree suites run in GitHub Actions without a second workflow
+entry point.
 Until LGA-12 adds `backend/alembic.ini`, `scripts/ci.sh` reports migration
 validation as explicitly skipped. Once the file exists, CI requires
 `LGA_VALIDATE_MIGRATIONS=1` and runs `alembic upgrade head` against the clean
