@@ -19,6 +19,6 @@ Jira project `LGA` remains the source for task planning and execution state.
 | Cookie/storage consent | [`cookie-consent-compliance.md`](cookie-consent-compliance.md) | Compliance baseline and implementation boundary |
 | Matchmaking analysis | [`matchmaking-analysis.md`](matchmaking-analysis.md) | Algorithm, data flow, persistence, API, and UI behavior |
 
-The root [`README.md`](../README.md) is the public repository landing page. The
+The root [`README.md`](../README.md) is the private repository entry point. The
 root [`AGENTS.md`](../AGENTS.md) is the mandatory repository instruction map;
 nested agent guides provide only subtree-specific conventions.

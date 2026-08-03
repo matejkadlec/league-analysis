@@ -8,10 +8,14 @@ ci_gate="$repository_root/scripts/ci.sh"
 workflow="$repository_root/.github/workflows/quality-checks.yml"
 pre_commit="$repository_root/.pre-commit-config.yaml"
 frontend_package="$repository_root/frontend/package.json"
+agent_guide="$repository_root/AGENTS.md"
+runtime_guide="$repository_root/docs/project-overview.md"
 worktree_guard="$repository_root/scripts/guard-git-worktree-test.sh"
 flow_policy_regression="$repository_root/scripts/test-flow1-policy.sh"
 worktree_regression="$repository_root/scripts/test-worktree-tooling.sh"
 dependabot_validation="$repository_root/scripts/check-dependabot-config.py"
+readme_regression="$repository_root/scripts/test-readme.sh"
+run_script="$repository_root/run.sh"
 github_governance_regression="$repository_root/scripts/test-github-governance.sh"
 
 fail() {
@@ -26,12 +30,14 @@ fail() {
 [[ -x "$flow_policy_regression" ]] || fail 'the Flow 1 policy regression must be executable.'
 [[ -x "$worktree_regression" ]] || fail 'the worktree tooling regression must be executable.'
 [[ -f "$dependabot_validation" ]] || fail 'the Dependabot validator must exist.'
+[[ -x "$readme_regression" ]] || fail 'the README regression must be executable.'
 [[ -x "$github_governance_regression" ]] || fail 'the GitHub governance regression must be executable.'
 bash -n "$gate"
 bash -n "$ci_gate"
 bash -n "$worktree_guard"
 bash -n "$flow_policy_regression"
 bash -n "$worktree_regression"
+bash -n "$readme_regression"
 grep -Fqx '"$repository_root/test.sh"' "$ci_gate" || fail 'CI must invoke the authoritative local gate.'
 [[ "$(grep -Fxc '  exec "$worktree_guard" --repository "$repository_root" -- "$repository_root/test.sh" "$@"' "$gate")" -eq 1 ]] \
   || fail './test.sh must enter the worktree guard exactly once.'
@@ -58,6 +64,7 @@ grep -Fq 'uv run python scripts/validate_migrations.py' "$gate" || fail 'Alembic
 grep -Fq 'uv run bandit' "$gate" || fail 'backend security analysis is missing from the gate.'
 python3 "$repository_root/scripts/test-dependency-audit.py" >/dev/null || fail 'dependency audit policy regressions failed.'
 python3 "$dependabot_validation" >/dev/null || fail 'Dependabot configuration validation failed.'
+"$readme_regression" >/dev/null || fail 'README regression failed.'
 "$github_governance_regression" >/dev/null || fail 'GitHub governance regression failed.'
 if "$repository_root/scripts/run-actionlint.sh" \
   "$repository_root/tests/fixtures/github-workflows/invalid-expression.yml" \
@@ -68,5 +75,17 @@ grep -Fq 'frontend-lint' "$pre_commit" || fail 'the fast frontend lint pre-commi
 grep -Fq 'frontend-typecheck' "$pre_commit" || fail 'the fast frontend typecheck pre-commit hook is missing.'
 grep -Fqx '    rev: v0.16.1' "$pre_commit" || fail 'pre-commit Ruff must match the backend tool pin.'
 grep -Fq 'source "$SCRIPT_DIR/scripts/use-project-node.sh"' "$repository_root/run.sh" || fail 'run.sh must select the project Node runtime.'
+grep -Fq 'Each `run.sh` invocation creates `logs/` before redirecting backend or frontend' "$agent_guide" \
+  || fail 'AGENTS.md must document run.sh log-directory creation.'
+grep -Fq '`run.sh` creates `logs/` before redirecting output' "$runtime_guide" \
+  || fail 'docs/project-overview.md must document run.sh log-directory creation.'
+[[ "$(grep -Fxc 'mkdir -p "$SCRIPT_DIR/logs"' "$run_script")" -eq 1 ]] \
+  || fail 'run.sh must create its log directory exactly once.'
+log_directory_line="$(grep -n -F 'mkdir -p "$SCRIPT_DIR/logs"' "$run_script" | cut -d: -f1)"
+backend_redirect_line="$(grep -n -F '> "$SCRIPT_DIR/logs/backend.log" 2>&1 &' "$run_script" | cut -d: -f1)"
+frontend_redirect_line="$(grep -n -F '> "$SCRIPT_DIR/logs/frontend.log" 2>&1 &' "$run_script" | cut -d: -f1)"
+if (( log_directory_line >= backend_redirect_line || log_directory_line >= frontend_redirect_line )); then
+  fail 'run.sh must create logs before redirecting either process output.'
+fi
 
 printf 'Quality tooling regression passed.\n'

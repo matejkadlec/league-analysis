@@ -1,74 +1,123 @@
 # League Analysis
 
-![Python](https://img.shields.io/badge/Python-3.14.6-20232a?style=for-the-badge&logo=python&logoColor=3776AB)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.141+-20232a?style=for-the-badge&logo=fastapi&logoColor=009688)
-![React](https://img.shields.io/badge/React-19-20232a?style=for-the-badge&logo=react&logoColor=61DAFB)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-18+-20232a?style=for-the-badge&logo=postgresql&logoColor=white)
-![Status](https://img.shields.io/badge/status-inactive-red?style=for-the-badge)
-[![Quality Checks](https://github.com/matejkadlec/league-analysis/actions/workflows/quality-checks.yml/badge.svg)](https://github.com/matejkadlec/league-analysis/actions/workflows/quality-checks.yml)
+League Analysis is a private, actively developed full-stack League of Legends
+analytics application. It combines authenticated player tracking, match and
+timeline ingestion, rank history, playstyle signals, matchmaking-quality
+analysis, and administrator-managed background jobs.
 
-League Analysis is a full-stack League of Legends analytics platform prototype that combines tracked-player monitoring, match history processing, playstyle signals, and matchmaking-quality analysis in one app.
+This README is the entry point for contributors with authorized repository
+access. Detailed architecture, operations, integration, database, and workflow
+guidance is indexed in [`docs/README.md`](docs/README.md).
 
-This repository is public as a portfolio snapshot. Active development in this repository is currently paused.
+## Architecture
 
-Engineering architecture, workflows, integrations, schema guidance, and local
-commands are indexed in [`docs/README.md`](docs/README.md).
+| Area | Current basis |
+| --- | --- |
+| Frontend | Next.js 16, React 19, TypeScript, Tailwind CSS, TanStack Query, Zod |
+| Backend | Python 3.14, FastAPI, SQLAlchemy, Pydantic, APScheduler |
+| Data | PostgreSQL 18 with reviewed Alembic revisions |
+| External integration | Riot Games API |
+| Tooling | Node 26.5.1, npm 12.0.2, uv 0.12.1, GitHub Actions |
 
-## Product Highlights
+The supported local development flow is non-Docker. Docker packaging and
+production deployment guidance are intentionally deferred to
+[LGA-10](https://envelopment.atlassian.net/browse/LGA-10); see the maintained
+[production deployment boundary](docs/project-overview.md#production-deployment-boundary)
+and do not substitute container commands for the local workflow below.
 
-- Tracked players dashboard with aggregated match history and rank trends
-- Matchmaking analysis workflow with transparent scoring and history comparisons
-- Profile-level analysis for recent performance, champion patterns, and role tendencies
-- Background job orchestration for periodic data refresh from Riot APIs
+## Prerequisites
 
-## Tech Stack
+Use a WSL development environment with:
 
-| Layer        | Technologies                                                     |
-| ------------ | ---------------------------------------------------------------- |
-| **Backend**  | Python, FastAPI, SQLAlchemy, PostgreSQL                          |
-| **Frontend** | Next.js (App Router), React, TypeScript, Tailwind CSS, shadcn/ui |
-| **Data**     | TanStack Query, Zod, Axios                                       |
-| **External** | Riot Games API                                                   |
+- Git and authorized SSH access to this private repository;
+- Node 26.5.1 through NVM and npm 12.0.2;
+- Python 3.14.6 and uv 0.12.1;
+- an already-provisioned PostgreSQL 18.4 database and role matching the
+  non-secret `POSTGRES_DB` and `POSTGRES_USER` configuration values;
+- a root `.env` file from the authorized private configuration source.
 
-## Riot API Notes
+Never paste, commit, or share `.env` values. The file is ignored and must stay
+outside source control. Explicit process environment variables take precedence
+over its values; see [the local-environment guidance](docs/project-overview.md#local-environment)
+for the configuration boundary.
 
-- Riot API keys are intentionally excluded from the repository.
-- Required Riot legal boilerplate is present in the product legal page (`frontend/app/license/page.tsx`).
-- Public source code visibility is allowed, but any running public product must use the correct Riot key type and follow Riot policy updates.
-
-## Development and Quality
-
-The supported local environment uses the runtime pins in `.nvmrc` and
-`.python-version`, npm for the frontend, and uv for the backend. After selecting
-Node 26.5.1, install the pinned npm with
-`npm install --global npm@12.0.2 --ignore-scripts`.
+## Set up a fresh checkout
 
 ```bash
-./run.sh             # Start the local application
-(cd backend && uv run python scripts/migrate.py upgrade head)  # Apply reviewed schema revisions
-./test.sh -f         # Repository and frontend checks
-./test.sh -b         # Repository and backend checks
-./test.sh            # Complete pre-pull-request quality gate
+git clone git@github.com:matejkadlec/league-analysis.git
+cd league-analysis
+
+nvm install 26.5.1
+nvm use 26.5.1
+npm install --global npm@12.0.2 --ignore-scripts
+
+(cd frontend && npm ci)
+(cd backend && uv sync --frozen --all-groups)
+./scripts/install-git-hooks.sh
 ```
 
-The complete gate performs deterministic installs, linting, type checks,
-backend and frontend regression tests, a production frontend build, static
-security analysis, ShellCheck, and GitHub workflow validation. GitHub Actions
-runs the same gate and a separate live production dependency audit. No ordinary
-quality check requires a real Riot API key.
+The hook installer maintains trusted hook snapshots and can safely provision an
+already-authorized ignored root `.env` into a linked worktree. It never prints
+or stages local configuration; see [project overview](docs/project-overview.md#git-hooks-and-worktrees).
 
-## Repository Policy
+## Database and local application
 
-- No external development contributions are accepted.
-- Unsolicited external pull requests are not reviewed or merged.
-- No code/data sharing rights are granted outside explicit written permission.
+Point the private root `.env` at the verified local PostgreSQL database. The
+migration command creates application schemas, not the database or role, so
+provision that target before applying the reviewed schema revisions:
 
-## Disable PRs Without Archiving
+```bash
+(cd backend && uv run python scripts/migrate.py upgrade head)
+./run.sh
+```
 
-1. Open repository `Settings`.
-2. Under `General` -> `Features`, disable `Pull requests`.
-3. Optional: disable `Issues` and `Discussions` in the same `Features` section.
-4. Optional: disable `Actions` in `Settings` -> `Actions` -> `General`.
+`./run.sh` starts the frontend at <http://localhost:3000> and the backend at
+<http://localhost:8000>; API documentation is available at
+<http://localhost:8000/api>. Use `./run.sh 3001 8001` for alternate local ports.
+Do not run a second development session over an existing one. The full command,
+log locations, and restart behavior are documented in
+[project overview](docs/project-overview.md#local-environment).
+
+Alembic revisions in [`backend/alembic/versions/`](backend/alembic/versions/)
+are the schema authority. For a populated local database without an Alembic
+marker, follow the explicit [safe adoption process](docs/database.md#source-of-truth)
+instead of resetting or recreating schemas.
+
+## Riot API development key
+
+Obtain a Riot development key through the authorized Riot Developer Portal.
+Development keys expire every 24 hours. Configure it only through the existing
+secret-safe settings or `RIOT_API_KEY` environment fallback; never put the key
+in a commit, issue, documentation example, or chat message. The key precedence,
+routing, rate limits, and endpoint constraints are maintained in
+[`docs/riot-api.md`](docs/riot-api.md).
+
+Ordinary local quality checks do not require a real Riot API key.
+
+## Validation
+
+Run these commands from the repository root:
+
+```bash
+./test.sh -f  # repository and frontend feedback gate
+./test.sh -b  # repository and backend feedback gate
+./test.sh     # complete pre-pull-request quality gate
+```
+
+The complete gate runs deterministic installs, linting, type checks, frontend
+and backend regression tests, the production frontend build, static security
+analysis, ShellCheck, workflow checks, migration validation, and repository
+tooling regressions. GitHub Actions also runs the maintained live dependency
+comparison; local success is not GitHub check success. See
+[`docs/quality-checks.md`](docs/quality-checks.md) for the current boundary.
+
+## Further reading
+
+- [Project overview and local operation](docs/project-overview.md)
+- [Database and migration workflow](docs/database.md)
+- [Riot API integration](docs/riot-api.md)
+- [Quality checks and CI](docs/quality-checks.md)
+- [AI/Jira/GitHub delivery flow](docs/ai-development-flow.md)
 
 ## License
 

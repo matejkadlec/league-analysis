@@ -139,9 +139,9 @@ committed lock before development continues.
 ./run.sh --help
 ```
 
-`run.sh` verifies the database connection, starts Uvicorn with reload, waits for
-the backend, installs frontend dependencies only when `node_modules` is absent,
-and starts Next.js. Defaults:
+`run.sh` creates `logs/` before redirecting output, verifies the database
+connection, starts Uvicorn with reload, waits for the backend, installs frontend
+dependencies only when `node_modules` is absent, and starts Next.js. Defaults:
 
 - Frontend: <http://localhost:3000>
 - Backend: <http://localhost:8000>
@@ -152,7 +152,16 @@ and starts Next.js. Defaults:
 Changing `.env` requires a restart. Do not start a second development session
 over an existing one; stop the running session first.
 
-### Git hooks and worktrees
+## Production Deployment Boundary
+
+Production Docker packaging and VPS operating procedures are not yet present in
+this repository. LGA-10 owns the reviewed images, Compose/deployment wiring,
+migration ordering, health checks, network hardening, and production
+troubleshooting guidance; LGA-16 owns the backup, restore, rollback, and
+incident runbook. Until those tickets are complete, `./run.sh` remains the only
+supported application start command documented here for local development.
+
+## Git hooks and worktrees
 
 After clone, and whenever `.githooks/` or the local-file provisioner changes,
 install the reviewed hook generation:
