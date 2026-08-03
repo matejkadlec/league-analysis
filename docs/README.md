@@ -12,6 +12,7 @@ Jira project `LGA` remains the source for task planning and execution state.
 | Database schema | [`../backend/init_database.sql`](../backend/init_database.sql) | Executable PostgreSQL schema source of truth |
 | Database model and change workflow | [`database.md`](database.md) | Maintained explanation of the schema and safe updates |
 | Riot API integration | [`riot-api.md`](riot-api.md) | Routing, endpoints, credentials, rate limits, and integration boundaries |
+| Riot API compatibility audit (2026-08-03) | [`riot-api-compatibility-2026-08-03.md`](riot-api-compatibility-2026-08-03.md) | Dated endpoint/caller trace, official-contract delta, risks, and remediation order |
 | Background jobs | [`jobs.md`](jobs.md) | Scheduler lifecycle, job behavior, controls, and API surface |
 | Cookie/storage consent | [`cookie-consent-compliance.md`](cookie-consent-compliance.md) | Compliance baseline and implementation boundary |
 | Matchmaking analysis | [`matchmaking-analysis.md`](matchmaking-analysis.md) | Algorithm, data flow, persistence, API, and UI behavior |

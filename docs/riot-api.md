@@ -6,6 +6,12 @@
 > **Maintenance:** Update when Riot routing, endpoints, DTOs, credentials,
 > throttling, or feature usage changes.
 
+The dated [2026-08-03 compatibility audit](riot-api-compatibility-2026-08-03.md)
+traces every current caller and consumer, compares the implementation with the
+current official contract, records the unavailable authenticated-payload check,
+and defines the ordered remediation scope. No runtime behavior was changed by
+that audit.
+
 ---
 
 ## 1. Core Concepts
@@ -92,6 +98,10 @@ Host: {region}.api.riotgames.com
 }
 ```
 
+`puuid` is the durable identifier. The current ACCOUNT-V1 contract permits
+`gameName` and `tagLine` to be omitted, so consumers must not assume that every
+valid response carries a Riot ID.
+
 **Used in**: Player search, adding tracked players
 
 #### Get Account by PUUID
@@ -114,14 +124,13 @@ GET /lol/summoner/v4/summoners/by-puuid/{encryptedPUUID}
 Host: {platform}.api.riotgames.com
 ```
 
-**Response:**
+**Documented response:**
 
 ```json
 {
-  "id": "encrypted_summoner_id",
-  "accountId": "encrypted_account_id",
   "puuid": "kO3z7...",
   "profileIconId": 5367,
+  "revisionDate": 1785600000000,
   "summonerLevel": 450
 }
 ```
@@ -148,7 +157,10 @@ Host: {region}.api.riotgames.com
 | `startTime` | int | Epoch seconds - matches that **started after** this time (inclusive) |
 | `endTime` | int | Epoch seconds - matches that **started before** this time (inclusive) |
 
-**IMPORTANT**: Both `startTime` and `endTime` filter by `gameCreation` (match start time), **NOT** `gameEndTimestamp`. The parameter names refer to the time window boundaries, not match end times.
+`startTime` and `endTime` are epoch-second match-start filters. The current
+official match DTO distinguishes `gameCreation` (loading-screen time) from
+`gameStartTimestamp` (actual game start); do not use `gameEndTimestamp` for this
+filter and do not treat `gameCreation` as the actual start field.
 
 **Response:**
 
@@ -202,6 +214,7 @@ Host: {platform}.api.riotgames.com
 [
   {
     "leagueId": "abc123...",
+    "puuid": "kO3z7...",
     "queueType": "RANKED_SOLO_5x5",
     "tier": "EMERALD",
     "rank": "I",
@@ -266,13 +279,15 @@ These endpoints may be used in future features.
 
 **Potential use**: Leaderboards, high-elo tracking
 
-### MATCH-V5 Additional (Regional)
+### MATCH-V5 Available but Not Implemented (Regional)
 
 | Endpoint                                             | Description                  |
 | ---------------------------------------------------- | ---------------------------- |
 | `GET /lol/match/v5/matches/by-puuid/{puuid}/replays` | Replay download URLs         |
 
-**Potential use**: Replay download and VOD tooling
+**Potential use**: Replay download and VOD tooling. This route is currently
+listed by Riot, but it has no endpoint builder, client method, or caller in this
+repository.
 
 ### SPECTATOR-V5 (Platform)
 
@@ -374,7 +389,8 @@ Retry-After: 5
 - `Region` enum: EUROPE, AMERICAS, ASIA, SEA
 - `Platform` enum: EUN1, EUW1, NA1, KR, etc.
 - `QueueType` includes ranked, normal, ARAM, practice/tutorial, and rotating
-  mode IDs; current Match Fetcher defaults are 420, 440, 400, and 450
+  mode IDs, but its event/tutorial catalog is stale as detailed in the dated
+  compatibility audit; current Match Fetcher defaults are 420, 440, 400, and 450
 - `get_region_by_platform()`: Platform → Region mapping
 
 ---
@@ -383,7 +399,8 @@ Retry-After: 5
 
 1. **Always use PUUID** - It's permanent; game names change
 2. **Batch requests** - Don't fire parallel requests, queue them
-3. **Respect rate limits** - 1.2s delay minimum between match fetches
+3. **Respect rate limits** - honor Riot's application, method, service, region,
+   and `Retry-After` signals; do not rely on a single fixed delay
 4. **Check queue types** - 420=Solo/Duo, 440=Flex, etc.
 5. **Filter by season** - Check `game_version.startsWith("16.")` for Season 16
 6. **Handle empty responses** - League entries return `[]` for unranked players
