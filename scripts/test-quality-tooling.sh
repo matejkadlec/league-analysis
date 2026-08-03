@@ -12,6 +12,7 @@ worktree_guard="$repository_root/scripts/guard-git-worktree-test.sh"
 flow_policy_regression="$repository_root/scripts/test-flow1-policy.sh"
 worktree_regression="$repository_root/scripts/test-worktree-tooling.sh"
 dependabot_validation="$repository_root/scripts/check-dependabot-config.py"
+readme_regression="$repository_root/scripts/test-readme.sh"
 
 fail() {
   printf 'Quality tooling regression failed: %s\n' "$1" >&2
@@ -25,11 +26,13 @@ fail() {
 [[ -x "$flow_policy_regression" ]] || fail 'the Flow 1 policy regression must be executable.'
 [[ -x "$worktree_regression" ]] || fail 'the worktree tooling regression must be executable.'
 [[ -f "$dependabot_validation" ]] || fail 'the Dependabot validator must exist.'
+[[ -x "$readme_regression" ]] || fail 'the README regression must be executable.'
 bash -n "$gate"
 bash -n "$ci_gate"
 bash -n "$worktree_guard"
 bash -n "$flow_policy_regression"
 bash -n "$worktree_regression"
+bash -n "$readme_regression"
 grep -Fqx '"$repository_root/test.sh"' "$ci_gate" || fail 'CI must invoke the authoritative local gate.'
 [[ "$(grep -Fxc '  exec "$worktree_guard" --repository "$repository_root" -- "$repository_root/test.sh" "$@"' "$gate")" -eq 1 ]] \
   || fail './test.sh must enter the worktree guard exactly once.'
@@ -54,6 +57,7 @@ grep -Fq 'uv run python scripts/validate_migrations.py' "$gate" || fail 'Alembic
 grep -Fq 'uv run bandit' "$gate" || fail 'backend security analysis is missing from the gate.'
 python3 "$repository_root/scripts/test-dependency-audit.py" >/dev/null || fail 'dependency audit policy regressions failed.'
 python3 "$dependabot_validation" >/dev/null || fail 'Dependabot configuration validation failed.'
+"$readme_regression" >/dev/null || fail 'README regression failed.'
 if "$repository_root/scripts/run-actionlint.sh" \
   "$repository_root/tests/fixtures/github-workflows/invalid-expression.yml" \
   >/dev/null 2>&1; then

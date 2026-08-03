@@ -161,7 +161,7 @@ troubleshooting guidance; LGA-16 owns the backup, restore, rollback, and
 incident runbook. Until those tickets are complete, `./run.sh` remains the only
 supported application start command documented here for local development.
 
-### Git hooks and worktrees
+## Git hooks and worktrees
 
 After clone, and whenever `.githooks/` or the local-file provisioner changes,
 install the reviewed hook generation:

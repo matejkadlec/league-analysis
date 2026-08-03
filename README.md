@@ -31,8 +31,9 @@ Use a WSL development environment with:
 
 - Git and authorized SSH access to this private repository;
 - Node 26.5.1 through NVM and npm 12.0.2;
-- Python 3.14 and uv 0.12.1;
-- a reachable PostgreSQL 18.4 instance;
+- Python 3.14.6 and uv 0.12.1;
+- an already-provisioned PostgreSQL 18.4 database and role matching the
+  non-secret `POSTGRES_DB` and `POSTGRES_USER` configuration values;
 - a root `.env` file from the authorized private configuration source.
 
 Never paste, commit, or share `.env` values. The file is ignored and must stay
@@ -61,8 +62,9 @@ or stages local configuration; see [project overview](docs/project-overview.md#g
 
 ## Database and local application
 
-Point the private root `.env` at the verified local PostgreSQL instance, then
-apply the reviewed schema revisions before starting the application:
+Point the private root `.env` at the verified local PostgreSQL database. The
+migration command creates application schemas, not the database or role, so
+provision that target before applying the reviewed schema revisions:
 
 ```bash
 (cd backend && uv run python scripts/migrate.py upgrade head)
