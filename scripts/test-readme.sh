@@ -17,6 +17,8 @@ grep -Fq 'an already-provisioned PostgreSQL 18.4 database and role matching the'
   || fail 'README must require the configured database and role.'
 grep -Fq 'migration command creates application schemas, not the database or role' "$readme" \
   || fail 'README must distinguish migration scope from database provisioning.'
+grep -Fq '`run.sh` requires `lsof` and stops existing TCP listeners on its selected' "$readme" \
+  || fail 'README must document run.sh port-listener cleanup.'
 grep -Fqx '## Git hooks and worktrees' "$project_overview" \
   || fail 'Git hooks must be a top-level project-overview section.'
 if grep -Fqx '### Git hooks and worktrees' "$project_overview"; then
