@@ -165,8 +165,11 @@ When debugging runtime failures, inspect both logs before changing code.
 - The only documented exception is LGA-11's deliberately non-secret,
   local-development-only QA fixtures. They are never valid for production or a
   shared environment, and the cleanup command refuses any target unless
-  `ENVIRONMENT=dev`, the configured host and PostgreSQL listener are loopback,
-  and the explicit database name matches `POSTGRES_DB`:
+  `ENVIRONMENT=dev`, the configured host, every PostgreSQL `listen_addresses`
+  bind, and the active listener are loopback-only, and the explicit database
+  name matches `POSTGRES_DB`. The command checks the configured target before
+  opening a database session and requires a canonical outside-repository backup
+  path with private `0600` permissions:
   - Admin: `mat.kadlec@email.cz` / `LocalAdminQa123!`
   - Client: `scipiocz@gmail.com` / `LocalUserQa123!`
   Keep these fixture values stable for local browser/API smoke tests. Reset

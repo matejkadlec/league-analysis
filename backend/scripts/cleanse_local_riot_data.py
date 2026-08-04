@@ -13,6 +13,7 @@ import argparse
 import ipaddress
 import os
 import re
+import stat
 import subprocess
 import sys
 from collections.abc import Mapping
@@ -89,6 +90,7 @@ class Preflight:
     admin_id: int
     client_id: int | None
     server_address: str
+    listen_addresses: str
 
 
 def validated_database_name(value: str) -> str:
@@ -111,6 +113,27 @@ def is_loopback_address(value: str) -> bool:
         return ipaddress.ip_interface(value).ip.is_loopback
     except ValueError:
         return False
+
+
+def is_loopback_listener_configuration(value: str) -> bool:
+    """Return whether every configured PostgreSQL bind address is loopback-only."""
+    addresses = [address.strip().strip("'\"") for address in value.split(",")]
+    return bool(addresses) and all(
+        address and is_local_host(address) for address in addresses
+    )
+
+
+def validate_configured_target(settings: Settings, database: str) -> None:
+    """Refuse a non-local configured target before opening a database connection."""
+    environment = os.environ.get("ENVIRONMENT", "").strip().lower()
+    if environment != "dev" or settings.environment != "dev":
+        raise LocalCleanupRefusal("ENVIRONMENT must be explicitly set to dev")
+    if not is_local_host(settings.postgres_host):
+        raise LocalCleanupRefusal("POSTGRES_HOST must be localhost, 127.0.0.1, or ::1")
+    if settings.postgres_db != database:
+        raise LocalCleanupRefusal(
+            "--database must exactly match the configured POSTGRES_DB"
+        )
 
 
 def table_label(table: tuple[str, str]) -> str:
@@ -164,17 +187,22 @@ def parse_arguments(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def validated_backup_path(value: Path) -> Path:
-    """Refuse existing, relative, symlinked, or repository-contained backups."""
+    """Return a canonical new backup path outside the canonical repository root."""
     if not value.is_absolute():
         raise LocalCleanupRefusal("backup path must be absolute")
     if os.path.lexists(value):
         raise LocalCleanupRefusal("backup path already exists")
-    if value.parent.is_symlink() or not value.parent.is_dir():
+    try:
+        resolved_value = value.resolve(strict=False)
+        resolved_project_root = PROJECT_ROOT.resolve()
+    except (OSError, RuntimeError) as error:
+        raise LocalCleanupRefusal("backup path cannot be resolved safely") from error
+    if not resolved_value.parent.is_dir():
         raise LocalCleanupRefusal("backup parent must be an existing regular directory")
     try:
-        value.relative_to(PROJECT_ROOT)
+        resolved_value.relative_to(resolved_project_root)
     except ValueError:
-        return value
+        return resolved_value
     raise LocalCleanupRefusal("backup path must stay outside the repository")
 
 
@@ -221,15 +249,7 @@ def assert_required_tables(connection: Connection) -> None:
 
 def preflight(connection: Connection, settings: Settings, database: str) -> Preflight:
     """Prove the exact target is an explicit local development database."""
-    environment = os.environ.get("ENVIRONMENT", "").strip().lower()
-    if environment != "dev" or settings.environment != "dev":
-        raise LocalCleanupRefusal("ENVIRONMENT must be explicitly set to dev")
-    if not is_local_host(settings.postgres_host):
-        raise LocalCleanupRefusal("POSTGRES_HOST must be localhost, 127.0.0.1, or ::1")
-    if settings.postgres_db != database:
-        raise LocalCleanupRefusal(
-            "--database must exactly match the configured POSTGRES_DB"
-        )
+    validate_configured_target(settings, database)
 
     current_database = connection.execute(
         text("SELECT current_database()")
@@ -237,6 +257,14 @@ def preflight(connection: Connection, settings: Settings, database: str) -> Pref
     if current_database != database:
         raise LocalCleanupRefusal(
             "connected database does not match the confirmed target"
+        )
+
+    listen_addresses = str(
+        connection.execute(text("SHOW listen_addresses")).scalar_one()
+    )
+    if not is_loopback_listener_configuration(listen_addresses):
+        raise LocalCleanupRefusal(
+            "PostgreSQL listen_addresses contains a non-loopback bind address"
         )
 
     server_address = str(
@@ -270,7 +298,18 @@ def preflight(connection: Connection, settings: Settings, database: str) -> Pref
         admin_id=admin_rows[0]["id"],
         client_id=client_rows[0]["id"] if client_rows else None,
         server_address=server_address,
+        listen_addresses=listen_addresses,
     )
+
+
+def assert_private_backup_file(backup_path: Path) -> None:
+    """Require the completed dump file to be present, non-empty, and owner-only."""
+    if not backup_path.is_file() or backup_path.stat().st_size == 0:
+        raise LocalCleanupRefusal("verified backup file is missing or empty")
+    if stat.S_IMODE(backup_path.stat().st_mode) != 0o600:
+        raise LocalCleanupRefusal(
+            "verified backup file must have private 0600 permissions"
+        )
 
 
 def create_verified_backup(
@@ -291,13 +330,18 @@ def create_verified_backup(
         f"--file={backup_path}",
     ]
     try:
-        subprocess.run(
-            dump_command,
-            check=True,
-            capture_output=True,
-            text=True,
-            env=environment,
-        )
+        original_umask = os.umask(0o077)
+        try:
+            subprocess.run(
+                dump_command,
+                check=True,
+                capture_output=True,
+                text=True,
+                env=environment,
+            )
+        finally:
+            os.umask(original_umask)
+        assert_private_backup_file(backup_path)
         subprocess.run(
             ["pg_restore", "--list", str(backup_path)],
             check=True,
@@ -307,8 +351,6 @@ def create_verified_backup(
         )
     except (FileNotFoundError, subprocess.CalledProcessError) as error:
         raise LocalCleanupRefusal("backup creation or verification failed") from error
-    if not backup_path.is_file() or backup_path.stat().st_size == 0:
-        raise LocalCleanupRefusal("verified backup file is missing or empty")
 
 
 def lock_cleanup_tables(connection: Connection) -> None:
@@ -493,6 +535,10 @@ def print_plan(
 ) -> None:
     """Print a credential-free before-mutation report."""
     print(f"Verified local development target: {database}")
+    print(
+        "Verified PostgreSQL loopback bind configuration: "
+        f"{preflight_result.listen_addresses}"
+    )
     print(f"Verified PostgreSQL loopback listener: {preflight_result.server_address}")
     print("Riot-derived deletion plan:")
     for label, count in riot_counts.items():
@@ -511,8 +557,10 @@ def main(argv: list[str] | None = None) -> int:
     """Run a dry-run report or the explicit, backed-up cleanup transaction."""
     arguments = parse_arguments(argv)
     settings = get_settings()
-    engine: Engine = create_engine(connection_url(settings, arguments.database))
+    engine: Engine | None = None
     try:
+        validate_configured_target(settings, arguments.database)
+        engine = create_engine(connection_url(settings, arguments.database))
         with engine.connect() as connection:
             preflight_result = preflight(connection, settings, arguments.database)
             riot_counts = table_counts(connection, RIOT_DATA_TABLES)
@@ -558,7 +606,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Local cleanup failed: {type(error).__name__}", file=sys.stderr)
         return 1
     finally:
-        engine.dispose()
+        if engine is not None:
+            engine.dispose()
 
 
 if __name__ == "__main__":

@@ -359,11 +359,14 @@ execution history. It resets the documented local-only admin fixture and
 creates or normalizes the documented non-admin client fixture.
 
 The command is read-only by default. It refuses to run unless all of these are
-true: `ENVIRONMENT=dev` is explicit, `POSTGRES_HOST` and PostgreSQL's listener
-are loopback-only, `--database` exactly matches `POSTGRES_DB`, and the reviewed
-application tables exist. Applying changes also requires a new absolute backup
-path outside the repository; the command creates a custom-format `pg_dump` and
-verifies it with `pg_restore --list` before starting its transaction.
+true: `ENVIRONMENT=dev` is explicit, `POSTGRES_HOST`, every PostgreSQL
+`listen_addresses` bind, and the active listener are loopback-only,
+`--database` exactly matches `POSTGRES_DB`, and the reviewed application tables
+exist. The configured environment, host, and database name are checked before a
+database session opens. Applying changes also requires a new canonical backup
+path outside the repository; the command creates the custom-format `pg_dump`
+with owner-only `0600` permissions and verifies it with `pg_restore --list`
+before starting its transaction.
 
 ```bash
 cd backend
