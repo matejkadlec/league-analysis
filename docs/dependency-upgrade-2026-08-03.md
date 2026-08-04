@@ -11,20 +11,21 @@ were queried from the official npm registry and PyPI on 2026-08-03. Runtime,
 database, action, and tool decisions were cross-checked against their official
 release pages.
 
-Only stable versions were selected. Two newer stable frontend tools were not
-compatible with the current Next.js lint stack: ESLint 10 is outside several
-`eslint-config-next` plugin peer ranges, and TypeScript 7 is outside
-`typescript-eslint`'s `<6.1.0` peer range. The selected ESLint 9.39.5 and
-TypeScript 6.0.3 are therefore the newest stable compatible releases. The
-unused `eslint-plugin-react-compiler` RC was removed.
+Only stable versions were selected. ESLint 10 remains outside several
+`eslint-config-next` plugin peer ranges. TypeScript 7 does not yet expose the
+compiler API expected by `typescript-eslint`, so the frontend runs the native
+TypeScript 7 compiler through `@typescript/native` while the `typescript`
+alias supplies the supported TypeScript 6 API to lint tooling. The unused
+`eslint-plugin-react-compiler` RC was removed.
 
 Primary release sources include [Python 3.14.6], [Node.js 26.5.1], the
-[Node.js release schedule], [Next.js 16.2], [PostgreSQL 18.4], [PyPI], [npm],
-and the linked GitHub releases in the tooling matrix.
+[Node.js release schedule], [TypeScript 7.0], [Next.js 16.2], [PostgreSQL
+18.4], [PyPI], [npm], and the linked GitHub releases in the tooling matrix.
 
 [Python 3.14.6]: https://www.python.org/downloads/release/python-3146/
 [Node.js 26.5.1]: https://nodejs.org/en/blog/release/v26.5.1
 [Node.js release schedule]: https://nodejs.org/en/about/previous-releases
+[TypeScript 7.0]: https://devblogs.microsoft.com/typescript/announcing-typescript-7-0/
 [Next.js 16.2]: https://nextjs.org/blog/next-16-2
 [PostgreSQL 18.4]: https://www.postgresql.org/docs/current/release-18-4.html
 [PyPI]: https://pypi.org/
@@ -133,7 +134,7 @@ breakage would have blocked the target.
 | eslint-plugin-react-hooks | 7.0.1 | 7.1.1 (2026-04-17) | Compatible v7 update; new effect diagnostics were resolved or narrowly justified. |
 | Tailwind CSS | 4.1.18 | 4.3.3 (2026-07-16) | Compatible v4 update; production styles build. |
 | tailwindcss-animate | 1.0.7 | 1.0.7 (2023-08-28) | Retained latest stable. |
-| TypeScript | 5.9.3 | 6.0.3 (2026-04-16) | Major compiler update; typecheck passes. TypeScript 7.0.2 is rejected until `typescript-eslint` supports it. |
+| TypeScript | 5.9.3 | 7.0.2 native compiler plus 6.0.2 API compatibility (2026-07-08) | TypeScript 7 does not ship a compiler API. `@typescript/native` provides the `tsc` executable while the `typescript` npm alias resolves `@typescript/typescript6` for `typescript-eslint`; lint and typecheck both pass. |
 | Vitest | 3.2.7 | 4.1.10 (2026-07-06) | Major runner update; all deterministic tests pass without configuration migration. |
 
 ## Transitive security decisions
