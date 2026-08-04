@@ -162,6 +162,16 @@ When debugging runtime failures, inspect both logs before changing code.
 ## Repository-Wide Safety and Maintenance
 
 - Never commit credentials, API keys, tokens, or `.env` contents.
+- The only documented exception is LGA-11's deliberately non-secret,
+  local-development-only QA fixtures. They are never valid for production or a
+  shared environment, and the cleanup command refuses any target unless
+  `ENVIRONMENT=dev`, the configured host and PostgreSQL listener are loopback,
+  and the explicit database name matches `POSTGRES_DB`:
+  - Admin: `mat.kadlec@email.cz` / `LocalAdminQa123!`
+  - Client: `scipiocz@gmail.com` / `LocalUserQa123!`
+  Keep these fixture values stable for local browser/API smoke tests. Reset
+  only these accounts through `backend/scripts/cleanse_local_riot_data.py`; do
+  not use the command or fixture passwords for arbitrary accounts.
 - Do not commit, push, or publish unless the user request or an explicitly named
   workflow authorizes that delivery step.
 - Never use unsafe force push. Where rebasing a published task branch is

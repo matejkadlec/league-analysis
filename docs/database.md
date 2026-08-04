@@ -349,6 +349,38 @@ User-specific tracked player mappings.
 **Primary Key**: (`user_id`, `puuid`)
 **Behavior**: Jobs process players tracked by any user (distinct `puuid` set).
 
+### Local Riot-data cleanup and QA fixtures
+
+`backend/scripts/cleanse_local_riot_data.py` is the only reviewed maintenance
+command for LGA-11's local data reset. It deletes the reviewed Riot-derived
+tables in foreign-key-safe order, clears Riot links from user accounts, and
+preserves application configuration, user settings, job configuration, and job
+execution history. It resets the documented local-only admin fixture and
+creates or normalizes the documented non-admin client fixture.
+
+The command is read-only by default. It refuses to run unless all of these are
+true: `ENVIRONMENT=dev` is explicit, `POSTGRES_HOST` and PostgreSQL's listener
+are loopback-only, `--database` exactly matches `POSTGRES_DB`, and the reviewed
+application tables exist. Applying changes also requires a new absolute backup
+path outside the repository; the command creates a custom-format `pg_dump` and
+verifies it with `pg_restore --list` before starting its transaction.
+
+```bash
+cd backend
+uv run python scripts/cleanse_local_riot_data.py \
+  --database league_analysis_local_dev
+
+install -d -m 700 "$HOME/.local/state/league-analysis/backups"
+uv run python scripts/cleanse_local_riot_data.py \
+  --database league_analysis_local_dev \
+  --apply \
+  --backup-path "$HOME/.local/state/league-analysis/backups/pre-lga-11.dump"
+```
+
+Never point this command at production, a shared environment, a remote host,
+or a database whose identity cannot be proven. Restore the verified backup
+instead of attempting an ad-hoc reversal.
+
 ### `auth.user_cookie_consents`
 
 Authenticated user cookie-consent audit record.
