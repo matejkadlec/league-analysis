@@ -17,10 +17,14 @@ from scripts.cleanse_local_riot_data import (
     PRESERVED_TABLES,
     RIOT_DATA_TABLES,
     LocalCleanupRefusal,
+    Preflight,
     create_verified_backup,
+    delete_riot_data,
     is_local_host,
     is_loopback_address,
     is_loopback_listener_configuration,
+    lock_cleanup_tables,
+    normalize_qa_accounts,
     parse_arguments,
     preflight,
     validate_configured_target,
@@ -252,6 +256,158 @@ def test_create_verified_backup_rejects_a_non_private_dump(
 
     with pytest.raises(LocalCleanupRefusal, match="private 0600"):
         create_verified_backup(settings, "league_analysis_local_dev", backup_path)
+
+
+def test_delete_riot_data_clears_every_saved_puuid_preference() -> None:
+    """The reset cannot leave a page preference pointing at deleted Riot data."""
+
+    class Result:
+        rowcount = 3
+
+    class Connection:
+        def __init__(self) -> None:
+            self.queries: list[str] = []
+
+        def execute(self, statement, *_args, **_kwargs) -> Result:
+            self.queries.append(str(statement))
+            return Result()
+
+    connection = Connection()
+
+    deleted = delete_riot_data(connection)
+
+    settings_update = next(
+        query for query in connection.queries if "UPDATE auth.user_settings" in query
+    )
+    for column in (
+        "save_playstyle_url",
+        "saved_playstyle_puuid",
+        "save_matchmaking_url",
+        "saved_matchmaking_puuid",
+        "save_tracked_url",
+        "saved_tracked_puuid",
+    ):
+        assert column in settings_update
+    assert deleted["auth.user_settings_saved_puuids"] == 3
+
+
+def test_lock_cleanup_tables_blocks_writers_and_allows_backup_reads() -> None:
+    """The lock covers each cleanup mutation without blocking pg_dump reads."""
+
+    class Connection:
+        def __init__(self) -> None:
+            self.query = ""
+
+        def execute(self, statement, *_args, **_kwargs) -> None:
+            self.query = str(statement)
+
+    connection = Connection()
+
+    lock_cleanup_tables(connection)
+
+    assert "IN SHARE ROW EXCLUSIVE MODE" in connection.query
+    assert '"auth"."user_settings"' in connection.query
+    assert '"auth"."revoked_access_tokens"' not in connection.query
+
+
+def test_normalize_qa_accounts_preserves_revoked_access_tokens(monkeypatch) -> None:
+    """Resetting fixture sessions must not reactivate an already revoked JWT."""
+
+    class Result:
+        def scalar_one(self) -> int:
+            return 1
+
+    class Connection:
+        def __init__(self) -> None:
+            self.queries: list[str] = []
+
+        def execute(self, statement, *_args, **_kwargs) -> Result:
+            self.queries.append(str(statement))
+            return Result()
+
+    monkeypatch.setattr(
+        cleanup.AuthService,
+        "get_password_hash",
+        staticmethod(lambda _password: "test-password-hash"),
+    )
+    connection = Connection()
+    target = Preflight(
+        admin_id=1,
+        client_id=2,
+        server_address="127.0.0.1",
+        listen_addresses="localhost",
+    )
+
+    assert not normalize_qa_accounts(connection, target)
+
+    cleanup_queries = "\n".join(connection.queries)
+    assert 'DELETE FROM auth."refresh_tokens"' in cleanup_queries
+    assert 'DELETE FROM auth."email_change_requests"' in cleanup_queries
+    assert "revoked_access_tokens" not in cleanup_queries
+
+
+def test_apply_locks_tables_before_creating_the_backup(tmp_path, monkeypatch) -> None:
+    """Every cleanup mutation is protected by the same pre-backup write lock."""
+    events: list[str] = []
+    settings = SimpleNamespace()
+    target = Preflight(
+        admin_id=1,
+        client_id=2,
+        server_address="127.0.0.1",
+        listen_addresses="localhost",
+    )
+
+    class Context:
+        def __enter__(self) -> Context:
+            return self
+
+        def __exit__(self, *_args) -> None:
+            return None
+
+    class Engine:
+        def connect(self) -> Context:
+            return Context()
+
+        def begin(self) -> Context:
+            return Context()
+
+        def dispose(self) -> None:
+            events.append("dispose")
+
+    monkeypatch.setattr(cleanup, "get_settings", lambda: settings)
+    monkeypatch.setattr(cleanup, "validate_configured_target", lambda *_args: None)
+    monkeypatch.setattr(cleanup, "connection_url", lambda *_args: "test-url")
+    monkeypatch.setattr(cleanup, "create_engine", lambda _url: Engine())
+    monkeypatch.setattr(cleanup, "preflight", lambda *_args: target)
+    monkeypatch.setattr(cleanup, "table_counts", lambda *_args: {})
+    monkeypatch.setattr(cleanup, "print_plan", lambda *_args: None)
+    monkeypatch.setattr(
+        cleanup, "lock_cleanup_tables", lambda _connection: events.append("lock")
+    )
+    monkeypatch.setattr(
+        cleanup,
+        "create_verified_backup",
+        lambda *_args: events.append("backup"),
+    )
+    monkeypatch.setattr(
+        cleanup, "delete_riot_data", lambda _connection: events.append("delete") or {}
+    )
+    monkeypatch.setattr(cleanup, "normalize_qa_accounts", lambda *_args: False)
+    monkeypatch.setattr(cleanup, "verify_after_cleanup", lambda *_args: None)
+
+    assert (
+        cleanup.main(
+            [
+                "--database",
+                "league_analysis_local_dev",
+                "--apply",
+                "--backup-path",
+                str(tmp_path / "before.dump"),
+            ]
+        )
+        == 0
+    )
+    assert events.index("lock") < events.index("backup") < events.index("delete")
 
 
 def test_cleanup_plan_includes_every_riot_data_category() -> None:

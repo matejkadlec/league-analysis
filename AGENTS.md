@@ -169,7 +169,9 @@ When debugging runtime failures, inspect both logs before changing code.
   bind, and the active listener are loopback-only, and the explicit database
   name matches `POSTGRES_DB`. The command checks the configured target before
   opening a database session and requires a canonical outside-repository backup
-  path with private `0600` permissions:
+  path with private `0600` permissions. During `--apply`, it blocks writers to
+  every table it changes before taking the backup and preserves revoked access
+  token blacklist entries:
   - Admin: `mat.kadlec@email.cz` / `LocalAdminQa123!`
   - Client: `scipiocz@gmail.com` / `LocalUserQa123!`
   Keep these fixture values stable for local browser/API smoke tests. Reset

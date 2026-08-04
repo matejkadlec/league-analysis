@@ -354,17 +354,19 @@ def create_verified_backup(
 
 
 def lock_cleanup_tables(connection: Connection) -> None:
-    """Prevent concurrent writes to every table changed by the transaction."""
+    """Block cleanup-table writers while allowing pg_dump's read lock to proceed."""
     changed_tables = RIOT_DATA_TABLES + (
         ("auth", "users"),
+        ("auth", "user_settings"),
         ("auth", "refresh_tokens"),
-        ("auth", "revoked_access_tokens"),
         ("auth", "email_change_requests"),
     )
     qualified_tables = ", ".join(
         f'"{schema}"."{table}"' for schema, table in changed_tables
     )
-    connection.execute(text(f"LOCK TABLE {qualified_tables} IN ACCESS EXCLUSIVE MODE"))
+    connection.execute(
+        text(f"LOCK TABLE {qualified_tables} IN SHARE ROW EXCLUSIVE MODE")
+    )
 
 
 def delete_riot_data(connection: Connection) -> dict[str, int]:
@@ -378,6 +380,18 @@ def delete_riot_data(connection: Connection) -> dict[str, int]:
         text(
             "UPDATE auth.users SET riot_account_connected = FALSE, puuid = NULL "
             "WHERE riot_account_connected IS TRUE OR puuid IS NOT NULL"
+        )
+    ).rowcount
+    deleted["auth.user_settings_saved_puuids"] = connection.execute(
+        text(
+            "UPDATE auth.user_settings SET "
+            "save_playstyle_url = FALSE, saved_playstyle_puuid = NULL, "
+            "save_matchmaking_url = FALSE, saved_matchmaking_puuid = NULL, "
+            "save_tracked_url = FALSE, saved_tracked_puuid = NULL, "
+            "updated_at = CURRENT_TIMESTAMP "
+            "WHERE save_playstyle_url IS TRUE OR saved_playstyle_puuid IS NOT NULL "
+            "OR save_matchmaking_url IS TRUE OR saved_matchmaking_puuid IS NOT NULL "
+            "OR save_tracked_url IS TRUE OR saved_tracked_puuid IS NOT NULL"
         )
     ).rowcount
     return deleted
@@ -443,7 +457,7 @@ def normalize_qa_accounts(connection: Connection, target: Preflight) -> bool:
             },
         )
 
-    for table in ("refresh_tokens", "revoked_access_tokens", "email_change_requests"):
+    for table in ("refresh_tokens", "email_change_requests"):
         connection.execute(
             text(
                 f'DELETE FROM auth."{table}" WHERE user_id IN (:admin_id, :client_id)'
@@ -579,14 +593,15 @@ def main(argv: list[str] | None = None) -> int:
             return 0
 
         backup_path = validated_backup_path(arguments.backup_path)
-        create_verified_backup(settings, arguments.database, backup_path)
 
         with engine.begin() as connection:
-            # Repeat identity checks after backup and take exclusive table locks
-            # before any state change, so an interrupted run rolls back cleanly.
+            # Repeat identity checks and block writers before taking the backup.
+            # The lock stays held through cleanup, so its backup covers every row
+            # the transaction can delete or update.
             preflight_result = preflight(connection, settings, arguments.database)
-            before_preserved = table_counts(connection, PRESERVED_TABLES)
             lock_cleanup_tables(connection)
+            create_verified_backup(settings, arguments.database, backup_path)
+            before_preserved = table_counts(connection, PRESERVED_TABLES)
             deleted = delete_riot_data(connection)
             client_created = normalize_qa_accounts(connection, preflight_result)
             verify_after_cleanup(connection, before_preserved, client_created)

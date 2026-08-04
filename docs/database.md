@@ -364,9 +364,12 @@ true: `ENVIRONMENT=dev` is explicit, `POSTGRES_HOST`, every PostgreSQL
 `--database` exactly matches `POSTGRES_DB`, and the reviewed application tables
 exist. The configured environment, host, and database name are checked before a
 database session opens. Applying changes also requires a new canonical backup
-path outside the repository; the command creates the custom-format `pg_dump`
-with owner-only `0600` permissions and verifies it with `pg_restore --list`
-before starting its transaction.
+path outside the repository. The command blocks writers to every table it will
+change before creating the custom-format `pg_dump`, keeps those locks through
+the cleanup transaction, uses owner-only `0600` permissions, and verifies the
+backup with `pg_restore --list`. It also clears all saved Riot PUUID URL
+preferences while preserving settings rows and revoked access-token blacklist
+entries.
 
 ```bash
 cd backend
