@@ -349,6 +349,44 @@ User-specific tracked player mappings.
 **Primary Key**: (`user_id`, `puuid`)
 **Behavior**: Jobs process players tracked by any user (distinct `puuid` set).
 
+### Local Riot-data cleanup and QA fixtures
+
+`backend/scripts/cleanse_local_riot_data.py` is the only reviewed maintenance
+command for LGA-11's local data reset. It deletes the reviewed Riot-derived
+tables in foreign-key-safe order, clears Riot links from user accounts, and
+preserves application configuration, user settings, job configuration, and job
+execution history. It resets the documented local-only admin fixture and
+creates or normalizes the documented non-admin client fixture.
+
+The command is read-only by default. It refuses to run unless all of these are
+true: `ENVIRONMENT=dev` is explicit, `POSTGRES_HOST`, every PostgreSQL
+`listen_addresses` bind, and the active listener are loopback-only,
+`--database` exactly matches `POSTGRES_DB`, and the reviewed application tables
+exist. The configured environment, host, and database name are checked before a
+database session opens. Applying changes also requires a new canonical backup
+path outside the repository. The command blocks writers to every table it will
+change before creating the custom-format `pg_dump`, keeps those locks through
+the cleanup transaction, uses owner-only `0600` permissions, and verifies the
+backup with `pg_restore --list`. It also clears all saved Riot PUUID URL
+preferences while preserving settings rows and revoked access-token blacklist
+entries.
+
+```bash
+cd backend
+uv run python scripts/cleanse_local_riot_data.py \
+  --database league_analysis_local_dev
+
+install -d -m 700 "$HOME/.local/state/league-analysis/backups"
+uv run python scripts/cleanse_local_riot_data.py \
+  --database league_analysis_local_dev \
+  --apply \
+  --backup-path "$HOME/.local/state/league-analysis/backups/pre-lga-11.dump"
+```
+
+Never point this command at production, a shared environment, a remote host,
+or a database whose identity cannot be proven. Restore the verified backup
+instead of attempting an ad-hoc reversal.
+
 ### `auth.user_cookie_consents`
 
 Authenticated user cookie-consent audit record.
