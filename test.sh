@@ -180,6 +180,7 @@ fi
 run_step 'Repository hygiene' run_repository_hygiene
 run_step 'ShellCheck' "$repository_root/scripts/run-shellcheck.sh"
 run_step 'ShellCheck tooling regression' "$repository_root/scripts/test-shellcheck.sh"
+run_step 'run.sh port cleanup regression' "$repository_root/scripts/test-run.sh"
 run_step 'GitHub workflow syntax' "$repository_root/scripts/run-actionlint.sh"
 run_step 'GitHub workflow security policy' python3 "$repository_root/scripts/verify-github-workflows.py"
 run_step 'Dependabot configuration' python3 "$repository_root/scripts/check-dependabot-config.py"
