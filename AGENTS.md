@@ -63,9 +63,10 @@ Non-negotiable summary:
   a concrete exceptional reason recorded in the batch ledger.
 - An AI-created pull request is ready for review, not draft. Prefer one
   coherent multi-ticket PR. One preselected invocation may publish up to two
-  independent ready pull requests, or three only when every batch is small,
-  AI-only, mutually independent, and non-overlapping. Each published PR becomes
-  owner-managed immediately: do not poll, review, repair, merge, or deploy it.
+  independent ready pull requests. At most two independently selected batches
+  may be pending or unmerged at once, counting both `PENDING CR` and `PENDING
+  USER QA`. Each published PR becomes owner-managed immediately: do not poll,
+  review, repair, merge, or deploy it.
   Continue only with independent batches recorded during intake, then provide
   one final ticket-to-PR handoff and stop.
 - Owner-managed review and merge are workflow policy, not an identity control
@@ -122,8 +123,9 @@ tail -50 logs/frontend.log
 
 Each `run.sh` invocation creates `logs/` before redirecting backend or frontend
 output, so fresh checkouts do not require manual log-directory setup.
-It requires `lsof` and stops existing TCP listeners on the selected frontend
-and backend ports before checking the database or starting replacement services.
+It requires `lsof` and `fuser` and stops existing TCP listeners on the selected
+frontend and backend ports before checking the database or starting replacement
+services. `fuser` covers WSL cases where `lsof` cannot report a listener.
 
 Backend API docs are at `http://localhost:8000/api`; the frontend is at
 `http://localhost:3000`. After changing `.env`, a restart is required. Do not

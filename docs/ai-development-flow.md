@@ -66,6 +66,9 @@ issue belongs to project `League Analysis`.
      roadmap grouping.
 5. Treat Jira priority as relative to the active sprint. Use priority, `NEXT`,
    dependencies, conflicts, and risk together when selecting work.
+   Active-sprint work outranks future-sprint work. Select from `NEXT` first and
+   replenish it from eligible active-sprint `TO DO` work before it becomes
+   empty.
 
 ## QA Classification
 
@@ -184,11 +187,11 @@ as the reason when it makes the selected batch materially smaller.
 
 ### Independent pull requests in one invocation
 
-Prefer one coherent multi-ticket pull request. If independently reviewable work
-should not share a rollback or review boundary, one `flow1` invocation may
-publish up to **2 ready pull requests** by default. A third ready pull request is
-allowed only when all three batches are small, AI-only, mutually independent,
-and non-overlapping.
+Prefer one coherent multi-ticket pull request. At most **two** independently
+selected batches may be pending or unmerged at once, counting both `PENDING CR`
+and `PENDING USER QA`. If independently reviewable work should not share a
+rollback or review boundary, one `flow1` invocation may publish up to two ready
+pull requests within that limit.
 
 - Preselect every planned batch and its PR mapping during intake.
 - Give each pull request its own focused branch and linked worktree from the
@@ -197,8 +200,9 @@ and non-overlapping.
 - Do not stack pull requests merely for convenience.
 - A published PR becomes owner-managed immediately. Do not poll CI or review,
   request review, inspect or remediate published feedback, merge, or deploy it.
-- Continue after publication only with independent batches recorded in the
-  intake ledger; do not add opportunistic work.
+- Continue after publication only with an independent batch recorded in the
+  intake ledger that stays within the pending-batch limit; do not add
+  opportunistic work.
 - Stop the remaining invocation immediately if it encounters User QA, a
   secret/provider action, destructive uncertainty, an architecture/product
   decision, a conflict, a baseline failure, or another genuine owner boundary.
@@ -274,10 +278,12 @@ repository.
 3. Implement only the coherent authorized scope.
 4. Keep authoritative docs and scoped agent guidance synchronized with runtime
    changes.
-5. Run the checks required by
+5. Run focused checks relevant to the changed files and risk area during
+   implementation, then run the checks required by
    [`project-overview.md`](project-overview.md#quality-and-verification).
    Run `./test.sh` before publication; focused `-f`/`-b` modes are for
-   implementation feedback, not substitutes for the complete PR gate.
+   implementation feedback, not substitutes for the complete PR gate. Do not
+   duplicate an unambiguous successful full gate against an unchanged worktree.
 6. Inspect the final diff for scope, secrets, generated-file drift, and
    accidental user-change overlap.
 7. Automatically fix safely remediable pre-publication defects within the same
@@ -285,6 +291,35 @@ repository.
 
 Do not escalate ordinary lint, type, formatting, link, or focused regression
 failures before attempting a safe fix.
+
+## Local Assistance and User QA Launch
+
+- When the owner can resolve something through the terminal, provide complete,
+  copy-pasteable command(s), not a partial command or an assumed working
+  directory.
+- Agents may run commands needed for authorized implementation, validation, and
+  workflow steps. This includes the narrowly scoped private `.env` fallback
+  below when it is needed to validate or launch an exact linked worktree.
+- Never inspect, print, stage, commit, or otherwise expose `.env` contents.
+  The trusted post-checkout provisioning described in [Branch and Worktree
+  Lifecycle](#branch-and-worktree-lifecycle) remains the preferred path.
+
+### User QA launch commands
+
+- When a batch requires User QA, give the owner complete copy-pasteable
+  command(s) to start the app from the exact worktree containing that batch.
+- If that worktree does not have its ignored `.env`, provide this mode-600,
+  no-overwrite command before the launch command, or run it when necessary for
+  the authorized workflow:
+
+  ```bash
+  install -m 600 -- <primary-worktree>/.env <qa-worktree>/.env
+  ```
+
+  Use exact absolute paths, never overwrite an existing target, and do not
+  inspect, print, or stage any `.env` value.
+- Then provide `cd <qa-worktree>` followed by `./run.sh`. If the batch is in
+  the primary `master` worktree, tell the owner only to run `./run.sh`.
 
 ## User QA Path
 
@@ -295,8 +330,8 @@ For a User QA batch:
    `PENDING USER QA`.
 3. Add or update the `LGA-1` entry with only the remaining visual/subjective
    checks and the current user-priority convention.
-4. Provide the owner exact routes, states, viewports, and interactions to
-   inspect.
+4. Provide the owner the User QA launch command(s), exact routes, states,
+   viewports, and interactions to inspect.
 5. Stop for owner judgment. Do not publish a ready pull request until the owner
    passes the visual scope or explicitly changes the lifecycle.
 
@@ -312,9 +347,13 @@ When publication is authorized by the user or a named workflow:
 4. Push the focused branch to `matejkadlec/league-analysis`.
 5. Create or update a **ready** pull request, never a draft, targeting
    `master`.
-6. Include issue keys, scope, validation, and any owner-relevant limitations.
-7. Transition the associated `LGA` issues to `PENDING CR`.
-8. Mark this PR owner-managed immediately. Continue only if the intake ledger
+6. Read back the actual remote pull-request head, verify the final commit is
+   reachable from it, and record the current Quality Checks state. A queued,
+   in-progress, blocked, or missing remote check is not a successful check.
+7. Include issue keys, scope, validation, the remote-delivery proof, and any
+   owner-relevant limitations.
+8. Transition the associated `LGA` issues to `PENDING CR`.
+9. Mark this PR owner-managed immediately. Continue only if the intake ledger
    contains another preselected independent AI-only batch; otherwise provide
    the final handoff and return control to the owner.
 
@@ -328,6 +367,11 @@ stop.
 A later `continue` or `resume` requires fresh inspection of GitHub, Jira,
 `origin/master`, CI/CD state, and relevant runtime/live state before
 reconciliation.
+
+Codex Review is optional, not a required merge gate. The owner may explicitly
+delegate one review pass for a named high-risk pull request. Do not create an
+automatic review-remediation-rereview loop, and address review findings only
+when the owner delegates that named pull request.
 
 ## Completion and Rejection
 
@@ -356,6 +400,13 @@ Stop and ask the owner when completion requires:
 Never ask the owner to paste secrets or a complete environment file into chat
 or Jira.
 
+When an external control is required but cannot be safely accessed or changed,
+report the observed evidence, likely root cause, exact owner action and control
+location, non-secret identifiers or values needed, and the verification to run
+afterward. Once the owner confirms that action, re-inspect the control and
+resume or retry the original task. Do not repeat local work that cannot affect
+the external control.
+
 ## Workflow Shortcuts
 
 ### `flow1`
@@ -379,7 +430,7 @@ active-sprint work.
 7. Otherwise commit, push, open/update each preselected ready pull request, and
    transition its issues to `PENDING CR`. Treat every published PR as
    owner-managed immediately; continue only with another preselected
-   independent AI-only batch within the two/three-PR limits.
+   independent AI-only batch within the two-pending-batch limit.
 8. Provide one final ledger mapping tickets, branches/worktrees, validation, and
    pull requests, then stop.
 

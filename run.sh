@@ -96,7 +96,15 @@ validate_port "Frontend" "$FRONTEND_PORT"
 validate_port "Backend" "$BACKEND_PORT"
 
 listener_pids_for_port() {
-    lsof -tiTCP:"$1" -sTCP:LISTEN 2>/dev/null || true
+    local port="$1"
+
+    # Some WSL lsof builds do not report listeners owned by a Next.js child
+    # process even though the port is occupied. Combine its output with fuser
+    # so the selected port is reliably clear before either service starts.
+    {
+        lsof -tiTCP:"$port" -sTCP:LISTEN 2>/dev/null || true
+        fuser -n tcp "$port" 2>/dev/null || true
+    } | awk '{ for (i = 1; i <= NF; i++) if ($i ~ /^[0-9]+$/ && !seen[$i]++) print $i }'
 }
 
 stop_listeners_on_port() {
@@ -162,6 +170,12 @@ stop_listeners_on_port() {
 if ! command -v lsof >/dev/null 2>&1; then
     echo -e "${RED}ERROR: lsof is required to stop processes on the selected ports.${NC}" >&2
     echo -e "${YELLOW}Install lsof, then run this command again.${NC}" >&2
+    exit 1
+fi
+
+if ! command -v fuser >/dev/null 2>&1; then
+    echo -e "${RED}ERROR: fuser is required to stop processes on the selected ports.${NC}" >&2
+    echo -e "${YELLOW}Install the procps package, then run this command again.${NC}" >&2
     exit 1
 fi
 

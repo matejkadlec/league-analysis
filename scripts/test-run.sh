@@ -40,6 +40,10 @@ done
 
 printf 'lsof:%s\n' "$port" >> "$LGA_RUN_TEST_CALL_LOG"
 
+if [[ "${LGA_RUN_TEST_LISTENER_LOOKUP:-lsof}" == "fuser" ]]; then
+  exit 0
+fi
+
 case "$port" in
   3000) pid="$LGA_RUN_TEST_PORT_3000_PID" ;;
   3001) pid="$LGA_RUN_TEST_PORT_3001_PID" ;;
@@ -54,12 +58,33 @@ if [[ -n "$state" && ! "$state" =~ ^[[:space:]]*Z ]]; then
 fi
 EOF
 
+cat > "$test_directory/fuser" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+port="${!#}"
+printf 'fuser:%s\n' "$port" >> "$LGA_RUN_TEST_CALL_LOG"
+
+case "$port" in
+  3000) pid="$LGA_RUN_TEST_PORT_3000_PID" ;;
+  3001) pid="$LGA_RUN_TEST_PORT_3001_PID" ;;
+  8000) pid="$LGA_RUN_TEST_PORT_8000_PID" ;;
+  8001) pid="$LGA_RUN_TEST_PORT_8001_PID" ;;
+  *) exit 1 ;;
+esac
+
+state="$(ps -o stat= -p "$pid" 2>/dev/null || true)"
+if [[ -n "$state" && ! "$state" =~ ^[[:space:]]*Z ]]; then
+  printf '%s\n' "$pid"
+fi
+EOF
+
 cat > "$test_directory/psql" <<'EOF'
 #!/usr/bin/env bash
 printf 'psql\n' >> "$LGA_RUN_TEST_CALL_LOG"
 exit 1
 EOF
-chmod 700 "$test_directory/lsof" "$test_directory/psql"
+chmod 700 "$test_directory/lsof" "$test_directory/fuser" "$test_directory/psql"
 
 pid_is_alive() {
   local pid="$1"
@@ -88,7 +113,8 @@ is_expected_port() {
 run_case() {
   local name="$1"
   local expected_ports="$2"
-  shift 2
+  local listener_lookup="$3"
+  shift 3
   local case_directory="$test_directory/$name"
   local call_log="$case_directory/calls.log"
   local status
@@ -114,7 +140,7 @@ run_case() {
   export LGA_RUN_TEST_CALL_LOG="$call_log"
 
   set +e
-  PATH="$test_directory:$PATH" "$case_directory/run.sh" "$@" > "$case_directory/output.log" 2>&1
+  LGA_RUN_TEST_LISTENER_LOOKUP="$listener_lookup" PATH="$test_directory:$PATH" "$case_directory/run.sh" "$@" > "$case_directory/output.log" 2>&1
   status=$?
   set -e
 
@@ -126,6 +152,7 @@ run_case() {
     if is_expected_port "$expected_ports" "$port"; then
       ! pid_is_alive "$pid" || fail "$name did not stop the listener for port $port."
       grep -Fxq "lsof:$port" "$call_log" || fail "$name did not inspect port $port."
+      grep -Fxq "fuser:$port" "$call_log" || fail "$name did not inspect port $port with fuser."
     else
       pid_is_alive "$pid" || fail "$name stopped an unselected port $port."
       if grep -Fxq "lsof:$port" "$call_log"; then
@@ -135,8 +162,9 @@ run_case() {
   done
 }
 
-run_case default '3000 8000'
-run_case frontend_override '3001 8000' 3001
-run_case custom_ports '3001 8001' 3001 8001
+run_case default '3000 8000' lsof
+run_case frontend_override '3001 8000' lsof 3001
+run_case custom_ports '3001 8001' lsof 3001 8001
+run_case fuser_fallback '3001 8001' fuser 3001 8001
 
 printf 'run.sh port cleanup regression passed.\n'
