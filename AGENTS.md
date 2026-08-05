@@ -123,9 +123,9 @@ tail -50 logs/frontend.log
 
 Each `run.sh` invocation creates `logs/` before redirecting backend or frontend
 output, so fresh checkouts do not require manual log-directory setup.
-It requires `lsof` and `fuser` and stops existing TCP listeners on the selected
+It requires `lsof` and `ss` and stops existing TCP listeners on the selected
 frontend and backend ports before checking the database or starting replacement
-services. `fuser` covers WSL cases where `lsof` cannot report a listener.
+services. `ss` covers WSL cases where `lsof` cannot report a listener.
 
 Backend API docs are at `http://localhost:8000/api`; the frontend is at
 `http://localhost:3000`. After changing `.env`, a restart is required. Do not

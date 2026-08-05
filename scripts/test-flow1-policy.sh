@@ -31,6 +31,9 @@ require_text "$flow" 'Continue after publication only with an independent batch 
 require_text "$flow" 'Newly selected `flow1` task work uses a dedicated linked worktree by default.'
 require_text "$flow" '`flow1/<jira-keys>-<scope>`'
 require_text "$flow" 'Working in the primary checkout requires a concrete exceptional'
+require_text "$flow" '[ -e "<qa-worktree>/.env" ] || [ -L "<qa-worktree>/.env" ]'
+require_text "$flow" 'Refusing to overwrite the existing QA .env file.'
+require_text "$flow" 'cd <primary-worktree>` followed by'
 require_text "$flow" 'Final handoff maps every selected ticket to its pull request'
 require_text "$flow" 'Stop the remaining invocation immediately'
 

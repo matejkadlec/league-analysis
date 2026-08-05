@@ -99,11 +99,11 @@ listener_pids_for_port() {
     local port="$1"
 
     # Some WSL lsof builds do not report listeners owned by a Next.js child
-    # process even though the port is occupied. Combine its output with fuser
-    # so the selected port is reliably clear before either service starts.
+    # process even though the port is occupied. Combine its output with ss,
+    # which is restricted to LISTEN sockets, before either service starts.
     {
         lsof -tiTCP:"$port" -sTCP:LISTEN 2>/dev/null || true
-        fuser -n tcp "$port" 2>/dev/null || true
+        ss -H -ltnp "sport = :$port" 2>/dev/null | grep -oE 'pid=[0-9]+' | cut -d= -f2 || true
     } | awk '{ for (i = 1; i <= NF; i++) if ($i ~ /^[0-9]+$/ && !seen[$i]++) print $i }'
 }
 
@@ -124,7 +124,7 @@ stop_listeners_on_port() {
             continue
         fi
         if ! [[ "$pid" =~ ^[0-9]+$ ]]; then
-            echo -e "${RED}ERROR: lsof returned an invalid PID for port $port: $pid${NC}" >&2
+            echo -e "${RED}ERROR: Listener lookup returned an invalid PID for port $port: $pid${NC}" >&2
             return 1
         fi
         if ! kill -TERM "$pid" 2>/dev/null; then
@@ -148,7 +148,7 @@ stop_listeners_on_port() {
             continue
         fi
         if ! [[ "$pid" =~ ^[0-9]+$ ]]; then
-            echo -e "${RED}ERROR: lsof returned an invalid PID for port $port: $pid${NC}" >&2
+            echo -e "${RED}ERROR: Listener lookup returned an invalid PID for port $port: $pid${NC}" >&2
             return 1
         fi
         if ! kill -KILL "$pid" 2>/dev/null; then
@@ -173,9 +173,9 @@ if ! command -v lsof >/dev/null 2>&1; then
     exit 1
 fi
 
-if ! command -v fuser >/dev/null 2>&1; then
-    echo -e "${RED}ERROR: fuser is required to stop processes on the selected ports.${NC}" >&2
-    echo -e "${YELLOW}Install the procps package, then run this command again.${NC}" >&2
+if ! command -v ss >/dev/null 2>&1; then
+    echo -e "${RED}ERROR: ss is required to inspect listeners on the selected ports.${NC}" >&2
+    echo -e "${YELLOW}Install the iproute2 package, then run this command again.${NC}" >&2
     exit 1
 fi
 

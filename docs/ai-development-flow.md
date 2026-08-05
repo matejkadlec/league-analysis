@@ -313,13 +313,20 @@ failures before attempting a safe fix.
   the authorized workflow:
 
   ```bash
-  install -m 600 -- <primary-worktree>/.env <qa-worktree>/.env
+  (
+    if [ -e "<qa-worktree>/.env" ] || [ -L "<qa-worktree>/.env" ]; then
+      printf '%s\n' 'Refusing to overwrite the existing QA .env file.' >&2
+      exit 1
+    fi
+    install -m 600 -- "<primary-worktree>/.env" "<qa-worktree>/.env"
+  )
   ```
 
   Use exact absolute paths, never overwrite an existing target, and do not
   inspect, print, or stage any `.env` value.
 - Then provide `cd <qa-worktree>` followed by `./run.sh`. If the batch is in
-  the primary `master` worktree, tell the owner only to run `./run.sh`.
+  the primary `master` worktree, provide `cd <primary-worktree>` followed by
+  `./run.sh` instead.
 
 ## User QA Path
 
