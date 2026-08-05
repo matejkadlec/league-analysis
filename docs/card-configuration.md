@@ -1,11 +1,12 @@
 # Configurable Card Catalog and Settings Contract
 
-> **Status:** Proposal for LGA-23. It requires owner approval before any
-> persistence, API, or UI work begins.
+> **Status:** Owner-approved LGA-23 contract. It authorizes follow-up
+> persistence, API, calculation, and frontend work in LGA-24/LGA-25, but does
+> not itself change current application behavior.
 >
-> **Authority after approval:** First-release catalog, settings contract, and
-> migration rules for user-configurable analytical cards. This document does
-> not change current application behavior.
+> **Authority:** First-release catalog, settings contract, and migration rules
+> for user-configurable analytical cards. This document does not change current
+> application behavior.
 
 ## Goal and boundaries
 
@@ -75,11 +76,11 @@ interface CardPreferenceV1<TCardId extends CardId, TSettings> {
 
 interface TopChampionsSettingsV1 {
   queueId: 420;
-  minimumGames: number; // integer, 1 through 100; default 1
+  minimumGames: number; // integer, 1 through 999; default 1
   minimumWinRate: number; // percent, 0 through 100; default 0
   minimumKda: number; // 0 through 50 in 0.1 increments; default 0
   includedRoles: Role[]; // unique canonical values; [] means all roles
-  displayLimit: 5;
+  displayLimit: 5; // exactly five visible rows; not configurable in LGA-23
 }
 
 interface RecentPerformanceSettingsV1 {
@@ -97,10 +98,11 @@ preserves the two distinct current calculations while still allowing a simple
 single “5% trend tolerance” control in the first UI. An advanced UI must show
 their different meanings before exposing them independently.
 
-The recommended bounds prevent accidental unbounded queries and unusable
-inputs while retaining the current defaults. The owner should confirm the
-upper bounds before implementation; changing a bound is a contract decision,
-not a client-only validation change.
+The approved bounds prevent accidental unbounded queries and unusable inputs
+while retaining the current defaults. `displayLimit` is intentionally fixed at
+five simultaneously visible rows and is not a user setting in LGA-23. The
+complete eligible result remains available to a future pagination contract;
+LGA-46 owns pagination through that result and is not part of this ticket.
 
 ## Calculation and filtering rules
 
@@ -116,9 +118,12 @@ not a client-only validation change.
 4. Order eligible champions by games played descending. Preserve a stable
    secondary order, such as canonical champion name, so equal game counts do
    not jump between requests.
-5. Return at least the current five display rows after filtering; the client
-   displays `displayLimit` rows and explains when data exists but no aggregate
-   meets the selected filters.
+5. Order the complete eligible result, keep a deterministic secondary order,
+   and return the first five visible rows for the LGA-23 card. The normalized
+   `displayLimit: 5` is fixed and not configurable. LGA-46 may paginate the
+   remaining eligible champions without changing this filtering or ordering
+   contract. The client explains when data exists but no aggregate meets the
+   selected filters.
 
 These settings affect server-side calculation. Applying the filters only after
 the current `limit=20` response would incorrectly hide a qualifying champion
@@ -150,14 +155,15 @@ reproduce the current behavior exactly:
 
 | Card | Current behavior preserved by default |
 | --- | --- |
-| Top Champions | Queue 420, all roles, no aggregate thresholds, server limit 20, and the first five champions ordered by games played. |
+| Top Champions | Queue 420, all roles, no aggregate thresholds, and the first five champions ordered by games played. The visible result is unchanged even though filtering must evaluate the complete aggregate population. |
 | Recent Performance | Queue 420, recent 10 matches against all matching matches, 0.05 absolute win-rate tolerance, and 0.05 relative tolerance for the remaining metrics. |
 
 The initial persistence API should have an explicit read, validated upsert, and
 per-card reset operation. A reset removes the stored override and immediately
 returns the normalized defaults. A global reset must enumerate the affected
 catalog entries before confirmation; it must not delete unrelated account
-settings.
+settings. This is post-MVP product development, so the versioned lifecycle
+below is required rather than optional MVP hardening.
 
 On read or write, the server must validate the card ID, version, field types,
 numeric bounds, unique roles, and allowed role values. The client repeats this
@@ -166,11 +172,11 @@ validation for immediate feedback, but client validation is not an authority.
 | Situation | Required behavior |
 | --- | --- |
 | Unknown card ID or future version | Do not apply it. Preserve the stored record for a compatible future server when safe, and fall back to the current card's defaults with an observable warning. |
-| Unknown or removed setting | Ignore only that field after recording a migration/audit event; retain all still-valid settings. |
+| Unknown or removed setting | Ignore only that field after recording a structured migration/log record; retain all still-valid settings. This does not require a new large audit subsystem. |
 | Renamed card or setting | Keep a server-side versioned migration map. Reads migrate before normalization; writes persist only the new canonical name. |
 | Added optional setting | Supply its documented default during normalization, then persist it only when the user changes it. |
 | Invalid, corrupt, or out-of-range value | Reject an update atomically. On a legacy read, use defaults for the invalid field and surface a non-sensitive recovery message with Reset available. |
-| Card removed from the product | Hide it from the catalog, retain a reversible migration/export path for its preference, and never silently reinterpret it as another card. |
+| Card removed from the product | Hide it from the catalog, retain a reversible migration/export path for its preference, and never silently reinterpret it as another card. The reversible path does not require a user-facing export screen in LGA-23. |
 
 ## Proposed first-release UX
 
@@ -184,8 +190,8 @@ shown to the current viewer, including tracked-player profiles. It offers
 - Minimum games — numeric stepper, default `1`.
 - Minimum win rate — percentage stepper, default `0%`.
 - Minimum KDA — decimal stepper, default `0.0`.
-- Roles — multi-select of Top, Jungle, Mid, Bottom, and Support; no selection
-  means all roles.
+- Roles — multi-select of the canonical `TOP`, `JUNGLE`, `MIDDLE`, `BOTTOM`,
+  and `UTILITY` values; no selection means all roles.
 
 The card keeps its current five-row layout. If filters remove every champion,
 the empty state names the active filters and offers Reset; it does not claim
@@ -194,15 +200,17 @@ that the player has no match data.
 ### Recent Performance controls
 
 - Recent sample — 5 through 50 matches, default `10`.
-- Trend tolerance — recommended single control at 5%, which writes both
-  normalized tolerance fields. A later advanced mode may expose the two
-  distinct tolerances with their respective explanations.
+- Trend tolerance — an initial single control at 5%, which writes both
+  normalized tolerance fields. The UI must explain that this produces two
+  different calculations: `0.05` is five percentage points for win rate, but
+  five percent of the overall value for the other metrics. A later advanced
+  mode may expose the two distinct tolerances independently.
 
 Queue selection, card placement, and card visibility are intentionally absent
 from this release. They belong to the later dashboard/catalog work rather than
 to a threshold contract.
 
-## Implementation sequence after approval
+## Follow-up implementation sequence
 
 1. **Persistence contract (LGA-24):** add a viewer-owned, versioned preference
    boundary with strict server validation, migration tests, and no player-data
@@ -218,19 +226,38 @@ to a threshold contract.
    migration; run the focused frontend/backend gates while implementing and
    the complete repository gate before a pull request.
 
-## Owner decision required
+The exact persistence table, endpoint shape, query-key details, and dialog
+layout remain implementation choices for LGA-24 and LGA-25. They must preserve
+the approved card IDs, viewer-global scope, strict server validation, default
+equivalence, fixed five-row display, and calculation boundaries recorded here.
 
-This proposal recommends approving only `profile.top-champions` and
-`profile.recent-performance` for version 1, with viewer-global scope and the
-defaults/bounds above. Before implementation, the owner must confirm:
+## Owner approval and compatibility record
 
-1. the two-card initial catalog and the deferred-card boundaries;
-2. ranked-solo/duo-only scope (`queueId: 420`) for version 1;
-3. the proposed numeric bounds and default 5% trend tolerance;
-4. that an empty Top Champions role selection means all roles; and
-5. that settings apply to every permitted player view for the current viewer,
-   rather than separately per player or page.
+The owner approved this contract on 2026-08-06. The approval is for exactly
+these v1 cards: `profile.top-champions` and `profile.recent-performance`.
+It confirms ranked Solo/Duo only (`queueId: 420`), viewer-global settings,
+empty `includedRoles` meaning all roles, the approved bounds/defaults, fixed
+five-row display, deterministic ordering, complete-population filtering, and
+the versioned lifecycle rules above. All other inventoried cards remain outside
+the first configurable-card release for their documented reasons.
 
-Until those decisions are recorded, this is a review proposal only. No
-preference table, endpoint, UI control, or displayed behavior is authorized to
-change.
+The contract remains compatible with the planned follow-up tickets:
+
+- **LGA-24:** persistence and API work can store viewer-owned, versioned
+  mutable settings, validate them server-side, normalize defaults, and reset a
+  card without duplicating player data.
+- **LGA-25:** frontend controls can consume the normalized contract, use an
+  accessible dialog, and expose one trend-tolerance control while preserving
+  the distinct mathematical meanings of its two fields. Five visible rows
+  remain fixed in this ticket.
+- **LGA-26:** dashboard/catalog work can add placement, visibility, or other
+  card composition concepts without changing these stable namespaced card IDs
+  or reinterpreting their settings.
+- **LGA-46:** pagination can operate on the complete deterministically ordered
+  eligible Top Champions result after LGA-23 filters. It may expose rows beyond
+  the first five without making the number of simultaneously visible rows a
+  setting here.
+
+LGA-23 remains a contract/design ticket. It authorizes no preference table,
+endpoint, calculation change, UI control, or displayed-behavior change until
+the follow-up implementation work is performed in its designated tickets.
