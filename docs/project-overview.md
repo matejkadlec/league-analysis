@@ -149,10 +149,11 @@ dependencies only when `node_modules` is absent, and starts Next.js. Defaults:
 - Backend log: `logs/backend.log`
 - Frontend log: `logs/frontend.log`
 
-`run.sh` requires `lsof`. Before the database check, it gracefully terminates
-TCP listeners on the selected frontend and backend ports, then force-terminates
-only listeners that remain after five seconds. Consequently, `./run.sh` clears
-3000 and 8000, `./run.sh 3001` clears 3001 and 8000, and
+`run.sh` requires `lsof` and `ss`. Before the database check, it gracefully
+terminates TCP listeners on the selected frontend and backend ports, then
+force-terminates only listeners that remain after five seconds. `ss` covers
+WSL cases where `lsof` does not report a listener. Consequently, `./run.sh`
+clears 3000 and 8000, `./run.sh 3001` clears 3001 and 8000, and
 `./run.sh 3001 8001` clears 3001 and 8001. Do not use a selected port for any
 other local process you need to keep running.
 
