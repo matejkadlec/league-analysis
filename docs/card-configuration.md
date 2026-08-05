@@ -123,7 +123,10 @@ LGA-46 owns pagination through that result and is not part of this ticket.
    `includedRoles` is non-empty, by the stored canonical `team_position`.
    Unknown or missing positions do not match an explicit role selection.
 2. Group the remaining rows by champion and calculate games, wins, losses,
-   win rate, and KDA from that selected population.
+   win rate, and KDA from that selected population. KDA uses the aggregate
+   formula `(totalKills + totalAssists) / totalDeaths`; when total deaths are
+   zero, use `totalKills + totalAssists` instead. Do not average per-match KDA
+   values.
 3. Apply `minimumGames`, `minimumWinRate`, and `minimumKda` to the aggregate
    result, not to individual matches.
 4. Order eligible champions by games played descending. Use a canonical
@@ -185,6 +188,14 @@ returns the normalized defaults. A global reset must enumerate the affected
 catalog entries before confirmation; it must not delete unrelated account
 settings. This is post-MVP product development, so the versioned lifecycle
 below is required rather than optional MVP hardening.
+
+Preference storage is version-coexistent: the durable key includes the viewer,
+canonical card ID, and stored version. A known future-version record therefore
+remains beside any current v1 row. A v1 upsert or per-card reset may create,
+replace, or remove only the current v1 row; it must preserve future-version
+rows. If the storage implementation cannot coexist versions, reject the
+mutation with a version-conflict response rather than overwriting or deleting
+the future record.
 
 On read or write, the server must validate the card ID, version, field types,
 numeric bounds, unique roles, and allowed role values. The client repeats this

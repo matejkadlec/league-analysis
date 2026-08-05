@@ -27,7 +27,7 @@ absent() {
 
 contains "$index" 'Configurable card catalog (LGA-23 approved contract)'
 contains "$index" 'Owner-approved v1 catalog'
-absent "$index" 'Pending-owner-review'
+absent "$index" '| Configurable card catalog (LGA-23 proposal) |'
 
 contains "$document" 'up to five eligible rows'
 contains "$document" 'never pads or fabricates rows'
@@ -38,6 +38,10 @@ contains "$document" 'settings: CardSettingsById[TCardId];'
 absent "$document" 'interface CardPreferenceV1<TCardId extends CardId, TSettings>'
 
 contains "$document" '| Unknown card ID |'
+contains "$document" 'version-coexistent'
+contains "$document" 'version-conflict response'
+contains "$document" 'totalKills + totalAssists'
+contains "$document" 'Do not average per-match KDA'
 contains "$document" '| Known card ID with a future version |'
 absent "$document" '| Unknown card ID or future version |'
 contains "$document" '| Legacy record with an unknown or removed setting |'
