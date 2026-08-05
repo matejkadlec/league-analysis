@@ -32,7 +32,7 @@ secret.
 
 | Surface | Current behavior and dependency | First-release decision | Rationale |
 | --- | --- | --- | --- |
-| **Top Champions** | Both profile routes request `GET /matches/player/{puuid}/champion-stats?queue=420&limit=20`. The service groups all matching participants by champion, orders by games played, and the UI displays the first five. | **Configurable** | The landing page explicitly calls out win-rate, KDA, games-played, and role filters for this card. |
+| **Top Champions** | Both profile routes request `GET /matches/player/{puuid}/champion-stats?queue=420&limit=20`. The service groups all matching participants by champion, orders by games played, and the UI displays the first five. | **Configurable** | The landing page explicitly calls out win-rate, KDA, and role filtering. Minimum games is an owner-approved aggregate threshold, not a claim about that landing-page copy. |
 | **Recent Performance** | The card requests the latest 10 ranked-solo/duo matches and an overall ranked-solo/duo request without a limit; the service currently caps that overall fetch at 10,000 matches. A win-rate change must exceed 5 percentage points; every other metric must differ by more than 5% of its overall value. | **Configurable** | The threshold is hard-coded and the landing page identifies performance trends as the primary configurable-card use case. |
 | **Role Performance** | `GET /matches/player/{puuid}/lane-stats?queue=420` groups recognized positions and orders them by games played. Win-rate and KDA color bands are display-only. | Not configurable in v1 | A role selector on this card would hide the comparison it is meant to show. The Top Champions role filter gives a useful, non-duplicated role choice. |
 | **Player summary** | A `PlayerCard` combines identity, rank, refresh/tracking controls, and unfiltered summary statistics. | Not configurable in v1 | It is a profile summary and action surface, not a filtered analytical result. |
@@ -227,8 +227,13 @@ Reset; it does not claim that the player has no match data.
 - Trend tolerance — an initial single control at 5%, which writes both
   normalized tolerance fields. The UI must explain that this produces two
   different calculations: `0.05` is five percentage points for win rate, but
-  five percent of the overall value for the other metrics. A later advanced
-  mode may expose the two distinct tolerances independently.
+  five percent of the overall value for the other metrics. When the normalized
+  fields are equal, the control displays their shared value. When they differ
+  because of an advanced write or legacy data, it displays a mixed/custom state
+  instead of choosing one value. Changing another setting preserves both
+  underlying tolerances; explicitly changing this control writes both fields to
+  the newly selected value. A later advanced mode may expose the two distinct
+  tolerances independently.
 
 Queue selection, card placement, and card visibility are intentionally absent
 from this release. They belong to the later dashboard/catalog work rather than

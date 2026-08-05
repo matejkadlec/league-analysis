@@ -16,6 +16,7 @@ worktree_regression="$repository_root/scripts/test-worktree-tooling.sh"
 dependabot_validation="$repository_root/scripts/check-dependabot-config.py"
 readme_regression="$repository_root/scripts/test-readme.sh"
 run_script="$repository_root/run.sh"
+card_configuration_regression="$repository_root/scripts/test-card-configuration.sh"
 github_governance_regression="$repository_root/scripts/test-github-governance.sh"
 
 fail() {
@@ -32,12 +33,14 @@ fail() {
 [[ -f "$dependabot_validation" ]] || fail 'the Dependabot validator must exist.'
 [[ -x "$readme_regression" ]] || fail 'the README regression must be executable.'
 [[ -x "$github_governance_regression" ]] || fail 'the GitHub governance regression must be executable.'
+[[ -x "$card_configuration_regression" ]] || fail 'the card configuration regression must be executable.'
 bash -n "$gate"
 bash -n "$ci_gate"
 bash -n "$worktree_guard"
 bash -n "$flow_policy_regression"
 bash -n "$worktree_regression"
 bash -n "$readme_regression"
+bash -n "$card_configuration_regression"
 grep -Fqx '"$repository_root/test.sh"' "$ci_gate" || fail 'CI must invoke the authoritative local gate.'
 [[ "$(grep -Fxc '  exec "$worktree_guard" --repository "$repository_root" -- "$repository_root/test.sh" "$@"' "$gate")" -eq 1 ]] \
   || fail './test.sh must enter the worktree guard exactly once.'
@@ -45,6 +48,8 @@ grep -Fqx "run_step 'Flow 1 policy regression' \"\$repository_root/scripts/test-
   || fail 'the authoritative gate must run Flow 1 policy regressions.'
 grep -Fqx "run_step 'Worktree tooling regression' \"\$repository_root/scripts/test-worktree-tooling.sh\"" "$gate" \
   || fail 'the authoritative gate must run worktree regressions.'
+grep -Fqx "run_step 'Card configuration contract regression' \"\$repository_root/scripts/test-card-configuration.sh\"" "$gate" \
+  || fail 'the authoritative gate must run card configuration regressions.'
 grep -Fqx "run_step 'Dependabot configuration' python3 \"\$repository_root/scripts/check-dependabot-config.py\"" "$gate" \
   || fail 'the authoritative gate must validate Dependabot configuration.'
 grep -Fqx "run_step 'GitHub governance configuration' \"\$repository_root/scripts/test-github-governance.sh\"" "$gate" \
@@ -66,6 +71,7 @@ python3 "$repository_root/scripts/test-dependency-audit.py" >/dev/null || fail '
 python3 "$dependabot_validation" >/dev/null || fail 'Dependabot configuration validation failed.'
 "$readme_regression" >/dev/null || fail 'README regression failed.'
 "$github_governance_regression" >/dev/null || fail 'GitHub governance regression failed.'
+"$card_configuration_regression" >/dev/null || fail 'card configuration regression failed.'
 if "$repository_root/scripts/run-actionlint.sh" \
   "$repository_root/tests/fixtures/github-workflows/invalid-expression.yml" \
   >/dev/null 2>&1; then
