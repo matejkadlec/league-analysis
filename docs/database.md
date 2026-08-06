@@ -395,11 +395,12 @@ true: `ENVIRONMENT=dev` is explicit, `POSTGRES_HOST`, every PostgreSQL
 `--database` exactly matches `POSTGRES_DB`, and the reviewed application tables
 exist. The configured environment, host, and database name are checked before a
 database session opens. Applying changes also requires a new canonical backup
-path outside the repository. The command blocks writers to every table it will
-change before creating the custom-format `pg_dump`, keeps those locks through
-the cleanup transaction, and creates a new owner-only `0600` archive with
-no-follow semantics before `pg_dump` receives any database data. The command
-re-verifies the archive's descriptor identity and permissions before
+path outside the repository whose parent is not writable by group or other
+accounts. The command blocks writers to every table it will change before
+creating the custom-format `pg_dump`, keeps those locks through the cleanup
+transaction, and creates a new owner-only `0600` archive with no-follow
+semantics before `pg_dump` receives any database data. The command re-verifies
+the archive's descriptor identity and permissions before
 `pg_restore --list`; if the filesystem cannot honor them, it securely removes
 only that verified file and refuses before any database mutation. It also
 clears all saved Riot PUUID URL preferences while preserving settings rows and
@@ -407,12 +408,14 @@ revoked access-token blacklist entries.
 
 Before an apply, the command locks the two writer job tables, refuses if a
 regular Match Fetcher or Player Updater execution is `RUNNING` or `PAUSED`,
-and persists a `riot_maintenance_mode` interlock on those configurations. A
-writer that starts after the lock is released records a `CANCELLED` execution
-before making a Riot-data write. The interlock stays enabled after cleanup so
-the emptied database cannot be immediately repopulated. Do not clear it with
-the jobs API; resume only through the separately guarded command after local
-maintenance is complete.
+and persists a `riot_maintenance_mode` interlock on those configurations.
+Regular scheduled writers record a `CANCELLED` execution before a Riot-data
+write, while the player-add background match/profile writers lock and re-read
+their configuration and return before creating an execution or making a
+Riot-data write. The interlock stays enabled after cleanup so the emptied
+database cannot be immediately repopulated. Do not clear it with the jobs API;
+resume only through the separately guarded command after local maintenance is
+complete.
 
 ```bash
 cd backend

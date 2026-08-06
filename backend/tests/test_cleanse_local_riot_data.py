@@ -141,6 +141,18 @@ def test_validated_backup_path_rejects_a_symlink_into_the_repository(tmp_path) -
         validated_backup_path(repository_alias / "backend" / "before.dump")
 
 
+def test_validated_backup_path_refuses_a_group_or_other_writable_parent(
+    tmp_path,
+) -> None:
+    """A renameable backup path cannot be trusted through cleanup mutation."""
+    backup_directory = tmp_path / "shared-backups"
+    backup_directory.mkdir()
+    backup_directory.chmod(0o733)
+
+    with pytest.raises(LocalCleanupRefusal, match="writable by group or other"):
+        validated_backup_path(backup_directory / "before.dump")
+
+
 @pytest.mark.parametrize(
     "listen_addresses", ["localhost", "127.0.0.1", "127.0.0.1, ::1"]
 )

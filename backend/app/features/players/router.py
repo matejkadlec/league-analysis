@@ -336,7 +336,23 @@ async def get_tracked_players(
         )
 
 
-async def run_background_match_sync(puuid: str, platform: str):
+async def _locked_background_writer_configuration(session, job_type):
+    """Load a direct writer configuration after any cleanup interlock commits."""
+    from sqlalchemy import select
+
+    from app.features.jobs.models import JobConfiguration
+
+    statement = (
+        select(JobConfiguration)
+        .where(JobConfiguration.job_type == job_type)
+        .limit(1)
+        .with_for_update()
+    )
+    result = await session.execute(statement)
+    return result.scalar_one_or_none()
+
+
+async def run_background_match_sync(puuid: str, platform: str) -> None:
     """
     Background task to sync matches.
     Also creates a JobExecution entry so it appears in the Jobs dashboard.
@@ -344,22 +360,27 @@ async def run_background_match_sync(puuid: str, platform: str):
     async with db_manager.get_session() as session:
         # 1. Create Job Execution Record
         # We need to find the Match Fetcher job configuration first
-        from sqlalchemy import func, select
+        from sqlalchemy import func
 
+        from app.features.jobs.maintenance import is_riot_writer_maintenance_active
         from app.features.jobs.models import (
-            JobConfiguration,
+            ExecutionType,
             JobExecution,
             JobStatus,
             JobType,
         )
 
-        stmt = (
-            select(JobConfiguration)
-            .where(JobConfiguration.job_type == JobType.MATCH_FETCHER)
-            .limit(1)
+        job_config = await _locked_background_writer_configuration(
+            session, JobType.MATCH_FETCHER
         )
-        result = await session.execute(stmt)
-        job_config = result.scalar_one_or_none()
+        if job_config and is_riot_writer_maintenance_active(
+            job_config, ExecutionType.REGULAR
+        ):
+            logger.info(
+                "Background match sync skipped during local maintenance",
+                puuid=puuid,
+            )
+            return
 
         job_execution = None
         if job_config:
@@ -411,30 +432,34 @@ async def run_background_match_sync(puuid: str, platform: str):
             await riot_client.close()
 
 
-async def run_background_player_update(puuid: str, platform: str):
+async def run_background_player_update(puuid: str, platform: str) -> None:
     """
     Background task to update player profile (name, tag, icon, level).
     Also creates a JobExecution entry so it appears in the Jobs dashboard.
     """
     async with db_manager.get_session() as session:
-        from sqlalchemy import func, select
+        from sqlalchemy import func
 
+        from app.features.jobs.maintenance import is_riot_writer_maintenance_active
         from app.features.jobs.models import (
-            JobConfiguration,
+            ExecutionType,
             JobExecution,
             JobStatus,
             JobType,
         )
         from app.features.players.models import Player
 
-        # Find the Player Updater job configuration
-        stmt = (
-            select(JobConfiguration)
-            .where(JobConfiguration.job_type == JobType.PLAYER_UPDATER)
-            .limit(1)
+        job_config = await _locked_background_writer_configuration(
+            session, JobType.PLAYER_UPDATER
         )
-        result = await session.execute(stmt)
-        job_config = result.scalar_one_or_none()
+        if job_config and is_riot_writer_maintenance_active(
+            job_config, ExecutionType.REGULAR
+        ):
+            logger.info(
+                "Background player update skipped during local maintenance",
+                puuid=puuid,
+            )
+            return
 
         job_execution = None
         if job_config:

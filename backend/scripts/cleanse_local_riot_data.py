@@ -222,6 +222,16 @@ def validated_backup_path(value: Path) -> Path:
     if not resolved_value.parent.is_dir():
         raise LocalCleanupRefusal("backup parent must be an existing regular directory")
     try:
+        parent_mode = stat.S_IMODE(resolved_value.parent.stat().st_mode)
+    except OSError as error:
+        raise LocalCleanupRefusal(
+            "backup parent permissions cannot be verified"
+        ) from error
+    if parent_mode & 0o022:
+        raise LocalCleanupRefusal(
+            "backup parent must not be writable by group or other accounts"
+        )
+    try:
         resolved_value.relative_to(resolved_project_root)
     except ValueError:
         return resolved_value
