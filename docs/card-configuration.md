@@ -127,8 +127,11 @@ LGA-46 owns pagination through that result and is not part of this ticket.
    formula `(totalKills + totalAssists) / totalDeaths`; when total deaths are
    zero, use `totalKills + totalAssists` instead. Do not average per-match KDA
    values.
-3. Apply `minimumGames`, `minimumWinRate`, and `minimumKda` to the aggregate
-   result, not to individual matches.
+3. Keep an aggregate result only when games played, win rate, and KDA are each
+   greater than or equal to their configured minimum. Apply `minimumGames`,
+   `minimumWinRate`, and `minimumKda` to the aggregate result, not to
+   individual matches. Equality at the default 0% and 0 KDA thresholds remains
+   eligible, as does a one-game aggregate at the default minimum-games value.
 4. Order eligible champions by games played descending. For equal game counts,
    use the canonical champion name in ascending lexicographic order as the
    secondary key. This intentionally resolves the current backend's previously
@@ -163,7 +166,10 @@ wrong.
 4. If the overall baseline is empty, keep the existing insufficient-data
    state. If fewer than the selected recent-match count exist, use the matches
    that exist and disclose the actual sample size rather than treating missing
-   rows as zeros.
+   rows as zeros. This is an intentional LGA-25 display-label change: the
+   current card labels that comparison `Recent 10 games` even when fewer
+   matching matches exist. The future label must identify the actual sample
+   size rather than claiming a full ten-match sample.
 
 Sample size affects server-side calculation. Trend tolerances are
 presentation-only: they change the improving/stable/declining label and color,
@@ -174,13 +180,14 @@ not the returned aggregate values.
 A viewer with no saved preference receives the normalized defaults above. They
 reproduce the current filters, metrics, sample populations, and row capacity.
 The contract intentionally defines deterministic ordering for ties that the
-current implementation leaves unspecified, so only the order of tied rows may
-change:
+current implementation leaves unspecified. The only documented follow-up
+display differences are the order of tied champion rows and, for a sparse
+recent population, an actual-sample-size label instead of `Recent 10 games`:
 
 | Card | Current behavior preserved by default |
 | --- | --- |
 | Top Champions | Queue 420, all roles, no aggregate thresholds, and up to five eligible champions ordered by games played with a deterministic tie-breaker. The visible capacity is unchanged even though filtering must evaluate the complete aggregate population. |
-| Recent Performance | Queue 420, recent 10 matches against the current overall matching population capped at 10,000, 0.05 absolute win-rate tolerance, and 0.05 relative tolerance for the remaining metrics. |
+| Recent Performance | Queue 420, recent 10 matches against the current overall matching population capped at 10,000, 0.05 absolute win-rate tolerance, and 0.05 relative tolerance for the remaining metrics. For sparse results, LGA-25 intentionally replaces the current `Recent 10 games` copy with actual-sample-size disclosure. |
 
 The initial persistence API should have an explicit read, validated upsert, and
 per-card reset operation. A reset removes the stored override and immediately
@@ -197,14 +204,18 @@ rows. If the storage implementation cannot coexist versions, reject the
 mutation with a version-conflict response rather than overwriting or deleting
 the future record.
 
-On read or write, the server must validate the card ID, version, field types,
-numeric bounds, unique roles, and allowed role values. The client repeats this
-validation for immediate feedback, but client validation is not an authority.
+On a legacy read, the server must validate the record before applying or
+normalizing it. On every write, it must validate the card ID, version, field
+types, numeric bounds, unique roles, and allowed role values before mutating
+storage. The client repeats this validation for immediate feedback, but client
+validation is not an authority.
 
 | Situation | Required behavior |
 | --- | --- |
-| Unknown card ID | Do not apply or normalize it. Preserve the raw record for a compatible future server when safe, omit it from normalized output, and emit an observable non-sensitive warning or structured migration record. Never substitute another card's defaults. |
-| Known card ID with a future version | Do not apply the future record. Preserve it for a compatible future server when safe, fall back to that known card's current defaults, and emit an observable warning. |
+| Unknown card ID on a legacy read | Do not apply or normalize it. Preserve the raw record for a compatible future server when safe, omit it from normalized output, and emit an observable non-sensitive warning or structured migration record. Never substitute another card's defaults. |
+| Known card ID with a future version on a legacy read, with no supported row | Do not apply the future record. Preserve it for a compatible future server when safe, fall back to that known card's current defaults, and emit an observable warning. |
+| Known card ID with both a current v1 row and a future-version row | Normalize exactly one entry per card. The current v1 row takes precedence; inspect the future row only for preservation and observability. |
+| Write with an unknown card ID or unsupported version | Reject the entire update atomically before persistence. Writes never preserve submitted raw records; only compatible future servers may create their own supported records. |
 | Legacy record with an unknown or removed setting | On read, ignore only that field after recording a structured migration/log record; retain all still-valid settings. This does not require a new large audit subsystem. |
 | Write with an unknown or removed setting | Reject the entire update atomically. Writes accept only the canonical settings for the known card/version, so clients cannot believe an ignored preference was saved. |
 | Renamed card or setting | Keep a server-side versioned migration map. Reads migrate before normalization; writes persist only the new canonical name. |
