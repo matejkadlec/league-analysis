@@ -610,7 +610,9 @@ generation but never creates application tables at runtime.
 5. For a populated database with no Alembic marker, first run `uv run python
    scripts/adopt_migrations.py --database <verified_local_database>`. Only after
    its schema-only comparison passes may you repeat it with `--apply`; the
-   command stamps `head` and proves application row counts did not change.
+   command compares the initial baseline revision, stamps that baseline, then
+   upgrades through the reviewed current head while proving existing application
+   row counts did not change.
 
 The initial baseline revision intentionally has no downgrade because dropping
 the application schemas is unsafe. Restore a verified backup when reversal is
