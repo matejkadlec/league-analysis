@@ -16,8 +16,8 @@ from sqlalchemy import URL, create_engine, text
 
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
 PROJECT_ROOT = BACKEND_ROOT.parent
-EXPECTED_REVISION = "20260803_0001"
-EXPECTED_TABLES = 21
+EXPECTED_REVISION = "20260806_0002"
+EXPECTED_TABLES = 22
 EXPECTED_ENUMS = 6
 EXPECTED_TRIGGERS = 1
 
@@ -185,13 +185,26 @@ async def verify_application_database_access(database: str) -> None:
                     {"user_id": user_id},
                 )
             ).scalar_one()
+            card_preference_user_id = (
+                await session.execute(
+                    text(
+                        "INSERT INTO auth.user_card_preferences "
+                        "(user_id, card_id, version, settings) "
+                        "VALUES (:user_id, 'profile.top-champions', 1, "
+                        '\'{"minimum_games": 1, "minimum_win_rate": 0, '
+                        '"minimum_kda": 0, "included_roles": []}\'::jsonb) '
+                        "RETURNING user_id"
+                    ),
+                    {"user_id": user_id},
+                )
+            ).scalar_one()
             job_count = (
                 await session.execute(
                     text("SELECT COUNT(*) FROM jobs.job_configurations")
                 )
             ).scalar_one()
             await session.rollback()
-        if settings_count != 1 or job_count != 2:
+        if settings_count != 1 or card_preference_user_id != user_id or job_count != 2:
             raise RuntimeError(
                 "Application migration smoke check returned unexpected rows"
             )

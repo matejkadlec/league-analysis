@@ -7,6 +7,10 @@ including runtime configuration and Riot API key management.
 from .dependencies import SettingsServiceDep, get_settings_service
 from .router import router as settings_router
 from .schemas import (
+    CardId,
+    CardPreferenceResponse,
+    CardPreferencesResetRequest,
+    CardPreferenceUpdate,
     ServiceStatusResponse,
     SettingResponse,
     SettingTestResponse,
@@ -23,6 +27,10 @@ __all__ = [
     # Service
     "SettingsService",
     # Schemas
+    "CardId",
+    "CardPreferenceResponse",
+    "CardPreferencesResetRequest",
+    "CardPreferenceUpdate",
     "SettingResponse",
     "SettingUpdate",
     "SettingTestResponse",

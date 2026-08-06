@@ -21,6 +21,7 @@
 ```mermaid
 erDiagram
     users ||--|| user_settings : "1:1"
+    users ||--o{ user_card_preferences : "1:M"
     users ||--o| user_cookie_consents : "1:0..1"
     users ||--o| email_change_requests : "1:0..1"
     users ||--o{ user_tracked_players : "1:M"
@@ -51,6 +52,15 @@ erDiagram
         boolean save_tracked_url
         string saved_tracked_puuid
         string default_platform
+        string created_at
+        string updated_at
+    }
+
+    user_card_preferences {
+        int user_id PK, FK
+        string card_id PK
+        int version PK
+        jsonb settings
         string created_at
         string updated_at
     }
@@ -309,6 +319,27 @@ User authentication and authorization.
 | `puuid`                 | varchar(78)  | Linked Riot account (optional)                    |
 
 **Trigger**: `trg_create_user_settings_after_user_insert` automatically creates `user_settings` record.
+
+### `auth.user_card_preferences`
+
+Version-coexistent viewer-owned overrides for the approved analytical-card
+catalog. A preference never includes a PUUID, Riot ID, match data, or another
+user's identifier.
+
+| Column       | Type        | Description                                                     |
+| ------------ | ----------- | --------------------------------------------------------------- |
+| `user_id`    | bigint      | PK + FK to `auth.users.id`; authenticated viewer owner          |
+| `card_id`    | varchar(64) | PK; stable approved card identifier                             |
+| `version`    | int         | PK; positive card-settings contract version                     |
+| `settings`   | jsonb       | Validated mutable fields only; defaults are added on API reads  |
+| `created_at` | timestamptz | When this versioned override was first stored                   |
+| `updated_at` | timestamptz | When this versioned override was last atomically replaced       |
+
+**Primary Key**: (`user_id`, `card_id`, `version`). The composite key permits
+a future-version row to coexist with v1. LGA-24 reads and changes only the
+supported v1 row, so reset and upsert cannot discard a later compatible
+server's settings. The `version > 0` database check complements the API's
+card-specific validation.
 
 ### `auth.refresh_tokens`
 

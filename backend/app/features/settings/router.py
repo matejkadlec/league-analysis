@@ -12,6 +12,10 @@ from app.features.auth.models import User
 from .dependencies import SettingsServiceDep
 from .schemas import (
     APIKeyStatusResponse,
+    CardId,
+    CardPreferenceResponse,
+    CardPreferencesResetRequest,
+    CardPreferenceUpdate,
     ServiceStatusResponse,
     SettingResponse,
     SettingTestResponse,
@@ -169,6 +173,109 @@ async def test_riot_api_key(
 
 
 # ===== USER SETTINGS ENDPOINTS =====
+
+
+# ===== CARD PREFERENCE ENDPOINTS =====
+
+
+@router.get(
+    "/card-preferences",
+    response_model=list[CardPreferenceResponse],
+)
+async def get_card_preferences(
+    settings_service: SettingsServiceDep,
+    current_user: User = Depends(get_current_active_user),
+):
+    """Return the authenticated viewer's effective settings for every v1 card."""
+    try:
+        return await settings_service.get_card_preferences(current_user.id)
+    except Exception as error:
+        logger.error(
+            "failed_to_get_card_preferences",
+            error_type=type(error).__name__,
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to get card preferences",
+        ) from error
+
+
+@router.put(
+    "/card-preferences/{card_id}",
+    response_model=CardPreferenceResponse,
+)
+async def update_card_preference(
+    card_id: CardId,
+    update: CardPreferenceUpdate,
+    settings_service: SettingsServiceDep,
+    current_user: User = Depends(get_current_active_user),
+):
+    """Atomically replace one complete, validated v1 override for this viewer."""
+    try:
+        return await settings_service.update_card_preference(
+            current_user.id, card_id, update
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    except Exception as error:
+        logger.error(
+            "failed_to_update_card_preference",
+            error_type=type(error).__name__,
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to update card preference",
+        ) from error
+
+
+@router.delete(
+    "/card-preferences/{card_id}",
+    response_model=CardPreferenceResponse,
+)
+async def reset_card_preference(
+    card_id: CardId,
+    settings_service: SettingsServiceDep,
+    current_user: User = Depends(get_current_active_user),
+):
+    """Remove the viewer's v1 override for one card and return its defaults."""
+    try:
+        return await settings_service.reset_card_preference(current_user.id, card_id)
+    except Exception as error:
+        logger.error(
+            "failed_to_reset_card_preference",
+            error_type=type(error).__name__,
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to reset card preference",
+        ) from error
+
+
+@router.post(
+    "/card-preferences/reset",
+    response_model=list[CardPreferenceResponse],
+)
+async def reset_all_card_preferences(
+    confirmation: CardPreferencesResetRequest,
+    settings_service: SettingsServiceDep,
+    current_user: User = Depends(get_current_active_user),
+):
+    """Reset the complete current catalog after explicit client-side enumeration."""
+    try:
+        return await settings_service.reset_all_card_preferences(current_user.id)
+    except Exception as error:
+        logger.error(
+            "failed_to_reset_all_card_preferences",
+            error_type=type(error).__name__,
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to reset card preferences",
+        ) from error
 
 
 @router.get("/user", response_model=UserSettingsResponse)

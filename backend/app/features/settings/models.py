@@ -1,17 +1,20 @@
-"""Riot API Key model for storing credentials."""
+"""Models for system and viewer-owned settings."""
 
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 
 from sqlalchemy import (
     BigInteger,
     Boolean,
+    CheckConstraint,
+    ForeignKey,
     Integer,
     String,
 )
 from sqlalchemy import (
     DateTime as SQLDateTime,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
@@ -62,4 +65,49 @@ class RiotAPIKey(Base):
         default=0,
         nullable=False,
         comment="Total number of requests made with this key",
+    )
+
+
+class UserCardPreference(Base):
+    """Versioned, viewer-owned overrides for an approved analytical card."""
+
+    __tablename__ = "user_card_preferences"
+    __table_args__ = (
+        CheckConstraint("version > 0", name="positive_version"),
+        {"schema": "auth"},
+    )
+
+    user_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("auth.users.id", ondelete="CASCADE"),
+        primary_key=True,
+        comment="Authenticated viewer that owns this preference",
+    )
+    card_id: Mapped[str] = mapped_column(
+        String(64),
+        primary_key=True,
+        comment="Stable card catalog identifier",
+    )
+    version: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        comment="Version of the card-specific settings contract",
+    )
+    settings: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+        comment="Validated mutable settings only; fixed defaults are normalized on read",
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        SQLDateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        comment="When this versioned override was first stored",
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        SQLDateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+        comment="When this versioned override was most recently updated",
     )

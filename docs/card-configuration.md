@@ -293,6 +293,31 @@ layout remain implementation choices for LGA-24 and LGA-25. They must preserve
 the approved card IDs, viewer-global scope, strict server validation, default
 equivalence, fixed five-row capacity, and calculation boundaries recorded here.
 
+## LGA-24 persistence and API boundary
+
+LGA-24 implements the approved persistence boundary without changing a card's
+current calculation or rendered output. Alembic revision `20260806_0002` adds
+`auth.user_card_preferences`, keyed by `(user_id, card_id, version)`. It stores
+only validated mutable settings; the API always adds the fixed queue and
+display-limit fields while normalizing an effective v1 response.
+
+The authenticated settings API exposes only the current viewer's records:
+
+| Operation | Route | Behavior |
+| --- | --- | --- |
+| Read effective catalog | `GET /api/v1/settings/card-preferences` | Returns exactly the two approved cards, including defaults where a v1 row is absent. |
+| Replace one override | `PUT /api/v1/settings/card-preferences/{cardId}` | Requires `version: 1` and the complete mutable schema for that exact catalog card; PostgreSQL upsert makes concurrent replacements atomic. |
+| Reset one card | `DELETE /api/v1/settings/card-preferences/{cardId}` | Deletes only the viewer's v1 row for that card, then returns normalized defaults. |
+| Reset catalog | `POST /api/v1/settings/card-preferences/reset` | Requires an explicit `cardIds` enumeration of the current catalog, then removes only its v1 rows. |
+
+The routes never accept a user ID, player ID, or arbitrary card identifier, so
+the authenticated dependency provides the only ownership scope. Writes reject
+unknown fields, unsupported versions, invalid ranges, duplicate roles, and
+incomplete mutable payloads before persistence. Reads preserve unsupported
+future-version rows, ignore only malformed legacy fields, and emit a
+non-sensitive structured warning rather than interpreting them as another
+card's setting.
+
 ## Owner approval and compatibility record
 
 The owner approved this contract on 2026-08-06. The approval is for exactly

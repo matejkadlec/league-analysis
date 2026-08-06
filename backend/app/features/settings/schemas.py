@@ -2,9 +2,9 @@
 
 from datetime import datetime
 from enum import Enum as PyEnum
-from typing import Optional
+from typing import Any, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 
 class ThemeEnum(str, PyEnum):
@@ -12,6 +12,159 @@ class ThemeEnum(str, PyEnum):
 
     LIGHT = "LIGHT"
     DARK = "DARK"
+
+
+def _to_camel_case(value: str) -> str:
+    """Convert an internal snake_case field name into an API field name."""
+    head, *tail = value.split("_")
+    return head + "".join(part.capitalize() for part in tail)
+
+
+class CardId(str, PyEnum):
+    """Approved first-release analytical-card identifiers."""
+
+    TOP_CHAMPIONS = "profile.top-champions"
+    RECENT_PERFORMANCE = "profile.recent-performance"
+
+
+class CardRole(str, PyEnum):
+    """Canonical Riot team-position values allowed by the card contract."""
+
+    TOP = "TOP"
+    JUNGLE = "JUNGLE"
+    MIDDLE = "MIDDLE"
+    BOTTOM = "BOTTOM"
+    UTILITY = "UTILITY"
+
+
+class _CardSettingsBase(BaseModel):
+    """Shared API compatibility settings for the versioned card contract."""
+
+    model_config = ConfigDict(
+        alias_generator=_to_camel_case,
+        populate_by_name=True,
+        extra="forbid",
+    )
+
+
+class TopChampionsMutableSettingsV1(_CardSettingsBase):
+    """Mutable Top Champions fields in the approved version 1 contract."""
+
+    minimum_games: int = Field(default=1, ge=1, le=999)
+    minimum_win_rate: float = Field(default=0, ge=0, le=100)
+    minimum_kda: float = Field(default=0, ge=0, le=50, multiple_of=0.1)
+    included_roles: list[CardRole] = Field(default_factory=list)
+
+    @field_validator("included_roles")
+    @classmethod
+    def roles_must_be_unique(cls, roles: list[CardRole]) -> list[CardRole]:
+        """Reject duplicate roles instead of normalizing a malformed write."""
+        if len(roles) != len(set(roles)):
+            raise ValueError("includedRoles must contain unique canonical roles")
+        return roles
+
+
+class RecentPerformanceMutableSettingsV1(_CardSettingsBase):
+    """Mutable Recent Performance fields in the approved version 1 contract."""
+
+    recent_match_count: int = Field(default=10, ge=5, le=50)
+    win_rate_trend_delta: float = Field(default=0.05, ge=0.01, le=0.25)
+    relative_metric_trend_delta: float = Field(default=0.05, ge=0.01, le=0.25)
+
+
+class CardPreferenceUpdate(_CardSettingsBase):
+    """Versioned request body for a complete card-specific preference update."""
+
+    version: Literal[1]
+    settings: dict[str, Any]
+
+
+class CardPreferenceResponse(_CardSettingsBase):
+    """Normalized effective settings for one approved card."""
+
+    card_id: CardId
+    version: Literal[1] = 1
+    settings: dict[str, Any]
+    is_default: bool
+    updated_at: Optional[datetime] = None
+
+
+class CardPreferencesResetRequest(_CardSettingsBase):
+    """Explicit catalog confirmation required before resetting every card."""
+
+    card_ids: list[CardId] = Field(min_length=2, max_length=2)
+
+    @field_validator("card_ids")
+    @classmethod
+    def must_confirm_the_full_current_catalog(
+        cls, card_ids: list[CardId]
+    ) -> list[CardId]:
+        """Avoid an ambiguous global reset that silently omits a catalog entry."""
+        if set(card_ids) != set(CardId) or len(card_ids) != len(set(card_ids)):
+            raise ValueError("cardIds must enumerate each current card exactly once")
+        return card_ids
+
+
+_CARD_SETTINGS_MODELS: dict[CardId, type[_CardSettingsBase]] = {
+    CardId.TOP_CHAMPIONS: TopChampionsMutableSettingsV1,
+    CardId.RECENT_PERFORMANCE: RecentPerformanceMutableSettingsV1,
+}
+
+_CARD_FIXED_SETTINGS_V1: dict[CardId, dict[str, int]] = {
+    CardId.TOP_CHAMPIONS: {"queue_id": 420, "display_limit": 5},
+    CardId.RECENT_PERFORMANCE: {"queue_id": 420},
+}
+
+# This map is intentionally explicit even while v1 has no renamed fields. A
+# future contract revision must add a reviewed mapping before it changes a
+# persisted name, so legacy values are never silently repurposed.
+_LEGACY_SETTING_RENAMES: dict[CardId, dict[str, str]] = {
+    CardId.TOP_CHAMPIONS: {},
+    CardId.RECENT_PERFORMANCE: {},
+}
+
+
+def validate_card_preference_update(
+    card_id: CardId, settings: dict[str, Any]
+) -> dict[str, Any]:
+    """Validate one complete mutable v1 payload before an atomic upsert."""
+    model_type = _CARD_SETTINGS_MODELS[card_id]
+    parsed = model_type.model_validate(settings)
+    missing_fields = set(model_type.model_fields) - parsed.model_fields_set
+    if missing_fields:
+        missing = ", ".join(sorted(_to_camel_case(field) for field in missing_fields))
+        raise ValueError(f"Missing required settings for {card_id.value}: {missing}")
+    return parsed.model_dump(mode="json")
+
+
+def normalize_stored_card_preference(
+    card_id: CardId, stored_settings: object
+) -> tuple[dict[str, Any], tuple[str, ...]]:
+    """Merge a legacy record with defaults without applying invalid fields."""
+    model_type = _CARD_SETTINGS_MODELS[card_id]
+    normalized = model_type().model_dump(mode="json")
+    warnings: list[str] = []
+    if not isinstance(stored_settings, dict):
+        return {**_CARD_FIXED_SETTINGS_V1[card_id], **normalized}, ("settings",)
+
+    renames = _LEGACY_SETTING_RENAMES[card_id]
+    for raw_name, value in stored_settings.items():
+        field_name = renames.get(raw_name, raw_name)
+        if field_name not in model_type.model_fields:
+            warnings.append(str(raw_name))
+            continue
+        candidate = {**normalized, field_name: value}
+        try:
+            normalized = model_type.model_validate(candidate).model_dump(mode="json")
+        except ValidationError:
+            warnings.append(str(raw_name))
+
+    return {**_CARD_FIXED_SETTINGS_V1[card_id], **normalized}, tuple(warnings)
+
+
+def serialize_card_preference_settings(settings: dict[str, Any]) -> dict[str, Any]:
+    """Serialize normalized internal fields using the approved API field names."""
+    return {_to_camel_case(name): value for name, value in settings.items()}
 
 
 class SettingUpdate(BaseModel):
