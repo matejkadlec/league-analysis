@@ -51,6 +51,7 @@ absent "$document" '| Unknown or removed setting | Ignore only'
 
 contains "$document" 'at most 10,000 matches'
 contains "$document" 'old tie sequence was unspecified'
+contains "$document" 'canonical champion name in ascending lexicographic order'
 absent "$document" 'all matching matches, exactly as the card does today'
 contains "$document" 'displays a mixed/custom state'
 contains "$document" 'Changing another setting preserves both'

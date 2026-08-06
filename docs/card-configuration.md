@@ -129,9 +129,9 @@ LGA-46 owns pagination through that result and is not part of this ticket.
    values.
 3. Apply `minimumGames`, `minimumWinRate`, and `minimumKda` to the aggregate
    result, not to individual matches.
-4. Order eligible champions by games played descending. Use a canonical
-   champion ID or name as a deterministic secondary order for equal game
-   counts. This intentionally resolves the current backend's previously
+4. Order eligible champions by games played descending. For equal game counts,
+   use the canonical champion name in ascending lexicographic order as the
+   secondary key. This intentionally resolves the current backend's previously
    unspecified tie ordering.
 5. Order the complete eligible result and return up to five eligible rows for
    the LGA-23 card. The normalized `displayLimit: 5` is a fixed maximum and
