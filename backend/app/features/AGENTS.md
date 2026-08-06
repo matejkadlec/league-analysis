@@ -21,7 +21,7 @@ Domain-specific business logic organized by feature. Each feature is self-contai
 | `playstyle_analysis/`   | Playstyle analysis                                      |
 | `matchmaking_analysis/` | Fairness evaluation                                     |
 | `jobs/`                 | Background tasks ([see jobs/AGENTS.md](jobs/AGENTS.md)) |
-| `settings/`             | Runtime config, API key                                 |
+| `settings/`             | Runtime config, API key, viewer-owned versioned card preferences |
 
 ## Standard Structure
 

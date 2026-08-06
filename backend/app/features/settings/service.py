@@ -470,13 +470,13 @@ class SettingsService:
         responses: list[CardPreferenceResponse] = []
         for card_id in CardId:
             preference = current_preferences.get(card_id)
+            if card_id in future_versions:
+                logger.warning(
+                    "card_preference_future_version_ignored",
+                    user_id=user_id,
+                    card_id=card_id.value,
+                )
             if preference is None:
-                if card_id in future_versions:
-                    logger.warning(
-                        "card_preference_future_version_ignored",
-                        user_id=user_id,
-                        card_id=card_id.value,
-                    )
                 settings, _warnings = normalize_stored_card_preference(card_id, {})
                 responses.append(
                     CardPreferenceResponse(
@@ -502,6 +502,7 @@ class SettingsService:
                     card_id=card_id,
                     settings=serialize_card_preference_settings(settings),
                     is_default=False,
+                    requires_recovery=bool(ignored_fields),
                     updated_at=preference.updated_at,
                 )
             )

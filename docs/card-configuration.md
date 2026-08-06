@@ -234,6 +234,12 @@ validation is not an authority.
 | Invalid, corrupt, or out-of-range value | Reject an update atomically. On a legacy read, use defaults for the invalid field and surface a non-sensitive recovery message with Reset available. |
 | Card removed from the product | Hide it from the catalog, retain a reversible migration/export path for its preference, and never silently reinterpret it as another card. The reversible path does not require a user-facing export screen in LGA-23. |
 
+Each normalized read response includes `requiresRecovery`. It is `true` only
+when a stored current-version preference contained a malformed, removed, or
+out-of-range field and the server substituted a default. The flag exposes no
+stored value or field name; clients use it to show the non-sensitive recovery
+message and offer the existing card-local Reset action.
+
 ## Proposed first-release UX
 
 Each selected card receives a **Customize** action that opens a keyboard-

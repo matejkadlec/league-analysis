@@ -9,6 +9,8 @@ from pydantic import ValidationError
 from sqlalchemy.dialects import postgresql
 
 from app.features.settings import router
+from app.features.settings import service as settings_service_module
+from app.features.settings.models import UserCardPreference
 from app.features.settings.schemas import (
     CardId,
     CardPreferencesResetRequest,
@@ -74,6 +76,29 @@ def test_card_preference_validation_rejects_unknown_or_invalid_values(
         validate_card_preference_update(card_id, settings)
 
 
+@pytest.mark.parametrize(
+    ("card_id", "settings"),
+    [
+        (CardId.TOP_CHAMPIONS, {**TOP_CHAMPIONS_PAYLOAD, "minimumGames": "12"}),
+        (CardId.TOP_CHAMPIONS, {**TOP_CHAMPIONS_PAYLOAD, "minimumGames": True}),
+        (
+            CardId.RECENT_PERFORMANCE,
+            {**RECENT_PERFORMANCE_PAYLOAD, "recentMatchCount": "15"},
+        ),
+        (
+            CardId.RECENT_PERFORMANCE,
+            {**RECENT_PERFORMANCE_PAYLOAD, "winRateTrendDelta": True},
+        ),
+    ],
+)
+def test_card_preference_validation_rejects_coerced_numeric_types(
+    card_id: CardId, settings: dict[str, Any]
+) -> None:
+    """Writes reject string and boolean numeric values rather than coercing them."""
+    with pytest.raises(ValidationError):
+        validate_card_preference_update(card_id, settings)
+
+
 def test_card_preference_validation_requires_complete_mutable_settings() -> None:
     """A partial write cannot accidentally reset a missing field to its default."""
     with pytest.raises(ValueError, match="includedRoles"):
@@ -113,6 +138,20 @@ def test_card_preference_defaults_and_legacy_normalization_are_safe() -> None:
     assert normalized["queue_id"] == 420
     assert set(warnings) == {"minimum_win_rate", "removed_setting"}
 
+    legacy_normalized, legacy_warnings = normalize_stored_card_preference(
+        CardId.TOP_CHAMPIONS,
+        {"minimum_games": "25"},
+    )
+    assert legacy_normalized["minimum_games"] == 25
+    assert legacy_warnings == ()
+
+
+def test_card_preference_model_declares_the_migration_index() -> None:
+    """Autogeneration metadata retains the reviewed user/update ordering index."""
+    assert {index.name for index in UserCardPreference.__table__.indexes} == {
+        "ix_user_card_preferences_user_updated"
+    }
+
 
 def test_global_reset_requires_explicit_catalog_enumeration() -> None:
     """The all-card reset is a deliberate confirmation, not a broad delete."""
@@ -151,6 +190,69 @@ class _Session:
 
     async def commit(self) -> None:
         self.committed = True
+
+
+class _PreferencesResult:
+    def __init__(self, preferences: list[object]):
+        self.preferences = preferences
+
+    def scalars(self) -> _PreferencesResult:
+        return self
+
+    def all(self) -> list[object]:
+        return self.preferences
+
+
+class _PreferencesSession:
+    def __init__(self, preferences: list[object]):
+        self.preferences = preferences
+
+    async def execute(self, _statement: object) -> _PreferencesResult:
+        return _PreferencesResult(self.preferences)
+
+
+@pytest.mark.asyncio
+async def test_card_preference_read_signals_recovery_and_observes_future_version(
+    monkeypatch,
+) -> None:
+    """A corrupted v1 row remains custom while future-version coexistence is logged."""
+    warnings: list[tuple[str, dict[str, object]]] = []
+    monkeypatch.setattr(
+        settings_service_module.logger,
+        "warning",
+        lambda event, **context: warnings.append((event, context)),
+    )
+    timestamp = datetime(2026, 8, 6, tzinfo=timezone.utc)
+    service = SettingsService(
+        _PreferencesSession(
+            [
+                SimpleNamespace(
+                    card_id=CardId.TOP_CHAMPIONS.value,
+                    version=1,
+                    settings={"minimum_games": "invalid"},
+                    updated_at=timestamp,
+                ),
+                SimpleNamespace(
+                    card_id=CardId.TOP_CHAMPIONS.value,
+                    version=2,
+                    settings={"minimum_games": 30},
+                    updated_at=timestamp,
+                ),
+            ]
+        )
+    )
+
+    responses = await service.get_card_preferences(user_id=73)
+
+    top_champions = next(
+        response for response in responses if response.card_id is CardId.TOP_CHAMPIONS
+    )
+    assert not top_champions.is_default
+    assert top_champions.requires_recovery
+    assert top_champions.settings["minimumGames"] == 1
+    assert any(
+        event == "card_preference_future_version_ignored" for event, _ in warnings
+    )
 
 
 @pytest.mark.asyncio

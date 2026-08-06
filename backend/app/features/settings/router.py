@@ -185,7 +185,7 @@ async def test_riot_api_key(
 async def get_card_preferences(
     settings_service: SettingsServiceDep,
     current_user: User = Depends(get_current_active_user),
-):
+) -> list[CardPreferenceResponse]:
     """Return the authenticated viewer's effective settings for every v1 card."""
     try:
         return await settings_service.get_card_preferences(current_user.id)
@@ -210,7 +210,7 @@ async def update_card_preference(
     update: CardPreferenceUpdate,
     settings_service: SettingsServiceDep,
     current_user: User = Depends(get_current_active_user),
-):
+) -> CardPreferenceResponse:
     """Atomically replace one complete, validated v1 override for this viewer."""
     try:
         return await settings_service.update_card_preference(
@@ -238,7 +238,7 @@ async def reset_card_preference(
     card_id: CardId,
     settings_service: SettingsServiceDep,
     current_user: User = Depends(get_current_active_user),
-):
+) -> CardPreferenceResponse:
     """Remove the viewer's v1 override for one card and return its defaults."""
     try:
         return await settings_service.reset_card_preference(current_user.id, card_id)
@@ -262,7 +262,7 @@ async def reset_all_card_preferences(
     confirmation: CardPreferencesResetRequest,
     settings_service: SettingsServiceDep,
     current_user: User = Depends(get_current_active_user),
-):
+) -> list[CardPreferenceResponse]:
     """Reset the complete current catalog after explicit client-side enumeration."""
     try:
         return await settings_service.reset_all_card_preferences(current_user.id)

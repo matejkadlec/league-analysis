@@ -8,6 +8,7 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     ForeignKey,
+    Index,
     Integer,
     String,
 )
@@ -74,6 +75,7 @@ class UserCardPreference(Base):
     __tablename__ = "user_card_preferences"
     __table_args__ = (
         CheckConstraint("version > 0", name="positive_version"),
+        Index("ix_user_card_preferences_user_updated", "user_id", "updated_at"),
         {"schema": "auth"},
     )
 

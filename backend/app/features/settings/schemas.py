@@ -72,6 +72,71 @@ class RecentPerformanceMutableSettingsV1(_CardSettingsBase):
     relative_metric_trend_delta: float = Field(default=0.05, ge=0.01, le=0.25)
 
 
+def _require_json_integer(value: Any) -> int:
+    """Reject coerced values while accepting only JSON integer settings writes."""
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError("must be an integer")
+    return value
+
+
+def _require_json_number(value: Any) -> float | int:
+    """Reject boolean and string coercion for JSON numeric settings writes."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError("must be a number")
+    return value
+
+
+class TopChampionsMutableSettingsWriteV1(_CardSettingsBase):
+    """Strict write-only contract that leaves legacy reads tolerant."""
+
+    minimum_games: int = Field(default=1, ge=1, le=999)
+    minimum_win_rate: float = Field(default=0, ge=0, le=100)
+    minimum_kda: float = Field(default=0, ge=0, le=50, multiple_of=0.1)
+    included_roles: list[CardRole] = Field(default_factory=list)
+
+    @field_validator("minimum_games", mode="before")
+    @classmethod
+    def minimum_games_must_be_an_integer(cls, value: Any) -> int:
+        """Reject strings, booleans, and decimal values before coercion."""
+        return _require_json_integer(value)
+
+    @field_validator("minimum_win_rate", "minimum_kda", mode="before")
+    @classmethod
+    def threshold_must_be_a_number(cls, value: Any) -> float | int:
+        """Reject strings and booleans before normal numeric validation."""
+        return _require_json_number(value)
+
+    @field_validator("included_roles")
+    @classmethod
+    def roles_must_be_unique(cls, roles: list[CardRole]) -> list[CardRole]:
+        """Reject duplicate roles instead of normalizing a malformed write."""
+        if len(roles) != len(set(roles)):
+            raise ValueError("includedRoles must contain unique canonical roles")
+        return roles
+
+
+class RecentPerformanceMutableSettingsWriteV1(_CardSettingsBase):
+    """Strict write-only contract that leaves legacy reads tolerant."""
+
+    recent_match_count: int = Field(default=10, ge=5, le=50)
+    win_rate_trend_delta: float = Field(default=0.05, ge=0.01, le=0.25)
+    relative_metric_trend_delta: float = Field(default=0.05, ge=0.01, le=0.25)
+
+    @field_validator("recent_match_count", mode="before")
+    @classmethod
+    def match_count_must_be_an_integer(cls, value: Any) -> int:
+        """Reject strings, booleans, and decimal values before coercion."""
+        return _require_json_integer(value)
+
+    @field_validator(
+        "win_rate_trend_delta", "relative_metric_trend_delta", mode="before"
+    )
+    @classmethod
+    def threshold_must_be_a_number(cls, value: Any) -> float | int:
+        """Reject strings and booleans before normal numeric validation."""
+        return _require_json_number(value)
+
+
 class CardPreferenceUpdate(_CardSettingsBase):
     """Versioned request body for a complete card-specific preference update."""
 
@@ -86,6 +151,7 @@ class CardPreferenceResponse(_CardSettingsBase):
     version: Literal[1] = 1
     settings: dict[str, Any]
     is_default: bool
+    requires_recovery: bool = False
     updated_at: Optional[datetime] = None
 
 
@@ -110,6 +176,11 @@ _CARD_SETTINGS_MODELS: dict[CardId, type[_CardSettingsBase]] = {
     CardId.RECENT_PERFORMANCE: RecentPerformanceMutableSettingsV1,
 }
 
+_CARD_SETTINGS_WRITE_MODELS: dict[CardId, type[_CardSettingsBase]] = {
+    CardId.TOP_CHAMPIONS: TopChampionsMutableSettingsWriteV1,
+    CardId.RECENT_PERFORMANCE: RecentPerformanceMutableSettingsWriteV1,
+}
+
 _CARD_FIXED_SETTINGS_V1: dict[CardId, dict[str, int]] = {
     CardId.TOP_CHAMPIONS: {"queue_id": 420, "display_limit": 5},
     CardId.RECENT_PERFORMANCE: {"queue_id": 420},
@@ -128,7 +199,7 @@ def validate_card_preference_update(
     card_id: CardId, settings: dict[str, Any]
 ) -> dict[str, Any]:
     """Validate one complete mutable v1 payload before an atomic upsert."""
-    model_type = _CARD_SETTINGS_MODELS[card_id]
+    model_type = _CARD_SETTINGS_WRITE_MODELS[card_id]
     parsed = model_type.model_validate(settings)
     missing_fields = set(model_type.model_fields) - parsed.model_fields_set
     if missing_fields:
