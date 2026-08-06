@@ -210,6 +210,35 @@ _LEGACY_SETTING_RENAMES: dict[CardId, dict[str, str]] = {
     CardId.RECENT_PERFORMANCE: {},
 }
 
+_LEGACY_INTEGER_SETTING_FIELDS = frozenset({"minimum_games", "recent_match_count"})
+_LEGACY_NUMBER_SETTING_FIELDS = frozenset(
+    {
+        "minimum_win_rate",
+        "minimum_kda",
+        "win_rate_trend_delta",
+        "relative_metric_trend_delta",
+    }
+)
+
+
+def _is_compatible_legacy_setting_value(field_name: str, value: object) -> bool:
+    """Accept only documented legacy numeric forms before Pydantic coercion.
+
+    Historic integer strings remain supported, but booleans and floats must not
+    silently become integer card settings on a legacy read.
+    """
+    if field_name in _LEGACY_INTEGER_SETTING_FIELDS:
+        return (
+            isinstance(value, int)
+            and not isinstance(value, bool)
+            or isinstance(value, str)
+            and value.isascii()
+            and value.isdecimal()
+        )
+    if field_name in _LEGACY_NUMBER_SETTING_FIELDS:
+        return isinstance(value, (int, float)) and not isinstance(value, bool)
+    return True
+
 
 def validate_card_preference_update(
     card_id: CardId, settings: dict[str, Any]
@@ -238,6 +267,9 @@ def normalize_stored_card_preference(
     for raw_name, value in stored_settings.items():
         field_name = renames.get(raw_name, raw_name)
         if field_name not in model_type.model_fields:
+            warnings.append(str(raw_name))
+            continue
+        if not _is_compatible_legacy_setting_value(field_name, value):
             warnings.append(str(raw_name))
             continue
         candidate = {**normalized, field_name: value}

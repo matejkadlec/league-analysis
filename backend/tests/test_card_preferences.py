@@ -179,6 +179,44 @@ def test_card_preference_defaults_and_legacy_normalization_are_safe() -> None:
     assert legacy_warnings == ()
 
 
+@pytest.mark.parametrize(
+    ("card_id", "stored_settings", "field_name"),
+    [
+        (
+            CardId.TOP_CHAMPIONS,
+            {"minimum_games": True},
+            "minimum_games",
+        ),
+        (
+            CardId.TOP_CHAMPIONS,
+            {"minimum_games": 25.0},
+            "minimum_games",
+        ),
+        (
+            CardId.RECENT_PERFORMANCE,
+            {"recent_match_count": 10.0},
+            "recent_match_count",
+        ),
+        (
+            CardId.RECENT_PERFORMANCE,
+            {"win_rate_trend_delta": True},
+            "win_rate_trend_delta",
+        ),
+    ],
+)
+def test_card_preference_legacy_normalization_rejects_incompatible_numeric_types(
+    card_id: CardId,
+    stored_settings: dict[str, Any],
+    field_name: str,
+) -> None:
+    """Legacy numeric coercion produces recovery defaults instead of bad settings."""
+    defaults, _ = normalize_stored_card_preference(card_id, {})
+    normalized, warnings = normalize_stored_card_preference(card_id, stored_settings)
+
+    assert normalized[field_name] == defaults[field_name]
+    assert warnings == (field_name,)
+
+
 def test_card_preference_model_declares_the_migration_index() -> None:
     """Autogeneration metadata retains the reviewed user/update ordering index."""
     assert {index.name for index in UserCardPreference.__table__.indexes} == {
