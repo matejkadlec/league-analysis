@@ -397,12 +397,13 @@ exist. The configured environment, host, and database name are checked before a
 database session opens. Applying changes also requires a new canonical backup
 path outside the repository. The command blocks writers to every table it will
 change before creating the custom-format `pg_dump`, keeps those locks through
-the cleanup transaction, uses owner-only `0600` permissions, and verifies the
-backup with `pg_restore --list`. If a platform ignores the restrictive umask,
-the command corrects the dump to `0600` and re-verifies it; if it cannot, it
-securely removes the unverified archive and refuses before any database
-mutation. It also clears all saved Riot PUUID URL preferences while preserving
-settings rows and revoked access-token blacklist entries.
+the cleanup transaction, and creates a new owner-only `0600` archive with
+no-follow semantics before `pg_dump` receives any database data. The command
+re-verifies the archive's descriptor identity and permissions before
+`pg_restore --list`; if the filesystem cannot honor them, it securely removes
+only that verified file and refuses before any database mutation. It also
+clears all saved Riot PUUID URL preferences while preserving settings rows and
+revoked access-token blacklist entries.
 
 Before an apply, the command locks the two writer job tables, refuses if a
 regular Match Fetcher or Player Updater execution is `RUNNING` or `PAUSED`,

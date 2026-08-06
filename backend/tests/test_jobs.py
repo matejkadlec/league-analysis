@@ -21,6 +21,8 @@ from app.features.jobs.queue_config import (
     has_enabled_match_fetcher_queue,
     normalize_match_fetcher_config,
 )
+from app.features.jobs.schemas import JobConfigurationUpdate
+from app.features.jobs.service import JobService
 
 
 def test_queue_configuration_defaults_and_preserves_known_order() -> None:
@@ -104,6 +106,57 @@ def test_job_configuration_updates_preserve_an_active_maintenance_interlock() ->
         {},
         {"enabled_queue_ids": []},
     ) == {"enabled_queue_ids": []}
+
+
+@pytest.mark.asyncio
+async def test_job_configuration_update_row_locks_before_merging_interlock(
+    monkeypatch,
+) -> None:
+    """A queue-toggle write cannot overwrite cleanup's interlock from a stale read."""
+    job = SimpleNamespace(
+        id=7,
+        job_type=JobType.MATCH_FETCHER,
+        config_json={RIOT_MAINTENANCE_MODE_KEY: True, "enabled_queue_ids": [420]},
+        name="match fetcher",
+        is_active=True,
+        is_paused=False,
+    )
+
+    class Result:
+        def scalar_one_or_none(self):
+            return job
+
+    class Session:
+        def __init__(self) -> None:
+            self.statements: list[object] = []
+
+        async def execute(self, statement: object) -> Result:
+            self.statements.append(statement)
+            return Result()
+
+        async def commit(self) -> None:
+            return None
+
+        async def refresh(self, _job: object) -> None:
+            return None
+
+    monkeypatch.setattr(
+        JobService, "_to_job_response", staticmethod(lambda value: value)
+    )
+    session = Session()
+    service = JobService(session)  # type: ignore[arg-type]
+
+    updated = await service.update_job_configuration(
+        7,
+        JobConfigurationUpdate(config_json={"enabled_queue_ids": [440]}),
+    )
+
+    statement = session.statements[0]
+    assert getattr(statement, "_for_update_arg") is not None
+    assert updated.config_json == {
+        RIOT_MAINTENANCE_MODE_KEY: True,
+        "enabled_queue_ids": [440],
+    }
 
 
 class _MaintenanceBlockedJob(BaseJob):

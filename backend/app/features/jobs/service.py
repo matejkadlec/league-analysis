@@ -122,7 +122,11 @@ class JobService:
         Returns:
             Updated job configuration if found, None otherwise.
         """
-        query = select(JobConfiguration).where(JobConfiguration.id == job_id)
+        query = (
+            select(JobConfiguration)
+            .where(JobConfiguration.id == job_id)
+            .with_for_update()
+        )
         result = await self.db.execute(query)
         job = result.scalar_one_or_none()
 

@@ -6,7 +6,6 @@ import argparse
 import os
 import stat
 import subprocess
-from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -224,7 +223,7 @@ def test_main_refuses_a_remote_target_before_creating_an_engine(monkeypatch) -> 
 
 
 def test_create_verified_backup_uses_private_permissions(tmp_path, monkeypatch) -> None:
-    """pg_dump creates the before-cleanup archive with an owner-only umask."""
+    """pg_dump receives a pre-created owner-only archive descriptor."""
     backup_path = tmp_path / "before.dump"
     settings = SimpleNamespace(
         postgres_password="test-password",
@@ -235,12 +234,10 @@ def test_create_verified_backup_uses_private_permissions(tmp_path, monkeypatch) 
 
     def fake_run(command, **_kwargs):
         if command[0] == "pg_dump":
-            dump_path = Path(
-                next(option[7:] for option in command if option.startswith("--file="))
-            )
-            descriptor = os.open(dump_path, os.O_CREAT | os.O_WRONLY, 0o666)
-            os.write(descriptor, b"backup")
-            os.close(descriptor)
+            assert not any(option.startswith("--file=") for option in command)
+            backup_output = _kwargs["stdout"]
+            assert stat.S_IMODE(os.fstat(backup_output.fileno()).st_mode) == 0o600
+            backup_output.write(b"backup")
         return subprocess.CompletedProcess(command, 0)
 
     original_umask = os.umask(0o022)
@@ -267,13 +264,9 @@ def test_create_verified_backup_corrects_a_non_private_dump(
 
     def fake_run(command, **_kwargs):
         if command[0] == "pg_dump":
-            dump_path = Path(
-                next(option[7:] for option in command if option.startswith("--file="))
-            )
-            descriptor = os.open(dump_path, os.O_CREAT | os.O_WRONLY, 0o666)
-            os.write(descriptor, b"backup")
-            os.close(descriptor)
-            os.chmod(dump_path, 0o644)
+            backup_output = _kwargs["stdout"]
+            backup_output.write(b"backup")
+            os.fchmod(backup_output.fileno(), 0o644)
         return subprocess.CompletedProcess(command, 0)
 
     monkeypatch.setattr(cleanup.subprocess, "run", fake_run)
@@ -283,8 +276,10 @@ def test_create_verified_backup_corrects_a_non_private_dump(
     assert stat.S_IMODE(backup_path.stat().st_mode) == 0o600
 
 
-def test_create_verified_backup_discards_unsecured_dump(tmp_path, monkeypatch) -> None:
-    """Cleanup refuses if a relaxed dump cannot be changed to mode 0600."""
+def test_create_verified_backup_refuses_an_unsecured_output_before_dump(
+    tmp_path, monkeypatch
+) -> None:
+    """Cleanup does not start pg_dump when private output setup cannot be verified."""
     backup_path = tmp_path / "before.dump"
     settings = SimpleNamespace(
         postgres_password="test-password",
@@ -292,30 +287,55 @@ def test_create_verified_backup_discards_unsecured_dump(tmp_path, monkeypatch) -
         postgres_port=5432,
         postgres_user="postgres",
     )
-    original_chmod = os.chmod
+    invoked_commands: list[str] = []
 
     def fake_run(command, **_kwargs):
-        if command[0] == "pg_dump":
-            dump_path = Path(
-                next(option[7:] for option in command if option.startswith("--file="))
-            )
-            descriptor = os.open(dump_path, os.O_CREAT | os.O_WRONLY, 0o666)
-            os.write(descriptor, b"backup")
-            os.close(descriptor)
-            original_chmod(dump_path, 0o644)
+        invoked_commands.append(command[0])
         return subprocess.CompletedProcess(command, 0)
 
     monkeypatch.setattr(cleanup.subprocess, "run", fake_run)
     monkeypatch.setattr(
         cleanup.os,
-        "chmod",
+        "fchmod",
         lambda *_args: (_ for _ in ()).throw(PermissionError("read-only mode")),
     )
 
-    with pytest.raises(LocalCleanupRefusal, match="discarded"):
+    with pytest.raises(LocalCleanupRefusal, match="private backup output"):
         create_verified_backup(settings, "league_analysis_local_dev", backup_path)
 
+    assert invoked_commands == []
     assert not os.path.lexists(backup_path)
+
+
+def test_create_verified_backup_refuses_a_replaced_path_without_touching_target(
+    tmp_path, monkeypatch
+) -> None:
+    """No-follow discard never overwrites a path swapped for an attacker symlink."""
+    backup_path = tmp_path / "before.dump"
+    victim_path = tmp_path / "victim.txt"
+    victim_path.write_bytes(b"do-not-touch")
+    settings = SimpleNamespace(
+        postgres_password="test-password",
+        postgres_host="localhost",
+        postgres_port=5432,
+        postgres_user="postgres",
+    )
+
+    def fake_run(command, **_kwargs):
+        if command[0] == "pg_dump":
+            backup_output = _kwargs["stdout"]
+            backup_output.write(b"backup")
+            backup_path.unlink()
+            backup_path.symlink_to(victim_path)
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr(cleanup.subprocess, "run", fake_run)
+
+    with pytest.raises(LocalCleanupRefusal, match="removal could not be verified"):
+        create_verified_backup(settings, "league_analysis_local_dev", backup_path)
+
+    assert victim_path.read_bytes() == b"do-not-touch"
+    assert backup_path.is_symlink()
 
 
 def test_delete_riot_data_clears_every_saved_puuid_preference() -> None:
