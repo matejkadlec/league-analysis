@@ -22,17 +22,19 @@ from .control import (
 )
 from .error_handling import RateLimitSignal
 from .log_capture import job_log_capture
+from .maintenance import is_riot_writer_maintenance_active
 from .models import ExecutionType, JobConfiguration, JobExecution, JobStatus
 
 logger = structlog.get_logger(__name__)
 
 
 class JobStopSignal(Exception):
-    """Signal used for graceful/forced user-requested stop."""
+    """Signal used for graceful/forced stops before a job writes data."""
 
-    def __init__(self, force: bool = False):
+    def __init__(self, force: bool = False, reason: str = "user_requested"):
         self.force = force
-        super().__init__("Job stop requested by user")
+        self.reason = reason
+        super().__init__(f"Job stopped: {reason}")
 
 
 def _format_api_calls_for_storage(api_calls: List[Any]) -> List[Dict[str, Any]]:
@@ -415,6 +417,16 @@ class BaseJob(ABC):
                         job_type=job_config.job_type.value,
                     )
 
+                if is_riot_writer_maintenance_active(job_config, self.execution_type):
+                    logger.warning(
+                        "Regular Riot writer skipped during local maintenance",
+                        job_config_id=self.job_config_id,
+                        job_name=job_config.name,
+                        job_type=job_config.job_type.value,
+                    )
+                    self.add_log_entry("riot_maintenance_blocked", True)
+                    raise JobStopSignal(reason="riot_maintenance")
+
                 await self.check_control_state(db)
                 await self.execute(db)
 
@@ -424,6 +436,7 @@ class BaseJob(ABC):
                     "stop_mode",
                     "force" if stop_signal.force else "graceful",
                 )
+                self.add_log_entry("stop_reason", stop_signal.reason)
                 job_logs = self._get_job_logs()
                 await self.log_completion(
                     db,

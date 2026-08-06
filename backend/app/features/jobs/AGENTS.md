@@ -28,6 +28,7 @@ details. Keep it synchronized with job changes.
 | `queue_config.py` | Match Fetcher queue validation and defaults |
 | `error_handling.py` | Riot error to job-signal translation |
 | `log_capture.py` | Structured execution-log capture |
+| `maintenance.py` | Persistent local Riot-writer maintenance interlock |
 | `implementations/` | Match Fetcher, Player Updater, and non-writing test runners |
 
 ## Job and Execution Model
@@ -62,6 +63,9 @@ details. Keep it synchronized with job changes.
   [`../../../../docs/riot-api.md`](../../../../docs/riot-api.md).
 - Test runners may call the same Riot endpoints but must not write gameplay
   data; their execution record is the allowed persistence.
+- The local cleanup command may set `config_json.riot_maintenance_mode` for
+  regular Match Fetcher and Player Updater jobs. Preserve that interlock on
+  configuration updates; only the reviewed cleanup resume path may remove it.
 
 ## Startup and Recovery
 

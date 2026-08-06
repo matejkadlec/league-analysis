@@ -398,9 +398,20 @@ database session opens. Applying changes also requires a new canonical backup
 path outside the repository. The command blocks writers to every table it will
 change before creating the custom-format `pg_dump`, keeps those locks through
 the cleanup transaction, uses owner-only `0600` permissions, and verifies the
-backup with `pg_restore --list`. It also clears all saved Riot PUUID URL
-preferences while preserving settings rows and revoked access-token blacklist
-entries.
+backup with `pg_restore --list`. If a platform ignores the restrictive umask,
+the command corrects the dump to `0600` and re-verifies it; if it cannot, it
+securely removes the unverified archive and refuses before any database
+mutation. It also clears all saved Riot PUUID URL preferences while preserving
+settings rows and revoked access-token blacklist entries.
+
+Before an apply, the command locks the two writer job tables, refuses if a
+regular Match Fetcher or Player Updater execution is `RUNNING` or `PAUSED`,
+and persists a `riot_maintenance_mode` interlock on those configurations. A
+writer that starts after the lock is released records a `CANCELLED` execution
+before making a Riot-data write. The interlock stays enabled after cleanup so
+the emptied database cannot be immediately repopulated. Do not clear it with
+the jobs API; resume only through the separately guarded command after local
+maintenance is complete.
 
 ```bash
 cd backend
@@ -412,6 +423,10 @@ uv run python scripts/cleanse_local_riot_data.py \
   --database league_analysis_local_dev \
   --apply \
   --backup-path "$HOME/.local/state/league-analysis/backups/pre-lga-11.dump"
+
+uv run python scripts/cleanse_local_riot_data.py \
+  --database league_analysis_local_dev \
+  --resume-writers
 ```
 
 Never point this command at production, a shared environment, a remote host,

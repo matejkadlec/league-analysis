@@ -173,6 +173,11 @@ def parse_arguments(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Print the verified plan only (the default).",
     )
+    mode.add_argument(
+        "--resume-writers",
+        action="store_true",
+        help="Remove the persistent local Riot-writer maintenance interlock.",
+    )
     parser.add_argument(
         "--backup-path",
         type=Path,
@@ -304,12 +309,62 @@ def preflight(connection: Connection, settings: Settings, database: str) -> Pref
 
 def assert_private_backup_file(backup_path: Path) -> None:
     """Require the completed dump file to be present, non-empty, and owner-only."""
-    if not backup_path.is_file() or backup_path.stat().st_size == 0:
+    backup_stat = backup_path.lstat()
+    if not stat.S_ISREG(backup_stat.st_mode) or backup_stat.st_size == 0:
         raise LocalCleanupRefusal("verified backup file is missing or empty")
-    if stat.S_IMODE(backup_path.stat().st_mode) != 0o600:
+    if stat.S_IMODE(backup_stat.st_mode) != 0o600:
         raise LocalCleanupRefusal(
             "verified backup file must have private 0600 permissions"
         )
+
+
+def discard_unverified_backup(backup_path: Path) -> None:
+    """Best-effort wipe and verified removal for an unusable local backup file."""
+    try:
+        backup_stat = backup_path.lstat()
+    except FileNotFoundError:
+        return
+
+    try:
+        if stat.S_ISREG(backup_stat.st_mode):
+            with backup_path.open("r+b", buffering=0) as backup_file:
+                remaining = backup_stat.st_size
+                while remaining:
+                    chunk_size = min(remaining, 1024 * 1024)
+                    backup_file.write(b"\0" * chunk_size)
+                    remaining -= chunk_size
+                backup_file.flush()
+                os.fsync(backup_file.fileno())
+        backup_path.unlink()
+    except OSError as error:
+        raise LocalCleanupRefusal(
+            "could not securely remove an unverified backup file"
+        ) from error
+
+    if os.path.lexists(backup_path):
+        raise LocalCleanupRefusal("unverified backup file remains after removal")
+
+
+def secure_backup_permissions(backup_path: Path) -> None:
+    """Correct a relaxed dump mode or remove the unsafe archive and refuse."""
+    try:
+        assert_private_backup_file(backup_path)
+        return
+    except LocalCleanupRefusal, OSError:
+        try:
+            os.chmod(backup_path, 0o600)
+            assert_private_backup_file(backup_path)
+            return
+        except (LocalCleanupRefusal, OSError) as permission_error:
+            try:
+                discard_unverified_backup(backup_path)
+            except LocalCleanupRefusal as removal_error:
+                raise LocalCleanupRefusal(
+                    "backup permissions could not be secured and removal could not be verified"
+                ) from removal_error
+            raise LocalCleanupRefusal(
+                "backup permissions could not be secured; unverified backup was discarded"
+            ) from permission_error
 
 
 def create_verified_backup(
@@ -341,7 +396,7 @@ def create_verified_backup(
             )
         finally:
             os.umask(original_umask)
-        assert_private_backup_file(backup_path)
+        secure_backup_permissions(backup_path)
         subprocess.run(
             ["pg_restore", "--list", str(backup_path)],
             check=True,
@@ -350,6 +405,7 @@ def create_verified_backup(
             env=environment,
         )
     except (FileNotFoundError, subprocess.CalledProcessError) as error:
+        discard_unverified_backup(backup_path)
         raise LocalCleanupRefusal("backup creation or verification failed") from error
 
 
@@ -360,6 +416,8 @@ def lock_cleanup_tables(connection: Connection) -> None:
         ("auth", "user_settings"),
         ("auth", "refresh_tokens"),
         ("auth", "email_change_requests"),
+        ("jobs", "job_configurations"),
+        ("jobs", "job_executions"),
     )
     qualified_tables = ", ".join(
         f'"{schema}"."{table}"' for schema, table in changed_tables
@@ -367,6 +425,65 @@ def lock_cleanup_tables(connection: Connection) -> None:
     connection.execute(
         text(f"LOCK TABLE {qualified_tables} IN SHARE ROW EXCLUSIVE MODE")
     )
+
+
+def active_regular_riot_writer_execution_ids(connection: Connection) -> list[int]:
+    """Return regular writer executions that must finish before cleanup can run."""
+    rows = (
+        connection.execute(
+            text(
+                "SELECT execution.id FROM jobs.job_executions AS execution "
+                "JOIN jobs.job_configurations AS configuration "
+                "ON configuration.id = execution.job_config_id "
+                "WHERE configuration.job_type::text IN ('MATCH_FETCHER', 'PLAYER_UPDATER') "
+                "AND execution.execution_type::text = 'REGULAR' "
+                "AND execution.status::text IN ('RUNNING', 'PAUSED') "
+                "ORDER BY execution.id"
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return [int(execution_id) for execution_id in rows]
+
+
+def refuse_active_regular_riot_writers(connection: Connection) -> None:
+    """Fail before cleanup whenever a regular Riot writer can still mutate rows."""
+    active_execution_ids = active_regular_riot_writer_execution_ids(connection)
+    if active_execution_ids:
+        joined_ids = ", ".join(
+            str(execution_id) for execution_id in active_execution_ids
+        )
+        raise LocalCleanupRefusal(
+            "active regular Riot writer executions block maintenance: " + joined_ids
+        )
+
+
+def enable_riot_writer_maintenance_mode(connection: Connection) -> int:
+    """Persist the interlock that cancels regular Riot writers before they write."""
+    return connection.execute(
+        text(
+            "UPDATE jobs.job_configurations "
+            "SET config_json = jsonb_set("
+            "COALESCE(config_json, '{}'::jsonb), "
+            "'{riot_maintenance_mode}', 'true'::jsonb, TRUE), "
+            "updated_at = CURRENT_TIMESTAMP "
+            "WHERE job_type::text IN ('MATCH_FETCHER', 'PLAYER_UPDATER')"
+        )
+    ).rowcount
+
+
+def resume_riot_writers(connection: Connection) -> int:
+    """Remove the interlock only after the caller has locked and checked writers."""
+    return connection.execute(
+        text(
+            "UPDATE jobs.job_configurations "
+            "SET config_json = COALESCE(config_json, '{}'::jsonb) "
+            "- 'riot_maintenance_mode', updated_at = CURRENT_TIMESTAMP "
+            "WHERE job_type::text IN ('MATCH_FETCHER', 'PLAYER_UPDATER') "
+            "AND config_json ? 'riot_maintenance_mode'"
+        )
+    ).rowcount
 
 
 def delete_riot_data(connection: Connection) -> dict[str, int]:
@@ -586,6 +703,18 @@ def main(argv: list[str] | None = None) -> int:
                 preserved_counts,
             )
 
+        if arguments.resume_writers:
+            with engine.begin() as connection:
+                preflight(connection, settings, arguments.database)
+                lock_cleanup_tables(connection)
+                refuse_active_regular_riot_writers(connection)
+                resumed_configurations = resume_riot_writers(connection)
+            print(
+                "Riot writer maintenance mode cleared for "
+                f"{resumed_configurations} configuration(s)."
+            )
+            return 0
+
         if not arguments.apply:
             print(
                 "Dry run passed. Re-run with --apply and a new --backup-path to mutate."
@@ -600,6 +729,8 @@ def main(argv: list[str] | None = None) -> int:
             # the transaction can delete or update.
             preflight_result = preflight(connection, settings, arguments.database)
             lock_cleanup_tables(connection)
+            refuse_active_regular_riot_writers(connection)
+            enable_riot_writer_maintenance_mode(connection)
             create_verified_backup(settings, arguments.database, backup_path)
             before_preserved = table_counts(connection, PRESERVED_TABLES)
             deleted = delete_riot_data(connection)
@@ -612,6 +743,10 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  {label}: {count}")
         print(
             "Both local-only QA account password hashes and authorization flags passed."
+        )
+        print(
+            "Regular Riot writers remain blocked. Re-run with --resume-writers only "
+            "after confirming the local environment is ready to ingest new Riot data."
         )
         return 0
     except LocalCleanupRefusal as error:

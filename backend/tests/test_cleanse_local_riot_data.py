@@ -18,8 +18,10 @@ from scripts.cleanse_local_riot_data import (
     RIOT_DATA_TABLES,
     LocalCleanupRefusal,
     Preflight,
+    active_regular_riot_writer_execution_ids,
     create_verified_backup,
     delete_riot_data,
+    enable_riot_writer_maintenance_mode,
     is_local_host,
     is_loopback_address,
     is_loopback_listener_configuration,
@@ -27,6 +29,8 @@ from scripts.cleanse_local_riot_data import (
     normalize_qa_accounts,
     parse_arguments,
     preflight,
+    refuse_active_regular_riot_writers,
+    resume_riot_writers,
     validate_configured_target,
     validated_backup_path,
     validated_database_name,
@@ -95,6 +99,26 @@ def test_apply_requires_a_new_backup_path(tmp_path) -> None:
         ]
     )
     assert validated_backup_path(arguments.backup_path) == backup_path
+
+
+def test_resume_writers_is_explicit_and_cannot_take_a_backup(tmp_path) -> None:
+    """Resuming ingestion is a separate, deliberately guarded operation."""
+    arguments = parse_arguments(
+        ["--database", "league_analysis_local_dev", "--resume-writers"]
+    )
+    assert arguments.resume_writers
+    assert not arguments.apply
+
+    with pytest.raises(SystemExit):
+        parse_arguments(
+            [
+                "--database",
+                "league_analysis_local_dev",
+                "--resume-writers",
+                "--backup-path",
+                str(tmp_path / "before.dump"),
+            ]
+        )
 
 
 def test_validated_backup_path_resolves_an_external_symlink(tmp_path) -> None:
@@ -229,10 +253,10 @@ def test_create_verified_backup_uses_private_permissions(tmp_path, monkeypatch) 
     assert stat.S_IMODE(backup_path.stat().st_mode) == 0o600
 
 
-def test_create_verified_backup_rejects_a_non_private_dump(
+def test_create_verified_backup_corrects_a_non_private_dump(
     tmp_path, monkeypatch
 ) -> None:
-    """An unexpectedly relaxed dump mode aborts the cleanup before mutation."""
+    """An unexpectedly relaxed dump mode is corrected and re-verified."""
     backup_path = tmp_path / "before.dump"
     settings = SimpleNamespace(
         postgres_password="test-password",
@@ -254,8 +278,44 @@ def test_create_verified_backup_rejects_a_non_private_dump(
 
     monkeypatch.setattr(cleanup.subprocess, "run", fake_run)
 
-    with pytest.raises(LocalCleanupRefusal, match="private 0600"):
+    create_verified_backup(settings, "league_analysis_local_dev", backup_path)
+
+    assert stat.S_IMODE(backup_path.stat().st_mode) == 0o600
+
+
+def test_create_verified_backup_discards_unsecured_dump(tmp_path, monkeypatch) -> None:
+    """Cleanup refuses if a relaxed dump cannot be changed to mode 0600."""
+    backup_path = tmp_path / "before.dump"
+    settings = SimpleNamespace(
+        postgres_password="test-password",
+        postgres_host="localhost",
+        postgres_port=5432,
+        postgres_user="postgres",
+    )
+    original_chmod = os.chmod
+
+    def fake_run(command, **_kwargs):
+        if command[0] == "pg_dump":
+            dump_path = Path(
+                next(option[7:] for option in command if option.startswith("--file="))
+            )
+            descriptor = os.open(dump_path, os.O_CREAT | os.O_WRONLY, 0o666)
+            os.write(descriptor, b"backup")
+            os.close(descriptor)
+            original_chmod(dump_path, 0o644)
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr(cleanup.subprocess, "run", fake_run)
+    monkeypatch.setattr(
+        cleanup.os,
+        "chmod",
+        lambda *_args: (_ for _ in ()).throw(PermissionError("read-only mode")),
+    )
+
+    with pytest.raises(LocalCleanupRefusal, match="discarded"):
         create_verified_backup(settings, "league_analysis_local_dev", backup_path)
+
+    assert not os.path.lexists(backup_path)
 
 
 def test_delete_riot_data_clears_every_saved_puuid_preference() -> None:
@@ -307,7 +367,77 @@ def test_lock_cleanup_tables_blocks_writers_and_allows_backup_reads() -> None:
 
     assert "IN SHARE ROW EXCLUSIVE MODE" in connection.query
     assert '"auth"."user_settings"' in connection.query
+    assert '"jobs"."job_configurations"' in connection.query
+    assert '"jobs"."job_executions"' in connection.query
     assert '"auth"."revoked_access_tokens"' not in connection.query
+
+
+def test_active_regular_riot_writer_query_excludes_test_runs() -> None:
+    """Only a real writer can repopulate the tables that cleanup deletes."""
+
+    class Result:
+        def scalars(self) -> Result:
+            return self
+
+        def all(self) -> list[int]:
+            return [7, 11]
+
+    class Connection:
+        def __init__(self) -> None:
+            self.query = ""
+
+        def execute(self, statement, *_args, **_kwargs) -> Result:
+            self.query = str(statement)
+            return Result()
+
+    connection = Connection()
+
+    assert active_regular_riot_writer_execution_ids(connection) == [7, 11]
+    assert "MATCH_FETCHER" in connection.query
+    assert "PLAYER_UPDATER" in connection.query
+    assert "execution_type" in connection.query
+    assert "'REGULAR'" in connection.query
+    assert "'RUNNING'" in connection.query
+    assert "'PAUSED'" in connection.query
+
+
+def test_active_regular_riot_writer_refuses_cleanup(monkeypatch) -> None:
+    """The destructive transaction stops before backup when a writer is active."""
+    monkeypatch.setattr(
+        cleanup,
+        "active_regular_riot_writer_execution_ids",
+        lambda _connection: [9],
+    )
+
+    with pytest.raises(LocalCleanupRefusal, match="9"):
+        refuse_active_regular_riot_writers(object())
+
+
+def test_riot_writer_maintenance_queries_change_only_writer_configurations() -> None:
+    """Apply and explicit resume use narrow JSONB changes on reviewed job types."""
+
+    class Result:
+        rowcount = 2
+
+    class Connection:
+        def __init__(self) -> None:
+            self.queries: list[str] = []
+
+        def execute(self, statement, *_args, **_kwargs) -> Result:
+            self.queries.append(str(statement))
+            return Result()
+
+    connection = Connection()
+
+    assert enable_riot_writer_maintenance_mode(connection) == 2
+    assert resume_riot_writers(connection) == 2
+
+    enable_query, resume_query = connection.queries
+    assert "jsonb_set" in enable_query
+    assert "riot_maintenance_mode" in enable_query
+    assert "MATCH_FETCHER" in enable_query
+    assert "PLAYER_UPDATER" in enable_query
+    assert "- 'riot_maintenance_mode'" in resume_query
 
 
 def test_normalize_qa_accounts_preserves_revoked_access_tokens(monkeypatch) -> None:
@@ -386,6 +516,16 @@ def test_apply_locks_tables_before_creating_the_backup(tmp_path, monkeypatch) ->
     )
     monkeypatch.setattr(
         cleanup,
+        "refuse_active_regular_riot_writers",
+        lambda _connection: events.append("refuse-active-writers"),
+    )
+    monkeypatch.setattr(
+        cleanup,
+        "enable_riot_writer_maintenance_mode",
+        lambda _connection: events.append("enable-maintenance"),
+    )
+    monkeypatch.setattr(
+        cleanup,
         "create_verified_backup",
         lambda *_args: events.append("backup"),
     )
@@ -407,7 +547,13 @@ def test_apply_locks_tables_before_creating_the_backup(tmp_path, monkeypatch) ->
         )
         == 0
     )
-    assert events.index("lock") < events.index("backup") < events.index("delete")
+    assert (
+        events.index("lock")
+        < events.index("refuse-active-writers")
+        < events.index("enable-maintenance")
+        < events.index("backup")
+        < events.index("delete")
+    )
 
 
 def test_cleanup_plan_includes_every_riot_data_category() -> None:
