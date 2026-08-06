@@ -159,10 +159,21 @@ wrong.
    matches. Calculate the overall baseline from matching matches within the
    current service behavior: an omitted limit fetches at most 10,000 matches.
    Preserving this cap is part of default equivalence; removing it requires an
-   explicit behavior change in a later ticket.
+   explicit behavior change in a later ticket. For both the recent and overall
+   population, Recent Performance KDA uses aggregate participant totals:
+   `(totalKills + totalAssists) / totalDeaths`; when total deaths are zero, use
+   `totalKills + totalAssists`. For Recent Performance, do not average
+   per-match KDA values.
 3. Classify win rate with the absolute `winRateTrendDelta`; classify KDA,
    kills, deaths, assists, CS, and vision with
-   `relativeMetricTrendDelta`. Deaths remains lower-is-better.
+   `relativeMetricTrendDelta`. Every comparison uses strict bounds: it is
+   improving or declining only when its directional difference strictly exceeds
+   the configured tolerance; equality at the configured tolerance is stable.
+   For win rate, compare the difference directly to
+   `winRateTrendDelta`. For every relative metric, use
+   `overallMetric * relativeMetricTrendDelta` as its tolerance. Deaths remains
+   lower-is-better, so its improving and declining directions are inverted
+   while the same strict boundary and stable equality rule applies.
 4. If the overall baseline is empty, keep the existing insufficient-data
    state. If fewer than the selected recent-match count exist, use the matches
    that exist and disclose the actual sample size rather than treating missing
