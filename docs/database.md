@@ -396,7 +396,8 @@ true: `ENVIRONMENT=dev` is explicit, `POSTGRES_HOST`, every PostgreSQL
 exist. The configured environment, host, and database name are checked before a
 database session opens. Applying changes also requires a new canonical backup
 path outside the repository whose parent is not writable by group or other
-accounts. The command blocks writers to every table it will change before
+accounts and whose non-sticky directory ancestors are not writable by group or
+other accounts. The command blocks writers to every table it will change before
 creating the custom-format `pg_dump`, keeps those locks through the cleanup
 transaction, and creates a new owner-only `0600` archive with no-follow
 semantics before `pg_dump` receives any database data. The command re-verifies
@@ -410,9 +411,10 @@ Before an apply, the command locks the two writer job tables, refuses if a
 regular Match Fetcher or Player Updater execution is `RUNNING` or `PAUSED`,
 and persists a `riot_maintenance_mode` interlock on those configurations.
 Regular scheduled writers record a `CANCELLED` execution before a Riot-data
-write, while the player-add background match/profile writers lock and re-read
-their configuration and return before creating an execution or making a
-Riot-data write. The interlock stays enabled after cleanup so the emptied
+write. The foreground player-add handler and its background match/profile
+writers acquire gameplay and job-table locks in cleanup order, then re-read the
+interlock and return before a core/auth write, execution, or Riot-data request.
+The interlock stays enabled after cleanup so the emptied
 database cannot be immediately repopulated. Do not clear it with the jobs API;
 resume only through the separately guarded command after local maintenance is
 complete.

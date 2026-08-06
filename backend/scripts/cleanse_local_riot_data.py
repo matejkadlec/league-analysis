@@ -219,23 +219,52 @@ def validated_backup_path(value: Path) -> Path:
         resolved_project_root = PROJECT_ROOT.resolve()
     except (OSError, RuntimeError) as error:
         raise LocalCleanupRefusal("backup path cannot be resolved safely") from error
-    if not resolved_value.parent.is_dir():
-        raise LocalCleanupRefusal("backup parent must be an existing regular directory")
-    try:
-        parent_mode = stat.S_IMODE(resolved_value.parent.stat().st_mode)
-    except OSError as error:
-        raise LocalCleanupRefusal(
-            "backup parent permissions cannot be verified"
-        ) from error
-    if parent_mode & 0o022:
-        raise LocalCleanupRefusal(
-            "backup parent must not be writable by group or other accounts"
-        )
+    validate_backup_directory_chain(resolved_value.parent)
     try:
         resolved_value.relative_to(resolved_project_root)
     except ValueError:
         return resolved_value
     raise LocalCleanupRefusal("backup path must stay outside the repository")
+
+
+def validate_backup_directory_chain(backup_parent: Path) -> None:
+    """Require private output parentage through the filesystem root.
+
+    A non-sticky group- or other-writable ancestor lets another account replace
+    an otherwise private child directory before the backup is created.
+    """
+    directory = backup_parent
+    is_direct_parent = True
+    while True:
+        try:
+            directory_stat = directory.stat()
+        except OSError as error:
+            raise LocalCleanupRefusal(
+                "backup directory permissions cannot be verified"
+            ) from error
+        if not stat.S_ISDIR(directory_stat.st_mode):
+            raise LocalCleanupRefusal(
+                "backup parent must be an existing regular directory"
+            )
+
+        mode = stat.S_IMODE(directory_stat.st_mode)
+        writable_by_others = mode & 0o022
+        if writable_by_others and (is_direct_parent or not mode & stat.S_ISVTX):
+            if is_direct_parent:
+                message = (
+                    "backup parent must not be writable by group or other accounts"
+                )
+            else:
+                message = (
+                    "backup directory ancestor must not be writable by group or "
+                    "other accounts unless it is sticky"
+                )
+            raise LocalCleanupRefusal(message)
+
+        if directory.parent == directory:
+            return
+        directory = directory.parent
+        is_direct_parent = False
 
 
 def table_counts(

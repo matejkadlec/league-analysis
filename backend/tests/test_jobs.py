@@ -13,6 +13,7 @@ from app.features.jobs.maintenance import (
     RIOT_MAINTENANCE_MODE_KEY,
     is_riot_writer_maintenance_active,
     preserve_riot_writer_maintenance_mode,
+    riot_writer_maintenance_is_active,
 )
 from app.features.jobs.models import ExecutionType, JobStatus, JobType
 from app.features.jobs.queue_config import (
@@ -83,6 +84,24 @@ def test_riot_maintenance_mode_blocks_only_regular_writer_jobs() -> None:
             config_json={RIOT_MAINTENANCE_MODE_KEY: False},
         ),
         ExecutionType.REGULAR,
+    )
+
+    assert riot_writer_maintenance_is_active(
+        {
+            JobType.MATCH_FETCHER: config,
+            JobType.PLAYER_UPDATER: SimpleNamespace(
+                job_type=JobType.PLAYER_UPDATER,
+                config_json={RIOT_MAINTENANCE_MODE_KEY: False},
+            ),
+        }
+    )
+    assert not riot_writer_maintenance_is_active(
+        {
+            JobType.MATCH_FETCHER: SimpleNamespace(
+                job_type=JobType.MATCH_FETCHER,
+                config_json={RIOT_MAINTENANCE_MODE_KEY: False},
+            )
+        }
     )
 
 

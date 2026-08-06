@@ -153,6 +153,18 @@ def test_validated_backup_path_refuses_a_group_or_other_writable_parent(
         validated_backup_path(backup_directory / "before.dump")
 
 
+def test_validated_backup_path_refuses_a_nonsticky_writable_ancestor(tmp_path) -> None:
+    """A private parent is unsafe below a replaceable directory ancestor."""
+    shared_directory = tmp_path / "shared-backups"
+    shared_directory.mkdir()
+    shared_directory.chmod(0o733)
+    private_directory = shared_directory / "private"
+    private_directory.mkdir(mode=0o700)
+
+    with pytest.raises(LocalCleanupRefusal, match="ancestor"):
+        validated_backup_path(private_directory / "before.dump")
+
+
 @pytest.mark.parametrize(
     "listen_addresses", ["localhost", "127.0.0.1", "127.0.0.1, ::1"]
 )

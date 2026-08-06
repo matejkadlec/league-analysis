@@ -77,9 +77,10 @@ resume. Stop paths clear the persisted pause state.
 The reviewed local Riot-data cleanup command can also persist
 `config_json.riot_maintenance_mode` on Match Fetcher and Player Updater
 configurations. Regular scheduled executions check that interlock after loading
-fresh configuration and record `CANCELLED` before any gameplay-data write;
-player-add background match/profile writers lock and re-read their matching
-configuration, then return before an execution or Riot-data write when it is
+fresh configuration and record `CANCELLED` before any gameplay-data write. The
+foreground player-add handler and its background match/profile writers acquire
+gameplay and job-table locks in cleanup order, then re-read the interlock and
+return before a core/auth write, execution, or Riot-data request when it is
 active. Non-writing `TEST` executions are not blocked. Configuration updates
 preserve an active interlock. Cleanup enables it only after it has locked the
 job tables and refused existing `RUNNING`/`PAUSED` regular writers, and the

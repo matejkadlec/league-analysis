@@ -338,18 +338,21 @@ async def get_tracked_players(
 
 async def _locked_background_writer_configuration(session, job_type):
     """Load a direct writer configuration after any cleanup interlock commits."""
-    from sqlalchemy import select
+    from app.features.jobs.maintenance import locked_riot_writer_configurations
 
-    from app.features.jobs.models import JobConfiguration
+    configurations = await locked_riot_writer_configurations(session)
+    return configurations.get(job_type)
 
-    statement = (
-        select(JobConfiguration)
-        .where(JobConfiguration.job_type == job_type)
-        .limit(1)
-        .with_for_update()
+
+async def _riot_writer_maintenance_is_active(session) -> bool:
+    """Check the cleanup interlock before a foreground Riot-data write."""
+    from app.features.jobs.maintenance import (
+        locked_riot_writer_configurations,
+        riot_writer_maintenance_is_active,
     )
-    result = await session.execute(statement)
-    return result.scalar_one_or_none()
+
+    configurations = await locked_riot_writer_configurations(session)
+    return riot_writer_maintenance_is_active(configurations)
 
 
 async def run_background_match_sync(puuid: str, platform: str) -> None:
@@ -566,6 +569,12 @@ async def add_tracked_player(
         # Validate inputs
         _validate_game_name(game_name)
         _validate_tag_line(tag_line)
+
+        if await _riot_writer_maintenance_is_active(player_service.db):
+            raise HTTPException(
+                status_code=503,
+                detail="Riot data maintenance is in progress. Try again after it completes.",
+            )
 
         result = await player_service.add_and_track_player(
             riot_client=riot_client,
