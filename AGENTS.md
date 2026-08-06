@@ -63,9 +63,10 @@ Non-negotiable summary:
   a concrete exceptional reason recorded in the batch ledger.
 - An AI-created pull request is ready for review, not draft. Prefer one
   coherent multi-ticket PR. One preselected invocation may publish up to two
-  independent ready pull requests, or three only when every batch is small,
-  AI-only, mutually independent, and non-overlapping. Each published PR becomes
-  owner-managed immediately: do not poll, review, repair, merge, or deploy it.
+  independent ready pull requests. At most two independently selected batches
+  may be pending or unmerged at once, counting both `PENDING CR` and `PENDING
+  USER QA`. Each published PR becomes owner-managed immediately: do not poll,
+  review, repair, merge, or deploy it.
   Continue only with independent batches recorded during intake, then provide
   one final ticket-to-PR handoff and stop.
 - Owner-managed review and merge are workflow policy, not an identity control
@@ -122,6 +123,9 @@ tail -50 logs/frontend.log
 
 Each `run.sh` invocation creates `logs/` before redirecting backend or frontend
 output, so fresh checkouts do not require manual log-directory setup.
+It requires `lsof` and `ss` and stops existing TCP listeners on the selected
+frontend and backend ports before checking the database or starting replacement
+services. `ss` covers WSL cases where `lsof` cannot report a listener.
 
 Backend API docs are at `http://localhost:8000/api`; the frontend is at
 `http://localhost:3000`. After changing `.env`, a restart is required. Do not
@@ -160,6 +164,21 @@ When debugging runtime failures, inspect both logs before changing code.
 ## Repository-Wide Safety and Maintenance
 
 - Never commit credentials, API keys, tokens, or `.env` contents.
+- The only documented exception is LGA-11's deliberately non-secret,
+  local-development-only QA fixtures. They are never valid for production or a
+  shared environment, and the cleanup command refuses any target unless
+  `ENVIRONMENT=dev`, the configured host, every PostgreSQL `listen_addresses`
+  bind, and the active listener are loopback-only, and the explicit database
+  name matches `POSTGRES_DB`. The command checks the configured target before
+  opening a database session and requires a canonical outside-repository backup
+  path with private `0600` permissions. During `--apply`, it blocks writers to
+  every table it changes before taking the backup and preserves revoked access
+  token blacklist entries:
+  - Admin: `mat.kadlec@email.cz` / `LocalAdminQa123!`
+  - Client: `scipiocz@gmail.com` / `LocalUserQa123!`
+  Keep these fixture values stable for local browser/API smoke tests. Reset
+  only these accounts through `backend/scripts/cleanse_local_riot_data.py`; do
+  not use the command or fixture passwords for arbitrary accounts.
 - Do not commit, push, or publish unless the user request or an explicitly named
   workflow authorizes that delivery step.
 - Never use unsafe force push. Where rebasing a published task branch is

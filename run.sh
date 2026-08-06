@@ -95,6 +95,95 @@ BACKEND_PORT="${2:-8000}"
 validate_port "Frontend" "$FRONTEND_PORT"
 validate_port "Backend" "$BACKEND_PORT"
 
+listener_pids_for_port() {
+    local port="$1"
+
+    # Some WSL lsof builds do not report listeners owned by a Next.js child
+    # process even though the port is occupied. Combine its output with ss,
+    # which is restricted to LISTEN sockets, before either service starts.
+    {
+        lsof -tiTCP:"$port" -sTCP:LISTEN 2>/dev/null || true
+        ss -H -ltnp "sport = :$port" 2>/dev/null | grep -oE 'pid=[0-9]+' | cut -d= -f2 || true
+    } | awk '{ for (i = 1; i <= NF; i++) if ($i ~ /^[0-9]+$/ && !seen[$i]++) print $i }'
+}
+
+stop_listeners_on_port() {
+    local port="$1"
+    local pids
+    local pid
+    local remaining_pids
+
+    pids="$(listener_pids_for_port "$port")"
+    if [ -z "$pids" ]; then
+        return
+    fi
+
+    echo -e "${YELLOW}Stopping process(es) listening on port $port: ${pids//$'\n'/ }${NC}"
+    while IFS= read -r pid; do
+        if [ -z "$pid" ]; then
+            continue
+        fi
+        if ! [[ "$pid" =~ ^[0-9]+$ ]]; then
+            echo -e "${RED}ERROR: Listener lookup returned an invalid PID for port $port: $pid${NC}" >&2
+            return 1
+        fi
+        if ! kill -TERM "$pid" 2>/dev/null; then
+            echo -e "${RED}ERROR: Could not stop PID $pid on port $port.${NC}" >&2
+            return 1
+        fi
+    done <<< "$pids"
+
+    for _ in {1..25}; do
+        sleep 0.2
+        remaining_pids="$(listener_pids_for_port "$port")"
+        if [ -z "$remaining_pids" ]; then
+            echo -e "${GREEN}✓ Port $port is available${NC}"
+            return
+        fi
+    done
+
+    echo -e "${YELLOW}Force-stopping remaining process(es) on port $port: ${remaining_pids//$'\n'/ }${NC}"
+    while IFS= read -r pid; do
+        if [ -z "$pid" ]; then
+            continue
+        fi
+        if ! [[ "$pid" =~ ^[0-9]+$ ]]; then
+            echo -e "${RED}ERROR: Listener lookup returned an invalid PID for port $port: $pid${NC}" >&2
+            return 1
+        fi
+        if ! kill -KILL "$pid" 2>/dev/null; then
+            echo -e "${RED}ERROR: Could not force-stop PID $pid on port $port.${NC}" >&2
+            return 1
+        fi
+    done <<< "$remaining_pids"
+
+    sleep 0.2
+    remaining_pids="$(listener_pids_for_port "$port")"
+    if [ -n "$remaining_pids" ]; then
+        echo -e "${RED}ERROR: Port $port is still in use by: ${remaining_pids//$'\n'/ }${NC}" >&2
+        return 1
+    fi
+
+    echo -e "${GREEN}✓ Port $port is available${NC}"
+}
+
+if ! command -v lsof >/dev/null 2>&1; then
+    echo -e "${RED}ERROR: lsof is required to stop processes on the selected ports.${NC}" >&2
+    echo -e "${YELLOW}Install lsof, then run this command again.${NC}" >&2
+    exit 1
+fi
+
+if ! command -v ss >/dev/null 2>&1; then
+    echo -e "${RED}ERROR: ss is required to inspect listeners on the selected ports.${NC}" >&2
+    echo -e "${YELLOW}Install the iproute2 package, then run this command again.${NC}" >&2
+    exit 1
+fi
+
+stop_listeners_on_port "$FRONTEND_PORT"
+if [ "$BACKEND_PORT" != "$FRONTEND_PORT" ]; then
+    stop_listeners_on_port "$BACKEND_PORT"
+fi
+
 LOCAL_CORS_ORIGINS="http://localhost:$FRONTEND_PORT,http://127.0.0.1:$FRONTEND_PORT"
 if [ -n "${CORS_ORIGINS:-}" ]; then
     RUN_CORS_ORIGINS="$CORS_ORIGINS,$LOCAL_CORS_ORIGINS"

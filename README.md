@@ -74,7 +74,11 @@ provision that target before applying the reviewed schema revisions:
 `./run.sh` starts the frontend at <http://localhost:3000> and the backend at
 <http://localhost:8000>; API documentation is available at
 <http://localhost:8000/api>. Use `./run.sh 3001 8001` for alternate local ports.
-Do not run a second development session over an existing one. The full command,
+`run.sh` requires `lsof` and `ss` and stops existing TCP listeners on its
+selected frontend and backend ports before starting: `./run.sh` clears 3000/8000,
+`./run.sh 3001` clears 3001/8000, and `./run.sh 3001 8001` clears 3001/8001.
+`ss` covers WSL cases where `lsof` does not report a listener.
+This terminates any local process listening on those ports. The full command,
 log locations, and restart behavior are documented in
 [project overview](docs/project-overview.md#local-environment).
 
