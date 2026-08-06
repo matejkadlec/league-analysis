@@ -66,8 +66,8 @@ All modes run:
 - `git diff --check`;
 - tracked JSON parsing, merge-marker detection, and sensitive-filename hygiene;
 - ShellCheck over every tracked shell script;
-- regression checks for the ShellCheck installer/runner, Node selector, and CI
-  entry-point coupling;
+- regression checks for the ShellCheck installer/runner, Node selector, CI
+  entry-point coupling, and the LGA-23 card-configuration contract;
 - Flow 1 policy regressions for expected batch scale, undersized-batch reasons,
   bounded independent PRs, worktree defaults, and final handoff behavior;
 - trusted-hook, local `.env` provisioning, primary/linked worktree identity,
