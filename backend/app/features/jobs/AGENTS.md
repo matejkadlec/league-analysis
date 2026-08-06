@@ -66,10 +66,11 @@ details. Keep it synchronized with job changes.
 - The local cleanup command may set `config_json.riot_maintenance_mode` for
   regular Match Fetcher and Player Updater jobs. Preserve that interlock on
   configuration updates; only the reviewed cleanup resume path may remove it.
-- Foreground player-add and its background Riot-data writers acquire gameplay
-  and job-table locks in cleanup order before checking that interlock. Do not
-  reintroduce a configuration-row-only lock that can invert cleanup's
-  table-lock order.
+- Every direct Riot-data writer, including account linking, player tracking and
+  refresh, and match-history storage, acquires gameplay and job-table locks in
+  cleanup order before it writes. Job-configuration updates use that same order
+  before locking a row, and the jobs API cannot create the cleanup-owned
+  interlock. Do not reintroduce a configuration-row-only lock.
 
 ## Startup and Recovery
 

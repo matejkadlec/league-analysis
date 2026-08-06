@@ -234,9 +234,16 @@ async def track_player(
         404: Player not found
         400: Maximum tracked players limit reached
     """
+    from app.features.jobs.maintenance import RiotWriterMaintenanceActiveError
+
     try:
         player = await player_service.track_player(puuid, current_user.id)
         return player
+    except RiotWriterMaintenanceActiveError:
+        raise HTTPException(
+            status_code=503,
+            detail="Riot data maintenance is in progress. Try again after it completes.",
+        )
     except ValueError as e:
         if "not found" in str(e).lower():
             raise HTTPException(status_code=404, detail=str(e))
@@ -565,6 +572,8 @@ async def add_tracked_player(
         404: Player not found in Riot API
         500: Unexpected error
     """
+    from app.features.jobs.maintenance import RiotWriterMaintenanceActiveError
+
     try:
         # Validate inputs
         _validate_game_name(game_name)
@@ -596,6 +605,11 @@ async def add_tracked_player(
 
         return result
 
+    except RiotWriterMaintenanceActiveError:
+        raise HTTPException(
+            status_code=503,
+            detail="Riot data maintenance is in progress. Try again after it completes.",
+        )
     except ValueError as e:
         _handle_tracking_value_error(e)
     except AuthenticationError as e:
@@ -673,6 +687,8 @@ async def refresh_player_league(
         404: Player not found
         500: Database or API error
     """
+    from app.features.jobs.maintenance import RiotWriterMaintenanceActiveError
+
     try:
         # Get the player model (not PlayerResponse) for update_player_league
         from .models import Player
@@ -697,6 +713,11 @@ async def refresh_player_league(
         return None
     except HTTPException:
         raise
+    except RiotWriterMaintenanceActiveError:
+        raise HTTPException(
+            status_code=503,
+            detail="Riot data maintenance is in progress. Try again after it completes.",
+        )
     except AuthenticationError as e:
         logger.error(
             "refresh_player_league_failed",

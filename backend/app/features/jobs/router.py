@@ -18,6 +18,7 @@ from .dependencies import JobServiceDep
 from .implementations.match_fetcher import MatchFetcherJob
 from .implementations.player_updater import PlayerUpdaterJob
 from .implementations.test_runner import TestMatchFetcherJob, TestPlayerUpdaterJob
+from .maintenance import RiotWriterMaintenanceConfigurationError
 from .models import ExecutionType, JobStatus, JobType
 from .schemas import (
     JobConfigurationResponse,
@@ -123,6 +124,8 @@ async def update_job_configuration(
         return job
     except HTTPException:
         raise
+    except RiotWriterMaintenanceConfigurationError as error:
+        raise HTTPException(status_code=400, detail=str(error))
     except Exception as e:
         logger.error(
             "Failed to update job configuration",

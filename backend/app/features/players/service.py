@@ -27,6 +27,13 @@ if TYPE_CHECKING:
 logger = structlog.get_logger(__name__)
 
 
+async def _ensure_riot_writer_maintenance_is_inactive(session: AsyncSession) -> None:
+    """Avoid importing the jobs package until a direct Riot-data write runs."""
+    from app.features.jobs.maintenance import ensure_riot_writer_maintenance_is_inactive
+
+    await ensure_riot_writer_maintenance_is_inactive(session)
+
+
 class PlayerService:
     """Service for handling player data operations."""
 
@@ -685,6 +692,8 @@ class PlayerService:
             ValueError: If player not found
         """
         try:
+            await _ensure_riot_writer_maintenance_is_inactive(self.db)
+
             # Determine Region from Platform for Account API
             # Heuristic mapping
             platform_lower = platform.lower()
@@ -778,6 +787,7 @@ class PlayerService:
         Raises:
             ValueError: If player not found.
         """
+        await _ensure_riot_writer_maintenance_is_inactive(self.db)
         player = await self.db.get(Player, puuid)
 
         if not player:
@@ -1058,6 +1068,7 @@ class PlayerService:
         """
         from app.features.matches.transformers import PlayerDataSanitizer
 
+        await _ensure_riot_writer_maintenance_is_inactive(self.db)
         normalized_platform = platform.strip().upper()
         discovered_count = 0
 
@@ -1134,6 +1145,7 @@ class PlayerService:
 
         from app.core.riot_api.constants import Platform, Region
 
+        await _ensure_riot_writer_maintenance_is_inactive(self.db)
         logger.debug("Updating player profile", puuid=player.puuid)
 
         # Convert platform string to Platform enum
@@ -1230,6 +1242,7 @@ class PlayerService:
 
         from .leagues import PlayerLeague
 
+        await _ensure_riot_writer_maintenance_is_inactive(self.db)
         logger.debug("Updating player league", puuid=player.puuid)
 
         # Convert platform string to Platform enum

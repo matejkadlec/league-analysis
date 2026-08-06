@@ -323,6 +323,7 @@ async def connect_riot_account(
 
     Validates the player exists via Riot API and links the PUUID to the user.
     """
+    from app.features.jobs.maintenance import RiotWriterMaintenanceActiveError
     from app.features.players.service import PlayerService
 
     player_service = PlayerService(auth_service.db)
@@ -335,6 +336,11 @@ async def connect_riot_account(
             tag_line=link_request.tag_line,
             platform=link_request.platform,
             user_id=current_user.id,
+        )
+    except RiotWriterMaintenanceActiveError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Riot data maintenance is in progress. Try again after it completes.",
         )
     except Exception as e:
         error_msg = str(e)

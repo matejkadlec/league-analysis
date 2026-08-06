@@ -11,6 +11,8 @@ from app.features.jobs.base import BaseJob
 from app.features.jobs.error_handling import RateLimitSignal, handle_riot_api_errors
 from app.features.jobs.maintenance import (
     RIOT_MAINTENANCE_MODE_KEY,
+    RIOT_WRITER_TABLES,
+    RiotWriterMaintenanceConfigurationError,
     is_riot_writer_maintenance_active,
     preserve_riot_writer_maintenance_mode,
     riot_writer_maintenance_is_active,
@@ -118,7 +120,7 @@ def test_job_configuration_updates_preserve_an_active_maintenance_interlock() ->
     assert preserve_riot_writer_maintenance_mode(
         JobType.PLAYER_UPDATER,
         {RIOT_MAINTENANCE_MODE_KEY: True},
-        None,
+        {RIOT_MAINTENANCE_MODE_KEY: True},
     ) == {RIOT_MAINTENANCE_MODE_KEY: True}
     assert preserve_riot_writer_maintenance_mode(
         JobType.MATCH_FETCHER,
@@ -126,9 +128,19 @@ def test_job_configuration_updates_preserve_an_active_maintenance_interlock() ->
         {"enabled_queue_ids": []},
     ) == {"enabled_queue_ids": []}
 
+    with pytest.raises(RiotWriterMaintenanceConfigurationError):
+        preserve_riot_writer_maintenance_mode(
+            JobType.MATCH_FETCHER,
+            {"enabled_queue_ids": [420]},
+            {
+                "enabled_queue_ids": [420],
+                RIOT_MAINTENANCE_MODE_KEY: True,
+            },
+        )
+
 
 @pytest.mark.asyncio
-async def test_job_configuration_update_row_locks_before_merging_interlock(
+async def test_job_configuration_update_locks_cleanup_tables_before_its_row(
     monkeypatch,
 ) -> None:
     """A queue-toggle write cannot overwrite cleanup's interlock from a stale read."""
@@ -170,8 +182,10 @@ async def test_job_configuration_update_row_locks_before_merging_interlock(
         JobConfigurationUpdate(config_json={"enabled_queue_ids": [440]}),
     )
 
-    statement = session.statements[0]
-    assert getattr(statement, "_for_update_arg") is not None
+    assert str(session.statements[0]) == (
+        f"LOCK TABLE {', '.join(RIOT_WRITER_TABLES)} IN ROW EXCLUSIVE MODE"
+    )
+    assert getattr(session.statements[1], "_for_update_arg") is not None
     assert updated.config_json == {
         RIOT_MAINTENANCE_MODE_KEY: True,
         "enabled_queue_ids": [440],

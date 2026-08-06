@@ -13,7 +13,10 @@ from .control import (
     is_runtime_job_running,
     request_job_stop,
 )
-from .maintenance import preserve_riot_writer_maintenance_mode
+from .maintenance import (
+    lock_riot_writer_tables,
+    preserve_riot_writer_maintenance_mode,
+)
 from .models import ExecutionType, JobConfiguration, JobExecution, JobStatus, JobType
 from .queue_config import (
     has_enabled_match_fetcher_queue,
@@ -122,6 +125,7 @@ class JobService:
         Returns:
             Updated job configuration if found, None otherwise.
         """
+        await lock_riot_writer_tables(self.db)
         query = (
             select(JobConfiguration)
             .where(JobConfiguration.id == job_id)
