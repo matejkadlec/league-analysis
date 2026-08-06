@@ -47,6 +47,16 @@ class _CardSettingsBase(BaseModel):
     )
 
 
+class _CardSettingsWriteBase(BaseModel):
+    """Strict external request contract that accepts canonical aliases only."""
+
+    model_config = ConfigDict(
+        alias_generator=_to_camel_case,
+        populate_by_name=False,
+        extra="forbid",
+    )
+
+
 class TopChampionsMutableSettingsV1(_CardSettingsBase):
     """Mutable Top Champions fields in the approved version 1 contract."""
 
@@ -86,7 +96,7 @@ def _require_json_number(value: Any) -> float | int:
     return value
 
 
-class TopChampionsMutableSettingsWriteV1(_CardSettingsBase):
+class TopChampionsMutableSettingsWriteV1(_CardSettingsWriteBase):
     """Strict write-only contract that leaves legacy reads tolerant."""
 
     minimum_games: int = Field(default=1, ge=1, le=999)
@@ -115,7 +125,7 @@ class TopChampionsMutableSettingsWriteV1(_CardSettingsBase):
         return roles
 
 
-class RecentPerformanceMutableSettingsWriteV1(_CardSettingsBase):
+class RecentPerformanceMutableSettingsWriteV1(_CardSettingsWriteBase):
     """Strict write-only contract that leaves legacy reads tolerant."""
 
     recent_match_count: int = Field(default=10, ge=5, le=50)
@@ -137,11 +147,17 @@ class RecentPerformanceMutableSettingsWriteV1(_CardSettingsBase):
         return _require_json_number(value)
 
 
-class CardPreferenceUpdate(_CardSettingsBase):
+class CardPreferenceUpdate(_CardSettingsWriteBase):
     """Versioned request body for a complete card-specific preference update."""
 
     version: Literal[1]
     settings: dict[str, Any]
+
+    @field_validator("version", mode="before")
+    @classmethod
+    def version_must_be_an_integer(cls, value: Any) -> int:
+        """Reject coercion before the supported-version literal is checked."""
+        return _require_json_integer(value)
 
 
 class CardPreferenceResponse(_CardSettingsBase):
@@ -155,7 +171,7 @@ class CardPreferenceResponse(_CardSettingsBase):
     updated_at: Optional[datetime] = None
 
 
-class CardPreferencesResetRequest(_CardSettingsBase):
+class CardPreferencesResetRequest(_CardSettingsWriteBase):
     """Explicit catalog confirmation required before resetting every card."""
 
     card_ids: list[CardId] = Field(min_length=2, max_length=2)
@@ -176,7 +192,7 @@ _CARD_SETTINGS_MODELS: dict[CardId, type[_CardSettingsBase]] = {
     CardId.RECENT_PERFORMANCE: RecentPerformanceMutableSettingsV1,
 }
 
-_CARD_SETTINGS_WRITE_MODELS: dict[CardId, type[_CardSettingsBase]] = {
+_CARD_SETTINGS_WRITE_MODELS: dict[CardId, type[_CardSettingsWriteBase]] = {
     CardId.TOP_CHAMPIONS: TopChampionsMutableSettingsWriteV1,
     CardId.RECENT_PERFORMANCE: RecentPerformanceMutableSettingsWriteV1,
 }

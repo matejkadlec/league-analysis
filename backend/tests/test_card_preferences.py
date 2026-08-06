@@ -99,6 +99,39 @@ def test_card_preference_validation_rejects_coerced_numeric_types(
         validate_card_preference_update(card_id, settings)
 
 
+def test_card_preference_validation_rejects_noncanonical_setting_names() -> None:
+    """Writes accept only the documented camel-case settings contract."""
+    with pytest.raises(ValidationError):
+        validate_card_preference_update(
+            CardId.TOP_CHAMPIONS,
+            {
+                "minimum_games": 12,
+                "minimumWinRate": 54.5,
+                "minimumKda": 2.3,
+                "includedRoles": ["TOP", "JUNGLE"],
+            },
+        )
+
+    with pytest.raises(ValidationError):
+        CardPreferencesResetRequest.model_validate(
+            {
+                "card_ids": [
+                    "profile.top-champions",
+                    "profile.recent-performance",
+                ]
+            }
+        )
+
+
+@pytest.mark.parametrize("version", [True, 1.0, "1"])
+def test_card_preference_update_rejects_coerced_versions(version: Any) -> None:
+    """Only the JSON integer literal version 1 can reach the v1 update path."""
+    with pytest.raises(ValidationError):
+        CardPreferenceUpdate.model_validate(
+            {"version": version, "settings": TOP_CHAMPIONS_PAYLOAD}
+        )
+
+
 def test_card_preference_validation_requires_complete_mutable_settings() -> None:
     """A partial write cannot accidentally reset a missing field to its default."""
     with pytest.raises(ValueError, match="includedRoles"):

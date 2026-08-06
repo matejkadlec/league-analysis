@@ -218,8 +218,10 @@ the future record.
 On a legacy read, the server must validate the record before applying or
 normalizing it. On every write, it must validate the card ID, version, field
 types, numeric bounds, unique roles, and allowed role values before mutating
-storage. The client repeats this validation for immediate feedback, but client
-validation is not an authority.
+storage. Current API writes accept only canonical camel-case field names and
+the JSON integer literal `version: 1`; snake-case names, booleans, floats, and
+strings are not compatible aliases. The client repeats this validation for
+immediate feedback, but client validation is not an authority.
 
 | Situation | Required behavior |
 | --- | --- |
