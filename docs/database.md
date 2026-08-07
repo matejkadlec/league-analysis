@@ -409,8 +409,9 @@ revoked access-token blacklist entries.
 
 Before an apply, the command locks the two writer job tables, refuses if a
 regular Match Fetcher or Player Updater execution is `RUNNING` or `PAUSED`,
-requires both writer configurations to receive the interlock, and persists a
-`riot_maintenance_mode` interlock on them. Regular scheduled writers record a
+requires exactly one Match Fetcher and one Player Updater configuration to
+receive the interlock, and persists a `riot_maintenance_mode` interlock on them.
+Regular scheduled writers record a
 `CANCELLED` execution before a Riot-data write. Direct account linking, player
 tracking/refresh, match-history storage, and matchmaking analysis acquire
 gameplay and job-table locks in cleanup order, then re-read the interlock before

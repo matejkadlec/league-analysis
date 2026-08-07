@@ -69,7 +69,8 @@ details. Keep it synchronized with job changes.
 - Every direct Riot-data writer, including account linking, player tracking and
   refresh, match-history storage, and matchmaking analysis, acquires gameplay
   and job-table locks in cleanup order before it writes. Cleanup refuses to
-  proceed unless both regular writer configurations receive the interlock.
+  proceed unless exactly one Match Fetcher and one Player Updater configuration
+  receive the interlock.
   Job-configuration updates use that same order before locking a row, and the
   jobs API cannot create the cleanup-owned interlock. Do not reintroduce a
   configuration-row-only lock.

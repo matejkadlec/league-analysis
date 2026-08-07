@@ -102,9 +102,9 @@ verified backup rather than dropping a populated application schema.
 The local Riot-data cleanup command also owns its persistent regular-job
 maintenance interlock. Do not bypass `config_json.riot_maintenance_mode` in a
 Riot writer, including matchmaking-analysis persistence, or clear it through
-an administrator update; cleanup refuses to proceed unless both regular writer
-configurations are present, and the documented resume command re-verifies the
-local target and inactive writers first.
+an administrator update; cleanup refuses to proceed unless exactly one regular
+configuration exists for each writer type, and the documented resume command
+re-verifies the local target and inactive writers first.
 
 ## Related Docs
 

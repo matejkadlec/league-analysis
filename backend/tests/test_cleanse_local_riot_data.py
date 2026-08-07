@@ -463,6 +463,9 @@ def test_riot_writer_maintenance_queries_change_only_writer_configurations() -> 
     class Result:
         rowcount = 2
 
+        def scalars(self):
+            return SimpleNamespace(all=lambda: ["MATCH_FETCHER", "PLAYER_UPDATER"])
+
     class Connection:
         def __init__(self) -> None:
             self.queries: list[str] = []
@@ -481,23 +484,35 @@ def test_riot_writer_maintenance_queries_change_only_writer_configurations() -> 
     assert "riot_maintenance_mode" in enable_query
     assert "MATCH_FETCHER" in enable_query
     assert "PLAYER_UPDATER" in enable_query
+    assert "RETURNING job_type::text" in enable_query
     assert "- 'riot_maintenance_mode'" in resume_query
 
 
-@pytest.mark.parametrize("updated_configurations", [0, 1, 3])
-def test_riot_writer_maintenance_refuses_missing_or_duplicate_configurations(
-    updated_configurations: int,
+@pytest.mark.parametrize(
+    "updated_job_types",
+    [
+        [],
+        ["MATCH_FETCHER"],
+        ["PLAYER_UPDATER"],
+        ["MATCH_FETCHER", "MATCH_FETCHER"],
+        ["PLAYER_UPDATER", "PLAYER_UPDATER"],
+        ["MATCH_FETCHER", "PLAYER_UPDATER", "MATCH_FETCHER"],
+    ],
+)
+def test_riot_writer_maintenance_refuses_missing_or_duplicate_writer_types(
+    updated_job_types: list[str],
 ) -> None:
-    """Cleanup never proceeds without exactly its two regular writer configs."""
+    """Cleanup requires exactly one configuration for each regular writer type."""
 
     class Result:
-        rowcount = updated_configurations
+        def scalars(self):
+            return SimpleNamespace(all=lambda: updated_job_types)
 
     class Connection:
         def execute(self, *_args, **_kwargs) -> Result:
             return Result()
 
-    with pytest.raises(LocalCleanupRefusal, match="Match Fetcher and Player Updater"):
+    with pytest.raises(LocalCleanupRefusal, match="exactly one Match Fetcher"):
         enable_riot_writer_maintenance_mode(Connection())
 
 
