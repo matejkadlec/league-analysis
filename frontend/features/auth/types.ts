@@ -35,6 +35,7 @@ export interface AuthResponse {
 export interface AuthLoginError extends Error {
   code?: string;
   lockedUntil?: string;
+  status?: number;
 }
 
 export interface AuthContextType {

@@ -4,7 +4,9 @@ import { useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import Image from "next/image";
 import { Turnstile, type TurnstileInstance } from "@marsidev/react-turnstile";
+import { Eye, EyeOff } from "lucide-react";
 import { useAuth } from "../context/auth-context";
+import { getLoginErrorMessage, isAuthLoginError } from "../utils/login-error";
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -17,14 +19,16 @@ import {
 import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { PublicPageFooter } from "@/components/public-page-footer";
-import type { AuthLoginError, LoginCredentials } from "../types";
+import type { LoginCredentials } from "../types";
 
 export function SignInForm() {
   const { login } = useAuth();
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [captchaRequired, setCaptchaRequired] = useState(false);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const submissionInFlight = useRef(false);
   const turnstileRef = useRef<TurnstileInstance | undefined>(undefined);
   const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim() ?? "";
   const isTurnstileConfigured = turnstileSiteKey.length > 0;
@@ -47,6 +51,11 @@ export function SignInForm() {
     !captchaRequired || (isTurnstileConfigured && captchaToken !== null);
 
   const onSubmit = async (data: LoginCredentials) => {
+    if (submissionInFlight.current) {
+      return;
+    }
+
+    submissionInFlight.current = true;
     setError(null);
     setIsSubmitting(true);
 
@@ -56,37 +65,30 @@ export function SignInForm() {
         captchaToken,
       });
     } catch (err) {
-      const authError = err as AuthLoginError;
-      const authMessage =
-        authError instanceof Error ? authError.message : "Login failed";
+      const authError = isAuthLoginError(err) ? err : null;
 
       if (
-        authError.code === "CAPTCHA_REQUIRED" ||
-        authError.code === "CAPTCHA_INVALID"
+        authError?.code === "CAPTCHA_REQUIRED" ||
+        authError?.code === "CAPTCHA_INVALID"
       ) {
         setCaptchaRequired(true);
         setCaptchaToken(null);
         turnstileRef.current?.reset();
       }
 
-      if (authError.code === "ACCOUNT_LOCKED" && authError.lockedUntil) {
-        const lockedUntilDate = new Date(authError.lockedUntil);
-        const lockoutTime = Number.isNaN(lockedUntilDate.getTime())
-          ? authError.lockedUntil
-          : lockedUntilDate.toLocaleString();
-        setError(`Account locked until ${lockoutTime}`);
+      if (authError?.code === "ACCOUNT_LOCKED" && authError.lockedUntil) {
+        setError(getLoginErrorMessage(authError));
       } else if (
-        (authError.code === "CAPTCHA_REQUIRED" ||
-          authError.code === "CAPTCHA_INVALID") &&
+        (authError?.code === "CAPTCHA_REQUIRED" ||
+          authError?.code === "CAPTCHA_INVALID") &&
         !isTurnstileConfigured
       ) {
-        setError(
-          "Security check is required, but CAPTCHA is not configured. Contact the app administrator.",
-        );
+        setError("Sign-in is temporarily unavailable. Please try again later.");
       } else {
-        setError(authMessage);
+        setError(getLoginErrorMessage(err));
       }
 
+      submissionInFlight.current = false;
       setIsSubmitting(false);
     }
   };
@@ -167,17 +169,36 @@ export function SignInForm() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel className="text-gray-700">Password</FormLabel>
-                      <FormControl>
-                        <Input
-                          {...field}
-                          type="password"
-                          placeholder="••••••••"
+                      <div className="relative">
+                        <FormControl>
+                          <Input
+                            {...field}
+                            type={isPasswordVisible ? "text" : "password"}
+                            placeholder="••••••••"
+                            disabled={isSubmitting}
+                            className="pr-12 text-gray-900 border-gray-300 placeholder:text-gray-500 focus-visible:ring-gray-400"
+                            style={{ backgroundColor: "#e5e7eb" }}
+                            autoComplete="current-password"
+                          />
+                        </FormControl>
+                        <button
+                          type="button"
+                          aria-label={
+                            isPasswordVisible ? "Hide password" : "Show password"
+                          }
+                          aria-pressed={isPasswordVisible}
                           disabled={isSubmitting}
-                          className="text-gray-900 border-gray-300 placeholder:text-gray-500 focus-visible:ring-gray-400"
-                          style={{ backgroundColor: "#e5e7eb" }}
-                          autoComplete="current-password"
-                        />
-                      </FormControl>
+                          onPointerDown={(event) => event.preventDefault()}
+                          onClick={() => setIsPasswordVisible((visible) => !visible)}
+                          className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-gray-600 hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400 focus-visible:ring-offset-2"
+                        >
+                          {isPasswordVisible ? (
+                            <EyeOff aria-hidden="true" className="h-4 w-4" />
+                          ) : (
+                            <Eye aria-hidden="true" className="h-4 w-4" />
+                          )}
+                        </button>
+                      </div>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -217,12 +238,17 @@ export function SignInForm() {
                     ) : (
                       <Alert variant="destructive">
                         <AlertDescription>
-                          CAPTCHA is required for this login, but
-                          NEXT_PUBLIC_TURNSTILE_SITE_KEY is not configured.
+                          Security check is unavailable. Please try again later.
                         </AlertDescription>
                       </Alert>
                     )}
                   </div>
+                )}
+
+                {error && (
+                  <Alert variant="destructive">
+                    <AlertDescription>{error}</AlertDescription>
+                  </Alert>
                 )}
 
                 <Button
@@ -236,19 +262,6 @@ export function SignInForm() {
                 </Button>
               </form>
             </Form>
-
-            {/* Error message shown below the form to prevent layout shift */}
-            <div
-              className={`mt-4 transition-all duration-300 ease-in-out overflow-hidden ${
-                error ? "max-h-20 opacity-100" : "max-h-0 opacity-0"
-              }`}
-            >
-              {error && (
-                <Alert variant="destructive">
-                  <AlertDescription>{error}</AlertDescription>
-                </Alert>
-              )}
-            </div>
           </div>
         </div>
       </div>
