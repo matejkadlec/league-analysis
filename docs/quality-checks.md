@@ -98,7 +98,9 @@ locked pre-commit installation.
   rule APIs without suppressing any configured lint rules;
 - `tsc --noEmit`;
 - deterministic Vitest regressions for player search validation, platform
-  presentation, rank-style mapping, and Top Champions pagination boundaries;
+  presentation, rank-style mapping, Top Champions pagination boundaries, and
+  sign-in authentication errors, request timeouts, duplicate-submission
+  prevention, and password visibility;
 - Next.js production build.
 
 The separate `cd frontend && npm run test:e2e` Playwright suite verifies the

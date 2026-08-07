@@ -111,7 +111,10 @@ async def login(
     if not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Inactive user account",
+            detail={
+                "code": "ACCOUNT_INACTIVE",
+                "message": "This account is inactive. Contact an administrator to restore access.",
+            },
         )
 
     (
@@ -168,7 +171,10 @@ async def refresh_access_token(
         await auth_service.revoke_all_refresh_tokens_for_user(user.id)
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Inactive user account",
+            detail={
+                "code": "ACCOUNT_INACTIVE",
+                "message": "This account is inactive. Contact an administrator to restore access.",
+            },
         )
 
     await auth_service.cleanup_expired_token_state()

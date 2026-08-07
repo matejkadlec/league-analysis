@@ -16,57 +16,21 @@ import {
   removeAuthTokens,
   setAuthTokens,
 } from "../utils/token-manager";
+import {
+  createAuthLoginError,
+  getLoginRequestError,
+  LOGIN_REQUEST_TIMEOUT_MS,
+} from "../utils/login-error";
 import type {
   AuthResponse,
   User,
   LoginRequest,
   AuthContextType,
-  AuthLoginError,
 } from "../types";
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-
-function createAuthLoginError(payload: unknown): AuthLoginError {
-  const fallbackMessage = "Login failed";
-  const error = new Error(fallbackMessage) as AuthLoginError;
-
-  if (!payload || typeof payload !== "object") {
-    return error;
-  }
-
-  const detail = (payload as { detail?: unknown }).detail;
-
-  if (typeof detail === "string") {
-    error.message = detail;
-    return error;
-  }
-
-  if (!detail || typeof detail !== "object") {
-    return error;
-  }
-
-  const detailObject = detail as {
-    code?: unknown;
-    message?: unknown;
-    locked_until?: unknown;
-  };
-
-  if (typeof detailObject.code === "string") {
-    error.code = detailObject.code;
-  }
-
-  if (typeof detailObject.message === "string") {
-    error.message = detailObject.message;
-  }
-
-  if (typeof detailObject.locked_until === "string") {
-    error.lockedUntil = detailObject.locked_until;
-  }
-
-  return error;
-}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -175,25 +139,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         formData.append("captcha_token", credentials.captchaToken);
       }
 
-      const response = await fetch(`${API_BASE_URL}/api/v1/auth/login`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
-        body: formData,
-      });
+      const abortController = new AbortController();
+      let didTimeout = false;
+      const timeoutId = setTimeout(() => {
+        didTimeout = true;
+        abortController.abort();
+      }, LOGIN_REQUEST_TIMEOUT_MS);
 
-      if (!response.ok) {
-        let payload: unknown = null;
-        try {
-          payload = await response.json();
-        } catch {
-          payload = null;
+      let data: AuthResponse;
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/v1/auth/login`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+          body: formData,
+          signal: abortController.signal,
+        });
+
+        if (!response.ok) {
+          let payload: unknown = null;
+          try {
+            payload = await response.json();
+          } catch (error) {
+            if (getLoginRequestError(error, didTimeout).code === "REQUEST_TIMEOUT") {
+              throw error;
+            }
+          }
+          throw createAuthLoginError(payload, response.status);
         }
-        throw createAuthLoginError(payload);
-      }
 
-      const data = (await response.json()) as AuthResponse;
+        data = (await response.json()) as AuthResponse;
+      } catch (error) {
+        throw getLoginRequestError(error, didTimeout);
+      } finally {
+        clearTimeout(timeoutId);
+      }
 
       setAuthTokens(data.access_token, data.refresh_token);
       queryClient.clear();

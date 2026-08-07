@@ -15,7 +15,7 @@ Domain-specific UI components. Each feature is self-contained with its own compo
 
 | Feature               | Description                        |
 | --------------------- | ---------------------------------- |
-| `auth/`               | Authentication context, rotating refresh tokens, adaptive Turnstile CAPTCHA, signed-in redirect away from `/sign-in`, auth-hinted public routes (`/join-us`, `/license`, `/privacy-policy`, `/cookie-policy`) |
+| `auth/`               | Authentication context, rotating refresh tokens, adaptive Turnstile CAPTCHA, safe sign-in error mapping, accessible password visibility, signed-in redirect away from `/sign-in`, auth-hinted public routes (`/join-us`, `/license`, `/privacy-policy`, `/cookie-policy`) |
 | `cookie-consent/`     | EU-style consent banner, browser consent persistence, optional-storage gating, authenticated consent sync to backend |
 | `jobs/`               | Job monitoring components          |
 | `matches/`            | Match history display              |
