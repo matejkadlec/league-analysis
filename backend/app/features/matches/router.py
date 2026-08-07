@@ -114,18 +114,14 @@ async def get_player_champion_stats(
     queue: Optional[int] = Query(
         None, description="Queue ID filter (e.g., 420 for ranked solo/duo)"
     ),
-    limit: int = Query(
-        20, ge=1, le=50, description="Maximum number of champions to return"
-    ),
 ):
     """
     Get player statistics grouped by champion.
-    Returns champions sorted by games played descending.
+    Returns every qualifying champion sorted by games played descending.
     """
     return await match_service.get_player_champion_stats(
         puuid=puuid,
         queue=queue,
-        limit=limit,
     )
 
 

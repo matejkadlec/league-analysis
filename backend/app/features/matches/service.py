@@ -826,7 +826,6 @@ class MatchService:
         self,
         puuid: str,
         queue: Optional[int] = None,
-        limit: int = 20,
     ) -> ChampionStatsResponse:
         """
         Get player statistics grouped by champion.
@@ -834,10 +833,9 @@ class MatchService:
         Args:
             puuid: Player PUUID
             queue: Filter by queue ID (e.g., 420 for ranked solo/duo)
-            limit: Maximum number of champions to return (sorted by games played)
 
         Returns:
-            ChampionStatsResponse with per-champion statistics
+            ChampionStatsResponse with every qualifying champion statistic
         """
         from .schemas import ChampionStatsItem, ChampionStatsResponse
 
@@ -903,9 +901,11 @@ class MatchService:
                     )
                 )
 
-            # Sort by games played descending, limit results
-            champions.sort(key=lambda x: x.games_played, reverse=True)
-            champions = champions[:limit]
+            # Keep the complete aggregate population available for client pagination.
+            # The secondary key prevents tied champions from moving between pages.
+            champions.sort(
+                key=lambda champion: (-champion.games_played, champion.champion_name)
+            )
 
             return ChampionStatsResponse(
                 puuid=puuid,

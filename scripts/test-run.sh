@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Regression coverage for run.sh selected-port cleanup without touching live ports.
+# Regression coverage for run.sh local configuration and selected-port cleanup
+# without touching live ports.
 set -euo pipefail
 
 repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -96,7 +97,24 @@ EOF
 
 cat > "$test_directory/psql" <<'EOF'
 #!/usr/bin/env bash
-printf 'psql\n' >> "$LGA_RUN_TEST_CALL_LOG"
+database=""
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    -d)
+      database="$2"
+      shift 2
+      ;;
+    *)
+      shift
+      ;;
+  esac
+done
+if [ -n "${DEBUG+x}" ]; then
+  debug_state="set:$DEBUG"
+else
+  debug_state='unset'
+fi
+printf 'psql:%s:%s\n' "$database" "$debug_state" >> "$LGA_RUN_TEST_CALL_LOG"
 exit 1
 EOF
 chmod 700 "$test_directory/lsof" "$test_directory/ss" "$test_directory/fuser" "$test_directory/psql"
@@ -147,10 +165,21 @@ run_case() {
   local port_8000_pid
   local port_8001_pid
   local client_pid
+  local expected_database='worktree_dotenv_database'
+  local expected_debug_state='unset'
+  local use_process_environment="${LGA_RUN_TEST_USE_PROCESS_ENV:-0}"
 
   mkdir -p "$case_directory"
   cp "$run_script" "$case_directory/run.sh"
   chmod 700 "$case_directory/run.sh"
+  cat > "$case_directory/.env" <<'EOF'
+POSTGRES_DB=worktree_dotenv_database
+POSTGRES_USER=worktree_dotenv_user
+POSTGRES_PASSWORD=worktree_dotenv_password
+POSTGRES_HOST=127.0.0.1
+POSTGRES_PORT=5432
+EOF
+  chmod 600 "$case_directory/.env"
 
   start_fake_listener port_3000_pid
   start_fake_listener port_3001_pid
@@ -164,13 +193,23 @@ run_case() {
   export LGA_RUN_TEST_CLIENT_PID="$client_pid"
   export LGA_RUN_TEST_CALL_LOG="$call_log"
 
+  if [ "$use_process_environment" = "1" ]; then
+    expected_database='intentional_process_override_database'
+    expected_debug_state='set:release'
+  fi
+
   set +e
-  LGA_RUN_TEST_LISTENER_LOOKUP="$listener_lookup" PATH="$test_directory:$PATH" "$case_directory/run.sh" "$@" > "$case_directory/output.log" 2>&1
+  LGA_RUN_TEST_LISTENER_LOOKUP="$listener_lookup" \
+    LGA_RUN_USE_PROCESS_ENV="$use_process_environment" \
+    POSTGRES_DB='intentional_process_override_database' \
+    DEBUG='release' \
+    PATH="$test_directory:$PATH" \
+    "$case_directory/run.sh" "$@" > "$case_directory/output.log" 2>&1
   status=$?
   set -e
 
   [[ "$status" -eq 1 ]] || fail "$name should stop at the fake PostgreSQL check."
-  grep -Fxq 'psql' "$call_log" || fail "$name did not reach the PostgreSQL check after cleanup."
+  grep -Fxq "psql:$expected_database:$expected_debug_state" "$call_log" || fail "$name did not use the expected local configuration."
 
   for port in 3000 3001 8000 8001; do
     pid="$(printenv "LGA_RUN_TEST_PORT_${port}_PID")"
@@ -199,5 +238,6 @@ run_case default '3000 8000' lsof
 run_case frontend_override '3001 8000' lsof 3001
 run_case custom_ports '3001 8001' lsof 3001 8001
 run_case ss_fallback '3001 8001' ss 3001 8001
+LGA_RUN_TEST_USE_PROCESS_ENV=1 run_case intentional_process_override '3001 8001' lsof 3001 8001
 
 printf 'run.sh port cleanup regression passed.\n'

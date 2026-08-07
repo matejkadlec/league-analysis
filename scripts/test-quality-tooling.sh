@@ -82,6 +82,10 @@ if "$repository_root/scripts/run-actionlint.sh" \
 fi
 grep -Fq 'frontend-lint' "$pre_commit" || fail 'the fast frontend lint pre-commit hook is missing.'
 grep -Fq 'frontend-typecheck' "$pre_commit" || fail 'the fast frontend typecheck pre-commit hook is missing.'
+[[ "$(grep -Fxc '          repository_root="$(git rev-parse --show-toplevel)" &&' "$pre_commit")" -eq 2 ]] \
+  || fail 'frontend pre-commit hooks must resolve the linked-worktree root.'
+[[ "$(grep -Fxc '          source "$repository_root/scripts/use-project-node.sh" && cd "$repository_root/frontend" &&' "$pre_commit")" -eq 2 ]] \
+  || fail 'frontend pre-commit hooks must select the project Node runtime.'
 grep -Fqx '    rev: v0.16.1' "$pre_commit" || fail 'pre-commit Ruff must match the backend tool pin.'
 grep -Fq 'source "$SCRIPT_DIR/scripts/use-project-node.sh"' "$repository_root/run.sh" || fail 'run.sh must select the project Node runtime.'
 grep -Fq 'Each `run.sh` invocation creates `logs/` before redirecting backend or frontend' "$agent_guide" \

@@ -137,7 +137,6 @@ function TrackedPlayerProfileContent({ puuid }: { puuid: string }) {
         `/matches/player/${puuid}/champion-stats`,
         {
           queue: 420,
-          limit: 20,
         },
       ),
     placeholderData: (previousData) => previousData,
@@ -281,7 +280,11 @@ function TrackedPlayerProfileContent({ puuid }: { puuid: string }) {
             </CardContent>
           </Card>
         ) : championStats ? (
-          <ChampionStatsCard stats={championStats} lastUpdated={player?.updated_at} />
+          <ChampionStatsCard
+            stats={championStats}
+            lastUpdated={player?.updated_at}
+            dataSourceKey={`${puuid}:queue:420`}
+          />
         ) : (
           <Card className="p-6">
             <p className="text-muted-foreground">Champion stats unavailable.</p>

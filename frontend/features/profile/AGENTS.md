@@ -25,7 +25,8 @@ Displays top played champions with:
 - Games played
 - KDA (Kills/Deaths/Assists)
 - Win rate (color coded: green >55%, yellow 50-55%, red <50%)
-- Updated timestamp
+- Updated timestamp and accessible local pagination controls
+- Exactly five champion rows per page, with a stable card height on a partial final page
 
 ### RoleStatsCard
 
@@ -54,7 +55,7 @@ All comparisons show trend indicators (improving/declining/stable).
 
 ## Backend Endpoints Used
 
-- `GET /matches/player/{puuid}/champion-stats?queue=420&limit=20`
+- `GET /matches/player/{puuid}/champion-stats?queue=420` (complete ordered aggregate; the shared card paginates locally)
 - `GET /matches/player/{puuid}/lane-stats?queue=420`
 - `GET /matches/player/{puuid}/stats?queue=420&limit=10` (recent)
 - `GET /matches/player/{puuid}/stats?queue=420` (overall)

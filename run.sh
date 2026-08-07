@@ -5,8 +5,51 @@ set -e
 # Get absolute path to script directory
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-# Load environment variables from .env file
+# Load environment variables from the worktree's .env file.
+#
+# A linked worktree receives its own protected local configuration. A WSL
+# session can retain application variables from a previous project or
+# worktree, so this launcher clears every backend configuration name before
+# loading the local file. This also lets the backend's documented defaults take
+# effect for values absent from .env. Set LGA_RUN_USE_PROCESS_ENV=1 only for an
+# intentional one-off process override.
 # Supports quoted values and preserves special characters.
+use_process_environment="${LGA_RUN_USE_PROCESS_ENV:-0}"
+backend_configuration_variables=(
+    POSTGRES_DB
+    POSTGRES_USER
+    POSTGRES_PASSWORD
+    POSTGRES_HOST
+    POSTGRES_PORT
+    DEBUG
+    LOG_LEVEL
+    CORS_ORIGINS
+    ENVIRONMENT
+    JWT_SECRET_KEY
+    JWT_ALGORITHM
+    JWT_ACCESS_TOKEN_EXPIRE_MINUTES
+    JWT_REFRESH_TOKEN_EXPIRE_DAYS
+    AUTH_LOCKOUT_MAX_ATTEMPTS
+    AUTH_LOCKOUT_MINUTES
+    AUTH_CAPTCHA_AFTER_FAILURES
+    TURNSTILE_SECRET_KEY
+    TURNSTILE_SITEVERIFY_URL
+    SMTP_HOST
+    SMTP_PORT
+    SMTP_USERNAME
+    SMTP_PASSWORD
+    SMTP_FROM_EMAIL
+    SMTP_USE_TLS
+    SMTP_USE_SSL
+    RIOT_API_KEY
+)
+
+if [ "$use_process_environment" != "1" ]; then
+    for configuration_variable in "${backend_configuration_variables[@]}"; do
+        unset "$configuration_variable"
+    done
+fi
+
 if [ -f "$SCRIPT_DIR/.env" ]; then
     while IFS= read -r line || [ -n "$line" ]; do
         # Trim leading whitespace
@@ -31,8 +74,10 @@ if [ -f "$SCRIPT_DIR/.env" ]; then
             value="${value:1:${#value}-2}"
         fi
 
-        # Explicit process environment values take precedence over .env.
-        if [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] && [ -z "${!key+x}" ]; then
+        if [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+            if [ "$use_process_environment" = "1" ] && [ -n "${!key+x}" ]; then
+                continue
+            fi
             export "$key=$value"
         fi
     done < "$SCRIPT_DIR/.env"

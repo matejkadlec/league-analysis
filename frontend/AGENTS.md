@@ -140,6 +140,7 @@ npm run dev      # Start dev server
 npm run lint     # ESLint
 npm run typecheck
 npm test         # Deterministic Vitest regressions
+npm run test:e2e # Playwright pagination/browser regressions (after installing Chromium)
 npm run build    # Production build
 rm -rf .next     # Clear cache
 ```
@@ -147,6 +148,12 @@ rm -rf .next     # Clear cache
 The authoritative gate selects the Node version from `../.nvmrc`, installs with
 `npm ci`, rejects ESLint warnings, and preserves tracked `next-env.d.ts` content
 across the production build.
+
+Install the matching browser before running the separate Playwright suite:
+
+```bash
+npx playwright install chromium
+```
 
 ## Related Docs
 
