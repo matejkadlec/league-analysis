@@ -187,7 +187,6 @@ export function SignInForm() {
                             isPasswordVisible ? "Hide password" : "Show password"
                           }
                           aria-pressed={isPasswordVisible}
-                          disabled={isSubmitting}
                           onPointerDown={(event) => event.preventDefault()}
                           onClick={() => setIsPasswordVisible((visible) => !visible)}
                           className="password-visibility-toggle absolute inset-y-0 right-0 flex w-10 items-center justify-center text-gray-600 hover:text-gray-900"

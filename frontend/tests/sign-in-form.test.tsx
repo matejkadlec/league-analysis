@@ -63,13 +63,15 @@ describe("SignInForm", () => {
     expect(password.value).toBe("secret-password");
   });
 
-  it("prevents duplicate submissions while a sign-in request is pending", async () => {
+  it("prevents duplicate submissions while allowing a visible password to be hidden", async () => {
     const user = userEvent.setup();
     login.mockReturnValue(new Promise<void>(() => {}));
     render(<SignInForm />);
 
     await user.type(screen.getByLabelText("Email"), "user@example.com");
-    await user.type(screen.getByLabelText("Password"), "secret-password");
+    const password = screen.getByLabelText("Password") as HTMLInputElement;
+    await user.type(password, "secret-password");
+    await user.click(screen.getByRole("button", { name: "Show password" }));
     const submit = screen.getByRole("button", { name: "Sign In" });
 
     await user.click(submit);
@@ -81,6 +83,13 @@ describe("SignInForm", () => {
         name: "Signing in...",
       }) as HTMLButtonElement).disabled,
     ).toBe(true);
+    const hidePassword = screen.getByRole("button", { name: "Hide password" });
+    expect(hidePassword).toHaveProperty("disabled", false);
+
+    await user.click(hidePassword);
+
+    expect(password.type).toBe("password");
+    expect(login).toHaveBeenCalledTimes(1);
   });
 
   it("never renders raw client error text", async () => {
