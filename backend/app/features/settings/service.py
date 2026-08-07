@@ -4,22 +4,30 @@ from datetime import datetime, timezone
 from typing import Optional
 
 import structlog
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, delete, or_, select
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql import func
 
 from app.core.riot_api.client import RiotAPIClient
 from app.core.riot_api.constants import Platform, Region
 from app.core.riot_api.errors import RiotAPIError
 
-from .models import RiotAPIKey
+from .models import RiotAPIKey, UserCardPreference
 from .schemas import (
     APIKeyStatusResponse,
+    CardId,
+    CardPreferenceResponse,
+    CardPreferenceUpdate,
     ServiceStatusResponse,
     SettingResponse,
     SettingTestResponse,
     SettingUpdate,
     SettingValidationResponse,
     UserCookieConsentUpdate,
+    normalize_stored_card_preference,
+    serialize_card_preference_settings,
+    validate_card_preference_update,
 )
 
 logger = structlog.get_logger(__name__)
@@ -430,6 +438,173 @@ class SettingsService:
                 else None
             ),
         )
+
+    # ===== CARD PREFERENCE METHODS =====
+
+    async def get_card_preferences(self, user_id: int) -> list[CardPreferenceResponse]:
+        """Return every approved card's effective v1 settings for one viewer."""
+        result = await self.db.execute(
+            select(UserCardPreference).where(UserCardPreference.user_id == user_id)
+        )
+        stored_preferences = result.scalars().all()
+        current_preferences: dict[CardId, UserCardPreference] = {}
+        future_versions: set[CardId] = set()
+
+        for preference in stored_preferences:
+            try:
+                card_id = CardId(preference.card_id)
+            except ValueError:
+                logger.warning(
+                    "card_preference_unknown_card_ignored",
+                    user_id=user_id,
+                    card_id=preference.card_id,
+                    version=preference.version,
+                )
+                continue
+
+            if preference.version == 1:
+                current_preferences[card_id] = preference
+            else:
+                future_versions.add(card_id)
+
+        responses: list[CardPreferenceResponse] = []
+        for card_id in CardId:
+            preference = current_preferences.get(card_id)
+            if card_id in future_versions:
+                logger.warning(
+                    "card_preference_future_version_ignored",
+                    user_id=user_id,
+                    card_id=card_id.value,
+                )
+            if preference is None:
+                settings, _warnings = normalize_stored_card_preference(card_id, {})
+                responses.append(
+                    CardPreferenceResponse(
+                        card_id=card_id,
+                        settings=serialize_card_preference_settings(settings),
+                        is_default=True,
+                    )
+                )
+                continue
+
+            settings, ignored_fields = normalize_stored_card_preference(
+                card_id, preference.settings
+            )
+            if ignored_fields:
+                logger.warning(
+                    "card_preference_legacy_fields_ignored",
+                    user_id=user_id,
+                    card_id=card_id.value,
+                    ignored_fields=list(ignored_fields),
+                )
+            responses.append(
+                CardPreferenceResponse(
+                    card_id=card_id,
+                    settings=serialize_card_preference_settings(settings),
+                    is_default=False,
+                    requires_recovery=bool(ignored_fields),
+                    updated_at=preference.updated_at,
+                )
+            )
+        return responses
+
+    async def update_card_preference(
+        self,
+        user_id: int,
+        card_id: CardId,
+        update: CardPreferenceUpdate,
+    ) -> CardPreferenceResponse:
+        """Atomically replace the authenticated viewer's validated v1 override."""
+        mutable_settings = validate_card_preference_update(card_id, update.settings)
+        statement = (
+            insert(UserCardPreference)
+            .values(
+                user_id=user_id,
+                card_id=card_id.value,
+                version=update.version,
+                settings=mutable_settings,
+            )
+            .on_conflict_do_update(
+                index_elements=[
+                    UserCardPreference.user_id,
+                    UserCardPreference.card_id,
+                    UserCardPreference.version,
+                ],
+                set_={
+                    "settings": mutable_settings,
+                    "updated_at": func.now(),
+                },
+            )
+            .returning(UserCardPreference)
+        )
+        result = await self.db.execute(statement)
+        preference = result.scalar_one()
+        await self.db.commit()
+
+        settings, _warnings = normalize_stored_card_preference(
+            card_id, preference.settings
+        )
+        logger.info(
+            "card_preference_updated",
+            user_id=user_id,
+            card_id=card_id.value,
+            version=update.version,
+        )
+        return CardPreferenceResponse(
+            card_id=card_id,
+            settings=serialize_card_preference_settings(settings),
+            is_default=False,
+            updated_at=preference.updated_at,
+        )
+
+    async def reset_card_preference(
+        self, user_id: int, card_id: CardId
+    ) -> CardPreferenceResponse:
+        """Remove only the current v1 row, preserving any future-version row."""
+        await self.db.execute(
+            delete(UserCardPreference).where(
+                UserCardPreference.user_id == user_id,
+                UserCardPreference.card_id == card_id.value,
+                UserCardPreference.version == 1,
+            )
+        )
+        await self.db.commit()
+        settings, _warnings = normalize_stored_card_preference(card_id, {})
+        logger.info(
+            "card_preference_reset",
+            user_id=user_id,
+            card_id=card_id.value,
+            version=1,
+        )
+        return CardPreferenceResponse(
+            card_id=card_id,
+            settings=serialize_card_preference_settings(settings),
+            is_default=True,
+        )
+
+    async def reset_all_card_preferences(
+        self, user_id: int
+    ) -> list[CardPreferenceResponse]:
+        """Reset the current catalog while preserving unsupported card/version rows."""
+        await self.db.execute(
+            delete(UserCardPreference).where(
+                UserCardPreference.user_id == user_id,
+                UserCardPreference.version == 1,
+                UserCardPreference.card_id.in_([card_id.value for card_id in CardId]),
+            )
+        )
+        await self.db.commit()
+        logger.info("all_card_preferences_reset", user_id=user_id, version=1)
+        return [
+            CardPreferenceResponse(
+                card_id=card_id,
+                settings=serialize_card_preference_settings(
+                    normalize_stored_card_preference(card_id, {})[0]
+                ),
+                is_default=True,
+            )
+            for card_id in CardId
+        ]
 
     # ===== USER SETTINGS METHODS =====
 

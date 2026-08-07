@@ -17,7 +17,8 @@ from sqlalchemy import URL, create_engine, text
 
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
 PROJECT_ROOT = BACKEND_ROOT.parent
-EXPECTED_REVISION = "20260803_0001"
+ADOPTION_BASELINE_REVISION = "20260803_0001"
+EXPECTED_REVISION = "20260806_0002"
 
 load_dotenv(PROJECT_ROOT / ".env", override=False)
 
@@ -103,10 +104,10 @@ def subprocess_environment(database: str) -> dict[str, str]:
     return environment
 
 
-def run_migration_command(database: str, command_name: str) -> None:
+def run_migration_command(database: str, command_name: str, revision: str) -> None:
     """Run a locked upgrade or stamp command without logging connection values."""
     subprocess.run(
-        [sys.executable, "scripts/migrate.py", command_name, "head"],
+        [sys.executable, "scripts/migrate.py", command_name, revision],
         cwd=BACKEND_ROOT,
         env=subprocess_environment(database),
         check=True,
@@ -168,6 +169,16 @@ def application_row_counts(database: str) -> dict[str, int]:
         engine.dispose()
 
 
+def existing_application_row_counts_unchanged(
+    before_counts: dict[str, int], after_counts: dict[str, int]
+) -> bool:
+    """Ensure adoption and later upgrades preserve every pre-existing row count."""
+    return all(
+        after_counts.get(table_name) == row_count
+        for table_name, row_count in before_counts.items()
+    )
+
+
 def stamped_revision(database: str) -> str | None:
     """Read the baseline marker if it is already present."""
     url = administration_url().set(database=database)
@@ -193,7 +204,10 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument(
         "--apply",
         action="store_true",
-        help="Stamp head after a clean schema comparison; without it this is read-only.",
+        help=(
+            "Stamp the initial baseline then upgrade after a clean schema "
+            "comparison; without it this is read-only."
+        ),
     )
     return parser.parse_args()
 
@@ -214,7 +228,11 @@ def main() -> int:
     try:
         create_temporary_database(url, temporary_database)
         created = True
-        run_migration_command(temporary_database, "upgrade")
+        run_migration_command(
+            temporary_database,
+            "upgrade",
+            ADOPTION_BASELINE_REVISION,
+        )
         expected = normalized_schema_dump(temporary_database)
         actual = normalized_schema_dump(arguments.database)
         if actual != expected:
@@ -237,14 +255,24 @@ def main() -> int:
         before_counts = application_row_counts(arguments.database)
         if not arguments.apply:
             print(
-                "Migration adoption verification passed; rerun with --apply to stamp head."
+                "Migration adoption verification passed; rerun with --apply to stamp "
+                "the initial baseline and upgrade."
             )
             return 0
 
-        run_migration_command(arguments.database, "stamp")
+        run_migration_command(
+            arguments.database,
+            "stamp",
+            ADOPTION_BASELINE_REVISION,
+        )
+        run_migration_command(arguments.database, "upgrade", EXPECTED_REVISION)
         after_counts = application_row_counts(arguments.database)
         revision = stamped_revision(arguments.database)
-        if before_counts != after_counts or revision != EXPECTED_REVISION:
+        if (
+            not existing_application_row_counts_unchanged(before_counts, after_counts)
+            or after_counts.get("auth.user_card_preferences") != 0
+            or revision != EXPECTED_REVISION
+        ):
             print("Migration adoption stamp verification failed.", file=sys.stderr)
             return 1
     except Exception as error:
@@ -254,7 +282,7 @@ def main() -> int:
         if created:
             drop_temporary_database(url, temporary_database)
 
-    print("Migration adoption stamp passed without changing application row counts.")
+    print("Migration adoption and upgrade passed without changing existing row counts.")
     return 0
 
 

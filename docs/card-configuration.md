@@ -218,8 +218,10 @@ the future record.
 On a legacy read, the server must validate the record before applying or
 normalizing it. On every write, it must validate the card ID, version, field
 types, numeric bounds, unique roles, and allowed role values before mutating
-storage. The client repeats this validation for immediate feedback, but client
-validation is not an authority.
+storage. Current API writes accept only canonical camel-case field names and
+the JSON integer literal `version: 1`; snake-case names, booleans, floats, and
+strings are not compatible aliases. The client repeats this validation for
+immediate feedback, but client validation is not an authority.
 
 | Situation | Required behavior |
 | --- | --- |
@@ -233,6 +235,12 @@ validation is not an authority.
 | Added optional setting | Supply its documented default during normalization, then persist it only when the user changes it. |
 | Invalid, corrupt, or out-of-range value | Reject an update atomically. On a legacy read, use defaults for the invalid field and surface a non-sensitive recovery message with Reset available. |
 | Card removed from the product | Hide it from the catalog, retain a reversible migration/export path for its preference, and never silently reinterpret it as another card. The reversible path does not require a user-facing export screen in LGA-23. |
+
+Each normalized read response includes `requiresRecovery`. It is `true` only
+when a stored current-version preference contained a malformed, removed, or
+out-of-range field and the server substituted a default. The flag exposes no
+stored value or field name; clients use it to show the non-sensitive recovery
+message and offer the existing card-local Reset action.
 
 ## Proposed first-release UX
 
@@ -292,6 +300,31 @@ The exact persistence table, endpoint shape, query-key details, and dialog
 layout remain implementation choices for LGA-24 and LGA-25. They must preserve
 the approved card IDs, viewer-global scope, strict server validation, default
 equivalence, fixed five-row capacity, and calculation boundaries recorded here.
+
+## LGA-24 persistence and API boundary
+
+LGA-24 implements the approved persistence boundary without changing a card's
+current calculation or rendered output. Alembic revision `20260806_0002` adds
+`auth.user_card_preferences`, keyed by `(user_id, card_id, version)`. It stores
+only validated mutable settings; the API always adds the fixed queue and
+display-limit fields while normalizing an effective v1 response.
+
+The authenticated settings API exposes only the current viewer's records:
+
+| Operation | Route | Behavior |
+| --- | --- | --- |
+| Read effective catalog | `GET /api/v1/settings/card-preferences` | Returns exactly the two approved cards, including defaults where a v1 row is absent. |
+| Replace one override | `PUT /api/v1/settings/card-preferences/{cardId}` | Requires `version: 1` and the complete mutable schema for that exact catalog card; PostgreSQL upsert makes concurrent replacements atomic. |
+| Reset one card | `DELETE /api/v1/settings/card-preferences/{cardId}` | Deletes only the viewer's v1 row for that card, then returns normalized defaults. |
+| Reset catalog | `POST /api/v1/settings/card-preferences/reset` | Requires an explicit `cardIds` enumeration of the current catalog, then removes only its v1 rows. |
+
+The routes never accept a user ID, player ID, or arbitrary card identifier, so
+the authenticated dependency provides the only ownership scope. Writes reject
+unknown fields, unsupported versions, invalid ranges, duplicate roles, and
+incomplete mutable payloads before persistence. Reads preserve unsupported
+future-version rows, ignore only malformed legacy fields, and emit a
+non-sensitive structured warning rather than interpreting them as another
+card's setting.
 
 ## Owner approval and compatibility record
 
