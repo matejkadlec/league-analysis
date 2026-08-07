@@ -146,9 +146,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         abortController.abort();
       }, LOGIN_REQUEST_TIMEOUT_MS);
 
-      let response: Response;
+      let data: AuthResponse;
       try {
-        response = await fetch(`${API_BASE_URL}/api/v1/auth/login`, {
+        const response = await fetch(`${API_BASE_URL}/api/v1/auth/login`, {
           method: "POST",
           headers: {
             "Content-Type": "application/x-www-form-urlencoded",
@@ -156,23 +156,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           body: formData,
           signal: abortController.signal,
         });
+
+        if (!response.ok) {
+          let payload: unknown = null;
+          try {
+            payload = await response.json();
+          } catch (error) {
+            if (getLoginRequestError(error, didTimeout).code === "REQUEST_TIMEOUT") {
+              throw error;
+            }
+          }
+          throw createAuthLoginError(payload, response.status);
+        }
+
+        data = (await response.json()) as AuthResponse;
       } catch (error) {
         throw getLoginRequestError(error, didTimeout);
       } finally {
         clearTimeout(timeoutId);
       }
-
-      if (!response.ok) {
-        let payload: unknown = null;
-        try {
-          payload = await response.json();
-        } catch {
-          payload = null;
-        }
-        throw createAuthLoginError(payload, response.status);
-      }
-
-      const data = (await response.json()) as AuthResponse;
 
       setAuthTokens(data.access_token, data.refresh_token);
       queryClient.clear();

@@ -1,0 +1,195 @@
+// @vitest-environment jsdom
+
+import { useEffect } from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { act, cleanup, render } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const {
+  getAccessToken,
+  refreshAccessToken,
+  removeAuthTokens,
+  setAuthTokens,
+  routerPush,
+} = vi.hoisted(() => ({
+  getAccessToken: vi.fn(),
+  refreshAccessToken: vi.fn(),
+  removeAuthTokens: vi.fn(),
+  setAuthTokens: vi.fn(),
+  routerPush: vi.fn(),
+}));
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: routerPush }),
+}));
+
+vi.mock("../features/auth/utils/token-manager", () => ({
+  getAccessToken,
+  refreshAccessToken,
+  removeAuthTokens,
+  setAuthTokens,
+}));
+
+import { AuthProvider, useAuth } from "../features/auth/context/auth-context";
+import { LOGIN_REQUEST_TIMEOUT_MS } from "../features/auth/utils/login-error";
+import type { AuthContextType } from "../features/auth/types";
+
+function AuthProbe({
+  onLogin,
+}: {
+  onLogin: (login: AuthContextType["login"]) => void;
+}) {
+  const { login } = useAuth();
+
+  useEffect(() => {
+    onLogin(login);
+  }, [login, onLogin]);
+
+  return null;
+}
+
+describe("AuthProvider login timeout", () => {
+  let login: AuthContextType["login"] | undefined;
+
+  beforeEach(() => {
+    login = undefined;
+    getAccessToken.mockReset();
+    getAccessToken.mockReturnValue(null);
+    refreshAccessToken.mockReset();
+    refreshAccessToken.mockResolvedValue(null);
+    removeAuthTokens.mockReset();
+    setAuthTokens.mockReset();
+    routerPush.mockReset();
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
+
+  function renderAuthProvider() {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <AuthProbe onLogin={(nextLogin) => (login = nextLogin)} />
+        </AuthProvider>
+      </QueryClientProvider>,
+    );
+
+    if (!login) {
+      throw new Error("Auth login callback was not initialized");
+    }
+
+    return login;
+  }
+
+  it("keeps the timeout active while parsing a successful login response", async () => {
+    vi.useFakeTimers();
+    const abortError = Object.assign(new Error("The operation was aborted"), {
+      code: 20,
+      name: "AbortError",
+    });
+    const fetchMock = vi.fn(
+      (_input: RequestInfo | URL, init?: RequestInit) =>
+        Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () =>
+            new Promise((_, reject) => {
+              init?.signal?.addEventListener("abort", () => reject(abortError), {
+                once: true,
+              });
+            }),
+        } as Response),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const startLogin = renderAuthProvider();
+    const loginPromise = startLogin({
+      email: "user@example.com",
+      password: "secret-password",
+    });
+    const loginError = loginPromise.catch((error: unknown) => error);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(LOGIN_REQUEST_TIMEOUT_MS);
+    });
+
+    await expect(loginError).resolves.toMatchObject({ code: "REQUEST_TIMEOUT" });
+  });
+
+  it("keeps the timeout active while parsing an error login response", async () => {
+    vi.useFakeTimers();
+    const abortError = Object.assign(new Error("The operation was aborted"), {
+      code: 20,
+      name: "AbortError",
+    });
+    const fetchMock = vi.fn(
+      (_input: RequestInfo | URL, init?: RequestInit) =>
+        Promise.resolve({
+          ok: false,
+          status: 401,
+          json: () =>
+            new Promise((_, reject) => {
+              init?.signal?.addEventListener("abort", () => reject(abortError), {
+                once: true,
+              });
+            }),
+        } as Response),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const startLogin = renderAuthProvider();
+    const loginPromise = startLogin({
+      email: "user@example.com",
+      password: "secret-password",
+    });
+    const loginError = loginPromise.catch((error: unknown) => error);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(LOGIN_REQUEST_TIMEOUT_MS);
+    });
+
+    await expect(loginError).resolves.toMatchObject({ code: "REQUEST_TIMEOUT" });
+  });
+
+  it("clears the timeout after the login response body has been parsed", async () => {
+    vi.useFakeTimers();
+    const request = { signal: null as AbortSignal | null };
+    const fetchMock = vi.fn(
+      (_input: RequestInfo | URL, init?: RequestInit) => {
+        request.signal = init?.signal ?? null;
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () =>
+            Promise.resolve({
+              access_token: "access-token",
+              refresh_token: "refresh-token",
+              token_type: "bearer",
+              expires_in_seconds: 900,
+              refresh_expires_in_seconds: 3600,
+            }),
+        } as Response);
+      },
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const startLogin = renderAuthProvider();
+
+    await expect(
+      startLogin({ email: "user@example.com", password: "secret-password" }),
+    ).resolves.toBeUndefined();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(LOGIN_REQUEST_TIMEOUT_MS);
+    });
+
+    expect(request.signal?.aborted).toBe(false);
+    expect(setAuthTokens).toHaveBeenCalledWith("access-token", "refresh-token");
+  });
+});
