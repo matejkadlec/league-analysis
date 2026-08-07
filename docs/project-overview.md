@@ -83,8 +83,9 @@ payloads at the frontend boundary.
 
 The sign-in flow keeps its password-visibility control accessible and preserves
 the entered value while it toggles. It bounds the browser login request and maps
-trusted authentication codes and HTTP status classes to concise user-facing
-messages; raw server, network, and implementation error text is never rendered.
+trusted authentication codes, including inactive accounts, and HTTP status
+classes to concise user-facing messages; raw server, network, and implementation
+error text is never rendered.
 
 ### Data
 

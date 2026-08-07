@@ -84,6 +84,8 @@ export function getLoginErrorMessage(error: unknown): string {
   }
 
   switch (error.code) {
+    case "ACCOUNT_INACTIVE":
+      return "This account is inactive. Please contact an administrator.";
     case "ACCOUNT_LOCKED": {
       const lockoutTime = error.lockedUntil
         ? formatLockoutTime(error.lockedUntil)

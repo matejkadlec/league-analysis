@@ -81,6 +81,11 @@ describe("sign-in error mapping", () => {
   it("keeps account and CAPTCHA responses user-safe", () => {
     expect(
       getLoginErrorMessage(
+        createAuthLoginError({ detail: { code: "ACCOUNT_INACTIVE" } }, 403),
+      ),
+    ).toBe("This account is inactive. Please contact an administrator.");
+    expect(
+      getLoginErrorMessage(
         createAuthLoginError(
           {
             detail: {
@@ -98,5 +103,8 @@ describe("sign-in error mapping", () => {
         createAuthLoginError({ detail: { code: "CAPTCHA_REQUIRED" } }, 403),
       ),
     ).toBe("Complete the security check to continue signing in.");
+    expect(getLoginErrorMessage(createAuthLoginError(null, 403))).toBe(
+      "Something went wrong while signing in. Please try again.",
+    );
   });
 });
