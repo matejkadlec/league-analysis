@@ -45,6 +45,13 @@ if TYPE_CHECKING:
 logger = structlog.get_logger(__name__)
 
 
+async def _ensure_riot_writer_maintenance_is_inactive(session: AsyncSession) -> None:
+    """Avoid importing the jobs package until a direct Riot-data write runs."""
+    from app.features.jobs.maintenance import ensure_riot_writer_maintenance_is_inactive
+
+    await ensure_riot_writer_maintenance_is_inactive(session)
+
+
 class MatchService:
     """Service for handling match data operations."""
 
@@ -1440,6 +1447,7 @@ class MatchService:
     async def _store_match_detail(self, match_data: Dict[str, Any]) -> Match:
         """Store match detail in database."""
         try:
+            await _ensure_riot_writer_maintenance_is_inactive(self.db)
             # Validate match data
             if not self.transformer.validate_match_data(match_data):
                 raise ValueError("Invalid match data")
@@ -1510,6 +1518,7 @@ class MatchService:
         from .transformers import MatchDTOTransformer
 
         try:
+            await _ensure_riot_writer_maintenance_is_inactive(self.db)
             # Extract platform
             platform_id = match_dto.info.platform or default_platform
 
@@ -1945,6 +1954,8 @@ class MatchService:
         """Update existing match or insert new match using merge (upsert)."""
         from .transformers import MatchDTOTransformer
 
+        await _ensure_riot_writer_maintenance_is_inactive(self.db)
+
         # Extract platform
         platform_id = match_dto.info.platform or "EUN1"
         match_id = match_dto.metadata.match_id
@@ -2288,6 +2299,7 @@ class MatchService:
                             ),
                         )
 
+                        await _ensure_riot_writer_maintenance_is_inactive(self.db)
                         timeline_rows = await replace_match_timeline_rows(
                             self.db,
                             synthetic_match_dto,

@@ -304,6 +304,18 @@ async def analyze_match_history(
     import os
 
     from app.core.config import get_riot_api_key
+    from app.features.jobs.maintenance import (
+        RiotWriterMaintenanceActiveError,
+        ensure_riot_writer_maintenance_is_inactive,
+    )
+
+    try:
+        await ensure_riot_writer_maintenance_is_inactive(db)
+    except RiotWriterMaintenanceActiveError:
+        raise HTTPException(
+            status_code=503,
+            detail="Riot data maintenance is in progress. Try again after it completes.",
+        )
 
     try:
         api_key = await get_riot_api_key(db)

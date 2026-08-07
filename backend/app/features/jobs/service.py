@@ -13,6 +13,10 @@ from .control import (
     is_runtime_job_running,
     request_job_stop,
 )
+from .maintenance import (
+    lock_riot_writer_tables,
+    preserve_riot_writer_maintenance_mode,
+)
 from .models import ExecutionType, JobConfiguration, JobExecution, JobStatus, JobType
 from .queue_config import (
     has_enabled_match_fetcher_queue,
@@ -121,7 +125,12 @@ class JobService:
         Returns:
             Updated job configuration if found, None otherwise.
         """
-        query = select(JobConfiguration).where(JobConfiguration.id == job_id)
+        await lock_riot_writer_tables(self.db)
+        query = (
+            select(JobConfiguration)
+            .where(JobConfiguration.id == job_id)
+            .with_for_update()
+        )
         result = await self.db.execute(query)
         job = result.scalar_one_or_none()
 
@@ -132,9 +141,16 @@ class JobService:
         if not update_dict:
             return self._to_job_response(job)
 
+        incoming_config: dict[str, Any] = {}
+        if "config_json" in update_dict:
+            incoming_config = preserve_riot_writer_maintenance_mode(
+                job.job_type,
+                job.config_json,
+                update_dict.get("config_json"),
+            )
+
         # Match Fetcher queue toggles are stored in config_json and drive active state.
         if job.job_type == JobType.MATCH_FETCHER and "config_json" in update_dict:
-            incoming_config = update_dict.get("config_json") or {}
             merged_config: dict[str, Any] = {
                 **(job.config_json or {}),
                 **incoming_config,
@@ -144,6 +160,8 @@ class JobService:
             update_dict["is_active"] = has_enabled_match_fetcher_queue(
                 normalized_config
             )
+        elif "config_json" in update_dict:
+            update_dict["config_json"] = incoming_config
 
         update_dict["updated_at"] = datetime.now(timezone.utc)
 

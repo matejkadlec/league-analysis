@@ -395,12 +395,30 @@ true: `ENVIRONMENT=dev` is explicit, `POSTGRES_HOST`, every PostgreSQL
 `--database` exactly matches `POSTGRES_DB`, and the reviewed application tables
 exist. The configured environment, host, and database name are checked before a
 database session opens. Applying changes also requires a new canonical backup
-path outside the repository. The command blocks writers to every table it will
-change before creating the custom-format `pg_dump`, keeps those locks through
-the cleanup transaction, uses owner-only `0600` permissions, and verifies the
-backup with `pg_restore --list`. It also clears all saved Riot PUUID URL
-preferences while preserving settings rows and revoked access-token blacklist
-entries.
+path outside the repository whose parent is not writable by group or other
+accounts and whose non-sticky directory ancestors are not writable by group or
+other accounts. The command blocks writers to every table it will change before
+creating the custom-format `pg_dump`, keeps those locks through the cleanup
+transaction, and creates a new owner-only `0600` archive with no-follow
+semantics before `pg_dump` receives any database data. The command re-verifies
+the archive's descriptor identity and permissions before
+`pg_restore --list`; if the filesystem cannot honor them, it securely removes
+only that verified file and refuses before any database mutation. It also
+clears all saved Riot PUUID URL preferences while preserving settings rows and
+revoked access-token blacklist entries.
+
+Before an apply, the command locks the two writer job tables, refuses if a
+regular Match Fetcher or Player Updater execution is `RUNNING` or `PAUSED`,
+requires exactly one Match Fetcher and one Player Updater configuration to
+receive the interlock, and persists a `riot_maintenance_mode` interlock on them.
+Regular scheduled writers record a
+`CANCELLED` execution before a Riot-data write. Direct account linking, player
+tracking/refresh, match-history storage, and matchmaking analysis acquire
+gameplay and job-table locks in cleanup order, then re-read the interlock before
+a core/auth write or Riot-data request. The interlock stays enabled after cleanup
+so the emptied database cannot be immediately repopulated. Do not clear it with the jobs API;
+resume only through the separately guarded command after local maintenance is
+complete.
 
 ```bash
 cd backend
@@ -412,6 +430,10 @@ uv run python scripts/cleanse_local_riot_data.py \
   --database league_analysis_local_dev \
   --apply \
   --backup-path "$HOME/.local/state/league-analysis/backups/pre-lga-11.dump"
+
+uv run python scripts/cleanse_local_riot_data.py \
+  --database league_analysis_local_dev \
+  --resume-writers
 ```
 
 Never point this command at production, a shared environment, a remote host,

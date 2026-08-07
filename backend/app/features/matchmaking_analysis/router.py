@@ -8,6 +8,7 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 
 from app.features.auth.dependencies import get_current_active_user
+from app.features.jobs.maintenance import RiotWriterMaintenanceActiveError
 
 from .dependencies import MatchmakingServiceDep
 from .schemas import (
@@ -82,6 +83,11 @@ async def start_analysis(
         return await service.start_analysis(payload.puuid)
     except HTTPException:
         raise
+    except RiotWriterMaintenanceActiveError:
+        raise HTTPException(
+            status_code=503,
+            detail="Riot data maintenance is in progress. Try again after it completes.",
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

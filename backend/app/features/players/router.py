@@ -234,9 +234,16 @@ async def track_player(
         404: Player not found
         400: Maximum tracked players limit reached
     """
+    from app.features.jobs.maintenance import RiotWriterMaintenanceActiveError
+
     try:
         player = await player_service.track_player(puuid, current_user.id)
         return player
+    except RiotWriterMaintenanceActiveError:
+        raise HTTPException(
+            status_code=503,
+            detail="Riot data maintenance is in progress. Try again after it completes.",
+        )
     except ValueError as e:
         if "not found" in str(e).lower():
             raise HTTPException(status_code=404, detail=str(e))
@@ -336,7 +343,26 @@ async def get_tracked_players(
         )
 
 
-async def run_background_match_sync(puuid: str, platform: str):
+async def _locked_background_writer_configuration(session, job_type):
+    """Load a direct writer configuration after any cleanup interlock commits."""
+    from app.features.jobs.maintenance import locked_riot_writer_configurations
+
+    configurations = await locked_riot_writer_configurations(session)
+    return configurations.get(job_type)
+
+
+async def _riot_writer_maintenance_is_active(session) -> bool:
+    """Check the cleanup interlock before a foreground Riot-data write."""
+    from app.features.jobs.maintenance import (
+        locked_riot_writer_configurations,
+        riot_writer_maintenance_is_active,
+    )
+
+    configurations = await locked_riot_writer_configurations(session)
+    return riot_writer_maintenance_is_active(configurations)
+
+
+async def run_background_match_sync(puuid: str, platform: str) -> None:
     """
     Background task to sync matches.
     Also creates a JobExecution entry so it appears in the Jobs dashboard.
@@ -344,22 +370,27 @@ async def run_background_match_sync(puuid: str, platform: str):
     async with db_manager.get_session() as session:
         # 1. Create Job Execution Record
         # We need to find the Match Fetcher job configuration first
-        from sqlalchemy import func, select
+        from sqlalchemy import func
 
+        from app.features.jobs.maintenance import is_riot_writer_maintenance_active
         from app.features.jobs.models import (
-            JobConfiguration,
+            ExecutionType,
             JobExecution,
             JobStatus,
             JobType,
         )
 
-        stmt = (
-            select(JobConfiguration)
-            .where(JobConfiguration.job_type == JobType.MATCH_FETCHER)
-            .limit(1)
+        job_config = await _locked_background_writer_configuration(
+            session, JobType.MATCH_FETCHER
         )
-        result = await session.execute(stmt)
-        job_config = result.scalar_one_or_none()
+        if job_config and is_riot_writer_maintenance_active(
+            job_config, ExecutionType.REGULAR
+        ):
+            logger.info(
+                "Background match sync skipped during local maintenance",
+                puuid=puuid,
+            )
+            return
 
         job_execution = None
         if job_config:
@@ -411,30 +442,34 @@ async def run_background_match_sync(puuid: str, platform: str):
             await riot_client.close()
 
 
-async def run_background_player_update(puuid: str, platform: str):
+async def run_background_player_update(puuid: str, platform: str) -> None:
     """
     Background task to update player profile (name, tag, icon, level).
     Also creates a JobExecution entry so it appears in the Jobs dashboard.
     """
     async with db_manager.get_session() as session:
-        from sqlalchemy import func, select
+        from sqlalchemy import func
 
+        from app.features.jobs.maintenance import is_riot_writer_maintenance_active
         from app.features.jobs.models import (
-            JobConfiguration,
+            ExecutionType,
             JobExecution,
             JobStatus,
             JobType,
         )
         from app.features.players.models import Player
 
-        # Find the Player Updater job configuration
-        stmt = (
-            select(JobConfiguration)
-            .where(JobConfiguration.job_type == JobType.PLAYER_UPDATER)
-            .limit(1)
+        job_config = await _locked_background_writer_configuration(
+            session, JobType.PLAYER_UPDATER
         )
-        result = await session.execute(stmt)
-        job_config = result.scalar_one_or_none()
+        if job_config and is_riot_writer_maintenance_active(
+            job_config, ExecutionType.REGULAR
+        ):
+            logger.info(
+                "Background player update skipped during local maintenance",
+                puuid=puuid,
+            )
+            return
 
         job_execution = None
         if job_config:
@@ -537,10 +572,18 @@ async def add_tracked_player(
         404: Player not found in Riot API
         500: Unexpected error
     """
+    from app.features.jobs.maintenance import RiotWriterMaintenanceActiveError
+
     try:
         # Validate inputs
         _validate_game_name(game_name)
         _validate_tag_line(tag_line)
+
+        if await _riot_writer_maintenance_is_active(player_service.db):
+            raise HTTPException(
+                status_code=503,
+                detail="Riot data maintenance is in progress. Try again after it completes.",
+            )
 
         result = await player_service.add_and_track_player(
             riot_client=riot_client,
@@ -562,6 +605,11 @@ async def add_tracked_player(
 
         return result
 
+    except RiotWriterMaintenanceActiveError:
+        raise HTTPException(
+            status_code=503,
+            detail="Riot data maintenance is in progress. Try again after it completes.",
+        )
     except ValueError as e:
         _handle_tracking_value_error(e)
     except AuthenticationError as e:
@@ -639,6 +687,8 @@ async def refresh_player_league(
         404: Player not found
         500: Database or API error
     """
+    from app.features.jobs.maintenance import RiotWriterMaintenanceActiveError
+
     try:
         # Get the player model (not PlayerResponse) for update_player_league
         from .models import Player
@@ -663,6 +713,11 @@ async def refresh_player_league(
         return None
     except HTTPException:
         raise
+    except RiotWriterMaintenanceActiveError:
+        raise HTTPException(
+            status_code=503,
+            detail="Riot data maintenance is in progress. Try again after it completes.",
+        )
     except AuthenticationError as e:
         logger.error(
             "refresh_player_league_failed",
