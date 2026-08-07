@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Dict, Optional
 
-from pydantic import BaseModel, Field, computed_field
+from pydantic import BaseModel, ConfigDict, Field, computed_field
 
 
 class MatchmakingAnalysisRequest(BaseModel):
@@ -36,6 +36,8 @@ class MatchmakingAnalysisResults(BaseModel):
 
 class MatchmakingAnalysisResponse(BaseModel):
     """Response containing matchmaking analysis data."""
+
+    model_config = ConfigDict(from_attributes=True)
 
     puuid: str
     results: Optional[MatchmakingAnalysisResults] = None
@@ -73,14 +75,11 @@ class MatchmakingAnalysisResponse(BaseModel):
             return 0
         return len(self.puuid_progress)
 
-    class Config:
-        """Pydantic config."""
-
-        from_attributes = True
-
 
 class MatchmakingAnalysisStatusResponse(BaseModel):
     """Quick status check response."""
+
+    model_config = ConfigDict(from_attributes=True)
 
     puuid: str
     status: str
@@ -91,14 +90,11 @@ class MatchmakingAnalysisStatusResponse(BaseModel):
     requests_saved: int = 0
     rate_limit_reset_at: Optional[datetime] = None
 
-    class Config:
-        """Pydantic config."""
-
-        from_attributes = True
-
 
 class MatchmakingAnalysisHistoryItem(BaseModel):
     """Single item in analysis history."""
+
+    model_config = ConfigDict(from_attributes=True)
 
     created_at: datetime
     team_avg_winrate: float
@@ -110,21 +106,13 @@ class MatchmakingAnalysisHistoryItem(BaseModel):
         """Winrate gap (positive = in favor of player's team)."""
         return self.team_avg_winrate - self.enemy_avg_winrate
 
-    class Config:
-        """Pydantic config."""
-
-        from_attributes = True
-
 
 class MatchmakingAnalysisHistoryResponse(BaseModel):
     """Response containing analysis history for a player."""
 
+    model_config = ConfigDict(from_attributes=True)
+
     items: list[MatchmakingAnalysisHistoryItem]
-
-    class Config:
-        """Pydantic config."""
-
-        from_attributes = True
 
 
 class NotEnoughMatchesResponse(BaseModel):

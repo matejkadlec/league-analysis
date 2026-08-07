@@ -484,6 +484,23 @@ def test_riot_writer_maintenance_queries_change_only_writer_configurations() -> 
     assert "- 'riot_maintenance_mode'" in resume_query
 
 
+@pytest.mark.parametrize("updated_configurations", [0, 1, 3])
+def test_riot_writer_maintenance_refuses_missing_or_duplicate_configurations(
+    updated_configurations: int,
+) -> None:
+    """Cleanup never proceeds without exactly its two regular writer configs."""
+
+    class Result:
+        rowcount = updated_configurations
+
+    class Connection:
+        def execute(self, *_args, **_kwargs) -> Result:
+            return Result()
+
+    with pytest.raises(LocalCleanupRefusal, match="Match Fetcher and Player Updater"):
+        enable_riot_writer_maintenance_mode(Connection())
+
+
 def test_normalize_qa_accounts_preserves_revoked_access_tokens(monkeypatch) -> None:
     """Resetting fixture sessions must not reactivate an already revoked JWT."""
 

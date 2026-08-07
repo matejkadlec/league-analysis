@@ -57,6 +57,13 @@ MAX_RATE_LIMIT_WAIT = 120
 _running_analyses: Dict[str, asyncio.Task] = {}
 
 
+async def _ensure_riot_writer_maintenance_is_inactive(session: AsyncSession) -> None:
+    """Avoid importing the jobs package until a Riot-data write runs."""
+    from app.features.jobs.maintenance import ensure_riot_writer_maintenance_is_inactive
+
+    await ensure_riot_writer_maintenance_is_inactive(session)
+
+
 class MatchmakingAnalysisService:
     """Service for analyzing matchmaking fairness."""
 
@@ -99,6 +106,8 @@ class MatchmakingAnalysisService:
 
     async def start_analysis(self, puuid: str) -> MatchmakingAnalysisResponse:
         """Create analysis record and spawn background task."""
+        await _ensure_riot_writer_maintenance_is_inactive(self.db)
+
         if puuid in _running_analyses:
             task = _running_analyses[puuid]
             if task.done():
@@ -350,6 +359,7 @@ class MatchmakingAnalysisService:
             )
             try:
                 async with db_manager.get_session() as db:
+                    await _ensure_riot_writer_maintenance_is_inactive(db)
                     await db.execute(
                         update(MatchmakingAnalysis)
                         .where(
@@ -404,6 +414,7 @@ class MatchmakingAnalysisService:
         self._winrate_cache = {}
 
         # Mark as started
+        await _ensure_riot_writer_maintenance_is_inactive(self.db)
         await self.db.execute(
             update(MatchmakingAnalysis)
             .where(
@@ -530,6 +541,7 @@ class MatchmakingAnalysisService:
             self.requests_saved = max(theoretical_max - self.api_calls_made, 0)
 
             now = datetime.now(timezone.utc)
+            await _ensure_riot_writer_maintenance_is_inactive(self.db)
             await self.db.execute(
                 update(MatchmakingAnalysis)
                 .where(
@@ -695,9 +707,7 @@ class MatchmakingAnalysisService:
         dto = await self._api_fetch_match(match_id)
         if dto is None:
             return []
-        from app.core.match_utils import _upsert_match
-
-        await _upsert_match(self.db, dto)
+        await self._store_fetched_match(dto)
         return [(p.puuid, p.team_id) for p in dto.info.participants]
 
     async def _get_win_status(self, match_id: str, puuid: str) -> Optional[bool]:
@@ -717,9 +727,7 @@ class MatchmakingAnalysisService:
         dto = await self._api_fetch_match(match_id)
         if dto is None:
             return None
-        from app.core.match_utils import _upsert_match
-
-        await _upsert_match(self.db, dto)
+        await self._store_fetched_match(dto)
 
         result = await self.db.execute(
             select(MatchParticipant.win).where(
@@ -752,10 +760,15 @@ class MatchmakingAnalysisService:
         # Need API call — use rate limiter
         dto = await self._api_fetch_match(match_id)
         if dto:
-            from app.core.match_utils import _upsert_match
-
-            await _upsert_match(self.db, dto)
+            await self._store_fetched_match(dto)
         return False
+
+    async def _store_fetched_match(self, match_dto: object) -> None:
+        """Persist an API-fetched match only while cleanup is inactive."""
+        from app.core.match_utils import _upsert_match
+
+        await _ensure_riot_writer_maintenance_is_inactive(self.db)
+        await _upsert_match(self.db, match_dto)
 
     async def _get_game_start_timestamp(self, match_id: str) -> Optional[int]:
         """Get game_start_timestamp for a match from DB."""
@@ -934,6 +947,7 @@ class MatchmakingAnalysisService:
                 # Keep the later reset time if one is already set
                 next_reset = current_reset
 
+            await _ensure_riot_writer_maintenance_is_inactive(self.db)
             await self.db.execute(
                 update(MatchmakingAnalysis)
                 .where(
@@ -975,6 +989,7 @@ class MatchmakingAnalysisService:
     async def _update_progress(
         self, puuid: str, created_at: datetime, progress: Dict[str, bool]
     ) -> None:
+        await _ensure_riot_writer_maintenance_is_inactive(self.db)
         await self.db.execute(
             update(MatchmakingAnalysis)
             .where(
@@ -991,6 +1006,7 @@ class MatchmakingAnalysisService:
         self, puuid: str, created_at: datetime, msg: str
     ) -> None:
         logger.warning("Analysis error", puuid=puuid, error=msg)
+        await _ensure_riot_writer_maintenance_is_inactive(self.db)
         await self.db.execute(
             update(MatchmakingAnalysis)
             .where(

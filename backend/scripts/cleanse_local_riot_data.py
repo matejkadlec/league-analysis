@@ -632,7 +632,7 @@ def refuse_active_regular_riot_writers(connection: Connection) -> None:
 
 def enable_riot_writer_maintenance_mode(connection: Connection) -> int:
     """Persist the interlock that cancels regular Riot writers before they write."""
-    return connection.execute(
+    updated_configurations = connection.execute(
         text(
             "UPDATE jobs.job_configurations "
             "SET config_json = jsonb_set("
@@ -642,6 +642,11 @@ def enable_riot_writer_maintenance_mode(connection: Connection) -> int:
             "WHERE job_type::text IN ('MATCH_FETCHER', 'PLAYER_UPDATER')"
         )
     ).rowcount
+    if updated_configurations != 2:
+        raise LocalCleanupRefusal(
+            "expected Match Fetcher and Player Updater configurations before cleanup"
+        )
+    return updated_configurations
 
 
 def resume_riot_writers(connection: Connection) -> int:

@@ -78,15 +78,16 @@ The reviewed local Riot-data cleanup command can also persist
 `config_json.riot_maintenance_mode` on Match Fetcher and Player Updater
 configurations. Regular scheduled executions check that interlock after loading
 fresh configuration and record `CANCELLED` before any gameplay-data write.
-Every direct Riot-data writer—account linking, player tracking or refresh, and
-match-history storage—acquires gameplay and job-table locks in cleanup order,
-then re-reads the interlock before its core/auth write. Non-writing `TEST`
-executions are not blocked. Job-configuration updates take those same locks
-before their row lock; the administrator API cannot create or clear the
-cleanup-owned key, but preserves it when echoing an active configuration.
-Cleanup enables it only after it has locked the job tables and refused existing
-`RUNNING`/`PAUSED` regular writers, and the explicit cleanup resume command is
-the only supported way to remove it.
+Every direct Riot-data writer—account linking, player tracking or refresh,
+match-history storage, and matchmaking analysis—acquires gameplay and job-table
+locks in cleanup order, then re-reads the interlock before its core/auth write.
+Non-writing `TEST` executions are not blocked. Job-configuration updates take
+those same locks before their row lock; the administrator API cannot create or
+clear the cleanup-owned key, but preserves it when echoing an active
+configuration. Cleanup enables it only after it has locked the job tables,
+refused existing `RUNNING`/`PAUSED` regular writers, and verified that both
+writer configurations received the interlock; the explicit cleanup resume
+command is the only supported way to remove it.
 
 During a live process, service/base cleanup marks a database execution
 `FAILED` when it claims to be running but has no corresponding in-memory
