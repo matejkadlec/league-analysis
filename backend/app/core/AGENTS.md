@@ -74,3 +74,9 @@ Key settings (from `.env`):
 - `auth_captcha_after_failures` - Failed-attempt threshold for CAPTCHA
 - `turnstile_secret_key` - Server-side Turnstile verification secret
 - `smtp_*` + `smtp_use_tls` / `smtp_use_ssl` - Outbound SMTP transport for verification/contact emails
+
+For normal local `./run.sh` launches, the protected `.env` is authoritative:
+the launcher clears inherited backend configuration names first, then loads the
+worktree file. Use `LGA_RUN_USE_PROCESS_ENV=1` only for a deliberate one-off
+override; this avoids WSL variables from another worktree selecting a wrong
+database or invalid setting value.

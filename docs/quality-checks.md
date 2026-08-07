@@ -98,12 +98,15 @@ locked pre-commit installation.
   rule APIs without suppressing any configured lint rules;
 - `tsc --noEmit`;
 - deterministic Vitest regressions for player search validation, platform
-  presentation, and rank-style mapping;
+  presentation, rank-style mapping, and Top Champions pagination boundaries;
 - Next.js production build.
 
-Browser smoke tests require stable QA accounts and application fixtures that do
-not yet exist. LGA-11 owns that prerequisite; add them here once they are
-deterministic and secret-free.
+The separate `cd frontend && npm run test:e2e` Playwright suite verifies the
+Top Champions browser interaction against intercepted deterministic API
+fixtures. It requires `npx playwright install chromium` once for the pinned
+browser version, but never calls a real Riot endpoint or a local database. It
+is intentionally separate from `./test.sh` until the browser-installation
+provisioning is part of the deterministic CI environment.
 
 ### Backend checks
 

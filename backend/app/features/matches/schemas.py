@@ -393,12 +393,13 @@ class ChampionStatsItem(BaseModel):
 
 
 class ChampionStatsResponse(BaseModel):
-    """Schema for champion stats response."""
+    """Schema for the complete ordered champion-statistics response."""
 
     puuid: str = Field(..., description="Player PUUID")
     total_champions: int = Field(..., ge=0, description="Total unique champions played")
     champions: List[ChampionStatsItem] = Field(
-        default_factory=list, description="List of champion stats"
+        default_factory=list,
+        description="Every qualifying champion, ordered for local pagination",
     )
 
     model_config = ConfigDict(from_attributes=True)

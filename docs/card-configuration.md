@@ -32,7 +32,7 @@ secret.
 
 | Surface | Current behavior and dependency | First-release decision | Rationale |
 | --- | --- | --- | --- |
-| **Top Champions** | Both profile routes request `GET /matches/player/{puuid}/champion-stats?queue=420&limit=20`. The service groups all matching participants by champion, orders by games played, and the UI displays the first five. | **Configurable** | The landing page explicitly calls out win-rate, KDA, and role filtering. Minimum games is an owner-approved aggregate threshold, not a claim about that landing-page copy. |
+| **Top Champions** | Both profile routes request `GET /matches/player/{puuid}/champion-stats?queue=420`. The service returns the complete matching champion aggregate in deterministic games-played order; the UI displays five rows per local page. | **Configurable** | The landing page explicitly calls out win-rate, KDA, and role filtering. Minimum games is an owner-approved aggregate threshold, not a claim about that landing-page copy. |
 | **Recent Performance** | The card requests the latest 10 ranked-solo/duo matches and an overall ranked-solo/duo request without a limit; the service currently caps that overall fetch at 10,000 matches. A win-rate change must exceed 5 percentage points; every other metric must differ by more than 5% of its overall value. | **Configurable** | The threshold is hard-coded and the landing page identifies performance trends as the primary configurable-card use case. |
 | **Role Performance** | `GET /matches/player/{puuid}/lane-stats?queue=420` groups recognized positions and orders them by games played. Win-rate and KDA color bands are display-only. | Not configurable in v1 | A role selector on this card would hide the comparison it is meant to show. The Top Champions role filter gives a useful, non-duplicated role choice. |
 | **Player summary** | A `PlayerCard` combines identity, rank, refresh/tracking controls, and unfiltered summary statistics. | Not configurable in v1 | It is a profile summary and action surface, not a filtered analytical result. |
@@ -349,8 +349,8 @@ The contract remains compatible with the planned follow-up tickets:
 - **LGA-26:** dashboard/catalog work can add placement, visibility, or other
   card composition concepts without changing these stable namespaced card IDs
   or reinterpreting their settings.
-- **LGA-46:** pagination can operate on the complete deterministically ordered
-  eligible Top Champions result after LGA-23 filters. It may expose rows beyond
+- **LGA-46:** pagination operates on the complete deterministically ordered
+  eligible Top Champions result after LGA-23 filters. It exposes rows beyond
   the first five without making the five-row capacity a setting here.
 
 LGA-23 remains a contract/design ticket. It authorizes no preference table,

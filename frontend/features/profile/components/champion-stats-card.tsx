@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { useState } from "react";
 import { ChampionStatsResponse } from "@/lib/core/schemas";
 import {
   getChampionIconUrl,
@@ -8,15 +9,22 @@ import {
 } from "@/lib/core/data-dragon";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Swords, Clock } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Swords, Clock, ChevronLeft, ChevronRight } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  ChampionPaginationState,
+  getChampionPage,
+  pageForChampionDataSource,
+} from "../utils/champion-pagination";
 
 interface ChampionStatsCardProps {
+  dataSourceKey: string;
   stats: ChampionStatsResponse;
   lastUpdated?: string | null;
 }
@@ -74,9 +82,13 @@ function formatKDA(kda: number): string {
 }
 
 export function ChampionStatsCard({
+  dataSourceKey,
   stats,
   lastUpdated,
 }: ChampionStatsCardProps) {
+  const [paginationState, setPaginationState] =
+    useState<ChampionPaginationState>({ dataSourceKey, page: 0 });
+
   if (!stats.champions || stats.champions.length === 0) {
     return (
       <Card>
@@ -95,34 +107,72 @@ export function ChampionStatsCard({
     );
   }
 
+  const requestedPage = pageForChampionDataSource(paginationState, dataSourceKey);
+  const championPage = getChampionPage(stats.champions, requestedPage);
+  const isFirstPage = championPage.page === 0;
+  const isLastPage = championPage.page === championPage.totalPages - 1;
+
+  const setPage = (page: number) => {
+    setPaginationState({ dataSourceKey, page });
+  };
+
   return (
     <Card id="top-champions">
       <CardHeader className="pb-3">
-        <CardTitle className="flex gap-2">
+        <CardTitle className="flex flex-wrap items-center gap-2">
           <Swords className="h-5 w-5 text-primary" />
           Top Champions
-          <Badge variant="secondary" className="ml-auto">
-            Top 5 champions played ({stats.total_champions} different champions
-            played in total)
+          <Badge variant="secondary" className="ml-auto text-right">
+            Ranked by games played · {stats.champions.length} champions total
           </Badge>
         </CardTitle>
-        {lastUpdated && (
-          <div className="flex items-center gap-1 text-xs text-muted-foreground mt-2">
-            <Clock className="h-3 w-3" />
-            <span>Updated {formatRelativeTime(lastUpdated)}</span>
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+          {lastUpdated ? (
+            <div className="flex items-center gap-1">
+              <Clock className="h-3 w-3" />
+              <span>Updated {formatRelativeTime(lastUpdated)}</span>
+            </div>
+          ) : (
+            <span />
+          )}
+          <div className="ml-auto flex items-center gap-1">
+            <Button
+              aria-label="Previous champions"
+              disabled={isFirstPage}
+              onClick={() => setPage(championPage.page - 1)}
+              size="icon"
+              type="button"
+              variant="ghost"
+            >
+              <ChevronLeft aria-hidden="true" />
+            </Button>
+            <span aria-atomic="true" aria-live="polite" role="status">
+              {championPage.startIndex + 1}–{championPage.endIndex} of{" "}
+              {stats.champions.length}
+            </span>
+            <Button
+              aria-label="Next champions"
+              disabled={isLastPage}
+              onClick={() => setPage(championPage.page + 1)}
+              size="icon"
+              type="button"
+              variant="ghost"
+            >
+              <ChevronRight aria-hidden="true" />
+            </Button>
           </div>
-        )}
+        </div>
       </CardHeader>
       <CardContent>
-        <div className="space-y-3">
-          {stats.champions.slice(0, 5).map((champ, index) => (
+        <div className="min-h-[20.5rem] space-y-3">
+          {championPage.items.map((champ, index) => (
             <div
               key={champ.champion_name}
               className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 transition-colors"
             >
               {/* Rank number */}
               <span className="text-sm font-medium text-muted-foreground w-4">
-                {index + 1}
+                {championPage.startIndex + index + 1}
               </span>
 
               {/* Champion icon */}

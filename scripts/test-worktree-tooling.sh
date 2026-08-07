@@ -39,6 +39,8 @@ for executable in "$guard" "$installer" "$provisioner" "$pre_commit_hook" "$post
     || fail "required executable is missing or unsafe: $executable"
   bash -n "$executable"
 done
+grep -Fqx 'exec uv run --project "$repository_root/backend" pre-commit run --hook-stage pre-commit' "$pre_commit_hook" \
+  || fail 'the pre-commit hook must keep pre-commit at the linked-worktree root.'
 
 new_fixture() {
   local name="$1"

@@ -63,7 +63,7 @@ function ProfileContent({ puuid }: { puuid: string }) {
       validatedGet(
         ChampionStatsResponseSchema,
         `/matches/player/${puuid}/champion-stats`,
-        { queue: 420, limit: 20 },
+        { queue: 420 },
       ),
   });
 
@@ -147,6 +147,7 @@ function ProfileContent({ puuid }: { puuid: string }) {
           <ChampionStatsCard
             stats={championStats}
             lastUpdated={player?.updated_at}
+            dataSourceKey={`${puuid}:queue:420`}
           />
         ) : null}
 

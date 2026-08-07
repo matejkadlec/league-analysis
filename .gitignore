@@ -47,6 +47,8 @@ Thumbs.db
 htmlcov/
 frontend/.turbo/
 frontend/coverage/
+frontend/playwright-report/
+frontend/test-results/
 
 # Build artifacts
 backend/dist/

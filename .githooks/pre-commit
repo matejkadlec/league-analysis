@@ -3,5 +3,5 @@
 set -euo pipefail
 
 repository_root="$(git rev-parse --show-toplevel)"
-cd "$repository_root/backend"
-exec uv run pre-commit run --hook-stage pre-commit
+cd "$repository_root"
+exec uv run --project "$repository_root/backend" pre-commit run --hook-stage pre-commit

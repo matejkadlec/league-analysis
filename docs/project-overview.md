@@ -105,7 +105,7 @@ Versions are pinned or constrained by `backend/pyproject.toml`,
 | Backend tooling | uv 0.12.1 in CI, Pyright 1.1.411, Ruff 0.16.1 |
 | Frontend runtime | Next.js 16.2.12, React 19.2.8, TypeScript 7.0.2 native compiler with TypeScript 6.0.2 API compatibility for ESLint, Tailwind CSS 4.3.3, shadcn/ui |
 | Frontend data/forms | TanStack Query 5, Zod 4, Axios, React Hook Form |
-| Frontend tooling | Node 26.5.1, npm 12.0.2 with `package-lock.json`, ESLint 10.8.0 with `@eslint/compat` for Next's legacy plugins, TypeScript 7.0.2 compiler, Vitest 4.1.10 |
+| Frontend tooling | Node 26.5.1, npm 12.0.2 with `package-lock.json`, ESLint 10.8.0 with `@eslint/compat` for Next's legacy plugins, TypeScript 7.0.2 compiler, Vitest 4.1.10, Playwright 1.62.1 |
 | Database | PostgreSQL 18.4, asyncpg for application I/O, psycopg2 for APScheduler |
 | External data | Riot Games API |
 
@@ -117,9 +117,13 @@ The dated selection and security rationale is recorded in
 ## Local Environment
 
 The supported local setup is WSL with PostgreSQL 18.4. The repository-root
-`.env` provides database and runtime configuration; explicit process
-environment values take precedence. Never print, paste, commit, or copy its
-secret values into documentation or Jira.
+`.env` provides database and runtime configuration and is authoritative for
+the normal `./run.sh` local launch. The launcher clears inherited backend
+configuration names first, preventing WSL values from another worktree (such
+as `POSTGRES_*` or an invalid `DEBUG`) from selecting a wrong database or
+breaking startup. For a deliberate one-off process-level override only, use
+`LGA_RUN_USE_PROCESS_ENV=1` with `./run.sh`. Never print, paste, commit, or
+copy `.env` secret values into documentation or Jira.
 
 Install/select the exact frontend tools before the first npm command:
 
@@ -139,9 +143,10 @@ committed lock before development continues.
 ./run.sh --help
 ```
 
-`run.sh` creates `logs/` before redirecting output, verifies the database
-connection, starts Uvicorn with reload, waits for the backend, installs frontend
-dependencies only when `node_modules` is absent, and starts Next.js. Defaults:
+`run.sh` creates `logs/` before redirecting output, loads the current
+worktree's protected `.env`, verifies the database connection, starts Uvicorn
+with reload, waits for the backend, installs frontend dependencies only when
+`node_modules` is absent, and starts Next.js. Defaults:
 
 - Frontend: <http://localhost:3000>
 - Backend: <http://localhost:8000>
@@ -235,6 +240,10 @@ and repository/project identifiers.
 This selects Node from `.nvmrc`, runs `npm ci`, ESLint with zero warnings,
 TypeScript, Vitest regressions, and a Next.js production build.
 
+The separate browser suite runs with `cd frontend && npx playwright install
+chromium && npm run test:e2e`. Its API is intercepted with deterministic fixture
+responses, so it does not require a Riot credential or a local database.
+
 Use the workspace `get_errors` diagnostic on changed TypeScript files when it
 is available; it complements ESLint and TypeScript rather than replacing them.
 
@@ -262,10 +271,13 @@ fail-fast step names.
 ### Commits and GitHub
 
 `.pre-commit-config.yaml` keeps fast whitespace/format checks, Ruff, frontend
-ESLint, and frontend TypeScript checks at commit time. Never skip configured
-hooks. GitHub's `Quality Checks` workflow runs the same deterministic gate with
-PostgreSQL 18.4, plus a separate live production dependency audit. Local results
-are not GitHub check results.
+ESLint, and frontend TypeScript checks at commit time. The trusted hook keeps
+pre-commit at the Git worktree root while selecting the backend tool project;
+the frontend checks then resolve that root and select the pinned Node runtime
+before changing into `frontend`. This keeps commits reliable from linked
+worktrees. Never skip configured hooks. GitHub's `Quality Checks` workflow runs
+the same deterministic gate with PostgreSQL 18.4, plus a separate live
+production dependency audit. Local results are not GitHub check results.
 
 ## Debugging and Operational Boundaries
 
