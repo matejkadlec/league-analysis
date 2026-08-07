@@ -18,7 +18,7 @@ import {
 } from "../utils/token-manager";
 import {
   createAuthLoginError,
-  isAuthLoginError,
+  getLoginRequestError,
   LOGIN_REQUEST_TIMEOUT_MS,
 } from "../utils/login-error";
 import type {
@@ -157,15 +157,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           signal: abortController.signal,
         });
       } catch (error) {
-        if (isAuthLoginError(error)) {
-          throw error;
-        }
-
-        throw createAuthLoginError(
-          null,
-          undefined,
-          didTimeout ? "REQUEST_TIMEOUT" : "NETWORK_ERROR",
-        );
+        throw getLoginRequestError(error, didTimeout);
       } finally {
         clearTimeout(timeoutId);
       }

@@ -190,7 +190,7 @@ export function SignInForm() {
                           disabled={isSubmitting}
                           onPointerDown={(event) => event.preventDefault()}
                           onClick={() => setIsPasswordVisible((visible) => !visible)}
-                          className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-gray-600 hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400 focus-visible:ring-offset-2"
+                          className="password-visibility-toggle absolute inset-y-0 right-0 flex w-10 items-center justify-center text-gray-600 hover:text-gray-900"
                         >
                           {isPasswordVisible ? (
                             <EyeOff aria-hidden="true" className="h-4 w-4" />

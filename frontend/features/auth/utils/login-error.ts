@@ -44,10 +44,31 @@ export function createAuthLoginError(
 }
 
 export function isAuthLoginError(error: unknown): error is AuthLoginError {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  const authError = error as Partial<AuthLoginError>;
   return (
-    error instanceof Error &&
-    ("code" in error || "status" in error || "lockedUntil" in error)
+    typeof authError.code === "string" ||
+    typeof authError.status === "number" ||
+    typeof authError.lockedUntil === "string"
   );
+}
+
+export function getLoginRequestError(
+  error: unknown,
+  didTimeout: boolean,
+): AuthLoginError {
+  if (didTimeout || (error instanceof Error && error.name === "AbortError")) {
+    return createAuthLoginError(null, undefined, "REQUEST_TIMEOUT");
+  }
+
+  if (isAuthLoginError(error)) {
+    return error;
+  }
+
+  return createAuthLoginError(null, undefined, "NETWORK_ERROR");
 }
 
 function formatLockoutTime(lockedUntil: string): string | null {
