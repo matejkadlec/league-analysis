@@ -462,7 +462,7 @@ export type JobExecutionListResponse = z.infer<
 // Simplified immutable league snapshot (ordered by created_at DESC for current)
 export const PlayerLeagueSchema = z.object({
   puuid: z.string(),
-  league_id: z.string(),
+  league_id: z.string().nullable(),
   queue_type: z.string(),
   tier: z.string(),
   rank: z.string().nullable(),
