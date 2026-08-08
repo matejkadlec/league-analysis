@@ -30,6 +30,9 @@ Inherits repository-wide rules from
   Summoner-V4 and League-V4.
 - Use PUUID as the durable player identifier.
 - Keep HTTP I/O async and validate responses through the DTO layer.
+- Treat `leagueId` and `puuid` as optional metadata in League-V4 by-PUUID
+  entries. Keep queue and ranked-result fields strict so genuine response-shape
+  drift remains visible without rejecting the current payload.
 - Preserve both rate-limit layers. Do not bypass acquisition/recording,
   priority, spacing, `Retry-After`, or 429 behavior.
 - Credential lookup is implemented by `app.core.config.get_riot_api_key`: an

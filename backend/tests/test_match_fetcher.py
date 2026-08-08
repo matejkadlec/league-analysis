@@ -4,12 +4,17 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
+from pydantic import ValidationError as PydanticValidationError
+from sqlalchemy.exc import SQLAlchemyError
 
+from app.core.exceptions import ServiceException
 from app.core.riot_api.errors import RateLimitError
+from app.core.riot_api.models import LeagueEntryDTO
 from app.features.jobs.base import BaseJob
 from app.features.jobs.error_handling import RateLimitSignal
 from app.features.jobs.implementations import match_fetcher as match_fetcher_module
 from app.features.jobs.implementations.match_fetcher import MatchFetcherJob
+from app.features.jobs.maintenance import RiotWriterMaintenanceActiveError
 from app.features.matches.service import MatchService
 
 
@@ -116,6 +121,27 @@ async def test_match_sync_propagates_rate_limit_to_the_job_layer() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "fatal_error",
+    [SQLAlchemyError("database unavailable"), RiotWriterMaintenanceActiveError()],
+)
+async def test_match_sync_propagates_fatal_writer_errors_to_the_job_layer(
+    fatal_error: Exception,
+) -> None:
+    service = MatchService(_QueueSyncSession())  # type: ignore[arg-type]
+    service._sync_single_queue_for_player = AsyncMock(  # type: ignore[method-assign]
+        side_effect=fatal_error
+    )
+
+    with pytest.raises(type(fatal_error)):
+        await service.sync_matches_for_player(
+            riot_client=object(),
+            player=SimpleNamespace(puuid="test-puuid", platform="eun1"),
+            enabled_queue_ids=[420],
+        )
+
+
+@pytest.mark.asyncio
 async def test_match_fetcher_converts_rate_limit_to_a_non_failure_signal() -> None:
     job = MatchFetcherJob(job_config_id=7)
     match_service = SimpleNamespace(
@@ -164,8 +190,8 @@ async def test_match_fetcher_execute_propagates_rate_limit_to_base_job(
     player = SimpleNamespace(puuid="test-puuid", game_name="Test")
 
     monkeypatch.setattr(
-        match_fetcher_module,
-        "get_riot_api_key",
+        MatchFetcherJob,
+        "get_job_riot_api_key",
         AsyncMock(return_value="test-key"),
     )
     monkeypatch.setattr(match_fetcher_module, "RiotAPIClient", FakeRiotClient)
@@ -193,6 +219,42 @@ async def test_match_fetcher_execute_propagates_rate_limit_to_base_job(
     rate_limiter.release.assert_awaited_once()
 
 
+@pytest.mark.asyncio
+async def test_match_fetcher_processes_the_player_league_refresh_path() -> None:
+    job = MatchFetcherJob(job_config_id=7)
+    db = SimpleNamespace(
+        get=AsyncMock(return_value=SimpleNamespace(puuid="sanitized-puuid")),
+        commit=AsyncMock(),
+        rollback=AsyncMock(),
+    )
+    player_service = SimpleNamespace(update_player_league=AsyncMock(return_value=False))
+    match_service = SimpleNamespace(sync_matches_for_player=AsyncMock(return_value=0))
+    rate_limiter = SimpleNamespace(
+        acquire=AsyncMock(return_value=True),
+        record_request=AsyncMock(),
+    )
+    player = SimpleNamespace(
+        puuid="sanitized-puuid",
+        platform="eun1",
+        game_name="Sanitized",
+    )
+
+    await job._process_player(
+        db=db,
+        player=player,
+        player_service=player_service,
+        match_service=match_service,
+        riot_client=object(),
+        rate_limiter=rate_limiter,
+        enabled_queue_ids=[420],
+    )
+
+    player_service.update_player_league.assert_awaited_once()
+    db.commit.assert_awaited_once()
+    rate_limiter.record_request.assert_awaited_once()
+    assert not job.has_errors()
+
+
 def test_job_error_diagnostics_exclude_raw_error_text_and_unreviewed_context() -> None:
     job = _NoopJob(job_config_id=7)
     job.record_error(
@@ -217,3 +279,34 @@ def test_job_error_diagnostics_exclude_raw_error_text_and_unreviewed_context() -
         "Job completed with 1 error(s); first failure: "
         "match synchronization (RateLimitError)"
     )
+
+
+def test_job_diagnostics_retain_wrapped_validation_fields() -> None:
+    job = _NoopJob(job_config_id=7)
+    try:
+        LeagueEntryDTO(
+            tier="GOLD",
+            rank="II",
+            leaguePoints=42,
+            wins=12,
+            losses=8,
+            veteran=False,
+            inactive=False,
+            freshBlood=False,
+            hotStreak=False,
+        )
+    except PydanticValidationError as validation_error:
+        wrapped_error = ServiceException(
+            "validation failed",
+            original_error=validation_error,
+        )
+    else:  # pragma: no cover - protects the test fixture itself
+        raise AssertionError("Malformed league fixture unexpectedly validated")
+
+    job.record_error(wrapped_error, operation="player league update")
+
+    assert job.execution_log["errors"][0] == {
+        "operation": "player league update",
+        "error_type": "ValidationError",
+        "validation_fields": ["queueType"],
+    }

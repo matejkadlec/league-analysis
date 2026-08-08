@@ -17,7 +17,11 @@ class PlayerLeagueBase(BaseModel):
     puuid: str = Field(
         ..., max_length=78, description="Reference to the player (Riot PUUID)"
     )
-    league_id: str = Field(..., max_length=36, description="Riot league ID (UUID)")
+    league_id: Optional[str] = Field(
+        None,
+        max_length=36,
+        description="Riot league ID when supplied by the upstream response",
+    )
     queue_type: str = Field(..., max_length=32, description="Queue type")
     tier: Tier = Field(..., description="Rank tier")
     rank: Optional[str] = Field(None, max_length=4, description="Rank division")

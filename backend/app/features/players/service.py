@@ -1136,7 +1136,7 @@ class PlayerService:
             riot_api_client: RiotAPIClient instance
 
         Returns:
-            True if profile was updated, False if unchanged or error
+            True if profile was updated, False if unchanged
 
         Raises:
             ValueError: If player has invalid platform
@@ -1162,62 +1162,39 @@ class PlayerService:
         elif platform_lower in ["ph2", "sg2", "th2", "tw2", "vn2"]:
             region = Region.SEA
 
-        try:
-            # Fetch summoner data for profile_icon_id and summoner_level
-            summoner = await riot_api_client.get_summoner_by_puuid(
-                player.puuid, platform_enum
-            )
+        # Fetch both sources before mutating the ORM object so a partial Riot
+        # response cannot leave an uncommitted half-update in the session.
+        summoner = await riot_api_client.get_summoner_by_puuid(
+            player.puuid, platform_enum
+        )
+        account = await riot_api_client.get_account_by_puuid(player.puuid, region)
 
-            # Fetch account data for game_name and tag_line
-            account = await riot_api_client.get_account_by_puuid(player.puuid, region)
+        changed = False
+        if account.game_name != player.game_name:
+            player.game_name = account.game_name
+            changed = True
+        if account.tag_line != player.tag_line:
+            player.tag_line = account.tag_line
+            changed = True
+        if summoner.profile_icon_id != player.profile_icon_id:
+            player.profile_icon_id = summoner.profile_icon_id
+            changed = True
+        if summoner.summoner_level != player.summoner_level:
+            player.summoner_level = summoner.summoner_level
+            changed = True
 
-            # Check if anything changed
-            changed = False
-            if account.game_name != player.game_name:
-                player.game_name = account.game_name
-                changed = True
-            if account.tag_line != player.tag_line:
-                player.tag_line = account.tag_line
-                changed = True
-            if summoner.profile_icon_id != player.profile_icon_id:
-                player.profile_icon_id = summoner.profile_icon_id
-                changed = True
-            if summoner.summoner_level != player.summoner_level:
-                player.summoner_level = summoner.summoner_level
-                changed = True
-
-            if changed:
-                player.updated_at = datetime.now(timezone.utc)
-                logger.info(
-                    "Updated player profile",
-                    puuid=player.puuid,
-                    game_name=player.game_name,
-                    profile_icon_id=player.profile_icon_id,
-                )
-                return True
-            else:
-                logger.debug("Player profile unchanged", puuid=player.puuid)
-                return False
-
-        except Exception as e:
-            from app.core.riot_api.errors import RiotAPIError
-
-            if isinstance(e, RiotAPIError):
-                logger.warning(
-                    "Riot API error while updating player profile - propagating to caller",
-                    puuid=player.puuid,
-                    error_type=type(e).__name__,
-                    status_code=getattr(e, "status_code", None),
-                    error_message=str(e),
-                )
-                raise
-
-            logger.error(
-                "Failed to update player profile",
+        if changed:
+            player.updated_at = datetime.now(timezone.utc)
+            logger.info(
+                "Updated player profile",
                 puuid=player.puuid,
-                error=str(e),
+                game_name=player.game_name,
+                profile_icon_id=player.profile_icon_id,
             )
-            return False
+            return True
+
+        logger.debug("Player profile unchanged", puuid=player.puuid)
+        return False
 
     @service_error_handler("PlayerService")
     async def update_player_league(

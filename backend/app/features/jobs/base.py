@@ -20,7 +20,7 @@ from .control import (
     register_runtime_control,
     unregister_runtime_control,
 )
-from .error_handling import RateLimitSignal
+from .error_handling import RateLimitSignal, diagnostic_error
 from .log_capture import job_log_capture
 from .maintenance import is_riot_writer_maintenance_active
 from .models import ExecutionType, JobConfiguration, JobExecution, JobStatus
@@ -109,6 +109,8 @@ class BaseJob(ABC):
     Subclasses must implement:
     - execute(): The main job logic
     """
+
+    recorded_errors_are_fatal = True
 
     def __init__(
         self,
@@ -471,6 +473,8 @@ class BaseJob(ABC):
                 )
             except Exception as job_error:
                 error_message = await self.handle_error(db, job_error)
+                if self.has_api_key_error():
+                    error_message = self._get_error_summary()
                 job_logs = self._get_job_logs()
                 await self.log_completion(
                     db,
@@ -479,13 +483,14 @@ class BaseJob(ABC):
                     logs=job_logs,
                 )
             else:
-                # Check if any errors were recorded during execution
+                # API-key rejection is fatal. Regular writer jobs may classify
+                # isolated per-player/provider errors as successful warnings,
+                # while health-check jobs retain fail-on-any-error semantics.
                 job_logs = self._get_job_logs()
-                if self.has_errors():
-                    # Job completed but with errors - mark as FAILED
+                if self.has_api_key_error() or (
+                    self.has_errors() and self.recorded_errors_are_fatal
+                ):
                     error_summary = self._get_error_summary()
-                    if self._has_api_key_error:
-                        error_summary = "API key error: Invalid or expired Riot API key"
                     await self.log_completion(
                         db,
                         success=False,
@@ -493,6 +498,14 @@ class BaseJob(ABC):
                         logs=job_logs,
                     )
                 else:
+                    if self.has_errors():
+                        self.add_log_entry("completed_with_warnings", True)
+                        self.add_log_entry(
+                            "warning_count", len(self._errors_encountered)
+                        )
+                        self.add_log_entry(
+                            "warning_summary", self._get_warning_summary()
+                        )
                     await self.log_completion(
                         db,
                         success=True,
@@ -628,19 +641,18 @@ class BaseJob(ABC):
         safe HTTP status and explicitly supplied identifiers, but never arbitrary
         exception text or provider response bodies.
         """
-        error_type = (
-            type(error).__name__ if isinstance(error, Exception) else "RecordedError"
-        )
+        source_error = diagnostic_error(error) if isinstance(error, Exception) else None
+        error_type = type(source_error).__name__ if source_error else "RecordedError"
         diagnostic: Dict[str, Any] = {
             "operation": operation,
             "error_type": error_type,
         }
 
-        status_code = getattr(error, "status_code", None)
+        status_code = getattr(source_error, "status_code", None)
         if isinstance(status_code, int):
             diagnostic["status_code"] = status_code
 
-        validation_errors = getattr(error, "errors", None)
+        validation_errors = getattr(source_error, "errors", None)
         if callable(validation_errors):
             locations: list[str] = []
             try:
@@ -688,6 +700,30 @@ class BaseJob(ABC):
             f"Job completed with {count} error(s); first failure: "
             f"{operation} ({error_type})"
         )
+
+    def _get_warning_summary(self) -> str:
+        """Return a concise completion summary for recoverable diagnostics."""
+        count = len(self._errors_encountered)
+        first_error = self._errors_encountered[0]
+        return (
+            f"Job completed with {count} warning(s); first warning: "
+            f"{first_error['operation']} ({first_error['error_type']})"
+        )
+
+    async def get_job_riot_api_key(self, db: AsyncSession) -> str:
+        """Load a Riot key and classify missing configuration as a key failure."""
+        from app.core.config import get_riot_api_key
+        from app.core.riot_api.errors import AuthenticationError
+
+        try:
+            return await get_riot_api_key(db)
+        except ValueError as error:
+            self.record_error(
+                error,
+                operation="Riot API key lookup",
+                is_api_key_error=True,
+            )
+            raise AuthenticationError("No active Riot API key configured") from error
 
     def has_errors(self) -> bool:
         """Check if any errors were encountered during execution."""

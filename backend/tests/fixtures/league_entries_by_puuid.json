@@ -1,0 +1,72 @@
+{
+  "present": [
+    {
+      "leagueId": "sanitized-league-id",
+      "queueType": "RANKED_SOLO_5x5",
+      "tier": "GOLD",
+      "rank": "II",
+      "leaguePoints": 42,
+      "wins": 12,
+      "losses": 8,
+      "veteran": false,
+      "inactive": false,
+      "freshBlood": true,
+      "hotStreak": false
+    }
+  ],
+  "missing": [
+    {
+      "queueType": "RANKED_SOLO_5x5",
+      "tier": "GOLD",
+      "rank": "II",
+      "leaguePoints": 43,
+      "wins": 13,
+      "losses": 8,
+      "veteran": false,
+      "inactive": false,
+      "freshBlood": true,
+      "hotStreak": true
+    }
+  ],
+  "mixed": [
+    {
+      "leagueId": "sanitized-solo-league-id",
+      "queueType": "RANKED_SOLO_5x5",
+      "tier": "PLATINUM",
+      "rank": "IV",
+      "leaguePoints": 21,
+      "wins": 30,
+      "losses": 24,
+      "veteran": false,
+      "inactive": false,
+      "freshBlood": false,
+      "hotStreak": false
+    },
+    {
+      "queueType": "RANKED_FLEX_SR",
+      "tier": "SILVER",
+      "rank": "I",
+      "leaguePoints": 75,
+      "wins": 18,
+      "losses": 16,
+      "veteran": false,
+      "inactive": false,
+      "freshBlood": false,
+      "hotStreak": true
+    }
+  ],
+  "empty": [],
+  "malformed": [
+    {
+      "tier": "GOLD",
+      "rank": "II",
+      "leaguePoints": 42,
+      "wins": 12,
+      "losses": 8,
+      "veteran": false,
+      "inactive": false,
+      "freshBlood": true,
+      "hotStreak": false
+    }
+  ]
+}

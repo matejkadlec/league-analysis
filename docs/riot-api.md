@@ -213,8 +213,6 @@ Host: {platform}.api.riotgames.com
 ```json
 [
   {
-    "leagueId": "abc123...",
-    "puuid": "kO3z7...",
     "queueType": "RANKED_SOLO_5x5",
     "tier": "EMERALD",
     "rank": "I",
@@ -229,7 +227,13 @@ Host: {platform}.api.riotgames.com
 ]
 ```
 
-**Note**: Returns empty `[]` if unranked. Multiple entries if player has Flex rank.
+**Note**: Returns empty `[]` if unranked and multiple entries if the player also
+has a Flex rank. Although Riot's
+[League-V4 portal contract](https://developer.riotgames.com/apis#league-v4/GET_getLeagueEntriesByPUUID)
+lists `leagueId` and `puuid` on a league entry, the by-PUUID response can omit
+both. They are optional metadata in `LeagueEntryDTO`; `queueType`, tier, rank,
+LP, win/loss, and state fields remain required. A missing `leagueId` is stored
+as SQL `NULL` and does not prevent the rank snapshot from being saved.
 
 **Used in**: Player league updates, Match Fetcher job
 
@@ -360,6 +364,7 @@ credential-error toast rather than exposing a server error.
 
 2. Compare with latest core.player_leagues record
    └── If different: Insert new snapshot
+      (`league_id` may be null when Riot omits it)
 ```
 
 ---

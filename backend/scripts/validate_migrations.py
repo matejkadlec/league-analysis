@@ -16,7 +16,7 @@ from sqlalchemy import URL, create_engine, text
 
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
 PROJECT_ROOT = BACKEND_ROOT.parent
-EXPECTED_REVISION = "20260806_0002"
+EXPECTED_REVISION = "20260808_0003"
 EXPECTED_TABLES = 22
 EXPECTED_ENUMS = 6
 EXPECTED_TRIGGERS = 1
@@ -151,11 +151,31 @@ def validate_catalog(database: str) -> None:
                     "WHERE namespace.nspname = 'auth' AND NOT trigger.tgisinternal"
                 )
             ).scalar_one()
+            league_id_nullable = connection.execute(
+                text(
+                    "SELECT is_nullable FROM information_schema.columns "
+                    "WHERE table_schema = 'core' "
+                    "AND table_name = 'player_leagues' "
+                    "AND column_name = 'league_id'"
+                )
+            ).scalar_one()
     finally:
         engine.dispose()
 
-    observed = (revision, table_count, enum_count, trigger_count)
-    expected = (EXPECTED_REVISION, EXPECTED_TABLES, EXPECTED_ENUMS, EXPECTED_TRIGGERS)
+    observed = (
+        revision,
+        table_count,
+        enum_count,
+        trigger_count,
+        league_id_nullable,
+    )
+    expected = (
+        EXPECTED_REVISION,
+        EXPECTED_TABLES,
+        EXPECTED_ENUMS,
+        EXPECTED_TRIGGERS,
+        "YES",
+    )
     if observed != expected:
         raise RuntimeError(f"Unexpected migrated schema inventory: {observed}")
 
