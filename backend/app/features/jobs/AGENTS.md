@@ -61,6 +61,10 @@ details. Keep it synchronized with job changes.
   `sync_job_configuration()`.
 - Preserve Riot API throttling and priority rules from
   [`../../../../docs/riot-api.md`](../../../../docs/riot-api.md).
+- Record recoverable execution failures through `BaseJob.record_error()` with a
+  static operation name and only reviewed identifiers. It stores bounded,
+  secret-safe diagnostics for administrator execution details; never pass raw
+  exception text, provider payloads, or credentials as context.
 - Test runners may call the same Riot endpoints but must not write gameplay
   data; their execution record is the allowed persistence.
 - The local cleanup command may set `config_json.riot_maintenance_mode` for

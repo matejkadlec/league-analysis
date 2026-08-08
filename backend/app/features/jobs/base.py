@@ -137,8 +137,8 @@ class BaseJob(ABC):
             }
         )
         self.execution_log: Dict[str, Any] = {}
-        # Track errors encountered during execution
-        self._errors_encountered: List[str] = []
+        # Track safe, structured diagnostics for errors encountered during execution.
+        self._errors_encountered: List[Dict[str, Any]] = []
         self._has_api_key_error: bool = False
         # Track API call records for detailed logging
         self._api_call_records: List[Any] = []
@@ -483,9 +483,7 @@ class BaseJob(ABC):
                 job_logs = self._get_job_logs()
                 if self.has_errors():
                     # Job completed but with errors - mark as FAILED
-                    error_summary = (
-                        f"Job completed with {len(self._errors_encountered)} error(s)"
-                    )
+                    error_summary = self._get_error_summary()
                     if self._has_api_key_error:
                         error_summary = "API key error: Invalid or expired Riot API key"
                     await self.log_completion(
@@ -616,16 +614,80 @@ class BaseJob(ABC):
         """Increment a metric counter."""
         self.metrics[metric_name] += count
 
-    def record_error(self, error_message: str, is_api_key_error: bool = False) -> None:
-        """Record an error that occurred during job execution.
+    def record_error(
+        self,
+        error: Exception | str,
+        *,
+        operation: str = "job execution",
+        context: Optional[Dict[str, Any]] = None,
+        is_api_key_error: bool = False,
+    ) -> None:
+        """Record a safe, structured diagnostic for an execution error.
 
-        Args:
-            error_message: The error message to record.
-            is_api_key_error: Whether this is an API key authentication error.
+        Persisted diagnostics deliberately retain the operation, exception type,
+        safe HTTP status and explicitly supplied identifiers, but never arbitrary
+        exception text or provider response bodies.
         """
-        self._errors_encountered.append(error_message)
+        error_type = (
+            type(error).__name__ if isinstance(error, Exception) else "RecordedError"
+        )
+        diagnostic: Dict[str, Any] = {
+            "operation": operation,
+            "error_type": error_type,
+        }
+
+        status_code = getattr(error, "status_code", None)
+        if isinstance(status_code, int):
+            diagnostic["status_code"] = status_code
+
+        validation_errors = getattr(error, "errors", None)
+        if callable(validation_errors):
+            locations: list[str] = []
+            try:
+                reported_errors = validation_errors()
+                if isinstance(reported_errors, list):
+                    for item in reported_errors:
+                        if not isinstance(item, dict):
+                            continue
+                        location = item.get("loc")
+                        if isinstance(location, tuple):
+                            locations.append(".".join(str(part) for part in location))
+            except Exception:
+                locations = []
+            if locations:
+                diagnostic["validation_fields"] = locations[:5]
+
+        if context:
+            safe_context = {
+                key: value
+                for key, value in context.items()
+                if isinstance(value, (str, int, float, bool)) and len(str(value)) <= 128
+            }
+            if safe_context:
+                diagnostic["context"] = safe_context
+
+        self._errors_encountered.append(diagnostic)
+        persisted_errors = self.execution_log.setdefault("errors", [])
+        if len(persisted_errors) < 20:
+            persisted_errors.append(diagnostic)
+        else:
+            self.execution_log["errors_truncated"] = len(self._errors_encountered) - 20
         if is_api_key_error:
             self._has_api_key_error = True
+
+    def _get_error_summary(self) -> str:
+        """Return an actionable, secret-safe completion summary."""
+        if self._has_api_key_error:
+            return "API key error: Invalid or expired Riot API key"
+
+        count = len(self._errors_encountered)
+        first_error = self._errors_encountered[0]
+        operation = first_error["operation"]
+        error_type = first_error["error_type"]
+        return (
+            f"Job completed with {count} error(s); first failure: "
+            f"{operation} ({error_type})"
+        )
 
     def has_errors(self) -> bool:
         """Check if any errors were encountered during execution."""

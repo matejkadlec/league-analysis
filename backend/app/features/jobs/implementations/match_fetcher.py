@@ -6,8 +6,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_riot_api_key
 from app.core.riot_api.client import APICallRecord, RiotAPIClient
 from app.core.riot_api.db_rate_limiter import DBRateLimiter, RateLimitComponent
-from app.core.riot_api.errors import AuthenticationError
+from app.core.riot_api.errors import AuthenticationError, RateLimitError
 from app.features.jobs.base import BaseJob
+from app.features.jobs.error_handling import RateLimitSignal
 from app.features.jobs.queue_config import get_enabled_match_fetcher_queue_ids
 from app.features.matches.service import MatchService
 from app.features.players.models import Player
@@ -93,6 +94,13 @@ class MatchFetcherJob(BaseJob):
                             rate_limiter,
                             enabled_queue_ids,
                         )
+                    except RateLimitSignal:
+                        raise
+                    except RateLimitError as error:
+                        raise RateLimitSignal(
+                            retry_after=error.retry_after,
+                            message="Rate limit reached while fetching matches",
+                        ) from error
                     except Exception as e:
                         error_msg = str(e)
                         is_api_key_err = _is_api_key_error(e)
@@ -101,7 +109,12 @@ class MatchFetcherJob(BaseJob):
                             puuid=player.puuid,
                             error=error_msg,
                         )
-                        self.record_error(error_msg, is_api_key_error=is_api_key_err)
+                        self.record_error(
+                            e,
+                            operation="player synchronization",
+                            context={"puuid": player.puuid},
+                            is_api_key_error=is_api_key_err,
+                        )
                         # If it's an API key error, stop processing more players
                         if is_api_key_err:
                             logger.error(
@@ -131,13 +144,32 @@ class MatchFetcherJob(BaseJob):
         Note: Player profile updates (game_name, tag_line, profile_icon_id, summoner_level)
         are handled by the separate PlayerUpdaterJob which runs less frequently (every 24h).
         """
+
         # Fetch new matches with rate limiting
-        count = await match_service.sync_matches_for_player(
-            riot_client,
-            player,
-            rate_limiter,
-            enabled_queue_ids=enabled_queue_ids,
-        )
+        def record_match_sync_failure(
+            operation: str,
+            error: Exception,
+            context: dict[str, object],
+        ) -> None:
+            self.record_error(
+                error,
+                operation=operation,
+                context={"puuid": player.puuid, **context},
+            )
+
+        try:
+            count = await match_service.sync_matches_for_player(
+                riot_client,
+                player,
+                rate_limiter,
+                enabled_queue_ids=enabled_queue_ids,
+                on_failure=record_match_sync_failure,
+            )
+        except RateLimitError as error:
+            raise RateLimitSignal(
+                retry_after=error.retry_after,
+                message="Rate limit reached while synchronizing matches",
+            ) from error
         self.metrics["records_created"] += count
 
         # Need to get the Player model, not PlayerResponse
@@ -172,6 +204,8 @@ class MatchFetcherJob(BaseJob):
                     puuid=player.puuid,
                     game_name=player.game_name,
                 )
+        except RateLimitError:
+            raise
         except Exception as e:
             error_msg = str(e)
             is_api_key_err = _is_api_key_error(e)
@@ -181,7 +215,9 @@ class MatchFetcherJob(BaseJob):
                 error=error_msg,
             )
             self.record_error(
-                f"Failed to update player league: {error_msg}",
+                e,
+                operation="player league update",
+                context={"puuid": player.puuid},
                 is_api_key_error=is_api_key_err,
             )
             if is_api_key_err:
