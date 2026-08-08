@@ -273,13 +273,10 @@ export async function getPlayerByPuuid(
 // Player Tracking API Functions
 export async function trackPlayer(
   puuid: string,
-): Promise<ApiResponse<{ message: string }>> {
+): Promise<ApiResponse<Player>> {
   try {
     const response = await api.post(`/players/${puuid}/track`);
-    return {
-      success: true,
-      data: response.data,
-    };
+    return validateResponse(PlayerSchema, `/players/${puuid}/track`, response.data);
   } catch (error) {
     return {
       success: false,

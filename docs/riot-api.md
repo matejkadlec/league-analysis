@@ -325,6 +325,17 @@ For each tracked player:
 
 ### Player Search & Tracking
 
+The frontend uses one `Name#Tag` field for manual tracked-player input. The
+field stays neutral while typing: the Track button is disabled until the value
+is a valid Riot ID (exactly one separator, a game name of at most 16 permitted
+characters, and an alphanumeric tag line of at most 5 characters) or identifies
+a saved player by game name. Saved-player matches use their canonical PUUID with
+`POST /players/{puuid}/track` instead of resolving the mutable Riot ID again.
+Manual input continues through `POST /players/add-tracked`, which resolves the
+Riot ID, persists/updates the canonical player, creates the current user's
+tracking mapping, and queues the Player Updater and Match Fetcher work for that
+player.
+
 ```
 1. GET /riot/account/v1/accounts/by-riot-id/{gameName}/{tagLine}
    └── Resolve Riot ID to PUUID
@@ -335,6 +346,11 @@ For each tracked player:
 3. GET /lol/league/v4/entries/by-puuid/{puuid}
    └── Get current rank
 ```
+
+A missing Riot account is returned as `404` and presented below the Track
+button as `Player {name}#{tag} wasn't found on server {server}.` A `429` is
+shown as a warning toast, while an invalid Riot API key uses the existing
+credential-error toast rather than exposing a server error.
 
 ### Player League Refresh
 

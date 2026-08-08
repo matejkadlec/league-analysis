@@ -97,10 +97,12 @@ locked pre-commit installation.
 - ESLint 10 with zero warnings; `@eslint/compat` adapts legacy Next.js plugin
   rule APIs without suppressing any configured lint rules;
 - `tsc --noEmit`;
-- deterministic Vitest regressions for player search validation, platform
-  presentation, rank-style mapping, Top Champions pagination boundaries, and
-  sign-in authentication errors, request timeouts, duplicate-submission
-  prevention, and password visibility;
+- deterministic Vitest regressions for player-search validation, strict Riot ID
+  parsing, disabled partial tracked-player input, saved-player/PUUID selection,
+  manual tracking feedback for missing players, rate limits and invalid keys,
+  platform presentation, rank-style mapping, Top Champions pagination
+  boundaries, and sign-in authentication errors, request timeouts,
+  duplicate-submission prevention, and password visibility;
 - Next.js production build.
 
 The separate `cd frontend && npm run test:e2e` Playwright suite verifies the

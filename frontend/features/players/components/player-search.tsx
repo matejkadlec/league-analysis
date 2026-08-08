@@ -23,6 +23,12 @@ import {
   addTrackedPlayer,
   searchPlayerSuggestions,
 } from "@/lib/core/api";
+import { useToast } from "@/lib/core/hooks";
+import { parseRiotId } from "../utils/riot-id";
+import {
+  PlayerTrackingError,
+  toPlayerTrackingError,
+} from "../utils/tracking-feedback";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -87,6 +93,7 @@ export function PlayerSearch({
 }: PlayerSearchProps) {
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  const { toast } = useToast();
   const userId = user?.id;
   const [showTrackOption, setShowTrackOption] = useState(false);
   const [lastSearchParams, setLastSearchParams] =
@@ -94,6 +101,9 @@ export function PlayerSearch({
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [debouncedSearchValue, setDebouncedSearchValue] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(-1);
+  const [trackingErrorMessage, setTrackingErrorMessage] = useState<
+    string | null
+  >(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const form = useForm<PlayerSearchForm>({
@@ -241,27 +251,26 @@ export function PlayerSearch({
     mutationFn: async (): Promise<Player | null> => {
       if (!lastSearchParams) return null;
 
-      // Use the same logic for addTrackedPlayer (uses game_name and tag_line)
-      let game_name = lastSearchParams.searchValue;
-      let tag_line = "";
-
-      if (lastSearchParams.searchValue.includes("#")) {
-        const parts = lastSearchParams.searchValue.split("#");
-        game_name = parts[0];
-        tag_line = parts.slice(1).join("#");
-      }
+      const { gameName, tagLine } = parseRiotId(lastSearchParams.searchValue);
 
       const params = {
-        game_name,
-        tag_line,
+        game_name: gameName,
+        tag_line: tagLine,
         platform: lastSearchParams.platform,
       };
 
       const result = await addTrackedPlayer(params);
       if (!result.success) {
-        throw new Error(result.error.message);
+        throw toPlayerTrackingError(
+          result.error,
+          { gameName, tagLine },
+          params.platform,
+        );
       }
       return result.data as Player;
+    },
+    onMutate: () => {
+      setTrackingErrorMessage(null);
     },
     onSuccess: (player) => {
       if (player) {
@@ -276,7 +285,39 @@ export function PlayerSearch({
           searchValue: "",
           platform: form.getValues("platform"),
         });
+        toast({
+          title: "Player added for tracking",
+          description: `${player.game_name}#${player.tag_line} is now being tracked.`,
+          variant: "success",
+        });
       }
+    },
+    onError: (error) => {
+      if (!(error instanceof PlayerTrackingError)) {
+        setTrackingErrorMessage("Failed to track player. Please try again.");
+        return;
+      }
+
+      if (error.kind === "rate-limited") {
+        toast({
+          title: "Unable to add player for tracking",
+          description:
+            "We weren't able to get this players info. Please try again in a few minutes.",
+          variant: "warning",
+        });
+        return;
+      }
+
+      if (error.kind === "api-key") {
+        toast({
+          title:
+            "The Riot API key is invalid or expired. Please contact an administrator.",
+          variant: "error",
+        });
+        return;
+      }
+
+      setTrackingErrorMessage(error.message);
     },
   });
 
@@ -324,13 +365,13 @@ export function PlayerSearch({
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Player Name</FormLabel>
-                      <FormControl>
-                        <Popover
+                      <Popover
                           open={showSuggestions}
                           onOpenChange={setShowSuggestions}
                         >
                           <PopoverTrigger asChild>
                             <div className="relative">
+                              <FormControl>
                               <Input
                                 {...field}
                                 ref={inputRef}
@@ -350,6 +391,7 @@ export function PlayerSearch({
                                 }}
                                 autoComplete="off"
                               />
+                              </FormControl>
                               {suggestionsLoading &&
                                 searchValue.length >= MIN_SEARCH_LENGTH && (
                                   <div className="absolute right-3 top-1/2 -translate-y-1/2">
@@ -404,10 +446,9 @@ export function PlayerSearch({
                               )}
                             </div>
                           </PopoverContent>
-                        </Popover>
-                      </FormControl>
+                      </Popover>
                       <p className="text-xs text-muted-foreground">
-                        Enter game name or tag line to begin search
+                        Enter game name or tag line to search for players
                       </p>
                       <FormMessage />
                     </FormItem>
@@ -593,15 +634,10 @@ export function PlayerSearch({
                     </AlertDescription>
                   </Alert>
                 )}
-                {trackMutation.error && (
-                  <Alert variant="destructive" className="mt-2">
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertDescription>
-                      {trackMutation.error instanceof Error
-                        ? trackMutation.error.message
-                        : "Failed to track player. Please try again."}
-                    </AlertDescription>
-                  </Alert>
+                {trackingErrorMessage && (
+                  <p role="alert" className="mt-3 text-sm text-muted-foreground">
+                    {trackingErrorMessage}
+                  </p>
                 )}
               </>
             )}

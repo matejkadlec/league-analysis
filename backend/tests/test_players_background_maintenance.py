@@ -8,7 +8,7 @@ import pytest
 from fastapi import BackgroundTasks, HTTPException
 from starlette.requests import Request
 
-from app.core.riot_api.errors import RateLimitError
+from app.core.riot_api.errors import NotFoundError, RateLimitError
 from app.features.auth import router as auth_router
 from app.features.jobs import models as job_models
 from app.features.jobs.maintenance import (
@@ -213,6 +213,70 @@ async def test_player_add_continues_when_maintenance_is_inactive(monkeypatch) ->
     assert result is response
     player_service.add_and_track_player.assert_awaited_once()
     assert len(background_tasks.tasks) == 2
+
+
+@pytest.mark.asyncio
+async def test_player_add_returns_not_found_for_a_missing_riot_account(
+    monkeypatch,
+) -> None:
+    """The client can render a server-specific missing-player message from 404."""
+    player_service = SimpleNamespace(
+        db=object(),
+        add_and_track_player=AsyncMock(
+            side_effect=NotFoundError("Resource not found", status_code=404)
+        ),
+    )
+    monkeypatch.setattr(
+        players_router,
+        "_riot_writer_maintenance_is_active",
+        AsyncMock(return_value=False),
+    )
+
+    with pytest.raises(HTTPException) as error:
+        await players_router.add_tracked_player(
+            player_service=player_service,
+            riot_client=object(),
+            background_tasks=BackgroundTasks(),
+            current_user=SimpleNamespace(id=7),
+            game_name="SomeName",
+            tag_line="1234",
+            platform="eun1",
+        )
+
+    assert error.value.status_code == 404
+    assert error.value.detail == "Player not found"
+
+
+@pytest.mark.asyncio
+async def test_player_add_preserves_the_riot_rate_limit_status(monkeypatch) -> None:
+    """A live Riot 429 must not be collapsed into a generic server failure."""
+    player_service = SimpleNamespace(
+        db=object(),
+        add_and_track_player=AsyncMock(
+            side_effect=RateLimitError(
+                "Rate limit exceeded", status_code=429, retry_after=10
+            )
+        ),
+    )
+    monkeypatch.setattr(
+        players_router,
+        "_riot_writer_maintenance_is_active",
+        AsyncMock(return_value=False),
+    )
+
+    with pytest.raises(HTTPException) as error:
+        await players_router.add_tracked_player(
+            player_service=player_service,
+            riot_client=object(),
+            background_tasks=BackgroundTasks(),
+            current_user=SimpleNamespace(id=7),
+            game_name="SomeName",
+            tag_line="1234",
+            platform="eun1",
+        )
+
+    assert error.value.status_code == 429
+    assert error.value.detail == "Riot API rate limit reached"
 
 
 @pytest.mark.asyncio

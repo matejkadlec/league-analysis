@@ -56,7 +56,7 @@ export function TrackPlayerButton({
       queryClient.invalidateQueries({ queryKey: ["tracked-players", userId] });
       queryClient.invalidateQueries({ queryKey: ["player", puuid] });
       toast({
-        title: "Player tracked",
+        title: "Player added for tracking",
         description: `${
           playerName || "Player"
         } is now being tracked. New matches will be fetched automatically.`,
