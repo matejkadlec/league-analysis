@@ -14,7 +14,11 @@ from app.core.database import db_manager
 from app.core.dependencies import get_riot_client
 from app.core.riot_api.client import RiotAPIClient
 from app.core.riot_api.constants import Platform
-from app.core.riot_api.errors import AuthenticationError, RateLimitError
+from app.core.riot_api.errors import (
+    AuthenticationError,
+    NotFoundError,
+    RateLimitError,
+)
 from app.features.auth.dependencies import get_current_active_user
 from app.features.auth.models import User
 from app.features.matches.service import MatchService
@@ -630,6 +634,10 @@ async def add_tracked_player(
         )
     except ValueError as e:
         _handle_tracking_value_error(e)
+    except NotFoundError:
+        raise HTTPException(status_code=404, detail="Player not found")
+    except RateLimitError:
+        raise HTTPException(status_code=429, detail="Riot API rate limit reached")
     except AuthenticationError as e:
         logger.error("riot_api_auth_error", error=str(e))
         raise HTTPException(
