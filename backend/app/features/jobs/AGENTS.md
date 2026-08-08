@@ -65,6 +65,11 @@ details. Keep it synchronized with job changes.
   static operation name and only reviewed identifiers. It stores bounded,
   secret-safe diagnostics for administrator execution details; never pass raw
   exception text, provider payloads, or credentials as context.
+- Regular Match Fetcher and Player Updater runs finish `SUCCESS` with warning
+  diagnostics after isolated player, match, timeline, or provider-shape errors.
+  Missing/rejected Riot credentials remain `FAILED`; rate exhaustion is
+  `RATE_LIMITED`, maintenance or operator stops are `CANCELLED`, and database or
+  other execution-wide failures must still escape and fail the run.
 - Test runners may call the same Riot endpoints but must not write gameplay
   data; their execution record is the allowed persistence.
 - The local cleanup command may set `config_json.riot_maintenance_mode` for

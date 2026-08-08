@@ -60,6 +60,15 @@ This ensures the system automatically recovers from downtime without manual inte
   `PENDING` -> `RUNNING` <-> `PAUSED` ->
   `SUCCESS` / `FAILED` / `CANCELLED` / `RATE_LIMITED`.
 
+For the two regular writer jobs, isolated player, match, timeline, and
+provider-response errors are recoverable: the job continues and finishes
+`SUCCESS` with bounded warning diagnostics. A missing or Riot-rejected API key
+finishes `FAILED`; rate exhaustion finishes `RATE_LIMITED`, and maintenance or
+operator stops finish `CANCELLED`. Database failures and other execution-wide
+faults still finish `FAILED` because continuing could corrupt or misreport
+progress. Test runs retain fail-on-any-diagnostic semantics because they are
+health checks rather than best-effort batch writers.
+
 ### Runtime Controls
 
 Runtime control has two layers:
@@ -181,15 +190,21 @@ For each tracked player:
 
 ### Error Handling
 
-| Error Type                               | Behavior                                                |
-| ---------------------------------------- | ------------------------------------------------------- |
-| `RateLimitError`                         | Convert to `RateLimitSignal`, job terminates gracefully |
-| `AuthenticationError` / `ForbiddenError` | Job fails immediately (API key invalid/expired)         |
-| Match fetch error                        | Record a diagnostic, skip that match, continue with others |
-| Player processing error                  | Record a diagnostic, skip that player, continue with others |
-| Rank update error                        | Record a diagnostic and continue with other players       |
+| Error Type                               | Behavior                                                      |
+| ---------------------------------------- | ------------------------------------------------------------- |
+| `RateLimitError`                         | Stop cleanly with `RATE_LIMITED`                              |
+| `AuthenticationError` / `ForbiddenError` | Stop with `FAILED` and `has_api_key_error=true`               |
+| Match, timeline, or rank response error  | Record a warning, skip the affected unit, and continue        |
+| Player processing error                  | Roll back that player, record a warning, and continue         |
+| Database or execution-wide error         | Roll back and stop with `FAILED`                              |
+| Riot-writer maintenance                  | Stop cleanly with `CANCELLED`                                 |
 
-For each recoverable Match Fetcher failure, the admin execution record stores a bounded, secret-safe diagnostic with the failed operation, exception type, safe HTTP status where available, and relevant queue, match, or player identifiers. The completion summary names the first failed stage instead of reporting only an error count.
+For each recoverable Match Fetcher failure, the admin execution record stores a
+bounded, secret-safe diagnostic with the failed operation, exception type, safe
+HTTP status where available, and relevant queue, match, or player identifiers.
+The final status remains `SUCCESS`, while `completed_with_warnings`,
+`warning_count`, and `warning_summary` in `execution_log` make partial work
+visible without populating the failure-only `error_message` field.
 
 ### Database Tables Updated
 
@@ -252,7 +267,7 @@ Active-state behavior:
 
 | Issue                                    | Cause                            | Solution                                          |
 | ---------------------------------------- | -------------------------------- | ------------------------------------------------- |
-| "2 validation errors for LeagueEntryDTO" | Riot API changed response format | Update `LeagueEntryDTO` model fields              |
+| Ranked entry omits `leagueId`             | Current by-PUUID response shape   | Expected; persist the rank snapshot with a null ID |
 | Ranks not updating                       | Session commit missing           | Ensure `db.commit()` after `update_player_rank()` |
 | Execution left in RUNNING after a crash  | Ungraceful shutdown               | Restart cleanup marks it `CANCELLED`; inspect logs |
 | No matches fetched                       | All matches already analyzed     | Expected behavior if no new games                 |
@@ -303,6 +318,16 @@ For each tracked player:
 - `records_updated`: Number of player profiles updated
 - `api_requests_made`: Total Riot API calls (2 per player)
 
+### Error Handling
+
+The Player Updater fetches both Riot responses before mutating a player, then
+commits that player atomically. An isolated provider or validation problem is
+rolled back, recorded as a bounded warning, and processing continues with the
+next player; the regular run finishes `SUCCESS` with warning details. Riot key
+rejection finishes `FAILED`, local or upstream rate exhaustion finishes
+`RATE_LIMITED`, maintenance finishes `CANCELLED`, and database or
+execution-wide failures remain `FAILED`.
+
 ---
 
 ## API Key Handling
@@ -312,9 +337,10 @@ The system retrieves the Riot API key with database priority:
 1. Select the newest active, non-expired key in `core.riot_api_keys`
 2. Fall back to `RIOT_API_KEY` from `.env` when no valid database key exists
 
-**When API Key is Invalid:**
+**When the API key is missing or invalid:**
 
-- First API call returns `401 Unauthorized` or `403 Forbidden`
+- Key lookup finds no usable credential, or a Riot call returns `401
+  Unauthorized` / `403 Forbidden`
 - Job raises `AuthenticationError`
 - Job terminates with `FAILED` status
 - `jobs.job_executions.has_api_key_error` is stored as `true` for the failed run

@@ -188,7 +188,7 @@ erDiagram
 
     player_leagues {
         string puuid FK
-        string league_id
+        string league_id "nullable"
         string queue_type
         string tier
         string rank
@@ -553,13 +553,17 @@ Objective-focused timeline aggregates (1 row per participant per match).
 
 Immutable league history snapshots (one row per rank change).
 
-| Column          | Type        | Description                  |
-| --------------- | ----------- | ---------------------------- |
-| `puuid`         | varchar(78) | Player reference             |
-| `tier`          | varchar(16) | IRON, BRONZE, ... CHALLENGER |
-| `rank`          | varchar(4)  | I, II, III, IV               |
-| `league_points` | int         | LP (0-100)                   |
-| `created_at`    | timestamp   | Snapshot time                |
+| Column          | Type        | Description                                             |
+| --------------- | ----------- | ------------------------------------------------------- |
+| `puuid`         | varchar(78) | Player reference                                        |
+| `league_id`     | varchar(36) | Nullable ID; current by-PUUID responses may omit it     |
+| `queue_type`    | varchar(32) | Riot queue type                                         |
+| `tier`          | varchar(16) | IRON, BRONZE, ... CHALLENGER                            |
+| `rank`          | varchar(4)  | I, II, III, IV                                          |
+| `league_points` | int         | LP (0-100)                                              |
+| `wins`          | int         | Ranked wins at snapshot time                            |
+| `losses`        | int         | Ranked losses at snapshot time                          |
+| `created_at`    | timestamp   | Snapshot time                                           |
 
 **Note**: No primary key - uses composite index on `(puuid, created_at DESC)` for current rank queries.
 

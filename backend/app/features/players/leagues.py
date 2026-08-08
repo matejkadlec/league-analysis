@@ -45,11 +45,11 @@ class PlayerLeague(Base):
     )
 
     # League information
-    league_id: Mapped[str] = mapped_column(
+    league_id: Mapped[Optional[str]] = mapped_column(
         String(36),
-        nullable=False,
+        nullable=True,
         index=True,
-        comment="Riot league ID (UUID)",
+        comment="Optional Riot league ID (omitted by current by-PUUID responses)",
     )
 
     queue_type: Mapped[str] = mapped_column(

@@ -221,11 +221,13 @@ class LeagueEntryDTO(BaseModel):
     with other league endpoints that may return them.
     """
 
-    league_id: str = Field(..., alias="leagueId")
+    # The live by-PUUID response can omit leagueId even though Riot's portal
+    # still lists the field. Keep the remaining ranked fields strict.
+    league_id: str | None = Field(default=None, alias="leagueId")
     # summonerId/summonerName are NOT returned by the by-puuid endpoint
     summoner_id: str | None = Field(default=None, alias="summonerId")
     summoner_name: str | None = Field(default=None, alias="summonerName")
-    # puuid is returned by the by-puuid endpoint
+    # puuid can also be omitted because the requested PUUID is already in the path
     puuid: str | None = Field(default=None, alias="puuid")
     queue_type: str = Field(..., alias="queueType")
     tier: str

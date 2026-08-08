@@ -11,11 +11,11 @@ from typing import List, Optional
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import TEST_PUUID, get_riot_api_key
+from app.core.config import TEST_PUUID
 from app.core.riot_api.client import APICallRecord, RiotAPIClient
 from app.core.riot_api.constants import Platform, get_region_by_platform
-from app.core.riot_api.errors import AuthenticationError
 from app.features.jobs.base import BaseJob
+from app.features.jobs.error_handling import is_riot_api_key_error
 from app.features.jobs.models import ExecutionType
 from app.features.players.service import PlayerService
 
@@ -24,16 +24,6 @@ logger = structlog.get_logger(__name__)
 # Test loop constants
 _MAX_ITERATIONS = 60  # 1 hour (60 × 1-minute intervals)
 _WAIT_SECONDS = 60  # seconds between API call batches
-
-
-def _is_api_key_error(error: Exception) -> bool:
-    error_str = str(error).lower()
-    return (
-        isinstance(error, AuthenticationError)
-        or "401" in error_str
-        or "invalid api key" in error_str
-        or "authentication" in error_str
-    )
 
 
 async def _interruptible_wait(job: BaseJob, db: AsyncSession, seconds: int) -> None:
@@ -88,7 +78,7 @@ class TestMatchFetcherJob(BaseJob):
         region = get_region_by_platform(platform)
         platform_enum = Platform(platform)
 
-        api_key = await get_riot_api_key(db)
+        api_key = await self.get_job_riot_api_key(db)
 
         async with RiotAPIClient(
             api_key=api_key,
@@ -134,8 +124,8 @@ class TestMatchFetcherJob(BaseJob):
                     )
 
                 except Exception as e:
-                    is_key_err = _is_api_key_error(e)
-                    self.record_error(str(e), is_api_key_error=is_key_err)
+                    is_key_err = is_riot_api_key_error(e)
+                    self.record_error(e, is_api_key_error=is_key_err)
                     logger.error(
                         "Test Match Fetcher API call failed",
                         iteration=iteration + 1,
@@ -184,7 +174,7 @@ class TestPlayerUpdaterJob(BaseJob):
         platform_enum = Platform(platform)
         region = get_region_by_platform(platform)
 
-        api_key = await get_riot_api_key(db)
+        api_key = await self.get_job_riot_api_key(db)
 
         async with RiotAPIClient(
             api_key=api_key,
@@ -213,8 +203,8 @@ class TestPlayerUpdaterJob(BaseJob):
                     )
 
                 except Exception as e:
-                    is_key_err = _is_api_key_error(e)
-                    self.record_error(str(e), is_api_key_error=is_key_err)
+                    is_key_err = is_riot_api_key_error(e)
+                    self.record_error(e, is_api_key_error=is_key_err)
                     logger.error(
                         "Test Player Updater API call failed",
                         iteration=iteration + 1,

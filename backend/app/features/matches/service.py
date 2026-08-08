@@ -45,6 +45,16 @@ if TYPE_CHECKING:
 logger = structlog.get_logger(__name__)
 
 
+def _must_abort_writer_sync(error: Exception) -> bool:
+    """Return whether a lower-level sync error must reach the owning job."""
+    from app.features.jobs.error_handling import is_database_job_error
+    from app.features.jobs.maintenance import RiotWriterMaintenanceActiveError
+
+    return is_database_job_error(error) or isinstance(
+        error, RiotWriterMaintenanceActiveError
+    )
+
+
 async def _ensure_riot_writer_maintenance_is_inactive(session: AsyncSession) -> None:
     """Avoid importing the jobs package until a direct Riot-data write runs."""
     from app.features.jobs.maintenance import ensure_riot_writer_maintenance_is_inactive
@@ -2113,6 +2123,8 @@ class MatchService:
             except AuthenticationError, ForbiddenError, RateLimitError:
                 raise
             except Exception as e:
+                if _must_abort_writer_sync(e):
+                    raise
                 logger.warning(
                     "Queue sync failed, continuing with next queue",
                     puuid=puuid,
@@ -2184,12 +2196,10 @@ class MatchService:
                 if rate_limiter:
                     can_proceed = await rate_limiter.acquire()
                     if not can_proceed:
-                        logger.warning(
-                            "Rate limit exceeded, stopping queue sync",
-                            puuid=puuid,
-                            queue_id=queue_id,
+                        raise RateLimitError(
+                            "Local rate limiter capacity unavailable",
+                            status_code=429,
                         )
-                        break
 
                 match_list_dto = await riot_client.get_match_list_by_puuid(
                     puuid=puuid,
@@ -2256,14 +2266,10 @@ class MatchService:
                             if rate_limiter:
                                 can_proceed = await rate_limiter.acquire()
                                 if not can_proceed:
-                                    logger.warning(
-                                        "Rate limit exceeded during timeline-only backfill",
-                                        puuid=puuid,
-                                        queue_id=queue_id,
-                                        match_id=match_id,
+                                    raise RateLimitError(
+                                        "Local rate limiter capacity unavailable",
+                                        status_code=429,
                                     )
-                                    keep_fetching = False
-                                    break
 
                             timeline_request_attempted = True
                             timeline_payload = await riot_client.get_match_timeline(
@@ -2273,6 +2279,8 @@ class MatchService:
                         except AuthenticationError, ForbiddenError, RateLimitError:
                             raise
                         except Exception as timeline_error:
+                            if _must_abort_writer_sync(timeline_error):
+                                raise
                             logger.warning(
                                 "Timeline-only fetch failed",
                                 puuid=puuid,
@@ -2340,14 +2348,10 @@ class MatchService:
                     if rate_limiter:
                         can_proceed = await rate_limiter.acquire()
                         if not can_proceed:
-                            logger.warning(
-                                "Rate limit exceeded during match fetch",
-                                puuid=puuid,
-                                queue_id=queue_id,
-                                match_id=match_id,
+                            raise RateLimitError(
+                                "Local rate limiter capacity unavailable",
+                                status_code=429,
                             )
-                            keep_fetching = False
-                            break
 
                     match_dto = await riot_client.get_match(match_id, region=region)
 
@@ -2369,14 +2373,10 @@ class MatchService:
                         if rate_limiter:
                             can_proceed = await rate_limiter.acquire()
                             if not can_proceed:
-                                logger.warning(
-                                    "Rate limit exceeded during timeline fetch",
-                                    puuid=puuid,
-                                    queue_id=queue_id,
-                                    match_id=match_id,
+                                raise RateLimitError(
+                                    "Local rate limiter capacity unavailable",
+                                    status_code=429,
                                 )
-                                keep_fetching = False
-                                break
 
                         timeline_request_attempted = True
                         timeline_payload = await riot_client.get_match_timeline(
@@ -2386,6 +2386,8 @@ class MatchService:
                     except AuthenticationError, ForbiddenError, RateLimitError:
                         raise
                     except Exception as timeline_error:
+                        if _must_abort_writer_sync(timeline_error):
+                            raise
                         logger.warning(
                             "Timeline fetch failed, storing match without timeline",
                             puuid=puuid,
@@ -2412,6 +2414,8 @@ class MatchService:
                 except AuthenticationError, ForbiddenError, RateLimitError:
                     raise
                 except Exception as e:
+                    if _must_abort_writer_sync(e):
+                        raise
                     logger.warning(
                         "Error syncing match",
                         puuid=puuid,

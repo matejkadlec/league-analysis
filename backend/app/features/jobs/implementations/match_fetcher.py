@@ -3,12 +3,16 @@ from typing import List
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import get_riot_api_key
 from app.core.riot_api.client import APICallRecord, RiotAPIClient
 from app.core.riot_api.db_rate_limiter import DBRateLimiter, RateLimitComponent
-from app.core.riot_api.errors import AuthenticationError, RateLimitError
-from app.features.jobs.base import BaseJob
-from app.features.jobs.error_handling import RateLimitSignal
+from app.core.riot_api.errors import RateLimitError
+from app.features.jobs.base import BaseJob, JobStopSignal
+from app.features.jobs.error_handling import (
+    RateLimitSignal,
+    is_database_job_error,
+    is_riot_api_key_error,
+)
+from app.features.jobs.maintenance import RiotWriterMaintenanceActiveError
 from app.features.jobs.queue_config import get_enabled_match_fetcher_queue_ids
 from app.features.matches.service import MatchService
 from app.features.players.models import Player
@@ -18,19 +22,10 @@ from app.features.players.service import PlayerService
 logger = structlog.get_logger(__name__)
 
 
-def _is_api_key_error(error: Exception) -> bool:
-    """Check if an error is related to API key authentication."""
-    error_str = str(error).lower()
-    return (
-        isinstance(error, AuthenticationError)
-        or "401" in error_str
-        or "invalid api key" in error_str
-        or "authentication" in error_str
-    )
-
-
 class MatchFetcherJob(BaseJob):
     """Job to fetch matches for tracked players and update their leagues."""
+
+    recorded_errors_are_fatal = False
 
     def __init__(self, job_config_id: int, triggered_by: str = "system"):
         super().__init__(job_config_id, triggered_by)
@@ -63,7 +58,7 @@ class MatchFetcherJob(BaseJob):
 
         # Initialize services
         # Retrieve API key dynamically (DB prioritized > Env fallback)
-        api_key = await get_riot_api_key(db)
+        api_key = await self.get_job_riot_api_key(db)
 
         player_service = PlayerService(db)
         match_service = MatchService(db)
@@ -101,14 +96,21 @@ class MatchFetcherJob(BaseJob):
                             retry_after=error.retry_after,
                             message="Rate limit reached while fetching matches",
                         ) from error
+                    except RiotWriterMaintenanceActiveError as error:
+                        await db.rollback()
+                        raise JobStopSignal(reason="riot_maintenance") from error
                     except Exception as e:
-                        error_msg = str(e)
-                        is_api_key_err = _is_api_key_error(e)
+                        is_api_key_err = is_riot_api_key_error(e)
                         logger.error(
                             "Error processing player",
                             puuid=player.puuid,
-                            error=error_msg,
+                            error_type=type(e).__name__,
                         )
+                        if is_database_job_error(e):
+                            await db.rollback()
+                            raise
+                        if is_api_key_err and self.has_api_key_error():
+                            break
                         self.record_error(
                             e,
                             operation="player synchronization",
@@ -121,6 +123,7 @@ class MatchFetcherJob(BaseJob):
                                 "API key error detected, stopping job execution"
                             )
                             break
+                        await db.rollback()
                         continue
             finally:
                 # Release rate limiter when done
@@ -182,21 +185,19 @@ class MatchFetcherJob(BaseJob):
             # Acquire rate limit before league API call
             can_proceed = await rate_limiter.acquire()
             if not can_proceed:
-                logger.warning(
-                    "Rate limit exceeded, skipping league update",
-                    puuid=player.puuid,
+                raise RateLimitSignal(
+                    message="Local rate limiter capacity unavailable during league update"
                 )
-                return
 
             league_updated = await player_service.update_player_league(
                 player_model, riot_client
             )
 
-            # Record the request
-            await rate_limiter.record_request()
-
             # Commit league updates
             await db.commit()
+
+            # Record the request only after the domain transaction is durable.
+            await rate_limiter.record_request()
             if league_updated:
                 self.metrics["records_updated"] += 1
                 logger.info(
@@ -204,16 +205,18 @@ class MatchFetcherJob(BaseJob):
                     puuid=player.puuid,
                     game_name=player.game_name,
                 )
-        except RateLimitError:
+        except RateLimitError, RateLimitSignal:
             raise
         except Exception as e:
-            error_msg = str(e)
-            is_api_key_err = _is_api_key_error(e)
+            is_api_key_err = is_riot_api_key_error(e)
             logger.error(
                 "Error updating player league",
                 puuid=player.puuid,
-                error=error_msg,
+                error_type=type(e).__name__,
             )
+            if is_database_job_error(e):
+                await db.rollback()
+                raise
             self.record_error(
                 e,
                 operation="player league update",
@@ -222,3 +225,4 @@ class MatchFetcherJob(BaseJob):
             )
             if is_api_key_err:
                 raise  # Re-raise to stop processing
+            await db.rollback()
