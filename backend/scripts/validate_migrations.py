@@ -16,7 +16,7 @@ from sqlalchemy import URL, create_engine, text
 
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
 PROJECT_ROOT = BACKEND_ROOT.parent
-EXPECTED_REVISION = "20260808_0003"
+EXPECTED_REVISION = "20260808_0004"
 EXPECTED_TABLES = 22
 EXPECTED_ENUMS = 6
 EXPECTED_TRIGGERS = 1
@@ -96,14 +96,34 @@ def migration_environment(database: str) -> dict[str, str]:
     return environment
 
 
-def run_upgrade(database: str) -> None:
-    """Apply every revision through the locked repository migration command."""
+def run_upgrade(database: str, revision: str = "head") -> None:
+    """Apply revisions through the locked repository migration command."""
     subprocess.run(
-        [sys.executable, "scripts/migrate.py", "upgrade", "head"],
+        [sys.executable, "scripts/migrate.py", "upgrade", revision],
         cwd=BACKEND_ROOT,
         env=migration_environment(database),
         check=True,
     )
+
+
+def seed_legacy_match(database: str) -> None:
+    """Create one pre-LGA-42 match row to exercise timestamp backfill."""
+    url = administration_url().set(database=database)
+    engine = create_engine(url)
+    try:
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "INSERT INTO core.matches "
+                    "(match_id, game_mode, game_type, queue_id, game_version, "
+                    "map_id, platform, game_start_timestamp, game_end_timestamp, "
+                    "game_duration) VALUES "
+                    "('EUN1_VALIDATION', 'CLASSIC', 'MATCHED_GAME', 420, "
+                    "'15.24.1', 11, 'EUN1', 1700000000000, 1700001800000, 1800)"
+                )
+            )
+    finally:
+        engine.dispose()
 
 
 def validate_catalog(database: str) -> None:
@@ -159,6 +179,32 @@ def validate_catalog(database: str) -> None:
                     "AND column_name = 'league_id'"
                 )
             ).scalar_one()
+            match_timestamp_column_count = connection.execute(
+                text(
+                    "SELECT COUNT(*) FROM information_schema.columns "
+                    "WHERE table_schema = 'core' AND table_name = 'matches' "
+                    "AND column_name IN "
+                    "('game_creation_timestamp', 'game_start_timestamp_source') "
+                    "AND is_nullable = 'NO' AND column_default IS NULL"
+                )
+            ).scalar_one()
+            match_timestamp_constraint_count = connection.execute(
+                text(
+                    "SELECT COUNT(*) FROM pg_constraint con "
+                    "JOIN pg_class cls ON cls.oid = con.conrelid "
+                    "JOIN pg_namespace ns ON ns.oid = cls.relnamespace "
+                    "WHERE ns.nspname = 'core' "
+                    "AND cls.relname = 'matches' "
+                    "AND con.conname = 'ck_matches_start_timestamp_source'"
+                )
+            ).scalar_one()
+            legacy_timestamp_row = connection.execute(
+                text(
+                    "SELECT game_creation_timestamp, game_start_timestamp, "
+                    "game_start_timestamp_source FROM core.matches "
+                    "WHERE match_id = 'EUN1_VALIDATION'"
+                )
+            ).one()
     finally:
         engine.dispose()
 
@@ -168,6 +214,9 @@ def validate_catalog(database: str) -> None:
         enum_count,
         trigger_count,
         league_id_nullable,
+        match_timestamp_column_count,
+        match_timestamp_constraint_count,
+        tuple(legacy_timestamp_row),
     )
     expected = (
         EXPECTED_REVISION,
@@ -175,6 +224,9 @@ def validate_catalog(database: str) -> None:
         EXPECTED_ENUMS,
         EXPECTED_TRIGGERS,
         "YES",
+        2,
+        1,
+        (1700000000000, 1700000000000, "legacy_game_creation"),
     )
     if observed != expected:
         raise RuntimeError(f"Unexpected migrated schema inventory: {observed}")
@@ -246,6 +298,8 @@ def main() -> int:
     try:
         create_database(url, database)
         created = True
+        run_upgrade(database, "20260808_0003")
+        seed_legacy_match(database)
         run_upgrade(database)
         validate_catalog(database)
         asyncio.run(verify_application_database_access(database))

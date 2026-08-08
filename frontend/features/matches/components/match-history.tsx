@@ -35,6 +35,7 @@ import {
   getRuneStyleIconUrl,
   getRuneStyleName,
 } from "@/lib/core/data-dragon";
+import { useDDragonVersion } from "@/lib/core/data-dragon-context";
 import {
   Tooltip,
   TooltipContent,
@@ -188,6 +189,7 @@ function MatchRow({
   match: MatchWithPlayerData;
   playerPuuid: string;
 }) {
+  const ddragonVersion = useDDragonVersion();
   const participant = match.player_participant;
   const opponent = match.lane_opponent;
   const result = getResultInfo(match);
@@ -234,7 +236,7 @@ function MatchRow({
   // Render summoner spell icon - bigger and with border radius
   const renderSummonerSpell = (spellId: number | null | undefined) => {
     if (!spellId) return <div className="h-5 w-5 bg-muted rounded" />;
-    const url = getSummonerSpellIconUrlById(spellId);
+    const url = getSummonerSpellIconUrlById(spellId, ddragonVersion);
     if (!url) return <div className="h-5 w-5 bg-muted rounded" />;
     return (
       <div className="relative rounded-sm h-5 w-5 overflow-hidden shrink-0 border border-black/30">
@@ -438,7 +440,7 @@ function MatchRow({
         title={getChampionDisplayName(champ.champion_name)}
       >
         <Image
-          src={getChampionIconUrl(champ.champion_name)}
+          src={getChampionIconUrl(champ.champion_name, ddragonVersion)}
           alt={getChampionDisplayName(champ.champion_name)}
           fill
           className="object-cover"
@@ -514,7 +516,10 @@ function MatchRow({
               <div className="relative h-[52px] w-[52px] rounded overflow-hidden shrink-0">
                 {participant && (
                   <Image
-                    src={getChampionIconUrl(participant.champion_name)}
+                    src={getChampionIconUrl(
+                      participant.champion_name,
+                      ddragonVersion,
+                    )}
                     alt={participant.champion_name}
                     fill
                     className="object-cover"
@@ -577,7 +582,10 @@ function MatchRow({
               <div className="relative h-[52px] w-[52px] rounded overflow-hidden shrink-0">
                 {opponent ? (
                   <Image
-                    src={getChampionIconUrl(opponent.champion_name)}
+                    src={getChampionIconUrl(
+                      opponent.champion_name,
+                      ddragonVersion,
+                    )}
                     alt={opponent.champion_name}
                     fill
                     className="object-cover"

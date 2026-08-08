@@ -112,6 +112,9 @@ Use this shared structure for user-action dialogs across frontend features.
 - `"use client"` for hooks/events/browser APIs
 - TanStack Query for all data fetching
 - Handle loading/error/success states
+- Resolve the current Data Dragon version server-side through the cached
+  manifest helper and consume it through `useDDragonVersion()` for versioned
+  assets. Keep the reviewed fallback and null behavior for unknown IDs.
 - Features expose public APIs via `index.ts`
 - Use Next.js `proxy.ts` file convention (not `middleware.ts`)
 - **Every interactive element** (`button`, `a`, `[role="button"]`, etc.) must have `cursor: pointer` — enforced globally via `globals.css`, no per-element override needed

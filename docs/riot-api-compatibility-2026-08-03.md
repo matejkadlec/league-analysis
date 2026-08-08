@@ -201,6 +201,29 @@ dataset under the local meanings. Current rotating-mode IDs such as `900` ARURF,
 | C-13 | Current docs list the replay route as a future endpoint. | The route is present in the current official MATCH-V5 API, but remains unimplemented and unused locally. | Keep it explicitly classified as available/not implemented; add code only with a product requirement and verified response contract. | **Low.** Documentation accuracy. |
 | C-14 | No authenticated current fixture was available during this audit. | Strict response and event assumptions could not be confirmed against a successful protected response. | Make current sanitized Account, Summoner, Match, Timeline, and League fixtures an explicit prerequisite for DTO/timeline implementation. | **Gate for C-02/C-05/C-07.** Do not infer payloads. |
 
+## LGA-42 implementation resolution (2026-08-08)
+
+LGA-42 completed the audited runtime scope with sanitized protected fixtures:
+
+- C-01 marks existing timestamps as explicit legacy creation-time fallbacks and
+  stores separate creation/actual-start values for new or refetched matches.
+- C-02/C-07 preserve PUUID identity, tolerate optional current fields, retain
+  known Riot IDs, and accept unknown extra participant fields.
+- C-03/C-10/C-11 update routing/queue catalogs and fail closed on invalid
+  platform, queue, type, pagination, and epoch inputs. Product support remains
+  limited to queues 400, 420, 440, and 450.
+- C-04/C-05 retain historical Atakhan data while routing unexpected current
+  objectives through logged generic retention.
+- C-06 resolves the current Data Dragon manifest with caching and a reviewed
+  fallback.
+- C-08/C-09 keep cross-component database priority while tracking header-driven
+  app/method windows by routing and service scope without extending an active
+  window on every response.
+- C-12 remains intentional: the current product has no promotion-series
+  consumer, and the legacy by-summoner DTO stays separate.
+
+The replay route remains documented and intentionally unimplemented (C-13).
+
 ## Required implementation scope and order
 
 The follow-up implementation should proceed in this order:

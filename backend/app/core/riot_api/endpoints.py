@@ -1,10 +1,11 @@
 """Riot API endpoint definitions and routing information."""
 
 from typing import Dict, List, Optional
+from urllib.parse import quote, urlencode
 
 import structlog
 
-from .constants import Platform, QueueType, Region
+from .constants import MatchType, Platform, QueueType, Region
 
 logger = structlog.get_logger(__name__)
 
@@ -46,17 +47,24 @@ class RiotAPIEndpoints:
     ) -> str:
         """Get account by Riot ID endpoint."""
         base_url = self.get_base_url(region)
-        return f"{base_url}/riot/account/v1/accounts/by-riot-id/{game_name}/{tag_line}"
+        encoded_name = quote(game_name, safe="")
+        encoded_tag = quote(tag_line, safe="")
+        return (
+            f"{base_url}/riot/account/v1/accounts/by-riot-id/"
+            f"{encoded_name}/{encoded_tag}"
+        )
 
     def account_by_puuid(self, puuid: str, region: Optional[Region] = None) -> str:
         """Get account by PUUID endpoint."""
         base_url = self.get_base_url(region)
-        return f"{base_url}/riot/account/v1/accounts/by-puuid/{puuid}"
+        return f"{base_url}/riot/account/v1/accounts/by-puuid/{quote(puuid, safe='')}"
 
     def summoner_by_puuid(self, puuid: str, platform: Optional[Platform] = None) -> str:
         """Get summoner by PUUID endpoint."""
         platform_url = self.get_platform_url(platform)
-        return f"{platform_url}/lol/summoner/v4/summoners/by-puuid/{puuid}"
+        return (
+            f"{platform_url}/lol/summoner/v4/summoners/by-puuid/{quote(puuid, safe='')}"
+        )
 
     # Match endpoints (Regional)
     def match_list_by_puuid(
@@ -65,41 +73,40 @@ class RiotAPIEndpoints:
         start: int = 0,
         count: int = 20,
         queue: Optional[QueueType] = None,
-        type: Optional[str] = None,
+        type: Optional[MatchType] = None,
         start_time: Optional[int] = None,
         end_time: Optional[int] = None,
         region: Optional[Region] = None,
     ) -> str:
         """Get match list by PUUID endpoint."""
         base_url = self.get_base_url(region)
-        url = f"{base_url}/lol/match/v5/matches/by-puuid/{puuid}/ids"
+        encoded_puuid = quote(puuid, safe="")
+        url = f"{base_url}/lol/match/v5/matches/by-puuid/{encoded_puuid}/ids"
 
-        params: list[str] = []
-        params.append(f"start={start}")
-        params.append(f"count={count}")
+        params: dict[str, int | str] = {"start": start, "count": count}
 
         if queue:
-            params.append(f"queue={queue.value}")
+            params["queue"] = queue.value
         if type:
-            params.append(f"type={type}")
-        if start_time:
-            params.append(f"startTime={start_time}")
-        if end_time:
-            params.append(f"endTime={end_time}")
+            params["type"] = type.value
+        if start_time is not None:
+            params["startTime"] = start_time
+        if end_time is not None:
+            params["endTime"] = end_time
 
-        return f"{url}?{'&'.join(params)}"
+        return f"{url}?{urlencode(params)}"
 
     def match_by_id(self, match_id: str, region: Optional[Region] = None) -> str:
         """Get match by ID endpoint."""
         base_url = self.get_base_url(region)
-        return f"{base_url}/lol/match/v5/matches/{match_id}"
+        return f"{base_url}/lol/match/v5/matches/{quote(match_id, safe='')}"
 
     def match_timeline_by_id(
         self, match_id: str, region: Optional[Region] = None
     ) -> str:
         """Get match timeline by ID endpoint."""
         base_url = self.get_base_url(region)
-        return f"{base_url}/lol/match/v5/matches/{match_id}/timeline"
+        return f"{base_url}/lol/match/v5/matches/{quote(match_id, safe='')}/timeline"
 
     # League endpoints (Platform)
     def league_entries_by_summoner_id(
@@ -107,14 +114,17 @@ class RiotAPIEndpoints:
     ) -> str:
         """Get league entries by encrypted Summoner ID endpoint."""
         platform_url = self.get_platform_url(platform)
-        return f"{platform_url}/lol/league/v4/entries/by-summoner/{summoner_id}"
+        return (
+            f"{platform_url}/lol/league/v4/entries/by-summoner/"
+            f"{quote(summoner_id, safe='')}"
+        )
 
     def league_entries_by_puuid(
         self, puuid: str, platform: Optional[Platform] = None
     ) -> str:
         """Get league entries by encrypted PUUID endpoint."""
         platform_url = self.get_platform_url(platform)
-        return f"{platform_url}/lol/league/v4/entries/by-puuid/{puuid}"
+        return f"{platform_url}/lol/league/v4/entries/by-puuid/{quote(puuid, safe='')}"
 
 
 def parse_rate_limit_header(header_value: str) -> List[Dict[str, int]]:

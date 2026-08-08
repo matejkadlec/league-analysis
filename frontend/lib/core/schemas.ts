@@ -24,7 +24,12 @@ export type Player = z.infer<typeof PlayerSchema>;
 export const MatchSchema = z.object({
   match_id: z.string(),
   platform: z.string(),
+  game_creation_timestamp: z.number(),
   game_start_timestamp: z.number(),
+  game_start_timestamp_source: z.enum([
+    "riot_game_start",
+    "legacy_game_creation",
+  ]),
   game_duration: z.number(),
   queue_id: z.number(),
   game_version: z.string(),

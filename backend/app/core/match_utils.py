@@ -99,7 +99,9 @@ async def _upsert_match(
         match = Match(
             match_id=match_id,
             platform=platform_id.upper(),
+            game_creation_timestamp=match_dto.info.game_creation_timestamp,
             game_start_timestamp=match_dto.info.game_start_timestamp,
+            game_start_timestamp_source="riot_game_start",
             game_end_timestamp=match_dto.info.game_end_timestamp,
             game_duration=match_dto.info.game_duration,
             game_mode=match_dto.info.game_mode,
@@ -115,29 +117,33 @@ async def _upsert_match(
         await db.merge(match)
 
         for participant in match_dto.info.participants:
-            p_game_name = (
-                participant.game_name or participant.summoner_name or "Unknown"
-            )
-            p_tag_line = participant.tag_line or (
-                platform_id.replace("1", "") if platform_id else "RIOT"
-            )
-            if not p_game_name or p_game_name == "":
-                p_game_name = "Unknown"
-            if not p_tag_line or p_tag_line == "":
-                p_tag_line = "RIOT"
-
             existing_player_result = await db.execute(
                 select(Player).where(Player.puuid == participant.puuid)
             )
             existing_player = existing_player_result.scalar_one_or_none()
+
+            p_game_name = participant.game_name or (
+                existing_player.game_name if existing_player else None
+            )
+            p_tag_line = participant.tag_line or (
+                existing_player.tag_line if existing_player else None
+            )
+            p_game_name = p_game_name or participant.summoner_name or "Unknown"
+            p_tag_line = p_tag_line or (
+                platform_id.replace("1", "") if platform_id else "RIOT"
+            )
 
             player_record = Player(
                 puuid=participant.puuid,
                 game_name=p_game_name,
                 tag_line=p_tag_line,
                 platform=platform_id.lower(),
-                profile_icon_id=participant.profile_icon or 29,
-                summoner_level=participant.summoner_level or 0,
+                profile_icon_id=participant.profile_icon
+                or (existing_player.profile_icon_id if existing_player else None)
+                or 29,
+                summoner_level=participant.summoner_level
+                or (existing_player.summoner_level if existing_player else None)
+                or 0,
                 is_tracked=existing_player.is_tracked if existing_player else False,
             )
             await db.merge(player_record)

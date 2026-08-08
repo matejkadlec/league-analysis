@@ -1,7 +1,7 @@
 """Pydantic schemas for Match model."""
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -12,8 +12,17 @@ class MatchBase(BaseModel):
     platform: str = Field(
         ..., max_length=4, description="Platform where the match was played"
     )
+    game_creation_timestamp: int = Field(
+        ..., description="Loading-screen timestamp in milliseconds since epoch"
+    )
     game_start_timestamp: int = Field(
-        ..., description="Game creation timestamp in milliseconds since epoch"
+        ..., description="Effective game start timestamp in milliseconds since epoch"
+    )
+    game_start_timestamp_source: Literal["riot_game_start", "legacy_game_creation"] = (
+        Field(
+            ...,
+            description="Whether the effective start is actual or a legacy fallback",
+        )
     )
     game_duration: int = Field(..., ge=0, description="Game duration in seconds")
     queue_id: int = Field(..., description="Queue type ID")

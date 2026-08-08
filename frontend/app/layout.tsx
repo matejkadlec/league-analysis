@@ -8,6 +8,7 @@ import { SidebarNav } from "@/components/sidebar-nav";
 import { HeaderMessages } from "@/components/header-messages";
 import { CookieConsentManager } from "@/features/cookie-consent";
 import { Toaster } from "sonner";
+import { resolveDDragonVersion } from "@/lib/core/data-dragon-version";
 
 const montserrat = Montserrat({
   subsets: ["latin"],
@@ -54,11 +55,13 @@ export const metadata: Metadata = {
   robots: robotsMetadata,
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const ddragonVersion = await resolveDDragonVersion();
+
   return (
     <html lang="en" suppressHydrationWarning>
       <body
@@ -70,7 +73,7 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <Providers>
+          <Providers ddragonVersion={ddragonVersion}>
             <HeaderMessages />
             <div className="flex min-h-screen">
               <SidebarNav />

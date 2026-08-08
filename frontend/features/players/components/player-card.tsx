@@ -17,6 +17,7 @@ import {
   getProfileIconUrl,
   getProfileIconFallbackUrl,
 } from "@/lib/core/data-dragon";
+import { useDDragonVersion } from "@/lib/core/data-dragon-context";
 import { toast } from "sonner";
 import { useState } from "react";
 import { useAuth } from "@/features/auth";
@@ -91,6 +92,7 @@ function formatRelativeTime(dateString: string | null | undefined): string {
 }
 
 export function PlayerCard({ player, onRefreshAll }: PlayerCardProps) {
+  const ddragonVersion = useDDragonVersion();
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const userId = user?.id;
@@ -104,8 +106,8 @@ export function PlayerCard({ player, onRefreshAll }: PlayerCardProps) {
   const profileIconKey = `${player.puuid}:${profileIconId}`;
   const hasFailedProfileIcon = failedProfileIconKey === profileIconKey;
   const profileIconSrc = hasFailedProfileIcon
-    ? getProfileIconFallbackUrl(profileIconId)
-    : getProfileIconUrl(profileIconId);
+    ? getProfileIconFallbackUrl(profileIconId, ddragonVersion)
+    : getProfileIconUrl(profileIconId, ddragonVersion);
 
   // Fetch player league
   const { data: league, refetch: refetchLeague } = useQuery({

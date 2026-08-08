@@ -141,7 +141,9 @@ erDiagram
         string game_version
         int map_id
         string platform
+        int game_creation_timestamp
         int game_start_timestamp
+        string game_start_timestamp_source
         int game_end_timestamp
         int game_duration
         boolean early_surrender
@@ -511,12 +513,22 @@ Central player registry using Riot PUUID as primary key.
 
 Match metadata from Riot API.
 
-| Column           | Type        | Description                      |
-| ---------------- | ----------- | -------------------------------- |
-| `match_id`       | varchar(20) | Primary key (e.g., EUN1_1234567) |
-| `queue_id`       | int         | 420=Solo/Duo, 440=Flex           |
-| `game_version`   | varchar(32) | Patch (e.g., "26.1.123")         |
-| `fully_analyzed` | boolean     | All participants processed       |
+| Column                        | Type        | Description                                                     |
+| ----------------------------- | ----------- | --------------------------------------------------------------- |
+| `match_id`                    | varchar(20) | Primary key (e.g., EUN1_1234567)                                |
+| `queue_id`                    | int         | Product-supported: 400, 420, 440, or 450                        |
+| `game_version`                | varchar(32) | Patch (e.g., "16.15.1")                                         |
+| `game_creation_timestamp`     | bigint      | Riot `gameCreation`, when the loading screen began              |
+| `game_start_timestamp`        | bigint      | Actual start, or a legacy creation-time fallback                |
+| `game_start_timestamp_source` | varchar(32) | `riot_game_start` or `legacy_game_creation`                     |
+| `fully_analyzed`              | boolean     | All participants processed                                      |
+
+Revision `20260808_0004` copies the prior single timestamp into
+`game_creation_timestamp` and marks those rows `legacy_game_creation`; it does
+not invent an actual start or require a bulk provider refetch. Normal refetch
+and re-analysis paths replace both timestamps and mark `riot_game_start`.
+Ordering and analysis anchors continue to use the effective
+`game_start_timestamp`, whose source is therefore always inspectable.
 
 ### `core.match_participants`
 
@@ -548,6 +560,10 @@ Objective-focused timeline aggregates (1 row per participant per match).
 | `team_turrets_destroyed`    | int         | Team turret total from timeline events                          |
 | `team_dragons_slain`        | int         | Team dragon total from timeline events                          |
 | `objective_events`          | jsonb       | Compact objective event log (`t`,`o`,`r`, optional `l`,`s`,`m`) |
+
+Dedicated Atakhan counters remain for historical rows and downgrade-safe data
+retention. Current 2026 ingestion sends an unexpected Atakhan event through the
+generic epic-monster map/event path, like any other unknown objective.
 
 ### `core.player_leagues`
 

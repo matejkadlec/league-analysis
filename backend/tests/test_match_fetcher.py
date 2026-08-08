@@ -61,7 +61,7 @@ class _NoopJob(BaseJob):
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("game_version", "expected_stored"),
-    [("26.15.1", 1), ("16.24.1", 0)],
+    [("16.15.1", 1), ("15.24.1", 0)],
 )
 async def test_queue_sync_accepts_current_release_and_stops_at_historical_match(
     game_version: str,
@@ -90,7 +90,7 @@ async def test_queue_sync_records_recoverable_match_failure_with_safe_context() 
     failures: list[tuple[str, Exception, dict[str, object]]] = []
 
     stored = await service._sync_single_queue_for_player(
-        riot_client=_QueueSyncClient("26.15.1"),
+        riot_client=_QueueSyncClient("16.15.1"),
         puuid="test-puuid",
         region="EUROPE",
         queue_id=420,

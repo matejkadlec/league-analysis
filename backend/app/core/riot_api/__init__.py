@@ -26,6 +26,7 @@ from .errors import (
 from .models import (
     AccountDTO,
     LeagueEntryDTO,
+    LegacyLeagueEntryDTO,
     MatchDTO,
     MatchListDTO,
     SummonerDTO,
@@ -52,5 +53,6 @@ __all__ = [
     "MatchListDTO",
     "MatchDTO",
     "LeagueEntryDTO",
+    "LegacyLeagueEntryDTO",
     "RiotAPIEndpoints",
 ]

@@ -19,7 +19,7 @@ If both numbers are close (~50%), matchmaking is fair. A large gap (>=3%) sugges
 
 ### Key Concept: Per-Match Anchors
 
-Each player's win rate is calculated from their **last 10 ranked matches at the time of the specific match they played with the current player**, not their current overall win rate. Each spine match has its own **anchor timestamp** — that match's `game_start_timestamp`.
+Each player's win rate is calculated from their **last 10 ranked matches at the time of the specific match they played with the current player**, not their current overall win rate. Each spine match has its own **anchor timestamp** — that match's effective `game_start_timestamp`. Its `game_start_timestamp_source` distinguishes an actual Riot start from a preserved legacy creation-time fallback.
 
 This means:
 

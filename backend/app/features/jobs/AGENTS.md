@@ -56,7 +56,8 @@ details. Keep it synchronized with job changes.
   negative configuration ID as their runtime key.
 - A regular manual trigger may force-stop its active test run before starting.
 - Keep Match Fetcher queue configuration in
-  `config_json.enabled_queue_ids`; an empty list disables the job.
+  `config_json.enabled_queue_ids`; validate it against the central product
+  allowlist (400, 420, 440, 450), and let an empty list disable the job.
 - Update APScheduler immediately after configuration changes through
   `sync_job_configuration()`.
 - Preserve Riot API throttling and priority rules from
