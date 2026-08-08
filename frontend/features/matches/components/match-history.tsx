@@ -36,6 +36,7 @@ import {
   getRuneStyleName,
 } from "@/lib/core/data-dragon";
 import { useDDragonVersion } from "@/lib/core/data-dragon-context";
+import { getMatchHistoryErrorMessage } from "../utils/match-history-error";
 import {
   Tooltip,
   TooltipContent,
@@ -950,24 +951,10 @@ export function MatchHistory({ puuid, lastUpdated }: MatchHistoryProps) {
   }
 
   if (error || (response && !response.success)) {
-    let errorMessage = "Failed to load matches";
-
-    if (error instanceof Error) {
-      errorMessage = error.message;
-    } else if (response && !response.success && response.error) {
-      errorMessage =
-        typeof response.error === "object" && "message" in response.error
-          ? (response.error as { message: string }).message
-          : String(response.error);
-    }
-
-    if (
-      errorMessage.includes("Network Error") ||
-      errorMessage.includes("ERR_NETWORK")
-    ) {
-      errorMessage =
-        "Network connection failed. Please check your internet connection.";
-    }
+    const errorMessage = getMatchHistoryErrorMessage(
+      error,
+      response && !response.success ? response.error : null,
+    );
 
     const isNotFound =
       errorMessage.toLowerCase().includes("not found") ||

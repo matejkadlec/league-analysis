@@ -115,9 +115,16 @@ else
   debug_state='unset'
 fi
 printf 'psql:%s:%s\n' "$database" "$debug_state" >> "$LGA_RUN_TEST_CALL_LOG"
+exit "${LGA_RUN_TEST_PSQL_STATUS:-1}"
+EOF
+
+cat > "$test_directory/uv" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf 'uv:%s\n' "$*" >> "$LGA_RUN_TEST_CALL_LOG"
 exit 1
 EOF
-chmod 700 "$test_directory/lsof" "$test_directory/ss" "$test_directory/fuser" "$test_directory/psql"
+chmod 700 "$test_directory/lsof" "$test_directory/ss" "$test_directory/fuser" "$test_directory/psql" "$test_directory/uv"
 
 pid_is_alive() {
   local pid="$1"
@@ -168,8 +175,9 @@ run_case() {
   local expected_database='worktree_dotenv_database'
   local expected_debug_state='unset'
   local use_process_environment="${LGA_RUN_TEST_USE_PROCESS_ENV:-0}"
+  local psql_status="${LGA_RUN_TEST_PSQL_STATUS:-1}"
 
-  mkdir -p "$case_directory"
+  mkdir -p "$case_directory/backend"
   cp "$run_script" "$case_directory/run.sh"
   chmod 700 "$case_directory/run.sh"
   cat > "$case_directory/.env" <<'EOF'
@@ -200,6 +208,7 @@ EOF
 
   set +e
   LGA_RUN_TEST_LISTENER_LOOKUP="$listener_lookup" \
+    LGA_RUN_TEST_PSQL_STATUS="$psql_status" \
     LGA_RUN_USE_PROCESS_ENV="$use_process_environment" \
     POSTGRES_DB='intentional_process_override_database' \
     DEBUG='release' \
@@ -208,8 +217,15 @@ EOF
   status=$?
   set -e
 
-  [[ "$status" -eq 1 ]] || fail "$name should stop at the fake PostgreSQL check."
+  [[ "$status" -eq 1 ]] || fail "$name should stop before starting application services."
   grep -Fxq "psql:$expected_database:$expected_debug_state" "$call_log" || fail "$name did not use the expected local configuration."
+
+  if [ "$psql_status" -eq 0 ]; then
+    grep -Fxq 'uv:run python scripts/migrate.py upgrade head' "$call_log" || fail "$name did not run the locked migration command."
+    grep -Fq 'Database migration failed; backend startup was cancelled.' "$case_directory/output.log" || fail "$name did not explain the migration failure."
+  elif grep -q '^uv:' "$call_log"; then
+    fail "$name attempted migration after the PostgreSQL check failed."
+  fi
 
   for port in 3000 3001 8000 8001; do
     pid="$(printenv "LGA_RUN_TEST_PORT_${port}_PID")"
@@ -239,5 +255,6 @@ run_case frontend_override '3001 8000' lsof 3001
 run_case custom_ports '3001 8001' lsof 3001 8001
 run_case ss_fallback '3001 8001' ss 3001 8001
 LGA_RUN_TEST_USE_PROCESS_ENV=1 run_case intentional_process_override '3001 8001' lsof 3001 8001
+LGA_RUN_TEST_PSQL_STATUS=0 run_case migration_before_startup '3001 8001' lsof 3001 8001
 
-printf 'run.sh port cleanup regression passed.\n'
+printf 'run.sh port cleanup and migration-order regression passed.\n'

@@ -150,9 +150,10 @@ committed lock before development continues.
 ```
 
 `run.sh` creates `logs/` before redirecting output, loads the current
-worktree's protected `.env`, verifies the database connection, starts Uvicorn
-with reload, waits for the backend, installs frontend dependencies only when
-`node_modules` is absent, and starts Next.js. Defaults:
+worktree's protected `.env`, verifies the database connection, applies Alembic
+revisions through the locked migration runner, starts Uvicorn with reload only
+after migration succeeds, waits for the backend, installs frontend dependencies
+only when `node_modules` is absent, and starts Next.js. Defaults:
 
 - Frontend: <http://localhost:3000>
 - Backend: <http://localhost:8000>
@@ -177,7 +178,10 @@ this repository. LGA-10 owns the reviewed images, Compose/deployment wiring,
 migration ordering, health checks, network hardening, and production
 troubleshooting guidance; LGA-16 owns the backup, restore, rollback, and
 incident runbook. Until those tickets are complete, `./run.sh` remains the only
-supported application start command documented here for local development.
+supported application start command documented here for local development. It
+stops the selected local listeners, verifies PostgreSQL, applies reviewed
+Alembic revisions through the locked migration runner, and starts the backend
+only after migration succeeds.
 
 ## Git hooks and worktrees
 
@@ -302,4 +306,7 @@ through `backend/scripts/migrate.py`, which holds one PostgreSQL advisory lock
 for the full Alembic operation. Every model/schema change needs a reviewed
 revision and an update to `docs/database.md`. The initial baseline is
 intentionally non-reversible; recover from a verified backup rather than
-dropping application schemas.
+dropping application schemas. Local `./run.sh` performs the normal `upgrade
+head` before starting application writers; a populated database without an
+Alembic marker still requires the explicit adoption procedure in
+`docs/database.md`.

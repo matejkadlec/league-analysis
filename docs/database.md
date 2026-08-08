@@ -645,7 +645,9 @@ generation but never creates application tables at runtime.
    include PostgreSQL-only objects that autogeneration cannot represent.
 3. Apply the reviewed revision with `uv run python scripts/migrate.py upgrade head`.
    The command holds a session-scoped PostgreSQL advisory lock so two
-   application containers cannot race migrations.
+   application containers cannot race migrations. The supported local
+   `../run.sh` launcher runs this command after stopping the selected listeners
+   and before starting backend writers; it cancels startup on failure.
 4. Run `../test.sh -b` during implementation and the complete `../test.sh`
    before publication. The backend gate validates the baseline on a clean
    isolated database and checks async application access.

@@ -103,6 +103,8 @@ locked pre-commit installation.
   platform presentation, rank-style mapping, Top Champions pagination
   boundaries, and sign-in authentication errors, request timeouts,
   duplicate-submission prevention, and password visibility;
+- deterministic match-history service-error copy that distinguishes local API
+  reachability from the user's internet connection;
 - Next.js production build.
 
 The separate `cd frontend && npm run test:e2e` Playwright suite verifies the

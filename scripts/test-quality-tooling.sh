@@ -51,8 +51,8 @@ grep -Fqx "run_step 'Worktree tooling regression' \"\$repository_root/scripts/te
   || fail 'the authoritative gate must run worktree regressions.'
 grep -Fqx "run_step 'Card configuration contract regression' \"\$repository_root/scripts/test-card-configuration.sh\"" "$gate" \
   || fail 'the authoritative gate must run card configuration regressions.'
-grep -Fqx "run_step 'run.sh port cleanup regression' \"\$repository_root/scripts/test-run.sh\"" "$gate" \
-  || fail 'the authoritative gate must run run.sh port-cleanup regressions.'
+grep -Fqx "run_step 'run.sh startup-order regression' \"\$repository_root/scripts/test-run.sh\"" "$gate" \
+  || fail 'the authoritative gate must run run.sh startup-order regressions.'
 grep -Fqx "run_step 'Dependabot configuration' python3 \"\$repository_root/scripts/check-dependabot-config.py\"" "$gate" \
   || fail 'the authoritative gate must validate Dependabot configuration.'
 grep -Fqx "run_step 'GitHub governance configuration' \"\$repository_root/scripts/test-github-governance.sh\"" "$gate" \
