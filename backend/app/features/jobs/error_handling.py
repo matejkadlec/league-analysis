@@ -33,7 +33,7 @@ class RateLimitSignal(Exception):
     """
 
     def __init__(
-        self, retry_after: Optional[int] = None, message: str = "Rate limit hit"
+        self, retry_after: Optional[float] = None, message: str = "Rate limit hit"
     ):
         """Initialize rate limit signal.
 

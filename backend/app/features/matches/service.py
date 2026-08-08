@@ -1,7 +1,7 @@
 """Match service for handling match data operations."""
 
 import asyncio
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, cast
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, cast
 
 import structlog
 from sqlalchemy import desc, func, select
@@ -56,11 +56,17 @@ class MatchService:
     """Service for handling match data operations."""
 
     SUPPORTED_SYNC_QUEUE_IDS: tuple[int, ...] = (420, 440, 400, 450)
+    CURRENT_GAME_VERSION_PREFIX = "26."
 
     def __init__(self, db: AsyncSession):
         """Initialize match service with database session only."""
         self.db = db
         self.transformer = MatchTransformer()
+
+    @classmethod
+    def is_current_game_version(cls, game_version: str) -> bool:
+        """Whether a Riot match belongs to the supported current release year."""
+        return game_version.startswith(cls.CURRENT_GAME_VERSION_PREFIX)
 
     async def get_player_matches(
         self,
@@ -1881,11 +1887,11 @@ class MatchService:
                     if not match_dto:
                         continue
 
-                    # Season 16 filter: skip matches from Season 15 (Task 1)
+                    # Ignore historical matches outside the current release year.
                     game_version = match_dto.info.game_version
-                    if not game_version.startswith("16."):
+                    if not self.is_current_game_version(game_version):
                         logger.debug(
-                            "Skipping Season 15 match",
+                            "Skipping historical match",
                             match_id=match_id,
                             game_version=game_version,
                         )
@@ -2056,6 +2062,7 @@ class MatchService:
         player: Any,
         rate_limiter: Optional[DBRateLimiter] = None,
         enabled_queue_ids: Optional[list[int]] = None,
+        on_failure: Optional[Callable[[str, Exception, dict[str, Any]], None]] = None,
     ) -> int:
         """
         Sync matches for a player from Riot API (Current Season).
@@ -2100,8 +2107,11 @@ class MatchService:
                     region=region,
                     queue_id=queue_id,
                     rate_limiter=rate_limiter,
+                    on_failure=on_failure,
                 )
                 total_stored += queue_stored
+            except AuthenticationError, ForbiddenError, RateLimitError:
+                raise
             except Exception as e:
                 logger.warning(
                     "Queue sync failed, continuing with next queue",
@@ -2109,6 +2119,12 @@ class MatchService:
                     queue_id=queue_id,
                     error=str(e),
                 )
+                if on_failure:
+                    on_failure(
+                        "queue synchronization",
+                        e,
+                        {"queue_id": queue_id},
+                    )
                 continue
 
         return total_stored
@@ -2149,6 +2165,7 @@ class MatchService:
         region: Any,
         queue_id: int,
         rate_limiter: Optional[DBRateLimiter],
+        on_failure: Optional[Callable[[str, Exception, dict[str, Any]], None]],
     ) -> int:
         """Sync one queue for a single player."""
         start = 0
@@ -2185,6 +2202,8 @@ class MatchService:
                 if rate_limiter:
                     await rate_limiter.record_request()
 
+            except AuthenticationError, ForbiddenError, RateLimitError:
+                raise
             except Exception as e:
                 logger.error(
                     "Failed to fetch match IDs",
@@ -2192,7 +2211,7 @@ class MatchService:
                     queue_id=queue_id,
                     error=str(e),
                 )
-                break
+                raise
 
             if not match_list_dto or not match_list_dto.match_ids:
                 break
@@ -2251,6 +2270,8 @@ class MatchService:
                                 match_id,
                                 region=region,
                             )
+                        except AuthenticationError, ForbiddenError, RateLimitError:
+                            raise
                         except Exception as timeline_error:
                             logger.warning(
                                 "Timeline-only fetch failed",
@@ -2259,6 +2280,12 @@ class MatchService:
                                 match_id=match_id,
                                 error=str(timeline_error),
                             )
+                            if on_failure:
+                                on_failure(
+                                    "timeline-only backfill",
+                                    timeline_error,
+                                    {"queue_id": queue_id, "match_id": match_id},
+                                )
                             continue
                         finally:
                             if rate_limiter and timeline_request_attempted:
@@ -2331,7 +2358,7 @@ class MatchService:
                         continue
 
                     # Match IDs are sorted newest->oldest per queue, so we can stop at first older season.
-                    if not match_dto.info.game_version.startswith("16."):
+                    if not self.is_current_game_version(match_dto.info.game_version):
                         keep_fetching = False
                         break
 
@@ -2356,6 +2383,8 @@ class MatchService:
                             match_id,
                             region=region,
                         )
+                    except AuthenticationError, ForbiddenError, RateLimitError:
+                        raise
                     except Exception as timeline_error:
                         logger.warning(
                             "Timeline fetch failed, storing match without timeline",
@@ -2364,6 +2393,12 @@ class MatchService:
                             match_id=match_id,
                             error=str(timeline_error),
                         )
+                        if on_failure:
+                            on_failure(
+                                "match timeline fetch",
+                                timeline_error,
+                                {"queue_id": queue_id, "match_id": match_id},
+                            )
                     finally:
                         if rate_limiter and timeline_request_attempted:
                             await rate_limiter.record_request()
@@ -2374,6 +2409,8 @@ class MatchService:
                     )
                     queue_stored += 1
 
+                except AuthenticationError, ForbiddenError, RateLimitError:
+                    raise
                 except Exception as e:
                     logger.warning(
                         "Error syncing match",
@@ -2382,6 +2419,12 @@ class MatchService:
                         match_id=match_id,
                         error=str(e),
                     )
+                    if on_failure:
+                        on_failure(
+                            "match synchronization",
+                            e,
+                            {"queue_id": queue_id, "match_id": match_id},
+                        )
                     continue
 
             if not keep_fetching or len(ids_list) < count:

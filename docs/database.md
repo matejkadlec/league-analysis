@@ -515,7 +515,7 @@ Match metadata from Riot API.
 | ---------------- | ----------- | -------------------------------- |
 | `match_id`       | varchar(20) | Primary key (e.g., EUN1_1234567) |
 | `queue_id`       | int         | 420=Solo/Duo, 440=Flex           |
-| `game_version`   | varchar(32) | Patch (e.g., "16.1.123")         |
+| `game_version`   | varchar(32) | Patch (e.g., "26.1.123")         |
 | `fully_analyzed` | boolean     | All participants processed       |
 
 ### `core.match_participants`

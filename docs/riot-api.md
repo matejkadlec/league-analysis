@@ -402,5 +402,5 @@ Retry-After: 5
 3. **Respect rate limits** - honor Riot's application, method, service, region,
    and `Retry-After` signals; do not rely on a single fixed delay
 4. **Check queue types** - 420=Solo/Duo, 440=Flex, etc.
-5. **Filter by season** - Check `game_version.startsWith("16.")` for Season 16
+5. **Filter by season** - Check `game_version.startswith("26.")` for Season 26
 6. **Handle empty responses** - League entries return `[]` for unranked players

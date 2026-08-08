@@ -150,7 +150,7 @@ For each tracked player:
    │   │   ├── Sleep 1.2s (rate limit protection)
    │   │   ├── Fetch full match details
    │   │   ├── Fetch match timeline
-   │   │   ├── Skip if not Season 16 (game_version != "16.*")
+   │   │   ├── Skip if outside the current release year (game_version != "26.*")
    │   │   └── Store/update match, participants, and timeline aggregates
    └── Commit changes
 
@@ -177,7 +177,7 @@ For each tracked player:
 - **Cross-component coordination**: `DBRateLimiter` uses
   `RateLimitComponent.MATCH_FETCHER`
 - This respects the Development API Key limit of 100 requests/2 minutes
-- Rate limit errors (`429`) trigger `RateLimitSignal`, causing graceful job termination with `RATE_LIMITED` status
+- Rate limit errors (`429`) trigger `RateLimitSignal`, causing graceful job termination with `RATE_LIMITED` status. New-player background Match Fetcher executions use the same status and retain the safe `retry_after` value in their execution details.
 
 ### Error Handling
 
@@ -185,9 +185,11 @@ For each tracked player:
 | ---------------------------------------- | ------------------------------------------------------- |
 | `RateLimitError`                         | Convert to `RateLimitSignal`, job terminates gracefully |
 | `AuthenticationError` / `ForbiddenError` | Job fails immediately (API key invalid/expired)         |
-| Match fetch error                        | Logged, skip that match, continue with others           |
-| Player processing error                  | Logged, skip that player, continue with others          |
-| Rank update error                        | Logged, does not fail the job                           |
+| Match fetch error                        | Record a diagnostic, skip that match, continue with others |
+| Player processing error                  | Record a diagnostic, skip that player, continue with others |
+| Rank update error                        | Record a diagnostic and continue with other players       |
+
+For each recoverable Match Fetcher failure, the admin execution record stores a bounded, secret-safe diagnostic with the failed operation, exception type, safe HTTP status where available, and relevant queue, match, or player identifiers. The completion summary names the first failed stage instead of reporting only an error count.
 
 ### Database Tables Updated
 
@@ -199,7 +201,7 @@ For each tracked player:
 
 ### Season Filtering
 
-The job only processes matches from the current season (Season 16). It checks `game_version.startsWith("16.")` and stops fetching when it encounters older matches.
+The job only processes matches from the current release year (Season 26). It checks `game_version.startswith("26.")` and stops fetching when it encounters older matches. This boundary is intentionally explicit so a new Riot release year requires a reviewed update rather than silently mixing historical data.
 
 ### Metrics Tracked
 
