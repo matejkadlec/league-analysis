@@ -177,7 +177,7 @@ For each tracked player:
 - **Cross-component coordination**: `DBRateLimiter` uses
   `RateLimitComponent.MATCH_FETCHER`
 - This respects the Development API Key limit of 100 requests/2 minutes
-- Rate limit errors (`429`) trigger `RateLimitSignal`, causing graceful job termination with `RATE_LIMITED` status
+- Rate limit errors (`429`) trigger `RateLimitSignal`, causing graceful job termination with `RATE_LIMITED` status. New-player background Match Fetcher executions use the same status and retain the safe `retry_after` value in their execution details.
 
 ### Error Handling
 

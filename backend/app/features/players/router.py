@@ -14,7 +14,7 @@ from app.core.database import db_manager
 from app.core.dependencies import get_riot_client
 from app.core.riot_api.client import RiotAPIClient
 from app.core.riot_api.constants import Platform
-from app.core.riot_api.errors import AuthenticationError
+from app.core.riot_api.errors import AuthenticationError, RateLimitError
 from app.features.auth.dependencies import get_current_active_user
 from app.features.auth.models import User
 from app.features.matches.service import MatchService
@@ -430,6 +430,24 @@ async def run_background_match_sync(puuid: str, platform: str) -> None:
                 }
                 await session.commit()
 
+        except RateLimitError as error:
+            logger.warning(
+                "Background match sync rate limited",
+                puuid=puuid,
+                retry_after=error.retry_after,
+            )
+            if job_execution:
+                job_execution.status = JobStatus.RATE_LIMITED
+                job_execution.completed_at = func.now()
+                job_execution.execution_log = {
+                    **(job_execution.execution_log or {}),
+                    "retry_after": error.retry_after,
+                }
+                job_execution.detailed_logs = {
+                    "message": "Rate limit reached while synchronizing matches",
+                    "retry_after": error.retry_after,
+                }
+                await session.commit()
         except Exception as e:
             logger.error("Background match sync failed", puuid=puuid, error=str(e))
             # 4. Update Job Execution on Failure

@@ -1,4 +1,4 @@
-"""Direct player-add writer maintenance regressions."""
+"""Direct player-add background task regressions."""
 
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
@@ -8,13 +8,15 @@ import pytest
 from fastapi import BackgroundTasks, HTTPException
 from starlette.requests import Request
 
+from app.core.riot_api.errors import RateLimitError
 from app.features.auth import router as auth_router
+from app.features.jobs import models as job_models
 from app.features.jobs.maintenance import (
     RIOT_MAINTENANCE_MODE_KEY,
     RIOT_WRITER_TABLES,
     RiotWriterMaintenanceActiveError,
 )
-from app.features.jobs.models import JobType
+from app.features.jobs.models import JobStatus, JobType
 from app.features.matches import router as matches_router
 from app.features.matches import service as matches_service_module
 from app.features.matches.service import MatchService
@@ -82,6 +84,78 @@ async def test_player_add_writers_lock_and_honor_the_cleanup_interlock(
     )
     assert getattr(session.statements[1], "_for_update_arg") is not None
     riot_client_factory.assert_not_called()
+
+
+class _FakeJobExecution:
+    """Lightweight execution record for background-task outcome tests."""
+
+    def __init__(self, **values: object) -> None:
+        self.__dict__.update(values)
+        self.error_message = None
+        self.detailed_logs = None
+
+
+@pytest.mark.asyncio
+async def test_background_match_sync_records_rate_limit_retry_after(
+    monkeypatch,
+) -> None:
+    """A propagated Riot 429 remains retryable in the direct-sync execution."""
+    job_config = SimpleNamespace(
+        id=7,
+        job_type=JobType.MATCH_FETCHER,
+        config_json={},
+    )
+    session = SimpleNamespace(
+        added=[],
+        commit=AsyncMock(),
+        refresh=AsyncMock(),
+    )
+    session.add = session.added.append
+
+    @asynccontextmanager
+    async def fake_get_session():
+        yield session
+
+    riot_client = SimpleNamespace(close=AsyncMock())
+    match_service = SimpleNamespace(
+        sync_matches_for_player=AsyncMock(
+            side_effect=RateLimitError("limited", status_code=429, retry_after=17)
+        )
+    )
+
+    monkeypatch.setattr(players_router.db_manager, "get_session", fake_get_session)
+    monkeypatch.setattr(
+        players_router,
+        "_locked_background_writer_configuration",
+        AsyncMock(return_value=job_config),
+    )
+    monkeypatch.setattr(job_models, "JobExecution", _FakeJobExecution)
+    monkeypatch.setattr(
+        players_router,
+        "RiotAPIClient",
+        Mock(return_value=riot_client),
+    )
+    monkeypatch.setattr(
+        players_router, "MatchService", Mock(return_value=match_service)
+    )
+
+    await players_router.run_background_match_sync("test-puuid", "eun1")
+
+    execution = session.added[0]
+    assert execution.status is JobStatus.RATE_LIMITED
+    assert execution.completed_at is not None
+    assert execution.error_message is None
+    assert execution.execution_log == {
+        "trigger": "new_player_added",
+        "puuid": "test-puuid",
+        "retry_after": 17,
+    }
+    assert execution.detailed_logs == {
+        "message": "Rate limit reached while synchronizing matches",
+        "retry_after": 17,
+    }
+    assert session.commit.await_count == 2
+    riot_client.close.assert_awaited_once()
 
 
 @pytest.mark.asyncio
