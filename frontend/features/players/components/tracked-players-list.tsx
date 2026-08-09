@@ -288,37 +288,35 @@ export function TrackedPlayersList({
       id="tracked-players"
       className={cn("flex h-full flex-col border-0", className)}
     >
-      <CardContent className="flex flex-1 flex-col p-6">
-        <div
-          data-testid="tracked-players-scroll-region"
-          className={cn(
-            data.length > MAX_VISIBLE_PLAYER_ROWS
-              ? "overflow-y-auto pr-1"
-              : "overflow-hidden",
-          )}
-          style={{
-            maxHeight: `${getListHeightPx(
-              Math.min(data.length, MAX_VISIBLE_PLAYER_ROWS),
-            )}px`,
-          }}
-        >
-          <div className="space-y-3">
-            {data.map((player) => (
-              <TrackedPlayerRow
-                key={player.puuid}
-                player={player}
-                isViewedPlayer={selectedPlayerPuuid === player.puuid}
-                isUntrackingCurrentPlayer={
-                  untrackMutation.isPending &&
-                  untrackMutation.variables === player.puuid
-                }
-                onViewPlayer={handleViewPlayer}
-                onUntrackPlayer={handleUntrack}
-              />
-            ))}
-          </div>
+      <div
+        data-testid="tracked-players-scroll-region"
+        className={cn(
+          data.length > MAX_VISIBLE_PLAYER_ROWS
+            ? "overflow-y-auto pr-1"
+            : "overflow-hidden",
+        )}
+        style={{
+          maxHeight: `${getListHeightPx(
+            Math.min(data.length, MAX_VISIBLE_PLAYER_ROWS),
+          )}px`,
+        }}
+      >
+        <div className="space-y-3">
+          {data.map((player) => (
+            <TrackedPlayerRow
+              key={player.puuid}
+              player={player}
+              isViewedPlayer={selectedPlayerPuuid === player.puuid}
+              isUntrackingCurrentPlayer={
+                untrackMutation.isPending &&
+                untrackMutation.variables === player.puuid
+              }
+              onViewPlayer={handleViewPlayer}
+              onUntrackPlayer={handleUntrack}
+            />
+          ))}
         </div>
-      </CardContent>
+      </div>
     </Card>
   );
 }

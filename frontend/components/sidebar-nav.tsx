@@ -155,7 +155,7 @@ export function SidebarNav() {
               variant="ghost"
               size="sm"
               onClick={() => setManagePlayersOpen(true)}
-              className="mx-3 mt-auto h-8 w-fit shrink-0 self-start justify-start px-2 text-xs text-white/65 hover:bg-white/10 hover:text-white"
+              className="mx-3 mt-auto h-8 shrink-0 justify-start px-2 text-xs text-white/65 hover:bg-white/10 hover:text-white"
             >
               <Users className="mr-2 h-3.5 w-3.5" /> Manage Tracked Players
             </Button>

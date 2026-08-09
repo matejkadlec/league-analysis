@@ -74,5 +74,6 @@ describe("TrackedPlayersList", () => {
       expect(scrollRegion.className).toContain("overflow-y-auto"),
     );
     expect(scrollRegion.style.maxHeight).toBe("488px");
+    expect(scrollRegion.parentElement?.id).toBe("tracked-players");
   });
 });

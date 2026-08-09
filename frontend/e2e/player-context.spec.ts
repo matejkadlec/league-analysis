@@ -193,13 +193,20 @@ test("quick-switches the URL-scoped current player without starting sync", async
     name: "Matchmaking Analysis",
   });
   const userName = page.getByText("QA User", { exact: true });
-  const [manageBox, matchmakingBox, userBox] = await Promise.all([
+  const [sidebarBox, manageBox, matchmakingBox, userBox] = await Promise.all([
+    page.locator("aside").boundingBox(),
     manageButton.boundingBox(),
     matchmakingLink.boundingBox(),
     userName.boundingBox(),
   ]);
   expect(manageBox?.y).toBeGreaterThan(matchmakingBox?.y ?? 0);
   expect(manageBox?.y).toBeLessThan(userBox?.y ?? Number.POSITIVE_INFINITY);
+  const leftInset = (manageBox?.x ?? 0) - (sidebarBox?.x ?? 0);
+  const rightInset =
+    (sidebarBox?.x ?? 0) +
+    (sidebarBox?.width ?? 0) -
+    ((manageBox?.x ?? 0) + (manageBox?.width ?? 0));
+  expect(Math.abs(leftInset - rightInset)).toBeLessThanOrEqual(1);
 
   await manageButton.click();
   const dialog = page.getByRole("dialog");
@@ -217,6 +224,9 @@ test("quick-switches the URL-scoped current player without starting sync", async
 
   const scrollRegion = dialog.getByTestId("tracked-players-scroll-region");
   await expect(scrollRegion).toHaveClass(/overflow-y-auto/);
+  expect(
+    await scrollRegion.evaluate((element) => element.parentElement?.id),
+  ).toBe("tracked-players");
   expect(
     await scrollRegion.evaluate(
       (element) => element.scrollHeight > element.clientHeight,
