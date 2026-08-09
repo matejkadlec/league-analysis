@@ -80,4 +80,7 @@ async def get_player_service(
 - Matchmaking Analysis start routes must return the persisted active run before
   Riot preflight/work begins. Preserve its explicit lifecycle states, one-active-
   run-per-PUUID database constraint, exact-run cancellation, and shared
-  rate-limiter/maintenance boundaries.
+  rate-limiter/maintenance boundaries. Any `AuthenticationError` or
+  `ForbiddenError`, including during optional cache filling, must terminate with
+  `error_code=RIOT_API_KEY_INVALID` so the shared frontend credential warning
+  survives the background-run HTTP 200 polling boundary.

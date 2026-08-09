@@ -6,7 +6,9 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from fastapi import HTTPException
 
+from app.core.riot_api.errors import AuthenticationError, ForbiddenError
 from app.features.matchmaking_analysis import router as analysis_router
 from app.features.matchmaking_analysis import service as analysis_service_module
 from app.features.matchmaking_analysis.service import MatchmakingAnalysisService
@@ -67,6 +69,26 @@ async def test_start_route_returns_without_riot_preflight() -> None:
     assert result is expected
     service.check_player_has_enough_matches.assert_not_awaited()
     service.start_analysis.assert_awaited_once_with("test-puuid")
+
+
+@pytest.mark.asyncio
+async def test_match_check_preserves_the_shared_invalid_key_signal() -> None:
+    """The diagnostic route keeps the global banner's established error code."""
+    service = SimpleNamespace(
+        check_player_has_enough_matches=AsyncMock(
+            side_effect=ForbiddenError("provider detail", status_code=403)
+        )
+    )
+
+    with pytest.raises(HTTPException) as error:
+        await analysis_router.check_player_matches.__wrapped__(
+            request=_request(),
+            payload=SimpleNamespace(puuid="test-puuid"),
+            service=service,
+        )
+
+    assert error.value.status_code == 503
+    assert error.value.detail == "RIOT_API_KEY_INVALID"
 
 
 @pytest.mark.asyncio
@@ -210,3 +232,38 @@ async def test_analysis_failure_keeps_a_safe_terminal_diagnostic(monkeypatch) ->
     assert "not_enough_matches" in values
     assert "Player doesn't have enough ranked matches for this analysis." in values
     database.commit.assert_awaited_once()
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        AuthenticationError("provider detail", status_code=401),
+        ForbiddenError("provider detail", status_code=403),
+    ],
+)
+def test_invalid_key_failure_keeps_the_shared_banner_signal(error: Exception) -> None:
+    """Background credentials failures remain detectable through a 200 poll."""
+    code, message = MatchmakingAnalysisService._safe_failure_details(error)
+
+    assert code == "RIOT_API_KEY_INVALID"
+    assert message == (
+        "The Riot API key is invalid or expired. Please update it and try again."
+    )
+    assert "provider detail" not in message
+
+
+@pytest.mark.asyncio
+async def test_optional_fetch_does_not_swallow_invalid_key_failure() -> None:
+    """Any rejected Riot call terminates the run even outside the required spine."""
+    riot_client = SimpleNamespace(
+        get_match_list_by_puuid=AsyncMock(
+            side_effect=ForbiddenError("provider detail", status_code=403)
+        )
+    )
+    service = MatchmakingAnalysisService(
+        SimpleNamespace(),
+        riot_client,  # type: ignore[arg-type]
+    )
+
+    with pytest.raises(ForbiddenError):
+        await service._api_fetch_match_ids("test-puuid")

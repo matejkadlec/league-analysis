@@ -381,6 +381,14 @@ If the background task crashes:
 3. The rate limiter is released
 4. The task is removed from `_running_analyses`
 
+Riot `401` and `403` failures are never treated as optional missing match data.
+They terminate the run with `error_code=RIOT_API_KEY_INVALID`. Matchmaking
+Analysis status is transported through successful HTTP polling responses, so
+the shared frontend interceptor reads this persisted code and activates the
+global invalid/expired-key header. Merely accepting or polling a pending/running
+analysis does not mark the key valid; only completion of the exact current run
+does.
+
 Cancellation targets the exact `(puuid, created_at)` run, persists `cancelled`,
 then stops that worker. The lifecycle record is retained for diagnostics and a
 new start remains retryable.
@@ -519,4 +527,5 @@ Notes:
 | Player has <10 ranked matches at anchor time  | Uses all available matches (even if <10)                       |
 | Analysis already running for player           | Unique active row is returned; no duplicate task is created    |
 | Exact run cancelled                           | Terminal `cancelled` record retained; fetched matches kept     |
+| Riot key rejected during any provider call    | Run fails with shared key code; global warning header appears  |
 | Background task crash                         | Analysis marked `failed` safely; rate limiter released         |

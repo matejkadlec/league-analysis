@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
+from app.core.riot_api.errors import AuthenticationError, ForbiddenError
 from app.features.auth.dependencies import get_current_active_user
 from app.features.jobs.maintenance import RiotWriterMaintenanceActiveError
 
@@ -51,6 +52,15 @@ async def check_player_matches(
         if has_enough:
             return {"success": True, "matches_found": match_count}
         return NotEnoughMatchesResponse(matches_found=match_count)
+    except (AuthenticationError, ForbiddenError) as error:
+        logger.warning(
+            "matchmaking_match_check_api_key_invalid",
+            error_type=type(error).__name__,
+        )
+        raise HTTPException(
+            status_code=503,
+            detail="RIOT_API_KEY_INVALID",
+        ) from error
     except Exception as error:
         logger.warning(
             "matchmaking_match_check_failed",

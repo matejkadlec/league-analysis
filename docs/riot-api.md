@@ -373,6 +373,13 @@ button as `Player {name}#{tag} wasn't found on server {server}.` A `429` is
 shown as a warning toast, while an invalid Riot API key uses the existing
 credential-error toast rather than exposing a server error.
 
+Background Matchmaking Analysis calls cannot return the original Riot `401` or
+`403` on the already-completed start request. Instead, they persist
+`error_code=RIOT_API_KEY_INVALID` on the failed run. The shared Axios response
+interceptor recognizes that code in the HTTP 200 lifecycle payload and activates
+the same global invalid/expired-key header. Pending/in-progress lifecycle
+responses are neutral; they do not prove the credential is valid.
+
 ### Player League Refresh
 
 ```

@@ -82,3 +82,6 @@ export function MyComponent({ id }: MyComponentProps) {
   cancel by `created_at`, and invalidate result/history data on completion. Keep
   provider throttling internal: the active card always presents one total ETA,
   while its percentage/bar interpolate between authoritative player milestones.
+  Persisted Matchmaking Analysis failures with
+  `error_code=RIOT_API_KEY_INVALID` must activate the shared API-key header
+  signal; accepting or polling an active run must not mark the key valid.

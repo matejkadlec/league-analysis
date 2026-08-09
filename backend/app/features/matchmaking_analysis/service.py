@@ -41,7 +41,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core import db_manager
 from app.core.riot_api.client import RiotAPIClient
 from app.core.riot_api.db_rate_limiter import DBRateLimiter, RateLimitComponent
-from app.core.riot_api.errors import RateLimitError, RiotAPIError
+from app.core.riot_api.errors import (
+    AuthenticationError,
+    ForbiddenError,
+    RateLimitError,
+    RiotAPIError,
+)
 from app.features.matches.models import Match
 from app.features.matches.participants import MatchParticipant
 
@@ -377,7 +382,12 @@ class MatchmakingAnalysisService:
             async with db_manager.get_session() as db:
                 from app.core.config import get_riot_api_key
 
-                api_key = await get_riot_api_key(db)
+                try:
+                    api_key = await get_riot_api_key(db)
+                except ValueError as error:
+                    raise AuthenticationError(
+                        "No active Riot API key configured"
+                    ) from error
 
                 async with RiotAPIClient(api_key=api_key) as riot_client:
                     rate_limiter = DBRateLimiter(
@@ -464,6 +474,12 @@ class MatchmakingAnalysisService:
     @staticmethod
     def _safe_failure_details(error: Exception) -> tuple[str, str]:
         """Map internal failures to stable, non-technical client messages."""
+        if isinstance(error, (AuthenticationError, ForbiddenError)):
+            return (
+                "RIOT_API_KEY_INVALID",
+                "The Riot API key is invalid or expired. Please update it and try "
+                "again.",
+            )
         if isinstance(error, RiotAPIError):
             return (
                 "riot_service_error",
@@ -982,7 +998,7 @@ class MatchmakingAnalysisService:
                     puuid=puuid,
                     error_type=type(e).__name__,
                 )
-                if required:
+                if isinstance(e, (AuthenticationError, ForbiddenError)) or required:
                     raise
                 return []
 
@@ -1040,7 +1056,7 @@ class MatchmakingAnalysisService:
                     match_id=match_id,
                     error_type=type(e).__name__,
                 )
-                if required:
+                if isinstance(e, (AuthenticationError, ForbiddenError)) or required:
                     raise
                 return None
 
