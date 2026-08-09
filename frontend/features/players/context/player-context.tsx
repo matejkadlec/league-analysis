@@ -13,11 +13,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { useAuth } from "@/features/auth";
 import { validatedGet, validatedPut } from "@/lib/core/api";
-import {
-  PlayerContextSchema,
-  PlayerSchema,
-  type Player,
-} from "@/lib/core/schemas";
+import { PlayerContextSchema, type Player } from "@/lib/core/schemas";
+import { playerQueryKey, playerQueryOptions } from "../player-query";
 
 const PLAYER_CONTEXT_QUERY_KEY = ["player-context"] as const;
 const PLAYER_CENTRIC_PATHS = new Set(["/my-profile", "/playstyle-analysis"]);
@@ -73,14 +70,8 @@ export function PlayerContextProvider({
   });
 
   const urlPlayerQuery = useQuery({
-    queryKey: ["player", urlPuuid],
-    queryFn: async () => {
-      const result = await validatedGet(PlayerSchema, `/players/${urlPuuid}`);
-      if (!result.success) throw new Error(result.error.message);
-      return result.data;
-    },
+    ...playerQueryOptions(urlPuuid),
     enabled: isAuthenticated && !!urlPuuid,
-    retry: false,
   });
 
   const updateCurrentMutation = useMutation({
@@ -134,7 +125,7 @@ export function PlayerContextProvider({
   const selectPlayer = useCallback(
     async (player: Player) => {
       await updateCurrentMutation.mutateAsync(player.puuid);
-      queryClient.setQueryData(["player", player.puuid], player);
+      queryClient.setQueryData(playerQueryKey(player.puuid), player);
       router.push(
         playerUrl(pathname, new URLSearchParams(searchParams), player.puuid),
         { scroll: false },

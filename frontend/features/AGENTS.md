@@ -83,6 +83,9 @@ export function MyComponent({ id }: MyComponentProps) {
 - Every player-derived TanStack Query key must include the exact PUUID. After
   explicit update completion, refetch only matching active keys and show the
   approved completion message only after every affected refetch succeeds.
+- The shared `["player", puuid]` query stores a validated raw `Player` through
+  `playerQueryOptions()`. Never cache an API-result envelope or attach a query
+  function with a different return shape to that key.
 - The Manage Tracked Players dialog presents the player rows directly without
   a second title, count, search field, or expand/collapse control. Show up to
   five rows before enabling vertical scrolling.

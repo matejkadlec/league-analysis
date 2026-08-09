@@ -3,7 +3,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ProtectedRoute } from "@/features/auth";
 import {
-  PlayerSchema,
   ChampionStatsResponseSchema,
   LaneStatsResponseSchema,
 } from "@/lib/core/schemas";
@@ -11,7 +10,12 @@ import { validatedGet } from "@/lib/core/api";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { UserRoundSearch } from "lucide-react";
-import { PlayerCard, usePlayerContext } from "@/features/players";
+import {
+  PlayerCard,
+  playerQueryKey,
+  playerQueryOptions,
+  usePlayerContext,
+} from "@/features/players";
 import { MatchHistory } from "@/features/matches";
 import {
   ChampionStatsCard,
@@ -57,13 +61,10 @@ function ProfileContent({ puuid }: { puuid: string }) {
 
   // Fetch player data
   const {
-    data: playerResult,
+    data: player,
     isLoading: isPlayerLoading,
     error: playerError,
-  } = useQuery({
-    queryKey: ["player", puuid],
-    queryFn: () => validatedGet(PlayerSchema, `/players/${puuid}`),
-  });
+  } = useQuery(playerQueryOptions(puuid));
 
   // Fetch champion stats
   const { data: championStatsResult, isLoading: isChampionLoading } = useQuery({
@@ -89,7 +90,6 @@ function ProfileContent({ puuid }: { puuid: string }) {
       ),
   });
 
-  const player = playerResult?.success ? playerResult.data : null;
   const championStats = championStatsResult?.success
     ? championStatsResult.data
     : null;
@@ -97,7 +97,7 @@ function ProfileContent({ puuid }: { puuid: string }) {
 
   // Callback to refresh all profile data - passed to PlayerCard
   const handleRefreshAll = () => {
-    queryClient.invalidateQueries({ queryKey: ["player", puuid] });
+    queryClient.invalidateQueries({ queryKey: playerQueryKey(puuid) });
     queryClient.invalidateQueries({ queryKey: ["champion-stats", puuid] });
     queryClient.invalidateQueries({ queryKey: ["lane-stats", puuid] });
     queryClient.invalidateQueries({ queryKey: ["recent-stats", puuid] });

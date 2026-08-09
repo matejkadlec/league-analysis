@@ -3,9 +3,13 @@
 import { Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Player, PlayerSchema } from "@/lib/core/schemas";
-import { validatedGet } from "@/lib/core/api";
-import { PlayerSearch, PlayerCard } from "@/features/players";
+import { Player } from "@/lib/core/schemas";
+import {
+  PlayerSearch,
+  PlayerCard,
+  playerQueryKey,
+  playerQueryOptions,
+} from "@/features/players";
 import {
   MatchmakingAnalysis,
   MatchmakingAnalysisResults,
@@ -23,22 +27,12 @@ function MatchmakingAnalysisContent() {
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const puuidFromUrl = searchParams.get("puuid");
-  const { data: selectedPlayer, isLoading: isLoadingInitialPlayer } = useQuery({
-    queryKey: ["player", puuidFromUrl],
-    queryFn: async () => {
-      const result = await validatedGet(
-        PlayerSchema,
-        `/players/${puuidFromUrl}`,
-      );
-      if (!result.success) throw new Error(result.error.message);
-      return result.data;
-    },
-    enabled: !!puuidFromUrl,
-    retry: false,
-  });
+  const { data: selectedPlayer, isLoading: isLoadingInitialPlayer } = useQuery(
+    playerQueryOptions(puuidFromUrl),
+  );
 
   const handlePlayerFound = (player: Player) => {
-    queryClient.setQueryData(["player", player.puuid], player);
+    queryClient.setQueryData(playerQueryKey(player.puuid), player);
     router.push(`/matchmaking-analysis?puuid=${player.puuid}`, {
       scroll: false,
     });

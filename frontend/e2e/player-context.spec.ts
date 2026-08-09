@@ -17,6 +17,9 @@ const players = {
     is_tracked: true,
     analyzed_matches: 0,
     total_matches: 0,
+    profile_synced_at: NOW,
+    league_synced_at: NOW,
+    match_synced_at: NOW,
     created_at: NOW,
     updated_at: NOW,
   },
@@ -28,6 +31,9 @@ const players = {
     is_tracked: true,
     analyzed_matches: 0,
     total_matches: 0,
+    profile_synced_at: NOW,
+    league_synced_at: NOW,
+    match_synced_at: NOW,
     created_at: NOW,
     updated_at: NOW,
   },
@@ -39,6 +45,9 @@ const players = {
     is_tracked: true,
     analyzed_matches: 0,
     total_matches: 0,
+    profile_synced_at: NOW,
+    league_synced_at: NOW,
+    match_synced_at: NOW,
     created_at: NOW,
     updated_at: NOW,
   },
@@ -50,6 +59,9 @@ const players = {
     is_tracked: true,
     analyzed_matches: 0,
     total_matches: 0,
+    profile_synced_at: NOW,
+    league_synced_at: NOW,
+    match_synced_at: NOW,
     created_at: NOW,
     updated_at: NOW,
   },
@@ -61,6 +73,9 @@ const players = {
     is_tracked: true,
     analyzed_matches: 0,
     total_matches: 0,
+    profile_synced_at: NOW,
+    league_synced_at: NOW,
+    match_synced_at: NOW,
     created_at: NOW,
     updated_at: NOW,
   },
@@ -72,6 +87,9 @@ const players = {
     is_tracked: true,
     analyzed_matches: 0,
     total_matches: 0,
+    profile_synced_at: NOW,
+    league_synced_at: NOW,
+    match_synced_at: NOW,
     created_at: NOW,
     updated_at: NOW,
   },
@@ -149,6 +167,93 @@ test("quick-switches the URL-scoped current player without starting sync", async
       return;
     }
 
+    const statsPlayer = Object.values(players).find((candidate) =>
+      path.includes(`/matches/player/${candidate.puuid}/`),
+    );
+    if (statsPlayer && path.endsWith("/champion-stats")) {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          puuid: statsPlayer.puuid,
+          total_champions: 1,
+          champions: [
+            {
+              champion_name: "Annie",
+              champion_id: 1,
+              games_played: 10,
+              wins: 6,
+              losses: 4,
+              win_rate: 0.6,
+              avg_kills: 7,
+              avg_deaths: 4,
+              avg_assists: 8,
+              avg_kda: 3.75,
+            },
+          ],
+        }),
+      });
+      return;
+    }
+
+    if (statsPlayer && path.endsWith("/lane-stats")) {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          puuid: statsPlayer.puuid,
+          total_lanes: 1,
+          lanes: [
+            {
+              lane: "MIDDLE",
+              games_played: 10,
+              wins: 6,
+              losses: 4,
+              win_rate: 0.6,
+              avg_kills: 7,
+              avg_deaths: 4,
+              avg_assists: 8,
+              avg_kda: 3.75,
+            },
+          ],
+        }),
+      });
+      return;
+    }
+
+    if (statsPlayer && path.endsWith("/stats")) {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          puuid: statsPlayer.puuid,
+          total_matches: 10,
+          wins: 6,
+          losses: 4,
+          win_rate: 0.6,
+          avg_kills: 7,
+          avg_deaths: 4,
+          avg_assists: 8,
+          avg_kda: 3.75,
+          avg_cs: 180,
+          avg_vision_score: 24,
+        }),
+      });
+      return;
+    }
+
+    if (statsPlayer && path.endsWith("/detailed")) {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          matches: [],
+          total: 0,
+          total_analyzed: 0,
+          page: 1,
+          size: 20,
+          pages: 0,
+        }),
+      });
+      return;
+    }
+
     const player = Object.values(players).find((candidate) =>
       path.endsWith(`/players/${candidate.puuid}`),
     );
@@ -185,6 +290,12 @@ test("quick-switches the URL-scoped current player without starting sync", async
   await expect(page).toHaveURL(new RegExp(`puuid=${RECENT_PUUID}`));
   await expect(page.getByText("Recent#TWO").first()).toBeVisible();
   expect(syncStarts).toBe(0);
+  await expect(page.locator("#player-summary")).toBeVisible();
+  await expect(page.locator("#recent-performance")).toBeVisible();
+  await expect(page.locator("#top-champions")).toBeVisible();
+  await expect(page.locator("#role-performance")).toBeVisible();
+  await expect(page.locator("#match-history")).toBeVisible();
+  await expect(page.getByText(/^Updated /)).toHaveCount(5);
 
   const quickNavigation = page.getByRole("button", {
     name: "Open page navigation",

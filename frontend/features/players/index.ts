@@ -7,3 +7,4 @@ export {
   PlayerContextProvider,
   usePlayerContext,
 } from "./context/player-context";
+export { playerQueryKey, playerQueryOptions } from "./player-query";
