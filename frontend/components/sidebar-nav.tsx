@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import Image from "next/image";
 import { Menu, X, User, LogOut, Settings, Users, Wrench } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { useAuth } from "@/features/auth";
 import { SidebarPlayerSwitcher } from "@/features/players";
 
@@ -149,13 +150,15 @@ export function SidebarNav() {
               ))}
             </ul>
 
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="sm"
               onClick={() => setManagePlayersOpen(true)}
-              className="mt-auto flex w-full shrink-0 items-center gap-2 whitespace-nowrap px-4 py-3 text-left text-xs text-white/70 transition-colors duration-300 hover:bg-white/10 hover:text-[#cfa93a]"
+              className="mt-auto h-8 w-full shrink-0 justify-start px-2 text-xs text-white/65 hover:bg-white/10 hover:text-white"
             >
-              <Users className="h-4 w-4" /> Manage Tracked Players
-            </button>
+              <Users className="mr-2 h-3.5 w-3.5" /> Manage Tracked Players
+            </Button>
           </nav>
 
           {/* User Info and Bottom Links */}
