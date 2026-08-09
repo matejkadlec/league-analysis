@@ -2,14 +2,17 @@
 
 from typing import Any
 
-# Queue IDs supported by Match Fetcher queue toggles
-MATCH_FETCHER_QUEUE_IDS: tuple[int, ...] = (420, 440, 400, 450)
+from app.core.riot_api.constants import PRODUCT_SUPPORTED_QUEUE_IDS
+
+# Queue IDs supported by Match Fetcher queue toggles. Product support is
+# declared once at the Riot boundary; the UI order stays workflow-specific.
+MATCH_FETCHER_QUEUE_IDS: tuple[int, ...] = PRODUCT_SUPPORTED_QUEUE_IDS
 
 # Queue IDs shown in the same order in UI
 MATCH_FETCHER_QUEUE_ORDER: tuple[int, ...] = (420, 440, 400, 450)
 
 # Default: all supported queues enabled
-MATCH_FETCHER_DEFAULT_QUEUE_IDS: list[int] = [420, 440, 400, 450]
+MATCH_FETCHER_DEFAULT_QUEUE_IDS: list[int] = list(MATCH_FETCHER_QUEUE_ORDER)
 
 MATCH_FETCHER_ENABLED_QUEUE_IDS_KEY = "enabled_queue_ids"
 

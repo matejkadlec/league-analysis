@@ -1,8 +1,10 @@
-"""Rate limiting implementation for Riot API using response headers."""
+"""Adaptive Riot rate limiting based on response headers."""
 
 import asyncio
 import time
-from typing import Dict, Optional
+from dataclasses import dataclass
+from typing import Dict
+from urllib.parse import urlsplit
 
 import structlog
 
@@ -11,266 +13,223 @@ from .endpoints import parse_rate_count_header, parse_rate_limit_header
 logger = structlog.get_logger(__name__)
 
 
+@dataclass(frozen=True)
+class _RateWindow:
+    """One observed provider window anchored to its first local observation."""
+
+    limit: int
+    used: int
+    window_seconds: int
+    started_at: float
+
+    @property
+    def remaining(self) -> int:
+        """Return provider capacity remaining in this window."""
+        return self.limit - self.used
+
+    @property
+    def reset_at(self) -> float:
+        """Return the monotonic reset deadline."""
+        return self.started_at + self.window_seconds
+
+
 class RateLimiter:
-    """Header-based rate limiter that trusts Riot API response headers."""
+    """Track Riot application and method limits per routing scope.
 
-    def __init__(self):
-        """Initialize rate limiter."""
-        # Track remaining requests from headers
-        self.app_remaining: Optional[int] = None
-        self.app_reset_time: Optional[float] = None
-        self.method_remaining: Dict[str, Optional[int]] = {}
-        self.method_reset_time: Dict[str, Optional[float]] = {}
+    Riot windows begin with the first request in a window. Repeated responses
+    therefore update the observed count without extending the reset deadline.
+    Application windows are isolated by routing host, while method windows are
+    isolated by routing host and normalized endpoint.
+    """
 
-        # Request spacing to avoid bursts
-        self.last_request_time = 0
-        self.request_spacing = 0.05  # 50ms between requests
-
-        # Lock for thread safety
+    def __init__(self) -> None:
+        """Initialize empty adaptive windows and conservative burst spacing."""
+        self._app_windows: dict[tuple[str, int], _RateWindow] = {}
+        self._method_windows: dict[tuple[str, int], _RateWindow] = {}
+        self.last_request_time = 0.0
+        self.request_spacing = 0.05
         self.lock = asyncio.Lock()
 
+    @staticmethod
+    def _get_routing_scope(endpoint: str) -> str:
+        """Return the Riot routing host, or a stable local fallback for tests."""
+        parsed = urlsplit(endpoint)
+        return parsed.hostname or "unspecified"
+
+    def _get_endpoint_key(self, endpoint: str, method: str) -> str:
+        """Return a method scope including routing host and service path."""
+        parsed = urlsplit(endpoint)
+        path = parsed.path or endpoint
+        segments = [segment for segment in path.split("/") if segment]
+        normalized_segments: list[str] = []
+        redact_next = 0
+        for index, segment in enumerate(segments):
+            if redact_next:
+                normalized_segments.append("{id}")
+                redact_next -= 1
+                continue
+
+            normalized_segments.append(segment)
+            if segment == "by-riot-id":
+                redact_next = 2
+            elif segment in {"by-puuid", "by-summoner"}:
+                redact_next = 1
+            elif (
+                segment == "matches"
+                and index + 1 < len(segments)
+                and segments[index + 1] != "by-puuid"
+            ):
+                redact_next = 1
+
+        service_key = "/".join(normalized_segments) if normalized_segments else "root"
+        return f"{method.upper()}:{self._get_routing_scope(endpoint)}:{service_key}"
+
+    @staticmethod
+    def _discard_expired(
+        windows: dict[tuple[str, int], _RateWindow], now: float
+    ) -> None:
+        """Remove windows whose original provider interval has elapsed."""
+        expired = [key for key, window in windows.items() if window.reset_at <= now]
+        for key in expired:
+            del windows[key]
+
     async def wait_if_needed(self, endpoint: str, method: str = "GET") -> None:
-        """
-        Wait if rate limits would be exceeded based on headers.
-
-        Args:
-            endpoint: API endpoint being called
-            method: HTTP method being used
-        """
+        """Wait for saturated app/method windows and enforce burst spacing."""
         async with self.lock:
-            now = time.time()
+            now = time.monotonic()
+            self._discard_expired(self._app_windows, now)
+            self._discard_expired(self._method_windows, now)
 
-            # Check app-level limit
-            should_reset = await self._check_and_wait_for_limit(
-                self.app_remaining, self.app_reset_time, now, "App"
-            )
-            if should_reset:
-                self.app_remaining = None
-                self.app_reset_time = None
-
-            # Check method-level limit
+            routing_scope = self._get_routing_scope(endpoint)
             endpoint_key = self._get_endpoint_key(endpoint, method)
-            if endpoint_key in self.method_remaining:
-                remaining = self.method_remaining[endpoint_key]
-                reset_time = self.method_reset_time.get(endpoint_key)
+            relevant_windows = [
+                window
+                for (scope, _), window in self._app_windows.items()
+                if scope == routing_scope
+            ]
+            relevant_windows.extend(
+                window
+                for (scope, _), window in self._method_windows.items()
+                if scope == endpoint_key
+            )
 
-                should_reset = await self._check_and_wait_for_limit(
-                    remaining, reset_time, now, "Method", endpoint_key
-                )
-                if should_reset:
-                    self.method_remaining[endpoint_key] = None
-                    self.method_reset_time[endpoint_key] = None
+            saturated = [window for window in relevant_windows if window.remaining <= 0]
+            if saturated:
+                wait_time = max(window.reset_at - now for window in saturated)
+                if wait_time > 0:
+                    logger.info(
+                        "Riot rate limit reached, waiting",
+                        routing_scope=routing_scope,
+                        endpoint=endpoint_key,
+                        wait_time=wait_time,
+                    )
+                    await asyncio.sleep(wait_time)
+                    now = time.monotonic()
+                    self._discard_expired(self._app_windows, now)
+                    self._discard_expired(self._method_windows, now)
 
-            # Request spacing to avoid bursts
             time_since_last = now - self.last_request_time
             if time_since_last < self.request_spacing:
                 await asyncio.sleep(self.request_spacing - time_since_last)
 
-            self.last_request_time = time.time()
+            self.last_request_time = time.monotonic()
 
-    async def _check_and_wait_for_limit(
-        self,
-        remaining: Optional[int],
-        reset_time: Optional[float],
-        now: float,
-        scope_name: str,
-        endpoint_key: Optional[str] = None,
-    ) -> bool:
-        """
-        Check if rate limit is exceeded and wait if needed.
-
-        Args:
-            remaining: Number of requests remaining
-            reset_time: Time when limit resets
-            now: Current time
-            scope_name: Name of the scope for logging (e.g., "App", "Method")
-            endpoint_key: Optional endpoint key for method-scoped limits
-
-        Returns:
-            True if limit was reset, False otherwise
-        """
-        if remaining is not None and remaining <= 0:
-            if reset_time and reset_time > now:
-                wait_time = reset_time - now
-                logger.info(
-                    f"{scope_name} rate limit reached, waiting",
-                    wait_time=wait_time,
-                    remaining=remaining,
-                    endpoint=endpoint_key,
-                )
-                await asyncio.sleep(wait_time)
-                return False
-            else:
-                # Reset time passed, reset counter
-                return True
-        return False
-
-    def _get_endpoint_key(self, endpoint: str, method: str) -> str:
-        """Generate a key for the endpoint."""
-        stripped = endpoint.replace("https://", "").replace("http://", "")
-        path = stripped.split("/", 1)[1] if "/" in stripped else stripped
-        segments = [segment for segment in path.split("/") if segment]
-
-        if segments:
-            service_key = "-".join(segments[:4])
-        else:
-            service_key = path
-
-        return f"{method}:{service_key}"
-
-    def _update_app_limit(self, remaining: int, reset_time: float) -> None:
-        """Update application-wide rate limit if more restrictive."""
-        if self.app_remaining is None or remaining < self.app_remaining:
-            self.app_remaining = remaining
-            self.app_reset_time = reset_time
-
-    def _update_method_limit(
-        self, endpoint_key: str, remaining: int, reset_time: float
-    ) -> None:
-        """Update method-specific rate limit if more restrictive."""
-        current = self.method_remaining.get(endpoint_key)
-        if current is None or remaining < current:
-            self.method_remaining[endpoint_key] = remaining
-            self.method_reset_time[endpoint_key] = reset_time
-
+    @staticmethod
     def _parse_rate_headers(
-        self, limit_header: str, count_header: str
-    ) -> tuple[list, list] | None:
-        """
-        Parse rate limit header pair.
-
-        Returns:
-            Tuple of (limits, counts) if parsing succeeds, None otherwise
-        """
+        limit_header: str, count_header: str
+    ) -> tuple[list[Dict[str, int]], list[Dict[str, int]]] | None:
+        """Parse a limit/count header pair."""
         if not limit_header or not count_header:
             return None
 
         limits = parse_rate_limit_header(limit_header)
         counts = parse_rate_count_header(count_header)
-
         if not limits or not counts:
             return None
+        return limits, counts
 
-        return (limits, counts)
-
-    def _apply_rate_limit_update(
-        self,
-        limit: Dict,
-        count: Dict,
+    @staticmethod
+    def _record_window(
+        windows: dict[tuple[str, int], _RateWindow],
         scope: str,
-        endpoint_key: str | None = None,
+        limit: int,
+        used: int,
+        window_seconds: int,
+        observed_at: float,
     ) -> None:
-        """
-        Apply a single rate limit update to internal state.
-
-        Args:
-            limit: Parsed limit dict with 'requests' and 'window' keys
-            count: Parsed count dict with 'requests' key
-            scope: Either "app" or "method" for logging
-            endpoint_key: Endpoint key for method-scoped limits
-        """
-        limit_requests = limit["requests"]
-        used_requests = count["requests"]
-        window = limit["window"]
-
-        remaining = limit_requests - used_requests
-        reset_time = time.time() + window
-
-        # Update app-level limit
-        if scope == "app":
-            self._update_app_limit(remaining, reset_time)
-            logger.debug(
-                "Updated app rate limit",
-                limit=limit_requests,
-                used=used_requests,
-                remaining=remaining,
-                window=window,
-            )
-            return
-
-        # Update method-level limit
-        if endpoint_key:
-            self._update_method_limit(endpoint_key, remaining, reset_time)
-            logger.debug(
-                "Updated method rate limit",
-                endpoint=endpoint_key,
-                limit=limit_requests,
-                used=used_requests,
-                remaining=remaining,
-                window=window,
-            )
+        """Update a window count without moving an active window's start."""
+        key = (scope, window_seconds)
+        current = windows.get(key)
+        starts_new_window = (
+            current is None
+            or current.limit != limit
+            or current.reset_at <= observed_at
+            or used < current.used
+        )
+        if starts_new_window:
+            started_at = observed_at
+        else:
+            assert current is not None
+            started_at = current.started_at
+        windows[key] = _RateWindow(
+            limit=limit,
+            used=used,
+            window_seconds=window_seconds,
+            started_at=started_at,
+        )
 
     def _process_rate_limit_pair(
         self,
         limit_header: str,
         count_header: str,
+        windows: dict[tuple[str, int], _RateWindow],
         scope: str,
-        endpoint_key: str | None = None,
+        observed_at: float,
     ) -> None:
-        """
-        Process a pair of rate limit headers and update internal state.
-
-        Args:
-            limit_header: Rate limit header value (e.g., "20:1,100:120")
-            count_header: Rate count header value (e.g., "15:1,80:120")
-            scope: Either "app" or "method" for logging
-            endpoint_key: Endpoint key for method-scoped limits
-        """
+        """Apply matching provider windows from one header pair."""
         parsed = self._parse_rate_headers(limit_header, count_header)
         if not parsed:
             return
 
         limits, counts = parsed
-        for limit, count in zip(limits, counts):
-            self._apply_rate_limit_update(limit, count, scope, endpoint_key)
+        counts_by_window = {item["window"]: item["requests"] for item in counts}
+        for limit in limits:
+            window_seconds = limit["window"]
+            used = counts_by_window.get(window_seconds)
+            if used is None:
+                continue
+            self._record_window(
+                windows,
+                scope,
+                limit["requests"],
+                used,
+                window_seconds,
+                observed_at,
+            )
 
     def update_limits(
         self, headers: Dict[str, str], endpoint: str, method: str = "GET"
     ) -> None:
-        """
-        Update rate limits from Riot API response headers.
-
-        Args:
-            headers: Response headers containing rate limit info
-            endpoint: API endpoint that was called
-            method: HTTP method used
-        """
+        """Update routing-scoped application and method windows from a response."""
         try:
-            normalized_headers = {k.lower(): v for k, v in headers.items()}
-
-            # Process app rate limits
+            normalized_headers = {key.lower(): value for key, value in headers.items()}
+            observed_at = time.monotonic()
             self._process_rate_limit_pair(
                 normalized_headers.get("x-app-rate-limit", ""),
                 normalized_headers.get("x-app-rate-limit-count", ""),
-                scope="app",
+                self._app_windows,
+                self._get_routing_scope(endpoint),
+                observed_at,
             )
-
-            # Process method rate limits
-            endpoint_key = self._get_endpoint_key(endpoint, method)
             self._process_rate_limit_pair(
                 normalized_headers.get("x-method-rate-limit", ""),
                 normalized_headers.get("x-method-rate-limit-count", ""),
-                scope="method",
-                endpoint_key=endpoint_key,
+                self._method_windows,
+                self._get_endpoint_key(endpoint, method),
+                observed_at,
             )
-
-        except Exception as e:
+        except Exception as error:
             logger.warning(
-                "Failed to parse rate limit headers",
-                error=str(e),
-                headers={
-                    k: v
-                    for k, v in headers.items()
-                    if k.lower().startswith("x-app-rate")
-                    or k.lower().startswith("x-method-rate")
-                },
+                "Failed to parse Riot rate limit headers",
+                error_type=type(error).__name__,
             )
-
-    async def record_success(self, endpoint: str, method: str = "GET") -> None:
-        """
-        Record a successful request.
-
-        Note: With header-based approach, this is a no-op since headers
-        provide the truth about remaining requests.
-        """
-        pass

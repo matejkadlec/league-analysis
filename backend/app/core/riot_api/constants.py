@@ -33,6 +33,15 @@ class Platform(str, Enum):
     VN2 = "vn2"
 
 
+class MatchType(str, Enum):
+    """MATCH-V5 match-list type filters."""
+
+    RANKED = "ranked"
+    NORMAL = "normal"
+    TOURNEY = "tourney"
+    TUTORIAL = "tutorial"
+
+
 # Platform display names (community-known abbreviations)
 PLATFORM_DISPLAY_NAMES: dict[str, str] = {
     "br1": "BR",
@@ -67,45 +76,77 @@ def get_platform_display_name(platform: str) -> str:
 
 
 class QueueType(int, Enum):
-    """Riot API queue types for match filtering."""
+    """Current Riot queue IDs accepted by MATCH-V5 filters.
 
-    # Ranked queues
-    RANKED_SOLO_5X5 = 420
-    RANKED_FLEX_5X5 = 440
-    RANKED_FLEX_3X3 = 470
+    Names follow Riot's maintained queue dataset, which includes active and
+    retained historical entries. Product support is a narrower allowlist
+    declared below.
+    """
 
-    # Normal queues
     NORMAL_DRAFT_5X5 = 400
+    RANKED_SOLO_5X5 = 420
     NORMAL_BLIND_PICK_5X5 = 430
-    NORMAL_BLIND_PICK_3X3 = 450
+    RANKED_FLEX_5X5 = 440
     ARAM = 450
+    SWIFTPLAY = 480
+    QUICKPLAY = 490
 
-    # Other queues
-    PRACTICE_TOOL = 2000
-    TUTORIAL_1 = 2010
-    TUTORIAL_2 = 2011
-    TUTORIAL_3 = 2012
+    BLOOD_HUNT_ASSASSIN = 600
+    DARK_STAR_SINGULARITY = 610
+    SUMMONERS_RIFT_CLASH = 700
+    ARAM_CLASH = 720
+    COOP_VS_AI_INTERMEDIATE_TWISTED_TREELINE = 800
+    COOP_VS_AI_INTRO_TWISTED_TREELINE = 810
+    COOP_VS_AI_BEGINNER_TWISTED_TREELINE = 820
+    COOP_VS_AI_INTRO = 870
+    COOP_VS_AI_BEGINNER = 880
+    COOP_VS_AI_INTERMEDIATE = 890
+    ARURF = 900
+    ASCENSION = 910
+    PORO_KING = 920
+    NEXUS_SIEGE = 940
+    DOOM_BOTS_VOTING = 950
+    DOOM_BOTS_STANDARD = 960
+    STAR_GUARDIAN_NORMAL = 980
+    STAR_GUARDIAN_ONSLAUGHT = 990
+    PROJECT_HUNTERS = 1000
+    SNOW_ARURF = 1010
+    ONE_FOR_ALL = 1020
+    ODYSSEY_INTRO = 1030
+    ODYSSEY_CADET = 1040
+    ODYSSEY_CREWMEMBER = 1050
+    ODYSSEY_CAPTAIN = 1060
+    ODYSSEY_ONSLAUGHT = 1070
+    NEXUS_BLITZ = 1300
+    ULTIMATE_SPELLBOOK = 1400
+    ARENA = 1700
+    ARENA_16_PLAYER = 1710
+    SWARM_SOLO = 1810
+    SWARM_DUO = 1820
+    SWARM_TRIO = 1830
+    SWARM_SQUAD = 1840
+    PICK_URF = 1900
+    TUTORIAL_1 = 2000
+    TUTORIAL_2 = 2010
+    TUTORIAL_3 = 2020
+    BRAWL = 2300
+    ARAM_MAYHEM = 2400
 
-    # Event/Rotation queues
-    ASSASSINATE = 600
-    ONE_FOR_ALL = 610
-    HEXAKILL = 620
-    URF = 630
-    DOOM_BOTS = 640
-    ASCENSION = 650
-    PoroKing = 700
-    NEXUS_SIEGE = 720
-    DefinitelyNotDominion = 800
-    ARURF = 830
-    PROJECT = 840
-    OVERCHARGE = 860
-    SNOWURF = 870
-    Odyssey = 880
+
+PRODUCT_SUPPORTED_QUEUE_TYPES: tuple[QueueType, ...] = (
+    QueueType.NORMAL_DRAFT_5X5,
+    QueueType.RANKED_SOLO_5X5,
+    QueueType.RANKED_FLEX_5X5,
+    QueueType.ARAM,
+)
+PRODUCT_SUPPORTED_QUEUE_IDS: tuple[int, ...] = tuple(
+    queue.value for queue in PRODUCT_SUPPORTED_QUEUE_TYPES
+)
 
 
-def get_region_by_platform(platform: str) -> Region:
-    """Map platform code to regional routing value."""
-    p = platform.lower()
+def get_region_by_platform(platform: Platform | str) -> Region:
+    """Map a supported platform to its regional route or fail closed."""
+    p = platform.value if isinstance(platform, Platform) else platform.lower()
     if p in ["na1", "br1", "la1", "la2"]:
         return Region.AMERICAS
     if p in ["kr", "jp1"]:
@@ -114,4 +155,4 @@ def get_region_by_platform(platform: str) -> Region:
         return Region.EUROPE
     if p in ["oc1", "ph2", "sg2", "th2", "tw2", "vn2"]:
         return Region.SEA
-    return Region.EUROPE  # Default fallback
+    raise ValueError(f"Unsupported Riot platform: {platform}")

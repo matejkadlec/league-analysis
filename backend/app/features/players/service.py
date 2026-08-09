@@ -13,7 +13,7 @@ from app.core.decorators import input_validation, service_error_handler
 from app.core.exceptions import (
     PlayerServiceError,
 )
-from app.core.riot_api.constants import Platform, Region
+from app.core.riot_api.constants import Platform, get_region_by_platform
 from app.features.auth.user_tracked_player import UserTrackedPlayer
 
 from .models import Player
@@ -694,19 +694,8 @@ class PlayerService:
         try:
             await _ensure_riot_writer_maintenance_is_inactive(self.db)
 
-            # Determine Region from Platform for Account API
-            # Heuristic mapping
-            platform_lower = platform.lower()
-            region = Region.EUROPE  # Default
-
-            if platform_lower in ["na1", "br1", "la1", "la2"]:
-                region = Region.AMERICAS
-            elif platform_lower in ["kr", "jp1"]:
-                region = Region.ASIA
-            elif platform_lower in ["ph2", "sg2", "th2", "tw2", "vn2"]:
-                region = Region.SEA
-
-            platform_enum = Platform(platform_lower)
+            platform_enum = Platform(platform.lower())
+            region = get_region_by_platform(platform_enum)
 
             # 1. Fetch Account data (PUUID, Name#Tag)
             account = await riot_client.get_account_by_riot_id(
@@ -732,8 +721,10 @@ class PlayerService:
 
             if player:
                 # Update existing
-                player.game_name = account.game_name
-                player.tag_line = account.tag_line
+                if account.game_name:
+                    player.game_name = account.game_name
+                if account.tag_line:
+                    player.tag_line = account.tag_line
                 player.platform = platform
                 player.summoner_level = summoner.summoner_level
                 player.profile_icon_id = summoner.profile_icon_id
@@ -748,8 +739,8 @@ class PlayerService:
                 # Create new
                 player = Player(
                     puuid=account.puuid,
-                    game_name=account.game_name,
-                    tag_line=account.tag_line,
+                    game_name=account.game_name or game_name,
+                    tag_line=account.tag_line or tag_line,
                     platform=platform,
                     summoner_level=summoner.summoner_level,
                     profile_icon_id=summoner.profile_icon_id,
@@ -1143,7 +1134,7 @@ class PlayerService:
         """
         from datetime import datetime, timezone
 
-        from app.core.riot_api.constants import Platform, Region
+        from app.core.riot_api.constants import Platform, get_region_by_platform
 
         await _ensure_riot_writer_maintenance_is_inactive(self.db)
         logger.debug("Updating player profile", puuid=player.puuid)
@@ -1151,16 +1142,7 @@ class PlayerService:
         # Convert platform string to Platform enum
         platform_enum = Platform(player.platform.lower())
 
-        # Determine region from platform
-        platform_lower = player.platform.lower()
-        region = Region.EUROPE  # Default
-
-        if platform_lower in ["na1", "br1", "la1", "la2"]:
-            region = Region.AMERICAS
-        elif platform_lower in ["kr", "jp1"]:
-            region = Region.ASIA
-        elif platform_lower in ["ph2", "sg2", "th2", "tw2", "vn2"]:
-            region = Region.SEA
+        region = get_region_by_platform(platform_enum)
 
         # Fetch both sources before mutating the ORM object so a partial Riot
         # response cannot leave an uncommitted half-update in the session.
@@ -1170,10 +1152,10 @@ class PlayerService:
         account = await riot_api_client.get_account_by_puuid(player.puuid, region)
 
         changed = False
-        if account.game_name != player.game_name:
+        if account.game_name is not None and account.game_name != player.game_name:
             player.game_name = account.game_name
             changed = True
-        if account.tag_line != player.tag_line:
+        if account.tag_line is not None and account.tag_line != player.tag_line:
             player.tag_line = account.tag_line
             changed = True
         if summoner.profile_icon_id != player.profile_icon_id:

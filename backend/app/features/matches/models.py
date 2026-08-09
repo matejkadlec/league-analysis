@@ -1,7 +1,7 @@
 """Match data model for storing League of Legends match information."""
 
 from datetime import datetime
-from typing import Optional
+from typing import Literal, Optional
 
 from sqlalchemy import (
     BigInteger,
@@ -42,11 +42,26 @@ class Match(Base):
     )
 
     # Game information
+    game_creation_timestamp: Mapped[int] = mapped_column(
+        BigInteger,
+        nullable=False,
+        comment="Riot loading-screen gameCreation timestamp in milliseconds",
+    )
+
     game_start_timestamp: Mapped[int] = mapped_column(
         BigInteger,
         nullable=False,
         index=True,
-        comment="Game creation timestamp in milliseconds since epoch",
+        comment="Actual game start, or creation time for explicitly marked legacy rows",
+    )
+
+    game_start_timestamp_source: Mapped[
+        Literal["riot_game_start", "legacy_game_creation"]
+    ] = mapped_column(
+        String(32),
+        nullable=False,
+        default="riot_game_start",
+        comment="Source semantics for game_start_timestamp",
     )
 
     game_end_timestamp: Mapped[Optional[int]] = mapped_column(

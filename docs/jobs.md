@@ -159,7 +159,7 @@ For each tracked player:
    │   │   ├── Sleep 1.2s (rate limit protection)
    │   │   ├── Fetch full match details
    │   │   ├── Fetch match timeline
-   │   │   ├── Skip if outside the current release year (game_version != "26.*")
+   │   │   ├── Skip if outside the current release year (game_version != "16.*")
    │   │   └── Store/update match, participants, and timeline aggregates
    └── Commit changes
 
@@ -185,7 +185,9 @@ For each tracked player:
 - **Strict throttling**: 1.2 second delay between match detail requests
 - **Cross-component coordination**: `DBRateLimiter` uses
   `RateLimitComponent.MATCH_FETCHER`
-- This respects the Development API Key limit of 100 requests/2 minutes
+- The database layer retains conservative global quotas and component
+  priorities; each Riot client additionally adapts to response-reported
+  application and method windows per routing/service scope.
 - Rate limit errors (`429`) trigger `RateLimitSignal`, causing graceful job termination with `RATE_LIMITED` status. New-player background Match Fetcher executions use the same status and retain the safe `retry_after` value in their execution details.
 
 ### Error Handling
@@ -216,7 +218,10 @@ visible without populating the failure-only `error_message` field.
 
 ### Season Filtering
 
-The job only processes matches from the current release year (Season 26). It checks `game_version.startswith("26.")` and stops fetching when it encounters older matches. This boundary is intentionally explicit so a new Riot release year requires a reviewed update rather than silently mixing historical data.
+The job only processes matches from the current 2026 release year. Riot game
+versions use the `16.*` prefix, so the job stops fetching when it encounters an
+older match. This boundary is intentionally explicit so a new release year
+requires a reviewed update rather than silently mixing historical data.
 
 ### Metrics Tracked
 
@@ -247,6 +252,10 @@ Queue meanings:
 - `440` = Ranked Flex
 - `400` = Normal Draft
 - `450` = ARAM
+
+These four IDs come from the central product allowlist shared by the Riot
+client and job validation. The larger `QueueType` reference catalog does not
+automatically enable new or rotating modes.
 
 Active-state behavior:
 

@@ -62,6 +62,7 @@ All comparisons show trend indicators (improving/declining/stable).
 
 ## Dependencies
 
-- Data Dragon for champion icons (`getChampionIconUrl`)
+- Cached current Data Dragon version context for champion icons
+  (`useDDragonVersion` + `getChampionIconUrl`)
 - TanStack Query for data fetching
 - shadcn/ui components (Card, Badge, Skeleton)

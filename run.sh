@@ -245,14 +245,14 @@ cleanup() {
     echo -e "${YELLOW}⚠️  Shutting down services...${NC}"
     echo -e "${YELLOW}============================================${NC}"
 
-    if [ ! -z "$BACKEND_PID" ]; then
+    if [ -n "$BACKEND_PID" ]; then
         echo -e "${BLUE}Stopping backend (PID: $BACKEND_PID)...${NC}"
-        kill $BACKEND_PID 2>/dev/null || true
+        kill "$BACKEND_PID" 2>/dev/null || true
     fi
 
-    if [ ! -z "$FRONTEND_PID" ]; then
+    if [ -n "$FRONTEND_PID" ]; then
         echo -e "${BLUE}Stopping frontend (PID: $FRONTEND_PID)...${NC}"
-        kill $FRONTEND_PID 2>/dev/null || true
+        kill "$FRONTEND_PID" 2>/dev/null || true
     fi
 
     echo -e "${GREEN}✓ All services stopped${NC}"
@@ -280,11 +280,21 @@ fi
 echo -e "${GREEN}✓ PostgreSQL connection OK${NC}"
 echo ""
 
+# Apply reviewed schema revisions before any application writer can start.
+echo -e "${YELLOW}Applying database migrations...${NC}"
+cd "$SCRIPT_DIR/backend"
+if ! uv run python scripts/migrate.py upgrade head; then
+    echo -e "${RED}ERROR: Database migration failed; backend startup was cancelled.${NC}"
+    echo -e "${YELLOW}For a populated database without an Alembic marker, follow docs/database.md before retrying.${NC}"
+    exit 1
+fi
+echo -e "${GREEN}✓ Database migrations applied${NC}"
+echo ""
+
 # Start backend
 echo -e "${BLUE}=============================================${NC}"
 echo -e "${BLUE}⚙️  Starting Backend (FastAPI)${NC}"
 echo -e "${BLUE}=============================================${NC}"
-cd "$SCRIPT_DIR/backend"
 CORS_ORIGINS="$RUN_CORS_ORIGINS" uv run uvicorn app.main:app --host 0.0.0.0 --port "$BACKEND_PORT" --reload > "$SCRIPT_DIR/logs/backend.log" 2>&1 &
 BACKEND_PID=$!
 echo -e "${GREEN}✓ Backend started (PID: $BACKEND_PID)${NC}"
@@ -300,7 +310,7 @@ for i in {1..30}; do
         echo -e "${GREEN}✓ Backend is ready!${NC}"
         break
     fi
-    if [ $i -eq 30 ]; then
+    if [ "$i" -eq 30 ]; then
         echo -e "${RED}ERROR: Backend failed to start. Check logs/backend.log${NC}"
         cleanup
     fi
@@ -329,7 +339,7 @@ echo -e "${GREEN}✓ Frontend started (PID: $FRONTEND_PID)${NC}"
 
 # Check if frontend is still running after a few seconds
 sleep 3
-if ! ps -p $FRONTEND_PID > /dev/null; then
+if ! ps -p "$FRONTEND_PID" > /dev/null; then
     echo -e "${RED}ERROR: Frontend failed to start (process exited). Check logs/frontend.log${NC}"
     echo -e "${YELLOW}Last 10 lines of frontend log:${NC}"
     tail -n 10 "$SCRIPT_DIR/logs/frontend.log"

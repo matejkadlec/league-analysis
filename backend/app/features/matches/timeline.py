@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Dict, Optional
 
+import structlog
 from sqlalchemy import (
     CheckConstraint,
     ForeignKey,
@@ -24,6 +25,8 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from app.core.models import Base
+
+logger = structlog.get_logger(__name__)
 
 VALID_TEAM_IDS = {100, 200}
 OBJECTIVE_KINDS = {
@@ -191,6 +194,14 @@ def _increment_counter(counter: Dict[str, int], key: str) -> None:
     counter[key] = counter.get(key, 0) + 1
 
 
+def _uses_historical_atakhan_contract(game_version: str) -> bool:
+    """Whether the match predates the 2026 objective-set change."""
+    try:
+        return int(game_version.split(".", 1)[0]) < 16
+    except AttributeError, TypeError, ValueError:
+        return False
+
+
 def _collect_involved_participants(
     event: Dict[str, Any],
     valid_participant_ids: set[int],
@@ -286,6 +297,7 @@ def build_match_timeline_rows(
         return []
 
     match_id = match_dto.metadata.match_id
+    historical_atakhan = _uses_historical_atakhan_contract(match_dto.info.game_version)
     frame_interval_ms = _normalize_int(info.get("frameInterval"))
     frame_count = len(frames)
 
@@ -410,15 +422,40 @@ def build_match_timeline_rows(
                     team_total_field = "team_inhibitors_destroyed"
                     lane_field = "inhibitor_takedowns_by_lane"
 
+                if objective is None:
+                    logger.warning(
+                        "Unknown Riot timeline building objective",
+                        match_id=match_id,
+                        building_type=building_type,
+                        tower_type=tower_type,
+                        lane_type=lane_type,
+                        timestamp=timestamp,
+                    )
+                    for participant_id in involved:
+                        row = rows_by_participant_id.get(participant_id)
+                        if row is None:
+                            continue
+                        _append_compact_objective_event(
+                            row=row,
+                            timestamp=timestamp,
+                            objective="other_building",
+                            role=(
+                                "K"
+                                if killer_id is not None and participant_id == killer_id
+                                else "A"
+                            ),
+                            lane=lane_type,
+                            subtype=building_type,
+                            monster_type=tower_type,
+                        )
+                    continue
+
                 if (
                     objective is not None
                     and team_total_field is not None
                     and killer_team_id in VALID_TEAM_IDS
                 ):
                     team_totals[killer_team_id][team_total_field] += 1
-
-                if objective is None:
-                    continue
 
                 for participant_id in involved:
                     row = rows_by_participant_id.get(participant_id)
@@ -468,9 +505,19 @@ def build_match_timeline_rows(
             elif monster_type == "HORDE":
                 objective = "voidgrub"
                 team_total_field = "team_voidgrubs_slain"
-            elif monster_type == "ATAKHAN":
+            elif monster_type == "ATAKHAN" and historical_atakhan:
                 objective = "atakhan"
                 team_total_field = "team_atakhan_slain"
+
+            if objective is None:
+                logger.warning(
+                    "Unknown Riot timeline epic monster objective",
+                    match_id=match_id,
+                    game_version=match_dto.info.game_version,
+                    monster_type=monster_type,
+                    monster_subtype=monster_subtype,
+                    timestamp=timestamp,
+                )
 
             if (
                 objective is not None

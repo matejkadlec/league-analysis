@@ -7,10 +7,10 @@
 > throttling, or feature usage changes.
 
 The dated [2026-08-03 compatibility audit](riot-api-compatibility-2026-08-03.md)
-traces every current caller and consumer, compares the implementation with the
-current official contract, records the unavailable authenticated-payload check,
-and defines the ordered remediation scope. No runtime behavior was changed by
-that audit.
+traces every caller and consumer and defines the remediation scope implemented
+by LGA-42. Sanitized protected fixtures captured on 2026-08-08 now cover the
+used Account, Summoner, Match, and Timeline shapes for queues 400, 420, 440,
+and 450.
 
 ---
 
@@ -47,8 +47,11 @@ Riot APIs use two routing schemas. Mixing them causes 403/404 errors.
 
 #### Rate-limit layers
 
-`backend/app/core/riot_api/rate_limiter.py` tracks app and method limits
-reported by Riot response headers for an individual client.
+`backend/app/core/riot_api/rate_limiter.py` tracks every app and method window
+reported by Riot response headers for an individual client. Application
+windows are isolated by routing host; method windows are isolated by routing
+host plus normalized service path. Counts update an active window without
+moving its original local start, and a lower count starts a new window.
 
 `backend/app/core/riot_api/db_rate_limiter.py` coordinates components through
 PostgreSQL:
@@ -153,7 +156,8 @@ Host: {region}.api.riotgames.com
 |-------|------|-------------|
 | `start` | int | Start index (default: 0) |
 | `count` | int | Number of matches (max: 100) |
-| `queue` | int | Queue ID (420=Solo/Duo, 440=Flex) |
+| `queue` | int | A documented `QueueType`; product jobs enable only 400, 420, 440, and 450 |
+| `type` | enum | `ranked`, `normal`, `tourney`, or `tutorial`; inclusive with `queue` |
 | `startTime` | int | Epoch seconds - matches that **started after** this time (inclusive) |
 | `endTime` | int | Epoch seconds - matches that **started before** this time (inclusive) |
 
@@ -161,6 +165,8 @@ Host: {region}.api.riotgames.com
 official match DTO distinguishes `gameCreation` (loading-screen time) from
 `gameStartTimestamp` (actual game start); do not use `gameEndTimestamp` for this
 filter and do not treat `gameCreation` as the actual start field.
+The client rejects negative `start`, `count` outside 0–100, unsupported queue
+or type values, invalid epoch values, and reversed time ranges before I/O.
 
 **Response:**
 
@@ -182,6 +188,13 @@ Host: {region}.api.riotgames.com
 - `metadata`: Match ID, participants list
 - `info.participants[]`: All 10 players with stats, items, runes
 - `info.gameVersion`: Patch version (e.g., "16.1.123")
+- separate `info.gameCreation` and `info.gameStartTimestamp` values
+
+PUUID remains the participant identity. Mode-sensitive statistics, legacy
+`summonerName`, and Riot ID fields are tolerant; unknown extra provider fields
+are ignored. Newly stored or refetched matches persist the actual start and
+mark its source as `riot_game_start`. Existing rows are explicitly marked as
+legacy creation-time fallbacks rather than silently relabeled.
 
 **Used in**: Match Fetcher job, match details
 
@@ -196,6 +209,10 @@ Host: {region}.api.riotgames.com
 
 **Used in**: Match Fetcher job and re-analysis flows to build `core.match_timelines`
 objective aggregates (turrets, inhibitors, dragons, heralds, barons, voidgrubs).
+Atakhan columns and old compact events remain readable for pre-2026 matches,
+but Atakhan is not treated as a current first-class objective. Unknown current
+building or epic-monster kinds are logged with reviewed fields and retained in
+compact generic events/maps for follow-up.
 
 ---
 
@@ -409,10 +426,20 @@ Retry-After: 5
 
 - `Region` enum: EUROPE, AMERICAS, ASIA, SEA
 - `Platform` enum: EUN1, EUW1, NA1, KR, etc.
-- `QueueType` includes ranked, normal, ARAM, practice/tutorial, and rotating
-  mode IDs, but its event/tutorial catalog is stale as detailed in the dated
-  compatibility audit; current Match Fetcher defaults are 420, 440, 400, and 450
-- `get_region_by_platform()`: Platform → Region mapping
+- `QueueType` follows Riot's maintained queue dataset. The narrower product
+  allowlist is 400, 420, 440, and 450; new documented modes are not enabled
+  automatically.
+- `get_region_by_platform()`: Platform → Region mapping that rejects unknown
+  platforms rather than defaulting to Europe.
+
+### Data Dragon assets
+
+The root layout resolves the first valid version from Riot's public
+`versions.json` manifest with a six-hour Next.js revalidation interval and
+provides it to client components. Versioned champion, item, spell, and profile
+assets use that value. A reviewed `16.15.1` fallback keeps existing assets
+available if the manifest is unavailable or malformed; unknown spell/rune IDs
+remain non-renderable instead of constructing speculative URLs.
 
 ---
 
@@ -423,5 +450,5 @@ Retry-After: 5
 3. **Respect rate limits** - honor Riot's application, method, service, region,
    and `Retry-After` signals; do not rely on a single fixed delay
 4. **Check queue types** - 420=Solo/Duo, 440=Flex, etc.
-5. **Filter by season** - Check `game_version.startswith("26.")` for Season 26
+5. **Filter by release year** - In 2026, accept `game_version.startswith("16.")`
 6. **Handle empty responses** - League entries return `[]` for unranked players

@@ -8,7 +8,7 @@ from typing import Any, Callable, Dict, List, Optional, Union
 import httpx
 import structlog
 
-from .constants import Platform, QueueType, Region
+from .constants import MatchType, Platform, QueueType, Region
 from .endpoints import RiotAPIEndpoints
 from .errors import (
     AuthenticationError,
@@ -22,6 +22,7 @@ from .errors import (
 from .models import (
     AccountDTO,
     LeagueEntryDTO,
+    LegacyLeagueEntryDTO,
     MatchDTO,
     MatchListDTO,
     SummonerDTO,
@@ -255,7 +256,6 @@ class RiotAPIClient:
         method: str,
         params: Optional[Dict[str, Any]],
         data: Optional[Dict[str, Any]],
-        endpoint_path: str,
         attempt: int,
         max_retries: int,
     ) -> Any:
@@ -271,7 +271,7 @@ class RiotAPIClient:
             self.request_callback("requests_made", 1)
 
         try:
-            self.rate_limiter.update_limits(response_headers, endpoint_path, method)
+            self.rate_limiter.update_limits(response_headers, url, method)
 
             # Handle error status codes
             if response.status_code != 200:
@@ -283,7 +283,6 @@ class RiotAPIClient:
                     return None  # Signal to retry
 
             response_data = response.json()
-            await self.rate_limiter.record_success(endpoint_path, method)
             return response_data
         finally:
             await response.aclose()
@@ -318,8 +317,7 @@ class RiotAPIClient:
             raise RiotAPIError("Session not initialized")
 
         # Rate limiting
-        endpoint_path = self._extract_endpoint_path(url)
-        await self.rate_limiter.wait_if_needed(endpoint_path, method)
+        await self.rate_limiter.wait_if_needed(url, method)
 
         # Retry loop
         max_retries = 3 if retry_on_failure else 0
@@ -328,7 +326,7 @@ class RiotAPIClient:
         for attempt in range(max_retries + 1):
             try:
                 result = await self._execute_single_request(
-                    url, method, params, data, endpoint_path, attempt, max_retries
+                    url, method, params, data, attempt, max_retries
                 )
                 if result is not None:
                     return result
@@ -405,15 +403,16 @@ class RiotAPIClient:
         puuid: str,
         start: int = 0,
         count: int = 20,
-        queue: Optional[Union[int, QueueType]] = None,
-        type: Optional[str] = None,
+        queue: Optional[Union[int, str, QueueType]] = None,
+        type: Optional[str | MatchType] = None,
         start_time: Optional[int] = None,
         end_time: Optional[int] = None,
         region: Optional[Region] = None,
     ) -> MatchListDTO:
         """Get match list by PUUID."""
-        # Normalize queue parameter to QueueType
         queue_type = self._normalize_queue_type(queue)
+        match_type = self._normalize_match_type(type)
+        self._validate_match_list_bounds(start, count, start_time, end_time)
         used_region = region or self.region
 
         self._record_api_call(
@@ -423,7 +422,14 @@ class RiotAPIClient:
         )
 
         url = self.endpoints.match_list_by_puuid(
-            puuid, start, count, queue_type, type, start_time, end_time, region
+            puuid,
+            start,
+            count,
+            queue_type,
+            match_type,
+            start_time,
+            end_time,
+            region,
         )
         response_data = await self._make_request(url)
 
@@ -470,7 +476,7 @@ class RiotAPIClient:
     # League endpoints
     async def get_league_entries_by_summoner_id(
         self, summoner_id: str, platform: Optional[Platform] = None
-    ) -> List[LeagueEntryDTO]:
+    ) -> List[LegacyLeagueEntryDTO]:
         """Get league entries by encrypted Summoner ID."""
         used_platform = platform or self.platform
         self._record_api_call(
@@ -487,7 +493,7 @@ class RiotAPIClient:
                 f"Expected list response for league entries, got {type(response)}"
             )
 
-        return [LeagueEntryDTO(**entry) for entry in response]
+        return [LegacyLeagueEntryDTO(**entry) for entry in response]
 
     async def get_league_entries_by_puuid(
         self, puuid: str, platform: Optional[Platform] = None
@@ -520,16 +526,51 @@ class RiotAPIClient:
     def _normalize_queue_type(
         queue: Optional[Union[int, str, QueueType]],
     ) -> Optional[QueueType]:
-        """Normalize queue parameter to QueueType enum."""
+        """Normalize a queue filter and reject unknown IDs."""
         if queue is None or isinstance(queue, QueueType):
             return queue
 
         try:
             queue_int = int(queue) if isinstance(queue, str) else queue
-            for queue_type in QueueType:
-                if queue_type.value == queue_int:
-                    return queue_type
-        except ValueError, TypeError:
-            pass
+            return QueueType(queue_int)
+        except (ValueError, TypeError) as error:
+            raise ValueError(f"Unsupported Riot queue ID: {queue}") from error
 
-        return None
+    @staticmethod
+    def _normalize_match_type(
+        match_type: str | MatchType | None,
+    ) -> MatchType | None:
+        """Normalize a MATCH-V5 type filter and reject unknown values."""
+        if match_type is None or isinstance(match_type, MatchType):
+            return match_type
+
+        try:
+            return MatchType(match_type.lower())
+        except (AttributeError, ValueError) as error:
+            raise ValueError(f"Unsupported Riot match type: {match_type}") from error
+
+    @staticmethod
+    def _validate_match_list_bounds(
+        start: int,
+        count: int,
+        start_time: int | None,
+        end_time: int | None,
+    ) -> None:
+        """Validate MATCH-V5 pagination and epoch-second time filters."""
+        if isinstance(start, bool) or not isinstance(start, int) or start < 0:
+            raise ValueError("start must be a non-negative integer")
+        if (
+            isinstance(count, bool)
+            or not isinstance(count, int)
+            or not 0 <= count <= 100
+        ):
+            raise ValueError("count must be an integer between 0 and 100")
+
+        for name, value in (("start_time", start_time), ("end_time", end_time)):
+            if value is None:
+                continue
+            if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+                raise ValueError(f"{name} must be a non-negative epoch-second integer")
+
+        if start_time is not None and end_time is not None and start_time > end_time:
+            raise ValueError("start_time must not be greater than end_time")

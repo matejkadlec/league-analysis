@@ -72,6 +72,8 @@ export function MyComponent({ id }: MyComponentProps) {
 - `"use client"` for interactivity
 - TypeScript interfaces for props
 - Handle loading/error/success states
+- Service reachability errors may suggest checking the League Analysis backend,
+  but must not claim that the user's internet connection is unavailable.
 - Use shadcn/ui from `@/components/ui/`
 - Export via `index.ts`
 - kebab-case files, PascalCase components

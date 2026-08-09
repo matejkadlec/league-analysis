@@ -30,11 +30,18 @@ Inherits repository-wide rules from
   Summoner-V4 and League-V4.
 - Use PUUID as the durable player identifier.
 - Keep HTTP I/O async and validate responses through the DTO layer.
+- Treat Account-V1 `gameName`/`tagLine` and mode-sensitive participant fields
+  as optional. Missing identity fields must preserve a known Riot ID; legacy
+  `summonerName` is only a new-record/display fallback.
+- Keep the Riot queue reference catalog separate from the product allowlist
+  (400, 420, 440, 450). Reject unknown queue/type/platform inputs before I/O.
 - Treat `leagueId` and `puuid` as optional metadata in League-V4 by-PUUID
   entries. Keep queue and ranked-result fields strict so genuine response-shape
   drift remains visible without rejecting the current payload.
-- Preserve both rate-limit layers. Do not bypass acquisition/recording,
-  priority, spacing, `Retry-After`, or 429 behavior.
+- Preserve both rate-limit layers. Per-client windows are routing/service
+  scoped and keep their original observed start; database coordination keeps
+  cross-component priority. Do not bypass acquisition/recording, spacing,
+  `Retry-After`, or 429 behavior.
 - Credential lookup is implemented by `app.core.config.get_riot_api_key`: an
   active, non-expired `core.riot_api_keys` row has priority, with
   `RIOT_API_KEY` as the development fallback.

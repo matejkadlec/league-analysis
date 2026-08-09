@@ -103,6 +103,8 @@ locked pre-commit installation.
   platform presentation, rank-style mapping, Top Champions pagination
   boundaries, and sign-in authentication errors, request timeouts,
   duplicate-submission prevention, and password visibility;
+- deterministic match-history service-error copy that distinguishes local API
+  reachability from the user's internet connection;
 - Next.js production build.
 
 The separate `cd frontend && npm run test:e2e` Playwright suite verifies the
@@ -115,9 +117,10 @@ provisioning is part of the deterministic CI environment.
 ### Backend checks
 
 - `uv sync --frozen --all-groups`;
-- Alembic clean-database validation that creates and removes an isolated
-  PostgreSQL database, verifies all schemas/tables/enums/triggers, and exercises
-  async application access plus the user-settings trigger;
+- Alembic isolated-database validation that upgrades through the pre-LGA-42
+  revision, seeds one legacy match, upgrades to head, verifies timestamp
+  backfill plus all schemas/tables/enums/triggers, and exercises async
+  application access plus the user-settings trigger;
 - pytest coverage for authentication/password and active/admin authorization,
   settings schemas, Riot HTTP/rate-limit boundaries, job queue/error behavior,
   core validation, and match/player transformations;

@@ -18,7 +18,7 @@ from sqlalchemy import URL, create_engine, text
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
 PROJECT_ROOT = BACKEND_ROOT.parent
 ADOPTION_BASELINE_REVISION = "20260803_0001"
-EXPECTED_REVISION = "20260808_0003"
+EXPECTED_REVISION = "20260808_0004"
 
 load_dotenv(PROJECT_ROOT / ".env", override=False)
 

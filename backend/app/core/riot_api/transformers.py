@@ -57,7 +57,9 @@ class MatchTransformer:
         return {
             "match_id": metadata.get("matchId"),
             "platform": info.get("platformId"),
-            "game_start_timestamp": info.get("gameCreation"),
+            "game_creation_timestamp": info.get("gameCreation"),
+            "game_start_timestamp": info.get("gameStartTimestamp"),
+            "game_start_timestamp_source": "riot_game_start",
             "game_duration": info.get("gameDuration"),
             "queue_id": info.get("queueId"),
             "game_version": info.get("gameVersion"),
@@ -183,6 +185,7 @@ class MatchTransformer:
             "metadata": ["matchId"],
             "info": [
                 "gameCreation",
+                "gameStartTimestamp",
                 "gameDuration",
                 "queueId",
                 "gameVersion",

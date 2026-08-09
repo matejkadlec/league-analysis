@@ -5,12 +5,15 @@
  * item images, summoner spell icons, etc.
  */
 
-// Current Data Dragon version - should be updated when new patches release
-// TODO: Consider fetching this dynamically from Riot API
-const DDRAGON_VERSION = "15.2.1";
+// Used only when Riot's version manifest is temporarily unavailable. The root
+// layout normally resolves the latest version and provides it to client code.
+export const DDRAGON_FALLBACK_VERSION = "16.15.1";
 
-const DDRAGON_BASE_URL = `https://ddragon.leagueoflegends.com/cdn/${DDRAGON_VERSION}`;
 const DDRAGON_IMAGE_BASE_URL = "https://ddragon.leagueoflegends.com/cdn/img";
+
+function getVersionedBaseUrl(version: string): string {
+  return `https://ddragon.leagueoflegends.com/cdn/${version}`;
+}
 
 /**
  * Get the URL for a champion's square icon.
@@ -19,15 +22,18 @@ const DDRAGON_IMAGE_BASE_URL = "https://ddragon.leagueoflegends.com/cdn/img";
  * @returns URL to the champion's square icon image
  *
  * @example
- * getChampionIconUrl("Aatrox") // => "https://ddragon.leagueoflegends.com/cdn/15.2.1/img/champion/Aatrox.png"
+ * getChampionIconUrl("Aatrox", "16.15.1") // => current versioned champion icon
  */
-export function getChampionIconUrl(championName: string): string {
+export function getChampionIconUrl(
+  championName: string,
+  version: string = DDRAGON_FALLBACK_VERSION,
+): string {
   // Champion names in Data Dragon use specific formatting:
   // - Single word names: as-is (e.g., "Aatrox")
   // - Multi-word names: camelCase without spaces (e.g., "AurelionSol", "TwistedFate")
   // - Special characters removed (e.g., "Kai'Sa" -> "Kaisa", "K'Sante" -> "KSante")
   // The backend should already provide the correct format from championName field
-  return `${DDRAGON_BASE_URL}/img/champion/${championName}.png`;
+  return `${getVersionedBaseUrl(version)}/img/champion/${championName}.png`;
 }
 
 /**
@@ -40,8 +46,9 @@ export function getChampionIconUrl(championName: string): string {
 export function getChampionLoadingUrl(
   championName: string,
   skinNum: number = 0,
+  version: string = DDRAGON_FALLBACK_VERSION,
 ): string {
-  return `${DDRAGON_BASE_URL}/img/champion/loading/${championName}_${skinNum}.jpg`;
+  return `${getVersionedBaseUrl(version)}/img/champion/loading/${championName}_${skinNum}.jpg`;
 }
 
 /**
@@ -50,17 +57,23 @@ export function getChampionLoadingUrl(
  * @param profileIconId - The profile icon ID from player data
  * @returns URL to the profile icon image
  */
-export function getProfileIconUrl(profileIconId: number): string {
-  return `${DDRAGON_BASE_URL}/img/profileicon/${profileIconId}.png`;
+export function getProfileIconUrl(
+  profileIconId: number,
+  version: string = DDRAGON_FALLBACK_VERSION,
+): string {
+  return `${getVersionedBaseUrl(version)}/img/profileicon/${profileIconId}.png`;
 }
 
 /**
  * Get fallback URL for a summoner profile icon.
  * Uses default icon 29 when the target icon is unavailable.
  */
-export function getProfileIconFallbackUrl(profileIconId: number): string {
+export function getProfileIconFallbackUrl(
+  profileIconId: number,
+  version: string = DDRAGON_FALLBACK_VERSION,
+): string {
   void profileIconId;
-  return `${DDRAGON_BASE_URL}/img/profileicon/29.png`;
+  return `${getVersionedBaseUrl(version)}/img/profileicon/29.png`;
 }
 
 /**
@@ -69,8 +82,11 @@ export function getProfileIconFallbackUrl(profileIconId: number): string {
  * @param itemId - The item ID
  * @returns URL to the item icon image
  */
-export function getItemIconUrl(itemId: number): string {
-  return `${DDRAGON_BASE_URL}/img/item/${itemId}.png`;
+export function getItemIconUrl(
+  itemId: number,
+  version: string = DDRAGON_FALLBACK_VERSION,
+): string {
+  return `${getVersionedBaseUrl(version)}/img/item/${itemId}.png`;
 }
 
 /**
@@ -79,15 +95,11 @@ export function getItemIconUrl(itemId: number): string {
  * @param spellName - The spell name (e.g., "SummonerFlash", "SummonerTeleport")
  * @returns URL to the summoner spell icon
  */
-export function getSummonerSpellIconUrl(spellName: string): string {
-  return `${DDRAGON_BASE_URL}/img/spell/${spellName}.png`;
-}
-
-/**
- * Get the current Data Dragon version being used.
- */
-export function getDDragonVersion(): string {
-  return DDRAGON_VERSION;
+export function getSummonerSpellIconUrl(
+  spellName: string,
+  version: string = DDRAGON_FALLBACK_VERSION,
+): string {
+  return `${getVersionedBaseUrl(version)}/img/spell/${spellName}.png`;
 }
 
 /**
@@ -202,12 +214,15 @@ export const SUMMONER_SPELL_MAP: Record<number, string> = {
  * @param spellId - The summoner spell ID from the API
  * @returns URL to the summoner spell icon, or null if not found
  */
-export function getSummonerSpellIconUrlById(spellId: number): string | null {
+export function getSummonerSpellIconUrlById(
+  spellId: number,
+  version: string = DDRAGON_FALLBACK_VERSION,
+): string | null {
   const spellName = SUMMONER_SPELL_MAP[spellId];
   if (!spellName) {
     return null;
   }
-  return `${DDRAGON_BASE_URL}/img/spell/${spellName}.png`;
+  return `${getVersionedBaseUrl(version)}/img/spell/${spellName}.png`;
 }
 
 // Keystone rune icon paths from Data Dragon runesReforged data.

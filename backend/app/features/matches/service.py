@@ -7,7 +7,10 @@ import structlog
 from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.riot_api.constants import get_region_by_platform
+from app.core.riot_api.constants import (
+    PRODUCT_SUPPORTED_QUEUE_IDS,
+    get_region_by_platform,
+)
 from app.core.riot_api.db_rate_limiter import DBRateLimiter
 from app.core.riot_api.errors import (
     AuthenticationError,
@@ -65,8 +68,8 @@ async def _ensure_riot_writer_maintenance_is_inactive(session: AsyncSession) -> 
 class MatchService:
     """Service for handling match data operations."""
 
-    SUPPORTED_SYNC_QUEUE_IDS: tuple[int, ...] = (420, 440, 400, 450)
-    CURRENT_GAME_VERSION_PREFIX = "26."
+    SUPPORTED_SYNC_QUEUE_IDS: tuple[int, ...] = PRODUCT_SUPPORTED_QUEUE_IDS
+    CURRENT_GAME_VERSION_PREFIX = "16."
 
     def __init__(self, db: AsyncSession):
         """Initialize match service with database session only."""
@@ -660,7 +663,9 @@ class MatchService:
                 match_response = MatchWithPlayerData(
                     match_id=match.match_id,
                     platform=match.platform,
+                    game_creation_timestamp=match.game_creation_timestamp,
                     game_start_timestamp=match.game_start_timestamp,
+                    game_start_timestamp_source=match.game_start_timestamp_source,
                     game_duration=match.game_duration,
                     queue_id=match.queue_id,
                     game_version=match.game_version,
@@ -1574,7 +1579,9 @@ class MatchService:
             match = Match(
                 match_id=match_dto.metadata.match_id,
                 platform=platform_id.upper(),
+                game_creation_timestamp=match_dto.info.game_creation_timestamp,
                 game_start_timestamp=match_dto.info.game_start_timestamp,
+                game_start_timestamp_source="riot_game_start",
                 game_end_timestamp=match_dto.info.game_end_timestamp,
                 game_duration=match_dto.info.game_duration,
                 game_mode=match_dto.info.game_mode,
@@ -1987,7 +1994,9 @@ class MatchService:
             match = Match(
                 match_id=match_id,
                 platform=platform_id.upper(),
+                game_creation_timestamp=match_dto.info.game_creation_timestamp,
                 game_start_timestamp=match_dto.info.game_start_timestamp,
+                game_start_timestamp_source="riot_game_start",
                 game_end_timestamp=match_dto.info.game_end_timestamp,
                 game_duration=match_dto.info.game_duration,
                 game_mode=match_dto.info.game_mode,
@@ -2009,26 +2018,23 @@ class MatchService:
                 # Riot API matches include all participants, but not all are in our DB.
                 # We upsert a skeletal Player record if missing to satisfy the FK.
 
-                # Basic sanitation
-                p_game_name = (
-                    participant.game_name or participant.summoner_name or "Unknown"
-                )
-                p_tag_line = participant.tag_line or (
-                    platform_id.replace("1", "") if platform_id else "RIOT"
-                )
-
-                # Safety check for empty strings that might come from API
-                if not p_game_name or p_game_name == "":
-                    p_game_name = "Unknown"
-                if not p_tag_line or p_tag_line == "":
-                    p_tag_line = "RIOT"
-
-                # Construct minimal player for upsert
-                # Check if player already exists to preserve is_tracked status
+                # Check before selecting fallbacks so missing Riot ID fields never
+                # overwrite a known account identity with a legacy summoner name.
                 existing_player_result = await self.db.execute(
                     select(Player).where(Player.puuid == participant.puuid)
                 )
                 existing_player = existing_player_result.scalar_one_or_none()
+
+                p_game_name = participant.game_name or (
+                    existing_player.game_name if existing_player else None
+                )
+                p_tag_line = participant.tag_line or (
+                    existing_player.tag_line if existing_player else None
+                )
+                p_game_name = p_game_name or participant.summoner_name or "Unknown"
+                p_tag_line = p_tag_line or (
+                    platform_id.replace("1", "") if platform_id else "RIOT"
+                )
 
                 player_record = Player(
                     puuid=participant.puuid,
@@ -2036,9 +2042,11 @@ class MatchService:
                     tag_line=p_tag_line,
                     platform=platform_id.lower(),
                     profile_icon_id=participant.profile_icon
-                    or 29,  # Default icon if missing
+                    or (existing_player.profile_icon_id if existing_player else None)
+                    or 29,
                     summoner_level=participant.summoner_level
-                    or 0,  # Default level if missing
+                    or (existing_player.summoner_level if existing_player else None)
+                    or 0,
                     # Preserve is_tracked if player exists, otherwise default to False
                     is_tracked=existing_player.is_tracked if existing_player else False,
                 )

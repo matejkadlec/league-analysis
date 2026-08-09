@@ -9,8 +9,8 @@ class AccountDTO(BaseModel):
     """Riot Account information."""
 
     puuid: str
-    game_name: str = Field(..., alias="gameName")
-    tag_line: str = Field(..., alias="tagLine")
+    game_name: str | None = Field(default=None, alias="gameName")
+    tag_line: str | None = Field(default=None, alias="tagLine")
 
     model_config = ConfigDict(populate_by_name=True)
 
@@ -45,10 +45,10 @@ class ParticipantDTO(BaseModel):
     # Core IDs
     participant_id: int = Field(..., alias="participantId")
     puuid: str
-    summoner_name: str = Field(..., alias="summonerName")
+    summoner_name: str | None = Field(default=None, alias="summonerName")
     summoner_id: Optional[str] = Field(None, alias="summonerId")
-    summoner_level: int = Field(..., alias="summonerLevel")
-    profile_icon: int = Field(..., alias="profileIcon")
+    summoner_level: int = Field(0, alias="summonerLevel")
+    profile_icon: int = Field(0, alias="profileIcon")
 
     # Riot ID fields
     game_name: Optional[str] = Field(None, alias="riotIdGameName")
@@ -79,7 +79,7 @@ class ParticipantDTO(BaseModel):
     first_tower_kill: bool = Field(False, alias="firstTowerKill")
 
     # Economy & Vision
-    gold_earned: int = Field(..., alias="goldEarned")
+    gold_earned: int = Field(0, alias="goldEarned")
     gold_spent: int = Field(0, alias="goldSpent")
     vision_score: Optional[float] = Field(None, alias="visionScore")
     vision_wards_placed: int = Field(0, alias="detectorWardsPlaced")
@@ -88,14 +88,12 @@ class ParticipantDTO(BaseModel):
     wards_killed: int = Field(0, alias="wardsKilled")
 
     # Farming
-    total_minions_killed: int = Field(..., alias="totalMinionsKilled")
-    neutral_minions_killed: int = Field(..., alias="neutralMinionsKilled")
+    total_minions_killed: int = Field(0, alias="totalMinionsKilled")
+    neutral_minions_killed: int = Field(0, alias="neutralMinionsKilled")
 
     # Damage
     total_damage_dealt: int = Field(0, alias="totalDamageDealt")
-    total_damage_dealt_to_champions: int = Field(
-        ..., alias="totalDamageDealtToChampions"
-    )
+    total_damage_dealt_to_champions: int = Field(0, alias="totalDamageDealtToChampions")
     physical_damage_dealt_to_champions: int = Field(
         0, alias="physicalDamageDealtToChampions"
     )
@@ -104,7 +102,7 @@ class ParticipantDTO(BaseModel):
     damage_dealt_to_objectives: int = Field(0, alias="damageDealtToObjectives")
     damage_dealt_to_turrets: int = Field(0, alias="damageDealtToTurrets")
 
-    total_damage_taken: int = Field(..., alias="totalDamageTaken")
+    total_damage_taken: int = Field(0, alias="totalDamageTaken")
     physical_damage_taken: int = Field(0, alias="physicalDamageTaken")
     magic_damage_taken: int = Field(0, alias="magicDamageTaken")
     true_damage_taken: int = Field(0, alias="trueDamageTaken")
@@ -175,7 +173,8 @@ class ParticipantDTO(BaseModel):
 class MatchInfoDTO(BaseModel):
     """Match information."""
 
-    game_start_timestamp: int = Field(..., alias="gameCreation")
+    game_creation_timestamp: int = Field(..., alias="gameCreation")
+    game_start_timestamp: int = Field(..., alias="gameStartTimestamp")
     game_duration: int = Field(..., alias="gameDuration")
     queue_id: int = Field(..., alias="queueId")
     map_id: int = Field(..., alias="mapId")
@@ -214,19 +213,11 @@ class MatchDTO(BaseModel):
 
 
 class LeagueEntryDTO(BaseModel):
-    """League entry information.
-
-    Note: The /lol/league/v4/entries/by-puuid/{puuid} endpoint does NOT return
-    summonerId or summonerName fields - they are optional here for compatibility
-    with other league endpoints that may return them.
-    """
+    """Current LEAGUE-V4 by-PUUID entry."""
 
     # The live by-PUUID response can omit leagueId even though Riot's portal
     # still lists the field. Keep the remaining ranked fields strict.
     league_id: str | None = Field(default=None, alias="leagueId")
-    # summonerId/summonerName are NOT returned by the by-puuid endpoint
-    summoner_id: str | None = Field(default=None, alias="summonerId")
-    summoner_name: str | None = Field(default=None, alias="summonerName")
     # puuid can also be omitted because the requested PUUID is already in the path
     puuid: str | None = Field(default=None, alias="puuid")
     queue_type: str = Field(..., alias="queueType")
@@ -248,4 +239,13 @@ class LeagueEntryDTO(BaseModel):
             return 0
         return (self.wins / total_games) * 100
 
-    model_config = ConfigDict(populate_by_name=True)
+    # miniSeries is intentionally ignored: no current feature displays or
+    # analyzes promotion-series state, and Pydantic ignores extra provider keys.
+    model_config = ConfigDict(populate_by_name=True, extra="ignore")
+
+
+class LegacyLeagueEntryDTO(LeagueEntryDTO):
+    """Legacy by-summoner response kept separate from the PUUID contract."""
+
+    summoner_id: str | None = Field(default=None, alias="summonerId")
+    summoner_name: str | None = Field(default=None, alias="summonerName")

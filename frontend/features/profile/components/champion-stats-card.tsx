@@ -7,6 +7,7 @@ import {
   getChampionIconUrl,
   getChampionDisplayName,
 } from "@/lib/core/data-dragon";
+import { useDDragonVersion } from "@/lib/core/data-dragon-context";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -86,6 +87,7 @@ export function ChampionStatsCard({
   stats,
   lastUpdated,
 }: ChampionStatsCardProps) {
+  const ddragonVersion = useDDragonVersion();
   const [paginationState, setPaginationState] =
     useState<ChampionPaginationState>({ dataSourceKey, page: 0 });
 
@@ -178,7 +180,10 @@ export function ChampionStatsCard({
               {/* Champion icon */}
               <div className="relative h-10 w-10 rounded-full overflow-hidden border-2 border-primary/20">
                 <Image
-                  src={getChampionIconUrl(champ.champion_name)}
+                  src={getChampionIconUrl(
+                    champ.champion_name,
+                    ddragonVersion,
+                  )}
                   alt={getChampionDisplayName(champ.champion_name)}
                   fill
                   className="object-cover"

@@ -1,0 +1,159 @@
+{
+  "capture": {
+    "date": "2026-08-08",
+    "source": "protected Riot developer-key probes",
+    "sanitization": "All provider identifiers and player values are synthetic; contract keys and objective kinds are retained."
+  },
+  "account": {
+    "puuid": "sanitized-account-puuid",
+    "gameName": "Sanitized Player",
+    "tagLine": "SAFE"
+  },
+  "summoner": {
+    "puuid": "sanitized-account-puuid",
+    "profileIconId": 29,
+    "revisionDate": 1786100000000,
+    "summonerLevel": 100
+  },
+  "participant": {
+    "participantId": 1,
+    "puuid": "sanitized-participant-puuid",
+    "summonerName": "Sanitized Legacy Name",
+    "riotIdGameName": "Sanitized Player",
+    "riotIdTagline": "SAFE",
+    "teamId": 100,
+    "championId": 1,
+    "championName": "Annie",
+    "champLevel": 18,
+    "win": true,
+    "kills": 1,
+    "deaths": 0,
+    "assists": 2,
+    "eligibleForProgression": true,
+    "profileIcon": 29,
+    "summonerLevel": 100,
+    "perks": {},
+    "challenges": {},
+    "observedExtraFieldCount": 137
+  },
+  "matches": {
+    "400": {
+      "metadata": {
+        "matchId": "EUN1_SANITIZED_400",
+        "participants": ["sanitized-participant-puuid"]
+      },
+      "info": {
+        "gameCreation": 1786100000000,
+        "gameStartTimestamp": 1786100060000,
+        "gameEndTimestamp": 1786101860000,
+        "gameDuration": 1800,
+        "queueId": 400,
+        "mapId": 11,
+        "gameVersion": "16.15.1.1",
+        "gameMode": "CLASSIC",
+        "gameType": "MATCHED_GAME",
+        "platformId": "EUN1"
+      },
+      "timeline": {
+        "info": {
+          "frameInterval": 60000,
+          "events": [
+            {"type": "ELITE_MONSTER_KILL", "monsterType": "DRAGON", "monsterSubType": "CHEMTECH_DRAGON"},
+            {"type": "ELITE_MONSTER_KILL", "monsterType": "HORDE"},
+            {"type": "ELITE_MONSTER_KILL", "monsterType": "RIFTHERALD"},
+            {"type": "ELITE_MONSTER_KILL", "monsterType": "BARON_NASHOR"},
+            {"type": "BUILDING_KILL", "buildingType": "TOWER_BUILDING", "towerType": "OUTER_TURRET"},
+            {"type": "BUILDING_KILL", "buildingType": "INHIBITOR_BUILDING"}
+          ]
+        }
+      }
+    },
+    "420": {
+      "metadata": {
+        "matchId": "EUN1_SANITIZED_420",
+        "participants": ["sanitized-participant-puuid"]
+      },
+      "info": {
+        "gameCreation": 1786100000000,
+        "gameStartTimestamp": 1786100060000,
+        "gameEndTimestamp": 1786101860000,
+        "gameDuration": 1800,
+        "queueId": 420,
+        "mapId": 11,
+        "gameVersion": "16.15.1.1",
+        "gameMode": "CLASSIC",
+        "gameType": "MATCHED_GAME",
+        "platformId": "EUN1"
+      },
+      "timeline": {
+        "info": {
+          "frameInterval": 60000,
+          "events": [
+            {"type": "ELITE_MONSTER_KILL", "monsterType": "DRAGON", "monsterSubType": "HEXTECH_DRAGON"},
+            {"type": "ELITE_MONSTER_KILL", "monsterType": "HORDE"},
+            {"type": "ELITE_MONSTER_KILL", "monsterType": "RIFTHERALD"},
+            {"type": "ELITE_MONSTER_KILL", "monsterType": "BARON_NASHOR"},
+            {"type": "BUILDING_KILL", "buildingType": "TOWER_BUILDING", "towerType": "NEXUS_TURRET"},
+            {"type": "BUILDING_KILL", "buildingType": "INHIBITOR_BUILDING"}
+          ]
+        }
+      }
+    },
+    "440": {
+      "metadata": {
+        "matchId": "EUN1_SANITIZED_440",
+        "participants": ["sanitized-participant-puuid"]
+      },
+      "info": {
+        "gameCreation": 1786100000000,
+        "gameStartTimestamp": 1786100060000,
+        "gameEndTimestamp": 1786101860000,
+        "gameDuration": 1800,
+        "queueId": 440,
+        "mapId": 11,
+        "gameVersion": "16.15.1.1",
+        "gameMode": "CLASSIC",
+        "gameType": "MATCHED_GAME",
+        "platformId": "EUN1"
+      },
+      "timeline": {
+        "info": {
+          "frameInterval": 60000,
+          "events": [
+            {"type": "ELITE_MONSTER_KILL", "monsterType": "DRAGON", "monsterSubType": "WATER_DRAGON"},
+            {"type": "ELITE_MONSTER_KILL", "monsterType": "HORDE"},
+            {"type": "BUILDING_KILL", "buildingType": "TOWER_BUILDING", "towerType": "OUTER_TURRET"}
+          ]
+        }
+      }
+    },
+    "450": {
+      "metadata": {
+        "matchId": "EUN1_SANITIZED_450",
+        "participants": ["sanitized-participant-puuid"]
+      },
+      "info": {
+        "gameCreation": 1786100000000,
+        "gameStartTimestamp": 1786100060000,
+        "gameEndTimestamp": 1786100960000,
+        "gameDuration": 900,
+        "queueId": 450,
+        "mapId": 12,
+        "gameVersion": "16.15.1.1",
+        "gameMode": "ARAM",
+        "gameType": "MATCHED_GAME",
+        "platformId": "EUN1"
+      },
+      "timeline": {
+        "info": {
+          "frameInterval": 60000,
+          "events": [
+            {"type": "BUILDING_KILL", "buildingType": "TOWER_BUILDING", "towerType": "OUTER_TURRET"},
+            {"type": "BUILDING_KILL", "buildingType": "TOWER_BUILDING", "towerType": "NEXUS_TURRET"},
+            {"type": "BUILDING_KILL", "buildingType": "INHIBITOR_BUILDING"}
+          ]
+        }
+      }
+    }
+  }
+}
