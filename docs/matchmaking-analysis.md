@@ -40,7 +40,7 @@ This means:
 | Backend Service    | Python/FastAPI       | Analysis logic, DB queries, Riot API calls      |
 | Background Task    | `asyncio.Task`       | Runs analysis independently of HTTP request     |
 | DB Rate Limiter    | PostgreSQL           | Coordinates API usage with other components     |
-| Frontend Component | React/TanStack Query | Polling, progress display, rate limit countdown |
+| Frontend Component | React/TanStack Query | Polling, authoritative count, projected ETA/progress |
 
 ### Data Flow
 
@@ -50,9 +50,9 @@ User clicks "Start Analysis"
     ▼
 POST /matchmaking-analysis/start
     │
-    ├── Creates DB record (status: pending)
+    ├── Creates or attaches to one DB record (status: pending/active)
     ├── Spawns asyncio background task
-    └── Returns immediately with analysis ID
+    └── Returns immediately with puuid + created_at run identity
          │
          ▼
     Background Task runs independently
@@ -66,10 +66,10 @@ POST /matchmaking-analysis/start
          └── Saves results to DB
               │
               ▼
-    Frontend polls GET /status every 3 seconds
+    Frontend polls GET /status?created_at=... every 3 seconds
          │
          ├── Shows progress bar (X/100 players)
-         ├── Shows rate limit countdown when waiting
+         ├── Keeps one continuous total ETA while waiting
          └── Shows results when completed
 ```
 
@@ -322,9 +322,18 @@ When the analysis hits a rate limit (either via `DBRateLimiter.acquire()` window
 1. Backend sets `rate_limit_reset_at` (absolute UTC timestamp) on the analysis DB record via:
    - `acquire_with_wait_callback` → `_rate_limit_wait_callback` (receives `window_end` datetime, sets once at start, clears when done)
    - `_wait_for_rate_limit` (for 429 errors, sets once then sleeps)
-2. Frontend polls status every 3 seconds and reads this field
-3. Frontend calculates `remainingSeconds = resetTime - Date.now()` and displays countdown
-4. When countdown reaches 0 or field becomes null, normal progress display resumes
+2. Backend keeps the run active as `waiting_rate_limit`; a successful later
+   provider request returns it to `in_progress`.
+3. Frontend polls the exact run every 3 seconds but does not expose provider
+   terminology or a separate reset countdown. The database-limiter reset can
+   precede a remaining adaptive-client wait, so it is not presented as the
+   analysis completion clock.
+4. The active card always shows one total analysis ETA. Its bar and percentage
+   interpolate once per second using the 100-request/120-second long window and
+   a representative warm-cache workload, then reconcile forward whenever the
+   backend reports a higher authoritative completed-player count.
+5. The display projection stops at 99%; only authoritative completion reaches
+   100% and triggers result/history refresh.
 
 ### 429 Error Handling
 
@@ -332,7 +341,8 @@ When Riot API returns HTTP 429:
 
 1. The `RiotAPIClient` raises `RateLimitError` with `retry_after` seconds
 2. The service catches it and calls `_wait_for_rate_limit(retry_after)`
-3. This sets the countdown timestamp, sleeps, then clears it
+3. This persists the internal wait timestamp, sleeps, then clears it; the
+   frontend continues presenting the whole-run ETA
 4. The API call is retried (up to 10 retries per call)
 
 ---
@@ -343,8 +353,10 @@ When Riot API returns HTTP 429:
 
 When the user clicks "Start Analysis":
 
-1. HTTP POST handler creates a DB record and spawns an `asyncio.Task`
-2. The response returns immediately — the user sees "pending" status
+1. HTTP POST handler creates or attaches to the one active DB record and spawns
+   an `asyncio.Task` only when this process does not already own it
+2. The response returns immediately, before the minimum-match Riot preflight;
+   the frontend seeds the progress UI and exact run identity from this response
 3. The background task runs with its **own DB session** and **own RiotAPIClient**
 4. Progress is written to DB (`puuid_progress` JSONB column) after each player
 5. Frontend polls the status endpoint every 3 seconds to show progress
@@ -356,16 +368,30 @@ The analysis **continues running even if the user closes the browser tab**:
 - The `asyncio.Task` lives in the server's event loop, independent of HTTP connections
 - When the user returns, the frontend polls the status endpoint and picks up where it left off
 - If the server itself restarts, the analysis record remains in DB with `started_at != NULL` and `completed_at = NULL`
-- On next request, `start_analysis()` detects this and resumes
+- On the next explicit start request, `start_analysis()` detects this, preserves
+  already-completed progress keys, and resumes the same persisted run
 
 ### Failure Handling
 
 If the background task crashes:
 
 1. The exception is caught in `_run_analysis_background`
-2. The analysis is marked as completed with an error message in `results.error`
+2. The analysis is marked `failed` with a stable client-safe `error_code` and
+   `error_message`; raw provider/internal text is not returned to the browser
 3. The rate limiter is released
 4. The task is removed from `_running_analyses`
+
+Riot `401` and `403` failures are never treated as optional missing match data.
+They terminate the run with `error_code=RIOT_API_KEY_INVALID`. Matchmaking
+Analysis status is transported through successful HTTP polling responses, so
+the shared frontend interceptor reads this persisted code and activates the
+global invalid/expired-key header. Merely accepting or polling a pending/running
+analysis does not mark the key valid; only completion of the exact current run
+does.
+
+Cancellation targets the exact `(puuid, created_at)` run, persists `cancelled`,
+then stops that worker. The lifecycle record is retained for diagnostics and a
+new start remains retryable.
 
 ---
 
@@ -373,14 +399,17 @@ If the background task crashes:
 
 ### POST `/matchmaking-analysis/check-matches`
 
-Check if player has ≥10 ranked matches before starting analysis.
+Diagnostic check for whether a player has ≥10 ranked matches. The frontend does
+not put this provider call in front of `start`; the background run performs the
+authoritative preflight so the start request stays bounded.
 
 **Request:** `{ "puuid": "..." }`
 **Response:** `{ "success": true, "matches_found": 15 }` or `NotEnoughMatchesResponse`
 
 ### POST `/matchmaking-analysis/start`
 
-Start a new analysis. Returns immediately with pending status.
+Create or attach to the one active analysis. Returns immediately with pending or
+active status and never waits for the long Riot work.
 
 **Request:** `{ "puuid": "..." }`
 **Response:** `MatchmakingAnalysisResponse`
@@ -397,11 +426,15 @@ Get the latest **completed** analysis (ignores in-progress or errored runs).
 
 **Response:** `MatchmakingAnalysisResponse`
 
-### GET `/matchmaking-analysis/player/{puuid}/status`
+### GET `/matchmaking-analysis/player/{puuid}/status?created_at={timestamp}`
 
-Lightweight status poll (used every 3 seconds by frontend).
+Lightweight poll for the exact persisted run (used every 3 seconds by frontend).
 
 **Response:** `MatchmakingAnalysisStatusResponse`
+
+### DELETE `/matchmaking-analysis/player/{puuid}/cancel?created_at={timestamp}`
+
+Cancel the exact active run and retain its `cancelled` terminal record.
 
 ### GET `/matchmaking-analysis/player/{puuid}/history`
 
@@ -416,15 +449,22 @@ Get completed analysis history.
 ### `MatchmakingAnalysis` (main component)
 
 - Shows start button when no analysis is active
-- Polls status every 3 seconds when active
+- Seeds the active state from the fast start response and prevents a duplicate
+  start interaction
+- Rehydrates an active run on reload and polls its exact `created_at` identity
+  every 3 seconds
 - Displays progress bar (X/100 players)
-- Shows rate limit countdown when `rate_limit_reset_at` is set (updated via `acquire_with_wait_callback`)
+- Shows one continuous whole-run ETA without exposing provider rate-limit waits
+- Smoothly projects the percentage/bar between authoritative player milestones;
+  the top-right and status-text `X / 100` count remains backend-authoritative
 - Shows inline results table when completed
 - "Run New Analysis" button to start a fresh analysis
 - **Completion animation**: Shows green "Analysis finished successfully" text and toast for 1 second before transitioning to results
 - **DB-only fast flow**: When all data is in DB (detected by `prevStatus === "pending"` or `progress < 10`), shows artificial progress animation: 0% → 50% ("Fetching from database...") → 100% ("Finished") → results
 - **Smooth transitions**: Card uses `transition-all duration-300` for height changes between states
 - **Cancel toast**: Uses yellow warning style (`toast.warning`)
+- Invalidates/refetches Last Analysis Result and Analysis History after the
+  authoritative run reaches `completed`; `failed` stays visibly retryable
 
 ### `MatchmakingResults`
 
@@ -454,12 +494,17 @@ Get completed analysis history.
 | `created_at`          | TIMESTAMPTZ | Analysis creation time (PK part 2)                                            |
 | `started_at`          | TIMESTAMPTZ | When background task started                                                  |
 | `completed_at`        | TIMESTAMPTZ | When analysis finished                                                        |
+| `status`              | VARCHAR(32) | `pending`, `in_progress`, `waiting_rate_limit`, `completed`, `failed`, or `cancelled` |
+| `error_code`          | VARCHAR(64) | Stable client-safe failure classification                                     |
+| `error_message`       | VARCHAR(500)| Reviewed retry guidance for a failed run                                      |
 | `results`             | JSONB       | `{ team_avg_winrate, enemy_avg_winrate, matches_analyzed, players_analyzed }` |
 | `puuid_progress`      | JSONB       | `{ "puuid:match_id": true/false }` for tracking progress                      |
 | `requests_saved`      | INTEGER     | Count of API calls saved by DB cache                                          |
 | `rate_limit_reset_at` | TIMESTAMPTZ | When rate limit resets (NULL = not waiting)                                   |
 
 Notes:
+- A partial unique index permits only one `pending`, `in_progress`, or
+  `waiting_rate_limit` row per PUUID.
 - With 10 spine matches, `players_analyzed` is recorded as 91 (current player + 9 others per match).
 - `matches_analyzed` is recorded as 910 (10 + 90*10) to represent the basis size shown in the UI.
 - The internal additional-match workload remains 820 (10 spine matches + 90 participants * 9 additional non-spine matches).
@@ -470,14 +515,17 @@ Notes:
 
 | Scenario                                      | Handling                                                       |
 | --------------------------------------------- | -------------------------------------------------------------- |
-| Player has <10 ranked matches                 | Pre-check endpoint returns error; analysis not started         |
-| Player not found in first match               | Analysis completed with error                                  |
-| Riot API 429 (rate limited)                   | Wait with countdown, retry up to 10 times                      |
+| Player has <10 ranked matches                 | Fast start succeeds; background run becomes retryable `failed` |
+| Player not found in first match               | Analysis becomes `failed` with a safe classification           |
+| Riot API 429 (rate limited)                   | Wait internally with continuous total ETA, retry up to 10 times |
 | Riot API 5xx (server error)                   | Retry with exponential backoff (handled by RiotAPIClient)      |
 | Riot API 403/404                              | Skip that match/player, use available data                     |
 | DB connection error                           | Exception propagates, analysis marked as failed                |
-| Server restart during analysis                | Analysis record stays in-progress; resumed on next start       |
+| Browser reload/reconnect during analysis      | Exact persisted run is rehydrated and polling continues        |
+| Server restart during analysis                | Active record remains; next explicit start resumes it          |
 | Same player appears in multiple spine matches | Win rate calculated once, cached and reused                    |
 | Player has <10 ranked matches at anchor time  | Uses all available matches (even if <10)                       |
-| Analysis already running for player           | Returns existing analysis status                               |
-| Background task crash                         | Analysis marked as completed with error, rate limiter released |
+| Analysis already running for player           | Unique active row is returned; no duplicate task is created    |
+| Exact run cancelled                           | Terminal `cancelled` record retained; fetched matches kept     |
+| Riot key rejected during any provider call    | Run fails with shared key code; global warning header appears  |
+| Background task crash                         | Analysis marked `failed` safely; rate limiter released         |

@@ -57,7 +57,6 @@ const RIOT_API_ENDPOINTS = [
   "/players/add-tracked",
   "/players/search",
   "/matches/sync",
-  "/matchmaking-analysis",
   "/refresh-league",
   "/auth/connect-riot-account",
 ];
@@ -69,6 +68,37 @@ function isRiotApiEndpoint(url: string | undefined): boolean {
 
 // Standard error code returned by backend when Riot API key is invalid
 const RIOT_API_KEY_INVALID_CODE = "RIOT_API_KEY_INVALID";
+
+export type RiotApiKeySignal = "invalid" | "valid" | null;
+
+export function getRiotApiKeySignal(
+  url: string | undefined,
+  responseData: unknown,
+): RiotApiKeySignal {
+  const data =
+    typeof responseData === "object" && responseData !== null
+      ? (responseData as Record<string, unknown>)
+      : null;
+  if (data?.error_code === RIOT_API_KEY_INVALID_CODE) {
+    return "invalid";
+  }
+
+  if (!url) {
+    return null;
+  }
+
+  if (url.includes("/matchmaking-analysis")) {
+    if (url.includes("/check-matches")) {
+      return "valid";
+    }
+    if (url.includes("/status") && data?.status === "completed") {
+      return "valid";
+    }
+    return null;
+  }
+
+  return isRiotApiEndpoint(url) ? "valid" : null;
+}
 
 function isApiKeyError(response: AxiosResponse | undefined): boolean {
   if (!response) return false;
@@ -88,8 +118,13 @@ function isApiKeyError(response: AxiosResponse | undefined): boolean {
 
 api.interceptors.response.use(
   (response: AxiosResponse) => {
-    // On successful response from Riot API endpoints, mark API key as valid
-    if (isRiotApiEndpoint(response.config.url)) {
+    const apiKeySignal = getRiotApiKeySignal(
+      response.config.url,
+      response.data,
+    );
+    if (apiKeySignal === "invalid") {
+      notifyApiKeyInvalid();
+    } else if (apiKeySignal === "valid") {
       notifyApiKeyValid();
     }
     return response;
@@ -415,10 +450,12 @@ export async function startMatchmakingAnalysis(
 
 export async function getMatchmakingAnalysisStatus(
   puuid: string,
+  createdAt: string,
 ): Promise<ApiResponse<MatchmakingAnalysisStatusResponse>> {
   return validatedGet(
     MatchmakingAnalysisStatusResponseSchema,
     `/matchmaking-analysis/player/${puuid}/status`,
+    { created_at: createdAt },
   );
 }
 
@@ -453,10 +490,12 @@ export async function getMatchmakingAnalysisHistory(
 
 export async function cancelMatchmakingAnalysis(
   puuid: string,
+  createdAt: string,
 ): Promise<ApiResponse<{ success: boolean; message: string }>> {
   try {
     const response = await api.delete(
       `/matchmaking-analysis/player/${puuid}/cancel`,
+      { params: { created_at: createdAt } },
     );
     return {
       success: true,

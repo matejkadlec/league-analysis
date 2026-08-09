@@ -19,7 +19,7 @@ Domain-specific UI components. Each feature is self-contained with its own compo
 | `cookie-consent/`     | EU-style consent banner, browser consent persistence, optional-storage gating, authenticated consent sync to backend |
 | `jobs/`               | Job monitoring components          |
 | `matches/`            | Match history display              |
-| `matchmaking/`        | Match fairness analysis            |
+| `matchmaking/`        | Match fairness analysis with persisted run rehydration |
 | `players/`            | Player search, cards, tracking, tracked-list controls |
 | `playstyle-analysis/` | Playstyle analysis results         |
 | `profile/`            | Signed-in user's champion, role, and recent-performance summaries |
@@ -77,3 +77,11 @@ export function MyComponent({ id }: MyComponentProps) {
 - Use shadcn/ui from `@/components/ui/`
 - Export via `index.ts`
 - kebab-case files, PascalCase components
+- Matchmaking Analysis must seed its active UI from the fast start response,
+  rehydrate and poll the exact persisted run, treat rate-limit waits as active,
+  cancel by `created_at`, and invalidate result/history data on completion. Keep
+  provider throttling internal: the active card always presents one total ETA,
+  while its percentage/bar interpolate between authoritative player milestones.
+  Persisted Matchmaking Analysis failures with
+  `error_code=RIOT_API_KEY_INVALID` must activate the shared API-key header
+  signal; accepting or polling an active run must not mark the key valid.

@@ -138,6 +138,38 @@ the only intended persistence.
 resumes it in cleanup. A regular manual trigger force-stops an active test run
 of the same job before the real run starts.
 
+### Matchmaking Analysis Run Lifecycle
+
+Matchmaking Analysis is an on-demand application run rather than an
+APScheduler job, but it shares the database-backed Riot rate limiter and the
+Riot-writer maintenance interlock with the scheduled writers.
+
+`POST /api/v1/matchmaking-analysis/start` creates or attaches to one persisted
+active run and returns immediately. It does not perform the Riot minimum-match
+preflight or wait for analysis work in the HTTP request. The background worker
+owns all provider calls, so a valid run may continue through multiple rate-limit
+windows without being coupled to the frontend's normal request timeout.
+
+`core.matchmaking_analyses.status` is authoritative:
+
+`pending` -> `in_progress` <-> `waiting_rate_limit` ->
+`completed` / `failed` / `cancelled`.
+
+- A partial unique index permits only one active run per PUUID. Repeated starts
+  return that run instead of creating duplicate work.
+- `waiting_rate_limit` remains active and records `rate_limit_reset_at`; a
+  successful later request returns the run to `in_progress`.
+- Progress, requests saved, safe failure classification, and terminal state are
+  persisted so page reloads rehydrate the current run.
+- Cancellation includes the run's `created_at`, stops only that exact worker,
+  and retains a `cancelled` record instead of deleting its lifecycle evidence.
+- Successful completion invalidates/refetches the current result and history
+  queries. Failures retain a stable client-safe code/message while detailed
+  internal diagnostics stay in server logs.
+- Interrupted process-local workers are marked `cancelled` when their
+  cancellation can be persisted safely. A later explicit start remains
+  retryable and cannot collide with an older active row.
+
 ---
 
 ## Match Fetcher Job

@@ -16,7 +16,7 @@ from sqlalchemy import URL, create_engine, text
 
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
 PROJECT_ROOT = BACKEND_ROOT.parent
-EXPECTED_REVISION = "20260808_0004"
+EXPECTED_REVISION = "20260809_0005"
 EXPECTED_TABLES = 22
 EXPECTED_ENUMS = 6
 EXPECTED_TRIGGERS = 1
@@ -126,6 +126,40 @@ def seed_legacy_match(database: str) -> None:
         engine.dispose()
 
 
+def seed_legacy_matchmaking_analyses(database: str) -> None:
+    """Exercise lifecycle backfill and active-run deduplication."""
+    url = administration_url().set(database=database)
+    engine = create_engine(url)
+    try:
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "INSERT INTO core.players "
+                    "(puuid, game_name, tag_line, platform, is_tracked) VALUES "
+                    "('LIFECYCLE_VALIDATION', 'Validator', 'TEST', 'EUN1', false)"
+                )
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO core.matchmaking_analyses "
+                    "(puuid, created_at, started_at, completed_at, results) VALUES "
+                    "('LIFECYCLE_VALIDATION', '2026-08-09T00:00:00Z', NULL, NULL, NULL), "
+                    "('LIFECYCLE_VALIDATION', '2026-08-09T00:01:00Z', "
+                    " '2026-08-09T00:01:01Z', NULL, NULL), "
+                    "('LIFECYCLE_VALIDATION', '2026-08-09T00:02:00Z', "
+                    " '2026-08-09T00:02:01Z', '2026-08-09T00:02:02Z', "
+                    ' \'{"team_avg_winrate": 0.51, "enemy_avg_winrate": 0.49, '
+                    '"matches_analyzed": 910}\'::jsonb), '
+                    "('LIFECYCLE_VALIDATION', '2026-08-09T00:03:00Z', "
+                    " '2026-08-09T00:03:01Z', '2026-08-09T00:03:02Z', "
+                    ' \'{"team_avg_winrate": 0, "enemy_avg_winrate": 0, '
+                    '"matches_analyzed": 0, "error": "legacy detail"}\'::jsonb)'
+                )
+            )
+    finally:
+        engine.dispose()
+
+
 def validate_catalog(database: str) -> None:
     """Assert that the full PostgreSQL baseline, including non-ORM objects, exists."""
     original_database = os.environ.get("POSTGRES_DB")
@@ -205,6 +239,40 @@ def validate_catalog(database: str) -> None:
                     "WHERE match_id = 'EUN1_VALIDATION'"
                 )
             ).one()
+            matchmaking_lifecycle_column_count = connection.execute(
+                text(
+                    "SELECT COUNT(*) FROM information_schema.columns "
+                    "WHERE table_schema = 'core' "
+                    "AND table_name = 'matchmaking_analyses' "
+                    "AND column_name IN ('status', 'error_code', 'error_message')"
+                )
+            ).scalar_one()
+            matchmaking_lifecycle_constraint_count = connection.execute(
+                text(
+                    "SELECT COUNT(*) FROM pg_constraint con "
+                    "JOIN pg_class cls ON cls.oid = con.conrelid "
+                    "JOIN pg_namespace ns ON ns.oid = cls.relnamespace "
+                    "WHERE ns.nspname = 'core' "
+                    "AND cls.relname = 'matchmaking_analyses' "
+                    "AND con.conname = 'ck_matchmaking_analyses_status_valid'"
+                )
+            ).scalar_one()
+            matchmaking_active_index_count = connection.execute(
+                text(
+                    "SELECT COUNT(*) FROM pg_indexes "
+                    "WHERE schemaname = 'core' "
+                    "AND tablename = 'matchmaking_analyses' "
+                    "AND indexname = 'uq_matchmaking_analyses_active_puuid'"
+                )
+            ).scalar_one()
+            matchmaking_lifecycle_rows = connection.execute(
+                text(
+                    "SELECT status, error_code, error_message "
+                    "FROM core.matchmaking_analyses "
+                    "WHERE puuid = 'LIFECYCLE_VALIDATION' "
+                    "ORDER BY created_at"
+                )
+            ).all()
     finally:
         engine.dispose()
 
@@ -217,6 +285,10 @@ def validate_catalog(database: str) -> None:
         match_timestamp_column_count,
         match_timestamp_constraint_count,
         tuple(legacy_timestamp_row),
+        matchmaking_lifecycle_column_count,
+        matchmaking_lifecycle_constraint_count,
+        matchmaking_active_index_count,
+        tuple(tuple(row) for row in matchmaking_lifecycle_rows),
     )
     expected = (
         EXPECTED_REVISION,
@@ -227,6 +299,23 @@ def validate_catalog(database: str) -> None:
         2,
         1,
         (1700000000000, 1700000000000, "legacy_game_creation"),
+        3,
+        1,
+        1,
+        (
+            (
+                "cancelled",
+                "superseded_during_migration",
+                "This older unfinished analysis was replaced.",
+            ),
+            ("in_progress", None, None),
+            ("completed", None, None),
+            (
+                "failed",
+                "legacy_analysis_failure",
+                "The analysis did not finish. Please try again.",
+            ),
+        ),
     )
     if observed != expected:
         raise RuntimeError(f"Unexpected migrated schema inventory: {observed}")
@@ -300,6 +389,7 @@ def main() -> int:
         created = True
         run_upgrade(database, "20260808_0003")
         seed_legacy_match(database)
+        seed_legacy_matchmaking_analyses(database)
         run_upgrade(database)
         validate_catalog(database)
         asyncio.run(verify_application_database_access(database))
