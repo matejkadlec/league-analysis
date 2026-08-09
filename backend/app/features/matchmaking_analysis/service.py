@@ -29,11 +29,13 @@ Rate Limiting:
 """
 
 import asyncio
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, cast
 
 import structlog
-from sqlalchemy import and_, select, update
+from sqlalchemy import and_, func, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import db_manager
@@ -48,13 +50,34 @@ from .schemas import (
     MatchmakingAnalysisHistoryItem,
     MatchmakingAnalysisHistoryResponse,
     MatchmakingAnalysisResponse,
+    MatchmakingAnalysisStatus,
     MatchmakingAnalysisStatusResponse,
 )
 
 logger = structlog.get_logger(__name__)
 
 MAX_RATE_LIMIT_WAIT = 120
-_running_analyses: Dict[str, asyncio.Task] = {}
+ACTIVE_ANALYSIS_STATUSES = ("pending", "in_progress", "waiting_rate_limit")
+
+
+@dataclass(frozen=True)
+class RunningAnalysis:
+    """Process-local handle for one persisted analysis run."""
+
+    created_at: datetime
+    task: asyncio.Task[None]
+
+
+_running_analyses: Dict[str, RunningAnalysis] = {}
+
+
+class MatchmakingAnalysisRuntimeError(Exception):
+    """Internal failure carrying only reviewed client-safe diagnostics."""
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(code)
+        self.code = code
+        self.client_message = message
 
 
 async def _ensure_riot_writer_maintenance_is_inactive(session: AsyncSession) -> None:
@@ -100,102 +123,94 @@ class MatchmakingAnalysisService:
             return count >= self.MIN_MATCHES_REQUIRED, count
         except RiotAPIError as e:
             logger.error(
-                "Failed to check player match count", puuid=puuid, error=str(e)
+                "Failed to check player match count",
+                puuid=puuid,
+                error_type=type(e).__name__,
             )
             raise
 
     async def start_analysis(self, puuid: str) -> MatchmakingAnalysisResponse:
-        """Create analysis record and spawn background task."""
+        """Create or attach to one active analysis and return immediately."""
         await _ensure_riot_writer_maintenance_is_inactive(self.db)
 
-        if puuid in _running_analyses:
-            task = _running_analyses[puuid]
-            if task.done():
-                _running_analyses.pop(puuid, None)
-            else:
-                logger.info("Analysis already running", puuid=puuid)
-                latest = await self.get_latest_analysis(puuid)
-                if latest:
-                    return latest
+        running = _running_analyses.get(puuid)
+        if running and running.task.done():
+            _running_analyses.pop(puuid, None)
 
-        # Check for existing in-progress analysis in DB
-        result = await self.db.execute(
-            select(MatchmakingAnalysis)
-            .where(
-                and_(
-                    MatchmakingAnalysis.puuid == puuid,
-                    MatchmakingAnalysis.started_at.isnot(None),
-                    MatchmakingAnalysis.completed_at.is_(None),
-                )
-            )
-            .order_by(MatchmakingAnalysis.created_at.desc())
-            .limit(1)
-        )
-        existing = result.scalar_one_or_none()
+        existing = await self._get_active_analysis(puuid)
         if existing:
-            logger.info("Resuming in-progress analysis", puuid=puuid)
-            task = asyncio.create_task(
-                self._run_analysis_background(puuid, existing.created_at)
-            )
-            _running_analyses[puuid] = task
+            logger.info("Attaching to active analysis", puuid=puuid)
+            self._ensure_background_task(puuid, existing.created_at)
             return MatchmakingAnalysisResponse.model_validate(existing)
 
         now = datetime.now(timezone.utc)
-        analysis = MatchmakingAnalysis(puuid=puuid, created_at=now, puuid_progress={})
+        analysis = MatchmakingAnalysis(
+            puuid=puuid,
+            created_at=now,
+            status="pending",
+            puuid_progress={},
+        )
         self.db.add(analysis)
-        await self.db.commit()
-        await self.db.refresh(analysis)
+        try:
+            await self.db.commit()
+            await self.db.refresh(analysis)
+        except IntegrityError:
+            await self.db.rollback()
+            existing = await self._get_active_analysis(puuid)
+            if not existing:
+                raise
+            logger.info("Attached after concurrent start", puuid=puuid)
+            self._ensure_background_task(puuid, existing.created_at)
+            return MatchmakingAnalysisResponse.model_validate(existing)
 
         logger.info("Created new matchmaking analysis", puuid=puuid, created_at=now)
-        task = asyncio.create_task(self._run_analysis_background(puuid, now))
-        _running_analyses[puuid] = task
+        self._ensure_background_task(puuid, now)
         return MatchmakingAnalysisResponse.model_validate(analysis)
 
-    async def cancel_analysis(self, puuid: str) -> bool:
-        """Cancel a running analysis for a player.
-
-        Cancels the asyncio task (which triggers CancelledError in the background),
-        then deletes the analysis record from DB. The task's CancelledError handler
-        takes care of releasing the rate limiter.
-
-        Returns True if an analysis was cancelled, False if none was running.
-        """
-        cancelled = False
-        task = _running_analyses.get(puuid)
-        if task and not task.done():
-            task.cancel()
-            try:
-                await task
-            except asyncio.CancelledError:
-                pass
-            except Exception:
-                pass
-            cancelled = True
-
-        _running_analyses.pop(puuid, None)
-
-        # Delete any incomplete analysis records (pending or in-progress)
+    async def cancel_analysis(self, puuid: str, created_at: datetime) -> bool:
+        """Cancel the exact active run while retaining its terminal record."""
         result = await self.db.execute(
             select(MatchmakingAnalysis).where(
                 and_(
                     MatchmakingAnalysis.puuid == puuid,
-                    MatchmakingAnalysis.completed_at.is_(None),
+                    MatchmakingAnalysis.created_at == created_at,
+                    MatchmakingAnalysis.status.in_(ACTIVE_ANALYSIS_STATUSES),
                 )
             )
         )
-        analyses = result.scalars().all()
-        if analyses:
-            for analysis in analyses:
-                await self.db.delete(analysis)
-            await self.db.commit()
-            logger.info(
-                "Analysis cancelled and records deleted",
-                puuid=puuid,
-                count=len(analyses),
-            )
-            return True
+        if result.scalar_one_or_none() is None:
+            return False
 
-        return cancelled
+        await self.db.execute(
+            update(MatchmakingAnalysis)
+            .where(
+                and_(
+                    MatchmakingAnalysis.puuid == puuid,
+                    MatchmakingAnalysis.created_at == created_at,
+                    MatchmakingAnalysis.status.in_(ACTIVE_ANALYSIS_STATUSES),
+                )
+            )
+            .values(
+                status="cancelled",
+                completed_at=datetime.now(timezone.utc),
+                error_code=None,
+                error_message=None,
+                rate_limit_reset_at=None,
+            )
+        )
+        await self.db.commit()
+
+        running = _running_analyses.get(puuid)
+        if running and running.created_at == created_at and not running.task.done():
+            running.task.cancel()
+            try:
+                await running.task
+            except asyncio.CancelledError:
+                pass
+            except Exception:
+                pass
+        logger.info("Analysis cancelled", puuid=puuid, created_at=created_at)
+        return True
 
     async def get_latest_completed_analysis(
         self, puuid: str
@@ -206,7 +221,7 @@ class MatchmakingAnalysisService:
             .where(
                 and_(
                     MatchmakingAnalysis.puuid == puuid,
-                    MatchmakingAnalysis.completed_at.isnot(None),
+                    MatchmakingAnalysis.status == "completed",
                     MatchmakingAnalysis.results.isnot(None),
                 )
             )
@@ -215,8 +230,6 @@ class MatchmakingAnalysisService:
         )
         analyses = result.scalars().all()
         for analysis in analyses:
-            if analysis.results and "error" in analysis.results:
-                continue
             return MatchmakingAnalysisResponse.model_validate(analysis)
         return None
 
@@ -255,14 +268,8 @@ class MatchmakingAnalysisService:
         progress = sum(1 for v in puuid_progress.values() if v)
         total = len(puuid_progress)
 
-        status = "pending"
-        if analysis.completed_at:
-            status = "completed"
-        elif analysis.started_at:
-            status = "in_progress"
-
         results_schema = None
-        if analysis.results:
+        if analysis.status == "completed" and analysis.results:
             from .schemas import MatchmakingAnalysisResults
 
             results_schema = MatchmakingAnalysisResults(
@@ -273,11 +280,15 @@ class MatchmakingAnalysisService:
 
         return MatchmakingAnalysisStatusResponse(
             puuid=analysis.puuid,
-            status=status,
+            status=cast(MatchmakingAnalysisStatus, analysis.status),
             progress=progress,
             total_puuids=total,
             results=results_schema,
             created_at=analysis.created_at,
+            started_at=analysis.started_at,
+            completed_at=analysis.completed_at,
+            error_code=analysis.error_code,
+            error_message=analysis.error_message,
             requests_saved=analysis.requests_saved or 0,
             rate_limit_reset_at=analysis.rate_limit_reset_at,
         )
@@ -291,7 +302,7 @@ class MatchmakingAnalysisService:
             .where(
                 and_(
                     MatchmakingAnalysis.puuid == puuid,
-                    MatchmakingAnalysis.completed_at.isnot(None),
+                    MatchmakingAnalysis.status == "completed",
                     MatchmakingAnalysis.results.isnot(None),
                 )
             )
@@ -301,7 +312,7 @@ class MatchmakingAnalysisService:
         analyses = result.scalars().all()
         items = []
         for a in analyses:
-            if a.results and "error" not in a.results:
+            if a.results:
                 items.append(
                     MatchmakingAnalysisHistoryItem(
                         created_at=a.created_at,
@@ -318,6 +329,7 @@ class MatchmakingAnalysisService:
                 and_(
                     MatchmakingAnalysis.puuid == puuid,
                     MatchmakingAnalysis.created_at == created_at,
+                    MatchmakingAnalysis.status == "completed",
                 )
             )
         )
@@ -328,6 +340,31 @@ class MatchmakingAnalysisService:
         await self.db.commit()
         logger.info("analysis_deleted", puuid=puuid, created_at=str(created_at))
         return True
+
+    async def _get_active_analysis(self, puuid: str) -> Optional[MatchmakingAnalysis]:
+        """Return the one persisted active analysis for a player, if present."""
+        result = await self.db.execute(
+            select(MatchmakingAnalysis)
+            .where(
+                MatchmakingAnalysis.puuid == puuid,
+                MatchmakingAnalysis.status.in_(ACTIVE_ANALYSIS_STATUSES),
+            )
+            .order_by(MatchmakingAnalysis.created_at.desc())
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
+    def _ensure_background_task(self, puuid: str, created_at: datetime) -> None:
+        """Start the process-local worker once for the persisted active run."""
+        running = _running_analyses.get(puuid)
+        if running and running.created_at == created_at and not running.task.done():
+            return
+
+        task = asyncio.create_task(self._run_analysis_background(puuid, created_at))
+        _running_analyses[puuid] = RunningAnalysis(
+            created_at=created_at,
+            task=task,
+        )
 
     # ================================================================
     # Background Analysis
@@ -351,12 +388,6 @@ class MatchmakingAnalysisService:
                     await service._run_analysis(puuid, created_at)
         except asyncio.CancelledError:
             logger.info("Background analysis cancelled", puuid=puuid)
-            # Rate limiter release and task cleanup happen in finally block
-            raise
-        except Exception as e:
-            logger.error(
-                "Background analysis failed", puuid=puuid, error=str(e), exc_info=True
-            )
             try:
                 async with db_manager.get_session() as db:
                     await _ensure_riot_writer_maintenance_is_inactive(db)
@@ -366,24 +397,62 @@ class MatchmakingAnalysisService:
                             and_(
                                 MatchmakingAnalysis.puuid == puuid,
                                 MatchmakingAnalysis.created_at == created_at,
+                                MatchmakingAnalysis.status.in_(
+                                    ACTIVE_ANALYSIS_STATUSES
+                                ),
                             )
                         )
                         .values(
+                            status="cancelled",
+                            completed_at=datetime.now(timezone.utc),
+                            rate_limit_reset_at=None,
+                        )
+                    )
+                    await db.commit()
+            except Exception:
+                logger.warning(
+                    "Could not persist interrupted analysis cancellation",
+                    puuid=puuid,
+                    created_at=created_at,
+                )
+            raise
+        except Exception as e:
+            logger.error(
+                "Background analysis failed",
+                puuid=puuid,
+                error_type=type(e).__name__,
+                exc_info=True,
+            )
+            error_code, error_message = self._safe_failure_details(e)
+            try:
+                async with db_manager.get_session() as db:
+                    await _ensure_riot_writer_maintenance_is_inactive(db)
+                    await db.execute(
+                        update(MatchmakingAnalysis)
+                        .where(
+                            and_(
+                                MatchmakingAnalysis.puuid == puuid,
+                                MatchmakingAnalysis.created_at == created_at,
+                                MatchmakingAnalysis.status.in_(
+                                    ACTIVE_ANALYSIS_STATUSES
+                                ),
+                            )
+                        )
+                        .values(
+                            status="failed",
                             rate_limit_reset_at=None,
                             completed_at=datetime.now(timezone.utc),
-                            results={
-                                "team_avg_winrate": 0,
-                                "enemy_avg_winrate": 0,
-                                "matches_analyzed": 0,
-                                "error": str(e)[:200],
-                            },
+                            error_code=error_code,
+                            error_message=error_message,
                         )
                     )
                     await db.commit()
             except Exception:
                 pass
         finally:
-            _running_analyses.pop(puuid, None)
+            running = _running_analyses.get(puuid)
+            if running and running.task is asyncio.current_task():
+                _running_analyses.pop(puuid, None)
             if rate_limiter:
                 try:
                     async with db_manager.get_session() as db:
@@ -391,6 +460,21 @@ class MatchmakingAnalysisService:
                         await rate_limiter.release()
                 except Exception:
                     pass
+
+    @staticmethod
+    def _safe_failure_details(error: Exception) -> tuple[str, str]:
+        """Map internal failures to stable, non-technical client messages."""
+        if isinstance(error, RiotAPIError):
+            return (
+                "riot_service_error",
+                "Riot data could not be loaded for this analysis. Please try again.",
+            )
+        if isinstance(error, MatchmakingAnalysisRuntimeError):
+            return error.code, error.client_message
+        return (
+            "analysis_failed",
+            "The analysis did not finish. Please try again.",
+        )
 
     async def _run_analysis(self, puuid: str, created_at: datetime) -> None:
         """
@@ -421,9 +505,18 @@ class MatchmakingAnalysisService:
                 and_(
                     MatchmakingAnalysis.puuid == puuid,
                     MatchmakingAnalysis.created_at == created_at,
+                    MatchmakingAnalysis.status.in_(ACTIVE_ANALYSIS_STATUSES),
                 )
             )
-            .values(started_at=datetime.now(timezone.utc))
+            .values(
+                status="in_progress",
+                started_at=func.coalesce(
+                    MatchmakingAnalysis.started_at,
+                    datetime.now(timezone.utc),
+                ),
+                error_code=None,
+                error_message=None,
+            )
         )
         await self.db.commit()
 
@@ -432,13 +525,18 @@ class MatchmakingAnalysisService:
             # No endTime — we want the actual latest matches for the current player.
             # This is always 1 API call that cannot be skipped.
             spine_match_ids = await self._api_fetch_match_ids(
-                puuid, count=self.MATCHES_TO_ANALYZE
+                puuid,
+                count=self.MATCHES_TO_ANALYZE,
+                required=True,
             )
             if not spine_match_ids or len(spine_match_ids) < self.MIN_MATCHES_REQUIRED:
                 await self._complete_with_error(
                     puuid,
                     created_at,
-                    f"Not enough matches: found {len(spine_match_ids) if spine_match_ids else 0}, need {self.MIN_MATCHES_REQUIRED}",
+                    "Player doesn't have enough ranked matches for this analysis. "
+                    f"Found {len(spine_match_ids) if spine_match_ids else 0}, "
+                    f"need {self.MIN_MATCHES_REQUIRED}.",
+                    error_code="not_enough_matches",
                 )
                 return
 
@@ -453,7 +551,10 @@ class MatchmakingAnalysisService:
             first_participants = await self._get_match_participants(spine_match_ids[0])
             if not any(p == puuid for p, _ in first_participants):
                 await self._complete_with_error(
-                    puuid, created_at, "Current player not in first match"
+                    puuid,
+                    created_at,
+                    "The selected player could not be verified in the latest matches.",
+                    error_code="player_not_in_match",
                 )
                 return
 
@@ -471,7 +572,11 @@ class MatchmakingAnalysisService:
                 for p_puuid, _ in participants:
                     all_keys.append(f"{p_puuid}:{mid}")
 
-            initial_progress = {k: False for k in all_keys}
+            existing_analysis = await self._get_analysis(puuid, created_at)
+            existing_progress = existing_analysis.puuid_progress or {}
+            initial_progress = {
+                key: bool(existing_progress.get(key, False)) for key in all_keys
+            }
             await self._update_progress(puuid, created_at, initial_progress)
             logger.info("Progress initialized", puuid=puuid, total_keys=len(all_keys))
 
@@ -548,15 +653,36 @@ class MatchmakingAnalysisService:
                     and_(
                         MatchmakingAnalysis.puuid == puuid,
                         MatchmakingAnalysis.created_at == created_at,
+                        MatchmakingAnalysis.status.in_(ACTIVE_ANALYSIS_STATUSES),
                     )
                 )
                 .values(
+                    status="completed",
                     results=results,
                     completed_at=now,
+                    error_code=None,
+                    error_message=None,
                     requests_saved=self.requests_saved,
                     rate_limit_reset_at=None,
                 )
             )
+
+            completion_status = await self.db.execute(
+                select(MatchmakingAnalysis.status).where(
+                    and_(
+                        MatchmakingAnalysis.puuid == puuid,
+                        MatchmakingAnalysis.created_at == created_at,
+                    )
+                )
+            )
+            if completion_status.scalar_one_or_none() != "completed":
+                await self.db.rollback()
+                logger.info(
+                    "Analysis completion ignored after terminal state",
+                    puuid=puuid,
+                    created_at=created_at,
+                )
+                return
 
             from app.features.players.models import Player
 
@@ -575,7 +701,12 @@ class MatchmakingAnalysisService:
             )
 
         except Exception as e:
-            logger.error("Analysis failed", puuid=puuid, error=str(e), exc_info=True)
+            logger.error(
+                "Analysis failed",
+                puuid=puuid,
+                error_type=type(e).__name__,
+                exc_info=True,
+            )
             raise
 
     # ================================================================
@@ -704,7 +835,7 @@ class MatchmakingAnalysisService:
             return [(r.puuid, r.team_id) for r in rows]
 
         # Not in DB → fetch from API
-        dto = await self._api_fetch_match(match_id)
+        dto = await self._api_fetch_match(match_id, required=True)
         if dto is None:
             return []
         await self._store_fetched_match(dto)
@@ -798,6 +929,8 @@ class MatchmakingAnalysisService:
         puuid: str,
         count: int = 10,
         end_time: Optional[int] = None,
+        *,
+        required: bool = False,
     ) -> List[str]:
         """Fetch match IDs from Riot API with rate limit handling."""
         max_retries = 10
@@ -810,6 +943,12 @@ class MatchmakingAnalysisService:
                         logger.warning(
                             "Rate limit: cannot fetch match IDs", puuid=puuid
                         )
+                        if required:
+                            raise MatchmakingAnalysisRuntimeError(
+                                "rate_limit_unavailable",
+                                "The analysis is still unable to obtain Riot request "
+                                "capacity. Please try again later.",
+                            )
                         return []
 
                 match_list = await self.riot_client.get_match_list_by_puuid(
@@ -838,13 +977,25 @@ class MatchmakingAnalysisService:
                 await self._wait_for_rate_limit(retry_after)
 
             except RiotAPIError as e:
-                logger.error("Failed to fetch match IDs", puuid=puuid, error=str(e))
+                logger.error(
+                    "Failed to fetch match IDs",
+                    puuid=puuid,
+                    error_type=type(e).__name__,
+                )
+                if required:
+                    raise
                 return []
 
         logger.warning("Max retries for match ID fetch", puuid=puuid)
+        if required:
+            raise MatchmakingAnalysisRuntimeError(
+                "rate_limit_wait_exhausted",
+                "The analysis could not resume within the allowed Riot rate-limit "
+                "wait. Please try again later.",
+            )
         return []
 
-    async def _api_fetch_match(self, match_id: str):
+    async def _api_fetch_match(self, match_id: str, *, required: bool = False):
         """Fetch a single match from API. Returns MatchDTO or None."""
         max_retries = 10
         for attempt in range(max_retries):
@@ -856,6 +1007,12 @@ class MatchmakingAnalysisService:
                         logger.warning(
                             "Rate limit: cannot fetch match", match_id=match_id
                         )
+                        if required:
+                            raise MatchmakingAnalysisRuntimeError(
+                                "rate_limit_unavailable",
+                                "The analysis is still unable to obtain Riot request "
+                                "capacity. Please try again later.",
+                            )
                         return None
 
                 dto = await self.riot_client.get_match(match_id)
@@ -878,10 +1035,22 @@ class MatchmakingAnalysisService:
                 await self._wait_for_rate_limit(retry_after)
 
             except RiotAPIError as e:
-                logger.warning("Failed to fetch match", match_id=match_id, error=str(e))
+                logger.warning(
+                    "Failed to fetch match",
+                    match_id=match_id,
+                    error_type=type(e).__name__,
+                )
+                if required:
+                    raise
                 return None
 
         logger.warning("Max retries for match fetch", match_id=match_id)
+        if required:
+            raise MatchmakingAnalysisRuntimeError(
+                "rate_limit_wait_exhausted",
+                "The analysis could not resume within the allowed Riot rate-limit "
+                "wait. Please try again later.",
+            )
         return None
 
     # ================================================================
@@ -932,6 +1101,7 @@ class MatchmakingAnalysisService:
                         MatchmakingAnalysis.puuid == self._current_analysis_puuid,
                         MatchmakingAnalysis.created_at
                         == self._current_analysis_created_at,
+                        MatchmakingAnalysis.status.in_(ACTIVE_ANALYSIS_STATUSES),
                     )
                 )
             )
@@ -955,15 +1125,21 @@ class MatchmakingAnalysisService:
                         MatchmakingAnalysis.puuid == self._current_analysis_puuid,
                         MatchmakingAnalysis.created_at
                         == self._current_analysis_created_at,
+                        MatchmakingAnalysis.status.in_(ACTIVE_ANALYSIS_STATUSES),
                     )
                 )
                 .values(
-                    rate_limit_reset_at=next_reset, requests_saved=self.requests_saved
+                    status=("waiting_rate_limit" if next_reset else "in_progress"),
+                    rate_limit_reset_at=next_reset,
+                    requests_saved=self.requests_saved,
                 )
             )
             await self.db.commit()
         except Exception as e:
-            logger.warning("Failed to set rate_limit_reset_at", error=str(e))
+            logger.warning(
+                "Failed to set rate_limit_reset_at",
+                error_type=type(e).__name__,
+            )
             try:
                 await self.db.rollback()
             except Exception:
@@ -981,6 +1157,7 @@ class MatchmakingAnalysisService:
                 and_(
                     MatchmakingAnalysis.puuid == puuid,
                     MatchmakingAnalysis.created_at == created_at,
+                    MatchmakingAnalysis.status.in_(ACTIVE_ANALYSIS_STATUSES),
                 )
             )
         )
@@ -996,6 +1173,7 @@ class MatchmakingAnalysisService:
                 and_(
                     MatchmakingAnalysis.puuid == puuid,
                     MatchmakingAnalysis.created_at == created_at,
+                    MatchmakingAnalysis.status.in_(ACTIVE_ANALYSIS_STATUSES),
                 )
             )
             .values(puuid_progress=progress)
@@ -1003,9 +1181,14 @@ class MatchmakingAnalysisService:
         await self.db.commit()
 
     async def _complete_with_error(
-        self, puuid: str, created_at: datetime, msg: str
+        self,
+        puuid: str,
+        created_at: datetime,
+        msg: str,
+        *,
+        error_code: str,
     ) -> None:
-        logger.warning("Analysis error", puuid=puuid, error=msg)
+        logger.warning("Analysis ended without results", puuid=puuid, code=error_code)
         await _ensure_riot_writer_maintenance_is_inactive(self.db)
         await self.db.execute(
             update(MatchmakingAnalysis)
@@ -1013,16 +1196,15 @@ class MatchmakingAnalysisService:
                 and_(
                     MatchmakingAnalysis.puuid == puuid,
                     MatchmakingAnalysis.created_at == created_at,
+                    MatchmakingAnalysis.status.in_(ACTIVE_ANALYSIS_STATUSES),
                 )
             )
             .values(
+                status="failed",
                 completed_at=datetime.now(timezone.utc),
-                results={
-                    "team_avg_winrate": 0,
-                    "enemy_avg_winrate": 0,
-                    "matches_analyzed": 0,
-                    "error": msg,
-                },
+                results=None,
+                error_code=error_code,
+                error_message=msg,
                 rate_limit_reset_at=None,
             )
         )

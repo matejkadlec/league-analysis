@@ -610,15 +610,26 @@ export const MatchmakingAnalysisResultsSchema = z.object({
   matches_analyzed: z.number().int().min(0),
 });
 
+export const MatchmakingAnalysisStatusSchema = z.enum([
+  "pending",
+  "in_progress",
+  "waiting_rate_limit",
+  "completed",
+  "failed",
+  "cancelled",
+]);
+
 export const MatchmakingAnalysisResponseSchema = z.object({
   puuid: z.string(),
-  status: z.string(),
+  status: MatchmakingAnalysisStatusSchema,
   progress: z.number(),
   total_puuids: z.number(),
   results: MatchmakingAnalysisResultsSchema.nullable().optional(),
   created_at: z.string(),
   started_at: z.string().nullable().optional(),
   completed_at: z.string().nullable().optional(),
+  error_code: z.string().nullable().optional(),
+  error_message: z.string().nullable().optional(),
   puuid_progress: z
     .record(z.string(), z.union([z.boolean(), z.string()]))
     .nullable()
@@ -629,11 +640,15 @@ export const MatchmakingAnalysisResponseSchema = z.object({
 
 export const MatchmakingAnalysisStatusResponseSchema = z.object({
   puuid: z.string(),
-  status: z.string(),
+  status: MatchmakingAnalysisStatusSchema,
   progress: z.number(),
   total_puuids: z.number(),
   results: MatchmakingAnalysisResultsSchema.nullable().optional(),
   created_at: z.string(),
+  started_at: z.string().nullable().optional(),
+  completed_at: z.string().nullable().optional(),
+  error_code: z.string().nullable().optional(),
+  error_message: z.string().nullable().optional(),
   requests_saved: z.number().default(0),
   rate_limit_reset_at: z.string().nullable().optional(),
 });
@@ -657,6 +672,9 @@ export const NotEnoughMatchesResponseSchema = z.object({
 
 export type MatchmakingAnalysisResults = z.infer<
   typeof MatchmakingAnalysisResultsSchema
+>;
+export type MatchmakingAnalysisStatus = z.infer<
+  typeof MatchmakingAnalysisStatusSchema
 >;
 export type MatchmakingAnalysisResponse = z.infer<
   typeof MatchmakingAnalysisResponseSchema

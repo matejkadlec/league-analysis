@@ -1,15 +1,17 @@
-"""Matchmaking analysis model for immutable analysis results."""
+"""Persisted matchmaking analysis lifecycle and immutable results."""
 
 from datetime import datetime
 from typing import Optional
 
 from sqlalchemy import (
-    DateTime as SQLDateTime,
-)
-from sqlalchemy import (
+    CheckConstraint,
     Index,
     PrimaryKeyConstraint,
     String,
+    text,
+)
+from sqlalchemy import (
+    DateTime as SQLDateTime,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
@@ -19,13 +21,7 @@ from app.core.models import Base
 
 
 class MatchmakingAnalysis(Base):
-    """Matchmaking analysis model - immutable records for each analysis.
-
-    This table uses an insert-only pattern:
-    - New analysis creates a new row
-    - puuid_progress is updated as players are analyzed
-    - Once completed, the row is never modified again
-    """
+    """Persisted lifecycle and results for one matchmaking analysis run."""
 
     __tablename__ = "matchmaking_analyses"
 
@@ -63,6 +59,26 @@ class MatchmakingAnalysis(Base):
         comment="When this analysis was completed",
     )
 
+    status: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        default="pending",
+        server_default="pending",
+        comment="Authoritative analysis lifecycle state",
+    )
+
+    error_code: Mapped[Optional[str]] = mapped_column(
+        String(64),
+        nullable=True,
+        comment="Stable client-safe failure classification",
+    )
+
+    error_message: Mapped[Optional[str]] = mapped_column(
+        String(500),
+        nullable=True,
+        comment="Reviewed user-safe terminal failure message",
+    )
+
     # Progress tracking - which PUUIDs have been analyzed
     puuid_progress: Mapped[Optional[dict]] = mapped_column(
         JSONB,
@@ -88,6 +104,19 @@ class MatchmakingAnalysis(Base):
 
     __table_args__ = (
         PrimaryKeyConstraint("puuid", "created_at", name="pk_matchmaking_analyses"),
+        CheckConstraint(
+            "status IN ('pending', 'in_progress', 'waiting_rate_limit', "
+            "'completed', 'failed', 'cancelled')",
+            name="status_valid",
+        ),
+        Index(
+            "uq_matchmaking_analyses_active_puuid",
+            "puuid",
+            unique=True,
+            postgresql_where=text(
+                "status IN ('pending', 'in_progress', 'waiting_rate_limit')"
+            ),
+        ),
         Index("idx_matchmaking_analyses_puuid", "puuid"),
         Index("ix_matchmaking_analyses_created_at", "created_at"),
         {"schema": "core"},
@@ -106,12 +135,12 @@ class MatchmakingAnalysis(Base):
     @property
     def is_completed(self) -> bool:
         """Check if analysis is completed."""
-        return self.completed_at is not None
+        return self.status == "completed"
 
     @property
     def is_in_progress(self) -> bool:
         """Check if analysis is in progress."""
-        return self.started_at is not None and self.completed_at is None
+        return self.status in {"pending", "in_progress", "waiting_rate_limit"}
 
     @property
     def progress_percentage(self) -> float:

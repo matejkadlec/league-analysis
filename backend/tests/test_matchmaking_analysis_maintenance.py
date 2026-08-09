@@ -48,7 +48,9 @@ async def test_new_matchmaking_analysis_refuses_active_maintenance(monkeypatch) 
 async def test_matchmaking_start_returns_maintenance_status(monkeypatch) -> None:
     """The start endpoint reports an active cleanup instead of an internal error."""
     service = SimpleNamespace(
-        check_player_has_enough_matches=AsyncMock(return_value=(True, 10)),
+        check_player_has_enough_matches=AsyncMock(
+            side_effect=AssertionError("start must not wait for Riot preflight")
+        ),
         start_analysis=AsyncMock(side_effect=RiotWriterMaintenanceActiveError()),
     )
 
@@ -60,6 +62,7 @@ async def test_matchmaking_start_returns_maintenance_status(monkeypatch) -> None
         )
 
     assert error.value.status_code == 503
+    service.check_player_has_enough_matches.assert_not_awaited()
     service.start_analysis.assert_awaited_once_with("test-puuid")
 
 

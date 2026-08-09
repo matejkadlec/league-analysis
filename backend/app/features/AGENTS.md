@@ -19,7 +19,7 @@ Domain-specific business logic organized by feature. Each feature is self-contai
 | `players/`              | Search, tracking, rank info                             |
 | `matches/`              | Match history, stats                                    |
 | `playstyle_analysis/`   | Playstyle analysis                                      |
-| `matchmaking_analysis/` | Fairness evaluation                                     |
+| `matchmaking_analysis/` | Persisted, idempotent, cancellable fairness-analysis lifecycle |
 | `jobs/`                 | Background tasks ([see jobs/AGENTS.md](jobs/AGENTS.md)) |
 | `settings/`             | Runtime config, API key, viewer-owned versioned card preferences |
 
@@ -77,3 +77,7 @@ async def get_player_service(
 - Minimize cross-feature dependencies
 - Features expose public APIs via `__init__.py`
 - Keep routes thin, logic in services
+- Matchmaking Analysis start routes must return the persisted active run before
+  Riot preflight/work begins. Preserve its explicit lifecycle states, one-active-
+  run-per-PUUID database constraint, exact-run cancellation, and shared
+  rate-limiter/maintenance boundaries.

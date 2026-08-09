@@ -1,9 +1,18 @@
 """Schemas for matchmaking analysis requests and responses."""
 
 from datetime import datetime
-from typing import Dict, Optional
+from typing import Dict, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field
+
+MatchmakingAnalysisStatus = Literal[
+    "pending",
+    "in_progress",
+    "waiting_rate_limit",
+    "completed",
+    "failed",
+    "cancelled",
+]
 
 
 class MatchmakingAnalysisRequest(BaseModel):
@@ -44,20 +53,12 @@ class MatchmakingAnalysisResponse(BaseModel):
     created_at: datetime
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
+    status: MatchmakingAnalysisStatus
+    error_code: Optional[str] = None
+    error_message: Optional[str] = None
     puuid_progress: Optional[Dict[str, bool]] = None
     requests_saved: int = 0
     rate_limit_reset_at: Optional[datetime] = None
-
-    @computed_field
-    @property
-    def status(self) -> str:
-        """Compute status from timestamps."""
-        if self.completed_at:
-            return "completed"
-        elif self.started_at:
-            return "in_progress"
-        else:
-            return "pending"
 
     @computed_field
     @property
@@ -82,11 +83,15 @@ class MatchmakingAnalysisStatusResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     puuid: str
-    status: str
+    status: MatchmakingAnalysisStatus
     progress: int
     total_puuids: int
     results: Optional[MatchmakingAnalysisResults] = None
     created_at: datetime
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    error_code: Optional[str] = None
+    error_message: Optional[str] = None
     requests_saved: int = 0
     rate_limit_reset_at: Optional[datetime] = None
 

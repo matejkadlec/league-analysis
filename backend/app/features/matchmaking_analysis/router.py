@@ -3,6 +3,7 @@
 from datetime import datetime
 from typing import Union
 
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -20,6 +21,7 @@ from .schemas import (
 )
 
 limiter = Limiter(key_func=get_remote_address)
+logger = structlog.get_logger(__name__)
 router = APIRouter(
     prefix="/matchmaking-analysis",
     tags=["matchmaking-analysis"],
@@ -49,8 +51,16 @@ async def check_player_matches(
         if has_enough:
             return {"success": True, "matches_found": match_count}
         return NotEnoughMatchesResponse(matches_found=match_count)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as error:
+        logger.warning(
+            "matchmaking_match_check_failed",
+            error_type=type(error).__name__,
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=502,
+            detail="Match availability could not be checked. Please try again.",
+        )
 
 
 @router.post("/start", response_model=MatchmakingAnalysisResponse)
@@ -63,23 +73,11 @@ async def start_analysis(
     """
     Start a new matchmaking analysis for a player.
 
-    This will analyze the player's last 10 ranked matches and calculate
-    average winrates for teammates vs enemies.
-
-    The analysis runs in the background and will continue even if the
-    user navigates away from the page.
+    The endpoint only creates or attaches to the persisted run. All Riot calls,
+    including the minimum-match preflight, happen in the background so a valid
+    long-running analysis is never tied to the HTTP request timeout.
     """
     try:
-        # First check if player has enough matches
-        has_enough, match_count = await service.check_player_has_enough_matches(
-            payload.puuid
-        )
-        if not has_enough:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Player doesn't have enough matches for this analysis. Found {match_count}, need 10.",
-            )
-
         return await service.start_analysis(payload.puuid)
     except HTTPException:
         raise
@@ -88,8 +86,16 @@ async def start_analysis(
             status_code=503,
             detail="Riot data maintenance is in progress. Try again after it completes.",
         )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as error:
+        logger.error(
+            "matchmaking_analysis_start_failed",
+            error_type=type(error).__name__,
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=500,
+            detail="The analysis could not be started. Please try again.",
+        )
 
 
 @router.get("/player/{puuid}", response_model=MatchmakingAnalysisResponse)
@@ -125,24 +131,16 @@ async def get_latest_completed_analysis(
 @router.get("/player/{puuid}/status", response_model=MatchmakingAnalysisStatusResponse)
 async def get_analysis_status_by_puuid(
     puuid: str,
+    created_at: datetime,
     service: MatchmakingServiceDep,
 ):
-    """Get status of the latest analysis for a player."""
-    result = await service.get_latest_analysis(puuid)
+    """Get authoritative status for one exact analysis run."""
+    result = await service.get_analysis_status(puuid, created_at)
 
     if not result:
         raise HTTPException(status_code=404, detail="No analysis found for this player")
 
-    return MatchmakingAnalysisStatusResponse(
-        puuid=result.puuid,
-        status=result.status,
-        progress=result.progress,
-        total_puuids=result.total_puuids,
-        results=result.results,
-        created_at=result.created_at,
-        requests_saved=result.requests_saved,
-        rate_limit_reset_at=result.rate_limit_reset_at,
-    )
+    return result
 
 
 @router.get(
@@ -160,14 +158,15 @@ async def get_analysis_history(
 @router.delete("/player/{puuid}/cancel")
 async def cancel_analysis(
     puuid: str,
+    created_at: datetime,
     service: MatchmakingServiceDep,
 ):
     """Cancel a running matchmaking analysis.
 
-    Cancels the background task, releases rate limiter, and deletes the
-    analysis record. Already-fetched matches are kept in DB.
+    Cancels the exact background run and preserves its terminal state. Already-
+    fetched matches are kept in the database.
     """
-    cancelled = await service.cancel_analysis(puuid)
+    cancelled = await service.cancel_analysis(puuid, created_at)
     if not cancelled:
         raise HTTPException(
             status_code=404, detail="No active analysis found for this player"

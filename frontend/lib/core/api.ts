@@ -415,10 +415,12 @@ export async function startMatchmakingAnalysis(
 
 export async function getMatchmakingAnalysisStatus(
   puuid: string,
+  createdAt: string,
 ): Promise<ApiResponse<MatchmakingAnalysisStatusResponse>> {
   return validatedGet(
     MatchmakingAnalysisStatusResponseSchema,
     `/matchmaking-analysis/player/${puuid}/status`,
+    { created_at: createdAt },
   );
 }
 
@@ -453,10 +455,12 @@ export async function getMatchmakingAnalysisHistory(
 
 export async function cancelMatchmakingAnalysis(
   puuid: string,
+  createdAt: string,
 ): Promise<ApiResponse<{ success: boolean; message: string }>> {
   try {
     const response = await api.delete(
       `/matchmaking-analysis/player/${puuid}/cancel`,
+      { params: { created_at: createdAt } },
     );
     return {
       success: true,

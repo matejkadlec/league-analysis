@@ -16,7 +16,6 @@ import {
   startMatchmakingAnalysis,
   getLatestMatchmakingAnalysis,
   getMatchmakingAnalysisStatus,
-  checkPlayerMatches,
   cancelMatchmakingAnalysis,
 } from "@/lib/core/api";
 
@@ -48,8 +47,6 @@ type UIPhase =
   | "completed"
   | "cancelling";
 
-const ANALYSIS_TIME_MATCH_TOLERANCE_MS = 1000;
-
 function parseIsoTimestamp(value: string | null | undefined): number | null {
   if (!value) {
     return null;
@@ -77,10 +74,7 @@ function isSameAnalysisInstance(
     return false;
   }
 
-  return (
-    Math.abs(firstTimestamp - secondTimestamp) <=
-    ANALYSIS_TIME_MATCH_TOLERANCE_MS
-  );
+  return firstTimestamp === secondTimestamp;
 }
 
 export function MatchmakingAnalysis({ puuid }: MatchmakingAnalysisProps) {
@@ -90,16 +84,10 @@ export function MatchmakingAnalysis({ puuid }: MatchmakingAnalysisProps) {
   const [nowTimestamp, setNowTimestamp] = useState(() => Date.now());
   const [estimatedRateLimitWindowSeconds, setEstimatedRateLimitWindowSeconds] =
     useState(60);
-  const [recentlyStartedTime, setRecentlyStartedTime] = useState<number | null>(
-    null,
-  );
   const [currentAnalysisCreatedAt, setCurrentAnalysisCreatedAt] = useState<
     string | null
   >(null);
-  const [notEnoughMatches, setNotEnoughMatches] = useState<{
-    show: boolean;
-    found: number;
-  } | null>(null);
+  const [analysisFailure, setAnalysisFailure] = useState<string | null>(null);
 
   // Track if we ever saw in_progress this session
   const sawInProgressRef = useRef(false);
@@ -139,15 +127,25 @@ export function MatchmakingAnalysis({ puuid }: MatchmakingAnalysisProps) {
   // Poll for status updates only when actively running
   const shouldPoll = phase === "running" || phase === "starting";
   const { data: statusUpdate } = useQuery({
-    queryKey: ["matchmaking-analysis-status", puuid],
+    queryKey: [
+      "matchmaking-analysis-status",
+      puuid,
+      currentAnalysisCreatedAt,
+    ],
     queryFn: async () => {
-      const result = await getMatchmakingAnalysisStatus(puuid);
+      if (!currentAnalysisCreatedAt) {
+        return null;
+      }
+      const result = await getMatchmakingAnalysisStatus(
+        puuid,
+        currentAnalysisCreatedAt,
+      );
       if (!result.success) {
         return null;
       }
       return result.data;
     },
-    enabled: shouldPoll,
+    enabled: shouldPoll && Boolean(currentAnalysisCreatedAt),
     refetchInterval: 3000,
     staleTime: 0,
   });
@@ -168,40 +166,18 @@ export function MatchmakingAnalysis({ puuid }: MatchmakingAnalysisProps) {
     );
   const latestForCurrent = latestMatchesCurrent ? latestAnalysis : null;
 
-  useEffect(() => {
-    if (!shouldPoll || !statusUpdate?.created_at || !currentAnalysisCreatedAt) {
-      return;
-    }
-    if (
-      isSameAnalysisInstance(
-        statusUpdate.created_at,
-        currentAnalysisCreatedAt,
-      ) ||
-      (statusUpdate.status !== "pending" &&
-        statusUpdate.status !== "in_progress")
-    ) {
-      return;
-    }
-
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- Resync tracking key when remount receives equivalent analysis with different datetime string format.
-    setCurrentAnalysisCreatedAt(statusUpdate.created_at);
-  }, [
-    shouldPoll,
-    statusUpdate?.created_at,
-    statusUpdate?.status,
-    currentAnalysisCreatedAt,
-  ]);
-
   const finalizeCompletion = useCallback(async () => {
     queryClient.removeQueries({
       queryKey: ["matchmaking-analysis-status", puuid],
     });
-    queryClient.invalidateQueries({
-      queryKey: ["matchmaking-analysis-results", puuid],
-    });
-    queryClient.invalidateQueries({
-      queryKey: ["matchmaking-analysis-history", puuid],
-    });
+    await Promise.all([
+      queryClient.invalidateQueries({
+        queryKey: ["matchmaking-analysis-results", puuid],
+      }),
+      queryClient.invalidateQueries({
+        queryKey: ["matchmaking-analysis-history", puuid],
+      }),
+    ]);
     await refetch();
     setCurrentAnalysisCreatedAt(null);
     setAnimProgress(null);
@@ -229,7 +205,10 @@ export function MatchmakingAnalysis({ puuid }: MatchmakingAnalysisProps) {
 
     // Track in_progress status - only transition to running from starting phase
     // This prevents stale statusUpdate data from incorrectly showing running state
-    if (currentStatus === "in_progress") {
+    if (
+      currentStatus === "in_progress" ||
+      currentStatus === "waiting_rate_limit"
+    ) {
       sawInProgressRef.current = true;
       if (phase === "starting") {
         // eslint-disable-next-line react-hooks/set-state-in-effect -- Transitioning UI state based on polled backend status.
@@ -250,8 +229,6 @@ export function MatchmakingAnalysis({ puuid }: MatchmakingAnalysisProps) {
         // Reset tracking for next run
         sawInProgressRef.current = false;
         lastBackendProgressRef.current = 0;
-        setRecentlyStartedTime(null);
-
         if (isFast) {
           setPhase("completing-fast");
           setAnimProgress(0); // Start at 0%
@@ -269,11 +246,46 @@ export function MatchmakingAnalysis({ puuid }: MatchmakingAnalysisProps) {
     // Transition from starting to running if we see pending/in_progress
     if (
       phase === "starting" &&
-      (currentStatus === "pending" || currentStatus === "in_progress")
+      (currentStatus === "pending" ||
+        currentStatus === "in_progress" ||
+        currentStatus === "waiting_rate_limit")
     ) {
-      if (currentStatus === "in_progress") {
+      if (
+        currentStatus === "in_progress" ||
+        currentStatus === "waiting_rate_limit"
+      ) {
         setPhase("running");
       }
+    }
+
+    if (
+      currentStatus === "failed" &&
+      (phase === "running" || phase === "starting")
+    ) {
+      const terminalUpdate = validStatusUpdate ?? latestForCurrent;
+      const message =
+        terminalUpdate?.error_message ??
+        "The analysis did not finish. Please try again.";
+      queryClient.setQueryData(
+        ["matchmaking-analysis", puuid],
+        terminalUpdate,
+      );
+      setAnalysisFailure(message);
+      setCurrentAnalysisCreatedAt(null);
+      setPhase("idle");
+      toast.error(message);
+    }
+
+    if (
+      currentStatus === "cancelled" &&
+      (phase === "running" || phase === "starting")
+    ) {
+      queryClient.setQueryData(
+        ["matchmaking-analysis", puuid],
+        validStatusUpdate ?? latestForCurrent,
+      );
+      setCurrentAnalysisCreatedAt(null);
+      setPhase("idle");
     }
   }, [
     validStatusUpdate?.status,
@@ -284,6 +296,10 @@ export function MatchmakingAnalysis({ puuid }: MatchmakingAnalysisProps) {
     latestAnalysis?.progress,
     phase,
     shouldPoll,
+    queryClient,
+    puuid,
+    validStatusUpdate,
+    latestForCurrent,
   ]);
 
   // Animation state machine for completion
@@ -328,38 +344,33 @@ export function MatchmakingAnalysis({ puuid }: MatchmakingAnalysisProps) {
     if (latestAnalysis?.status === "completed") {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- Initial UI state is derived from backend response.
       setPhase("completed");
-    } else if (latestAnalysis?.status === "in_progress") {
+    } else if (
+      latestAnalysis?.status === "in_progress" ||
+      latestAnalysis?.status === "waiting_rate_limit"
+    ) {
       sawInProgressRef.current = true;
       setCurrentAnalysisCreatedAt(latestAnalysis.created_at);
       setPhase("running");
     } else if (latestAnalysis?.status === "pending") {
       setCurrentAnalysisCreatedAt(latestAnalysis.created_at);
       setPhase("starting");
+    } else if (latestAnalysis?.status === "failed") {
+      setAnalysisFailure(
+        latestAnalysis.error_message ??
+          "The analysis did not finish. Please try again.",
+      );
     }
-  }, [isLoading, latestAnalysis?.status, latestAnalysis?.created_at, phase]);
+  }, [
+    isLoading,
+    latestAnalysis?.status,
+    latestAnalysis?.created_at,
+    latestAnalysis?.error_message,
+    phase,
+  ]);
 
   // Start analysis mutation
   const startMutation = useMutation({
     mutationFn: async () => {
-      // First check if player has enough matches
-      const checkResult = await checkPlayerMatches(puuid);
-      if (!checkResult.success) {
-        throw new Error(checkResult.error.message);
-      }
-
-      // Check if it's a "not enough matches" response
-      if (
-        "message" in checkResult.data &&
-        "matches_required" in checkResult.data
-      ) {
-        setNotEnoughMatches({
-          show: true,
-          found: checkResult.data.matches_found,
-        });
-        throw new Error("Not enough matches");
-      }
-
-      // Now start the analysis
       const result = await startMatchmakingAnalysis(puuid);
       if (!result.success) {
         throw new Error(result.error.message);
@@ -373,25 +384,25 @@ export function MatchmakingAnalysis({ puuid }: MatchmakingAnalysisProps) {
       });
       queryClient.setQueryData(["matchmaking-analysis", puuid], null);
       setPhase("starting");
-      setNotEnoughMatches(null);
+      setAnalysisFailure(null);
       setAnimProgress(null);
       sawInProgressRef.current = false;
       lastBackendProgressRef.current = 0;
-      setRecentlyStartedTime(Date.now());
       setCurrentAnalysisCreatedAt(null);
       setEstimatedRateLimitWindowSeconds(60);
       wasRateLimitedRef.current = false;
     },
     onSuccess: (data) => {
-      toast.success("Matchmaking analysis started");
+      toast.info("Matchmaking analysis started");
       queryClient.setQueryData(["matchmaking-analysis", puuid], data);
       // Track the created_at of this new analysis
       setCurrentAnalysisCreatedAt(data.created_at);
+      setPhase("running");
     },
-    onError: (error: Error) => {
-      if (error.message !== "Not enough matches") {
-        toast.error(`Failed to start analysis: ${error.message}`);
-      }
+    onError: () => {
+      const message = "The analysis could not be started. Please try again.";
+      toast.error(message);
+      setAnalysisFailure(message);
       setPhase("idle");
     },
   });
@@ -399,7 +410,13 @@ export function MatchmakingAnalysis({ puuid }: MatchmakingAnalysisProps) {
   // Cancel analysis mutation
   const cancelMutation = useMutation({
     mutationFn: async () => {
-      const result = await cancelMatchmakingAnalysis(puuid);
+      if (!currentAnalysisCreatedAt) {
+        throw new Error("No active analysis is selected.");
+      }
+      const result = await cancelMatchmakingAnalysis(
+        puuid,
+        currentAnalysisCreatedAt,
+      );
       if (!result.success) {
         throw new Error(result.error.message);
       }
@@ -407,7 +424,6 @@ export function MatchmakingAnalysis({ puuid }: MatchmakingAnalysisProps) {
     },
     onMutate: () => {
       setPhase("cancelling");
-      toast.warning("Analysis cancelled");
     },
     onSuccess: async () => {
       // Clean up queries and go to idle
@@ -426,13 +442,13 @@ export function MatchmakingAnalysis({ puuid }: MatchmakingAnalysisProps) {
       });
       sawInProgressRef.current = false;
       lastBackendProgressRef.current = 0;
-      setRecentlyStartedTime(null);
       setCurrentAnalysisCreatedAt(null);
       setAnimProgress(null);
       setPhase("idle");
+      toast.warning("Analysis cancelled");
     },
-    onError: (error: Error) => {
-      toast.error(`Failed to cancel analysis: ${error.message}`);
+    onError: () => {
+      toast.error("The analysis could not be cancelled. Please try again.");
       // Go back to running on error
       setPhase("running");
     },
@@ -445,10 +461,11 @@ export function MatchmakingAnalysis({ puuid }: MatchmakingAnalysisProps) {
 
   // Calculate progress percentage
   const EXPECTED_PLAYERS = 100;
+  const totalPlayers = displayData?.total_puuids || EXPECTED_PLAYERS;
   const rawProgressPercentage =
     displayData && displayData.progress > 0
       ? Math.min(
-          Math.round((displayData.progress / EXPECTED_PLAYERS) * 100),
+          Math.round((displayData.progress / totalPlayers) * 100),
           100,
         )
       : 0;
@@ -456,10 +473,6 @@ export function MatchmakingAnalysis({ puuid }: MatchmakingAnalysisProps) {
   // Use animation progress if set, otherwise raw
   const progressPercentage =
     animProgress !== null ? animProgress : rawProgressPercentage;
-
-  // Check if we should hide cancel button (recently started)
-  const hideCancel =
-    recentlyStartedTime !== null && nowTimestamp - recentlyStartedTime < 5000;
 
   useEffect(() => {
     const resetAt = displayData?.rate_limit_reset_at;
@@ -541,13 +554,10 @@ export function MatchmakingAnalysis({ puuid }: MatchmakingAnalysisProps) {
             in this player&apos;s last 10 matches. Visual representation of the
             calculation is under the Calculation Flowchart card.
           </p>
-          {notEnoughMatches?.show && (
+          {analysisFailure && (
             <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" />
-              <AlertDescription>
-                Player doesn&apos;t have enough matches for this analysis. Found{" "}
-                {notEnoughMatches.found} matches, need at least 10.
-              </AlertDescription>
+              <AlertDescription>{analysisFailure}</AlertDescription>
             </Alert>
           )}
 
@@ -661,7 +671,7 @@ export function MatchmakingAnalysis({ puuid }: MatchmakingAnalysisProps) {
       return `Analyzing player win rates... ${displayData.progress || 0} of 100 players completed${remainingText}${savedText}`;
     }
 
-    return "Starting analysis...";
+    return "Analyzing players... 0 of 100 players completed";
   };
 
   return (
@@ -675,7 +685,9 @@ export function MatchmakingAnalysis({ puuid }: MatchmakingAnalysisProps) {
           {(phase === "running" || phase === "starting") && (
             <div className="flex items-center gap-2 text-sm font-normal text-muted-foreground">
               <Clock className="h-4 w-4" />
-              <span>{displayData?.progress || 0} / 100 players</span>
+              <span>
+                {displayData?.progress || 0} / {totalPlayers} players
+              </span>
             </div>
           )}
         </CardTitle>
@@ -703,7 +715,7 @@ export function MatchmakingAnalysis({ puuid }: MatchmakingAnalysisProps) {
         </div>
 
         {/* Action Button */}
-        {phase === "running" && !hideCancel && (
+        {phase === "running" && (
           <Button
             onClick={() => cancelMutation.mutate()}
             disabled={cancelMutation.isPending}
@@ -725,8 +737,7 @@ export function MatchmakingAnalysis({ puuid }: MatchmakingAnalysisProps) {
         )}
         {(phase === "starting" ||
           phase === "cancelling" ||
-          isCompleting ||
-          (phase === "running" && hideCancel)) && (
+          isCompleting) && (
           <Button disabled className="w-full gold-gradient button-medium">
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             {phase === "cancelling" ? "Cancelling..." : "Analyzing..."}

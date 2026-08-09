@@ -215,10 +215,15 @@ erDiagram
     matchmaking_analyses {
         string puuid PK, FK
         string created_at PK
+        string status
         string results
         string started_at
         string completed_at
+        string error_code
+        string error_message
         string puuid_progress
+        int requests_saved
+        string rate_limit_reset_at
     }
 ```
 
@@ -260,6 +265,21 @@ erDiagram
 ---
 
 ## Enum Types
+
+### `core.matchmaking_analyses.status`
+
+This lifecycle uses a checked string column rather than a PostgreSQL enum so an
+incremental migration can safely classify legacy rows.
+
+- `pending` - accepted and queued for the process-local background worker
+- `in_progress` - actively calculating or fetching data
+- `waiting_rate_limit` - still active, waiting until `rate_limit_reset_at`
+- `completed` - terminal success with immutable result data
+- `failed` - terminal failure with a stable safe error code/message
+- `cancelled` - terminal user or process interruption
+
+The partial unique index `uq_matchmaking_analyses_active_puuid` covers the
+three active states and prevents concurrent analyses for the same PUUID.
 
 ### `jobs.job_status_enum`
 
