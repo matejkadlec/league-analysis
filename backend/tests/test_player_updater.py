@@ -1,5 +1,6 @@
 """Player Updater execution and recovery regressions."""
 
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
@@ -141,6 +142,7 @@ async def test_optional_account_identity_does_not_erase_known_riot_id(
 
     assert not changed
     assert (player.game_name, player.tag_line) == ("Known Name", "SAFE")
+    assert player.profile_synced_at is not None
 
 
 @pytest.mark.asyncio
@@ -163,23 +165,21 @@ async def test_new_player_uses_submitted_riot_id_when_account_omits_it(
     monkeypatch.setattr(player_service_module, "select", lambda *_args: _Statement())
     monkeypatch.setattr(player_service_module, "Player", _FakePlayer)
 
-    class _Result:
-        def scalar_one_or_none(self) -> None:
-            return None
+    async def populate_database_timestamps(player: SimpleNamespace) -> None:
+        player.created_at = datetime.now(timezone.utc)
+        player.updated_at = datetime.now(timezone.utc)
 
     db = SimpleNamespace(
-        execute=AsyncMock(return_value=_Result()),
+        get=AsyncMock(return_value=None),
         add=Mock(),
         commit=AsyncMock(),
-        refresh=AsyncMock(),
+        refresh=AsyncMock(side_effect=populate_database_timestamps),
     )
     service = PlayerService(db)
     service.track_player = AsyncMock(return_value=SimpleNamespace(puuid="safe"))  # type: ignore[method-assign]
     riot_client = SimpleNamespace(
         get_account_by_riot_id=AsyncMock(
-            return_value=SimpleNamespace(
-                puuid="sanitized-puuid", game_name=None, tag_line=None
-            )
+            return_value=SimpleNamespace(puuid="p" * 78, game_name=None, tag_line=None)
         ),
         get_summoner_by_puuid=AsyncMock(
             return_value=SimpleNamespace(profile_icon_id=29, summoner_level=100)
@@ -199,3 +199,4 @@ async def test_new_player_uses_submitted_riot_id_when_account_omits_it(
         "Submitted Name",
         "SAFE",
     )
+    assert created_player.profile_synced_at is not None

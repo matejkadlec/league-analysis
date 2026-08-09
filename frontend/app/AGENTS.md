@@ -16,9 +16,10 @@ Next.js App Router pages.
 | Route                   | File                            | Description                |
 | ----------------------- | ------------------------------- | -------------------------- |
 | `/`                     | `page.tsx`                      | Home landing page          |
-| `/playstyle-analysis`   | `playstyle-analysis/page.tsx`   | Player playstyle analysis  |
+| `/my-profile`           | `my-profile/page.tsx`           | Current-player profile dashboard |
+| `/playstyle-analysis`   | `playstyle-analysis/page.tsx`   | Current-player playstyle analysis |
 | `/matchmaking-analysis` | `matchmaking-analysis/page.tsx` | Match fairness analysis    |
-| `/tracked-players`      | `tracked-players/page.tsx`      | Tracked list + in-page player profile view |
+| `/tracked-players`      | `tracked-players/page.tsx`      | Compatibility redirect to current-player profile |
 | `/jobs`                 | `jobs/page.tsx`                 | Background jobs monitoring (admin only) |
 | `/settings`             | `settings/page.tsx`             | Application + account settings for all users, Riot API config for admins |
 | `/sign-in`              | `sign-in/page.tsx`              | Authentication (signed-in users are redirected to `/`) |
@@ -45,6 +46,11 @@ Next.js App Router pages.
 - Always handle loading/error/success states
 - Add new pages to `components/sidebar-nav.tsx`
 - Use container pattern: `<div className="container mx-auto py-8">`
+- My Profile and Playstyle Analysis consume the shared current-player context;
+  they must not restore duplicated large Player Search cards. Preserve
+  `?puuid=` for deep links, history, and independent browser tabs.
+- Tracked-player management lives in the sidebar dialog. Keep the retired
+  `/tracked-players` route as a safe redirect and preserve a supplied PUUID.
 
 ## Page Template
 

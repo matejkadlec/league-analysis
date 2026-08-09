@@ -4,15 +4,9 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import Image from "next/image";
-import {
-  Menu,
-  X,
-  User,
-  LogOut,
-  Settings,
-  Wrench,
-} from "lucide-react";
+import { Menu, X, User, LogOut, Settings, Wrench } from "lucide-react";
 import { useAuth } from "@/features/auth";
+import { SidebarPlayerSwitcher } from "@/features/players";
 
 interface NavItem {
   name: string;
@@ -39,7 +33,6 @@ const navItems: NavItem[] = [
   },
   { name: "Playstyle Analysis", path: "/playstyle-analysis" },
   { name: "Matchmaking Analysis", path: "/matchmaking-analysis" },
-  { name: "Tracked Players", path: "/tracked-players" },
 ];
 
 export function SidebarNav() {
@@ -116,6 +109,8 @@ export function SidebarNav() {
               </div>
             </Link>
           </div>
+
+          <SidebarPlayerSwitcher onNavigate={() => setMenuOpen(false)} />
 
           {/* Navigation Links */}
           <nav className="flex-1 py-6 overflow-y-auto" suppressHydrationWarning>

@@ -5,23 +5,26 @@ import {
   Player,
   PlayerLeagueSchema,
   MatchStatsResponseSchema,
+  PlayerSyncRunSchema,
 } from "@/lib/core/schemas";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { User, Trophy, RefreshCw, Loader2, Clock, StarOff } from "lucide-react";
+import { User, Trophy, RefreshCw, Loader2, Clock } from "lucide-react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
-import { validatedGet, api, untrackPlayer } from "@/lib/core/api";
+import { validatedGet, api } from "@/lib/core/api";
 import { getPlatformDisplayName } from "@/lib/core/platform-utils";
 import {
   getProfileIconUrl,
   getProfileIconFallbackUrl,
 } from "@/lib/core/data-dragon";
 import { useDDragonVersion } from "@/lib/core/data-dragon-context";
-import { toast } from "sonner";
-import { useState } from "react";
-import { useAuth } from "@/features/auth";
+import { useEffect, useRef, useState } from "react";
 import { getRankColors } from "@/features/players/utils/rank-colors";
+import { TrackPlayerButton } from "@/features/players/components/track-player-button";
+import { useToast } from "@/lib/core/hooks";
+import { oldestCompleteFreshness } from "@/lib/core/relative-time";
+import { useRelativeTime } from "@/lib/core/use-relative-time";
 
 interface PlayerCardProps {
   player: Player;
@@ -71,36 +74,21 @@ function formatDate(dateString: string | null | undefined): string {
   });
 }
 
-// Format relative time (like "just now", "5 minutes ago", "2 hours ago")
-function formatRelativeTime(dateString: string | null | undefined): string {
-  if (!dateString) return "Never";
-
-  const now = new Date();
-  const date = new Date(dateString);
-  const diffMs = now.getTime() - date.getTime();
-  const diffSecs = Math.floor(diffMs / 1000);
-  const diffMins = Math.floor(diffSecs / 60);
-  const diffHours = Math.floor(diffMins / 60);
-  const diffDays = Math.floor(diffHours / 24);
-
-  if (diffSecs < 60) return "just now";
-  if (diffMins < 60) return `${diffMins} minute${diffMins > 1 ? "s" : ""} ago`;
-  if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? "s" : ""} ago`;
-  if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? "s" : ""} ago`;
-
-  return formatDate(dateString);
-}
-
 export function PlayerCard({ player, onRefreshAll }: PlayerCardProps) {
   const ddragonVersion = useDDragonVersion();
   const queryClient = useQueryClient();
-  const { user } = useAuth();
-  const userId = user?.id;
-  const [isUpdating, setIsUpdating] = useState(false);
-  const [isHoveringTracked, setIsHoveringTracked] = useState(false);
-  const [failedProfileIconKey, setFailedProfileIconKey] = useState<string | null>(
-    null,
-  );
+  const { toast } = useToast();
+  const [observedSyncId, setObservedSyncId] = useState<number | null>(null);
+  const handledTerminalSyncIds = useRef(new Set<number>());
+  const [failedProfileIconKey, setFailedProfileIconKey] = useState<
+    string | null
+  >(null);
+  const combinedFreshness = oldestCompleteFreshness([
+    player.profile_synced_at,
+    player.league_synced_at,
+    player.match_synced_at,
+  ]);
+  const relativeFreshness = useRelativeTime(combinedFreshness);
   const profileIconId =
     typeof player.profile_icon_id === "number" ? player.profile_icon_id : 29;
   const profileIconKey = `${player.puuid}:${profileIconId}`;
@@ -110,7 +98,7 @@ export function PlayerCard({ player, onRefreshAll }: PlayerCardProps) {
     : getProfileIconUrl(profileIconId, ddragonVersion);
 
   // Fetch player league
-  const { data: league, refetch: refetchLeague } = useQuery({
+  const { data: league } = useQuery({
     queryKey: ["player-league", player.puuid],
     queryFn: async () => {
       const result = await validatedGet(
@@ -126,7 +114,7 @@ export function PlayerCard({ player, onRefreshAll }: PlayerCardProps) {
   });
 
   // Fetch player stats (all matches)
-  const { data: stats, refetch: refetchStats } = useQuery({
+  const { data: stats } = useQuery({
     queryKey: ["player-stats", player.puuid, 420],
     queryFn: async () => {
       const result = await validatedGet(
@@ -142,76 +130,135 @@ export function PlayerCard({ player, onRefreshAll }: PlayerCardProps) {
     retry: false,
   });
 
-  // Handle update button click - triggers match fetcher + player updater jobs
-  const handleUpdate = async () => {
-    setIsUpdating(true);
-    try {
-      // Trigger the unified player sync (match fetcher + player updater)
-      const response = await api.post<{ success: boolean; message: string }>(
-        `/jobs/sync-player/${player.puuid}`,
+  const activeSyncQuery = useQuery({
+    queryKey: ["player-sync-active", player.puuid],
+    queryFn: async () => {
+      const result = await validatedGet(
+        PlayerSyncRunSchema.nullable(),
+        `/players/${player.puuid}/sync/active`,
       );
-
-      if (!response.data.success) {
-        // Job is already running
-        toast.info(response.data.message);
-        setIsUpdating(false);
-        return;
-      }
-
-      // Show success message - data will be updated by jobs
-      toast.success("Update started", {
-        description:
-          "Match history and profile are being synced. Refresh in a moment.",
-      });
-
-      // Wait a bit then refetch data
-      setTimeout(async () => {
-        await Promise.all([
-          refetchLeague(),
-          refetchStats(),
-          queryClient.invalidateQueries({ queryKey: ["player", player.puuid] }),
-          queryClient.invalidateQueries({ queryKey: ["matchHistoryDetailed"] }),
-          queryClient.invalidateQueries({ queryKey: ["match-history-stats"] }),
-        ]);
-        // Call parent refresh callback if provided
-        if (onRefreshAll) {
-          onRefreshAll();
-        }
-        setIsUpdating(false);
-      }, 3000);
-    } catch {
-      toast.error("Failed to start update");
-      setIsUpdating(false);
-    }
-  };
-
-  // Untrack mutation
-  const untrackMutation = useMutation({
-    mutationFn: async () => {
-      const response = await untrackPlayer(player.puuid);
-      if (!response.success) {
-        throw new Error(response.error.message);
-      }
-      return response.data;
+      if (!result.success) throw new Error(result.error.message);
+      return result.data;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["player", player.puuid] });
-      queryClient.invalidateQueries({ queryKey: ["tracked-players", userId] });
-      queryClient.invalidateQueries({
-        queryKey: ["tracking-status", userId, player.puuid],
+    refetchInterval: (query) => (query.state.data ? 1_000 : false),
+  });
+
+  useEffect(() => {
+    const activeSyncId = activeSyncQuery.data?.id;
+    if (!activeSyncId || activeSyncId === observedSyncId) return;
+    const timeout = window.setTimeout(() => setObservedSyncId(activeSyncId), 0);
+    return () => window.clearTimeout(timeout);
+  }, [activeSyncQuery.data?.id, observedSyncId]);
+
+  const exactSyncQuery = useQuery({
+    queryKey: ["player-sync", player.puuid, observedSyncId],
+    queryFn: async () => {
+      const result = await validatedGet(
+        PlayerSyncRunSchema,
+        `/players/${player.puuid}/sync/${observedSyncId}`,
+      );
+      if (!result.success) throw new Error(result.error.message);
+      return result.data;
+    },
+    enabled: observedSyncId !== null,
+    refetchInterval: (query) =>
+      query.state.data?.status === "pending" ||
+      query.state.data?.status === "running"
+        ? 1_000
+        : false,
+  });
+
+  const startSyncMutation = useMutation({
+    mutationFn: async () => {
+      const response = await api.post(`/players/${player.puuid}/sync`);
+      const parsed = PlayerSyncRunSchema.safeParse(response.data);
+      if (!parsed.success) throw new Error("The update response was invalid.");
+      return parsed.data;
+    },
+    onSuccess: (syncRun) => {
+      setObservedSyncId(syncRun.id);
+      queryClient.setQueryData(["player-sync-active", player.puuid], syncRun);
+      toast({
+        title: "Player profile update started",
+        description: "Player data is refreshing in the background.",
+        variant: "info",
       });
-      toast.success("Player untracked");
     },
     onError: (error: Error) => {
-      toast.error("Failed to untrack player", {
+      toast({
+        title: "Failed to start player update",
         description: error.message,
+        variant: "error",
       });
     },
   });
 
-  const handleUntrack = () => {
-    untrackMutation.mutate();
-  };
+  useEffect(() => {
+    const syncRun = exactSyncQuery.data;
+    if (
+      !syncRun ||
+      syncRun.status === "pending" ||
+      syncRun.status === "running" ||
+      handledTerminalSyncIds.current.has(syncRun.id)
+    ) {
+      return;
+    }
+    handledTerminalSyncIds.current.add(syncRun.id);
+
+    const finish = async () => {
+      if (syncRun.status !== "completed") {
+        toast({
+          title: "Player update did not finish",
+          description:
+            syncRun.error_message ?? "Please try the update again later.",
+          variant: syncRun.status === "rate_limited" ? "warning" : "error",
+        });
+        await activeSyncQuery.refetch();
+        return;
+      }
+
+      const exactPlayerQuery = (query: { queryKey: readonly unknown[] }) =>
+        query.queryKey.includes(player.puuid);
+      try {
+        await queryClient.invalidateQueries({
+          predicate: exactPlayerQuery,
+          refetchType: "none",
+        });
+        onRefreshAll?.();
+        await queryClient.refetchQueries(
+          { predicate: exactPlayerQuery, type: "active" },
+          { throwOnError: true },
+        );
+        toast({
+          title: "Update finished",
+          description: "All cards were successfully updated.",
+          variant: "info",
+        });
+      } catch {
+        toast({
+          title: "Player data could not refresh",
+          description: "Please try again before relying on the card data.",
+          variant: "error",
+        });
+      }
+      await activeSyncQuery.refetch();
+    };
+    void finish();
+  }, [
+    activeSyncQuery,
+    exactSyncQuery.data,
+    onRefreshAll,
+    player.puuid,
+    queryClient,
+    toast,
+  ]);
+
+  const syncStatus =
+    exactSyncQuery.data?.status ?? activeSyncQuery.data?.status;
+  const isUpdating =
+    startSyncMutation.isPending ||
+    syncStatus === "pending" ||
+    syncStatus === "running";
 
   const leagueColors = league ? getRankColors(league.tier) : null;
 
@@ -268,7 +315,7 @@ export function PlayerCard({ player, onRefreshAll }: PlayerCardProps) {
                   variant="outline"
                   size="sm"
                   className="button-small"
-                  onClick={handleUpdate}
+                  onClick={() => startSyncMutation.mutate()}
                   disabled={isUpdating}
                 >
                   {isUpdating ? (
@@ -290,31 +337,22 @@ export function PlayerCard({ player, onRefreshAll }: PlayerCardProps) {
                   <span>Played {stats.total_matches} games</span>
                 </>
               )}
-              {player.is_tracked && (
-                <>
-                  <span>•</span>
-                  <Badge
-                    variant="default"
-                    className="bg-primary text-xs cursor-pointer transition-all hover:bg-primary/100 flex items-center gap-1"
-                    onClick={handleUntrack}
-                    onMouseEnter={() => setIsHoveringTracked(true)}
-                    onMouseLeave={() => setIsHoveringTracked(false)}
-                  >
-                    {isHoveringTracked ? (
-                      <>
-                        Untrack
-                        <StarOff className="h-3 w-3" />
-                      </>
-                    ) : (
-                      "Tracked"
-                    )}
-                  </Badge>
-                </>
-              )}
+              <span>•</span>
+              <TrackPlayerButton
+                puuid={player.puuid}
+                playerName={player.game_name ?? undefined}
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-xs"
+              />
             </div>
             <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
               <Clock className="h-3 w-3" />
-              <span>Updated {formatRelativeTime(player.updated_at)}</span>
+              <span>
+                {combinedFreshness
+                  ? `Updated ${relativeFreshness}`
+                  : "Not fully synced yet"}
+              </span>
             </div>
           </div>
         </div>
@@ -393,7 +431,7 @@ export function PlayerCard({ player, onRefreshAll }: PlayerCardProps) {
             <p className="font-medium text-muted-foreground">
               Match History Updated
             </p>
-            <p>{formatDate(player.updated_at)}</p>
+            <p>{formatDate(player.match_synced_at)}</p>
           </div>
         </div>
 

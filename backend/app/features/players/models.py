@@ -96,6 +96,24 @@ class Player(Base):
         comment="When this player record was last updated",
     )
 
+    profile_synced_at: Mapped[Optional[datetime]] = mapped_column(
+        SQLDateTime(timezone=True),
+        nullable=True,
+        comment="Last successful Player Updater profile check",
+    )
+
+    league_synced_at: Mapped[Optional[datetime]] = mapped_column(
+        SQLDateTime(timezone=True),
+        nullable=True,
+        comment="Last successful Match Fetcher rank check",
+    )
+
+    match_synced_at: Mapped[Optional[datetime]] = mapped_column(
+        SQLDateTime(timezone=True),
+        nullable=True,
+        comment="Last complete successful Match Fetcher match check",
+    )
+
     def __repr__(self) -> str:
         """Return string representation of the player."""
         return f"<Player(puuid='{self.puuid}', game_name='{self.game_name}#{self.tag_line}', platform='{self.platform}')>"

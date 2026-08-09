@@ -14,6 +14,8 @@ from app.core.exceptions import (
     PlayerServiceError,
 )
 from app.core.riot_api.constants import Platform, get_region_by_platform
+from app.features.auth.models import User
+from app.features.auth.user_settings import UserSettings
 from app.features.auth.user_tracked_player import UserTrackedPlayer
 
 from .models import Player
@@ -25,6 +27,8 @@ if TYPE_CHECKING:
     from .leagues import PlayerLeague
 
 logger = structlog.get_logger(__name__)
+
+MAX_TRACKED_PLAYERS_PER_USER = 10
 
 
 async def _ensure_riot_writer_maintenance_is_inactive(session: AsyncSession) -> None:
@@ -339,18 +343,20 @@ class PlayerService:
 
     @staticmethod
     def _build_player_search_query(
-        platform: str,
+        platform: str | None,
         search_type: str,
         query_lower: str,
         game_name: str | None,
         tag_line: str | None,
     ):
         """Build SQLAlchemy query based on search type."""
+        platform_filter = [Player.platform.ilike(platform.strip())] if platform else []
+
         if search_type == "full_id" and game_name and tag_line:
             # Search for exact or partial Full ID (GameName # TagLine)
             return select(Player).where(
                 and_(
-                    Player.platform == platform,
+                    *platform_filter,
                     or_(
                         # Exact match
                         and_(
@@ -368,7 +374,7 @@ class PlayerService:
             # Search tags only
             return select(Player).where(
                 and_(
-                    Player.platform == platform,
+                    *platform_filter,
                     Player.tag_line.ilike(f"%{tag_line}%"),
                 )
             )
@@ -377,7 +383,7 @@ class PlayerService:
         search_term = game_name if game_name else query_lower
         return select(Player).where(
             and_(
-                Player.platform == platform,
+                *platform_filter,
                 Player.game_name.ilike(f"%{search_term}%"),
             )
         )
@@ -534,7 +540,11 @@ class PlayerService:
         return scored_players[:limit]
 
     async def fuzzy_search_players(
-        self, query: str, platform: str, limit: int = 10, user_id: int | None = None
+        self,
+        query: str,
+        platform: str | None,
+        limit: int = 10,
+        user_id: int | None = None,
     ) -> List[PlayerResponse]:
         """
         Search for players using fuzzy matching with Levenshtein distance.
@@ -692,78 +702,69 @@ class PlayerService:
             ValueError: If player not found
         """
         try:
-            await _ensure_riot_writer_maintenance_is_inactive(self.db)
-
-            platform_enum = Platform(platform.lower())
-            region = get_region_by_platform(platform_enum)
-
-            # 1. Fetch Account data (PUUID, Name#Tag)
-            account = await riot_client.get_account_by_riot_id(
-                game_name, tag_line, region
+            player = await self.discover_player(
+                riot_client=riot_client,
+                game_name=game_name,
+                tag_line=tag_line,
+                platform=platform,
             )
-
-            if not account:
-                raise ValueError(f"Player not found: {game_name}#{tag_line}")
-
-            # 2. Fetch Summoner data (Level, Icon)
-            summoner = await riot_client.get_summoner_by_puuid(
-                account.puuid, platform_enum
-            )
-
-            if not summoner:
-                # Should theoretically exist if account exists, but maybe different shard?
-                raise ValueError(f"Summoner not found for PUUID: {account.puuid}")
-
-            # 3. Upsert Player in DB
-            stmt = select(Player).where(Player.puuid == account.puuid)
-            result = await self.db.execute(stmt)
-            player = result.scalar_one_or_none()
-
-            if player:
-                # Update existing
-                if account.game_name:
-                    player.game_name = account.game_name
-                if account.tag_line:
-                    player.tag_line = account.tag_line
-                player.platform = platform
-                player.summoner_level = summoner.summoner_level
-                player.profile_icon_id = summoner.profile_icon_id
-                player.updated_at = datetime.now(timezone.utc)
-
-                logger.info(
-                    "Player updated",
-                    puuid=player.puuid,
-                    game_name=player.game_name,
-                )
-            else:
-                # Create new
-                player = Player(
-                    puuid=account.puuid,
-                    game_name=account.game_name or game_name,
-                    tag_line=account.tag_line or tag_line,
-                    platform=platform,
-                    summoner_level=summoner.summoner_level,
-                    profile_icon_id=summoner.profile_icon_id,
-                    is_tracked=False,
-                )
-                self.db.add(player)
-
-                logger.info(
-                    "Player created",
-                    puuid=player.puuid,
-                    game_name=player.game_name,
-                )
-
-            await self.db.commit()
-            await self.db.refresh(player)
-
             return await self.track_player(player.puuid, user_id)
+        except Exception as error:
+            logger.error(
+                "add_and_track_player_failed",
+                error_type=type(error).__name__,
+            )
+            raise
 
-        except Exception as e:
-            # Check if it is a 404 from Riot API (usually comes as exception from client)
-            # You might want to handle it specifically if your client raises specific exceptions
-            logger.error("add_and_track_player_failed", error=str(e))
-            raise e
+    async def discover_player(
+        self,
+        riot_client: "RiotAPIClient",
+        game_name: str,
+        tag_line: str,
+        platform: str,
+    ) -> PlayerResponse:
+        """Resolve one Riot ID into shared canonical data without tracking it."""
+        await _ensure_riot_writer_maintenance_is_inactive(self.db)
+        platform_enum = Platform(platform.lower())
+        region = get_region_by_platform(platform_enum)
+        account = await riot_client.get_account_by_riot_id(game_name, tag_line, region)
+        if not account:
+            raise ValueError(f"Player not found: {game_name}#{tag_line}")
+
+        summoner = await riot_client.get_summoner_by_puuid(account.puuid, platform_enum)
+        if not summoner:
+            raise ValueError(f"Summoner not found for PUUID: {account.puuid}")
+
+        now = datetime.now(timezone.utc)
+        player = await self.db.get(Player, account.puuid)
+        if player is None:
+            player = Player(
+                puuid=account.puuid,
+                game_name=account.game_name or game_name,
+                tag_line=account.tag_line or tag_line,
+                platform=platform_enum.value,
+                summoner_level=summoner.summoner_level,
+                profile_icon_id=summoner.profile_icon_id,
+                is_tracked=False,
+                profile_synced_at=now,
+            )
+            self.db.add(player)
+        else:
+            if account.game_name:
+                player.game_name = account.game_name
+            if account.tag_line:
+                player.tag_line = account.tag_line
+            player.platform = platform_enum.value
+            player.summoner_level = summoner.summoner_level
+            player.profile_icon_id = summoner.profile_icon_id
+            player.profile_synced_at = now
+            player.updated_at = now
+
+        await self.db.commit()
+        await self.db.refresh(player)
+        response = PlayerResponse.model_validate(player)
+        response.is_tracked = False
+        return response
 
     async def track_player(self, puuid: str, user_id: int) -> PlayerResponse:
         """Mark a player as tracked by a specific user.
@@ -784,9 +785,35 @@ class PlayerService:
         if not player:
             raise ValueError(f"Player not found: {puuid}")
 
+        existing = await self._is_player_tracked_by_user(puuid, user_id)
+        if existing:
+            response = PlayerResponse.model_validate(player)
+            response.is_tracked = True
+            return response
+
+        user = await self.db.scalar(
+            select(User).where(User.id == user_id).with_for_update()
+        )
+        if user is None:
+            raise ValueError("Application user not found")
+
+        tracked_count = await self.db.scalar(
+            select(func.count())
+            .select_from(UserTrackedPlayer)
+            .where(UserTrackedPlayer.user_id == user_id)
+        )
+        if (tracked_count or 0) >= MAX_TRACKED_PLAYERS_PER_USER:
+            raise ValueError(
+                "You can track up to 10 players. Manage tracked players to make room."
+            )
+
         stmt = (
             insert(UserTrackedPlayer)
-            .values(user_id=user_id, puuid=puuid)
+            .values(
+                user_id=user_id,
+                puuid=puuid,
+                last_selected_at=datetime.now(timezone.utc),
+            )
             .on_conflict_do_nothing(index_elements=["user_id", "puuid"])
         )
         await self.db.execute(stmt)
@@ -864,7 +891,11 @@ class PlayerService:
             select(Player)
             .join(UserTrackedPlayer, UserTrackedPlayer.puuid == Player.puuid)
             .where(UserTrackedPlayer.user_id == user_id)
-            .order_by(Player.game_name)
+            .order_by(
+                UserTrackedPlayer.last_selected_at.desc(),
+                UserTrackedPlayer.tracked_at.desc(),
+                Player.game_name,
+            )
         )
 
         result = await self.db.execute(query)
@@ -874,6 +905,64 @@ class PlayerService:
         for response in responses:
             response.is_tracked = True
         return responses
+
+    async def get_player_context(self, user_id: int):
+        """Return the authenticated user's current and recent tracked players."""
+        from .schemas import PlayerContextResponse
+
+        settings = await self.db.scalar(
+            select(UserSettings).where(UserSettings.user_id == user_id)
+        )
+        if settings is None:
+            settings = UserSettings(user_id=user_id)
+            self.db.add(settings)
+            await self.db.flush()
+
+        current_player: PlayerResponse | None = None
+        if settings.current_player_puuid:
+            current_model = await self.db.get(Player, settings.current_player_puuid)
+            if current_model is None:
+                settings.current_player_puuid = None
+            else:
+                current_player = PlayerResponse.model_validate(current_model)
+                current_player.is_tracked = await self._is_player_tracked_by_user(
+                    current_model.puuid, user_id
+                )
+
+        tracked_players = await self.get_tracked_players(user_id)
+        await self.db.commit()
+        return PlayerContextResponse(
+            current_player=current_player,
+            tracked_players=tracked_players,
+        )
+
+    async def set_current_player(self, user_id: int, puuid: str | None):
+        """Persist one user's default player and update tracked recency."""
+        settings = await self.db.scalar(
+            select(UserSettings)
+            .where(UserSettings.user_id == user_id)
+            .with_for_update()
+        )
+        if settings is None:
+            settings = UserSettings(user_id=user_id)
+            self.db.add(settings)
+            await self.db.flush()
+
+        if puuid is not None and await self.db.get(Player, puuid) is None:
+            raise ValueError("Player not found")
+
+        settings.current_player_puuid = puuid
+        if puuid is not None:
+            await self.db.execute(
+                update(UserTrackedPlayer)
+                .where(
+                    UserTrackedPlayer.user_id == user_id,
+                    UserTrackedPlayer.puuid == puuid,
+                )
+                .values(last_selected_at=datetime.now(timezone.utc))
+            )
+        await self.db.commit()
+        return await self.get_player_context(user_id)
 
     async def get_globally_tracked_players(self) -> List[PlayerResponse]:
         """Get all players tracked by at least one user."""
@@ -1164,6 +1253,10 @@ class PlayerService:
         if summoner.summoner_level != player.summoner_level:
             player.summoner_level = summoner.summoner_level
             changed = True
+
+        # A successful check is freshness evidence even when Riot returned the
+        # same values. Keep it separate from generic ORM updated_at changes.
+        player.profile_synced_at = datetime.now(timezone.utc)
 
         if changed:
             player.updated_at = datetime.now(timezone.utc)

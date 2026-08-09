@@ -286,8 +286,8 @@ async def get_user_settings(
     """
     Get the current user's settings.
 
-    Returns the user's preferences including theme, URL persistence settings,
-    and saved PUUIDs. Creates default settings if none exist.
+    Returns the user's remaining application preferences. Player context is
+    owned by the authenticated players API. Creates defaults if none exist.
     """
     try:
         settings = await settings_service.get_or_create_user_settings(current_user.id)
@@ -309,8 +309,7 @@ async def update_user_settings(
     """
     Update the current user's settings.
 
-    Only provided fields will be updated. To clear a saved PUUID,
-    set the corresponding field to null/empty string.
+    Only provided application-preference fields will be updated.
     """
     try:
         settings = await settings_service.update_user_settings(current_user.id, update)

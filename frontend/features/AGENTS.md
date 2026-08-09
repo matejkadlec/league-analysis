@@ -20,7 +20,7 @@ Domain-specific UI components. Each feature is self-contained with its own compo
 | `jobs/`               | Job monitoring components          |
 | `matches/`            | Match history display              |
 | `matchmaking/`        | Match fairness analysis with persisted run rehydration |
-| `players/`            | Player search, cards, tracking, tracked-list controls |
+| `players/`            | Per-user current-player context, sidebar search/switching, cards, explicit sync, tracking, tracked-list controls |
 | `playstyle-analysis/` | Playstyle analysis results         |
 | `profile/`            | Signed-in user's champion, role, and recent-performance summaries |
 
@@ -40,6 +40,7 @@ features/<name>/
 // features/players/index.ts
 export { PlayerSearch } from "./components/player-search";
 export { PlayerCard } from "./components/player-card";
+export { PlayerContextProvider, usePlayerContext } from "./context/player-context";
 ```
 
 ## Component Pattern
@@ -76,6 +77,15 @@ export function MyComponent({ id }: MyComponentProps) {
   but must not claim that the user's internet connection is unavailable.
 - Use shadcn/ui from `@/components/ui/`
 - Export via `index.ts`
+- Ordinary player-centric pages consume `usePlayerContext()` and keep the
+  explicit URL PUUID authoritative for the current tab. Matchmaking Analysis
+  remains a deliberate local-target exception.
+- Every player-derived TanStack Query key must include the exact PUUID. After
+  explicit update completion, refetch only matching active keys and show the
+  approved completion message only after every affected refetch succeeds.
+- Use `profile_synced_at`, `league_synced_at`, or `match_synced_at` according to
+  the card's actual source. Multi-source identity cards use the oldest complete
+  required timestamp; never use generic `updated_at` as data freshness.
 - kebab-case files, PascalCase components
 - Matchmaking Analysis must seed its active UI from the fast start response,
   rehydrate and poll the exact persisted run, treat rate-limit waits as active,

@@ -93,7 +93,9 @@ function TrackedPlayerRow({
         <div className="flex items-center gap-2">
           <h3 className="font-semibold">{player.game_name}</h3>
           {player.tag_line && (
-            <span className="text-sm text-muted-foreground">#{player.tag_line}</span>
+            <span className="text-sm text-muted-foreground">
+              #{player.tag_line}
+            </span>
           )}
         </div>
 
@@ -249,12 +251,15 @@ export function TrackedPlayersList({
     },
     onSuccess: (_, puuid) => {
       queryClient.invalidateQueries({ queryKey: ["tracked-players", userId] });
+      queryClient.invalidateQueries({ queryKey: ["player-context", userId] });
       queryClient.invalidateQueries({
         queryKey: ["tracking-status", userId, puuid],
       });
       queryClient.invalidateQueries({ queryKey: ["player", puuid] });
 
-      const player = data?.find((trackedPlayer) => trackedPlayer.puuid === puuid);
+      const player = data?.find(
+        (trackedPlayer) => trackedPlayer.puuid === puuid,
+      );
       toast.success(
         `Successfully removed ${
           player?.game_name || "player"
@@ -303,7 +308,8 @@ export function TrackedPlayersList({
         </div>
         <div className="flex items-center gap-3">
           <span className="text-sm text-muted-foreground">
-            {trackedPlayersCount} {trackedPlayersCount === 1 ? "player" : "players"}
+            {trackedPlayersCount}{" "}
+            {trackedPlayersCount === 1 ? "player" : "players"}
           </span>
           <Button
             type="button"
@@ -341,7 +347,10 @@ export function TrackedPlayersList({
 
   if (isLoading) {
     return (
-      <Card id="tracked-players" className={cn("flex h-full flex-col", className)}>
+      <Card
+        id="tracked-players"
+        className={cn("flex h-full flex-col", className)}
+      >
         {renderHeader()}
         <CardContent className="flex flex-1 items-center justify-center py-8">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -352,7 +361,10 @@ export function TrackedPlayersList({
 
   if (error) {
     return (
-      <Card id="tracked-players" className={cn("flex h-full flex-col", className)}>
+      <Card
+        id="tracked-players"
+        className={cn("flex h-full flex-col", className)}
+      >
         {renderHeader()}
         <CardContent className="flex flex-1 flex-col justify-center">
           <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-center">
@@ -375,7 +387,10 @@ export function TrackedPlayersList({
 
   if (!data || data.length === 0) {
     return (
-      <Card id="tracked-players" className={cn("flex h-full flex-col", className)}>
+      <Card
+        id="tracked-players"
+        className={cn("flex h-full flex-col", className)}
+      >
         {renderHeader()}
         <CardContent className="flex flex-1 items-center">
           <div className="w-full rounded-lg border border-dashed p-8 text-center">
@@ -391,13 +406,18 @@ export function TrackedPlayersList({
   }
 
   return (
-    <Card id="tracked-players" className={cn("flex h-full flex-col", className)}>
+    <Card
+      id="tracked-players"
+      className={cn("flex h-full flex-col", className)}
+    >
       {renderHeader()}
       <CardContent className="flex flex-1 flex-col">
         <div
           className={cn(
             "transition-[max-height] duration-300 ease-in-out",
-            shouldEnableListScrollbar ? "overflow-y-auto pr-1" : "overflow-hidden",
+            shouldEnableListScrollbar
+              ? "overflow-y-auto pr-1"
+              : "overflow-hidden",
           )}
           style={{ maxHeight: `${listMaxHeightPx}px` }}
         >

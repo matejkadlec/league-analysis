@@ -1,6 +1,7 @@
 """Player Updater Job - Updates player profiles (name, tag, icon, level) for tracked players."""
 
 import structlog
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.riot_api.client import APICallRecord, RiotAPIClient
@@ -32,8 +33,14 @@ class PlayerUpdaterJob(BaseJob):
 
     recorded_errors_are_fatal = False
 
-    def __init__(self, job_config_id: int, triggered_by: str = "system"):
+    def __init__(
+        self,
+        job_config_id: int,
+        triggered_by: str = "system",
+        target_puuids: set[str] | None = None,
+    ):
         super().__init__(job_config_id, triggered_by)
+        self.target_puuids = target_puuids
 
     def _track_api_request(self, metric_name: str, count: int) -> None:
         """Callback for tracking API requests from RiotAPIClient."""
@@ -60,7 +67,17 @@ class PlayerUpdaterJob(BaseJob):
             request_callback=self._track_api_request,
         ) as riot_client:
             # Get tracked players
-            tracked_players = await player_service.get_globally_tracked_players()
+            if self.target_puuids is None:
+                tracked_players = await player_service.get_globally_tracked_players()
+            else:
+                result = await db.execute(
+                    select(Player).where(Player.puuid.in_(self.target_puuids))
+                )
+                tracked_players = [
+                    PlayerResponse.model_validate(player)
+                    for player in result.scalars().all()
+                ]
+                self.add_log_entry("target_puuids", sorted(self.target_puuids))
             logger.info(
                 "Starting player updater job", tracked_count=len(tracked_players)
             )

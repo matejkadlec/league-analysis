@@ -4,13 +4,7 @@ from datetime import datetime
 from enum import Enum as PyEnum
 from typing import Optional
 
-from sqlalchemy import (
-    BigInteger,
-    Boolean,
-    Enum,
-    ForeignKey,
-    String,
-)
+from sqlalchemy import BigInteger, Enum, ForeignKey, String
 from sqlalchemy import (
     DateTime as SQLDateTime,
 )
@@ -49,44 +43,12 @@ class UserSettings(Base):
         comment="User's preferred theme (LIGHT or DARK)",
     )
 
-    # URL persistence settings
-    save_playstyle_url: Mapped[bool] = mapped_column(
-        Boolean,
-        nullable=False,
-        default=False,
-        comment="Whether to remember the player PUUID in playstyle analysis URL",
-    )
-
-    saved_playstyle_puuid: Mapped[Optional[str]] = mapped_column(
+    current_player_puuid: Mapped[Optional[str]] = mapped_column(
         String(78),
+        ForeignKey("core.players.puuid", ondelete="SET NULL"),
         nullable=True,
-        comment="Saved PUUID for playstyle analysis URL persistence",
-    )
-
-    save_matchmaking_url: Mapped[bool] = mapped_column(
-        Boolean,
-        nullable=False,
-        default=False,
-        comment="Whether to remember the player PUUID in matchmaking analysis URL",
-    )
-
-    saved_matchmaking_puuid: Mapped[Optional[str]] = mapped_column(
-        String(78),
-        nullable=True,
-        comment="Saved PUUID for matchmaking analysis URL persistence",
-    )
-
-    save_tracked_url: Mapped[bool] = mapped_column(
-        Boolean,
-        nullable=False,
-        default=False,
-        comment="Whether to remember the viewed tracked player PUUID in tracked players URL",
-    )
-
-    saved_tracked_puuid: Mapped[Optional[str]] = mapped_column(
-        String(78),
-        nullable=True,
-        comment="Saved PUUID for tracked players URL persistence",
+        index=True,
+        comment="Last player selected by this application user",
     )
 
     # Default platform preference

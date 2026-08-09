@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useAuth, ProtectedRoute } from "@/features/auth";
+import { ProtectedRoute } from "@/features/auth";
 import {
   PlayerSchema,
   ChampionStatsResponseSchema,
@@ -10,33 +10,30 @@ import {
 import { validatedGet } from "@/lib/core/api";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Link2 } from "lucide-react";
-import { PlayerCard } from "@/features/players";
+import { UserRoundSearch } from "lucide-react";
+import { PlayerCard, usePlayerContext } from "@/features/players";
 import { MatchHistory } from "@/features/matches";
 import {
   ChampionStatsCard,
   RoleStatsCard,
   RecentPerformanceCard,
-  ConnectRiotAccountDialog,
 } from "@/features/profile";
 import {
   PlayerCardSkeleton,
   MatchHistorySkeleton,
 } from "@/components/loading-skeleton";
 
-function ConnectRiotAccountCard() {
+function SelectPlayerCard() {
   return (
     <Card className="w-full" style={{ minHeight: "300px" }}>
       <CardContent className="flex flex-col items-center justify-center h-full py-16">
         <div className="text-center space-y-4">
-          <Link2 className="h-16 w-16 mx-auto text-muted-foreground" />
-          <h3 className="text-xl font-semibold">Connect Your Riot Account</h3>
+          <UserRoundSearch className="h-16 w-16 mx-auto text-muted-foreground" />
+          <h3 className="text-xl font-semibold">Select a player</h3>
           <p className="text-muted-foreground max-w-md">
-            To view content on this page, connect a Riot account first. This
-            will allow you to see your match history, statistics, and personal
-            analyses.
+            Search from the sidebar or choose one of your recent tracked players
+            to open their dashboard.
           </p>
-          <ConnectRiotAccountDialog />
         </div>
       </CardContent>
     </Card>
@@ -124,7 +121,7 @@ function ProfileContent({ puuid }: { puuid: string }) {
         {player && (
           <RecentPerformanceCard
             puuid={puuid}
-            lastUpdated={player.updated_at}
+            lastUpdated={player.match_synced_at}
           />
         )}
       </div>
@@ -146,7 +143,7 @@ function ProfileContent({ puuid }: { puuid: string }) {
         ) : championStats ? (
           <ChampionStatsCard
             stats={championStats}
-            lastUpdated={player?.updated_at}
+            lastUpdated={player?.match_synced_at}
             dataSourceKey={`${puuid}:queue:420`}
           />
         ) : null}
@@ -164,7 +161,10 @@ function ProfileContent({ puuid }: { puuid: string }) {
             </CardContent>
           </Card>
         ) : laneStats ? (
-          <RoleStatsCard stats={laneStats} lastUpdated={player?.updated_at} />
+          <RoleStatsCard
+            stats={laneStats}
+            lastUpdated={player?.match_synced_at}
+          />
         ) : null}
       </div>
 
@@ -172,19 +172,14 @@ function ProfileContent({ puuid }: { puuid: string }) {
       {isPlayerLoading ? (
         <MatchHistorySkeleton />
       ) : player ? (
-        <MatchHistory
-          puuid={puuid}
-          lastUpdated={player.updated_at}
-        />
+        <MatchHistory puuid={puuid} lastUpdated={player.match_synced_at} />
       ) : null}
     </div>
   );
 }
 
 export default function MyProfilePage() {
-  const { user, isLoading } = useAuth();
-
-  const hasRiotAccount = user?.riot_account_connected && user?.puuid;
+  const { currentPlayer, isLoading } = usePlayerContext();
 
   return (
     <ProtectedRoute>
@@ -202,7 +197,7 @@ export default function MyProfilePage() {
             </p>
           </Card>
 
-          {/* Content - either connect card or profile content */}
+          {/* Content follows the URL-scoped global player context. */}
           {isLoading ? (
             <div className="space-y-6">
               <PlayerCardSkeleton />
@@ -212,10 +207,10 @@ export default function MyProfilePage() {
               </div>
               <MatchHistorySkeleton />
             </div>
-          ) : hasRiotAccount ? (
-            <ProfileContent puuid={user.puuid!} />
+          ) : currentPlayer ? (
+            <ProfileContent puuid={currentPlayer.puuid} />
           ) : (
-            <ConnectRiotAccountCard />
+            <SelectPlayerCard />
           )}
         </div>
       </div>

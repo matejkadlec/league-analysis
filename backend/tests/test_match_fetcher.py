@@ -222,8 +222,13 @@ async def test_match_fetcher_execute_propagates_rate_limit_to_base_job(
 @pytest.mark.asyncio
 async def test_match_fetcher_processes_the_player_league_refresh_path() -> None:
     job = MatchFetcherJob(job_config_id=7)
+    player_model = SimpleNamespace(
+        puuid="sanitized-puuid",
+        match_synced_at=None,
+        league_synced_at=None,
+    )
     db = SimpleNamespace(
-        get=AsyncMock(return_value=SimpleNamespace(puuid="sanitized-puuid")),
+        get=AsyncMock(return_value=player_model),
         commit=AsyncMock(),
         rollback=AsyncMock(),
     )
@@ -250,9 +255,61 @@ async def test_match_fetcher_processes_the_player_league_refresh_path() -> None:
     )
 
     player_service.update_player_league.assert_awaited_once()
-    db.commit.assert_awaited_once()
+    assert db.commit.await_count == 2
+    assert player_model.match_synced_at is not None
+    assert player_model.league_synced_at is not None
     rate_limiter.record_request.assert_awaited_once()
     assert not job.has_errors()
+
+
+@pytest.mark.asyncio
+async def test_recoverable_match_failure_does_not_claim_match_freshness() -> None:
+    job = MatchFetcherJob(job_config_id=7)
+    player_model = SimpleNamespace(
+        puuid="sanitized-puuid",
+        match_synced_at=None,
+        league_synced_at=None,
+    )
+    db = SimpleNamespace(
+        get=AsyncMock(return_value=player_model),
+        commit=AsyncMock(),
+        rollback=AsyncMock(),
+    )
+
+    async def sync_with_failure(*_args: object, **kwargs: object) -> int:
+        kwargs["on_failure"](
+            "match synchronization",
+            RuntimeError("provider failure"),
+            {"queue_id": 420},
+        )
+        return 0
+
+    match_service = SimpleNamespace(
+        sync_matches_for_player=AsyncMock(side_effect=sync_with_failure)
+    )
+    player_service = SimpleNamespace(update_player_league=AsyncMock(return_value=False))
+    rate_limiter = SimpleNamespace(
+        acquire=AsyncMock(return_value=True),
+        record_request=AsyncMock(),
+    )
+
+    await job._process_player(
+        db=db,
+        player=SimpleNamespace(
+            puuid="sanitized-puuid",
+            platform="eun1",
+            game_name="Sanitized",
+        ),
+        player_service=player_service,
+        match_service=match_service,
+        riot_client=object(),
+        rate_limiter=rate_limiter,
+        enabled_queue_ids=[420],
+    )
+
+    assert player_model.match_synced_at is None
+    assert player_model.league_synced_at is not None
+    assert job.has_errors()
 
 
 def test_job_error_diagnostics_exclude_raw_error_text_and_unreviewed_context() -> None:

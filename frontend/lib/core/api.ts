@@ -49,8 +49,7 @@ export interface ApiError {
 }
 
 export type ApiResponse<T> =
-  | { success: true; data: T }
-  | { success: false; error: ApiError };
+  { success: true; data: T } | { success: false; error: ApiError };
 
 // Endpoints that use the Riot API (when these succeed, API key is valid)
 const RIOT_API_ENDPOINTS = [
@@ -137,8 +136,7 @@ api.interceptors.response.use(
     }
 
     const originalRequest = error.config as
-      | (InternalAxiosRequestConfig & { _retry?: boolean })
-      | undefined;
+      (InternalAxiosRequestConfig & { _retry?: boolean }) | undefined;
     const status = error.response?.status;
 
     if (!originalRequest || status !== 401 || originalRequest._retry) {
@@ -146,7 +144,10 @@ api.interceptors.response.use(
     }
 
     const requestUrl = originalRequest.url ?? "";
-    if (requestUrl.includes("/auth/login") || requestUrl.includes("/auth/refresh")) {
+    if (
+      requestUrl.includes("/auth/login") ||
+      requestUrl.includes("/auth/refresh")
+    ) {
       return Promise.reject(error);
     }
 
@@ -306,12 +307,14 @@ export async function getPlayerByPuuid(
 }
 
 // Player Tracking API Functions
-export async function trackPlayer(
-  puuid: string,
-): Promise<ApiResponse<Player>> {
+export async function trackPlayer(puuid: string): Promise<ApiResponse<Player>> {
   try {
     const response = await api.post(`/players/${puuid}/track`);
-    return validateResponse(PlayerSchema, `/players/${puuid}/track`, response.data);
+    return validateResponse(
+      PlayerSchema,
+      `/players/${puuid}/track`,
+      response.data,
+    );
   } catch (error) {
     return {
       success: false,
@@ -396,7 +399,7 @@ export async function addTrackedPlayer(
 
 export interface SearchSuggestionsParams {
   q: string;
-  platform: string;
+  platform?: string;
   limit?: number;
 }
 
@@ -406,7 +409,7 @@ export async function searchPlayerSuggestions(
   const PlayerArraySchema = z.array(PlayerSchema);
   return validatedGet(PlayerArraySchema, "/players/suggestions", {
     q: params.q,
-    platform: params.platform,
+    ...(params.platform !== undefined && { platform: params.platform }),
     ...(params.limit !== undefined && { limit: params.limit }),
   });
 }

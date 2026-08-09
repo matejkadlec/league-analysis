@@ -2,7 +2,7 @@
 
 import os
 import re
-from typing import Annotated
+from typing import Annotated, Optional
 
 import structlog
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
@@ -21,6 +21,12 @@ from app.core.riot_api.errors import (
 )
 from app.features.auth.dependencies import get_current_active_user
 from app.features.auth.models import User
+from app.features.jobs.models import PlayerSyncRun
+from app.features.jobs.player_sync import (
+    create_or_get_player_sync,
+    get_active_player_sync,
+    run_player_sync,
+)
 from app.features.matches.service import MatchService
 from app.features.players.service import PlayerService
 
@@ -30,7 +36,10 @@ from .dependencies import (
 )
 from .leagues_schemas import PlayerLeagueResponse
 from .schemas import (
+    CurrentPlayerUpdate,
+    PlayerContextResponse,
     PlayerResponse,
+    PlayerSyncRunResponse,
 )
 
 logger = structlog.get_logger(__name__)
@@ -83,7 +92,9 @@ async def search_player(
         max_length=30,
         description="Search query (game name, tag line or both)",
     ),
-    platform: Platform = Query(Platform.EUN1, description="Platform (e.g. EUN1)"),
+    platform: Optional[Platform] = Query(
+        None, description="Optional platform filter (e.g. EUN1)"
+    ),
 ):
     """
     Fuzzy search for players by game name, tag line or both.
@@ -96,13 +107,15 @@ async def search_player(
     try:
         results = await player_service.fuzzy_search_players(
             query=query,
-            platform=platform.value,
+            platform=platform.value if platform else None,
             limit=10,
             user_id=current_user.id,
         )
         if not results:
             logger.debug(
-                f"No results found for query: {query}, platform: {platform.value}"
+                "No player search results",
+                query=query,
+                platform=platform.value if platform else None,
             )
         return results
 
@@ -112,13 +125,13 @@ async def search_player(
             "player_search_failed",
             error=str(e),
             query=query,
-            platform=platform.value,
+            platform=platform.value if platform else None,
             exc_info=True,
         )
         raise HTTPException(
             status_code=500,
             detail="Internal server error during player search",
-        )
+        ) from e
 
 
 @router.get("/suggestions", response_model=list[PlayerResponse])
@@ -132,7 +145,9 @@ async def get_player_suggestions(
         max_length=30,
         description="Search query (name, tag, or Name#Tag)",
     ),
-    platform: Platform = Query(..., description="Platform  (e.g. EUN1)"),
+    platform: Optional[Platform] = Query(
+        None, description="Optional platform filter (e.g. EUN1)"
+    ),
     limit: int = Query(
         5,
         ge=1,
@@ -168,13 +183,15 @@ async def get_player_suggestions(
     try:
         results = await player_service.fuzzy_search_players(
             query=q,
-            platform=platform.value,
+            platform=platform.value if platform else None,
             limit=limit,
             user_id=current_user.id,
         )
         if not results:
             logger.debug(
-                f"No suggestions found for query: {q}, platform: {platform.value}"
+                "No player suggestions found",
+                query=q,
+                platform=platform.value if platform else None,
             )
         return results
 
@@ -183,13 +200,86 @@ async def get_player_suggestions(
         logger.error(
             "player_suggestions_failed",
             error=str(e),
-            platform=platform.value,
+            platform=platform.value if platform else None,
             exc_info=True,
         )
         raise HTTPException(
             status_code=500,
             detail="Internal server error retrieving player suggestions",
+        ) from e
+
+
+@router.get("/context", response_model=PlayerContextResponse)
+async def get_player_context(
+    player_service: PlayerServiceDep,
+    current_user: User = Depends(get_current_active_user),
+):
+    """Get the authenticated user's current and recent tracked players."""
+    return await player_service.get_player_context(current_user.id)
+
+
+@router.put("/context/current", response_model=PlayerContextResponse)
+async def update_current_player(
+    update: CurrentPlayerUpdate,
+    player_service: PlayerServiceDep,
+    current_user: User = Depends(get_current_active_user),
+):
+    """Set the user's default current player without tracking or syncing it."""
+    try:
+        return await player_service.set_current_player(current_user.id, update.puuid)
+    except ValueError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+
+
+@router.post("/discover", response_model=PlayerResponse)
+@limiter.limit("30/minute")
+async def discover_player(
+    request: Request,
+    player_service: PlayerServiceDep,
+    riot_client: Annotated[RiotAPIClient, Depends(get_riot_client)],
+    _current_user: User = Depends(get_current_active_user),
+    game_name: str = Query(..., description="Riot game name"),
+    tag_line: str = Query(..., description="Riot tag line without #"),
+    platform: Platform = Query(..., description="Resolved Riot platform"),
+):
+    """Resolve a one-field Riot ID after conditional platform selection."""
+    try:
+        _validate_game_name(game_name)
+        _validate_tag_line(tag_line)
+        result = await player_service.discover_player(
+            riot_client=riot_client,
+            game_name=game_name,
+            tag_line=tag_line,
+            platform=platform.value,
         )
+        return result
+    except NotFoundError as error:
+        raise HTTPException(status_code=404, detail="Player not found") from error
+    except RateLimitError as error:
+        raise HTTPException(
+            status_code=429, detail="Riot API rate limit reached"
+        ) from error
+    except AuthenticationError as error:
+        raise HTTPException(
+            status_code=503,
+            detail="RIOT_API_KEY_INVALID",
+        ) from error
+    except ValueError as error:
+        _handle_tracking_value_error(error)
+    except HTTPException:
+        raise
+    except Exception as error:
+        logger.error(
+            "discover_player_failed",
+            game_name=game_name,
+            platform=platform.value,
+            error_type=type(error).__name__,
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=500,
+            detail="Player lookup failed. Please try again later.",
+        ) from error
 
 
 @router.get("/{puuid}", response_model=PlayerResponse)
@@ -203,6 +293,53 @@ async def get_player_by_puuid(
     if not player:
         raise HTTPException(status_code=404, detail="Player not found")
     return player
+
+
+@router.post("/{puuid}/sync", response_model=PlayerSyncRunResponse)
+@limiter.limit("10/minute")
+async def start_player_sync(
+    request: Request,
+    puuid: str,
+    background_tasks: BackgroundTasks,
+    player_service: PlayerServiceDep,
+    current_user: User = Depends(get_current_active_user),
+):
+    """Create or attach to one authoritative explicit update for this player."""
+    try:
+        sync_run, created = await create_or_get_player_sync(
+            player_service.db,
+            user_id=current_user.id,
+            puuid=puuid,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    if created:
+        background_tasks.add_task(run_player_sync, sync_run.id)
+    return sync_run
+
+
+@router.get("/{puuid}/sync/active", response_model=PlayerSyncRunResponse | None)
+async def read_active_player_sync(
+    puuid: str,
+    player_service: PlayerServiceDep,
+    _current_user: User = Depends(get_current_active_user),
+):
+    """Rehydrate the active update for a player after navigation or reload."""
+    return await get_active_player_sync(player_service.db, puuid)
+
+
+@router.get("/{puuid}/sync/{sync_id}", response_model=PlayerSyncRunResponse)
+async def read_player_sync(
+    puuid: str,
+    sync_id: int,
+    player_service: PlayerServiceDep,
+    _current_user: User = Depends(get_current_active_user),
+):
+    """Read the exact persisted update run returned by the start endpoint."""
+    sync_run = await player_service.db.get(PlayerSyncRun, sync_id)
+    if sync_run is None or sync_run.puuid != puuid:
+        raise HTTPException(status_code=404, detail="Player update not found")
+    return sync_run
 
 
 @router.get("/{puuid}/recent-opponents", response_model=list[PlayerResponse])
@@ -383,6 +520,7 @@ async def run_background_match_sync(puuid: str, platform: str) -> None:
             JobStatus,
             JobType,
         )
+        from app.features.players.models import Player
 
         job_config = await _locked_background_writer_configuration(
             session, JobType.MATCH_FETCHER
@@ -422,6 +560,12 @@ async def run_background_match_sync(puuid: str, platform: str) -> None:
 
             logger.info("Starting background match sync", puuid=puuid)
             count = await match_service.sync_matches_for_player(riot_client, player_obj)
+            player_model = await session.get(Player, puuid)
+            if player_model is not None:
+                from datetime import datetime, timezone
+
+                player_model.match_synced_at = datetime.now(timezone.utc)
+                await session.commit()
             logger.info("Background match sync completed", puuid=puuid, count=count)
 
             # 3. Update Job Execution on Success
@@ -534,6 +678,9 @@ async def run_background_player_update(puuid: str, platform: str) -> None:
             league_updated = await player_service.update_player_league(
                 player_model, riot_client
             )
+            from datetime import datetime, timezone
+
+            player_model.league_synced_at = datetime.now(timezone.utc)
             await session.commit()
 
             logger.info(
@@ -728,6 +875,9 @@ async def refresh_player_league(
 
         # Update league from Riot API (adds record to player_service.db session)
         await player_service.update_player_league(player_model, riot_client)
+        from datetime import datetime, timezone
+
+        player_model.league_synced_at = datetime.now(timezone.utc)
 
         # Commit using the same session the service used
         await player_service.db.commit()

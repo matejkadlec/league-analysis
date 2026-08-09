@@ -5,7 +5,9 @@ from enum import Enum as PyEnum
 from typing import Any, Dict, Optional
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
+    CheckConstraint,
     ForeignKey,
     Index,
     Integer,
@@ -14,6 +16,9 @@ from sqlalchemy import (
 )
 from sqlalchemy import (
     DateTime as SQLDateTime,
+)
+from sqlalchemy import (
+    text as sa_text,
 )
 from sqlalchemy.dialects.postgresql import ENUM, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -265,6 +270,69 @@ class JobExecution(Base):
     def __repr__(self) -> str:
         """Return string representation of the job execution."""
         return f"<JobExecution(id={self.id}, config_id={self.job_config_id}, status='{self.status.value}', started={self.started_at})>"
+
+
+class PlayerSyncRun(Base):
+    """Persist one explicit per-player profile and match synchronization."""
+
+    __tablename__ = "player_sync_runs"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('pending', 'running', 'completed', 'failed', "
+            "'cancelled', 'rate_limited')",
+            name="status_valid",
+        ),
+        Index(
+            "uq_player_sync_runs_active_puuid",
+            "puuid",
+            unique=True,
+            postgresql_where=sa_text("status IN ('pending', 'running')"),
+        ),
+        Index("ix_player_sync_runs_user_created", "user_id", "created_at"),
+        {"schema": "jobs"},
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("auth.users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    puuid: Mapped[str] = mapped_column(
+        String(78),
+        ForeignKey("core.players.puuid", ondelete="CASCADE"),
+        nullable=False,
+    )
+    status: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="pending", server_default="pending"
+    )
+    match_execution_id: Mapped[Optional[int]] = mapped_column(
+        Integer,
+        ForeignKey("jobs.job_executions.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    profile_execution_id: Mapped[Optional[int]] = mapped_column(
+        Integer,
+        ForeignKey("jobs.job_executions.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    error_code: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    error_message: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        SQLDateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    started_at: Mapped[Optional[datetime]] = mapped_column(
+        SQLDateTime(timezone=True), nullable=True
+    )
+    completed_at: Mapped[Optional[datetime]] = mapped_column(
+        SQLDateTime(timezone=True), nullable=True
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        SQLDateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
 
 
 # Create composite indexes for common queries

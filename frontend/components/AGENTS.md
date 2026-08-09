@@ -16,11 +16,11 @@ Shared layout/infrastructure components. Feature-specific components go in `feat
 | File                   | Purpose                                         |
 | ---------------------- | ----------------------------------------------- |
 | `ui/`                  | shadcn/ui primitives (**DO NOT edit manually**) |
-| `sidebar-nav.tsx`      | Navigation sidebar (My Profile currently renders as a regular link; anchor dropdown metadata is preserved for future use) |
+| `sidebar-nav.tsx`      | Navigation sidebar and canonical compact current/recent player switcher surface |
 | `header-messages.tsx`  | System/admin banners (includes signed-out recruiting notice) |
 | `theme-provider.tsx`   | Theme context                                   |
 | `theme-toggle.tsx`     | Dark mode toggle                                |
-| `providers.tsx`        | TanStack Query provider                         |
+| `providers.tsx`        | TanStack Query, auth, and per-user player-context providers |
 | `loading-skeleton.tsx` | Loading states                                  |
 
 ## shadcn/ui
@@ -43,3 +43,6 @@ npx shadcn@latest add button card dialog table tabs
 - ❌ Don't use direct axios calls (use TanStack Query)
 - ❌ Don't forget loading and error states
 - ❌ Don't use camelCase for component file names
+- Keep the sidebar player selector below the logo and above ordinary
+  navigation. Selection persists through the player feature context; it must
+  not silently track a player or start Riot synchronization.

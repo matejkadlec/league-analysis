@@ -1,6 +1,8 @@
+from datetime import datetime, timezone
 from typing import List
 
 import structlog
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.riot_api.client import APICallRecord, RiotAPIClient
@@ -27,8 +29,14 @@ class MatchFetcherJob(BaseJob):
 
     recorded_errors_are_fatal = False
 
-    def __init__(self, job_config_id: int, triggered_by: str = "system"):
+    def __init__(
+        self,
+        job_config_id: int,
+        triggered_by: str = "system",
+        target_puuids: set[str] | None = None,
+    ):
         super().__init__(job_config_id, triggered_by)
+        self.target_puuids = target_puuids
 
     def _track_api_request(self, metric_name: str, count: int) -> None:
         """Callback for tracking API requests from RiotAPIClient."""
@@ -71,7 +79,17 @@ class MatchFetcherJob(BaseJob):
             request_callback=self._track_api_request,
         ) as riot_client:
             # Get tracked players
-            tracked_players = await player_service.get_globally_tracked_players()
+            if self.target_puuids is None:
+                tracked_players = await player_service.get_globally_tracked_players()
+            else:
+                result = await db.execute(
+                    select(Player).where(Player.puuid.in_(self.target_puuids))
+                )
+                tracked_players = [
+                    PlayerResponse.model_validate(player)
+                    for player in result.scalars().all()
+                ]
+                self.add_log_entry("target_puuids", sorted(self.target_puuids))
             logger.info(
                 "Starting match fetcher job", tracked_count=len(tracked_players)
             )
@@ -160,6 +178,7 @@ class MatchFetcherJob(BaseJob):
                 context={"puuid": player.puuid, **context},
             )
 
+        error_count_before = len(self._errors_encountered)
         try:
             count = await match_service.sync_matches_for_player(
                 riot_client,
@@ -180,6 +199,10 @@ class MatchFetcherJob(BaseJob):
         if not player_model:
             return
 
+        if len(self._errors_encountered) == error_count_before:
+            player_model.match_synced_at = datetime.now(timezone.utc)
+            await db.commit()
+
         # Update player league (will only insert if league has changed)
         try:
             # Acquire rate limit before league API call
@@ -192,6 +215,8 @@ class MatchFetcherJob(BaseJob):
             league_updated = await player_service.update_player_league(
                 player_model, riot_client
             )
+
+            player_model.league_synced_at = datetime.now(timezone.utc)
 
             # Commit league updates
             await db.commit()

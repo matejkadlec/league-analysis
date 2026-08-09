@@ -14,11 +14,44 @@ export const PlayerSchema = z.object({
   total_matches: z.number().int().optional().default(0),
   last_playstyle_analysis: z.string().optional().nullable(),
   last_matchmaking_analysis: z.string().optional().nullable(),
+  profile_synced_at: z.string().optional().nullable(),
+  league_synced_at: z.string().optional().nullable(),
+  match_synced_at: z.string().optional().nullable(),
   created_at: z.string(),
   updated_at: z.string(),
 });
 
 export type Player = z.infer<typeof PlayerSchema>;
+
+export const PlayerContextSchema = z.object({
+  current_player: PlayerSchema.nullable(),
+  tracked_players: z.array(PlayerSchema),
+});
+
+export type PlayerContext = z.infer<typeof PlayerContextSchema>;
+
+export const PlayerSyncRunSchema = z.object({
+  id: z.coerce.number(),
+  puuid: z.string(),
+  status: z.enum([
+    "pending",
+    "running",
+    "completed",
+    "failed",
+    "cancelled",
+    "rate_limited",
+  ]),
+  match_execution_id: z.coerce.number().nullable().optional(),
+  profile_execution_id: z.coerce.number().nullable().optional(),
+  error_code: z.string().nullable().optional(),
+  error_message: z.string().nullable().optional(),
+  created_at: z.string(),
+  started_at: z.string().nullable().optional(),
+  completed_at: z.string().nullable().optional(),
+  updated_at: z.string(),
+});
+
+export type PlayerSyncRun = z.infer<typeof PlayerSyncRunSchema>;
 
 // Match Schema
 export const MatchSchema = z.object({
@@ -517,12 +550,6 @@ export type Theme = z.infer<typeof ThemeEnum>;
 
 export const UserSettingsSchema = z.object({
   theme: ThemeEnum,
-  save_playstyle_url: z.boolean(),
-  saved_playstyle_puuid: z.string().nullable(),
-  save_matchmaking_url: z.boolean(),
-  saved_matchmaking_puuid: z.string().nullable(),
-  save_tracked_url: z.boolean(),
-  saved_tracked_puuid: z.string().nullable(),
   default_platform: z.string().nullable(),
   created_at: z.string(),
   updated_at: z.string(),
@@ -530,12 +557,6 @@ export const UserSettingsSchema = z.object({
 
 export const UserSettingsUpdateSchema = z.object({
   theme: ThemeEnum.optional(),
-  save_playstyle_url: z.boolean().optional(),
-  saved_playstyle_puuid: z.string().nullable().optional(),
-  save_matchmaking_url: z.boolean().optional(),
-  saved_matchmaking_puuid: z.string().nullable().optional(),
-  save_tracked_url: z.boolean().optional(),
-  saved_tracked_puuid: z.string().nullable().optional(),
   default_platform: z.string().nullable().optional(),
 });
 

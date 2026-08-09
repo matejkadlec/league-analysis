@@ -11,6 +11,7 @@ import { useDDragonVersion } from "@/lib/core/data-dragon-context";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useRelativeTime } from "@/lib/core/use-relative-time";
 import { Swords, Clock, ChevronLeft, ChevronRight } from "lucide-react";
 import {
   Tooltip,
@@ -28,30 +29,6 @@ interface ChampionStatsCardProps {
   dataSourceKey: string;
   stats: ChampionStatsResponse;
   lastUpdated?: string | null;
-}
-
-// Format relative time
-function formatRelativeTime(dateString: string | null | undefined): string {
-  if (!dateString) return "Never";
-
-  const now = new Date();
-  const date = new Date(dateString);
-  const diffMs = now.getTime() - date.getTime();
-  const diffSecs = Math.floor(diffMs / 1000);
-  const diffMins = Math.floor(diffSecs / 60);
-  const diffHours = Math.floor(diffMins / 60);
-  const diffDays = Math.floor(diffHours / 24);
-
-  if (diffSecs < 60) return "just now";
-  if (diffMins < 60) return `${diffMins} minute${diffMins > 1 ? "s" : ""} ago`;
-  if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? "s" : ""} ago`;
-  if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? "s" : ""} ago`;
-
-  return new Date(dateString).toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
 }
 
 // Helper function to get win rate color
@@ -90,6 +67,7 @@ export function ChampionStatsCard({
   const ddragonVersion = useDDragonVersion();
   const [paginationState, setPaginationState] =
     useState<ChampionPaginationState>({ dataSourceKey, page: 0 });
+  const relativeUpdatedAt = useRelativeTime(lastUpdated);
 
   if (!stats.champions || stats.champions.length === 0) {
     return (
@@ -109,7 +87,10 @@ export function ChampionStatsCard({
     );
   }
 
-  const requestedPage = pageForChampionDataSource(paginationState, dataSourceKey);
+  const requestedPage = pageForChampionDataSource(
+    paginationState,
+    dataSourceKey,
+  );
   const championPage = getChampionPage(stats.champions, requestedPage);
   const isFirstPage = championPage.page === 0;
   const isLastPage = championPage.page === championPage.totalPages - 1;
@@ -132,7 +113,7 @@ export function ChampionStatsCard({
           {lastUpdated ? (
             <div className="flex items-center gap-1">
               <Clock className="h-3 w-3" />
-              <span>Updated {formatRelativeTime(lastUpdated)}</span>
+              <span>Updated {relativeUpdatedAt}</span>
             </div>
           ) : (
             <span />
@@ -180,10 +161,7 @@ export function ChampionStatsCard({
               {/* Champion icon */}
               <div className="relative h-10 w-10 rounded-full overflow-hidden border-2 border-primary/20">
                 <Image
-                  src={getChampionIconUrl(
-                    champ.champion_name,
-                    ddragonVersion,
-                  )}
+                  src={getChampionIconUrl(champ.champion_name, ddragonVersion)}
                   alt={getChampionDisplayName(champ.champion_name)}
                   fill
                   className="object-cover"
