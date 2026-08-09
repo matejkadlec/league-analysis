@@ -50,6 +50,8 @@ const PLATFORM_OPTIONS = [
 ] as const;
 
 interface SidebarPlayerSwitcherProps {
+  manageOpen: boolean;
+  onManageOpenChange: (open: boolean) => void;
   onNavigate?: () => void;
 }
 
@@ -58,6 +60,8 @@ function playerLabel(player: Player): string {
 }
 
 export function SidebarPlayerSwitcher({
+  manageOpen,
+  onManageOpenChange,
   onNavigate,
 }: SidebarPlayerSwitcherProps) {
   const { toast } = useToast();
@@ -69,7 +73,6 @@ export function SidebarPlayerSwitcher({
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [pendingRiotId, setPendingRiotId] = useState<RiotIdParts | null>(null);
   const [platform, setPlatform] = useState("eun1");
-  const [manageOpen, setManageOpen] = useState(false);
 
   useEffect(() => {
     const timeout = window.setTimeout(
@@ -172,7 +175,7 @@ export function SidebarPlayerSwitcher({
   );
 
   return (
-    <div className="border-b border-white/10 px-3 pb-4">
+    <div className="border-b border-white/10 px-3 pt-4 pb-2">
       <div className="relative">
         <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-white/50" />
         <Input
@@ -262,18 +265,8 @@ export function SidebarPlayerSwitcher({
         ))}
       </div>
 
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        onClick={() => setManageOpen(true)}
-        className="mt-2 h-8 w-full justify-start px-2 text-xs text-white/65 hover:bg-white/10 hover:text-white"
-      >
-        <Users className="mr-2 h-3.5 w-3.5" /> Manage Tracked Players
-      </Button>
-
-      <Dialog open={manageOpen} onOpenChange={setManageOpen}>
-        <DialogContent className="dialog-white-border max-h-[85vh] max-w-3xl overflow-y-auto">
+      <Dialog open={manageOpen} onOpenChange={onManageOpenChange}>
+        <DialogContent className="dialog-white-border player-management-border max-h-[85vh] max-w-3xl overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Users className="h-5 w-5 text-[#cfa93a]" /> Manage Tracked
@@ -287,7 +280,7 @@ export function SidebarPlayerSwitcher({
             selectedPlayerPuuid={currentPlayer?.puuid ?? null}
             onViewPlayerChange={(player) => {
               if (player) void choosePlayer(player);
-              setManageOpen(false);
+              onManageOpenChange(false);
             }}
           />
         </DialogContent>

@@ -3,6 +3,10 @@ import { expect, test } from "@playwright/test";
 const NOW = "2026-08-09T10:00:00.000Z";
 const CURRENT_PUUID = "current-player-puuid";
 const RECENT_PUUID = "recent-player-puuid";
+const THIRD_PUUID = "third-player-puuid";
+const FOURTH_PUUID = "fourth-player-puuid";
+const FIFTH_PUUID = "fifth-player-puuid";
+const SIXTH_PUUID = "sixth-player-puuid";
 
 const players = {
   [CURRENT_PUUID]: {
@@ -27,17 +31,63 @@ const players = {
     created_at: NOW,
     updated_at: NOW,
   },
+  [THIRD_PUUID]: {
+    puuid: THIRD_PUUID,
+    game_name: "Third",
+    tag_line: "THR",
+    platform: "eun1",
+    is_tracked: true,
+    analyzed_matches: 0,
+    total_matches: 0,
+    created_at: NOW,
+    updated_at: NOW,
+  },
+  [FOURTH_PUUID]: {
+    puuid: FOURTH_PUUID,
+    game_name: "Fourth",
+    tag_line: "FOR",
+    platform: "eun1",
+    is_tracked: true,
+    analyzed_matches: 0,
+    total_matches: 0,
+    created_at: NOW,
+    updated_at: NOW,
+  },
+  [FIFTH_PUUID]: {
+    puuid: FIFTH_PUUID,
+    game_name: "Fifth",
+    tag_line: "FIV",
+    platform: "eun1",
+    is_tracked: true,
+    analyzed_matches: 0,
+    total_matches: 0,
+    created_at: NOW,
+    updated_at: NOW,
+  },
+  [SIXTH_PUUID]: {
+    puuid: SIXTH_PUUID,
+    game_name: "Sixth",
+    tag_line: "SIX",
+    platform: "eun1",
+    is_tracked: true,
+    analyzed_matches: 0,
+    total_matches: 0,
+    created_at: NOW,
+    updated_at: NOW,
+  },
 };
 
 test("quick-switches the URL-scoped current player without starting sync", async ({
   page,
 }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
   let currentPuuid = CURRENT_PUUID;
   let syncStarts = 0;
 
   await page.addInitScript(() => {
     localStorage.setItem("auth_access_token", "test-access-token");
     localStorage.setItem("auth_refresh_token", "test-refresh-token");
+    localStorage.setItem("theme", "dark");
   });
 
   await page.route("**/api/v1/**", async (route) => {
@@ -77,8 +127,24 @@ test("quick-switches the URL-scoped current player without starting sync", async
         contentType: "application/json",
         body: JSON.stringify({
           current_player: players[currentPuuid as keyof typeof players],
-          tracked_players: [players[RECENT_PUUID], players[CURRENT_PUUID]],
+          tracked_players: Object.values(players),
         }),
+      });
+      return;
+    }
+
+    if (path.endsWith("/players/tracked/list")) {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify(Object.values(players)),
+      });
+      return;
+    }
+
+    if (path.endsWith("/league")) {
+      await route.fulfill({
+        contentType: "application/json",
+        body: "null",
       });
       return;
     }
@@ -119,4 +185,41 @@ test("quick-switches the URL-scoped current player without starting sync", async
   await expect(page).toHaveURL(new RegExp(`puuid=${RECENT_PUUID}`));
   await expect(page.getByText("Recent#TWO").first()).toBeVisible();
   expect(syncStarts).toBe(0);
+
+  const manageButton = page.getByRole("button", {
+    name: "Manage Tracked Players",
+  });
+  const matchmakingLink = page.getByRole("link", {
+    name: "Matchmaking Analysis",
+  });
+  const userName = page.getByText("QA User", { exact: true });
+  const [manageBox, matchmakingBox, userBox] = await Promise.all([
+    manageButton.boundingBox(),
+    matchmakingLink.boundingBox(),
+    userName.boundingBox(),
+  ]);
+  expect(manageBox?.y).toBeGreaterThan(matchmakingBox?.y ?? 0);
+  expect(manageBox?.y).toBeLessThan(userBox?.y ?? Number.POSITIVE_INFINITY);
+
+  await manageButton.click();
+  const dialog = page.getByRole("dialog");
+  await expect(
+    dialog.getByRole("heading", { name: "Manage Tracked Players" }),
+  ).toBeVisible();
+  await expect(dialog.getByText("Tracked Players", { exact: true })).toHaveCount(
+    0,
+  );
+  await expect(dialog.getByLabel("Search tracked players")).toHaveCount(0);
+  await expect(
+    dialog.getByRole("button", { name: /expand|collapse/i }),
+  ).toHaveCount(0);
+  await expect(dialog.getByRole("heading", { level: 3 })).toHaveCount(6);
+
+  const scrollRegion = dialog.getByTestId("tracked-players-scroll-region");
+  await expect(scrollRegion).toHaveClass(/overflow-y-auto/);
+  expect(
+    await scrollRegion.evaluate(
+      (element) => element.scrollHeight > element.clientHeight,
+    ),
+  ).toBe(true);
 });

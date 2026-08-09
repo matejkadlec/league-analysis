@@ -83,6 +83,9 @@ export function MyComponent({ id }: MyComponentProps) {
 - Every player-derived TanStack Query key must include the exact PUUID. After
   explicit update completion, refetch only matching active keys and show the
   approved completion message only after every affected refetch succeeds.
+- The Manage Tracked Players dialog presents the player rows directly without
+  a second title, count, search field, or expand/collapse control. Show up to
+  five rows before enabling vertical scrolling.
 - Use `profile_synced_at`, `league_synced_at`, or `match_synced_at` according to
   the card's actual source. Multi-source identity cards use the oldest complete
   required timestamp; never use generic `updated_at` as data freshness.

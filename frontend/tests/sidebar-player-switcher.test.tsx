@@ -57,7 +57,10 @@ function renderSwitcher() {
   });
   render(
     <QueryClientProvider client={queryClient}>
-      <SidebarPlayerSwitcher />
+      <SidebarPlayerSwitcher
+        manageOpen={false}
+        onManageOpenChange={vi.fn()}
+      />
     </QueryClientProvider>,
   );
 }

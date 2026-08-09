@@ -46,3 +46,5 @@ npx shadcn@latest add button card dialog table tabs
 - Keep the sidebar player selector below the logo and above ordinary
   navigation. Selection persists through the player feature context; it must
   not silently track a player or start Riot synchronization.
+- Keep the Manage Tracked Players action at the bottom of the ordinary
+  navigation group, immediately above the signed-in user section.

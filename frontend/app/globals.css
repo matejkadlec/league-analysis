@@ -304,6 +304,11 @@
   .dialog-white-border {
     border: 1px solid #e2e2e2;
   }
+
+  /* Muted blue-gray edge shared by the player manager and its player rows. */
+  .player-management-border {
+    border: 1px solid rgb(120 147 178 / 55%);
+  }
 }
 
 /* Shimmer animation for skeleton loading */
