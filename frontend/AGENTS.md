@@ -92,6 +92,9 @@ Use this shared structure for user-action dialogs across frontend features.
   - Use shadcn `Dialog` + `DialogContent` (darkened background handled by overlay)
   - Always add `dialog-white-border` class to `DialogContent` for visibility
   - Keep default close interactions enabled: top-right `X`, outside click, and explicit cancel button
+  - Keep the global vertical position from `globals.css`: remaining viewport
+    space must use a 1:2 top-to-bottom ratio (`X` above, `2X` below). Do not
+    center or override an individual dialog's `top`/vertical translation.
 - Layout:
   - Header with **gold icon** + title — every dialog title must include a relevant lucide icon with classes `h-5 w-5 text-[#cfa93a]`
   - Optional short description via `DialogDescription`

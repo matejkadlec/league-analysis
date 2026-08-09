@@ -22,6 +22,18 @@ import {
   PlayerCardSkeleton,
   MatchHistorySkeleton,
 } from "@/components/loading-skeleton";
+import {
+  SectionQuickNavigation,
+  type SectionQuickNavigationItem,
+} from "@/components/section-quick-navigation";
+
+const PROFILE_NAV_ITEMS: SectionQuickNavigationItem[] = [
+  { label: "Player Summary", anchor: "#player-summary" },
+  { label: "Recent Performance", anchor: "#recent-performance" },
+  { label: "Top Champions", anchor: "#top-champions" },
+  { label: "Role Performance", anchor: "#role-performance" },
+  { label: "Match History", anchor: "#match-history" },
+];
 
 function SelectPlayerCard() {
   return (
@@ -183,6 +195,7 @@ export default function MyProfilePage() {
 
   return (
     <ProtectedRoute>
+      {currentPlayer && <SectionQuickNavigation items={PROFILE_NAV_ITEMS} />}
       <div className="container mx-auto px-4 py-8">
         <div className="space-y-6">
           {/* Header Card - Full Width */}

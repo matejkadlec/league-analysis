@@ -186,6 +186,17 @@ test("quick-switches the URL-scoped current player without starting sync", async
   await expect(page.getByText("Recent#TWO").first()).toBeVisible();
   expect(syncStarts).toBe(0);
 
+  const quickNavigation = page.getByRole("button", {
+    name: "Open page navigation",
+  });
+  await quickNavigation.hover();
+  await expect(
+    page.getByRole("navigation", { name: "Page sections" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Player Summary" }),
+  ).toBeVisible();
+
   const manageButton = page.getByRole("button", {
     name: "Manage Tracked Players",
   });
@@ -213,6 +224,13 @@ test("quick-switches the URL-scoped current player without starting sync", async
   await expect(
     dialog.getByRole("heading", { name: "Manage Tracked Players" }),
   ).toBeVisible();
+  const dialogBox = await dialog.boundingBox();
+  const viewport = page.viewportSize();
+  const topSpace = dialogBox?.y ?? 0;
+  const bottomSpace =
+    (viewport?.height ?? 0) -
+    ((dialogBox?.y ?? 0) + (dialogBox?.height ?? 0));
+  expect(Math.abs(bottomSpace - topSpace * 2)).toBeLessThanOrEqual(2);
   await expect(dialog.getByText("Tracked Players", { exact: true })).toHaveCount(
     0,
   );

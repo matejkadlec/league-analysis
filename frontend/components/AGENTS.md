@@ -17,6 +17,7 @@ Shared layout/infrastructure components. Feature-specific components go in `feat
 | ---------------------- | ----------------------------------------------- |
 | `ui/`                  | shadcn/ui primitives (**DO NOT edit manually**) |
 | `sidebar-nav.tsx`      | Navigation sidebar and canonical compact current/recent player switcher surface |
+| `section-quick-navigation.tsx` | Hover-expanding in-page section navigation |
 | `header-messages.tsx`  | System/admin banners (includes signed-out recruiting notice) |
 | `theme-provider.tsx`   | Theme context                                   |
 | `theme-toggle.tsx`     | Dark mode toggle                                |
