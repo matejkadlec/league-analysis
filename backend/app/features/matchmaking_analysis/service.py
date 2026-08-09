@@ -24,7 +24,7 @@ DB-First Strategy:
 
 Rate Limiting:
 - Uses DBRateLimiter with priority 3 (lowest) to yield to Match Fetcher/Player Updater
-- When rate limited, sets rate_limit_reset_at timestamp so frontend shows countdown
+- When rate limited, persists rate_limit_reset_at for lifecycle diagnostics
 - Waits and retries automatically (up to 30 minutes total)
 """
 
@@ -1070,7 +1070,7 @@ class MatchmakingAnalysisService:
         await self._set_rate_limit_reset(reset_at)
 
     async def _wait_for_rate_limit(self, retry_after: int) -> None:
-        """Wait for rate limit reset, setting countdown timestamp for frontend."""
+        """Wait for rate limit reset while persisting lifecycle timing."""
         wait_time = min(retry_after, MAX_RATE_LIMIT_WAIT)
         reset_at = datetime.now(timezone.utc) + timedelta(seconds=wait_time)
 
@@ -1080,7 +1080,7 @@ class MatchmakingAnalysisService:
         await asyncio.sleep(wait_time)
 
     async def _clear_rate_limit_wait_if_active(self) -> None:
-        """Clear rate-limit countdown once requests can proceed again."""
+        """Clear persisted rate-limit timing once requests can proceed again."""
         if not self._is_waiting_for_rate_limit:
             return
         self._is_waiting_for_rate_limit = False
@@ -1091,7 +1091,7 @@ class MatchmakingAnalysisService:
         reset_at: Optional[datetime],
         force_clear: bool = False,
     ) -> None:
-        """Update rate_limit_reset_at in DB so frontend can show countdown."""
+        """Update the persisted rate-limit lifecycle timing."""
         if not self._current_analysis_puuid or not self._current_analysis_created_at:
             return
         try:

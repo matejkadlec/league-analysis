@@ -47,6 +47,65 @@ type UIPhase =
   | "completed"
   | "cancelling";
 
+const EXPECTED_PLAYERS = 100;
+const RIOT_LONG_WINDOW_SECONDS = 120;
+// A representative warm-cache analysis completes about six Riot requests per
+// logical player. This drives display-only interpolation; every real backend
+// milestone still moves the projection forward immediately.
+const ESTIMATED_PLAYERS_PER_WINDOW = 100 / 6;
+
+interface ProgressProjection {
+  analysisCreatedAt: string | null;
+  anchorProgress: number;
+  anchorTimestamp: number;
+}
+
+interface ProjectProgressInput extends ProgressProjection {
+  authoritativeProgress: number;
+  totalPlayers: number;
+  nowTimestamp: number;
+}
+
+export function projectMatchmakingProgress({
+  authoritativeProgress,
+  totalPlayers,
+  analysisCreatedAt,
+  anchorProgress,
+  anchorTimestamp,
+  nowTimestamp,
+}: ProjectProgressInput): number {
+  if (!analysisCreatedAt || totalPlayers <= 0) {
+    return Math.max(authoritativeProgress, 0);
+  }
+
+  const elapsedSeconds = Math.max(0, nowTimestamp - anchorTimestamp) / 1000;
+  const projectedProgress =
+    anchorProgress +
+    (elapsedSeconds * ESTIMATED_PLAYERS_PER_WINDOW) /
+      RIOT_LONG_WINDOW_SECONDS;
+  const activeRunCap = totalPlayers * 0.99;
+
+  return Math.min(
+    Math.max(authoritativeProgress, projectedProgress),
+    activeRunCap,
+  );
+}
+
+export function estimateMatchmakingMinutesRemaining(
+  projectedProgress: number,
+  totalPlayers: number,
+): number | null {
+  const remainingPlayers = Math.max(0, totalPlayers - projectedProgress);
+  if (remainingPlayers <= 0) {
+    return null;
+  }
+
+  const remainingSeconds =
+    (remainingPlayers / ESTIMATED_PLAYERS_PER_WINDOW) *
+    RIOT_LONG_WINDOW_SECONDS;
+  return Math.max(1, Math.ceil(remainingSeconds / 60));
+}
+
 function parseIsoTimestamp(value: string | null | undefined): number | null {
   if (!value) {
     return null;
@@ -82,17 +141,20 @@ export function MatchmakingAnalysis({ puuid }: MatchmakingAnalysisProps) {
   const [phase, setPhase] = useState<UIPhase>("idle");
   const [animProgress, setAnimProgress] = useState<number | null>(null);
   const [nowTimestamp, setNowTimestamp] = useState(() => Date.now());
-  const [estimatedRateLimitWindowSeconds, setEstimatedRateLimitWindowSeconds] =
-    useState(60);
   const [currentAnalysisCreatedAt, setCurrentAnalysisCreatedAt] = useState<
     string | null
   >(null);
   const [analysisFailure, setAnalysisFailure] = useState<string | null>(null);
+  const [progressProjection, setProgressProjection] =
+    useState<ProgressProjection>(() => ({
+      analysisCreatedAt: null,
+      anchorProgress: 0,
+      anchorTimestamp: Date.now(),
+    }));
 
   // Track if we ever saw in_progress this session
   const sawInProgressRef = useRef(false);
   const lastBackendProgressRef = useRef(0);
-  const wasRateLimitedRef = useRef(false);
 
   useEffect(() => {
     const intervalId = setInterval(() => {
@@ -350,9 +412,19 @@ export function MatchmakingAnalysis({ puuid }: MatchmakingAnalysisProps) {
     ) {
       sawInProgressRef.current = true;
       setCurrentAnalysisCreatedAt(latestAnalysis.created_at);
+      setProgressProjection({
+        analysisCreatedAt: latestAnalysis.created_at,
+        anchorProgress: latestAnalysis.progress,
+        anchorTimestamp: Date.now(),
+      });
       setPhase("running");
     } else if (latestAnalysis?.status === "pending") {
       setCurrentAnalysisCreatedAt(latestAnalysis.created_at);
+      setProgressProjection({
+        analysisCreatedAt: latestAnalysis.created_at,
+        anchorProgress: latestAnalysis.progress,
+        anchorTimestamp: Date.now(),
+      });
       setPhase("starting");
     } else if (latestAnalysis?.status === "failed") {
       setAnalysisFailure(
@@ -364,6 +436,7 @@ export function MatchmakingAnalysis({ puuid }: MatchmakingAnalysisProps) {
     isLoading,
     latestAnalysis?.status,
     latestAnalysis?.created_at,
+    latestAnalysis?.progress,
     latestAnalysis?.error_message,
     phase,
   ]);
@@ -389,14 +462,22 @@ export function MatchmakingAnalysis({ puuid }: MatchmakingAnalysisProps) {
       sawInProgressRef.current = false;
       lastBackendProgressRef.current = 0;
       setCurrentAnalysisCreatedAt(null);
-      setEstimatedRateLimitWindowSeconds(60);
-      wasRateLimitedRef.current = false;
+      setProgressProjection({
+        analysisCreatedAt: null,
+        anchorProgress: 0,
+        anchorTimestamp: Date.now(),
+      });
     },
     onSuccess: (data) => {
       toast.info("Matchmaking analysis started");
       queryClient.setQueryData(["matchmaking-analysis", puuid], data);
       // Track the created_at of this new analysis
       setCurrentAnalysisCreatedAt(data.created_at);
+      setProgressProjection({
+        analysisCreatedAt: data.created_at,
+        anchorProgress: data.progress,
+        anchorTimestamp: Date.now(),
+      });
       setPhase("running");
     },
     onError: () => {
@@ -459,65 +540,70 @@ export function MatchmakingAnalysis({ puuid }: MatchmakingAnalysisProps) {
     ? (validStatusUpdate ?? latestForCurrent)
     : latestAnalysis;
 
-  // Calculate progress percentage
-  const EXPECTED_PLAYERS = 100;
-  const totalPlayers = displayData?.total_puuids || EXPECTED_PLAYERS;
-  const rawProgressPercentage =
-    displayData && displayData.progress > 0
-      ? Math.min(
-          Math.round((displayData.progress / totalPlayers) * 100),
-          100,
+  useEffect(() => {
+    if (!shouldPoll || !currentAnalysisCreatedAt || !displayData) {
+      return;
+    }
+
+    const authoritativeProgress = displayData.progress || 0;
+    const totalPlayers = displayData.total_puuids || EXPECTED_PLAYERS;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Reanchor the display projection only when a polled backend milestone overtakes it.
+    setProgressProjection((current) => {
+      if (
+        !isSameAnalysisInstance(
+          current.analysisCreatedAt,
+          currentAnalysisCreatedAt,
         )
-      : 0;
+      ) {
+        return {
+          analysisCreatedAt: currentAnalysisCreatedAt,
+          anchorProgress: authoritativeProgress,
+          anchorTimestamp: Date.now(),
+        };
+      }
+
+      const projectedProgress = projectMatchmakingProgress({
+        ...current,
+        authoritativeProgress: current.anchorProgress,
+        totalPlayers,
+        nowTimestamp: Date.now(),
+      });
+      if (authoritativeProgress <= projectedProgress) {
+        return current;
+      }
+
+      return {
+        analysisCreatedAt: currentAnalysisCreatedAt,
+        anchorProgress: authoritativeProgress,
+        anchorTimestamp: Date.now(),
+      };
+    });
+  }, [
+    shouldPoll,
+    currentAnalysisCreatedAt,
+    displayData,
+  ]);
+
+  const totalPlayers = displayData?.total_puuids || EXPECTED_PLAYERS;
+  const authoritativeProgress = displayData?.progress || 0;
+  const projectedPlayerProgress = projectMatchmakingProgress({
+    ...progressProjection,
+    authoritativeProgress,
+    totalPlayers,
+    nowTimestamp,
+  });
+  const projectedProgressPercentage = Math.min(
+    (projectedPlayerProgress / totalPlayers) * 100,
+    99,
+  );
 
   // Use animation progress if set, otherwise raw
   const progressPercentage =
-    animProgress !== null ? animProgress : rawProgressPercentage;
-
-  useEffect(() => {
-    const resetAt = displayData?.rate_limit_reset_at;
-    if (!resetAt) {
-      wasRateLimitedRef.current = false;
-      return;
-    }
-
-    const resetTimeMs = new Date(resetAt).getTime();
-    if (!Number.isFinite(resetTimeMs)) {
-      return;
-    }
-
-    const secondsRemaining = Math.max(
-      1,
-      Math.ceil((resetTimeMs - nowTimestamp) / 1000),
-    );
-
-    if (!wasRateLimitedRef.current) {
-      setEstimatedRateLimitWindowSeconds((previousSeconds) =>
-        Math.max(previousSeconds, secondsRemaining),
-      );
-      wasRateLimitedRef.current = true;
-    }
-  }, [displayData?.rate_limit_reset_at, nowTimestamp]);
-
-  const getEstimatedMinutesRemaining = (): number | null => {
-    if (!displayData) {
-      return null;
-    }
-
-    const totalPlayers = displayData.total_puuids || EXPECTED_PLAYERS;
-    const processedPlayers = displayData.progress || 0;
-    const remainingPlayers = Math.max(0, totalPlayers - processedPlayers);
-    if (remainingPlayers <= 0) {
-      return null;
-    }
-
-    // Estimate requests from remaining players:
-    // roughly 1 match-list call + up to 10 match-detail calls per player.
-    const estimatedRemainingRequests = remainingPlayers * 11;
-    const estimatedSeconds =
-      (estimatedRemainingRequests / 100) * estimatedRateLimitWindowSeconds;
-    return Math.max(1, Math.round(estimatedSeconds / 60));
-  };
+    animProgress !== null ? animProgress : projectedProgressPercentage;
+  const estimatedMinutesRemaining = estimateMatchmakingMinutesRemaining(
+    projectedPlayerProgress,
+    totalPlayers,
+  );
 
   // Loading state
   if (isLoading) {
@@ -646,32 +732,12 @@ export function MatchmakingAnalysis({ puuid }: MatchmakingAnalysisProps) {
       return "Analysis finished successfully";
     }
 
-    // Active status
-    const resetAt = displayData?.rate_limit_reset_at;
-    if (resetAt) {
-      const resetTime = new Date(resetAt).getTime();
-      if (Number.isFinite(resetTime)) {
-        const now = nowTimestamp;
-        const waitSeconds = Math.max(1, Math.ceil((resetTime - now) / 1000));
-        const secondLabel = waitSeconds === 1 ? "second" : "seconds";
-        return `Waiting for rate limit to reset... (${waitSeconds} ${secondLabel} remaining)`;
-      }
-    }
-
-    if (displayData?.total_puuids && displayData.total_puuids > 0) {
-      const minutesRemaining = getEstimatedMinutesRemaining();
-      const minutesLabel = minutesRemaining === 1 ? "minute" : "minutes";
-      const remainingText = minutesRemaining
-        ? ` (~${minutesRemaining} ${minutesLabel} remaining)`
-        : "";
-      const savedText =
-        (displayData.requests_saved ?? 0) > 0
-          ? ` (${displayData.requests_saved} requests saved)`
-          : "";
-      return `Analyzing player win rates... ${displayData.progress || 0} of 100 players completed${remainingText}${savedText}`;
-    }
-
-    return "Analyzing players... 0 of 100 players completed";
+    const minutesLabel =
+      estimatedMinutesRemaining === 1 ? "minute" : "minutes";
+    const remainingText = estimatedMinutesRemaining
+      ? ` (~${estimatedMinutesRemaining} ${minutesLabel} remaining)`
+      : "";
+    return `Analyzing ${authoritativeProgress} of ${totalPlayers} players${remainingText}`;
   };
 
   return (
@@ -710,7 +776,7 @@ export function MatchmakingAnalysis({ puuid }: MatchmakingAnalysisProps) {
             className="h-2 transition-all duration-700 ease-in-out"
           />
           <p className="text-xs text-muted-foreground text-center">
-            {progressPercentage}% complete
+            {Math.round(progressPercentage)}% complete
           </p>
         </div>
 

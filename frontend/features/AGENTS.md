@@ -79,4 +79,6 @@ export function MyComponent({ id }: MyComponentProps) {
 - kebab-case files, PascalCase components
 - Matchmaking Analysis must seed its active UI from the fast start response,
   rehydrate and poll the exact persisted run, treat rate-limit waits as active,
-  cancel by `created_at`, and invalidate result/history data on completion.
+  cancel by `created_at`, and invalidate result/history data on completion. Keep
+  provider throttling internal: the active card always presents one total ETA,
+  while its percentage/bar interpolate between authoritative player milestones.

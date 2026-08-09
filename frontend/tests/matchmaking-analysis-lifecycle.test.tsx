@@ -34,7 +34,11 @@ vi.mock("@/lib/core/api", () => ({
 
 vi.mock("sonner", () => ({ toast }));
 
-import { MatchmakingAnalysis } from "../features/matchmaking/components/matchmaking-analysis";
+import {
+  estimateMatchmakingMinutesRemaining,
+  MatchmakingAnalysis,
+  projectMatchmakingProgress,
+} from "../features/matchmaking/components/matchmaking-analysis";
 
 const createdAt = "2026-08-09T01:00:00.000Z";
 
@@ -131,7 +135,7 @@ describe("MatchmakingAnalysis lifecycle", () => {
     expect(toast.info).toHaveBeenCalledWith("Matchmaking analysis started");
   });
 
-  it("rehydrates a rate-limit wait as an active cancellable run", async () => {
+  it("keeps a rate-limit wait user-facing as an active analysis", async () => {
     const waiting = analysis("waiting_rate_limit", {
       progress: 37,
       rate_limit_reset_at: new Date(Date.now() + 60_000).toISOString(),
@@ -151,8 +155,40 @@ describe("MatchmakingAnalysis lifecycle", () => {
     ).not.toBeNull();
     expect(await screen.findByText("37 / 100 players")).not.toBeNull();
     expect(
-      screen.getByText(/Waiting for rate limit to reset/),
+      screen.getByText(/Analyzing 37 of 100 players \(~\d+ minutes remaining\)/),
     ).not.toBeNull();
+    expect(screen.queryByText(/rate limit/i)).toBeNull();
+  });
+
+  it("projects ETA and visual progress smoothly between backend milestones", () => {
+    const anchorTimestamp = Date.parse(createdAt);
+    const projection = {
+      analysisCreatedAt: createdAt,
+      anchorProgress: 17,
+      anchorTimestamp,
+      authoritativeProgress: 17,
+      totalPlayers: 100,
+    };
+
+    const initial = projectMatchmakingProgress({
+      ...projection,
+      nowTimestamp: anchorTimestamp,
+    });
+    const afterOneMinute = projectMatchmakingProgress({
+      ...projection,
+      nowTimestamp: anchorTimestamp + 60_000,
+    });
+    const atNextWindow = projectMatchmakingProgress({
+      ...projection,
+      authoritativeProgress: 34,
+      nowTimestamp: anchorTimestamp + 120_000,
+    });
+
+    expect(Math.round(initial)).toBe(17);
+    expect(Math.round(afterOneMinute)).toBe(25);
+    expect(Math.round(atNextWindow)).toBe(34);
+    expect(estimateMatchmakingMinutesRemaining(initial, 100)).toBe(10);
+    expect(estimateMatchmakingMinutesRemaining(afterOneMinute, 100)).toBe(9);
   });
 
   it("cancels the exact persisted run and keeps the UI retryable", async () => {

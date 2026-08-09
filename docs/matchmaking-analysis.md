@@ -40,7 +40,7 @@ This means:
 | Backend Service    | Python/FastAPI       | Analysis logic, DB queries, Riot API calls      |
 | Background Task    | `asyncio.Task`       | Runs analysis independently of HTTP request     |
 | DB Rate Limiter    | PostgreSQL           | Coordinates API usage with other components     |
-| Frontend Component | React/TanStack Query | Polling, progress display, rate limit countdown |
+| Frontend Component | React/TanStack Query | Polling, authoritative count, projected ETA/progress |
 
 ### Data Flow
 
@@ -69,7 +69,7 @@ POST /matchmaking-analysis/start
     Frontend polls GET /status?created_at=... every 3 seconds
          │
          ├── Shows progress bar (X/100 players)
-         ├── Shows rate limit countdown when waiting
+         ├── Keeps one continuous total ETA while waiting
          └── Shows results when completed
 ```
 
@@ -323,10 +323,17 @@ When the analysis hits a rate limit (either via `DBRateLimiter.acquire()` window
    - `acquire_with_wait_callback` → `_rate_limit_wait_callback` (receives `window_end` datetime, sets once at start, clears when done)
    - `_wait_for_rate_limit` (for 429 errors, sets once then sleeps)
 2. Backend keeps the run active as `waiting_rate_limit`; a successful later
-   provider request returns it to `in_progress`
-3. Frontend polls the exact run every 3 seconds and reads this field
-4. Frontend calculates `remainingSeconds = resetTime - Date.now()` and displays countdown
-5. When countdown reaches 0 or field becomes null, normal progress display resumes
+   provider request returns it to `in_progress`.
+3. Frontend polls the exact run every 3 seconds but does not expose provider
+   terminology or a separate reset countdown. The database-limiter reset can
+   precede a remaining adaptive-client wait, so it is not presented as the
+   analysis completion clock.
+4. The active card always shows one total analysis ETA. Its bar and percentage
+   interpolate once per second using the 100-request/120-second long window and
+   a representative warm-cache workload, then reconcile forward whenever the
+   backend reports a higher authoritative completed-player count.
+5. The display projection stops at 99%; only authoritative completion reaches
+   100% and triggers result/history refresh.
 
 ### 429 Error Handling
 
@@ -334,7 +341,8 @@ When Riot API returns HTTP 429:
 
 1. The `RiotAPIClient` raises `RateLimitError` with `retry_after` seconds
 2. The service catches it and calls `_wait_for_rate_limit(retry_after)`
-3. This sets the countdown timestamp, sleeps, then clears it
+3. This persists the internal wait timestamp, sleeps, then clears it; the
+   frontend continues presenting the whole-run ETA
 4. The API call is retried (up to 10 retries per call)
 
 ---
@@ -438,7 +446,9 @@ Get completed analysis history.
 - Rehydrates an active run on reload and polls its exact `created_at` identity
   every 3 seconds
 - Displays progress bar (X/100 players)
-- Shows rate limit countdown when `rate_limit_reset_at` is set (updated via `acquire_with_wait_callback`)
+- Shows one continuous whole-run ETA without exposing provider rate-limit waits
+- Smoothly projects the percentage/bar between authoritative player milestones;
+  the top-right and status-text `X / 100` count remains backend-authoritative
 - Shows inline results table when completed
 - "Run New Analysis" button to start a fresh analysis
 - **Completion animation**: Shows green "Analysis finished successfully" text and toast for 1 second before transitioning to results
@@ -499,7 +509,7 @@ Notes:
 | --------------------------------------------- | -------------------------------------------------------------- |
 | Player has <10 ranked matches                 | Fast start succeeds; background run becomes retryable `failed` |
 | Player not found in first match               | Analysis becomes `failed` with a safe classification           |
-| Riot API 429 (rate limited)                   | Wait with countdown, retry up to 10 times                      |
+| Riot API 429 (rate limited)                   | Wait internally with continuous total ETA, retry up to 10 times |
 | Riot API 5xx (server error)                   | Retry with exponential backoff (handled by RiotAPIClient)      |
 | Riot API 403/404                              | Skip that match/player, use available data                     |
 | DB connection error                           | Exception propagates, analysis marked as failed                |
