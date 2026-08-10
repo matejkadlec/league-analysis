@@ -17,7 +17,7 @@ guidance is indexed in [`docs/README.md`](docs/README.md).
 | Backend | Python 3.14, FastAPI, SQLAlchemy, Pydantic, APScheduler |
 | Data | PostgreSQL 18 with reviewed Alembic revisions |
 | External integration | Riot Games API |
-| Tooling | Node 26.5.1, npm 12.0.2, uv 0.12.1, GitHub Actions |
+| Tooling | Node 26.7.0, npm 12.0.2, uv 0.12.1, GitHub Actions |
 
 The supported local development flow is non-Docker. Production packaging and
 the pi5ram8 deployment are repository-owned but remain an explicit, separate
@@ -29,7 +29,7 @@ container commands for the local workflow below.
 Use a WSL development environment with:
 
 - Git and authorized SSH access to this private repository;
-- Node 26.5.1 through NVM and npm 12.0.2;
+- Node 26.7.0 through NVM and npm 12.0.2;
 - Python 3.14.6 and uv 0.12.1;
 - an already-provisioned PostgreSQL 18.4 database and role matching the
   non-secret `POSTGRES_DB` and `POSTGRES_USER` configuration values;
@@ -46,8 +46,8 @@ for the configuration boundary.
 git clone git@github.com:matejkadlec/league-analysis.git
 cd league-analysis
 
-nvm install 26.5.1
-nvm use 26.5.1
+nvm install 26.7.0
+nvm use 26.7.0
 npm install --global npm@12.0.2 --ignore-scripts
 
 (cd frontend && npm ci)

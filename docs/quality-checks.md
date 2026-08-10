@@ -42,7 +42,7 @@ Frontend runs preserve the pre-existing tracked state of
 
 ## Deterministic dependencies and tools
 
-- Node 26.5.1 is pinned by `.nvmrc`; `scripts/use-project-node.sh` accepts only
+- Node 26.7.0 is pinned by `.nvmrc`; `scripts/use-project-node.sh` accepts only
   that exact runtime and may select it through NVM.
 - npm 12.0.2 is recorded in `packageManager`/`devEngines`, installed explicitly
   in CI, and enforced with exact Node/npm engines. Exact reviewed install
