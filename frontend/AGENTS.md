@@ -11,11 +11,15 @@ not weaken repository-wide rules.
 
 ## Tech Stack
 
-Node 26.5.1, npm 12.0.2, Next.js 16.2 (App Router), React 19, TypeScript 7
+Node 26.5.1, npm 12.0.2, Next.js 16.3 (App Router), React 19, TypeScript 7
 native compiler with a TypeScript 6 API compatibility alias for ESLint,
 Tailwind CSS 4, shadcn/ui (New York), TanStack Query v5, Zod v4, Axios, sonner,
 lucide-react, Vitest 4 with Testing Library (React and user-event) and jsdom
 for DOM component tests
+
+Next's TypeScript API mode remains explicitly enabled because the compatibility
+alias exposes the TypeScript 6 compiler API but not Next 16.3's expected
+`typescript/bin/tsc` CLI path.
 
 ## Structure
 
