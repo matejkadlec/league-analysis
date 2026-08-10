@@ -90,12 +90,16 @@ fi
 grep -Fq '_scheduler.shutdown(wait=False)' "$repository_root/backend/app/features/jobs/scheduler.py" \
   || fail 'backend shutdown must not drain long-running scheduler executions.'
 
+grep -Fqx 'name: Deploy to Raspberry Pi' "$deploy_workflow" \
+  || fail 'the deployment workflow display name changed.'
 grep -Fqx '    name: Deploy master to pi5ram8' "$deploy_workflow" \
   || fail 'the deployment workflow must target pi5ram8.'
 grep -Fq 'runs-on: [self-hosted, pi5ram8]' "$deploy_workflow" \
   || fail 'the deployment workflow must select the pi5ram8 runner.'
 grep -Fq 'cancel-in-progress: false' "$deploy_workflow" \
   || fail 'deployments must serialize instead of cancelling an active mutation.'
+grep -Fq 'The private production environment is missing: %s' "$deploy_script" \
+  || fail 'a missing private environment must report its exact host path.'
 grep -Fqx '        run: ./deploy/container-qa.sh' "$quality_workflow" \
   || fail 'the required quality job must build and health-check the containers.'
 

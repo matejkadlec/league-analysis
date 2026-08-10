@@ -66,6 +66,7 @@ grep -Fqx "run_step 'GitHub governance configuration' \"\$repository_root/script
 grep -Fqx '    name: Deterministic full-project gate' "$workflow" || fail 'the stable quality job name changed.'
 grep -Fqx '        run: ./scripts/ci.sh' "$workflow" || fail 'Quality Checks must invoke scripts/ci.sh.'
 grep -Fqx '        run: ./deploy/container-qa.sh' "$workflow" || fail 'Quality Checks must build and verify the isolated container stack.'
+grep -Fqx 'name: Deploy to Raspberry Pi' "$deployment_workflow" || fail 'the deployment workflow display name changed.'
 grep -Fqx '    name: Deploy master to pi5ram8' "$deployment_workflow" || fail 'Deploy must target pi5ram8.'
 grep -Fq './deploy/production-deploy.sh' "$deployment_workflow" || fail 'Deploy must call the repository-owned deployment script.'
 grep -Fqx '    name: Live production dependency audit' "$workflow" || fail 'the dependency audit job is missing.'

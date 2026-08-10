@@ -194,12 +194,12 @@ container QA script, which builds both production images and starts a second,
 uniquely named/ported/volumed stack to prove migrations, database readiness,
 frontend health, and PostgreSQL isolation before tearing it down.
 
-The separate `Deploy` workflow has the same required validation triggers but
-its job skips pull requests. Master pushes and manual master runs serialize on
-the pi5ram8 runner with `cancel-in-progress: false`; cancelling an active host
-mutation is less safe than queueing it. The repository deploy script holds an
-additional non-blocking host lock. Deployment does not duplicate the quality
-gate and never waits for application background jobs.
+The separate `Deploy to Raspberry Pi` workflow has the same required validation
+triggers but its job skips pull requests. Master pushes and manual master runs
+serialize on the pi5ram8 runner with `cancel-in-progress: false`; cancelling an
+active host mutation is less safe than queueing it. The repository deploy script
+holds an additional non-blocking host lock. Deployment does not duplicate the
+quality gate and never waits for application background jobs.
 
 The user must supply any current Codex Cloud Setup/Maintenance scripts before
 they can be adapted. Never request or copy a complete `.env`; Cloud should use
