@@ -1,0 +1,34 @@
+name: Deploy
+
+on:
+  pull_request:
+    branches:
+      - master
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy master to pi5ram16
+    # Deploys run only for master pushes and manual dispatches. The
+    # pull_request trigger exists for workflow policy and always skips.
+    if: github.event_name != 'pull_request'
+    runs-on: [self-hosted, pi5ram16]
+    timeout-minutes: 45
+    steps:
+      - name: Check out the pushed revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Deploy on pi5ram16
+        run: /home/pi/league-analysis/runner-deploy.sh "$GITHUB_WORKSPACE"
