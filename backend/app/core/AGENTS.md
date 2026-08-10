@@ -80,3 +80,7 @@ the launcher clears inherited backend configuration names first, then loads the
 worktree file. Use `LGA_RUN_USE_PROCESS_ENV=1` only for a deliberate one-off
 override; this avoids WSL variables from another worktree selecting a wrong
 database or invalid setting value.
+
+Production readiness is `/health/ready`, not the liveness-only `/health` route.
+Keep readiness secret-safe and fail it unless a real database `SELECT 1`
+succeeds; container orchestration depends on this distinction.

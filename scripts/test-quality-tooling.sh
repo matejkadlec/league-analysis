@@ -6,6 +6,7 @@ repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 gate="$repository_root/test.sh"
 ci_gate="$repository_root/scripts/ci.sh"
 workflow="$repository_root/.github/workflows/quality-checks.yml"
+deployment_workflow="$repository_root/.github/workflows/deploy.yml"
 pre_commit="$repository_root/.pre-commit-config.yaml"
 frontend_package="$repository_root/frontend/package.json"
 agent_guide="$repository_root/AGENTS.md"
@@ -18,6 +19,7 @@ readme_regression="$repository_root/scripts/test-readme.sh"
 run_script="$repository_root/run.sh"
 card_configuration_regression="$repository_root/scripts/test-card-configuration.sh"
 github_governance_regression="$repository_root/scripts/test-github-governance.sh"
+deployment_regression="$repository_root/scripts/test-deployment.sh"
 
 fail() {
   printf 'Quality tooling regression failed: %s\n' "$1" >&2
@@ -35,6 +37,7 @@ fail() {
 [[ -x "$repository_root/scripts/test-run.sh" ]] || fail 'the run.sh regression must be executable.'
 [[ -x "$github_governance_regression" ]] || fail 'the GitHub governance regression must be executable.'
 [[ -x "$card_configuration_regression" ]] || fail 'the card configuration regression must be executable.'
+[[ -x "$deployment_regression" ]] || fail 'the deployment regression must be executable.'
 bash -n "$gate"
 bash -n "$ci_gate"
 bash -n "$worktree_guard"
@@ -42,6 +45,7 @@ bash -n "$flow_policy_regression"
 bash -n "$worktree_regression"
 bash -n "$readme_regression"
 bash -n "$card_configuration_regression"
+bash -n "$deployment_regression"
 grep -Fqx '"$repository_root/test.sh"' "$ci_gate" || fail 'CI must invoke the authoritative local gate.'
 [[ "$(grep -Fxc '  exec "$worktree_guard" --repository "$repository_root" -- "$repository_root/test.sh" "$@"' "$gate")" -eq 1 ]] \
   || fail './test.sh must enter the worktree guard exactly once.'
@@ -53,12 +57,17 @@ grep -Fqx "run_step 'Card configuration contract regression' \"\$repository_root
   || fail 'the authoritative gate must run card configuration regressions.'
 grep -Fqx "run_step 'run.sh startup-order regression' \"\$repository_root/scripts/test-run.sh\"" "$gate" \
   || fail 'the authoritative gate must run run.sh startup-order regressions.'
+grep -Fqx "run_step 'Deployment and container contract regression' \"\$repository_root/scripts/test-deployment.sh\"" "$gate" \
+  || fail 'the authoritative gate must run deployment regressions.'
 grep -Fqx "run_step 'Dependabot configuration' python3 \"\$repository_root/scripts/check-dependabot-config.py\"" "$gate" \
   || fail 'the authoritative gate must validate Dependabot configuration.'
 grep -Fqx "run_step 'GitHub governance configuration' \"\$repository_root/scripts/test-github-governance.sh\"" "$gate" \
   || fail 'the authoritative gate must validate GitHub governance configuration.'
 grep -Fqx '    name: Deterministic full-project gate' "$workflow" || fail 'the stable quality job name changed.'
 grep -Fqx '        run: ./scripts/ci.sh' "$workflow" || fail 'Quality Checks must invoke scripts/ci.sh.'
+grep -Fqx '        run: ./deploy/container-qa.sh' "$workflow" || fail 'Quality Checks must build and verify the isolated container stack.'
+grep -Fqx '    name: Deploy master to pi5ram8' "$deployment_workflow" || fail 'Deploy must target pi5ram8.'
+grep -Fq './deploy/production-deploy.sh' "$deployment_workflow" || fail 'Deploy must call the repository-owned deployment script.'
 grep -Fqx '    name: Live production dependency audit' "$workflow" || fail 'the dependency audit job is missing.'
 grep -Fqx '        run: ./scripts/dependency-audit.sh "$CHANGE_BASE_SHA"' "$workflow" || fail 'the workflow must use the maintained comparative dependency audit.'
 [[ "$(grep -Fxc '        run: npm install --global npm@12.0.2 --ignore-scripts' "$workflow")" -eq 2 ]] || fail 'both workflow jobs must install the pinned npm release.'

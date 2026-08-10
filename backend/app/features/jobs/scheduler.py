@@ -580,12 +580,12 @@ async def _load_and_schedule_jobs() -> None:
 
 
 async def shutdown_scheduler() -> None:
-    """Gracefully shutdown the scheduler.
+    """Stop accepting scheduled work without draining active executions.
 
     This function:
-    1. Waits for running jobs to complete
-    2. Shuts down the scheduler
-    3. Cleans up resources
+    1. Stops future scheduler dispatches
+    2. Returns without waiting for long-running Riot work
+    3. Lets startup recovery reconcile interrupted persisted executions
     """
     global _scheduler
 
@@ -596,8 +596,7 @@ async def shutdown_scheduler() -> None:
     try:
         logger.info("Shutting down job scheduler")
 
-        # Wait for running jobs to complete (with timeout)
-        _scheduler.shutdown(wait=True)
+        _scheduler.shutdown(wait=False)
 
         _scheduler = None
 

@@ -1,0 +1,41 @@
+name: Deploy
+
+on:
+  pull_request:
+    branches:
+      - master
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+concurrency:
+  group: league-analysis-production-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy master to pi5ram8
+    # The pull-request trigger validates this workflow without touching the Pi.
+    # Manual runs are accepted only for the current master branch.
+    if: >-
+      github.event_name == 'push' ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/master')
+    runs-on: [self-hosted, pi5ram8]
+    timeout-minutes: 45
+    steps:
+      - name: Check out the exact master revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Deploy repository-owned stack on pi5ram8
+        run: >-
+          ./deploy/production-deploy.sh
+          --source "$GITHUB_WORKSPACE"
+          --commit "$GITHUB_SHA"

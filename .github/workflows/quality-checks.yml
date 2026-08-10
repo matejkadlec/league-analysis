@@ -26,7 +26,7 @@ jobs:
   quality-gate:
     name: Deterministic full-project gate
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     services:
       postgres:
         image: postgres:18.4
@@ -89,6 +89,9 @@ jobs:
           ENVIRONMENT: test
           LGA_VALIDATE_MIGRATIONS: "1"
         run: ./scripts/ci.sh
+
+      - name: Build and verify isolated production containers
+        run: ./deploy/container-qa.sh
 
   dependency-audit:
     name: Live production dependency audit

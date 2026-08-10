@@ -1,6 +1,8 @@
 # Environment variables
 .env
 .worktree-local-file.*
+deploy/*.env
+!deploy/*.env.example
 
 # Python
 __pycache__/

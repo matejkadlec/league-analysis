@@ -110,6 +110,14 @@ an administrator update; cleanup refuses to proceed unless exactly one regular
 configuration exists for each writer type, and the documented resume command
 re-verifies the local target and inactive writers first.
 
+The production backend image is defined by `Dockerfile`. It installs from
+`uv.lock`, runs Uvicorn without reload as non-root UID/GID 10001, and is
+read-only at runtime. `compose.production.yml` owns the separate one-shot
+migration service and probes `/health/ready`, which must include a database
+round trip. Scheduler shutdown must remain non-draining (`wait=False`) so
+deployments cannot block on normal long-running Riot jobs; startup recovery
+owns classification of interrupted persisted executions.
+
 ## Related Docs
 
 - [core/AGENTS.md](app/core/AGENTS.md) - Core infrastructure

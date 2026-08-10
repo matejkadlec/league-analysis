@@ -697,7 +697,12 @@ generation but never creates application tables at runtime.
    The command holds a session-scoped PostgreSQL advisory lock so two
    application containers cannot race migrations. The supported local
    `../run.sh` launcher runs this command after stopping the selected listeners
-   and before starting backend writers; it cancels startup on failure.
+   and before starting backend writers; it cancels startup on failure. The
+   production Compose contract runs the same command in a one-shot `migrate`
+   service after PostgreSQL health and requires successful completion before
+   the backend can start. Deploying a stale feature-branch image is forbidden;
+   the pi5ram8 workflow deploys the exact current `master` revision so every
+   referenced migration is present.
 4. Run `../test.sh -b` during implementation and the complete `../test.sh`
    before publication. The backend gate validates the baseline on a clean
    isolated database and checks async application access.

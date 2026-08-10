@@ -16,6 +16,7 @@ Run commands from the repository root:
 ./test.sh -f          # Repository + frontend feedback gate
 ./test.sh -b          # Repository + backend feedback gate
 ./scripts/ci.sh       # Portable CI wrapper used by GitHub Actions
+./deploy/container-qa.sh # Explicit disposable Docker build/runtime validation
 ```
 
 `./test.sh` is the mandatory pre-pull-request command. The focused modes shorten
@@ -84,8 +85,11 @@ All modes run:
 - Dependabot v2 configuration coverage for every current package ecosystem,
   manifest directory, update limit, local weekly schedule, labels, and the
   minor/patch-only version-update group. The validator intentionally detects
-  Dockerfiles, so LGA-10 must add the matching Docker update entry when it
-  introduces deployment artifacts.
+  Dockerfiles, including the backend and frontend production image contexts.
+- production Dockerfile/Compose/deploy-workflow invariants: lockfile installs,
+  non-root production commands, internal PostgreSQL, migration/readiness
+  ordering, fixed pi5ram8 identities/ports, deployment serialization, and the
+  permanent non-Docker `run.sh` boundary.
 
 The complete/backend gate also validates `.pre-commit-config.yaml` with the
 locked pre-commit installation.
@@ -141,7 +145,7 @@ real Riot API key or network access.
 | Before commit | Configured pre-commit hooks: hygiene/format hooks, Ruff, frontend ESLint, and frontend TypeScript when matching files changed |
 | During implementation | `./test.sh -f` or `./test.sh -b` for the affected domain |
 | Before pull request | Complete `./test.sh`; never substitute focused output |
-| GitHub `Quality Checks` | Stable jobs `Deterministic full-project gate` and `Live production dependency audit` |
+| GitHub `Quality Checks` | Stable jobs `Deterministic full-project gate` and `Live production dependency audit`; the deterministic job also builds and health-checks the isolated production containers |
 
 The live audit is intentionally GitHub-only because advisory databases change
 independently of a commit. `scripts/dependency-audit.sh <base-revision>` audits
@@ -154,22 +158,19 @@ available, but its output is not part of the deterministic local gate.
 
 ## Dependabot review policy
 
-`.github/dependabot.yml` checks the current frontend npm, backend uv, and
-GitHub Actions manifests weekly on Monday morning in `Europe/Prague`. A
-maximum of three frontend/backend version-update pull requests and two Actions
-version-update pull requests may be open at once. The `minor-and-patch` group
-reduces routine version-update noise while keeping major version updates
-separate. Security updates are not grouped by that rule and GitHub does not
-subject them to the version-update open-pull-request limit.
+`.github/dependabot.yml` checks frontend npm, backend uv, GitHub Actions, and
+both production Dockerfile contexts weekly on Monday morning in
+`Europe/Prague`. A maximum of three npm/uv and two Actions/Docker
+version-update pull requests per configured directory may be open at once. The
+`minor-and-patch` group reduces routine version-update noise while keeping
+major version updates separate. Security updates are not grouped by that rule
+and GitHub does not subject them to the version-update open-pull-request limit.
 
 Dependabot pull requests target `master` and follow the normal repository
 workflow: inspect the manifest and lockfile changes, rebase when current
 `master` moves, run the complete `./test.sh` gate, wait for the required GitHub
 checks and review, then merge only through the protected pull-request path.
 Do not auto-merge dependency changes or provide Dependabot with real secrets.
-No Docker update block exists yet because LGA-10 has not added Dockerfiles or a
-Compose definition; that ticket must extend this configuration in the same
-change.
 
 ## GitHub Actions behavior
 
@@ -185,9 +186,17 @@ the Flow 1 and worktree suites run in GitHub Actions without a second workflow
 entry point. The full backend gate validates the initial Alembic baseline in a
 fresh isolated database. CI additionally sets `LGA_VALIDATE_MIGRATIONS=1` and
 applies `backend/scripts/migrate.py upgrade head` to its clean PostgreSQL 18.4
-service database through the same advisory-lock path. Docker build/hardening
-checks remain conditional on LGA-10 adding deployment artifacts. Dependabot
-configuration and its dedicated regression validator remain owned by LGA-15.
+service database through the same advisory-lock path. It then runs the explicit
+container QA script, which builds both production images and starts a second,
+uniquely named/ported/volumed stack to prove migrations, database readiness,
+frontend health, and PostgreSQL isolation before tearing it down.
+
+The separate `Deploy` workflow has the same required validation triggers but
+its job skips pull requests. Master pushes and manual master runs serialize on
+the pi5ram8 runner with `cancel-in-progress: false`; cancelling an active host
+mutation is less safe than queueing it. The repository deploy script holds an
+additional non-blocking host lock. Deployment does not duplicate the quality
+gate and never waits for application background jobs.
 
 The user must supply any current Codex Cloud Setup/Maintenance scripts before
 they can be adapted. Never request or copy a complete `.env`; Cloud should use

@@ -46,6 +46,7 @@ def main() -> int:
         relative = workflow.relative_to(REPOSITORY_ROOT)
         lines = workflow.read_text(encoding="utf-8").splitlines()
         text = "\n".join(lines)
+        is_deployment_workflow = workflow.name == "deploy.yml"
         if "pull_request_target:" in text:
             errors.append(f"{relative} must not use pull_request_target")
         for required_trigger in ("  pull_request:", "  push:", "  workflow_dispatch:"):
@@ -55,15 +56,22 @@ def main() -> int:
                 )
         if "permissions:\n  contents: read" not in text:
             errors.append(f"{relative} must declare only top-level contents: read")
-        if "cancel-in-progress: true" not in text:
-            errors.append(f"{relative} must cancel superseded runs")
+        expected_cancellation = (
+            "cancel-in-progress: false"
+            if is_deployment_workflow
+            else "cancel-in-progress: true"
+        )
+        if expected_cancellation not in text:
+            errors.append(
+                f"{relative} must declare {expected_cancellation} for its concurrency boundary"
+            )
 
         for line_number, line in enumerate(lines, start=1):
             match = USE_LINE.match(line)
             if not match:
                 continue
             target, version_comment = match.groups()
-            if target.startswith("./") or target.startswith("docker://"):
+            if target.startswith(("./", "docker://")):
                 continue
             if not PINNED_USE.fullmatch(target):
                 errors.append(

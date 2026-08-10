@@ -7,6 +7,7 @@ Jira project `LGA` remains the source for task planning and execution state.
 | --- | --- | --- |
 | Documentation governance | [`AGENTS.md`](AGENTS.md) | Ownership, co-update, and validation rules for `docs/` |
 | Project summary, structure, stack, and commands | [`project-overview.md`](project-overview.md) | Current repository map and local tooling |
+| Production containers and Pi deployment | [`deployment.md`](deployment.md) | Docker images, Compose topology, pi5ram8 deployment, health, and container QA |
 | Quality checks and CI | [`quality-checks.md`](quality-checks.md) | Local/focused gates, test coverage, tool pins, and GitHub-only checks |
 | GitHub branch governance | [`github-governance.md`](github-governance.md) | `master` ruleset desired state, required checks, and drift audit |
 | Runtime/dependency review (2026-08-03) | [`dependency-upgrade-2026-08-03.md`](dependency-upgrade-2026-08-03.md) | Dated version matrix, compatibility decisions, security review, and deferred Cloud handoff |
