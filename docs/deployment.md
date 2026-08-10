@@ -368,6 +368,95 @@ snapshot, then drops the temporary database. It never replaces or exposes the
 production database. A nonzero restore test preserves the archive and removes
 the generated test database through the failure trap.
 
+## Recurring Pi-to-local mirror
+
+After LGA-79 validation and the durable `authority=pi` marker, the only
+automatic data direction is:
+
+```text
+pi5ram8 league_analysis -> local league_analysis_local_dev
+```
+
+The local database is disposable development data. Intentional local changes
+can be overwritten at the next refresh. The mirror implementation contains no
+remote restore, replacement, backup, or mutating SQL command: over SSH it may
+request only secret-safe `identity`, the read-only deterministic `snapshot`,
+and the authority-gated read-only `mirror-dump`. PostgreSQL stays internal to
+the Pi container.
+
+Run the worktree command without `--apply` for a read-only preflight, then use
+the same implementation on demand:
+
+```bash
+./backend/scripts/mirror_pi_postgres_to_local.py \
+  --database league_analysis_local_dev \
+  --remote pi5ram8 \
+  --remote-database league_analysis \
+  --config .env
+
+./backend/scripts/mirror_pi_postgres_to_local.py \
+  --database league_analysis_local_dev \
+  --remote pi5ram8 \
+  --remote-database league_analysis \
+  --config .env \
+  --apply
+```
+
+No password is accepted on the command line. The private config must be a
+current-user-owned, non-symlink regular file with mode `0600`; the target must
+be the configured PostgreSQL 18 loopback database in the `dev` environment.
+The Pi identity must match the exact League Analysis container/project/service,
+database, Alembic head, absent host binding, and confirmed authority marker.
+
+An apply first compares the deterministic Pi and local snapshots. An exact
+match skips the dump, transfer, restore, and swap. A mismatch streams a complete
+custom-format archive using mirror-specific Zstandard level 3 compression;
+daily backups retain their stronger gzip level 9 contract. The complete archive
+is downloaded and validated before any local database change. It restores into
+a generated staging database, validates the migration head, constraints, both
+administrators, all table counts and sequence states, disables connections
+during the short rename window, and atomically swaps database names. A private
+durable state file restores the previous local database after termination or
+validation failure. The old local database is dropped only after the new target
+validates. A Pi write immediately after a matching fingerprint can be delayed
+until the next five-minute check; it can never cause a partial local snapshot.
+Active local backend connections are terminated only for a changed snapshot and
+reconnect to the new target; restart a development session if its connection
+pool does not recover cleanly.
+
+Install a worktree-independent snapshot and the local user-systemd timer:
+
+```bash
+./deploy/install-local-postgres-mirror.sh
+```
+
+The default recurrence is every five minutes on an explicit
+`Europe/Prague` calendar. `Persistent=true` runs one missed refresh when the
+local machine next becomes available, and the non-blocking lock rejects overlap.
+The cheap snapshot comparison normally avoids the approximately 20 MB archive
+transfer and full local restore when nothing changed. The manual and automatic
+paths execute the same installed implementation. Inspect them without printing
+configuration values:
+
+```bash
+systemctl --user list-timers league-analysis-local-postgres-mirror.timer
+systemctl --user status league-analysis-local-postgres-mirror.service --no-pager
+journalctl --user -u league-analysis-local-postgres-mirror.service -n 50 --no-pager
+
+$HOME/.local/share/league-analysis/operations/local-postgres-mirror \
+  --database league_analysis_local_dev \
+  --remote pi5ram8 \
+  --remote-database league_analysis \
+  --config "$HOME/projects/league-analysis/.env" \
+  --apply
+```
+
+To configure a different local cadence without changing the implementation,
+create a systemd user override with `systemctl --user edit
+league-analysis-local-postgres-mirror.timer`, clear the inherited schedule with
+an empty `OnCalendar=`, add one explicit timezone-aware `OnCalendar=`, then run
+`systemctl --user daemon-reload` and restart the timer.
+
 ## Failure and recovery boundary
 
 Build, migration, container-start, or health failure exits nonzero with bounded

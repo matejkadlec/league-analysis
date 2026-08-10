@@ -746,15 +746,21 @@ before removing that database. The schedule, exact archive contract, diagnostic
 commands, and operator restore command are in
 [`deployment.md`](deployment.md#postgresql-daily-backups-and-restore-tests).
 
-### Pi backup authority
+### Disposable local mirror
 
-Once the Pi authority marker exists, repository-owned operations create one
-private PostgreSQL custom-format backup at `00:00 Europe/Prague` and retain the
-seven newest successful daily archives. Retention is deliberately narrower than
-the backup directory: incomplete files, migration safety archives, and unrelated
-files are excluded. Restore verification always uses a generated temporary
-database and validates the migration head, constraints, application-table
-presence, administrator flags, and deterministic schema/count/sequence snapshot
-before removing that database. The schedule, exact archive contract, diagnostic
-commands, and operator restore command are in
-[`deployment.md`](deployment.md#postgresql-daily-backups-and-restore-tests).
+After LGA-79 established and validated Pi authority, the data authority is
+strictly one-way:
+
+```text
+pi5ram8 league_analysis -> local league_analysis_local_dev
+```
+
+The local database is disposable development data. The recurring refresh can
+overwrite intentional local rows, updates, identifiers, and sequence advances;
+there is no automatic local-to-Pi path. Each refresh downloads a complete
+PostgreSQL custom-format archive through the SSH/Docker boundary before creating
+a local staging database. Only a fully restored and validated stage replaces the
+local target through database renames. Durable private state recovers the old
+local database after interruption, and a non-blocking lock prevents overlap.
+Schedule configuration, on-demand use, failure diagnostics, and validation are
+documented in [`deployment.md`](deployment.md#recurring-pi-to-local-mirror).

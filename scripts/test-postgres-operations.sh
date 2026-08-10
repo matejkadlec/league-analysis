@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Deterministic safety-contract checks for database migration/operations tools.
+# shellcheck disable=SC2016  # Assertions intentionally match literal shell source.
 set -euo pipefail
 
 repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -10,6 +11,10 @@ backup_retention="$repository_root/deploy/prune-postgres-daily-backups.sh"
 backup_retention_regression="$repository_root/scripts/test-postgres-backup-retention.sh"
 backup_service="$repository_root/deploy/systemd/league-analysis-postgres-backup.service"
 backup_timer="$repository_root/deploy/systemd/league-analysis-postgres-backup.timer"
+mirror_installer="$repository_root/deploy/install-local-postgres-mirror.sh"
+mirror_script="$repository_root/backend/scripts/mirror_pi_postgres_to_local.py"
+mirror_service="$repository_root/deploy/systemd/league-analysis-local-postgres-mirror.service"
+mirror_timer="$repository_root/deploy/systemd/league-analysis-local-postgres-mirror.timer"
 snapshot_sql="$repository_root/deploy/postgres-snapshot.sql"
 admin_reconciler="$repository_root/backend/scripts/reconcile_admin_account.py"
 initial_migration="$repository_root/backend/scripts/migrate_local_postgres_to_pi.py"
@@ -27,6 +32,10 @@ for required_file in \
   "$backup_retention_regression" \
   "$backup_service" \
   "$backup_timer" \
+  "$mirror_installer" \
+  "$mirror_script" \
+  "$mirror_service" \
+  "$mirror_timer" \
   "$snapshot_sql" \
   "$admin_reconciler" \
   "$initial_migration"; do
@@ -37,6 +46,7 @@ bash -n "$pi_installer"
 bash -n "$backup_timer_installer"
 bash -n "$backup_retention"
 bash -n "$backup_retention_regression"
+bash -n "$mirror_installer"
 
 grep -Fq 'name=^/${container}$' "$pi_operations" \
   || fail 'Pi operations must resolve exact container names.'
@@ -82,6 +92,39 @@ grep -Fq 'daily-backup --confirm-target league_analysis' "$backup_service" \
   || fail 'the backup service must confirm the exact League Analysis database.'
 grep -Fq 'restore-test accepts only an exact daily-backup filename' "$pi_operations" \
   || fail 'restore tests must reject archives outside the daily backup contract.'
+grep -Fq 'mirror exports require confirmed Pi database authority' "$pi_operations" \
+  || fail 'mirror exports must require confirmed Pi authority.'
+grep -Fq 'mirror-dump)' "$pi_operations" \
+  || fail 'the Pi read-only mirror export is missing.'
+mirror_case="$(sed -n '/^  mirror-dump)/,/^    ;;/p' "$pi_operations")"
+grep -Fq 'dump_mirror_database "$target"' <<< "$mirror_case" \
+  || fail 'the Pi mirror command must use only a native database dump.'
+if grep -Eq 'restore|replace|activate|finalize|rollback|create_database|drop_database' <<< "$mirror_case"; then
+  fail 'the Pi mirror export contains a database write operation.'
+fi
+grep -Fq 'mirror-dump --confirm-target' "$mirror_script" \
+  || fail 'the local mirror must use the read-only Pi export.'
+grep -Fq 'snapshot --confirm-target' "$mirror_script" \
+  || fail 'the local mirror must compare the read-only Pi snapshot first.'
+grep -Fq -- '--compress=zstd:3' "$pi_operations" \
+  || fail 'frequent mirror exports must use the reviewed fast compression level.'
+grep -Fq -- '--compress=gzip:9' "$pi_operations" \
+  || fail 'daily and safety backups must retain strong gzip compression.'
+if grep -Eq 'replace-from-stdin|activate-replacement|finalize-replacement|rollback-replacement|safety-backup|daily-backup' "$mirror_script"; then
+  fail 'the local mirror must not contain any remote Pi write command.'
+fi
+grep -Fq 'download_remote_archive(host, database, archive)' "$mirror_script" \
+  || fail 'the complete remote archive must precede local activation.'
+grep -Fq 'activate_archive(config, paths, archive, digest)' "$mirror_script" \
+  || fail 'the downloaded archive must use the guarded local activation path.'
+grep -Fq 'fcntl.LOCK_EX | fcntl.LOCK_NB' "$mirror_script" \
+  || fail 'the local mirror must refuse overlapping executions.'
+grep -Fq 'OnCalendar=*-*-* *:0/5:00 Europe/Prague' "$mirror_timer" \
+  || fail 'the local mirror timer must use the documented Prague cadence.'
+grep -Fq 'Persistent=true' "$mirror_timer" \
+  || fail 'the local mirror timer must catch up after local downtime.'
+grep -Fq -- '--config %h/projects/league-analysis/.env --apply' "$mirror_service" \
+  || fail 'the automatic mirror must use the canonical private local configuration.'
 if grep -Eq 'docker ps[^\n]*\|[^\n]*grep|docker ps[^\n]*grep' "$pi_operations"; then
   fail 'Pi operations must not identify PostgreSQL through docker ps and grep.'
 fi

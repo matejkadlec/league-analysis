@@ -35,6 +35,7 @@ usage() {
     '  safety-backup --label LABEL --confirm-target DATABASE' \
     '  daily-backup --confirm-target DATABASE' \
     '  restore-test --confirm-target DATABASE --archive ARCHIVE' \
+    '  mirror-dump --confirm-target DATABASE' \
     '  replace-from-stdin --confirm-target DATABASE --expected-sha256 SHA256' \
     '  activate-replacement --confirm-target DATABASE --expected-sha256 SHA256' \
     '  confirm-authority --confirm-target DATABASE --expected-sha256 SHA256' \
@@ -158,6 +159,13 @@ dump_database() {
   local database="$1"
   docker exec --user postgres "$postgres_container" sh -ceu \
     'exec pg_dump --username "$POSTGRES_USER" --dbname "$1" --format=custom --compress=gzip:9 --no-password' \
+    -- "$database"
+}
+
+dump_mirror_database() {
+  local database="$1"
+  docker exec --user postgres "$postgres_container" sh -ceu \
+    'exec pg_dump --username "$POSTGRES_USER" --dbname "$1" --format=custom --compress=zstd:3 --no-password' \
     -- "$database"
 }
 
@@ -676,6 +684,12 @@ case "$command_name" in
       exit 2
     }
     restore_test "$2" "$4"
+    ;;
+  mirror-dump)
+    target="$(parse_target_option "$@")"
+    confirm_target "$target"
+    confirmed_authority || die 'mirror exports require confirmed Pi database authority'
+    dump_mirror_database "$target"
     ;;
   replace-from-stdin)
     [[ "${1:-}" == "--confirm-target" && -n "${2:-}" && \

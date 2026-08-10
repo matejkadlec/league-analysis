@@ -130,6 +130,10 @@ The Pi database is backed up at `00:00 Europe/Prague` by a user-systemd timer;
 the guarded operation retains seven successful private custom-format archives
 and provides an isolated restore test. Install or repair that timer only through
 the reviewed repository installer documented in `docs/deployment.md`.
+After Pi authority is confirmed, local `league_analysis_local_dev` is a
+disposable one-way mirror checked against the Pi every five minutes. Matching
+snapshots skip the full refresh. Local data may be overwritten; the mirror has
+no local-to-Pi write command.
 
 The Raspberry Pi hosts multiple projects. For production operations, target
 only the exact League Analysis Docker resources and verify their Compose labels

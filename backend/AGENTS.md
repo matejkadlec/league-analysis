@@ -118,6 +118,9 @@ authentication path, and refuses any database other than the exact loopback
 `scripts/migrate_local_postgres_to_pi.py`; it is disabled after the Pi records
 its durable authority marker. Follow the ordered procedure and rollback gate in
 [`../docs/deployment.md`](../docs/deployment.md#postgresql-data-authority-and-initial-migration).
+The post-authority `scripts/mirror_pi_postgres_to_local.py` path accepts only a
+read-only Pi export, restores into a local staging database, and keeps durable
+rollback state through the atomic local name swap.
 
 The production backend image is defined by `Dockerfile`. It installs from
 `uv.lock`, runs Uvicorn without reload as non-root UID/GID 10001, and is
