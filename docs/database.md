@@ -732,3 +732,29 @@ safety backup and remained available as a rollback database through health and
 authentication validation. The full procedure, exact container boundary,
 authority marker, and rollback commands are maintained in
 [`deployment.md`](deployment.md#postgresql-data-authority-and-initial-migration).
+
+### Pi backup authority
+
+Once the Pi authority marker exists, repository-owned operations create one
+private PostgreSQL custom-format backup at `00:00 Europe/Prague` and retain the
+seven newest successful daily archives. Retention is deliberately narrower than
+the backup directory: incomplete files, migration safety archives, and unrelated
+files are excluded. Restore verification always uses a generated temporary
+database and validates the migration head, constraints, application-table
+presence, administrator flags, and deterministic schema/count/sequence snapshot
+before removing that database. The schedule, exact archive contract, diagnostic
+commands, and operator restore command are in
+[`deployment.md`](deployment.md#postgresql-daily-backups-and-restore-tests).
+
+### Pi backup authority
+
+Once the Pi authority marker exists, repository-owned operations create one
+private PostgreSQL custom-format backup at `00:00 Europe/Prague` and retain the
+seven newest successful daily archives. Retention is deliberately narrower than
+the backup directory: incomplete files, migration safety archives, and unrelated
+files are excluded. Restore verification always uses a generated temporary
+database and validates the migration head, constraints, application-table
+presence, administrator flags, and deterministic schema/count/sequence snapshot
+before removing that database. The schedule, exact archive contract, diagnostic
+commands, and operator restore command are in
+[`deployment.md`](deployment.md#postgresql-daily-backups-and-restore-tests).

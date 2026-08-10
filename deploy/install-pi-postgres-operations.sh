@@ -19,6 +19,7 @@ if [[ "$deployment_root" != /* || "$deployment_root" == "/" || \
 fi
 for source_file in \
   "$source_directory/pi-postgres-operations.sh" \
+  "$source_directory/prune-postgres-daily-backups.sh" \
   "$source_directory/postgres-snapshot.sql"; do
   if [[ ! -f "$source_file" || -L "$source_file" ]]; then
     printf 'Required source is missing or is a symlink: %s\n' "$source_file" >&2
@@ -45,12 +46,17 @@ trap cleanup EXIT
 
 install -m 700 -- "$source_directory/pi-postgres-operations.sh" \
   "$temporary_directory/pi-postgres-operations"
+install -m 700 -- "$source_directory/prune-postgres-daily-backups.sh" \
+  "$temporary_directory/prune-postgres-daily-backups"
 install -m 600 -- "$source_directory/postgres-snapshot.sql" \
   "$temporary_directory/postgres-snapshot.sql"
 bash -n "$temporary_directory/pi-postgres-operations"
+bash -n "$temporary_directory/prune-postgres-daily-backups"
 
 install -m 700 -- "$temporary_directory/pi-postgres-operations" \
   "$operations_directory/pi-postgres-operations"
+install -m 700 -- "$temporary_directory/prune-postgres-daily-backups" \
+  "$operations_directory/prune-postgres-daily-backups"
 install -m 600 -- "$temporary_directory/postgres-snapshot.sql" \
   "$operations_directory/postgres-snapshot.sql"
 

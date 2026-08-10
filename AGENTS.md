@@ -126,6 +126,10 @@ tail -50 logs/frontend.log
 never part of `./run.sh`, uses isolated names/ports/networks/volume, and removes
 its disposable stack. Production deployment is repository-owned and targets
 the `pi5ram8` runner; see [`docs/deployment.md`](docs/deployment.md).
+The Pi database is backed up at `00:00 Europe/Prague` by a user-systemd timer;
+the guarded operation retains seven successful private custom-format archives
+and provides an isolated restore test. Install or repair that timer only through
+the reviewed repository installer documented in `docs/deployment.md`.
 
 The Raspberry Pi hosts multiple projects. For production operations, target
 only the exact League Analysis Docker resources and verify their Compose labels

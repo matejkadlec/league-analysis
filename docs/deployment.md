@@ -250,6 +250,124 @@ foreign keys, timestamps, and sequences. It does not contain `.env` files or
 filesystem configuration. Do not delete the pre-LGA-79 safety archive until a
 separate reviewed retention decision explicitly covers it.
 
+## PostgreSQL daily backups and restore tests
+
+The authoritative Pi database has a user-systemd timer named
+`league-analysis-postgres-backup.timer`. It runs at exactly `00:00` in the
+`Europe/Prague` timezone, including daylight-saving changes, regardless of the
+Pi host timezone. `Persistent=true` catches up once after downtime; the shared
+non-blocking operations lock prevents overlap with migration, restore, or mirror
+exports.
+
+Install the reviewed operations snapshot and enable the timer on `pi5ram8`:
+
+```bash
+./deploy/install-pi-postgres-backup-timer.sh
+```
+
+The service verifies the exact Compose project, PostgreSQL service/container,
+database name, absent host port, Alembic head, and Pi-authority marker. It writes
+a PostgreSQL 18 custom-format gzip archive to a mode-`0700` host directory at
+`$HOME/.local/share/league-analysis/backups/postgres`. The dump first uses a
+private `.in-progress` file, validates it with `pg_restore --list`, syncs it,
+and atomically renames it to this deterministic timestamp shape:
+
+```text
+league-analysis-postgres-daily-YYYYMMDDTHHMMSS+ZZZZ.dump
+```
+
+Only after that success does retention remove daily archives older than the
+newest seven. It matches only exact successful daily filenames. Partial files,
+the pre-LGA-79 archive, and unrelated artifacts neither count toward retention
+nor get deleted. Failures are nonzero in the user journal and do not remove a
+previous successful backup.
+
+Inspect scheduling and the most recent service result without exposing runtime
+configuration:
+
+```bash
+systemctl --user list-timers league-analysis-postgres-backup.timer
+systemctl --user status league-analysis-postgres-backup.service --no-pager
+journalctl --user -u league-analysis-postgres-backup.service -n 50 --no-pager
+```
+
+Run an on-demand backup and test a selected daily archive as follows:
+
+```bash
+PI_OPERATIONS="$HOME/.local/share/league-analysis/operations/pi-postgres-operations"
+"$PI_OPERATIONS" daily-backup --confirm-target league_analysis
+"$PI_OPERATIONS" restore-test \
+  --confirm-target league_analysis \
+  --archive "$HOME/.local/share/league-analysis/backups/postgres/league-analysis-postgres-daily-YYYYMMDDTHHMMSS+ZZZZ.dump"
+```
+
+The restore test accepts only a private, current-user-owned daily archive
+directly inside the managed backup directory. It creates a generated temporary
+database, restores with ownership and ACL replay disabled, validates Alembic,
+constraints, application tables, both administrator flags, and a deterministic
+snapshot, then drops the temporary database. It never replaces or exposes the
+production database. A nonzero restore test preserves the archive and removes
+the generated test database through the failure trap.
+
+## PostgreSQL daily backups and restore tests
+
+The authoritative Pi database has a user-systemd timer named
+`league-analysis-postgres-backup.timer`. It runs at exactly `00:00` in the
+`Europe/Prague` timezone, including daylight-saving changes, regardless of the
+Pi host timezone. `Persistent=true` catches up once after downtime; the shared
+non-blocking operations lock prevents overlap with migration, restore, or mirror
+exports.
+
+Install the reviewed operations snapshot and enable the timer on `pi5ram8`:
+
+```bash
+./deploy/install-pi-postgres-backup-timer.sh
+```
+
+The service verifies the exact Compose project, PostgreSQL service/container,
+database name, absent host port, Alembic head, and Pi-authority marker. It writes
+a PostgreSQL 18 custom-format gzip archive to a mode-`0700` host directory at
+`$HOME/.local/share/league-analysis/backups/postgres`. The dump first uses a
+private `.in-progress` file, validates it with `pg_restore --list`, syncs it,
+and atomically renames it to this deterministic timestamp shape:
+
+```text
+league-analysis-postgres-daily-YYYYMMDDTHHMMSS+ZZZZ.dump
+```
+
+Only after that success does retention remove daily archives older than the
+newest seven. It matches only exact successful daily filenames. Partial files,
+the pre-LGA-79 archive, and unrelated artifacts neither count toward retention
+nor get deleted. Failures are nonzero in the user journal and do not remove a
+previous successful backup.
+
+Inspect scheduling and the most recent service result without exposing runtime
+configuration:
+
+```bash
+systemctl --user list-timers league-analysis-postgres-backup.timer
+systemctl --user status league-analysis-postgres-backup.service --no-pager
+journalctl --user -u league-analysis-postgres-backup.service -n 50 --no-pager
+```
+
+Run an on-demand backup and test a selected daily archive as follows:
+
+```bash
+PI_OPERATIONS="$HOME/.local/share/league-analysis/operations/pi-postgres-operations"
+"$PI_OPERATIONS" daily-backup --confirm-target league_analysis
+"$PI_OPERATIONS" restore-test \
+  --confirm-target league_analysis \
+  --archive "$HOME/.local/share/league-analysis/backups/postgres/league-analysis-postgres-daily-YYYYMMDDTHHMMSS+ZZZZ.dump"
+```
+
+The restore test accepts only a private, current-user-owned daily archive
+directly inside the managed backup directory. It creates a generated temporary
+database, restores with ownership and ACL replay disabled, validates Alembic,
+constraints, application tables, both administrator flags, and a deterministic
+snapshot, then drops the temporary database. It never replaces or exposes the
+production database. A nonzero restore test preserves the archive and removes
+the generated test database through the failure trap.
+
 ## Failure and recovery boundary
 
 Build, migration, container-start, or health failure exits nonzero with bounded
@@ -259,7 +377,8 @@ never removed by deployment. Do not use `docker compose down --volumes` on the
 production stack.
 
 The deployment script does not automatically reverse database migrations or
-delete releases/images. Full backup, restore, retention, and rollback policy
-remain owned by LGA-16. Until that runbook is complete, recovery is an explicit
-owner operation based on a verified database backup and compatible prior
-release; never guess or reset a populated schema.
+delete releases/images. Daily archives and their isolated restore test do not
+by themselves select a compatible application release or authorize a production
+restore. Broader disaster-recovery and release-rollback policy remains owned by
+LGA-16; recovery is an explicit owner operation based on a verified database
+backup and compatible prior release. Never guess or reset a populated schema.

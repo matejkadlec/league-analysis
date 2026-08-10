@@ -15,6 +15,7 @@ authority_marker="$state_directory/pi-authoritative.state"
 operation_lock="$deployment_root/.postgres-operations.lock"
 script_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 snapshot_sql="$script_directory/postgres-snapshot.sql"
+retention_tool="$script_directory/prune-postgres-daily-backups"
 
 incoming_archive=""
 replacement_started=0
@@ -32,6 +33,8 @@ usage() {
     '  snapshot --confirm-target DATABASE' \
     '  dump --confirm-target DATABASE' \
     '  safety-backup --label LABEL --confirm-target DATABASE' \
+    '  daily-backup --confirm-target DATABASE' \
+    '  restore-test --confirm-target DATABASE --archive ARCHIVE' \
     '  replace-from-stdin --confirm-target DATABASE --expected-sha256 SHA256' \
     '  activate-replacement --confirm-target DATABASE --expected-sha256 SHA256' \
     '  confirm-authority --confirm-target DATABASE --expected-sha256 SHA256' \
@@ -201,16 +204,87 @@ create_backup() {
   chmod 600 -- "$temporary"
   if ! dump_database "$database" > "$temporary"; then
     rm -f -- "$temporary"
-    die 'pg_dump failed; the incomplete safety backup was removed'
+    die 'pg_dump failed; the incomplete backup was removed'
   fi
   sync -f "$temporary"
   list_archive "$temporary" || {
     rm -f -- "$temporary"
-    die 'pg_restore could not read the safety backup archive'
+    die 'pg_restore could not read the backup archive'
   }
   chmod 600 -- "$temporary"
   mv -- "$temporary" "$completed"
   printf '%s\n' "$completed"
+}
+
+daily_backup() {
+  local target="$1"
+  local archive
+  local archive_sha256
+  local archive_size
+  confirm_target "$target"
+  confirmed_authority || die 'daily backups require confirmed Pi database authority'
+  [[ -x "$retention_tool" && ! -L "$retention_tool" ]] \
+    || die 'the installed daily-backup retention tool is missing or is a symlink'
+
+  archive="$(create_backup "$target" daily)"
+  archive_sha256="$(sha256sum "$archive" | awk '{print $1}')"
+  archive_size="$(stat -c '%s' "$archive")"
+  "$retention_tool" "$backup_root"
+  printf 'Daily PostgreSQL backup completed: %s\n' "$archive"
+  printf 'Archive SHA-256: %s\n' "$archive_sha256"
+  printf 'Archive bytes: %s\n' "$archive_size"
+}
+
+validate_daily_archive_path() {
+  local requested="$1"
+  local resolved
+  local basename
+  [[ -n "$requested" ]] || die 'a daily backup archive path is required'
+  [[ -f "$requested" && ! -L "$requested" ]] \
+    || die 'the restore-test archive must be a regular non-symlink file'
+  resolved="$(realpath -e -- "$requested")"
+  [[ "$(dirname "$resolved")" == "$backup_root" ]] \
+    || die 'the restore-test archive must be directly inside the managed backup root'
+  basename="$(basename "$resolved")"
+  [[ "$basename" =~ ^league-analysis-postgres-daily-[0-9]{8}T[0-9]{6}[+-][0-9]{4}\.dump$ ]] \
+    || die 'restore-test accepts only an exact daily-backup filename'
+  [[ "$(stat -c '%a' "$resolved")" == "600" ]] \
+    || die 'the restore-test archive must have mode 0600'
+  [[ "$(stat -c '%u' "$resolved")" == "$(id -u)" ]] \
+    || die 'the restore-test archive must be owned by the current Pi user'
+  printf '%s' "$resolved"
+}
+
+restore_test() {
+  local target="$1"
+  local requested_archive="$2"
+  local archive
+  local timestamp
+  local restored_snapshot
+  local restored_snapshot_sha256
+  local admin_count
+  confirm_target "$target"
+  confirmed_authority || die 'restore tests require confirmed Pi database authority'
+  archive="$(validate_daily_archive_path "$requested_archive")"
+  list_archive "$archive" || die 'the selected daily backup is not a readable PostgreSQL archive'
+
+  timestamp="$(TZ=Europe/Prague date '+%Y%m%dt%H%M%S')"
+  replacement_stage="${target}_restore_test_${timestamp}"
+  require_database_name "$replacement_stage"
+  database_exists "$replacement_stage" && die 'generated restore-test database already exists'
+  create_database "$replacement_stage"
+  restore_archive "$replacement_stage" "$archive"
+  validate_database "$replacement_stage"
+  admin_count="$(container_psql "$replacement_stage" \
+    "SELECT count(*) FROM auth.users WHERE lower(email) IN ('mat.kadlec@email.cz','marek.hovadik@seznam.cz') AND is_active AND is_admin AND email_verified;")"
+  [[ "$admin_count" == "2" ]] || die 'the restored backup does not contain both validated administrators'
+  restored_snapshot="$(snapshot_database "$replacement_stage")"
+  restored_snapshot_sha256="$(printf '%s\n' "$restored_snapshot" | sha256sum | awk '{print $1}')"
+  drop_database "$replacement_stage"
+  replacement_stage=""
+  printf 'Restore test completed in an isolated temporary database and removed it.\n'
+  printf 'Archive SHA-256: %s\n' "$(sha256sum "$archive" | awk '{print $1}')"
+  printf 'Restored snapshot SHA-256: %s\n' "$restored_snapshot_sha256"
 }
 
 snapshot_database() {
@@ -540,7 +614,7 @@ parse_target_option() {
   printf '%s' "$2"
 }
 
-for required_command in awk date docker find flock install mktemp sha256sum stat sync wc; do
+for required_command in awk basename date dirname docker find flock id install mktemp realpath sha256sum stat sync wc; do
   command -v "$required_command" >/dev/null 2>&1 \
     || die "$required_command is required on the Raspberry Pi"
 done
@@ -590,6 +664,18 @@ case "$command_name" in
     target="$4"
     confirm_target "$target"
     create_backup "$target" "$label"
+    ;;
+  daily-backup)
+    target="$(parse_target_option "$@")"
+    daily_backup "$target"
+    ;;
+  restore-test)
+    [[ "${1:-}" == "--confirm-target" && -n "${2:-}" && \
+      "${3:-}" == "--archive" && -n "${4:-}" && $# -eq 4 ]] || {
+      usage >&2
+      exit 2
+    }
+    restore_test "$2" "$4"
     ;;
   replace-from-stdin)
     [[ "${1:-}" == "--confirm-target" && -n "${2:-}" && \
