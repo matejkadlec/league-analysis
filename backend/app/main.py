@@ -5,10 +5,13 @@ from contextlib import asynccontextmanager
 from typing import Any, Dict
 
 import structlog
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
+from sqlalchemy import text
+from starlette import status
+from starlette.responses import JSONResponse
 from structlog import contextvars as structlog_contextvars
 
 from app.core import get_global_settings, get_riot_api_key
@@ -188,6 +191,26 @@ async def health_check() -> Dict[str, Any]:
         "version": "0.1.0",
         "debug": settings.debug,
     }
+
+
+@app.get("/health/ready", tags=["health"], response_model=None)
+async def readiness_check(response: Response) -> Dict[str, str] | JSONResponse:
+    """Report readiness only after a database round trip succeeds."""
+    try:
+        async with db_manager.get_session() as db:
+            await db.execute(text("SELECT 1"))
+    except Exception as error:
+        logger.warning(
+            "Database readiness probe failed",
+            error_type=type(error).__name__,
+        )
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={"status": "unavailable", "database": "unavailable"},
+        )
+
+    response.status_code = status.HTTP_200_OK
+    return {"status": "ready", "database": "ready"}
 
 
 if __name__ == "__main__":

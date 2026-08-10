@@ -98,6 +98,9 @@ details. Keep it synchronized with job changes.
 - Reset persisted pause flags because pause is runtime-only.
 - Mark `RUNNING`/`PAUSED` executions left by an ungraceful shutdown as
   `CANCELLED`.
+- Stop APScheduler with `wait=False` during process shutdown. Deployment must
+  never drain or wait for long-running Riot executions; startup recovery owns
+  the interrupted persisted state.
 - Detect never-run or overdue active jobs, run them at startup, and then keep
   their configured schedules.
 - Service/base orphan cleanup may mark a database execution `FAILED` when no

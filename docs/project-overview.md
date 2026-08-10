@@ -22,6 +22,7 @@ application, analysis, scheduler, and authentication state.
 ```text
 league-analysis/
 ├── backend/
+│   ├── Dockerfile
 │   ├── app/
 │   │   ├── main.py
 │   │   ├── core/
@@ -40,6 +41,7 @@ league-analysis/
 │   ├── pyproject.toml
 │   └── uv.lock
 ├── frontend/
+│   ├── Dockerfile
 │   ├── app/
 │   ├── components/
 │   ├── features/
@@ -50,6 +52,11 @@ league-analysis/
 │   ├── pre-commit
 │   └── post-checkout
 ├── docs/
+├── deploy/
+│   ├── container-qa.sh
+│   ├── production-deploy.sh
+│   └── production.env.example
+├── compose.production.yml
 ├── logs/
 ├── scripts/
 │   ├── guard-git-worktree-test.sh
@@ -119,6 +126,7 @@ Versions are pinned or constrained by `backend/pyproject.toml`,
 | Frontend data/forms | TanStack Query 5, Zod 4, Axios, React Hook Form |
 | Frontend tooling | Node 26.5.1, npm 12.0.2 with `package-lock.json`, ESLint 10.8.0 with `@eslint/compat` for Next's legacy plugins, TypeScript 7.0.2 compiler, Vitest 4.1.10 with Testing Library and jsdom, Playwright 1.62.1 |
 | Database | PostgreSQL 18.4, asyncpg for application I/O, psycopg2 for APScheduler |
+| Production packaging | Docker Compose v2, Python/Node production images, PostgreSQL 18.4 |
 | External data | Riot Games API |
 
 Use `uv` for backend dependencies and commands. Use npm for frontend
@@ -177,17 +185,25 @@ other local process you need to keep running.
 
 Changing `.env` requires a restart.
 
-## Production Deployment Boundary
+Docker is not a prerequisite for this native workflow. Explicit container
+packaging/health validation uses `./deploy/container-qa.sh`; it creates an
+isolated disposable stack and never reads the root `.env` or native database.
 
-Production Docker packaging and VPS operating procedures are not yet present in
-this repository. LGA-10 owns the reviewed images, Compose/deployment wiring,
-migration ordering, health checks, network hardening, and production
-troubleshooting guidance; LGA-16 owns the backup, restore, rollback, and
-incident runbook. Until those tickets are complete, `./run.sh` remains the only
-supported application start command documented here for local development. It
-stops the selected local listeners, verifies PostgreSQL, applies reviewed
-Alembic revisions through the locked migration runner, and starts the backend
-only after migration succeeds.
+## Production Deployment
+
+The repository owns production Dockerfiles, `compose.production.yml`, the
+locked deployment script, and the `pi5ram8` GitHub Actions workflow. The stack
+exposes the Next.js frontend on host port `8097`, FastAPI on `8098`, and keeps
+PostgreSQL 18.4 internal-only. A one-shot migration service completes before
+backend startup; backend readiness includes a database round trip, and
+frontend startup waits for that readiness.
+
+Production deployment consumes a private mode-`0600` host environment under
+`$HOME/.local/share/league-analysis`; no complete runtime environment or secret
+belongs in this repository. Deployment is serialized and bounded by migration
+and health, but never drains or waits for normal application background jobs.
+See [`deployment.md`](deployment.md) for the complete topology, explicit local
+container QA, host bootstrap, diagnostics, and LGA-16 rollback boundary.
 
 ## Git hooks and worktrees
 

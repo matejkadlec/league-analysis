@@ -82,6 +82,7 @@ Non-negotiable summary:
 | Documentation map and ownership | [`docs/README.md`](docs/README.md) |
 | Project structure, stack, and commands | [`docs/project-overview.md`](docs/project-overview.md) |
 | Quality gates and GitHub Actions | [`docs/quality-checks.md`](docs/quality-checks.md) |
+| Production containers and Pi deployment | [`docs/deployment.md`](docs/deployment.md) |
 | AI/Jira/GitHub development lifecycle | [`docs/ai-development-flow.md`](docs/ai-development-flow.md) |
 | GitHub branch governance | [`docs/github-governance.md`](docs/github-governance.md) |
 | Backend conventions | [`backend/AGENTS.md`](backend/AGENTS.md) |
@@ -120,6 +121,11 @@ mode `600`. See [`docs/project-overview.md`](docs/project-overview.md#git-hooks-
 tail -50 logs/backend.log
 tail -50 logs/frontend.log
 ```
+
+`./deploy/container-qa.sh` is the explicit Docker packaging/health path. It is
+never part of `./run.sh`, uses isolated names/ports/networks/volume, and removes
+its disposable stack. Production deployment is repository-owned and targets
+the `pi5ram8` runner; see [`docs/deployment.md`](docs/deployment.md).
 
 Each `run.sh` invocation creates `logs/` before redirecting backend or frontend
 output, so fresh checkouts do not require manual log-directory setup.

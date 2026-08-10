@@ -19,11 +19,10 @@ guidance is indexed in [`docs/README.md`](docs/README.md).
 | External integration | Riot Games API |
 | Tooling | Node 26.5.1, npm 12.0.2, uv 0.12.1, GitHub Actions |
 
-The supported local development flow is non-Docker. Docker packaging and
-production deployment guidance are intentionally deferred to
-[LGA-10](https://envelopment.atlassian.net/browse/LGA-10); see the maintained
-[production deployment boundary](docs/project-overview.md#production-deployment-boundary)
-and do not substitute container commands for the local workflow below.
+The supported local development flow is non-Docker. Production packaging and
+the pi5ram8 deployment are repository-owned but remain an explicit, separate
+path; see [the deployment guide](docs/deployment.md) and do not substitute
+container commands for the local workflow below.
 
 ## Prerequisites
 
@@ -115,12 +114,17 @@ tooling regressions. GitHub Actions also runs the maintained live dependency
 comparison; local success is not GitHub check success. See
 [`docs/quality-checks.md`](docs/quality-checks.md) for the current boundary.
 
+When Docker Compose v2 is intentionally available, the separate
+`./deploy/container-qa.sh` command builds and health-checks a disposable stack
+without reading the native `.env` or database.
+
 ## Further reading
 
 - [Project overview and local operation](docs/project-overview.md)
 - [Database and migration workflow](docs/database.md)
 - [Riot API integration](docs/riot-api.md)
 - [Quality checks and CI](docs/quality-checks.md)
+- [Production containers and pi5ram8 deployment](docs/deployment.md)
 - [AI/Jira/GitHub delivery flow](docs/ai-development-flow.md)
 
 ## License

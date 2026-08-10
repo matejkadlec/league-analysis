@@ -43,6 +43,15 @@ When the backend starts, the scheduler automatically:
 
 This ensures the system automatically recovers from downtime without manual intervention.
 
+Backend process shutdown stops APScheduler with `wait=False`: it stops future
+dispatches but never drains Match Fetcher, Player Updater, tests, or other
+long-running Riot work. A production restart therefore has a bounded shutdown
+instead of waiting through provider rate-limit windows. The next startup uses
+the recovery step above to mark interrupted `RUNNING`/`PAUSED` regular
+executions `CANCELLED`; Matchmaking Analysis retains its separate persisted
+cancellation/retry lifecycle. Deployment readiness never requires an idle job
+queue.
+
 ### Access Control
 
 - `/api/v1/jobs` API endpoints are **admin-only** (`is_admin=true`)

@@ -166,6 +166,13 @@ Install the matching browser before running the separate Playwright suite:
 npx playwright install chromium
 ```
 
+The production image is defined by `Dockerfile`, installs with `npm ci`, builds
+the Next standalone output, and runs `server.js` as non-root UID/GID 10001.
+`NEXT_PUBLIC_API_URL` is the browser-visible backend origin baked at build
+time; `API_INTERNAL_URL` is the server-side rewrite destination and points to
+the private Compose backend service. Normal `npm run dev` and repository
+`./run.sh` keep their localhost defaults and never require Docker.
+
 ## Related Docs
 
 - [app/AGENTS.md](app/AGENTS.md) - Page patterns

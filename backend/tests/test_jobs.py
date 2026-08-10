@@ -11,6 +11,7 @@ from app.core.riot_api.errors import (
     ForbiddenError,
     RateLimitError,
 )
+from app.features.jobs import scheduler as scheduler_module
 from app.features.jobs.base import BaseJob
 from app.features.jobs.error_handling import (
     RateLimitSignal,
@@ -36,6 +37,26 @@ from app.features.jobs.queue_config import (
 )
 from app.features.jobs.schemas import JobConfigurationUpdate
 from app.features.jobs.service import JobService
+
+
+@pytest.mark.asyncio
+async def test_scheduler_shutdown_does_not_drain_running_jobs(monkeypatch) -> None:
+    """Deploy shutdown must not wait for an ordinary long-running job."""
+
+    class SchedulerDouble:
+        def __init__(self) -> None:
+            self.wait_values: list[bool] = []
+
+        def shutdown(self, *, wait: bool) -> None:
+            self.wait_values.append(wait)
+
+    scheduler = SchedulerDouble()
+    monkeypatch.setattr(scheduler_module, "_scheduler", scheduler)
+
+    await scheduler_module.shutdown_scheduler()
+
+    assert scheduler.wait_values == [False]
+    assert scheduler_module.get_scheduler() is None
 
 
 def test_queue_configuration_defaults_and_preserves_known_order() -> None:

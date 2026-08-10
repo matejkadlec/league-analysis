@@ -1,6 +1,8 @@
 import type { NextConfig } from "next";
 
-const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const publicApiUrl =
+  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const internalApiUrl = process.env.API_INTERNAL_URL || publicApiUrl;
 
 const nextConfig: NextConfig = {
   output: "standalone",
@@ -21,7 +23,7 @@ const nextConfig: NextConfig = {
     return [
       {
         source: "/api/:path*",
-        destination: `${apiUrl}/api/:path*`,
+        destination: `${internalApiUrl}/api/:path*`,
       },
     ];
   },
