@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.18
-FROM node:26.5.1-bookworm-slim AS dependencies
+FROM node:26.7.0-bookworm-slim AS dependencies
 
 ENV NEXT_TELEMETRY_DISABLED=1 \
     NPM_CONFIG_AUDIT=false \
@@ -28,7 +28,7 @@ RUN test -n "$NEXT_PUBLIC_API_URL" \
     && test -n "$NEXT_PUBLIC_SITE_URL" \
     && npm run build
 
-FROM node:26.5.1-bookworm-slim AS runtime
+FROM node:26.7.0-bookworm-slim AS runtime
 
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
