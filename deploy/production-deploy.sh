@@ -73,8 +73,20 @@ if [[ "$deployment_root" != /* || "$deployment_root" == "/" || "$deployment_root
   exit 1
 fi
 environment_file="$deployment_root/production.env"
-if [[ -L "$environment_file" || ! -f "$environment_file" ]]; then
-  printf 'The private production environment must be a regular non-symlink file.\n' >&2
+if [[ -L "$environment_file" ]]; then
+  printf 'The private production environment must not be a symlink: %s\n' \
+    "$environment_file" >&2
+  exit 1
+fi
+if [[ ! -e "$environment_file" ]]; then
+  printf 'The private production environment is missing: %s\n' \
+    "$environment_file" >&2
+  printf 'Provision it locally from deploy/production.env.example without exposing its values.\n' >&2
+  exit 1
+fi
+if [[ ! -f "$environment_file" ]]; then
+  printf 'The private production environment must be a regular file: %s\n' \
+    "$environment_file" >&2
   exit 1
 fi
 if [[ "$(stat -c '%a' "$environment_file")" != "600" ]]; then

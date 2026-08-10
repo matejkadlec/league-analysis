@@ -97,11 +97,11 @@ Jira.
 
 ## Deployment flow
 
-`.github/workflows/deploy.yml` runs only for a push to `master` or a manual run
-whose selected ref is `master`. Its pull-request trigger intentionally skips
-the deployment job while still validating workflow syntax and policy. The
-workflow checks out the exact event SHA without persisted credentials and
-calls the repository-owned script:
+The `Deploy to Raspberry Pi` workflow in `.github/workflows/deploy.yml` runs
+only for a push to `master` or a manual run whose selected ref is `master`. Its
+pull-request trigger intentionally skips the deployment job while still
+validating workflow syntax and policy. The workflow checks out the exact event
+SHA without persisted credentials and calls the repository-owned script:
 
 ```bash
 ./deploy/production-deploy.sh \
