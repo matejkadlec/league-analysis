@@ -41,12 +41,24 @@ the native local database.
 [`compose.production.yml`](../compose.production.yml) is the sole portable
 application-stack definition:
 
-| Service | Container | Runtime | Host exposure |
-| --- | --- | --- | --- |
-| `frontend` | `league-analysis-frontend` | Next.js standalone production server on `3000` | `8097` |
-| `backend` | `league-analysis-backend` | One production Uvicorn worker on `8000` | `8098` |
-| `postgres` | `league-analysis-postgres` | PostgreSQL `18.4` | none |
-| `migrate` | one-shot, no fixed name | locked `migrate.py upgrade head` using the backend image | none |
+The Pi hosts multiple projects. Never act on an arbitrary container merely
+because it has a generic frontend, backend, or PostgreSQL role. Resolve the
+exact resource below and verify both its `com.docker.compose.project` label is
+`league-analysis` and its `com.docker.compose.service` label matches the
+Compose service before an operational change.
+
+| Compose service | Container name | Image | Runtime | Host exposure |
+| --- | --- | --- | --- | --- |
+| `frontend` | `league-analysis-frontend` | `league-analysis-frontend:<commit>` | Next.js standalone production server on `3000` | `8097` |
+| `backend` | `league-analysis-backend` | `league-analysis-backend:<commit>` | One production Uvicorn worker on `8000` | `8098` |
+| `postgres` | `league-analysis-postgres` | `postgres:18.4-bookworm` | PostgreSQL `18.4` | none; internal-only |
+| `migrate` | one-shot, no fixed name | `league-analysis-backend:<commit>` | locked `migrate.py upgrade head` | none |
+
+Compose service names, container names, and image names are distinct
+identities. In particular, `postgres` is the Compose service while
+`league-analysis-postgres` is its fixed container name, and the one-shot
+`migrate` service deliberately has no fixed container name. Do not substitute
+resources from another Pi project.
 
 The frontend and backend run as UID/GID `10001`, with a read-only root
 filesystem, `no-new-privileges`, all Linux capabilities dropped, bounded PIDs,
@@ -138,6 +150,7 @@ Secret-safe runtime checks on `pi5ram8`:
 
 ```bash
 ssh pi5ram8 'docker ps --filter name=league-analysis --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"'
+ssh pi5ram8 'docker inspect --format "{{.Name}} project={{index .Config.Labels \"com.docker.compose.project\"}} service={{index .Config.Labels \"com.docker.compose.service\"}} image={{.Config.Image}}" league-analysis-frontend league-analysis-backend league-analysis-postgres'
 ssh pi5ram8 'curl --fail --silent http://127.0.0.1:8098/health/ready'
 ssh pi5ram8 'curl --fail --silent http://127.0.0.1:8097/ >/dev/null'
 ssh pi5ram8 'docker inspect --format "{{json .HostConfig.PortBindings}}" league-analysis-postgres'
