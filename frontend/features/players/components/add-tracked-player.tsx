@@ -34,7 +34,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { addTrackedPlayer, searchPlayerSuggestions, trackPlayer } from "@/lib/core/api";
+import {
+  addTrackedPlayer,
+  searchPlayerSuggestions,
+  trackPlayer,
+} from "@/lib/core/api";
 import { useToast } from "@/lib/core/hooks";
 import { Player, PlayerSchema } from "@/lib/core/schemas";
 import { useAuth } from "@/features/auth";
@@ -75,9 +79,7 @@ interface AddTrackedPlayerFormValues {
 function displayRiotId(player: Player): string {
   const gameName = player.game_name || "Unknown player";
 
-  return player.tag_line
-    ? `${gameName}#${player.tag_line}`
-    : gameName;
+  return player.tag_line ? `${gameName}#${player.tag_line}` : gameName;
 }
 
 function isExactRiotIdMatch(
@@ -175,9 +177,7 @@ export function AddTrackedPlayer() {
     }
 
     return suggestions.find((suggestion) =>
-      (suggestion.game_name ?? "")
-        .toLocaleLowerCase()
-        .includes(normalizedName),
+      (suggestion.game_name ?? "").toLocaleLowerCase().includes(normalizedName),
     );
   }, [parsedRiotId, searchValue, selectedSuggestion, suggestions]);
 
@@ -263,6 +263,7 @@ export function AddTrackedPlayer() {
     onSuccess: (player) => {
       const userId = user?.id;
       queryClient.invalidateQueries({ queryKey: ["tracked-players", userId] });
+      queryClient.invalidateQueries({ queryKey: ["player-context", userId] });
       queryClient.invalidateQueries({
         queryKey: ["tracking-status", userId, player.puuid],
       });
@@ -278,7 +279,9 @@ export function AddTrackedPlayer() {
     },
     onError: (error) => {
       if (!(error instanceof PlayerTrackingError)) {
-        setTrackingErrorMessage("Failed to add tracked player. Please try again.");
+        setTrackingErrorMessage(
+          "Failed to add tracked player. Please try again.",
+        );
         return;
       }
 
@@ -330,7 +333,10 @@ export function AddTrackedPlayer() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Player Name</FormLabel>
-                    <Popover open={showSuggestions} onOpenChange={setShowSuggestions}>
+                    <Popover
+                      open={showSuggestions}
+                      onOpenChange={setShowSuggestions}
+                    >
                       <PopoverTrigger asChild>
                         <div className="relative">
                           <FormControl>
@@ -357,13 +363,14 @@ export function AddTrackedPlayer() {
                               onKeyDown={handleKeyDown}
                             />
                           </FormControl>
-                          {suggestionsLoading && searchValue.length >= MIN_SEARCH_LENGTH && (
-                            <Loader2
-                              className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground"
-                              aria-label="Loading suggestions"
-                              role="status"
-                            />
-                          )}
+                          {suggestionsLoading &&
+                            searchValue.length >= MIN_SEARCH_LENGTH && (
+                              <Loader2
+                                className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground"
+                                aria-label="Loading suggestions"
+                                role="status"
+                              />
+                            )}
                         </div>
                       </PopoverTrigger>
                       <PopoverContent
@@ -400,7 +407,8 @@ export function AddTrackedPlayer() {
                     </p>
                     {suggestionToTrack && (
                       <p className="text-xs text-muted-foreground">
-                        Tracking saved player {displayRiotId(suggestionToTrack)}.
+                        Tracking saved player {displayRiotId(suggestionToTrack)}
+                        .
                       </p>
                     )}
                   </FormItem>

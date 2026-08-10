@@ -81,6 +81,12 @@ contains shared API, schema, validation, and utility code.
 TanStack Query owns server-data fetching and cache state. Zod validates API
 payloads at the frontend boundary.
 
+The authenticated player provider owns the normal current-player context.
+My Profile and Playstyle Analysis use an explicit `?puuid=` as the tab-local
+authority and the account's saved current PUUID only as the default for new
+navigation. The sidebar is the canonical search, quick-switch, and tracked-list
+management surface; `/tracked-players` is compatibility-only.
+
 The sign-in flow keeps its password-visibility control accessible and preserves
 the entered value while it toggles. It bounds the browser login request and maps
 trusted authentication codes, including inactive accounts, and HTTP status

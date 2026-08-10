@@ -4,34 +4,11 @@ import Image from "next/image";
 import { LaneStatsResponse } from "@/lib/core/schemas";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Map, Clock } from "lucide-react";
+import { useRelativeTime } from "@/lib/core/use-relative-time";
 
 interface RoleStatsCardProps {
   stats: LaneStatsResponse;
   lastUpdated?: string | null;
-}
-
-// Format relative time
-function formatRelativeTime(dateString: string | null | undefined): string {
-  if (!dateString) return "Never";
-
-  const now = new Date();
-  const date = new Date(dateString);
-  const diffMs = now.getTime() - date.getTime();
-  const diffSecs = Math.floor(diffMs / 1000);
-  const diffMins = Math.floor(diffSecs / 60);
-  const diffHours = Math.floor(diffMins / 60);
-  const diffDays = Math.floor(diffHours / 24);
-
-  if (diffSecs < 60) return "just now";
-  if (diffMins < 60) return `${diffMins} minute${diffMins > 1 ? "s" : ""} ago`;
-  if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? "s" : ""} ago`;
-  if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? "s" : ""} ago`;
-
-  return new Date(dateString).toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
 }
 
 // Helper function to get win rate color
@@ -83,6 +60,7 @@ function getWinRateBarColor(winRate: number): string {
 }
 
 export function RoleStatsCard({ stats, lastUpdated }: RoleStatsCardProps) {
+  const relativeUpdatedAt = useRelativeTime(lastUpdated);
   if (!stats.lanes || stats.lanes.length === 0) {
     return (
       <Card>
@@ -117,7 +95,7 @@ export function RoleStatsCard({ stats, lastUpdated }: RoleStatsCardProps) {
         {lastUpdated && (
           <div className="flex items-center gap-1 text-xs text-muted-foreground mt-2">
             <Clock className="h-3 w-3" />
-            <span>Updated {formatRelativeTime(lastUpdated)}</span>
+            <span>Updated {relativeUpdatedAt}</span>
           </div>
         )}
       </CardHeader>

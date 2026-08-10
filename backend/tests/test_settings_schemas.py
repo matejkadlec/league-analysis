@@ -20,22 +20,13 @@ def test_setting_update_rejects_empty_sensitive_value() -> None:
 def test_user_settings_accepts_bounded_values() -> None:
     update = UserSettingsUpdate(
         theme=ThemeEnum.DARK,
-        saved_playstyle_puuid="p" * 78,
         default_platform="eun1",
     )
-    assert update.saved_playstyle_puuid == "p" * 78
     assert update.default_platform == "eun1"
+    assert "saved_playstyle_puuid" not in UserSettingsUpdate.model_fields
 
 
-@pytest.mark.parametrize(
-    ("field", "value"),
-    [
-        ("saved_playstyle_puuid", "p" * 79),
-        ("saved_matchmaking_puuid", "p" * 79),
-        ("saved_tracked_puuid", "p" * 79),
-        ("default_platform", "eun11"),
-    ],
-)
+@pytest.mark.parametrize(("field", "value"), [("default_platform", "eun11")])
 def test_user_settings_rejects_oversized_values(field: str, value: str) -> None:
     with pytest.raises(ValidationError):
         UserSettingsUpdate(**{field: value})

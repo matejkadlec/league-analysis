@@ -42,6 +42,7 @@ LOCAL_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
 
 # Delete dependent rows first so every removal is explicit and reviewable.
 RIOT_DATA_TABLES = (
+    ("jobs", "player_sync_runs"),
     ("auth", "user_tracked_players"),
     ("core", "match_timelines"),
     ("core", "match_participants"),
@@ -669,7 +670,15 @@ def resume_riot_writers(connection: Connection) -> int:
 
 def delete_riot_data(connection: Connection) -> dict[str, int]:
     """Delete every reviewed Riot-derived table and clear per-user Riot links."""
-    deleted = {}
+    deleted = {
+        "auth.user_settings_current_player": connection.execute(
+            text(
+                "UPDATE auth.user_settings SET current_player_puuid = NULL, "
+                "updated_at = CURRENT_TIMESTAMP "
+                "WHERE current_player_puuid IS NOT NULL"
+            )
+        ).rowcount
+    }
     for schema, table in RIOT_DATA_TABLES:
         deleted[f"{schema}.{table}"] = connection.execute(
             text(f'DELETE FROM "{schema}"."{table}"')
@@ -678,18 +687,6 @@ def delete_riot_data(connection: Connection) -> dict[str, int]:
         text(
             "UPDATE auth.users SET riot_account_connected = FALSE, puuid = NULL "
             "WHERE riot_account_connected IS TRUE OR puuid IS NOT NULL"
-        )
-    ).rowcount
-    deleted["auth.user_settings_saved_puuids"] = connection.execute(
-        text(
-            "UPDATE auth.user_settings SET "
-            "save_playstyle_url = FALSE, saved_playstyle_puuid = NULL, "
-            "save_matchmaking_url = FALSE, saved_matchmaking_puuid = NULL, "
-            "save_tracked_url = FALSE, saved_tracked_puuid = NULL, "
-            "updated_at = CURRENT_TIMESTAMP "
-            "WHERE save_playstyle_url IS TRUE OR saved_playstyle_puuid IS NOT NULL "
-            "OR save_matchmaking_url IS TRUE OR saved_matchmaking_puuid IS NOT NULL "
-            "OR save_tracked_url IS TRUE OR saved_tracked_puuid IS NOT NULL"
         )
     ).rowcount
     return deleted

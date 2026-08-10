@@ -29,6 +29,7 @@ details. Keep it synchronized with job changes.
 | `error_handling.py` | Riot error to job-signal translation |
 | `log_capture.py` | Structured execution-log capture |
 | `maintenance.py` | Persistent local Riot-writer maintenance interlock |
+| `player_sync.py` | Persisted explicit per-PUUID Match Fetcher + Player Updater orchestration |
 | `implementations/` | Match Fetcher, Player Updater, and non-writing test runners |
 
 ## Job and Execution Model
@@ -47,6 +48,13 @@ details. Keep it synchronized with job changes.
 ## Implementation Boundaries
 
 - Jobs process the union of PUUIDs in `auth.user_tracked_players`.
+- Explicit Player Card updates pass an exact `target_puuids` allowlist to both
+  writer implementations and persist one active `PlayerSyncRun` per PUUID.
+  Complete the application lifecycle only when both executions succeed without
+  warnings; keep failed, cancelled, and rate-limited states honest.
+- Advance `match_synced_at`, `league_synced_at`, and `profile_synced_at` only
+  after the owning provider check succeeds. A clean zero-change check is fresh;
+  a partial or failed check is not.
 - Use a fresh database session for a job execution.
 - Call `check_control_state()` at safe loop boundaries so pause and graceful
   stop remain responsive.

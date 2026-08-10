@@ -1,42 +1,55 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useAuth, ProtectedRoute } from "@/features/auth";
+import { ProtectedRoute } from "@/features/auth";
 import {
-  PlayerSchema,
   ChampionStatsResponseSchema,
   LaneStatsResponseSchema,
 } from "@/lib/core/schemas";
 import { validatedGet } from "@/lib/core/api";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Link2 } from "lucide-react";
-import { PlayerCard } from "@/features/players";
+import { UserRoundSearch } from "lucide-react";
+import {
+  PlayerCard,
+  playerQueryKey,
+  playerQueryOptions,
+  usePlayerContext,
+} from "@/features/players";
 import { MatchHistory } from "@/features/matches";
 import {
   ChampionStatsCard,
   RoleStatsCard,
   RecentPerformanceCard,
-  ConnectRiotAccountDialog,
 } from "@/features/profile";
 import {
   PlayerCardSkeleton,
   MatchHistorySkeleton,
 } from "@/components/loading-skeleton";
+import {
+  SectionQuickNavigation,
+  type SectionQuickNavigationItem,
+} from "@/components/section-quick-navigation";
 
-function ConnectRiotAccountCard() {
+const PROFILE_NAV_ITEMS: SectionQuickNavigationItem[] = [
+  { label: "Player Summary", anchor: "#player-summary" },
+  { label: "Recent Performance", anchor: "#recent-performance" },
+  { label: "Top Champions", anchor: "#top-champions" },
+  { label: "Role Performance", anchor: "#role-performance" },
+  { label: "Match History", anchor: "#match-history" },
+];
+
+function SelectPlayerCard() {
   return (
     <Card className="w-full" style={{ minHeight: "300px" }}>
       <CardContent className="flex flex-col items-center justify-center h-full py-16">
         <div className="text-center space-y-4">
-          <Link2 className="h-16 w-16 mx-auto text-muted-foreground" />
-          <h3 className="text-xl font-semibold">Connect Your Riot Account</h3>
+          <UserRoundSearch className="h-16 w-16 mx-auto text-muted-foreground" />
+          <h3 className="text-xl font-semibold">Select a player</h3>
           <p className="text-muted-foreground max-w-md">
-            To view content on this page, connect a Riot account first. This
-            will allow you to see your match history, statistics, and personal
-            analyses.
+            Search from the sidebar or choose one of your recent tracked players
+            to open their dashboard.
           </p>
-          <ConnectRiotAccountDialog />
         </div>
       </CardContent>
     </Card>
@@ -48,13 +61,10 @@ function ProfileContent({ puuid }: { puuid: string }) {
 
   // Fetch player data
   const {
-    data: playerResult,
+    data: player,
     isLoading: isPlayerLoading,
     error: playerError,
-  } = useQuery({
-    queryKey: ["player", puuid],
-    queryFn: () => validatedGet(PlayerSchema, `/players/${puuid}`),
-  });
+  } = useQuery(playerQueryOptions(puuid));
 
   // Fetch champion stats
   const { data: championStatsResult, isLoading: isChampionLoading } = useQuery({
@@ -80,7 +90,6 @@ function ProfileContent({ puuid }: { puuid: string }) {
       ),
   });
 
-  const player = playerResult?.success ? playerResult.data : null;
   const championStats = championStatsResult?.success
     ? championStatsResult.data
     : null;
@@ -88,7 +97,7 @@ function ProfileContent({ puuid }: { puuid: string }) {
 
   // Callback to refresh all profile data - passed to PlayerCard
   const handleRefreshAll = () => {
-    queryClient.invalidateQueries({ queryKey: ["player", puuid] });
+    queryClient.invalidateQueries({ queryKey: playerQueryKey(puuid) });
     queryClient.invalidateQueries({ queryKey: ["champion-stats", puuid] });
     queryClient.invalidateQueries({ queryKey: ["lane-stats", puuid] });
     queryClient.invalidateQueries({ queryKey: ["recent-stats", puuid] });
@@ -124,7 +133,7 @@ function ProfileContent({ puuid }: { puuid: string }) {
         {player && (
           <RecentPerformanceCard
             puuid={puuid}
-            lastUpdated={player.updated_at}
+            lastUpdated={player.match_synced_at}
           />
         )}
       </div>
@@ -146,7 +155,7 @@ function ProfileContent({ puuid }: { puuid: string }) {
         ) : championStats ? (
           <ChampionStatsCard
             stats={championStats}
-            lastUpdated={player?.updated_at}
+            lastUpdated={player?.match_synced_at}
             dataSourceKey={`${puuid}:queue:420`}
           />
         ) : null}
@@ -164,7 +173,10 @@ function ProfileContent({ puuid }: { puuid: string }) {
             </CardContent>
           </Card>
         ) : laneStats ? (
-          <RoleStatsCard stats={laneStats} lastUpdated={player?.updated_at} />
+          <RoleStatsCard
+            stats={laneStats}
+            lastUpdated={player?.match_synced_at}
+          />
         ) : null}
       </div>
 
@@ -172,22 +184,18 @@ function ProfileContent({ puuid }: { puuid: string }) {
       {isPlayerLoading ? (
         <MatchHistorySkeleton />
       ) : player ? (
-        <MatchHistory
-          puuid={puuid}
-          lastUpdated={player.updated_at}
-        />
+        <MatchHistory puuid={puuid} lastUpdated={player.match_synced_at} />
       ) : null}
     </div>
   );
 }
 
 export default function MyProfilePage() {
-  const { user, isLoading } = useAuth();
-
-  const hasRiotAccount = user?.riot_account_connected && user?.puuid;
+  const { currentPlayer, isLoading } = usePlayerContext();
 
   return (
     <ProtectedRoute>
+      {currentPlayer && <SectionQuickNavigation items={PROFILE_NAV_ITEMS} />}
       <div className="container mx-auto px-4 py-8">
         <div className="space-y-6">
           {/* Header Card - Full Width */}
@@ -202,7 +210,7 @@ export default function MyProfilePage() {
             </p>
           </Card>
 
-          {/* Content - either connect card or profile content */}
+          {/* Content follows the URL-scoped global player context. */}
           {isLoading ? (
             <div className="space-y-6">
               <PlayerCardSkeleton />
@@ -212,10 +220,10 @@ export default function MyProfilePage() {
               </div>
               <MatchHistorySkeleton />
             </div>
-          ) : hasRiotAccount ? (
-            <ProfileContent puuid={user.puuid!} />
+          ) : currentPlayer ? (
+            <ProfileContent puuid={currentPlayer.puuid} />
           ) : (
-            <ConnectRiotAccountCard />
+            <SelectPlayerCard />
           )}
         </div>
       </div>

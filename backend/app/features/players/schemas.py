@@ -1,7 +1,7 @@
 """Pydantic schemas for Player model."""
 
 from datetime import datetime
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -56,6 +56,15 @@ class PlayerResponse(PlayerBase):
     last_matchmaking_analysis: Optional[datetime] = Field(
         None, description="Time of last matchmaking analysis"
     )
+    profile_synced_at: Optional[datetime] = Field(
+        None, description="Last successful profile identity check"
+    )
+    league_synced_at: Optional[datetime] = Field(
+        None, description="Last successful ranked-data check"
+    )
+    match_synced_at: Optional[datetime] = Field(
+        None, description="Last complete successful match-history check"
+    )
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -68,5 +77,43 @@ class PlayerListResponse(BaseModel):
     page: int
     size: int
     pages: int
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CurrentPlayerUpdate(BaseModel):
+    """Set or clear the authenticated user's normal current player."""
+
+    puuid: Optional[str] = Field(None, min_length=78, max_length=78)
+
+
+class PlayerContextResponse(BaseModel):
+    """Per-user navigation context over shared canonical player records."""
+
+    current_player: Optional[PlayerResponse] = None
+    tracked_players: list[PlayerResponse]
+
+
+class PlayerSyncRunResponse(BaseModel):
+    """Authoritative lifecycle for an explicit current-player update."""
+
+    id: int
+    puuid: str
+    status: Literal[
+        "pending",
+        "running",
+        "completed",
+        "failed",
+        "cancelled",
+        "rate_limited",
+    ]
+    match_execution_id: Optional[int] = None
+    profile_execution_id: Optional[int] = None
+    error_code: Optional[str] = None
+    error_message: Optional[str] = None
+    created_at: datetime
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)

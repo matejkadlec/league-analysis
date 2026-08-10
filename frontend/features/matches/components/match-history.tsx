@@ -50,34 +50,11 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
+import { useRelativeTime } from "@/lib/core/use-relative-time";
 
 interface MatchHistoryProps {
   puuid: string;
   lastUpdated?: string | null;
-}
-
-// Format relative time
-function formatRelativeTime(dateString: string | null | undefined): string {
-  if (!dateString) return "Never";
-
-  const now = new Date();
-  const date = new Date(dateString);
-  const diffMs = now.getTime() - date.getTime();
-  const diffSecs = Math.floor(diffMs / 1000);
-  const diffMins = Math.floor(diffSecs / 60);
-  const diffHours = Math.floor(diffMins / 60);
-  const diffDays = Math.floor(diffHours / 24);
-
-  if (diffSecs < 60) return "just now";
-  if (diffMins < 60) return `${diffMins} minute${diffMins > 1 ? "s" : ""} ago`;
-  if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? "s" : ""} ago`;
-  if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? "s" : ""} ago`;
-
-  return new Date(dateString).toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
 }
 
 // Queue names mapping
@@ -346,12 +323,7 @@ function MatchRow({
   // To adjust turret size: change the h-[26px] w-[26px] values (26px = 20px * 1.3)
   const renderObjectiveIcon = (
     objective:
-      | "turret"
-      | "inhibitor"
-      | "dragon"
-      | "voidgrub"
-      | "herald"
-      | "baron",
+      "turret" | "inhibitor" | "dragon" | "voidgrub" | "herald" | "baron",
     count: number | null | undefined,
     title: string,
     team: "blue" | "red",
@@ -747,6 +719,7 @@ export function MatchHistory({ puuid, lastUpdated }: MatchHistoryProps) {
   const loadMoreRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
   const router = useRouter();
+  const relativeUpdatedAt = useRelativeTime(lastUpdated);
 
   const [displayCount, setDisplayCount] = useState(PAGE_SIZE);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -1069,7 +1042,7 @@ export function MatchHistory({ puuid, lastUpdated }: MatchHistoryProps) {
         {lastUpdated && (
           <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
             <Clock className="h-3 w-3" />
-            <span>Updated {formatRelativeTime(lastUpdated)}</span>
+            <span>Updated {relativeUpdatedAt}</span>
           </div>
         )}
       </CardHeader>

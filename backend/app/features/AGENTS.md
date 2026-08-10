@@ -16,12 +16,12 @@ Domain-specific business logic organized by feature. Each feature is self-contai
 | Feature                 | Description                                             |
 | ----------------------- | ------------------------------------------------------- |
 | `auth/`                 | User auth, JWT revocation blacklist, refresh rotation, lockout, adaptive CAPTCHA, self-service email updates, password changes with current-password verification, cookie-consent audit persistence, public Join Us contact flow with subject counters and IP anti-spam |
-| `players/`              | Search, tracking, rank info                             |
+| `players/`              | Shared canonical player data plus authenticated per-user current/tracked context |
 | `matches/`              | Match history, stats                                    |
 | `playstyle_analysis/`   | Playstyle analysis                                      |
 | `matchmaking_analysis/` | Persisted, idempotent, cancellable fairness-analysis lifecycle |
 | `jobs/`                 | Background tasks ([see jobs/AGENTS.md](jobs/AGENTS.md)) |
-| `settings/`             | Runtime config, API key, viewer-owned versioned card preferences |
+| `settings/`             | Runtime config, API key, remaining application settings, viewer-owned versioned card preferences |
 
 ## Standard Structure
 
@@ -76,6 +76,9 @@ async def get_player_service(
 - Features depend on `core/`, optionally on other features
 - Minimize cross-feature dependencies
 - Features expose public APIs via `__init__.py`
+- Player records, matches, and freshness timestamps remain shared by PUUID.
+  Current selection, tracked mappings, and recent ordering are always scoped by
+  authenticated application user ID. Never infer one from the other.
 - Keep routes thin, logic in services
 - Matchmaking Analysis start routes must return the persisted active run before
   Riot preflight/work begins. Preserve its explicit lifecycle states, one-active-

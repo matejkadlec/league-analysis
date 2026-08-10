@@ -16,8 +16,8 @@ from sqlalchemy import URL, create_engine, text
 
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
 PROJECT_ROOT = BACKEND_ROOT.parent
-EXPECTED_REVISION = "20260809_0005"
-EXPECTED_TABLES = 22
+EXPECTED_REVISION = "20260809_0006"
+EXPECTED_TABLES = 23
 EXPECTED_ENUMS = 6
 EXPECTED_TRIGGERS = 1
 
@@ -273,6 +273,52 @@ def validate_catalog(database: str) -> None:
                     "ORDER BY created_at"
                 )
             ).all()
+            player_freshness_column_count = connection.execute(
+                text(
+                    "SELECT COUNT(*) FROM information_schema.columns "
+                    "WHERE table_schema = 'core' AND table_name = 'players' "
+                    "AND column_name IN "
+                    "('profile_synced_at', 'league_synced_at', 'match_synced_at')"
+                )
+            ).scalar_one()
+            player_context_column_count = connection.execute(
+                text(
+                    "SELECT COUNT(*) FROM information_schema.columns "
+                    "WHERE table_schema = 'auth' "
+                    "AND ((table_name = 'user_settings' "
+                    "AND column_name = 'current_player_puuid') "
+                    "OR (table_name = 'user_tracked_players' "
+                    "AND column_name = 'last_selected_at'))"
+                )
+            ).scalar_one()
+            legacy_player_setting_count = connection.execute(
+                text(
+                    "SELECT COUNT(*) FROM information_schema.columns "
+                    "WHERE table_schema = 'auth' AND table_name = 'user_settings' "
+                    "AND column_name IN "
+                    "('save_playstyle_url', 'saved_playstyle_puuid', "
+                    "'save_matchmaking_url', 'saved_matchmaking_puuid', "
+                    "'save_tracked_url', 'saved_tracked_puuid')"
+                )
+            ).scalar_one()
+            player_sync_constraint_count = connection.execute(
+                text(
+                    "SELECT COUNT(*) FROM pg_constraint con "
+                    "JOIN pg_class cls ON cls.oid = con.conrelid "
+                    "JOIN pg_namespace ns ON ns.oid = cls.relnamespace "
+                    "WHERE ns.nspname = 'jobs' "
+                    "AND cls.relname = 'player_sync_runs' "
+                    "AND con.conname = 'ck_player_sync_runs_status_valid'"
+                )
+            ).scalar_one()
+            player_sync_active_index_count = connection.execute(
+                text(
+                    "SELECT COUNT(*) FROM pg_indexes "
+                    "WHERE schemaname = 'jobs' "
+                    "AND tablename = 'player_sync_runs' "
+                    "AND indexname = 'uq_player_sync_runs_active_puuid'"
+                )
+            ).scalar_one()
     finally:
         engine.dispose()
 
@@ -289,6 +335,11 @@ def validate_catalog(database: str) -> None:
         matchmaking_lifecycle_constraint_count,
         matchmaking_active_index_count,
         tuple(tuple(row) for row in matchmaking_lifecycle_rows),
+        player_freshness_column_count,
+        player_context_column_count,
+        legacy_player_setting_count,
+        player_sync_constraint_count,
+        player_sync_active_index_count,
     )
     expected = (
         EXPECTED_REVISION,
@@ -316,6 +367,11 @@ def validate_catalog(database: str) -> None:
                 "The analysis did not finish. Please try again.",
             ),
         ),
+        3,
+        2,
+        0,
+        1,
+        1,
     )
     if observed != expected:
         raise RuntimeError(f"Unexpected migrated schema inventory: {observed}")

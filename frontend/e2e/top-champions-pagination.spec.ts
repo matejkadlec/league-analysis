@@ -64,6 +64,48 @@ test.beforeEach(async ({ page }) => {
       return;
     }
 
+    if (path.endsWith("/players/context/current")) {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          current_player: {
+            puuid: PUUID,
+            game_name: "QA",
+            tag_line: "TEST",
+            platform: "eun1",
+            is_tracked: true,
+            analyzed_matches: 40,
+            total_matches: 40,
+            created_at: NOW,
+            updated_at: NOW,
+          },
+          tracked_players: [],
+        }),
+      });
+      return;
+    }
+
+    if (path.endsWith("/players/context")) {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          current_player: {
+            puuid: PUUID,
+            game_name: "QA",
+            tag_line: "TEST",
+            platform: "eun1",
+            is_tracked: true,
+            analyzed_matches: 40,
+            total_matches: 40,
+            created_at: NOW,
+            updated_at: NOW,
+          },
+          tracked_players: [],
+        }),
+      });
+      return;
+    }
+
     if (path.endsWith(`/matches/player/${PUUID}/champion-stats`)) {
       await route.fulfill({
         contentType: "application/json",
@@ -91,7 +133,7 @@ test.beforeEach(async ({ page }) => {
 test("navigates complete Top Champions results in fixed five-row pages", async ({
   page,
 }) => {
-  await page.goto("/my-profile");
+  await page.goto(`/my-profile?puuid=${PUUID}`);
   await page.getByRole("button", { name: "Accept necessary" }).click();
 
   const previous = page.getByRole("button", { name: "Previous champions" });

@@ -486,7 +486,6 @@ function UserSettingsCard({
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const userId = user?.id;
-  const checkboxCooldownRef = useRef(0);
 
   const { data: userSettingsResult, isLoading } = useQuery({
     queryKey: ["user-settings", userId],
@@ -522,21 +521,6 @@ function UserSettingsCard({
       });
     },
   });
-
-  const handleToggle = (
-    field: keyof UserSettingsUpdate,
-    value: boolean,
-    timestamp: number,
-  ) => {
-    const now = timestamp;
-    if (now < checkboxCooldownRef.current) {
-      toast.error("You need to wait a few seconds to repeat this action");
-      return;
-    }
-
-    checkboxCooldownRef.current = now + 2000;
-    updateMutation.mutate({ [field]: value });
-  };
 
   return (
     <Card className={cn("h-full p-6 text-left", className)}>
@@ -615,74 +599,6 @@ function UserSettingsCard({
                 </SelectItem>
               </SelectContent>
             </Select>
-          </div>
-
-          <div className="space-y-3">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <Label>Save Playstyle Analysis Search</Label>
-                <p className="text-xs text-muted-foreground">
-                  Saves searched player in Playstyle Analysis
-                </p>
-              </div>
-              <input
-                type="checkbox"
-                checked={userSettings?.save_playstyle_url || false}
-                onChange={(event) =>
-                  handleToggle(
-                    "save_playstyle_url",
-                    event.target.checked,
-                    event.timeStamp,
-                  )
-                }
-                className="mt-1 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-                disabled={updateMutation.isPending}
-              />
-            </div>
-
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <Label>Save Matchmaking Analysis Search</Label>
-                <p className="text-xs text-muted-foreground">
-                  Saves searched player in Matchmaking Analysis
-                </p>
-              </div>
-              <input
-                type="checkbox"
-                checked={userSettings?.save_matchmaking_url || false}
-                onChange={(event) =>
-                  handleToggle(
-                    "save_matchmaking_url",
-                    event.target.checked,
-                    event.timeStamp,
-                  )
-                }
-                className="mt-1 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-                disabled={updateMutation.isPending}
-              />
-            </div>
-
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <Label>Save Viewed Tracked Player</Label>
-                <p className="text-xs text-muted-foreground">
-                  Saves viewed player in Tracked Players
-                </p>
-              </div>
-              <input
-                type="checkbox"
-                checked={userSettings?.save_tracked_url || false}
-                onChange={(event) =>
-                  handleToggle(
-                    "save_tracked_url",
-                    event.target.checked,
-                    event.timeStamp,
-                  )
-                }
-                className="mt-1 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-                disabled={updateMutation.isPending}
-              />
-            </div>
           </div>
         </div>
       )}

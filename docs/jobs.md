@@ -55,6 +55,9 @@ This ensures the system automatically recovers from downtime without manual inte
   job-specific `config_json`.
 - `jobs.job_executions` stores each run's status, trigger source, execution
   type, metrics, errors, API-key error flag, and structured logs.
+- `jobs.player_sync_runs` stores the user-requested, per-PUUID Update lifecycle
+  that coordinates one targeted Match Fetcher followed by one targeted Player
+  Updater execution.
 - `jobs.apscheduler_jobs` is APScheduler's persistent job store.
 - Execution lifecycle is:
   `PENDING` -> `RUNNING` <-> `PAUSED` ->
@@ -123,7 +126,7 @@ All routes below are under `/api/v1/jobs`:
 | `POST /{job_id}/test/resume` | Resume a test run |
 | `POST /{job_id}/test/stop?force={bool}` | Stop a test run |
 | `GET /status/overview` | Scheduler, active-job, running-execution, and latest-run summary |
-| `POST /sync-player/{puuid}` | Trigger a focused player synchronization |
+| `POST /sync-player/{puuid}` | Trigger the legacy admin synchronization endpoint |
 | `GET /running-status` | Read lightweight running state |
 
 ### Test Runs
@@ -137,6 +140,30 @@ the only intended persistence.
 `suspend_regular=true` pauses the APScheduler entry for the duration and
 resumes it in cleanup. A regular manual trigger force-stops an active test run
 of the same job before the real run starts.
+
+### Explicit Per-Player Update Lifecycle
+
+The authenticated player API exposes the non-admin Player Card update flow:
+
+| Route | Responsibility |
+| --- | --- |
+| `POST /api/v1/players/{puuid}/sync` | Create or attach to the one active update for the exact PUUID |
+| `GET /api/v1/players/{puuid}/sync/active` | Rehydrate an active update after navigation or reload |
+| `GET /api/v1/players/{puuid}/sync/{sync_id}` | Poll the exact persisted lifecycle |
+
+`jobs.player_sync_runs` uses `pending` -> `running` -> `completed`, `failed`,
+`cancelled`, or `rate_limited`. A partial unique index on active PUUIDs makes
+repeated starts attach to the same run. The orchestrator passes an exact PUUID
+allowlist to Match Fetcher and Player Updater; it never expands an explicit
+update into all tracked players. It reports `completed` only when both job
+executions finish `SUCCESS` without recoverable warnings. Client-visible
+errors are stable and safe; detailed provider diagnostics remain in the
+underlying administrator execution records and server logs.
+
+The frontend polls this lifecycle, then invalidates and refetches active query
+keys containing that exact PUUID. The approved completion info toast is shown
+once only after those refetches succeed. Switching current player never starts
+this lifecycle on its own.
 
 ### Matchmaking Analysis Run Lifecycle
 
@@ -202,6 +229,12 @@ For each tracked player:
    ├── If different: Create new rank record
    └── Commit changes
 ```
+
+After a match-source check completes without a recoverable failure,
+`core.players.match_synced_at` advances even when Riot returned zero new
+matches. After the rank check succeeds, `league_synced_at` advances. Failed,
+cancelled, warning-bearing, or rate-limited work does not advance the affected
+source timestamp.
 
 ### Riot API Calls Made
 
@@ -334,6 +367,10 @@ For each tracked player:
    └── tag_line
 3. Update player record if any field changed
 ```
+
+Every successful two-source profile check advances
+`core.players.profile_synced_at`, including a check that finds no changed
+identity fields. Failed, cancelled, or rate-limited checks do not advance it.
 
 ### API Endpoints Used
 

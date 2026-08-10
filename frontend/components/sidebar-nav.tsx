@@ -4,15 +4,10 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import Image from "next/image";
-import {
-  Menu,
-  X,
-  User,
-  LogOut,
-  Settings,
-  Wrench,
-} from "lucide-react";
+import { Menu, X, User, LogOut, Settings, Users, Wrench } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { useAuth } from "@/features/auth";
+import { SidebarPlayerSwitcher } from "@/features/players";
 
 interface NavItem {
   name: string;
@@ -39,11 +34,11 @@ const navItems: NavItem[] = [
   },
   { name: "Playstyle Analysis", path: "/playstyle-analysis" },
   { name: "Matchmaking Analysis", path: "/matchmaking-analysis" },
-  { name: "Tracked Players", path: "/tracked-players" },
 ];
 
 export function SidebarNav() {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [managePlayersOpen, setManagePlayersOpen] = useState(false);
   const pathname = usePathname();
   const { user, logout, isAuthenticated, isLoading } = useAuth();
 
@@ -95,18 +90,18 @@ export function SidebarNav() {
       >
         <div className="flex h-full flex-col">
           {/* Logo Section */}
-          <div className="border-b border-white/10 p-6">
+          <div className="border-b border-white/10 p-5">
             <Link
               href="/"
               className="block cursor-pointer transition-opacity duration-300 hover:opacity-80"
               onClick={() => setMenuOpen(false)}
             >
-              <div className="relative mx-auto hidden h-[60px] w-full max-w-[200px] md:block md:max-w-[180px]">
+              <div className="relative mx-auto hidden h-[55px] w-[165px] md:block">
                 <Image
                   src="/logo-v3.png"
                   alt="League Analysis Logo"
                   fill
-                  sizes="(max-width: 768px) 200px, 180px"
+                  sizes="165px"
                   className="object-contain"
                   priority
                 />
@@ -117,9 +112,18 @@ export function SidebarNav() {
             </Link>
           </div>
 
+          <SidebarPlayerSwitcher
+            manageOpen={managePlayersOpen}
+            onManageOpenChange={setManagePlayersOpen}
+            onNavigate={() => setMenuOpen(false)}
+          />
+
           {/* Navigation Links */}
-          <nav className="flex-1 py-6 overflow-y-auto" suppressHydrationWarning>
-            <ul className="space-y-2">
+          <nav
+            className="flex min-h-0 flex-1 flex-col pt-3 pb-3"
+            suppressHydrationWarning
+          >
+            <ul className="min-h-0 flex-1 space-y-2 overflow-y-auto">
               {navItems.map((item) => (
                 <li key={item.name}>
                   <Link
@@ -145,6 +149,16 @@ export function SidebarNav() {
                 </li>
               ))}
             </ul>
+
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setManagePlayersOpen(true)}
+              className="mx-3 mt-auto h-8 shrink-0 justify-start px-2 text-xs text-white/65 hover:bg-white/10 hover:text-white"
+            >
+              <Users className="mr-2 h-3.5 w-3.5" /> Manage Tracked Players
+            </Button>
           </nav>
 
           {/* User Info and Bottom Links */}

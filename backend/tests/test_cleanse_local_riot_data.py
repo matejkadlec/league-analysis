@@ -362,8 +362,8 @@ def test_create_verified_backup_refuses_a_replaced_path_without_touching_target(
     assert backup_path.is_symlink()
 
 
-def test_delete_riot_data_clears_every_saved_puuid_preference() -> None:
-    """The reset cannot leave a page preference pointing at deleted Riot data."""
+def test_delete_riot_data_clears_current_player_context() -> None:
+    """The reset cannot leave account context pointing at deleted Riot data."""
 
     class Result:
         rowcount = 3
@@ -383,16 +383,8 @@ def test_delete_riot_data_clears_every_saved_puuid_preference() -> None:
     settings_update = next(
         query for query in connection.queries if "UPDATE auth.user_settings" in query
     )
-    for column in (
-        "save_playstyle_url",
-        "saved_playstyle_puuid",
-        "save_matchmaking_url",
-        "saved_matchmaking_puuid",
-        "save_tracked_url",
-        "saved_tracked_puuid",
-    ):
-        assert column in settings_update
-    assert deleted["auth.user_settings_saved_puuids"] == 3
+    assert "current_player_puuid = NULL" in settings_update
+    assert deleted["auth.user_settings_current_player"] == 3
 
 
 def test_lock_cleanup_tables_blocks_writers_and_allows_backup_reads() -> None:
@@ -634,8 +626,12 @@ def test_apply_locks_tables_before_creating_the_backup(tmp_path, monkeypatch) ->
 
 def test_cleanup_plan_includes_every_riot_data_category() -> None:
     """The reviewed deletion order covers data and user tracking mappings."""
-    assert RIOT_DATA_TABLES[0] == ("auth", "user_tracked_players")
+    assert RIOT_DATA_TABLES[:2] == (
+        ("jobs", "player_sync_runs"),
+        ("auth", "user_tracked_players"),
+    )
     assert set(RIOT_DATA_TABLES) == {
+        ("jobs", "player_sync_runs"),
         ("auth", "user_tracked_players"),
         ("core", "match_timelines"),
         ("core", "match_participants"),

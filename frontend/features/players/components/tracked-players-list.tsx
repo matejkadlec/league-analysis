@@ -1,15 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import {
-  ChevronDown,
-  ChevronUp,
   Eye,
   EyeOff,
   Loader2,
-  Search,
   UserMinus,
   Users,
 } from "lucide-react";
@@ -26,14 +22,13 @@ import { getRankColors } from "@/features/players/utils/rank-colors";
 import { cn } from "@/lib/core/utils";
 import { getPlatformDisplayName } from "@/lib/core/platform-utils";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { Card, CardContent } from "@/components/ui/card";
 
 const TrackedPlayersSchema = z.array(PlayerSchema);
-const TRACKED_PLAYERS_EXPAND_STORAGE_KEY = "tracked-players-list-expanded";
 const PLAYER_ROW_HEIGHT_PX = 88;
 const PLAYER_ROW_GAP_PX = 12;
 const EMPTY_LIST_HEIGHT_PX = 88;
+const MAX_VISIBLE_PLAYER_ROWS = 5;
 
 interface TrackedPlayersListProps {
   className?: string;
@@ -49,7 +44,7 @@ interface TrackedPlayerRowProps {
   onUntrackPlayer: (player: Player) => void;
 }
 
-function getAnimatedListHeightPx(rowCount: number): number {
+function getListHeightPx(rowCount: number): number {
   if (rowCount <= 0) {
     return EMPTY_LIST_HEIGHT_PX;
   }
@@ -88,12 +83,14 @@ function TrackedPlayerRow({
   const leagueColors = league ? getRankColors(league.tier) : null;
 
   return (
-    <div className="flex min-h-[88px] items-center justify-between rounded-lg border bg-card p-4 transition-colors hover:bg-accent/50">
+    <div className="player-management-border flex min-h-[88px] items-center justify-between rounded-lg bg-card p-4 transition-colors hover:bg-accent/50">
       <div className="flex-1">
         <div className="flex items-center gap-2">
           <h3 className="font-semibold">{player.game_name}</h3>
           {player.tag_line && (
-            <span className="text-sm text-muted-foreground">#{player.tag_line}</span>
+            <span className="text-sm text-muted-foreground">
+              #{player.tag_line}
+            </span>
           )}
         </div>
 
@@ -158,40 +155,6 @@ export function TrackedPlayersList({
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const userId = user?.id;
-  const [searchQuery, setSearchQuery] = useState("");
-  const [isExpanded, setIsExpanded] = useState(() => {
-    if (typeof window === "undefined") {
-      return false;
-    }
-
-    return (
-      window.sessionStorage.getItem(TRACKED_PLAYERS_EXPAND_STORAGE_KEY) ===
-      "true"
-    );
-  });
-  const refreshInProgressRef = useRef(false);
-
-  useEffect(() => {
-    const handleBeforeUnload = () => {
-      refreshInProgressRef.current = true;
-    };
-
-    window.addEventListener("beforeunload", handleBeforeUnload);
-
-    return () => {
-      window.removeEventListener("beforeunload", handleBeforeUnload);
-      if (!refreshInProgressRef.current) {
-        window.sessionStorage.removeItem(TRACKED_PLAYERS_EXPAND_STORAGE_KEY);
-      }
-    };
-  }, []);
-
-  useEffect(() => {
-    window.sessionStorage.setItem(
-      TRACKED_PLAYERS_EXPAND_STORAGE_KEY,
-      isExpanded ? "true" : "false",
-    );
-  }, [isExpanded]);
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["tracked-players", userId],
@@ -211,37 +174,6 @@ export function TrackedPlayersList({
     refetchInterval: 10000,
   });
 
-  const filteredPlayers = useMemo(() => {
-    if (!data) {
-      return [];
-    }
-
-    const normalizedQuery = searchQuery.trim().toLowerCase();
-    if (!normalizedQuery) {
-      return data;
-    }
-
-    return data.filter((player) => {
-      const normalizedGameName = (player.game_name || "").toLowerCase();
-      const normalizedTagLine = (player.tag_line || "").toLowerCase();
-      return (
-        normalizedGameName.includes(normalizedQuery) ||
-        normalizedTagLine.includes(normalizedQuery)
-      );
-    });
-  }, [data, searchQuery]);
-
-  const playersToRender = isExpanded
-    ? filteredPlayers
-    : filteredPlayers.slice(0, 1);
-
-  const animatedRowsCount = isExpanded
-    ? Math.min(filteredPlayers.length, 10)
-    : Math.min(filteredPlayers.length, 1);
-
-  const listMaxHeightPx = getAnimatedListHeightPx(animatedRowsCount);
-  const shouldEnableListScrollbar = isExpanded && filteredPlayers.length > 10;
-
   const untrackMutation = useMutation({
     mutationFn: async (puuid: string) => {
       const response = await api.delete(`/players/${puuid}/track`);
@@ -249,12 +181,15 @@ export function TrackedPlayersList({
     },
     onSuccess: (_, puuid) => {
       queryClient.invalidateQueries({ queryKey: ["tracked-players", userId] });
+      queryClient.invalidateQueries({ queryKey: ["player-context", userId] });
       queryClient.invalidateQueries({
         queryKey: ["tracking-status", userId, puuid],
       });
       queryClient.invalidateQueries({ queryKey: ["player", puuid] });
 
-      const player = data?.find((trackedPlayer) => trackedPlayer.puuid === puuid);
+      const player = data?.find(
+        (trackedPlayer) => trackedPlayer.puuid === puuid,
+      );
       toast.success(
         `Successfully removed ${
           player?.game_name || "player"
@@ -291,59 +226,13 @@ export function TrackedPlayersList({
     onViewPlayerChange?.(player);
   };
 
-  const trackedPlayersCount = data?.length ?? 0;
-  const canToggleExpand = filteredPlayers.length > 1;
-
-  const renderHeader = () => (
-    <CardHeader className="space-y-3">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex items-center space-x-2">
-          <Users className="h-5 w-5 text-primary" />
-          <CardTitle>Tracked Players</CardTitle>
-        </div>
-        <div className="flex items-center gap-3">
-          <span className="text-sm text-muted-foreground">
-            {trackedPlayersCount} {trackedPlayersCount === 1 ? "player" : "players"}
-          </span>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={!canToggleExpand}
-            onClick={() => setIsExpanded((previous) => !previous)}
-            className="min-w-[112px] justify-center"
-          >
-            {isExpanded ? "Collapse" : "Expand"}
-            {isExpanded ? (
-              <ChevronUp className="h-4 w-4" />
-            ) : (
-              <ChevronDown className="h-4 w-4" />
-            )}
-          </Button>
-        </div>
-      </div>
-
-      <div className="w-full md:w-1/2">
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={searchQuery}
-            onChange={(event) => setSearchQuery(event.target.value)}
-            placeholder="Search tracked players..."
-            className="pl-9"
-            disabled={isLoading || !!error || trackedPlayersCount === 0}
-            aria-label="Search tracked players"
-          />
-        </div>
-      </div>
-    </CardHeader>
-  );
-
   if (isLoading) {
     return (
-      <Card id="tracked-players" className={cn("flex h-full flex-col", className)}>
-        {renderHeader()}
-        <CardContent className="flex flex-1 items-center justify-center py-8">
+      <Card
+        id="tracked-players"
+        className={cn("flex h-full flex-col border-0", className)}
+      >
+        <CardContent className="flex flex-1 items-center justify-center p-8">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </CardContent>
       </Card>
@@ -352,9 +241,11 @@ export function TrackedPlayersList({
 
   if (error) {
     return (
-      <Card id="tracked-players" className={cn("flex h-full flex-col", className)}>
-        {renderHeader()}
-        <CardContent className="flex flex-1 flex-col justify-center">
+      <Card
+        id="tracked-players"
+        className={cn("flex h-full flex-col border-0", className)}
+      >
+        <CardContent className="flex flex-1 flex-col justify-center p-6">
           <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-center">
             <p className="text-sm text-destructive">
               Failed to load tracked players. Please try again.
@@ -375,9 +266,11 @@ export function TrackedPlayersList({
 
   if (!data || data.length === 0) {
     return (
-      <Card id="tracked-players" className={cn("flex h-full flex-col", className)}>
-        {renderHeader()}
-        <CardContent className="flex flex-1 items-center">
+      <Card
+        id="tracked-players"
+        className={cn("flex h-full flex-col border-0", className)}
+      >
+        <CardContent className="flex flex-1 items-center p-6">
           <div className="w-full rounded-lg border border-dashed p-8 text-center">
             <Users className="mx-auto h-12 w-12 text-muted-foreground/50" />
             <p className="mt-4 text-sm text-muted-foreground">
@@ -391,39 +284,39 @@ export function TrackedPlayersList({
   }
 
   return (
-    <Card id="tracked-players" className={cn("flex h-full flex-col", className)}>
-      {renderHeader()}
-      <CardContent className="flex flex-1 flex-col">
-        <div
-          className={cn(
-            "transition-[max-height] duration-300 ease-in-out",
-            shouldEnableListScrollbar ? "overflow-y-auto pr-1" : "overflow-hidden",
-          )}
-          style={{ maxHeight: `${listMaxHeightPx}px` }}
-        >
-          {filteredPlayers.length === 0 ? (
-            <div className="flex min-h-[88px] items-center justify-center rounded-lg border border-dashed px-4 text-center text-sm text-muted-foreground">
-              No tracked players match your search.
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {playersToRender.map((player) => (
-                <TrackedPlayerRow
-                  key={player.puuid}
-                  player={player}
-                  isViewedPlayer={selectedPlayerPuuid === player.puuid}
-                  isUntrackingCurrentPlayer={
-                    untrackMutation.isPending &&
-                    untrackMutation.variables === player.puuid
-                  }
-                  onViewPlayer={handleViewPlayer}
-                  onUntrackPlayer={handleUntrack}
-                />
-              ))}
-            </div>
-          )}
+    <Card
+      id="tracked-players"
+      className={cn("flex h-full flex-col border-0", className)}
+    >
+      <div
+        data-testid="tracked-players-scroll-region"
+        className={cn(
+          data.length > MAX_VISIBLE_PLAYER_ROWS
+            ? "overflow-y-auto pr-1"
+            : "overflow-hidden",
+        )}
+        style={{
+          maxHeight: `${getListHeightPx(
+            Math.min(data.length, MAX_VISIBLE_PLAYER_ROWS),
+          )}px`,
+        }}
+      >
+        <div className="space-y-3">
+          {data.map((player) => (
+            <TrackedPlayerRow
+              key={player.puuid}
+              player={player}
+              isViewedPlayer={selectedPlayerPuuid === player.puuid}
+              isUntrackingCurrentPlayer={
+                untrackMutation.isPending &&
+                untrackMutation.variables === player.puuid
+              }
+              onViewPlayer={handleViewPlayer}
+              onUntrackPlayer={handleUntrack}
+            />
+          ))}
         </div>
-      </CardContent>
+      </div>
     </Card>
   );
 }

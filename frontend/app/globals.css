@@ -300,9 +300,23 @@
     outline-offset: 2px;
   }
 
+  /*
+    Keep Radix dialogs above the viewport midpoint. The remaining vertical
+    space follows a 1:2 top-to-bottom ratio at every dialog height.
+  */
+  [role="dialog"][data-state] {
+    top: calc(100% / 3) !important;
+    --tw-translate-y: calc(-100% / 3) !important;
+  }
+
   /* White border for dialogs — improves visibility against dark backgrounds */
   .dialog-white-border {
     border: 1px solid #e2e2e2;
+  }
+
+  /* Muted blue-gray edge shared by the player manager and its player rows. */
+  .player-management-border {
+    border: 1px solid rgb(120 147 178 / 55%);
   }
 }
 

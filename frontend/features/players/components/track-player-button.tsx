@@ -52,8 +52,11 @@ export function TrackPlayerButton({
       return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["tracking-status", userId, puuid] });
+      queryClient.invalidateQueries({
+        queryKey: ["tracking-status", userId, puuid],
+      });
       queryClient.invalidateQueries({ queryKey: ["tracked-players", userId] });
+      queryClient.invalidateQueries({ queryKey: ["player-context", userId] });
       queryClient.invalidateQueries({ queryKey: ["player", puuid] });
       toast({
         title: "Player added for tracking",
@@ -81,8 +84,11 @@ export function TrackPlayerButton({
       return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["tracking-status", userId, puuid] });
+      queryClient.invalidateQueries({
+        queryKey: ["tracking-status", userId, puuid],
+      });
       queryClient.invalidateQueries({ queryKey: ["tracked-players", userId] });
+      queryClient.invalidateQueries({ queryKey: ["player-context", userId] });
       queryClient.invalidateQueries({ queryKey: ["player", puuid] });
       toast({
         title: "Player untracked",

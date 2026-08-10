@@ -45,12 +45,7 @@ erDiagram
     user_settings {
         int user_id PK, FK
         string theme
-        boolean save_playstyle_url
-        string saved_playstyle_puuid
-        boolean save_matchmaking_url
-        string saved_matchmaking_puuid
-        boolean save_tracked_url
-        string saved_tracked_puuid
+        string current_player_puuid FK
         string default_platform
         string created_at
         string updated_at
@@ -78,6 +73,7 @@ erDiagram
         int user_id PK, FK
         string puuid PK, FK
         string tracked_at
+        string last_selected_at
     }
 
     email_change_requests {
@@ -232,6 +228,7 @@ erDiagram
 ```mermaid
 erDiagram
     job_configurations ||--o{ job_executions : "1:M"
+    job_executions ||--o{ player_sync_runs : "targeted executions"
 
     job_configurations {
         int id PK
@@ -259,6 +256,21 @@ erDiagram
         string execution_log
         string detailed_logs
         string execution_type
+    }
+
+    player_sync_runs {
+        int id PK
+        int user_id FK
+        string puuid FK
+        string status
+        int match_execution_id FK
+        int profile_execution_id FK
+        string error_code
+        string error_message
+        string created_at
+        string started_at
+        string completed_at
+        string updated_at
     }
 ```
 
@@ -342,6 +354,12 @@ User authentication and authorization.
 
 **Trigger**: `trg_create_user_settings_after_user_insert` automatically creates `user_settings` record.
 
+`current_player_puuid` is the per-account default for new player-centric
+navigation. Explicit `?puuid=` page state remains authoritative within an open
+tab. Revision `20260809_0006` backfills this value from a valid legacy viewed
+player or linked Riot account and removes the obsolete per-page save-search
+columns.
+
 ### `auth.user_card_preferences`
 
 Version-coexistent viewer-owned overrides for the approved analytical-card
@@ -398,6 +416,7 @@ User-specific tracked player mappings.
 | `user_id`    | bigint      | FK to `auth.users.id`                  |
 | `puuid`      | varchar(78) | FK to `core.players.puuid`             |
 | `tracked_at` | timestamptz | When the player was added to this user |
+| `last_selected_at` | timestamptz | Recent-selection ordering for the sidebar |
 
 **Primary Key**: (`user_id`, `puuid`)
 **Behavior**: Jobs process players tracked by any user (distinct `puuid` set).
@@ -521,13 +540,16 @@ Join Us submission metadata used for anti-spam checks.
 
 Central player registry using Riot PUUID as primary key.
 
-| Column       | Type        | Description                 |
-| ------------ | ----------- | --------------------------- |
-| `puuid`      | varchar(78) | Primary key (Riot PUUID)    |
-| `game_name`  | varchar(16) | Riot ID game name           |
-| `tag_line`   | varchar(5)  | Riot ID tag                 |
-| `platform`   | varchar(4)  | e.g., EUN1, EUW1            |
-| `is_tracked` | boolean     | Derived global tracked flag |
+| Column              | Type        | Description                                      |
+| ------------------- | ----------- | ------------------------------------------------ |
+| `puuid`             | varchar(78) | Primary key (Riot PUUID)                         |
+| `game_name`         | varchar(16) | Riot ID game name                                |
+| `tag_line`          | varchar(5)  | Riot ID tag                                      |
+| `platform`          | varchar(4)  | e.g., EUN1, EUW1                                 |
+| `is_tracked`        | boolean     | Derived global tracked flag                      |
+| `profile_synced_at` | timestamptz | Last successful Player Updater profile check     |
+| `league_synced_at`  | timestamptz | Last successful Match Fetcher rank check         |
+| `match_synced_at`   | timestamptz | Last complete successful Match Fetcher data check |
 
 ### `core.matches`
 
@@ -645,6 +667,14 @@ Individual job run tracking.
 | `api_requests_made` | int                 | Riot API calls                |
 | `detailed_logs`     | jsonb               | Captured log entries          |
 | `execution_type`    | execution_type_enum | `REGULAR` (default) or `TEST` |
+
+### `jobs.player_sync_runs`
+
+Persisted application-user request lifecycle for an explicit Player Card
+update. It references the shared canonical PUUID and the two administrator job
+executions that performed the targeted work. Active `pending`/`running` rows
+are unique per PUUID; terminal states are retained for exact polling and audit
+without storing provider payloads or credentials.
 
 ---
 

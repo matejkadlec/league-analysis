@@ -4,13 +4,7 @@ import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  Search,
-  User,
-  AlertCircle,
-  UserPlus,
-  Loader2,
-} from "lucide-react";
+import { Search, User, AlertCircle, UserPlus, Loader2 } from "lucide-react";
 import { z } from "zod";
 
 import { Player, PlayerSchema } from "@/lib/core/schemas";
@@ -54,9 +48,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import {
-  ReloadIcon,
-} from "@radix-ui/react-icons";
+import { ReloadIcon } from "@radix-ui/react-icons";
 import { useAuth } from "@/features/auth";
 
 // Constants for autocomplete behavior
@@ -275,7 +267,10 @@ export function PlayerSearch({
     onSuccess: (player) => {
       if (player) {
         setShowTrackOption(false);
-        queryClient.invalidateQueries({ queryKey: ["tracked-players", userId] });
+        queryClient.invalidateQueries({
+          queryKey: ["tracked-players", userId],
+        });
+        queryClient.invalidateQueries({ queryKey: ["player-context", userId] });
         queryClient.invalidateQueries({
           queryKey: ["tracking-status", userId, player.puuid],
         });
@@ -366,12 +361,12 @@ export function PlayerSearch({
                     <FormItem>
                       <FormLabel>Player Name</FormLabel>
                       <Popover
-                          open={showSuggestions}
-                          onOpenChange={setShowSuggestions}
-                        >
-                          <PopoverTrigger asChild>
-                            <div className="relative">
-                              <FormControl>
+                        open={showSuggestions}
+                        onOpenChange={setShowSuggestions}
+                      >
+                        <PopoverTrigger asChild>
+                          <div className="relative">
+                            <FormControl>
                               <Input
                                 {...field}
                                 ref={inputRef}
@@ -391,61 +386,59 @@ export function PlayerSearch({
                                 }}
                                 autoComplete="off"
                               />
-                              </FormControl>
-                              {suggestionsLoading &&
-                                searchValue.length >= MIN_SEARCH_LENGTH && (
-                                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                                    <Loader2
-                                      className="h-4 w-4 animate-spin text-muted-foreground"
-                                      aria-label="Loading suggestions"
-                                      role="status"
-                                    />
-                                  </div>
-                                )}
-                            </div>
-                          </PopoverTrigger>
-                          <PopoverContent
-                            className="w-[var(--radix-popover-trigger-width)] p-0"
-                            align="start"
-                            onOpenAutoFocus={(e: Event) => e.preventDefault()}
-                          >
-                            <div className="max-h-[300px] overflow-y-auto">
-                              {suggestions.length === 0 ? (
-                                <div className="p-4 text-center text-sm text-muted-foreground">
-                                  No players found
-                                </div>
-                              ) : (
-                                <div className="py-1">
-                                  {suggestions.map((suggestion, index) => (
-                                    <button
-                                      key={suggestion.puuid}
-                                      type="button"
-                                      className={`w-full px-4 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground transition-colors ${
-                                        index === selectedIndex
-                                          ? "bg-accent text-accent-foreground"
-                                          : ""
-                                      }`}
-                                      onMouseDown={(e) => {
-                                        e.preventDefault();
-                                        handleSelectSuggestion(suggestion);
-                                      }}
-                                      onMouseEnter={() =>
-                                        setSelectedIndex(index)
-                                      }
-                                    >
-                                      <div className="flex flex-col">
-                                        <span className="font-medium">
-                                          {suggestion.game_name}
-                                          {suggestion.tag_line &&
-                                            `#${suggestion.tag_line}`}
-                                        </span>
-                                      </div>
-                                    </button>
-                                  ))}
+                            </FormControl>
+                            {suggestionsLoading &&
+                              searchValue.length >= MIN_SEARCH_LENGTH && (
+                                <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                                  <Loader2
+                                    className="h-4 w-4 animate-spin text-muted-foreground"
+                                    aria-label="Loading suggestions"
+                                    role="status"
+                                  />
                                 </div>
                               )}
-                            </div>
-                          </PopoverContent>
+                          </div>
+                        </PopoverTrigger>
+                        <PopoverContent
+                          className="w-[var(--radix-popover-trigger-width)] p-0"
+                          align="start"
+                          onOpenAutoFocus={(e: Event) => e.preventDefault()}
+                        >
+                          <div className="max-h-[300px] overflow-y-auto">
+                            {suggestions.length === 0 ? (
+                              <div className="p-4 text-center text-sm text-muted-foreground">
+                                No players found
+                              </div>
+                            ) : (
+                              <div className="py-1">
+                                {suggestions.map((suggestion, index) => (
+                                  <button
+                                    key={suggestion.puuid}
+                                    type="button"
+                                    className={`w-full px-4 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground transition-colors ${
+                                      index === selectedIndex
+                                        ? "bg-accent text-accent-foreground"
+                                        : ""
+                                    }`}
+                                    onMouseDown={(e) => {
+                                      e.preventDefault();
+                                      handleSelectSuggestion(suggestion);
+                                    }}
+                                    onMouseEnter={() => setSelectedIndex(index)}
+                                  >
+                                    <div className="flex flex-col">
+                                      <span className="font-medium">
+                                        {suggestion.game_name}
+                                        {suggestion.tag_line &&
+                                          `#${suggestion.tag_line}`}
+                                      </span>
+                                    </div>
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </PopoverContent>
                       </Popover>
                       <p className="text-xs text-muted-foreground">
                         Enter game name or tag line to search for players
@@ -635,7 +628,10 @@ export function PlayerSearch({
                   </Alert>
                 )}
                 {trackingErrorMessage && (
-                  <p role="alert" className="mt-3 text-sm text-muted-foreground">
+                  <p
+                    role="alert"
+                    className="mt-3 text-sm text-muted-foreground"
+                  >
                     {trackingErrorMessage}
                   </p>
                 )}
