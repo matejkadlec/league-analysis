@@ -1,0 +1,11 @@
+[Unit]
+Description=League Analysis PostgreSQL daily backup
+After=docker.service
+
+[Service]
+Type=oneshot
+UMask=0077
+ExecStart=%h/.local/share/league-analysis/operations/pi-postgres-operations daily-backup --confirm-target league_analysis
+
+[Install]
+WantedBy=default.target

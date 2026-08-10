@@ -183,6 +183,7 @@ run_step 'ShellCheck tooling regression' "$repository_root/scripts/test-shellche
 run_step 'Card configuration contract regression' "$repository_root/scripts/test-card-configuration.sh"
 run_step 'run.sh startup-order regression' "$repository_root/scripts/test-run.sh"
 run_step 'Deployment and container contract regression' "$repository_root/scripts/test-deployment.sh"
+run_step 'PostgreSQL operations regression' "$repository_root/scripts/test-postgres-operations.sh"
 run_step 'GitHub workflow syntax' "$repository_root/scripts/run-actionlint.sh"
 run_step 'GitHub workflow security policy' python3 "$repository_root/scripts/verify-github-workflows.py"
 run_step 'Dependabot configuration' python3 "$repository_root/scripts/check-dependabot-config.py"

@@ -41,12 +41,24 @@ the native local database.
 [`compose.production.yml`](../compose.production.yml) is the sole portable
 application-stack definition:
 
-| Service | Container | Runtime | Host exposure |
-| --- | --- | --- | --- |
-| `frontend` | `league-analysis-frontend` | Next.js standalone production server on `3000` | `8097` |
-| `backend` | `league-analysis-backend` | One production Uvicorn worker on `8000` | `8098` |
-| `postgres` | `league-analysis-postgres` | PostgreSQL `18.4` | none |
-| `migrate` | one-shot, no fixed name | locked `migrate.py upgrade head` using the backend image | none |
+The Pi hosts multiple projects. Never act on an arbitrary container merely
+because it has a generic frontend, backend, or PostgreSQL role. Resolve the
+exact resource below and verify both its `com.docker.compose.project` label is
+`league-analysis` and its `com.docker.compose.service` label matches the
+Compose service before an operational change.
+
+| Compose service | Container name | Image | Runtime | Host exposure |
+| --- | --- | --- | --- | --- |
+| `frontend` | `league-analysis-frontend` | `league-analysis-frontend:<commit>` | Next.js standalone production server on `3000` | `8097` |
+| `backend` | `league-analysis-backend` | `league-analysis-backend:<commit>` | One production Uvicorn worker on `8000` | `8098` |
+| `postgres` | `league-analysis-postgres` | `postgres:18.4-bookworm` | PostgreSQL `18.4` | none; internal-only |
+| `migrate` | one-shot, no fixed name | `league-analysis-backend:<commit>` | locked `migrate.py upgrade head` | none |
+
+Compose service names, container names, and image names are distinct
+identities. In particular, `postgres` is the Compose service while
+`league-analysis-postgres` is its fixed container name, and the one-shot
+`migrate` service deliberately has no fixed container name. Do not substitute
+resources from another Pi project.
 
 The frontend and backend run as UID/GID `10001`, with a read-only root
 filesystem, `no-new-privileges`, all Linux capabilities dropped, bounded PIDs,
@@ -138,6 +150,7 @@ Secret-safe runtime checks on `pi5ram8`:
 
 ```bash
 ssh pi5ram8 'docker ps --filter name=league-analysis --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"'
+ssh pi5ram8 'docker inspect --format "{{.Name}} project={{index .Config.Labels \"com.docker.compose.project\"}} service={{index .Config.Labels \"com.docker.compose.service\"}} image={{.Config.Image}}" league-analysis-frontend league-analysis-backend league-analysis-postgres'
 ssh pi5ram8 'curl --fail --silent http://127.0.0.1:8098/health/ready'
 ssh pi5ram8 'curl --fail --silent http://127.0.0.1:8097/ >/dev/null'
 ssh pi5ram8 'docker inspect --format "{{json .HostConfig.PortBindings}}" league-analysis-postgres'
@@ -154,6 +167,296 @@ repeatedly failed Alembic startup from that stale revision. The current
 workflow cannot manually deploy a feature branch and deploys the exact current
 `master` SHA, so repository migrations and images advance together.
 
+## PostgreSQL data authority and initial migration
+
+LGA-79 performed the one-time authority transfer from local
+`league_analysis_local_dev` to the Pi database `league_analysis`. The transfer
+uses PostgreSQL 18 custom-format archives over the existing SSH/Docker path;
+PostgreSQL never receives a host port. After this transfer is validated, the Pi
+authority marker prevents the initial local-to-Pi command from running again.
+
+The Pi tooling resolves only the exact `league-analysis-postgres` container and
+verifies its Compose project/service labels plus empty host-port bindings. A
+reviewed checkout installs the script snapshot outside disposable release
+directories:
+
+```bash
+./deploy/install-pi-postgres-operations.sh
+```
+
+Before the one-time export, reconcile the additional administrator locally.
+The command is read-only by default and never accepts a password on its command
+line:
+
+```bash
+cd backend
+uv run python scripts/reconcile_admin_account.py \
+  --database league_analysis_local_dev \
+  --email marek.hovadik@seznam.cz \
+  --display-name 'Marek Hovadík'
+uv run python scripts/reconcile_admin_account.py \
+  --database league_analysis_local_dev \
+  --email marek.hovadik@seznam.cz \
+  --display-name 'Marek Hovadík' \
+  --apply
+```
+
+Run the migration dry run, then explicitly apply it only while local remains
+the authority:
+
+```bash
+cd backend
+uv run python scripts/migrate_local_postgres_to_pi.py \
+  --database league_analysis_local_dev \
+  --remote pi5ram8 \
+  --remote-database league_analysis
+uv run python scripts/migrate_local_postgres_to_pi.py \
+  --database league_analysis_local_dev \
+  --remote pi5ram8 \
+  --remote-database league_analysis \
+  --apply
+```
+
+The apply path receives and SHA-256-verifies the complete archive before any
+database mutation, creates a mode-`0600` Pi safety backup under
+`$HOME/.local/share/league-analysis/backups/postgres`, restores an isolated
+staging database, stops only the exact League Analysis frontend/backend
+containers, and swaps database names. It compares every application-table row
+count, every sequence state, Alembic head, constraint-validation state, and the
+two administrator flags while application writers remain stopped. Only an
+exact match activates the containers. The old Pi database remains available
+under a generated rollback name until credential, `/api/v1/auth/me`, health,
+and representative frontend checks pass.
+
+If validation fails or the client command is interrupted after the swap, use
+the SHA-256 printed by the migration command with the pending state:
+
+```bash
+SOURCE_SHA256=replace-with-the-printed-64-character-digest
+ssh pi5ram8 "\$HOME/.local/share/league-analysis/operations/pi-postgres-operations rollback-replacement --confirm-target league_analysis --expected-sha256 $SOURCE_SHA256"
+```
+
+After successful external validation, finalize with the same digest. This
+drops only the generated rollback database, preserves the custom-format safety
+backup, and records Pi authority:
+
+```bash
+SOURCE_SHA256=replace-with-the-printed-64-character-digest
+ssh pi5ram8 "\$HOME/.local/share/league-analysis/operations/pi-postgres-operations finalize-replacement --confirm-target league_analysis --expected-sha256 $SOURCE_SHA256"
+```
+
+The database archive contains all schemas, application rows, identifiers,
+foreign keys, timestamps, and sequences. It does not contain `.env` files or
+filesystem configuration. Do not delete the pre-LGA-79 safety archive until a
+separate reviewed retention decision explicitly covers it.
+
+## PostgreSQL daily backups and restore tests
+
+The authoritative Pi database has a user-systemd timer named
+`league-analysis-postgres-backup.timer`. It runs at exactly `00:00` in the
+`Europe/Prague` timezone, including daylight-saving changes, regardless of the
+Pi host timezone. `Persistent=true` catches up once after downtime; the shared
+non-blocking operations lock prevents overlap with migration, restore, or mirror
+exports.
+
+Install the reviewed operations snapshot and enable the timer on `pi5ram8`:
+
+```bash
+./deploy/install-pi-postgres-backup-timer.sh
+```
+
+The service verifies the exact Compose project, PostgreSQL service/container,
+database name, absent host port, Alembic head, and Pi-authority marker. It writes
+a PostgreSQL 18 custom-format gzip archive to a mode-`0700` host directory at
+`$HOME/.local/share/league-analysis/backups/postgres`. The dump first uses a
+private `.in-progress` file, validates it with `pg_restore --list`, syncs it,
+and atomically renames it to this deterministic timestamp shape:
+
+```text
+league-analysis-postgres-daily-YYYYMMDDTHHMMSS+ZZZZ.dump
+```
+
+Only after that success does retention remove daily archives older than the
+newest seven. It matches only exact successful daily filenames. Partial files,
+the pre-LGA-79 archive, and unrelated artifacts neither count toward retention
+nor get deleted. Failures are nonzero in the user journal and do not remove a
+previous successful backup.
+
+Inspect scheduling and the most recent service result without exposing runtime
+configuration:
+
+```bash
+systemctl --user list-timers league-analysis-postgres-backup.timer
+systemctl --user status league-analysis-postgres-backup.service --no-pager
+journalctl --user -u league-analysis-postgres-backup.service -n 50 --no-pager
+```
+
+Run an on-demand backup and test a selected daily archive as follows:
+
+```bash
+PI_OPERATIONS="$HOME/.local/share/league-analysis/operations/pi-postgres-operations"
+"$PI_OPERATIONS" daily-backup --confirm-target league_analysis
+"$PI_OPERATIONS" restore-test \
+  --confirm-target league_analysis \
+  --archive "$HOME/.local/share/league-analysis/backups/postgres/league-analysis-postgres-daily-YYYYMMDDTHHMMSS+ZZZZ.dump"
+```
+
+The restore test accepts only a private, current-user-owned daily archive
+directly inside the managed backup directory. It creates a generated temporary
+database, restores with ownership and ACL replay disabled, validates Alembic,
+constraints, application tables, both administrator flags, and a deterministic
+snapshot, then drops the temporary database. It never replaces or exposes the
+production database. A nonzero restore test preserves the archive and removes
+the generated test database through the failure trap.
+
+## PostgreSQL daily backups and restore tests
+
+The authoritative Pi database has a user-systemd timer named
+`league-analysis-postgres-backup.timer`. It runs at exactly `00:00` in the
+`Europe/Prague` timezone, including daylight-saving changes, regardless of the
+Pi host timezone. `Persistent=true` catches up once after downtime; the shared
+non-blocking operations lock prevents overlap with migration, restore, or mirror
+exports.
+
+Install the reviewed operations snapshot and enable the timer on `pi5ram8`:
+
+```bash
+./deploy/install-pi-postgres-backup-timer.sh
+```
+
+The service verifies the exact Compose project, PostgreSQL service/container,
+database name, absent host port, Alembic head, and Pi-authority marker. It writes
+a PostgreSQL 18 custom-format gzip archive to a mode-`0700` host directory at
+`$HOME/.local/share/league-analysis/backups/postgres`. The dump first uses a
+private `.in-progress` file, validates it with `pg_restore --list`, syncs it,
+and atomically renames it to this deterministic timestamp shape:
+
+```text
+league-analysis-postgres-daily-YYYYMMDDTHHMMSS+ZZZZ.dump
+```
+
+Only after that success does retention remove daily archives older than the
+newest seven. It matches only exact successful daily filenames. Partial files,
+the pre-LGA-79 archive, and unrelated artifacts neither count toward retention
+nor get deleted. Failures are nonzero in the user journal and do not remove a
+previous successful backup.
+
+Inspect scheduling and the most recent service result without exposing runtime
+configuration:
+
+```bash
+systemctl --user list-timers league-analysis-postgres-backup.timer
+systemctl --user status league-analysis-postgres-backup.service --no-pager
+journalctl --user -u league-analysis-postgres-backup.service -n 50 --no-pager
+```
+
+Run an on-demand backup and test a selected daily archive as follows:
+
+```bash
+PI_OPERATIONS="$HOME/.local/share/league-analysis/operations/pi-postgres-operations"
+"$PI_OPERATIONS" daily-backup --confirm-target league_analysis
+"$PI_OPERATIONS" restore-test \
+  --confirm-target league_analysis \
+  --archive "$HOME/.local/share/league-analysis/backups/postgres/league-analysis-postgres-daily-YYYYMMDDTHHMMSS+ZZZZ.dump"
+```
+
+The restore test accepts only a private, current-user-owned daily archive
+directly inside the managed backup directory. It creates a generated temporary
+database, restores with ownership and ACL replay disabled, validates Alembic,
+constraints, application tables, both administrator flags, and a deterministic
+snapshot, then drops the temporary database. It never replaces or exposes the
+production database. A nonzero restore test preserves the archive and removes
+the generated test database through the failure trap.
+
+## Recurring Pi-to-local mirror
+
+After LGA-79 validation and the durable `authority=pi` marker, the only
+automatic data direction is:
+
+```text
+pi5ram8 league_analysis -> local league_analysis_local_dev
+```
+
+The local database is disposable development data. Intentional local changes
+can be overwritten at the next refresh. The mirror implementation contains no
+remote restore, replacement, backup, or mutating SQL command: over SSH it may
+request only secret-safe `identity`, the read-only deterministic `snapshot`,
+and the authority-gated read-only `mirror-dump`. PostgreSQL stays internal to
+the Pi container.
+
+Run the worktree command without `--apply` for a read-only preflight, then use
+the same implementation on demand:
+
+```bash
+./backend/scripts/mirror_pi_postgres_to_local.py \
+  --database league_analysis_local_dev \
+  --remote pi5ram8 \
+  --remote-database league_analysis \
+  --config .env
+
+./backend/scripts/mirror_pi_postgres_to_local.py \
+  --database league_analysis_local_dev \
+  --remote pi5ram8 \
+  --remote-database league_analysis \
+  --config .env \
+  --apply
+```
+
+No password is accepted on the command line. The private config must be a
+current-user-owned, non-symlink regular file with mode `0600`; the target must
+be the configured PostgreSQL 18 loopback database in the `dev` environment.
+The Pi identity must match the exact League Analysis container/project/service,
+database, Alembic head, absent host binding, and confirmed authority marker.
+
+An apply first compares the deterministic Pi and local snapshots. An exact
+match skips the dump, transfer, restore, and swap. A mismatch streams a complete
+custom-format archive using mirror-specific Zstandard level 3 compression;
+daily backups retain their stronger gzip level 9 contract. The complete archive
+is downloaded and validated before any local database change. It restores into
+a generated staging database, validates the migration head, constraints, both
+administrators, all table counts and sequence states, disables connections
+during the short rename window, and atomically swaps database names. A private
+durable state file restores the previous local database after termination or
+validation failure. The old local database is dropped only after the new target
+validates. A Pi write immediately after a matching fingerprint can be delayed
+until the next five-minute check; it can never cause a partial local snapshot.
+Active local backend connections are terminated only for a changed snapshot and
+reconnect to the new target; restart a development session if its connection
+pool does not recover cleanly.
+
+Install a worktree-independent snapshot and the local user-systemd timer:
+
+```bash
+./deploy/install-local-postgres-mirror.sh
+```
+
+The default recurrence is every five minutes on an explicit
+`Europe/Prague` calendar. `Persistent=true` runs one missed refresh when the
+local machine next becomes available, and the non-blocking lock rejects overlap.
+The cheap snapshot comparison normally avoids the approximately 20 MB archive
+transfer and full local restore when nothing changed. The manual and automatic
+paths execute the same installed implementation. Inspect them without printing
+configuration values:
+
+```bash
+systemctl --user list-timers league-analysis-local-postgres-mirror.timer
+systemctl --user status league-analysis-local-postgres-mirror.service --no-pager
+journalctl --user -u league-analysis-local-postgres-mirror.service -n 50 --no-pager
+
+$HOME/.local/share/league-analysis/operations/local-postgres-mirror \
+  --database league_analysis_local_dev \
+  --remote pi5ram8 \
+  --remote-database league_analysis \
+  --config "$HOME/projects/league-analysis/.env" \
+  --apply
+```
+
+To configure a different local cadence without changing the implementation,
+create a systemd user override with `systemctl --user edit
+league-analysis-local-postgres-mirror.timer`, clear the inherited schedule with
+an empty `OnCalendar=`, add one explicit timezone-aware `OnCalendar=`, then run
+`systemctl --user daemon-reload` and restart the timer.
+
 ## Failure and recovery boundary
 
 Build, migration, container-start, or health failure exits nonzero with bounded
@@ -163,7 +466,8 @@ never removed by deployment. Do not use `docker compose down --volumes` on the
 production stack.
 
 The deployment script does not automatically reverse database migrations or
-delete releases/images. Full backup, restore, retention, and rollback policy
-remain owned by LGA-16. Until that runbook is complete, recovery is an explicit
-owner operation based on a verified database backup and compatible prior
-release; never guess or reset a populated schema.
+delete releases/images. Daily archives and their isolated restore test do not
+by themselves select a compatible application release or authorize a production
+restore. Broader disaster-recovery and release-rollback policy remains owned by
+LGA-16; recovery is an explicit owner operation based on a verified database
+backup and compatible prior release. Never guess or reset a populated schema.

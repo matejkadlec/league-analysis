@@ -1,0 +1,13 @@
+[Unit]
+Description=Mirror authoritative League Analysis Pi PostgreSQL into local development
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+UMask=0077
+TimeoutStartSec=45min
+ExecStart=/usr/bin/python3 %h/.local/share/league-analysis/operations/local-postgres-mirror --database league_analysis_local_dev --remote pi5ram8 --remote-database league_analysis --config %h/projects/league-analysis/.env --apply
+
+[Install]
+WantedBy=default.target

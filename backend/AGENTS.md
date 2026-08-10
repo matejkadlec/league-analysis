@@ -110,6 +110,18 @@ an administrator update; cleanup refuses to proceed unless exactly one regular
 configuration exists for each writer type, and the documented resume command
 re-verifies the local target and inactive writers first.
 
+`scripts/reconcile_admin_account.py` is the guarded local-only path for a
+deliberate administrator reconciliation. It accepts passwords only through a
+hidden prompt or standard input, uses `AuthService`'s normal Argon2id and
+authentication path, and refuses any database other than the exact loopback
+`league_analysis_local_dev` target. The one-time LGA-79 migration wrapper is
+`scripts/migrate_local_postgres_to_pi.py`; it is disabled after the Pi records
+its durable authority marker. Follow the ordered procedure and rollback gate in
+[`../docs/deployment.md`](../docs/deployment.md#postgresql-data-authority-and-initial-migration).
+The post-authority `scripts/mirror_pi_postgres_to_local.py` path accepts only a
+read-only Pi export, restores into a local staging database, and keeps durable
+rollback state through the atomic local name swap.
+
 The production backend image is defined by `Dockerfile`. It installs from
 `uv.lock`, runs Uvicorn without reload as non-root UID/GID 10001, and is
 read-only at runtime. `compose.production.yml` owns the separate one-shot
