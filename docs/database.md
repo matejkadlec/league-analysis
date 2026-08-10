@@ -717,3 +717,18 @@ The initial baseline revision intentionally has no downgrade because dropping
 the application schemas is unsafe. Restore a verified backup when reversal is
 required. Never use `Base.metadata.create_all()`, direct schema-reset scripts,
 or an unverified `alembic stamp` against a populated database.
+
+### Initial local-to-Pi data migration
+
+The LGA-79 authority transfer used a complete PostgreSQL 18 custom-format dump
+of `league_analysis_local_dev`, not per-table copying. It restored into a new Pi
+staging database with source ownership/ACL replay disabled, applied every
+archived schema object, table row, constraint, and sequence state, and swapped
+database names only after restore validation. The production backend was not
+allowed to write until a deterministic source/restored snapshot matched.
+
+The pre-existing Pi database was first retained as a private custom-format
+safety backup and remained available as a rollback database through health and
+authentication validation. The full procedure, exact container boundary,
+authority marker, and rollback commands are maintained in
+[`deployment.md`](deployment.md#postgresql-data-authority-and-initial-migration).

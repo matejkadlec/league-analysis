@@ -167,6 +167,89 @@ repeatedly failed Alembic startup from that stale revision. The current
 workflow cannot manually deploy a feature branch and deploys the exact current
 `master` SHA, so repository migrations and images advance together.
 
+## PostgreSQL data authority and initial migration
+
+LGA-79 performed the one-time authority transfer from local
+`league_analysis_local_dev` to the Pi database `league_analysis`. The transfer
+uses PostgreSQL 18 custom-format archives over the existing SSH/Docker path;
+PostgreSQL never receives a host port. After this transfer is validated, the Pi
+authority marker prevents the initial local-to-Pi command from running again.
+
+The Pi tooling resolves only the exact `league-analysis-postgres` container and
+verifies its Compose project/service labels plus empty host-port bindings. A
+reviewed checkout installs the script snapshot outside disposable release
+directories:
+
+```bash
+./deploy/install-pi-postgres-operations.sh
+```
+
+Before the one-time export, reconcile the additional administrator locally.
+The command is read-only by default and never accepts a password on its command
+line:
+
+```bash
+cd backend
+uv run python scripts/reconcile_admin_account.py \
+  --database league_analysis_local_dev \
+  --email marek.hovadik@seznam.cz \
+  --display-name 'Marek Hovadík'
+uv run python scripts/reconcile_admin_account.py \
+  --database league_analysis_local_dev \
+  --email marek.hovadik@seznam.cz \
+  --display-name 'Marek Hovadík' \
+  --apply
+```
+
+Run the migration dry run, then explicitly apply it only while local remains
+the authority:
+
+```bash
+cd backend
+uv run python scripts/migrate_local_postgres_to_pi.py \
+  --database league_analysis_local_dev \
+  --remote pi5ram8 \
+  --remote-database league_analysis
+uv run python scripts/migrate_local_postgres_to_pi.py \
+  --database league_analysis_local_dev \
+  --remote pi5ram8 \
+  --remote-database league_analysis \
+  --apply
+```
+
+The apply path receives and SHA-256-verifies the complete archive before any
+database mutation, creates a mode-`0600` Pi safety backup under
+`$HOME/.local/share/league-analysis/backups/postgres`, restores an isolated
+staging database, stops only the exact League Analysis frontend/backend
+containers, and swaps database names. It compares every application-table row
+count, every sequence state, Alembic head, constraint-validation state, and the
+two administrator flags while application writers remain stopped. Only an
+exact match activates the containers. The old Pi database remains available
+under a generated rollback name until credential, `/api/v1/auth/me`, health,
+and representative frontend checks pass.
+
+If validation fails or the client command is interrupted after the swap, use
+the SHA-256 printed by the migration command with the pending state:
+
+```bash
+SOURCE_SHA256=replace-with-the-printed-64-character-digest
+ssh pi5ram8 "\$HOME/.local/share/league-analysis/operations/pi-postgres-operations rollback-replacement --confirm-target league_analysis --expected-sha256 $SOURCE_SHA256"
+```
+
+After successful external validation, finalize with the same digest. This
+drops only the generated rollback database, preserves the custom-format safety
+backup, and records Pi authority:
+
+```bash
+SOURCE_SHA256=replace-with-the-printed-64-character-digest
+ssh pi5ram8 "\$HOME/.local/share/league-analysis/operations/pi-postgres-operations finalize-replacement --confirm-target league_analysis --expected-sha256 $SOURCE_SHA256"
+```
+
+The database archive contains all schemas, application rows, identifiers,
+foreign keys, timestamps, and sequences. It does not contain `.env` files or
+filesystem configuration. Do not delete the pre-LGA-79 safety archive until a
+separate reviewed retention decision explicitly covers it.
+
 ## Failure and recovery boundary
 
 Build, migration, container-start, or health failure exits nonzero with bounded

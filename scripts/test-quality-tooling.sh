@@ -20,6 +20,7 @@ run_script="$repository_root/run.sh"
 card_configuration_regression="$repository_root/scripts/test-card-configuration.sh"
 github_governance_regression="$repository_root/scripts/test-github-governance.sh"
 deployment_regression="$repository_root/scripts/test-deployment.sh"
+postgres_operations_regression="$repository_root/scripts/test-postgres-operations.sh"
 
 fail() {
   printf 'Quality tooling regression failed: %s\n' "$1" >&2
@@ -38,6 +39,7 @@ fail() {
 [[ -x "$github_governance_regression" ]] || fail 'the GitHub governance regression must be executable.'
 [[ -x "$card_configuration_regression" ]] || fail 'the card configuration regression must be executable.'
 [[ -x "$deployment_regression" ]] || fail 'the deployment regression must be executable.'
+[[ -x "$postgres_operations_regression" ]] || fail 'the PostgreSQL operations regression must be executable.'
 bash -n "$gate"
 bash -n "$ci_gate"
 bash -n "$worktree_guard"
@@ -46,6 +48,7 @@ bash -n "$worktree_regression"
 bash -n "$readme_regression"
 bash -n "$card_configuration_regression"
 bash -n "$deployment_regression"
+bash -n "$postgres_operations_regression"
 grep -Fqx '"$repository_root/test.sh"' "$ci_gate" || fail 'CI must invoke the authoritative local gate.'
 [[ "$(grep -Fxc '  exec "$worktree_guard" --repository "$repository_root" -- "$repository_root/test.sh" "$@"' "$gate")" -eq 1 ]] \
   || fail './test.sh must enter the worktree guard exactly once.'
@@ -59,6 +62,8 @@ grep -Fqx "run_step 'run.sh startup-order regression' \"\$repository_root/script
   || fail 'the authoritative gate must run run.sh startup-order regressions.'
 grep -Fqx "run_step 'Deployment and container contract regression' \"\$repository_root/scripts/test-deployment.sh\"" "$gate" \
   || fail 'the authoritative gate must run deployment regressions.'
+grep -Fqx "run_step 'PostgreSQL operations regression' \"\$repository_root/scripts/test-postgres-operations.sh\"" "$gate" \
+  || fail 'the authoritative gate must run PostgreSQL operations regressions.'
 grep -Fqx "run_step 'Dependabot configuration' python3 \"\$repository_root/scripts/check-dependabot-config.py\"" "$gate" \
   || fail 'the authoritative gate must validate Dependabot configuration.'
 grep -Fqx "run_step 'GitHub governance configuration' \"\$repository_root/scripts/test-github-governance.sh\"" "$gate" \
