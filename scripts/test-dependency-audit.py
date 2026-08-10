@@ -18,6 +18,7 @@ SPEC.loader.exec_module(dependency_audit)
 AuditError = dependency_audit.AuditError
 Finding = dependency_audit.Finding
 compare_findings = dependency_audit.compare_findings
+npm_audit_manifest = dependency_audit.npm_audit_manifest
 parse_npm_audit = dependency_audit.parse_npm_audit
 parse_pip_audit = dependency_audit.parse_pip_audit
 
@@ -38,6 +39,15 @@ class DependencyAuditPolicyTests(unittest.TestCase):
     def test_resolved_finding_does_not_block(self) -> None:
         finding = Finding("npm", "axios", "GHSA-resolved")
         self.assertFalse(compare_findings({finding}, set(), True).blocks)
+
+    def test_npm_audit_manifest_omits_development_engine_gate(self) -> None:
+        manifest = {
+            "dependencies": {"next": "16.3.0"},
+            "devEngines": {"runtime": {"name": "node", "version": "26.5.1"}},
+        }
+        self.assertEqual(
+            npm_audit_manifest(manifest), {"dependencies": {"next": "16.3.0"}}
+        )
 
     def test_npm_parser_keeps_only_high_and_critical_advisories(self) -> None:
         data = {

@@ -152,7 +152,10 @@ independently of a commit. `scripts/dependency-audit.sh <base-revision>` audits
 base and candidate locks with the same advisory snapshot. It blocks newly
 introduced findings, and it blocks inherited findings whenever production
 dependency declarations change; inherited findings do not make unrelated
-changes permanently red. The deterministic gate regression-tests this policy.
+changes permanently red. The npm audit manifests omit `devEngines` only, so a
+baseline pinned to a prior Node runtime can be compared under the candidate
+runtime without changing the production dependency comparison. The deterministic
+gate regression-tests this policy.
 Developers may run the live comparison manually when network access is
 available, but its output is not part of the deterministic local gate.
 
