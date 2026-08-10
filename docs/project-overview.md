@@ -124,7 +124,7 @@ Versions are pinned or constrained by `backend/pyproject.toml`,
 | Backend tooling | uv 0.12.1 in CI, Pyright 1.1.411, Ruff 0.16.1 |
 | Frontend runtime | Next.js 16.3.0, React 19.2.8, TypeScript 7.0.2 native compiler with TypeScript 6.0.2 API compatibility for ESLint, Tailwind CSS 4.3.3, shadcn/ui |
 | Frontend data/forms | TanStack Query 5, Zod 4, Axios, React Hook Form |
-| Frontend tooling | Node 26.5.1, npm 12.0.2 with `package-lock.json`, ESLint 10.8.0 with `@eslint/compat` for Next's legacy plugins, TypeScript 7.0.2 compiler, Vitest 4.1.10 with Testing Library and jsdom, Playwright 1.62.1 |
+| Frontend tooling | Node 26.7.0, npm 12.0.2 with `package-lock.json`, ESLint 10.8.0 with `@eslint/compat` for Next's legacy plugins, TypeScript 7.0.2 compiler, Vitest 4.1.10 with Testing Library and jsdom, Playwright 1.62.1 |
 | Database | PostgreSQL 18.4, asyncpg for application I/O, psycopg2 for APScheduler |
 | Production packaging | Docker Compose v2, Python/Node production images, PostgreSQL 18.4 |
 | External data | Riot Games API |
@@ -148,8 +148,8 @@ copy `.env` secret values into documentation or Jira.
 Install/select the exact frontend tools before the first npm command:
 
 ```bash
-nvm install 26.5.1
-nvm use 26.5.1
+nvm install 26.7.0
+nvm use 26.7.0
 npm install --global npm@12.0.2 --ignore-scripts
 ```
 

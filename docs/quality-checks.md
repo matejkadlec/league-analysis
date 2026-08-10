@@ -42,7 +42,7 @@ Frontend runs preserve the pre-existing tracked state of
 
 ## Deterministic dependencies and tools
 
-- Node 26.5.1 is pinned by `.nvmrc`; `scripts/use-project-node.sh` accepts only
+- Node 26.7.0 is pinned by `.nvmrc`; `scripts/use-project-node.sh` accepts only
   that exact runtime and may select it through NVM.
 - npm 12.0.2 is recorded in `packageManager`/`devEngines`, installed explicitly
   in CI, and enforced with exact Node/npm engines. Exact reviewed install
@@ -152,7 +152,10 @@ independently of a commit. `scripts/dependency-audit.sh <base-revision>` audits
 base and candidate locks with the same advisory snapshot. It blocks newly
 introduced findings, and it blocks inherited findings whenever production
 dependency declarations change; inherited findings do not make unrelated
-changes permanently red. The deterministic gate regression-tests this policy.
+changes permanently red. The npm audit manifests omit `devEngines` only, so a
+baseline pinned to a prior Node runtime can be compared under the candidate
+runtime without changing the production dependency comparison. The deterministic
+gate regression-tests this policy.
 Developers may run the live comparison manually when network access is
 available, but its output is not part of the deterministic local gate.
 

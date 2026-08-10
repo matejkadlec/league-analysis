@@ -20,9 +20,10 @@ repos:
     hooks:
       # Run the linter
       - id: ruff
-        args: ["--fix"]
+        args: ["--fix", "--config=backend/pyproject.toml"]
       # Run the formatter
       - id: ruff-format
+        args: ["--config=backend/pyproject.toml"]
 
   # Frontend linting with Next.js (local hook for better compatibility)
   - repo: local

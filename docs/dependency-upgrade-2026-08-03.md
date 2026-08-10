@@ -196,4 +196,4 @@ network-free. An optional Cloud application smoke run has these boundaries:
 
 Secret values must never be copied into Jira, source, or chat. Once the owner
 supplies the current Cloud scripts, they should install Python 3.14.6,
-Node 26.5.1, npm 12.0.2, and uv 0.12.1, then invoke `./test.sh`.
+Node 26.7.0, npm 12.0.2, and uv 0.12.1, then invoke `./test.sh`.

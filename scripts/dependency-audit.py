@@ -97,7 +97,9 @@ def parse_pip_audit(data: dict[str, Any]) -> set[Finding]:
 
 
 def run(command: list[str], *, cwd: Path, allow_findings: bool = False) -> str:
-    result = subprocess.run(command, cwd=cwd, text=True, capture_output=True)
+    result = subprocess.run(
+        command, cwd=cwd, text=True, capture_output=True, check=False
+    )
     if result.returncode != 0 and not allow_findings:
         raise AuditError(
             f"command failed ({' '.join(command)}): {result.stderr.strip()}"
@@ -114,6 +116,7 @@ def write_revision_file(revision: str, source: str, destination: Path) -> None:
         ["git", "show", f"{revision}:{source}"],
         cwd=REPOSITORY_ROOT,
         capture_output=True,
+        check=False,
     )
     if result.returncode != 0:
         raise AuditError(f"cannot read {source} from base revision {revision}")
@@ -127,6 +130,17 @@ def npm_dependencies(path: Path) -> dict[str, Any]:
         key: data.get(key, {})
         for key in ("dependencies", "optionalDependencies", "peerDependencies")
     }
+
+
+def npm_audit_manifest(data: dict[str, Any]) -> dict[str, Any]:
+    return {key: value for key, value in data.items() if key != "devEngines"}
+
+
+def prepare_npm_audit_manifest(path: Path) -> None:
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise AuditError(f"npm manifest is not an object: {path}")
+    path.write_text(json.dumps(npm_audit_manifest(data)) + "\n", encoding="utf-8")
 
 
 def python_dependencies(path: Path) -> list[str]:
@@ -214,6 +228,7 @@ def main(argv: list[str]) -> int:
         ["git", "cat-file", "-e", f"{base_revision}^{{commit}}"],
         cwd=REPOSITORY_ROOT,
         capture_output=True,
+        check=False,
     )
     if verification.returncode != 0:
         print(
@@ -246,6 +261,8 @@ def main(argv: list[str]) -> int:
                 None,
                 ("frontend/package.json", "frontend/package-lock.json"),
             )
+            prepare_npm_audit_manifest(base_frontend / "package.json")
+            prepare_npm_audit_manifest(head_frontend / "package.json")
             prepare_tree(
                 base_backend,
                 base_revision,

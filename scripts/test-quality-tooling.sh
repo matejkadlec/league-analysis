@@ -96,6 +96,10 @@ grep -Fq 'frontend-typecheck' "$pre_commit" || fail 'the fast frontend typecheck
 [[ "$(grep -Fxc '          source "$repository_root/scripts/use-project-node.sh" && cd "$repository_root/frontend" &&' "$pre_commit")" -eq 2 ]] \
   || fail 'frontend pre-commit hooks must select the project Node runtime.'
 grep -Fqx '    rev: v0.16.1' "$pre_commit" || fail 'pre-commit Ruff must match the backend tool pin.'
+grep -Fqx '        args: ["--fix", "--config=backend/pyproject.toml"]' "$pre_commit" \
+  || fail 'pre-commit Ruff lint must use the backend tool configuration.'
+grep -Fqx '        args: ["--config=backend/pyproject.toml"]' "$pre_commit" \
+  || fail 'pre-commit Ruff format must use the backend tool configuration.'
 grep -Fq 'source "$SCRIPT_DIR/scripts/use-project-node.sh"' "$repository_root/run.sh" || fail 'run.sh must select the project Node runtime.'
 grep -Fq 'Each `run.sh` invocation creates `logs/` before redirecting backend or frontend' "$agent_guide" \
   || fail 'AGENTS.md must document run.sh log-directory creation.'
