@@ -33,6 +33,16 @@ export function getMatchHistoryQueueQuery(
   return filter === "ALL" ? undefined : filter;
 }
 
+export function getMatchHistoryEmptyMessage(
+  filter: Exclude<MatchHistoryQueueFilter, "ALL">,
+): string {
+  if (filter === 2400) {
+    return "No ARAM: Mayhem matches are currently available from Riot Match-V5 for this player.";
+  }
+
+  return `No matches found for ${getMatchQueueName(filter)}.`;
+}
+
 export function selectMatchHistoryQueue(
   currentFilter: MatchHistoryQueueFilter,
   nextFilter: MatchHistoryQueueFilter,

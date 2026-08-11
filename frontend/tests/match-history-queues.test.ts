@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  getMatchHistoryEmptyMessage,
   getMatchHistoryQueueQuery,
   getMatchQueueName,
   MATCH_HISTORY_PAGE_SIZE,
@@ -32,6 +33,15 @@ describe("Match History queue catalog", () => {
     expect(getMatchQueueName(480)).toBe("Swiftplay");
     expect(getMatchQueueName(2400)).toBe("ARAM: Mayhem");
     expect(getMatchQueueName(999999)).toBe("Queue 999999");
+  });
+
+  it("explains the Match-V5 availability boundary for the Mayhem filter", () => {
+    expect(getMatchHistoryEmptyMessage(2400)).toBe(
+      "No ARAM: Mayhem matches are currently available from Riot Match-V5 for this player.",
+    );
+    expect(getMatchHistoryEmptyMessage(450)).toBe(
+      "No matches found for ARAM.",
+    );
   });
 
   it("uses no queue restriction for All Queues and resets pagination on change", () => {

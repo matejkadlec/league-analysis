@@ -384,6 +384,17 @@ label owns a fixed width so the selected bold state cannot shift neighboring
 filters. Unknown stored queue IDs remain visible as `Queue N`; they are never
 silently relabeled as a supported mode.
 
+Riot's public queue catalog identifies 2400 as ARAM: Mayhem. A secret-safe
+2026-08-11 diagnostic confirmed that the selected account's local League
+client history and logs contained ARAM: Mayhem play, while Match-V5 returned no
+queue-2400 IDs and rejected known Mayhem match IDs. Owner QA independently
+observed the same missing history on another Match-V5-backed site. The product
+continues polling queue 2400 so provider-visible matches are stored
+automatically. When none have been returned, Match History names the Match-V5
+availability boundary instead of implying that the player did not play the
+mode. Local client state and logs are diagnostic evidence only and are never an
+ingestion source.
+
 ### Player Search & Tracking
 
 The frontend uses one `Name#Tag` field for manual tracked-player input. The

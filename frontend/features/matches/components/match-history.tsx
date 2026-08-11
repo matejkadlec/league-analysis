@@ -52,6 +52,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
 import { useRelativeTime } from "@/lib/core/use-relative-time";
 import {
+  getMatchHistoryEmptyMessage,
   getMatchHistoryQueueQuery,
   getMatchQueueName,
   MATCH_HISTORY_PAGE_SIZE,
@@ -1045,7 +1046,7 @@ export function MatchHistory({ puuid, lastUpdated }: MatchHistoryProps) {
                 </p>
               ) : activeQueueFilter !== "ALL" ? (
                 <p className="font-medium">
-                  No matches found for {getMatchQueueName(activeQueueFilter)}.
+                  {getMatchHistoryEmptyMessage(activeQueueFilter)}
                 </p>
               ) : (
                 <div>
