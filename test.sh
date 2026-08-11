@@ -19,10 +19,11 @@ next_env_existed=false
 
 usage() {
   printf '%s\n' \
-    'Usage: ./test.sh [-f|--frontend|-b|--backend]' \
+    'Usage: ./test.sh [-f|--frontend|-b|--backend|-r|--repo]' \
     '  ./test.sh             Run the complete frontend and backend gate' \
     '  ./test.sh -f          Run repository and frontend checks' \
-    '  ./test.sh -b          Run repository and backend checks'
+    '  ./test.sh -b          Run repository and backend checks' \
+    '  ./test.sh -r          Run repository checks only (documentation-only changes)'
 }
 
 if [[ $# -gt 1 ]]; then
@@ -37,6 +38,10 @@ if [[ $# -eq 1 ]]; then
       ;;
     -b|--backend)
       run_frontend=false
+      ;;
+    -r|--repo)
+      run_frontend=false
+      run_backend=false
       ;;
     -h|--help)
       usage
@@ -173,8 +178,10 @@ if [[ "$run_frontend" == true && "$run_backend" == true ]]; then
   printf 'Scope: repository + frontend + backend\n'
 elif [[ "$run_frontend" == true ]]; then
   printf 'Scope: repository + frontend\n'
-else
+elif [[ "$run_backend" == true ]]; then
   printf 'Scope: repository + backend\n'
+else
+  printf 'Scope: repository\n'
 fi
 
 run_step 'Repository hygiene' run_repository_hygiene
