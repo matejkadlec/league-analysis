@@ -13,6 +13,9 @@ from app.features.matches.timeline import build_match_timeline_rows
 FIXTURE = json.loads(
     (Path(__file__).parent / "fixtures" / "riot_contracts_2026_08_08.json").read_text()
 )
+QUEUE_VARIANTS = json.loads(
+    (Path(__file__).parent / "fixtures" / "supported_queue_variants.json").read_text()
+)
 
 
 def _match_payload(queue_id: str) -> dict:
@@ -66,6 +69,29 @@ def test_raw_match_transformer_keeps_both_timestamp_semantics() -> None:
     assert transformed["game_creation_timestamp"] == 1_786_100_000_000
     assert transformed["game_start_timestamp"] == 1_786_100_060_000
     assert transformed["game_start_timestamp_source"] == "riot_game_start"
+
+
+@pytest.mark.parametrize("variant", QUEUE_VARIANTS["queues"])
+def test_new_supported_queue_variants_preserve_queue_identity(variant: dict) -> None:
+    payload = _match_payload(variant["base_fixture"])
+    payload["metadata"]["matchId"] = f"EUN1_SANITIZED_{variant['id']}"
+    payload["info"].update(
+        {
+            "queueId": variant["id"],
+            "gameMode": variant["game_mode"],
+            "mapId": variant["map_id"],
+        }
+    )
+
+    match = MatchDTO.model_validate(payload)
+    transformed = MatchTransformer().transform_match_data(payload)["match"]
+
+    assert match.info.queue_id == variant["id"]
+    assert transformed["queue_id"] == variant["id"]
+    assert transformed["game_mode"] == variant["game_mode"]
+
+    rows = build_match_timeline_rows(match, _timeline_payload(variant["base_fixture"]))
+    assert len(rows) == 1
 
 
 @pytest.mark.parametrize("queue_id", ["400", "420", "440", "450"])

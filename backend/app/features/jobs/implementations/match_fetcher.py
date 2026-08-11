@@ -15,7 +15,7 @@ from app.features.jobs.error_handling import (
     is_riot_api_key_error,
 )
 from app.features.jobs.maintenance import RiotWriterMaintenanceActiveError
-from app.features.jobs.queue_config import get_enabled_match_fetcher_queue_ids
+from app.features.jobs.queue_config import get_match_fetcher_queue_ids
 from app.features.matches.service import MatchService
 from app.features.players.models import Player
 from app.features.players.schemas import PlayerResponse
@@ -52,17 +52,8 @@ class MatchFetcherJob(BaseJob):
         if not self.job_config:
             raise RuntimeError("Match Fetcher missing job configuration")
 
-        enabled_queue_ids = get_enabled_match_fetcher_queue_ids(
-            self.job_config.config_json
-        )
-        self.add_log_entry("enabled_queue_ids", enabled_queue_ids)
-
-        if not enabled_queue_ids:
-            logger.info(
-                "Skipping Match Fetcher - no queues enabled",
-                job_config_id=self.job_config_id,
-            )
-            return
+        supported_queue_ids = get_match_fetcher_queue_ids()
+        self.add_log_entry("supported_queue_ids", supported_queue_ids)
 
         # Initialize services
         # Retrieve API key dynamically (DB prioritized > Env fallback)
@@ -105,7 +96,6 @@ class MatchFetcherJob(BaseJob):
                             match_service,
                             riot_client,
                             rate_limiter,
-                            enabled_queue_ids,
                         )
                     except RateLimitSignal:
                         raise
@@ -158,7 +148,6 @@ class MatchFetcherJob(BaseJob):
         match_service: MatchService,
         riot_client: RiotAPIClient,
         rate_limiter: DBRateLimiter,
-        enabled_queue_ids: list[int],
     ) -> None:
         """Fetch and sync matches for a single player, then update their league.
 
@@ -184,7 +173,6 @@ class MatchFetcherJob(BaseJob):
                 riot_client,
                 player,
                 rate_limiter,
-                enabled_queue_ids=enabled_queue_ids,
                 on_failure=record_match_sync_failure,
             )
         except RateLimitError as error:

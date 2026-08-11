@@ -134,10 +134,12 @@ class QueueType(int, Enum):
 
 
 PRODUCT_SUPPORTED_QUEUE_TYPES: tuple[QueueType, ...] = (
-    QueueType.NORMAL_DRAFT_5X5,
     QueueType.RANKED_SOLO_5X5,
     QueueType.RANKED_FLEX_5X5,
+    QueueType.SWIFTPLAY,
+    QueueType.NORMAL_DRAFT_5X5,
     QueueType.ARAM,
+    QueueType.ARAM_MAYHEM,
 )
 PRODUCT_SUPPORTED_QUEUE_IDS: tuple[int, ...] = tuple(
     queue.value for queue in PRODUCT_SUPPORTED_QUEUE_TYPES

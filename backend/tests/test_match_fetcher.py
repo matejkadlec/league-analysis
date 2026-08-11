@@ -8,6 +8,7 @@ from pydantic import ValidationError as PydanticValidationError
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.exceptions import ServiceException
+from app.core.riot_api.constants import PRODUCT_SUPPORTED_QUEUE_IDS
 from app.core.riot_api.errors import RateLimitError
 from app.core.riot_api.models import LeagueEntryDTO
 from app.features.jobs.base import BaseJob
@@ -56,6 +57,32 @@ class _NoopJob(BaseJob):
 
     async def execute(self, _db: object) -> None:
         return None
+
+
+@pytest.mark.asyncio
+async def test_match_sync_always_processes_the_complete_supported_queue_set() -> None:
+    service = MatchService(_QueueSyncSession())  # type: ignore[arg-type]
+    service._sync_single_queue_for_player = AsyncMock(return_value=0)  # type: ignore[method-assign]
+
+    await service.sync_matches_for_player(
+        riot_client=object(),
+        player=SimpleNamespace(puuid="test-puuid", platform="eun1"),
+    )
+
+    assert [
+        call.kwargs["queue_id"]
+        for call in service._sync_single_queue_for_player.await_args_list
+    ] == list(PRODUCT_SUPPORTED_QUEUE_IDS)
+
+
+def test_explicit_analysis_queue_subset_rejects_unsupported_ids() -> None:
+    service = MatchService(_QueueSyncSession())  # type: ignore[arg-type]
+
+    assert service._normalize_sync_queue_ids([2400, 999999, 480, 2400]) == [
+        480,
+        2400,
+    ]
+    assert service._normalize_sync_queue_ids([999999]) == []
 
 
 @pytest.mark.asyncio
@@ -116,7 +143,6 @@ async def test_match_sync_propagates_rate_limit_to_the_job_layer() -> None:
         await service.sync_matches_for_player(
             riot_client=object(),
             player=SimpleNamespace(puuid="test-puuid", platform="eun1"),
-            enabled_queue_ids=[420],
         )
 
 
@@ -137,7 +163,6 @@ async def test_match_sync_propagates_fatal_writer_errors_to_the_job_layer(
         await service.sync_matches_for_player(
             riot_client=object(),
             player=SimpleNamespace(puuid="test-puuid", platform="eun1"),
-            enabled_queue_ids=[420],
         )
 
 
@@ -158,7 +183,6 @@ async def test_match_fetcher_converts_rate_limit_to_a_non_failure_signal() -> No
             match_service=match_service,
             riot_client=object(),
             rate_limiter=object(),
-            enabled_queue_ids=[420],
         )
 
     assert error.value.retry_after == 7
@@ -210,7 +234,7 @@ async def test_match_fetcher_execute_propagates_rate_limit_to_base_job(
     )
 
     job = MatchFetcherJob(job_config_id=7)
-    job.job_config = SimpleNamespace(config_json={"enabled_queue_ids": [420]})
+    job.job_config = SimpleNamespace(config_json={"enabled_queue_ids": []})
     job.check_control_state = AsyncMock()
 
     with pytest.raises(RateLimitSignal):
@@ -251,7 +275,6 @@ async def test_match_fetcher_processes_the_player_league_refresh_path() -> None:
         match_service=match_service,
         riot_client=object(),
         rate_limiter=rate_limiter,
-        enabled_queue_ids=[420],
     )
 
     player_service.update_player_league.assert_awaited_once()
@@ -304,7 +327,6 @@ async def test_recoverable_match_failure_does_not_claim_match_freshness() -> Non
         match_service=match_service,
         riot_client=object(),
         rate_limiter=rate_limiter,
-        enabled_queue_ids=[420],
     )
 
     assert player_model.match_synced_at is None

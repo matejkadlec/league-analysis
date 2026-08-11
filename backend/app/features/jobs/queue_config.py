@@ -1,82 +1,29 @@
-"""Utilities for Match Fetcher queue configuration stored in config_json."""
+"""Match Fetcher access to the canonical product-supported queue set."""
 
 from typing import Any
 
 from app.core.riot_api.constants import PRODUCT_SUPPORTED_QUEUE_IDS
 
-# Queue IDs supported by Match Fetcher queue toggles. Product support is
-# declared once at the Riot boundary; the UI order stays workflow-specific.
+# Product support is declared once at the Riot boundary. Match Fetcher always
+# uses this complete tuple and never narrows it with persisted configuration.
 MATCH_FETCHER_QUEUE_IDS: tuple[int, ...] = PRODUCT_SUPPORTED_QUEUE_IDS
-
-# Queue IDs shown in the same order in UI
-MATCH_FETCHER_QUEUE_ORDER: tuple[int, ...] = (420, 440, 400, 450)
-
-# Default: all supported queues enabled
-MATCH_FETCHER_DEFAULT_QUEUE_IDS: list[int] = list(MATCH_FETCHER_QUEUE_ORDER)
-
-MATCH_FETCHER_ENABLED_QUEUE_IDS_KEY = "enabled_queue_ids"
+LEGACY_MATCH_FETCHER_ENABLED_QUEUE_IDS_KEY = "enabled_queue_ids"
 
 
 def normalize_match_fetcher_config(
     config_json: dict[str, Any] | None,
 ) -> dict[str, Any]:
-    """Normalize Match Fetcher config_json with safe queue defaults.
+    """Remove the obsolete per-queue selection from Match Fetcher config.
 
-    Returns a copy with a guaranteed `enabled_queue_ids` key.
+    Historical rows can retain ``enabled_queue_ids`` until their next ordinary
+    configuration update. Runtime behavior and API responses ignore the field,
+    so stale values can never restrict the canonical supported queue set.
     """
     config = dict(config_json or {})
-    config[MATCH_FETCHER_ENABLED_QUEUE_IDS_KEY] = _normalize_enabled_queue_ids(
-        config.get(MATCH_FETCHER_ENABLED_QUEUE_IDS_KEY)
-    )
+    config.pop(LEGACY_MATCH_FETCHER_ENABLED_QUEUE_IDS_KEY, None)
     return config
 
 
-def get_enabled_match_fetcher_queue_ids(
-    config_json: dict[str, Any] | None,
-) -> list[int]:
-    """Extract enabled queue IDs from Match Fetcher config_json."""
-    normalized = normalize_match_fetcher_config(config_json)
-    return list(normalized[MATCH_FETCHER_ENABLED_QUEUE_IDS_KEY])
-
-
-def has_enabled_match_fetcher_queue(config_json: dict[str, Any] | None) -> bool:
-    """Whether at least one queue is enabled in Match Fetcher config_json."""
-    return len(get_enabled_match_fetcher_queue_ids(config_json)) > 0
-
-
-def _normalize_enabled_queue_ids(raw_queue_ids: Any) -> list[int]:
-    """Normalize `enabled_queue_ids` while preserving known queue order.
-
-    Rules:
-    - missing/invalid value => all queues enabled (safe default)
-    - empty list => no queues enabled
-    - invalid values inside a non-empty list are ignored
-    - if non-empty list has no valid values => all queues enabled
-    """
-    if raw_queue_ids is None:
-        return list(MATCH_FETCHER_DEFAULT_QUEUE_IDS)
-
-    if not isinstance(raw_queue_ids, list):
-        return list(MATCH_FETCHER_DEFAULT_QUEUE_IDS)
-
-    if len(raw_queue_ids) == 0:
-        return []
-
-    normalized_values: set[int] = set()
-    for raw_value in raw_queue_ids:
-        try:
-            queue_id = int(raw_value)
-        except TypeError, ValueError:
-            continue
-
-        if queue_id in MATCH_FETCHER_QUEUE_IDS:
-            normalized_values.add(queue_id)
-
-    if not normalized_values:
-        return list(MATCH_FETCHER_DEFAULT_QUEUE_IDS)
-
-    return [
-        queue_id
-        for queue_id in MATCH_FETCHER_QUEUE_ORDER
-        if queue_id in normalized_values
-    ]
+def get_match_fetcher_queue_ids() -> list[int]:
+    """Return every product-supported queue in deterministic canonical order."""
+    return list(MATCH_FETCHER_QUEUE_IDS)

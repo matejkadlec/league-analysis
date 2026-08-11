@@ -34,7 +34,9 @@ Inherits repository-wide rules from
   as optional. Missing identity fields must preserve a known Riot ID; legacy
   `summonerName` is only a new-record/display fallback.
 - Keep the Riot queue reference catalog separate from the product allowlist
-  (400, 420, 440, 450). Reject unknown queue/type/platform inputs before I/O.
+  (420, 440, 480, 400, 450, 2400). Reject unknown queue/type/platform inputs
+  before I/O. Match Fetcher always consumes the complete product allowlist;
+  persisted job configuration cannot narrow it.
 - Treat `leagueId` and `puuid` as optional metadata in League-V4 by-PUUID
   entries. Keep queue and ranked-result fields strict so genuine response-shape
   drift remains visible without rejecting the current payload.

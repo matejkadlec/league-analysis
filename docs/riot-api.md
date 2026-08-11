@@ -8,9 +8,11 @@
 
 The dated [2026-08-03 compatibility audit](riot-api-compatibility-2026-08-03.md)
 traces every caller and consumer and defines the remediation scope implemented
-by LGA-42. Sanitized protected fixtures captured on 2026-08-08 now cover the
-used Account, Summoner, Match, and Timeline shapes for queues 400, 420, 440,
-and 450.
+by LGA-42. Sanitized protected fixtures captured on 2026-08-08 cover the used
+Account, Summoner, Match, and Timeline shapes for queues 400, 420, 440, and
+450. Transparent synthetic variants derived from those fixtures verify queue
+identity and tolerant contract handling for Swiftplay 480 and ARAM: Mayhem
+2400 without claiming a new protected-provider capture.
 
 ---
 
@@ -180,7 +182,7 @@ Host: {region}.api.riotgames.com
 |-------|------|-------------|
 | `start` | int | Start index (default: 0) |
 | `count` | int | Number of matches (max: 100) |
-| `queue` | int | A documented `QueueType`; product jobs enable only 400, 420, 440, and 450 |
+| `queue` | int | A documented `QueueType`; product jobs use 420, 440, 480, 400, 450, and 2400 |
 | `type` | enum | `ranked`, `normal`, `tourney`, or `tutorial`; inclusive with `queue` |
 | `startTime` | int | Epoch seconds - matches that **started after** this time (inclusive) |
 | `endTime` | int | Epoch seconds - matches that **started before** this time (inclusive) |
@@ -350,8 +352,9 @@ repository.
 
 ```
 For each tracked player:
-1. GET /lol/match/v5/matches/by-puuid/{puuid}/ids?queue=420&count=100
-   └── Get ranked match IDs
+1. For each product queue 420, 440, 480, 400, 450, and 2400:
+   GET /lol/match/v5/matches/by-puuid/{puuid}/ids?queue={queue}&count=100
+   └── Get queue-specific match IDs
 
 2. For each new match_id:
    └── GET /lol/match/v5/matches/{matchId}
@@ -367,6 +370,19 @@ For each tracked player:
 5. GET /lol/league/v4/entries/by-puuid/{puuid}
    └── Get current rank, create snapshot if changed
 ```
+
+### Match History queue presentation
+
+The frontend catalog exposes filters in this fixed order:
+
+`All Queues | Ranked Solo/Duo | Ranked Flex | Swiftplay | Normal Draft | ARAM | ARAM: Mayhem`
+
+`All Queues` sends no queue restriction and therefore includes every stored
+supported mode, including both ARAM queues. A specific filter sends its exact
+queue ID. Filter changes reset local pagination to the first 20 rows, and every
+label owns a fixed width so the selected bold state cannot shift neighboring
+filters. Unknown stored queue IDs remain visible as `Queue N`; they are never
+silently relabeled as a supported mode.
 
 ### Player Search & Tracking
 
@@ -458,8 +474,8 @@ Retry-After: 5
 - `Region` enum: EUROPE, AMERICAS, ASIA, SEA
 - `Platform` enum: EUN1, EUW1, NA1, KR, etc.
 - `QueueType` follows Riot's maintained queue dataset. The narrower product
-  allowlist is 400, 420, 440, and 450; new documented modes are not enabled
-  automatically.
+  allowlist is 420, 440, 480, 400, 450, and 2400. Match Fetcher always uses
+  the complete allowlist; other documented modes are not enabled automatically.
 - `get_region_by_platform()`: Platform → Region mapping that rejects unknown
   platforms rather than defaulting to Europe.
 

@@ -9,6 +9,7 @@ from pydantic import ValidationError as PydanticValidationError
 
 from app.core.riot_api.client import RiotAPIClient
 from app.core.riot_api.constants import (
+    PRODUCT_SUPPORTED_QUEUE_IDS,
     MatchType,
     Platform,
     QueueType,
@@ -77,6 +78,13 @@ def test_server_retry_boundary_and_queue_normalization() -> None:
     assert client._extract_endpoint_path("https://europe.api.riotgames.com/path") == (
         "path"
     )
+
+
+def test_product_supported_queue_catalog_is_explicit_and_complete() -> None:
+    assert PRODUCT_SUPPORTED_QUEUE_IDS == (420, 440, 480, 400, 450, 2400)
+    assert QueueType(480) is QueueType.SWIFTPLAY
+    assert QueueType(2400) is QueueType.ARAM_MAYHEM
+    assert 999999 not in PRODUCT_SUPPORTED_QUEUE_IDS
 
 
 @pytest.mark.asyncio

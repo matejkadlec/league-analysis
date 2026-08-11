@@ -51,29 +51,19 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
 import { useRelativeTime } from "@/lib/core/use-relative-time";
+import {
+  getMatchHistoryQueueQuery,
+  getMatchQueueName,
+  MATCH_HISTORY_PAGE_SIZE,
+  MATCH_HISTORY_QUEUE_FILTERS,
+  MatchHistoryQueueFilter,
+  selectMatchHistoryQueue,
+} from "../queue-catalog";
 
 interface MatchHistoryProps {
   puuid: string;
   lastUpdated?: string | null;
 }
-
-// Queue names mapping
-const QUEUE_NAMES: Record<number, string> = {
-  420: "Ranked Solo/Duo",
-  440: "Ranked Flex",
-  400: "Normal Draft",
-  430: "Normal Blind",
-  450: "ARAM",
-};
-
-type MatchHistoryQueueFilter = "ALL" | 420 | 440 | 400;
-
-const MATCH_HISTORY_QUEUE_FILTERS = [
-  { id: "ALL" as const, label: "All Queues", widthClass: "w-[96px]" },
-  { id: 420 as const, label: "Ranked Solo/Duo", widthClass: "w-[140px]" },
-  { id: 440 as const, label: "Ranked Flex", widthClass: "w-[96px]" },
-  { id: 400 as const, label: "Normal Draft", widthClass: "w-[100px]" },
-];
 
 // Format time as "H:MM AM/PM"
 function formatTime(timestamp: number): string {
@@ -113,11 +103,6 @@ function getDaysAgo(timestamp: number): string {
   if (diffDays === 0) return "Today";
   if (diffDays === 1) return "Yesterday";
   return `${diffDays} days ago`;
-}
-
-// Get queue name
-function getQueueName(queueId: number): string {
-  return QUEUE_NAMES[queueId] || `Queue ${queueId}`;
 }
 
 // Get result text and color
@@ -431,7 +416,7 @@ function MatchRow({
         {/* Column 1: Queue Type & Patch - WIDER, CENTERED VERTICALLY */}
         <div className="w-35 shrink-0 flex flex-col justify-center">
           <span className="text-sm font-medium text-center">
-            {getQueueName(match.queue_id)}
+            {getMatchQueueName(match.queue_id)}
           </span>
           <span className="text-xs text-muted-foreground text-center mt-1">
             Patch {match.game_version.split(".").slice(0, 2).join(".")}
@@ -715,13 +700,12 @@ function MatchRow({
 }
 
 export function MatchHistory({ puuid, lastUpdated }: MatchHistoryProps) {
-  const PAGE_SIZE = 20;
   const loadMoreRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
   const router = useRouter();
   const relativeUpdatedAt = useRelativeTime(lastUpdated);
 
-  const [displayCount, setDisplayCount] = useState(PAGE_SIZE);
+  const [displayCount, setDisplayCount] = useState(MATCH_HISTORY_PAGE_SIZE);
   const [isUpdating, setIsUpdating] = useState(false);
   const [activeQueueFilter, setActiveQueueFilter] =
     useState<MatchHistoryQueueFilter>("ALL");
@@ -730,16 +714,13 @@ export function MatchHistory({ puuid, lastUpdated }: MatchHistoryProps) {
     MATCH_HISTORY_QUEUE_FILTERS.find(
       (filterOption) => filterOption.id === activeQueueFilter,
     ) ?? MATCH_HISTORY_QUEUE_FILTERS[0];
-  const queueQueryParam =
-    activeFilterConfig.id === "ALL" ? undefined : activeFilterConfig.id;
-  const excludeAramFromQuery = activeFilterConfig.id === "ALL";
+  const queueQueryParam = getMatchHistoryQueueQuery(activeFilterConfig.id);
 
   const { data: statsResult } = useQuery({
     queryKey: ["match-history-stats", puuid, activeQueueFilter],
     queryFn: () =>
       validatedGet(MatchStatsResponseSchema, `/matches/player/${puuid}/stats`, {
         queue: queueQueryParam,
-        exclude_aram: excludeAramFromQuery || undefined,
       }),
     enabled: !!puuid,
   });
@@ -759,7 +740,6 @@ export function MatchHistory({ puuid, lastUpdated }: MatchHistoryProps) {
           `/matches/player/${puuid}/detailed`,
           {
             queue: queueQueryParam,
-            exclude_aram: excludeAramFromQuery || undefined,
             start: 0,
             count: displayCount,
           },
@@ -838,12 +818,13 @@ export function MatchHistory({ puuid, lastUpdated }: MatchHistoryProps) {
   };
 
   const handleQueueFilterSelect = (queueId: MatchHistoryQueueFilter) => {
-    if (queueId === activeQueueFilter) {
+    const selection = selectMatchHistoryQueue(activeQueueFilter, queueId);
+    if (!selection) {
       return;
     }
 
-    setDisplayCount(PAGE_SIZE);
-    setActiveQueueFilter(queueId);
+    setDisplayCount(selection.displayCount);
+    setActiveQueueFilter(selection.filter);
   };
 
   const handleChampionSearchChange = (value: string) => {
@@ -874,7 +855,7 @@ export function MatchHistory({ puuid, lastUpdated }: MatchHistoryProps) {
 
   const loadMore = useCallback(() => {
     if (!isFetching && hasMore) {
-      setDisplayCount((prev) => prev + PAGE_SIZE);
+      setDisplayCount((prev) => prev + MATCH_HISTORY_PAGE_SIZE);
     }
   }, [isFetching, hasMore]);
 
@@ -976,7 +957,7 @@ export function MatchHistory({ puuid, lastUpdated }: MatchHistoryProps) {
   return (
     <Card id="match-history">
       <CardHeader>
-        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+        <div className="grid grid-cols-[1fr_auto] items-center gap-3 xl:grid-cols-[1fr_auto_1fr]">
           <div className="justify-self-start">
             <CardTitle className="flex items-center gap-2">
               <ListRestart className="h-5 w-5 text-primary" />
@@ -984,29 +965,35 @@ export function MatchHistory({ puuid, lastUpdated }: MatchHistoryProps) {
             </CardTitle>
           </div>
 
-          <div className="justify-self-center flex items-center text-sm">
-            {MATCH_HISTORY_QUEUE_FILTERS.map((queueOption, index) => {
-              const isSelected = queueOption.id === activeQueueFilter;
+          <div
+            className="order-3 col-span-2 min-w-0 w-full overflow-x-auto xl:order-none xl:col-span-1 xl:justify-self-center"
+            data-testid="match-history-queue-filters"
+          >
+            <div className="flex w-max min-w-full items-center justify-center text-sm">
+              {MATCH_HISTORY_QUEUE_FILTERS.map((queueOption, index) => {
+                const isSelected = queueOption.id === activeQueueFilter;
 
-              return (
-                <div key={queueOption.id} className="flex items-center">
-                  <button
-                    type="button"
-                    onClick={() => handleQueueFilterSelect(queueOption.id)}
-                    className={`${queueOption.widthClass} text-center transition-colors ${
-                      isSelected
-                        ? "cursor-default font-semibold text-foreground"
-                        : "cursor-pointer text-[#aaa]"
-                    }`}
-                  >
-                    {queueOption.label}
-                  </button>
-                  {index < MATCH_HISTORY_QUEUE_FILTERS.length - 1 && (
-                    <span className="text-muted-foreground">|</span>
-                  )}
-                </div>
-              );
-            })}
+                return (
+                  <div key={queueOption.id} className="flex items-center">
+                    <button
+                      type="button"
+                      onClick={() => handleQueueFilterSelect(queueOption.id)}
+                      aria-pressed={isSelected}
+                      className={`${queueOption.widthClass} text-center transition-colors ${
+                        isSelected
+                          ? "cursor-default font-semibold text-foreground"
+                          : "cursor-pointer text-[#aaa]"
+                      }`}
+                    >
+                      {queueOption.label}
+                    </button>
+                    {index < MATCH_HISTORY_QUEUE_FILTERS.length - 1 && (
+                      <span className="text-muted-foreground">|</span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
 
           <Button
@@ -1058,7 +1045,7 @@ export function MatchHistory({ puuid, lastUpdated }: MatchHistoryProps) {
                 </p>
               ) : activeQueueFilter !== "ALL" ? (
                 <p className="font-medium">
-                  No matches found for {getQueueName(activeQueueFilter)}.
+                  No matches found for {getMatchQueueName(activeQueueFilter)}.
                 </p>
               ) : (
                 <div>

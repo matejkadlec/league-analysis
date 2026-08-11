@@ -18,10 +18,7 @@ from .maintenance import (
     preserve_riot_writer_maintenance_mode,
 )
 from .models import ExecutionType, JobConfiguration, JobExecution, JobStatus, JobType
-from .queue_config import (
-    has_enabled_match_fetcher_queue,
-    normalize_match_fetcher_config,
-)
+from .queue_config import normalize_match_fetcher_config
 from .schemas import (
     JobConfigurationResponse,
     JobConfigurationUpdate,
@@ -149,7 +146,9 @@ class JobService:
                 update_dict.get("config_json"),
             )
 
-        # Match Fetcher queue toggles are stored in config_json and drive active state.
+        # Per-queue Match Fetcher configuration is obsolete. Merge other
+        # job-specific fields, then strip the legacy key so it cannot restrict
+        # the canonical supported queue set or leak back through the API.
         if job.job_type == JobType.MATCH_FETCHER and "config_json" in update_dict:
             merged_config: dict[str, Any] = {
                 **(job.config_json or {}),
@@ -157,9 +156,6 @@ class JobService:
             }
             normalized_config = normalize_match_fetcher_config(merged_config)
             update_dict["config_json"] = normalized_config
-            update_dict["is_active"] = has_enabled_match_fetcher_queue(
-                normalized_config
-            )
         elif "config_json" in update_dict:
             update_dict["config_json"] = incoming_config
 
