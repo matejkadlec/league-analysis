@@ -221,6 +221,10 @@ When debugging runtime failures, inspect both logs before changing code.
 - Do not modify Riot API rate-limiting behavior unless the task explicitly
   scopes that work; preserve the boundaries in
   [`docs/riot-api.md`](docs/riot-api.md).
+- Riot PUUIDs are encrypted per developer account: stored PUUIDs return
+  `400` under a key from a different developer account, and switching
+  accounts is a data migration (see
+  [`docs/riot-api.md`](docs/riot-api.md#puuids-are-bound-to-the-developer-account)).
 - Never let SQLAlchemy create application tables. Reviewed Alembic revisions in
   `backend/alembic/versions/` are the schema authority.
 - Apply schema changes through `backend/scripts/migrate.py` after reviewing a
