@@ -22,6 +22,30 @@ and 450.
 - **Key Validity**: Development keys expire every **24 hours**
 - **Storage**: API key stored in `core.riot_api_keys` table (database priority, env fallback)
 
+### PUUIDs Are Bound to the Developer Account
+
+Riot encrypts every PUUID per developer account. A PUUID obtained under one
+account's API key is rejected by every `by-puuid` endpoint when the request
+uses a key from a different developer account; the response is
+`400 Invalid request parameters`, not `401`, so it is easy to misread as a
+malformed request.
+
+Consequences:
+
+- Rotating to a key from a **different** developer account invalidates every
+  stored PUUID. Rotating keys within the same account is safe.
+- Datasets fetched under different developer accounts cannot be merged as-is;
+  the same player appears under two unrelated PUUIDs.
+- The recovery path is ACCOUNT-V1 **Get Account by Riot ID** (`game_name` and
+  `tag_line` are stored in `core.players`): resolve the player under the
+  current key, then remap the stored PUUID and every referencing row
+  (`core.players` is referenced by puuid from match, league, analysis, sync,
+  and tracking tables).
+
+Plan any future switch of the production key to a different developer account
+(for example after Riot application review) as a data migration, not a
+configuration change.
+
 ### Routing
 
 Riot APIs use two routing schemas. Mixing them causes 403/404 errors.
