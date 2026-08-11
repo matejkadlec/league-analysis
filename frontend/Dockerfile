@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1.18
+# syntax=docker/dockerfile:1.26
 FROM node:26.7.0-bookworm-slim AS dependencies
 
 ENV NEXT_TELEMETRY_DISABLED=1 \

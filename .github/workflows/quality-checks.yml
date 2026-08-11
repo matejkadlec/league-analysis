@@ -20,7 +20,7 @@ permissions:
 
 env:
   CHANGE_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before || github.sha }}
-  PYTHON_VERSION: "3.14.6"
+  PYTHON_VERSION: "3.14.7"
 
 jobs:
   quality-gate:
@@ -71,7 +71,7 @@ jobs:
         if: steps.changes.outputs.docs_only != 'true'
         uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
-          version: "0.12.1"
+          version: "0.12.3"
 
       - name: Install pinned Python
         if: steps.changes.outputs.docs_only != 'true'
@@ -141,7 +141,7 @@ jobs:
         if: needs.quality-gate.outputs.docs_only != 'true'
         uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
-          version: "0.12.1"
+          version: "0.12.3"
 
       - name: Install pinned Python
         if: needs.quality-gate.outputs.docs_only != 'true'
