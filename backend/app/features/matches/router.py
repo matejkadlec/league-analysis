@@ -149,7 +149,6 @@ async def get_player_lane_stats(
 async def _run_analysis_task(
     job_id: str,
     puuid: str,
-    api_key: str,
 ):
     """Background task for analysis.
 
@@ -177,7 +176,7 @@ async def _run_analysis_task(
 
     try:
         from app.core.database import db_manager
-        from app.core.riot_api.client import RiotAPIClient
+        from app.core.riot_api.credential_health import create_tracked_riot_api_client
         from app.features.matches.service import MatchService
 
         analysis_jobs[job_id]["message"] = "Preparing analysis..."
@@ -213,7 +212,7 @@ async def _run_analysis_task(
         async with db_manager.get_session() as session:
             match_service = MatchService(session)
 
-            async with RiotAPIClient(api_key) as client:
+            async with await create_tracked_riot_api_client(session) as client:
                 rate_limiter = DBRateLimiter(
                     session, RateLimitComponent.MATCHMAKING_ANALYSIS
                 )
@@ -296,9 +295,9 @@ async def analyze_match_history(
     current_user: User = Depends(get_current_active_user),
 ):
     """Start match history analysis background job."""
-    import os
-
-    from app.core.config import get_riot_api_key
+    from app.core.riot_api.credential_health import (
+        synchronize_riot_credential_health,
+    )
     from app.features.jobs.maintenance import (
         RiotWriterMaintenanceActiveError,
         ensure_riot_writer_maintenance_is_inactive,
@@ -313,13 +312,13 @@ async def analyze_match_history(
         )
 
     try:
-        api_key = await get_riot_api_key(db)
+        credential, _health = await synchronize_riot_credential_health(db)
     except ValueError:
-        api_key = os.getenv("RIOT_API_KEY")
+        credential = None
 
-    if not api_key:
+    if credential is None:
         raise HTTPException(
-            status_code=500, detail="RIOT_API_KEY not configured (DB or ENV)"
+            status_code=503, detail="Riot API credential is not configured"
         )
 
     job_id = str(uuid.uuid4())
@@ -332,7 +331,7 @@ async def analyze_match_history(
         "estimated_minutes_remaining": 5,  # Rough estimate
     }
 
-    background_tasks.add_task(_run_analysis_task, job_id, puuid, api_key)
+    background_tasks.add_task(_run_analysis_task, job_id, puuid)
 
     return {"job_id": job_id, "status": "pending"}
 

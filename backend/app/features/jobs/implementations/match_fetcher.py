@@ -55,18 +55,14 @@ class MatchFetcherJob(BaseJob):
         supported_queue_ids = get_match_fetcher_queue_ids()
         self.add_log_entry("supported_queue_ids", supported_queue_ids)
 
-        # Initialize services
-        # Retrieve API key dynamically (DB prioritized > Env fallback)
-        api_key = await self.get_job_riot_api_key(db)
-
         player_service = PlayerService(db)
         match_service = MatchService(db)
 
         # Initialize DB rate limiter for coordinated rate limiting
         rate_limiter = DBRateLimiter(db, RateLimitComponent.MATCH_FETCHER)
 
-        async with RiotAPIClient(
-            api_key=api_key,
+        async with await self.get_job_riot_api_client(
+            db,
             request_callback=self._track_api_request,
         ) as riot_client:
             # Get tracked players

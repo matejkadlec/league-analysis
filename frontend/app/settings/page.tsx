@@ -44,7 +44,7 @@ import {
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { cn } from "@/lib/core/utils";
 import { toast } from "sonner";
-import { notifyApiKeyValid } from "@/lib/core/api-key-status-context";
+import { notifyRiotCredentialHealthUpdated } from "@/lib/core/riot-credential-health-events";
 import {
   Check,
   CircleCheck,
@@ -94,7 +94,15 @@ interface APIKeyStatus {
   has_db_key: boolean;
   has_env_key: boolean;
   active_source: "db" | "env" | "none";
-  env_key_identifier?: string;
+  credential_status: "missing" | "unknown" | "valid" | "invalid";
+  evidence:
+    | "missing"
+    | "configured"
+    | "settings_validation"
+    | "provider_success"
+    | "credential_rejected";
+  observed_at: string;
+  health_revision: number;
 }
 
 interface BackendErrorDetail {
@@ -219,9 +227,12 @@ function SettingsPageContent() {
         queryClient.invalidateQueries({
           queryKey: ["settings", "riot_api_key"],
         });
-        notifyApiKeyValid();
+        notifyRiotCredentialHealthUpdated();
         queryClient.invalidateQueries({
           queryKey: ["apiKeyStatus"],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ["service-status"],
         });
         setApiKey("");
         setTestResult(null);
@@ -250,8 +261,12 @@ function SettingsPageContent() {
           success: result.data.success,
           message: result.data.message,
         });
-        if (result.data.success) {
+        if (result.data.status === "valid") {
           toast.success("API key is valid!", {
+            description: result.data.message,
+          });
+        } else if (result.data.status === "unavailable") {
+          toast.warning("API key could not be verified", {
             description: result.data.message,
           });
         } else {

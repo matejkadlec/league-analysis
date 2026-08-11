@@ -231,65 +231,12 @@ def get_global_settings() -> Settings:
 
 
 async def get_riot_api_key(db: AsyncSession) -> str:
-    """Get an active Riot API key from database or fallback to env.
+    """Return the database-first effective key and synchronize its health identity."""
+    from app.core.riot_api.credential_health import (
+        synchronize_riot_credential_health,
+    )
 
-    Logic:
-    1. Search for active key in `core.riot_api_keys`.
-    2. detailed expiration check (24h for dev keys).
-    3. If invalid/expired, mark as inactive and loop.
-    4. If no active key found, fallback to .env (with warning).
-
-    :param db: Database session
-    :returns: Active Riot API key
-    :raises ValueError: If no active API key found in DB or .env
-    """
-    from datetime import datetime, timezone
-
-    import structlog
-    from sqlalchemy import select
-
-    from app.features.settings.models import RiotAPIKey
-
-    logger = structlog.get_logger(__name__)
-
-    # Fallback function
-    def get_env_key(warning_msg: str) -> str:
-        key = os.getenv("RIOT_API_KEY")
-        if not key:
-            raise ValueError(f"{warning_msg} AND no RIOT_API_KEY found in .env!")
-
-        logger.warning(f"⚠️  {warning_msg}. Using key from .env.")
-        return key
-
-    while True:
-        # Get the latest active key
-        stmt = (
-            select(RiotAPIKey)
-            .where(RiotAPIKey.is_active.is_(True))
-            .order_by(RiotAPIKey.added_at.desc())
-            .limit(1)
-        )
-        result = await db.execute(stmt)
-        key_record = result.scalar_one_or_none()
-
-        if not key_record:
-            return get_env_key("No active Riot API key found in database")
-
-        # Check expiration (24 hours)
-        # added_at is timezone-aware (UTC) per model definition
-        now = datetime.now(timezone.utc)
-
-        # If key is older than 24h (86400 seconds)
-        if (now - key_record.added_at).total_seconds() > 86400:
-            logger.warning(
-                f"Riot API key {key_record.id} expired (older than 24h). Disabling..."
-            )
-
-            key_record.is_active = False
-            db.add(key_record)
-            await db.commit()
-
-            # Loop again to find next candidate
-            continue
-
-        return key_record.key_value
+    credential, _health = await synchronize_riot_credential_health(db)
+    if credential is None:
+        raise ValueError("No active Riot API key configured")
+    return credential.value

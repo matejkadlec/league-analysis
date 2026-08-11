@@ -99,8 +99,8 @@ async def update_riot_api_key(
     The new key is validated against the Riot API before being saved.
     If validation fails, the update is rejected.
 
-    **Note**: After updating, you should restart the backend application
-    for the changes to take effect properly.
+    Database-backed changes take effect immediately. Environment-backed changes
+    require updating the process environment and restarting the backend.
     """
     try:
         # Check if setting exists, create if not

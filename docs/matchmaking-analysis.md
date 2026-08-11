@@ -384,10 +384,9 @@ If the background task crashes:
 Riot `401` and `403` failures are never treated as optional missing match data.
 They terminate the run with `error_code=RIOT_API_KEY_INVALID`. Matchmaking
 Analysis status is transported through successful HTTP polling responses, so
-the shared frontend interceptor reads this persisted code and activates the
-global invalid/expired-key header. Merely accepting or polling a pending/running
-analysis does not mark the key valid; only completion of the exact current run
-does.
+the shared frontend interceptor reads this persisted code and refreshes the
+backend-owned credential-health state. Accepting, polling, or completing an
+analysis does not itself mark the key valid; only a direct Riot response does.
 
 Cancellation targets the exact `(puuid, created_at)` run, persists `cancelled`,
 then stops that worker. The lifecycle record is retained for diagnostics and a

@@ -1,15 +1,15 @@
 """Core dependencies for FastAPI application."""
 
-import os
 from collections.abc import AsyncGenerator
 from typing import Annotated
 
 from fastapi import Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from . import get_db, get_riot_api_key
+from . import get_db
 from .riot_api import RiotAPIClient
 from .riot_api.constants import Platform, Region
+from .riot_api.credential_health import create_tracked_riot_api_client
 
 
 async def get_riot_client(
@@ -17,23 +17,17 @@ async def get_riot_client(
 ) -> AsyncGenerator[RiotAPIClient, None]:
     """Get Riot API client instance."""
     try:
-        api_key = await get_riot_api_key(db)
-    except ValueError:
-        api_key = os.getenv("RIOT_API_KEY")
-
-    if not api_key:
-        api_key = os.getenv("RIOT_API_KEY")
-
-    if not api_key:
+        client = await create_tracked_riot_api_client(
+            db,
+            region=Region("europe"),
+            platform=Platform("eun1"),
+        )
+    except ValueError as error:
         raise HTTPException(
             status_code=503,
             detail="Riot API key not configured. Please add it via Settings page or .env file.",
-        )
+        ) from error
 
-    region = Region("europe")
-    platform = Platform("eun1")
-
-    client = RiotAPIClient(api_key=api_key, region=region, platform=platform)
     await client.start_session()
     try:
         yield client

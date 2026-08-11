@@ -313,6 +313,7 @@ class SettingValidationResponse(BaseModel):
     """Schema for setting validation response."""
 
     valid: bool = Field(..., description="Whether the value is valid")
+    status: Literal["valid", "invalid", "unavailable"]
     message: str = Field(..., description="Validation message")
     details: Optional[str] = Field(None, description="Additional validation details")
 
@@ -321,33 +322,40 @@ class SettingTestResponse(BaseModel):
     """Schema for setting test response."""
 
     success: bool = Field(..., description="Whether the test was successful")
+    status: Literal["valid", "invalid", "unavailable"]
     message: str = Field(..., description="Test result message")
     details: Optional[dict] = Field(None, description="Additional test details")
 
 
 class APIKeyStatusResponse(BaseModel):
-    """Response schema for API key status."""
+    """Admin configuration detail backed by the shared credential-health state."""
 
     has_db_key: bool
     has_env_key: bool
-    active_source: str  # "db", "env", "none"
-    env_key_identifier: Optional[str] = Field(
-        None,
-        description="Short identifier (hash/slice) of the env key to track uniqueness",
-    )
+    active_source: Literal["db", "env", "none"]
+    credential_status: Literal["missing", "unknown", "valid", "invalid"]
+    evidence: Literal[
+        "missing",
+        "configured",
+        "settings_validation",
+        "provider_success",
+        "credential_rejected",
+    ]
+    observed_at: datetime
+    health_revision: int = Field(..., gt=0)
 
 
 class ServiceStatusResponse(BaseModel):
-    """Response schema for user-facing service maintenance status."""
+    """Shared admin/non-admin view of authoritative credential health."""
 
     is_under_maintenance: bool
-    reason: str = Field(
-        ..., description="Maintenance reason identifier, e.g. 'ok', 'api_key_issue'"
-    )
-    no_active_key_configured: bool
-    latest_job_has_api_key_failure: bool
+    reason: Literal["ok", "api_key_missing", "api_key_invalid"]
+    active_source: Literal["db", "env", "none"]
+    credential_status: Literal["missing", "unknown", "valid", "invalid"]
+    health_revision: int = Field(..., gt=0)
+    observed_at: datetime
     has_recent_recovery: bool = Field(
-        ..., description="Whether a previously failing API-key state is now resolved"
+        ..., description="Whether the current generation recovered from key failure"
     )
     recovery_notice_key: Optional[str] = Field(
         None,

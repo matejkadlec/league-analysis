@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { X, AlertTriangle, AlertOctagon, CircleCheck } from "lucide-react";
 import { useAuth } from "@/features/auth";
 import {
@@ -12,32 +12,17 @@ import {
   type CookieConsentState,
 } from "@/features/cookie-consent";
 import { api } from "@/lib/core/api";
-import { useApiKeyStatus } from "@/lib/core/api-key-status-context";
-
-interface APIKeyStatus {
-  has_db_key: boolean;
-  has_env_key: boolean;
-  active_source: "db" | "env" | "none";
-  env_key_identifier?: string;
-}
+import { RIOT_CREDENTIAL_HEALTH_UPDATED_EVENT } from "@/lib/core/riot-credential-health-events";
 
 interface ServiceStatus {
   is_under_maintenance: boolean;
-  reason: "ok" | "api_key_issue";
-  no_active_key_configured: boolean;
-  latest_job_has_api_key_failure: boolean;
+  reason: "ok" | "api_key_missing" | "api_key_invalid";
+  active_source: "db" | "env" | "none";
+  credential_status: "missing" | "unknown" | "valid" | "invalid";
+  health_revision: number;
+  observed_at: string;
   has_recent_recovery: boolean;
   recovery_notice_key: string | null;
-}
-
-interface JobExecutionStatus {
-  status: string;
-  has_api_key_error: boolean;
-  started_at?: string;
-}
-
-interface JobStatusOverview {
-  last_execution?: JobExecutionStatus | null;
 }
 
 // Temporarily disabled while Riot production-key review is pending.
@@ -45,7 +30,7 @@ const SHOW_SIGNED_OUT_RECRUITMENT_BANNER = false;
 
 export function HeaderMessages() {
   const { user, isAuthenticated, isLoading: isAuthLoading } = useAuth();
-  const { isApiKeyInvalid, lastApiKeyValidatedAt } = useApiKeyStatus();
+  const queryClient = useQueryClient();
   const pathname = usePathname();
   const [optionalStorageEnabled, setOptionalStorageEnabled] = useState<boolean>(
     () => {
@@ -55,8 +40,7 @@ export function HeaderMessages() {
       return canUseOptionalStorage();
     },
   );
-  // Store closed keys as an array of identifiers.
-  // For env keys: "env_key_{identifier}".
+  // Store closed server-revision message identifiers.
   const [closedMessages, setClosedMessages] = useState<string[]>(() => {
     if (typeof window === "undefined" || !canUseOptionalStorage()) {
       return [];
@@ -131,43 +115,37 @@ export function HeaderMessages() {
     }
   };
 
-  const { data: keyStatus } = useQuery({
-    queryKey: ["apiKeyStatus"],
-    queryFn: async () => {
-      const res = await api.get<APIKeyStatus>("/settings/riot_api_key/status");
-      return res.data;
-    },
-    // Only fetch for admins
-    enabled: !!isAuthenticated && !!user?.is_admin,
-    staleTime: 60 * 1000,
-    refetchOnWindowFocus: false,
-  });
-
-  const { data: latestJobStatus } = useQuery({
-    queryKey: ["job-status-api-key-monitor"],
-    queryFn: async () => {
-      const res = await api.get<JobStatusOverview>("/jobs/status/overview");
-      return res.data;
-    },
-    enabled: !!isAuthenticated && !!user?.is_admin,
-    refetchInterval: 15000,
-    refetchOnWindowFocus: false,
-  });
-
   const { data: serviceStatus } = useQuery({
     queryKey: ["service-status"],
     queryFn: async () => {
       const res = await api.get<ServiceStatus>("/settings/service-status");
       return res.data;
     },
-    enabled: !!isAuthenticated && !user?.is_admin,
-    staleTime: 15 * 1000,
+    enabled: !!isAuthenticated,
+    staleTime: 5 * 1000,
     refetchInterval: 15 * 1000,
-    refetchOnWindowFocus: false,
+    refetchOnWindowFocus: true,
   });
 
+  useEffect(() => {
+    const refreshCredentialHealth = () => {
+      void queryClient.invalidateQueries({ queryKey: ["service-status"] });
+      void queryClient.invalidateQueries({ queryKey: ["apiKeyStatus"] });
+    };
+    window.addEventListener(
+      RIOT_CREDENTIAL_HEALTH_UPDATED_EVENT,
+      refreshCredentialHealth,
+    );
+    return () => {
+      window.removeEventListener(
+        RIOT_CREDENTIAL_HEALTH_UPDATED_EVENT,
+        refreshCredentialHealth,
+      );
+    };
+  }, [queryClient]);
+
   const isAdmin = !!user?.is_admin;
-  const maintenanceMessageId = "maintenance_api_key_invalid";
+  const maintenanceMessageId = `maintenance_${serviceStatus?.reason ?? "unknown"}_${serviceStatus?.health_revision ?? 0}`;
   const maintenanceRecoveredMessageId = serviceStatus?.recovery_notice_key
     ? `maintenance_resolved_notice_${serviceStatus.recovery_notice_key}`
     : "maintenance_resolved_notice";
@@ -176,8 +154,7 @@ export function HeaderMessages() {
   const isMaintenanceRecoveredClosed = closedMessages.includes(
     maintenanceRecoveredMessageId,
   );
-  const isUnderMaintenance =
-    Boolean(serviceStatus?.is_under_maintenance) || isApiKeyInvalid;
+  const isUnderMaintenance = Boolean(serviceStatus?.is_under_maintenance);
   const shouldShowMaintenanceRecovered = Boolean(
     serviceStatus?.has_recent_recovery,
   );
@@ -210,24 +187,6 @@ export function HeaderMessages() {
       </div>
     );
   }
-
-  // 2. HIGHEST PRIORITY: API Key Invalid/Expired
-  // Detected from Riot API request failures and background job execution failures.
-  // This takes precedence over all other admin messages
-  const hasLatestJobApiKeyFailure =
-    latestJobStatus?.last_execution?.status === "FAILED" &&
-    latestJobStatus.last_execution.has_api_key_error;
-
-  const latestJobFailureTimestamp = latestJobStatus?.last_execution?.started_at
-    ? new Date(latestJobStatus.last_execution.started_at).getTime()
-    : null;
-
-  const hasFreshJobApiKeyFailure =
-    hasLatestJobApiKeyFailure &&
-    (lastApiKeyValidatedAt === null ||
-      latestJobFailureTimestamp === null ||
-      Number.isNaN(latestJobFailureTimestamp) ||
-      latestJobFailureTimestamp > lastApiKeyValidatedAt);
 
   // 2. Non-admin maintenance message (closable)
   if (isNonAdminAuthenticated) {
@@ -279,10 +238,10 @@ export function HeaderMessages() {
   }
 
   // 3. Admin Messages
-  if (isAdmin && keyStatus) {
+  if (isAdmin && serviceStatus) {
     // RED: API Key Invalid/Expired
-    // Detected from Riot API request failures and background job execution failures.
-    if (isApiKeyInvalid || hasFreshJobApiKeyFailure) {
+    // Based only on the backend-owned state for the effective generation.
+    if (serviceStatus.credential_status === "invalid") {
       return (
         <div className="w-full h-[40px] fixed top-0 left-0 z-[100] flex items-center justify-center bg-red-600/75 backdrop-blur-sm shadow-md border-b border-red-800/50">
           <div className="flex items-center gap-2 text-sm font-semibold text-red-100 px-4 text-center">
@@ -303,7 +262,7 @@ export function HeaderMessages() {
     }
 
     // RED: No Key configured at all
-    if (keyStatus.active_source === "none") {
+    if (serviceStatus.credential_status === "missing") {
       return (
         <div className="w-full h-[40px] fixed top-0 left-0 z-[100] flex items-center justify-center bg-red-600/75 backdrop-blur-sm shadow-md border-b border-red-800/50">
           <div className="flex items-center gap-2 text-sm font-semibold text-red-100 px-4 text-center">
@@ -319,13 +278,27 @@ export function HeaderMessages() {
       );
     }
 
-    // YELLOW: Env Key (Closable - Unique per key)
-    const envKeyId = `env_key_${keyStatus.env_key_identifier || "legacy"}`;
+    if (serviceStatus.credential_status === "unknown") {
+      return (
+        <div className="w-full h-[40px] fixed top-0 left-0 z-[100] flex items-center justify-center bg-amber-500/75 backdrop-blur-sm border-b border-amber-800/50 shadow-sm">
+          <div className="flex items-center gap-2 text-sm font-medium text-amber-100 px-4 text-center">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            <span>
+              Riot API Key is configured but has not yet been verified by a
+              direct Riot API response.
+            </span>
+          </div>
+        </div>
+      );
+    }
+
+    // YELLOW: Env Key (Closable - Unique per credential-health revision)
+    const envKeyId = `env_key_${serviceStatus.health_revision}`;
     const isClosed = closedMessages.includes(envKeyId);
 
     // Hide env warning in production (env is standard there)
     if (
-      keyStatus.active_source === "env" &&
+      serviceStatus.active_source === "env" &&
       !isClosed &&
       process.env.NODE_ENV !== "production"
     ) {

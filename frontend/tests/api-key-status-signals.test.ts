@@ -1,14 +1,12 @@
 import type { AxiosAdapter } from "axios";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { notifyApiKeyInvalid, notifyApiKeyValid } = vi.hoisted(() => ({
-  notifyApiKeyInvalid: vi.fn(),
-  notifyApiKeyValid: vi.fn(),
+const { notifyRiotCredentialHealthUpdated } = vi.hoisted(() => ({
+  notifyRiotCredentialHealthUpdated: vi.fn(),
 }));
 
-vi.mock("@/lib/core/api-key-status-context", () => ({
-  notifyApiKeyInvalid,
-  notifyApiKeyValid,
+vi.mock("@/lib/core/riot-credential-health-events", () => ({
+  notifyRiotCredentialHealthUpdated,
 }));
 
 import { api } from "../lib/core/api";
@@ -24,10 +22,9 @@ const responseAdapter: AxiosAdapter = async (config) => ({
   config,
 });
 
-describe("Riot API key lifecycle signals", () => {
+describe("Riot credential-health refresh signals", () => {
   beforeEach(() => {
-    notifyApiKeyInvalid.mockReset();
-    notifyApiKeyValid.mockReset();
+    notifyRiotCredentialHealthUpdated.mockReset();
     api.defaults.adapter = responseAdapter;
     responseData = null;
   });
@@ -43,8 +40,7 @@ describe("Riot API key lifecycle signals", () => {
     responseData = { status: "in_progress", error_code: null };
     await api.get("/matchmaking-analysis/player/test-puuid/status");
 
-    expect(notifyApiKeyInvalid).not.toHaveBeenCalled();
-    expect(notifyApiKeyValid).not.toHaveBeenCalled();
+    expect(notifyRiotCredentialHealthUpdated).not.toHaveBeenCalled();
   });
 
   it("marks a persisted invalid-key failure returned with HTTP 200", async () => {
@@ -55,19 +51,16 @@ describe("Riot API key lifecycle signals", () => {
 
     await api.get("/matchmaking-analysis/player/test-puuid/status");
 
-    expect(notifyApiKeyInvalid).toHaveBeenCalledTimes(1);
-    expect(notifyApiKeyValid).not.toHaveBeenCalled();
+    expect(notifyRiotCredentialHealthUpdated).toHaveBeenCalledTimes(1);
   });
 
-  it("marks only exact current-run completion as successful validation", async () => {
+  it("does not infer validity from completed or cached local work", async () => {
     responseData = { status: "completed", error_code: null };
     await api.get("/matchmaking-analysis/player/test-puuid/status");
 
-    expect(notifyApiKeyValid).toHaveBeenCalledTimes(1);
-    expect(notifyApiKeyInvalid).not.toHaveBeenCalled();
-
-    notifyApiKeyValid.mockReset();
     await api.get("/matchmaking-analysis/player/test-puuid/latest-completed");
-    expect(notifyApiKeyValid).not.toHaveBeenCalled();
+    await api.get("/players/search?query=cached-player");
+
+    expect(notifyRiotCredentialHealthUpdated).not.toHaveBeenCalled();
   });
 });

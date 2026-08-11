@@ -63,10 +63,9 @@ async def test_player_updater_continues_after_a_recoverable_player_error(
     )
     monkeypatch.setattr(
         PlayerUpdaterJob,
-        "get_job_riot_api_key",
-        AsyncMock(return_value="test-key"),
+        "get_job_riot_api_client",
+        AsyncMock(return_value=_FakeRiotClient()),
     )
-    monkeypatch.setattr(player_updater_module, "RiotAPIClient", _FakeRiotClient)
     monkeypatch.setattr(
         player_updater_module,
         "PlayerService",

@@ -215,10 +215,9 @@ async def test_match_fetcher_execute_propagates_rate_limit_to_base_job(
 
     monkeypatch.setattr(
         MatchFetcherJob,
-        "get_job_riot_api_key",
-        AsyncMock(return_value="test-key"),
+        "get_job_riot_api_client",
+        AsyncMock(return_value=FakeRiotClient()),
     )
-    monkeypatch.setattr(match_fetcher_module, "RiotAPIClient", FakeRiotClient)
     monkeypatch.setattr(
         match_fetcher_module,
         "PlayerService",

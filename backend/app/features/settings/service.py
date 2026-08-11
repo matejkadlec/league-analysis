@@ -4,16 +4,22 @@ from datetime import datetime, timezone
 from typing import Optional
 
 import structlog
-from sqlalchemy import and_, delete, or_, select
+from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import func
 
 from app.core.riot_api.client import RiotAPIClient
 from app.core.riot_api.constants import Platform, Region
+from app.core.riot_api.credential_health import (
+    RiotAPIKey,
+    RiotCredentialStatus,
+    mark_database_credential_valid,
+    synchronize_riot_credential_health,
+)
 from app.core.riot_api.errors import RiotAPIError
 
-from .models import RiotAPIKey, UserCardPreference
+from .models import UserCardPreference
 from .schemas import (
     APIKeyStatusResponse,
     CardId,
@@ -73,166 +79,49 @@ class SettingsService:
         return None
 
     async def get_api_key_status(self) -> APIKeyStatusResponse:
-        """Get the current status of the Riot API key configuration."""
-        import hashlib
-        import os
-
-        # Check DB
-        stmt = (
-            select(RiotAPIKey)
-            .where(RiotAPIKey.is_active.is_(True))
-            .order_by(RiotAPIKey.added_at.desc())
-            .limit(1)
-        )
-        result = await self.db.execute(stmt)
-        db_key_exists = result.scalar_one_or_none() is not None
-
-        # Check Env
-        env_key = os.getenv("RIOT_API_KEY")
-        # In this project context, settings might not load env var directly into 'riot_api_key' field if not in .env?
-        # But os.getenv directly checks .env if loaded.
-        has_env_key = bool(env_key and env_key.strip())
-
-        # Determine source used by system (mimicking config logic)
-        active_source = "none"
-        if db_key_exists:
-            active_source = "db"
-        elif has_env_key:
-            active_source = "env"
-
-        # Generate identifier for env key if it exists
-        env_key_identifier = None
-        if has_env_key and env_key:
-            # Create a short hash of the key to use as identifier (last 8 chars of md5)
-            # We don't want to expose any part of the actual key that could be guessed
-            env_key_identifier = hashlib.sha256(env_key.encode()).hexdigest()[-8:]
-
+        """Get admin detail from the shared authoritative health state."""
+        _credential, health = await synchronize_riot_credential_health(self.db)
         return APIKeyStatusResponse(
-            has_db_key=db_key_exists,
-            has_env_key=has_env_key,
-            active_source=active_source,
-            env_key_identifier=env_key_identifier,
+            has_db_key=health.has_db_key,
+            has_env_key=health.has_env_key,
+            active_source=health.source.value,
+            credential_status=health.status.value,
+            evidence=health.evidence.value,
+            observed_at=health.evidence_at,
+            health_revision=health.revision,
         )
 
     async def get_service_status(self) -> ServiceStatusResponse:
-        """Get user-facing maintenance status based on API key health signals."""
-        from app.features.jobs.models import JobExecution, JobStatus
-
-        api_key_status = await self.get_api_key_status()
-        no_active_key_configured = api_key_status.active_source == "none"
-        latest_active_db_key = None
-        key_resolved_at = None
-        if api_key_status.active_source == "db":
-            latest_active_db_key_result = await self.db.execute(
-                select(RiotAPIKey)
-                .where(RiotAPIKey.is_active.is_(True))
-                .order_by(RiotAPIKey.added_at.desc())
-                .limit(1)
-            )
-            latest_active_db_key = latest_active_db_key_result.scalar_one_or_none()
-            if latest_active_db_key is not None:
-                key_resolved_at = (
-                    latest_active_db_key.last_used_at or latest_active_db_key.added_at
-                )
-
-        latest_api_health_signal_result = await self.db.execute(
-            select(
-                JobExecution.status,
-                JobExecution.has_api_key_error,
-                JobExecution.started_at,
-            )
-            .where(
-                or_(
-                    and_(
-                        JobExecution.status == JobStatus.FAILED,
-                        JobExecution.has_api_key_error.is_(True),
-                    ),
-                    JobExecution.status == JobStatus.SUCCESS,
-                )
-            )
-            .order_by(JobExecution.started_at.desc())
-            .limit(1)
-        )
-        latest_api_health_signal = latest_api_health_signal_result.first()
-
-        has_unresolved_api_key_failure = False
-        if latest_api_health_signal is not None:
-            latest_status, has_api_key_error, latest_signal_started_at = (
-                latest_api_health_signal
-            )
-            has_unresolved_api_key_failure = latest_status == JobStatus.FAILED and bool(
-                has_api_key_error
-            )
-            # Treat stale failures as resolved when a key was validated successfully after that failure.
-            if has_unresolved_api_key_failure and latest_active_db_key is not None:
-                if (
-                    key_resolved_at is not None
-                    and latest_signal_started_at is not None
-                    and key_resolved_at > latest_signal_started_at
-                ):
-                    has_unresolved_api_key_failure = False
-
-        is_under_maintenance = (
-            no_active_key_configured or has_unresolved_api_key_failure
-        )
-
-        latest_api_key_failure_result = await self.db.execute(
-            select(JobExecution.started_at)
-            .where(
-                and_(
-                    JobExecution.status == JobStatus.FAILED,
-                    JobExecution.has_api_key_error.is_(True),
-                )
-            )
-            .order_by(JobExecution.started_at.desc())
-            .limit(1)
-        )
-        latest_api_key_failure_at = latest_api_key_failure_result.scalar_one_or_none()
-
-        recovery_reference_at = None
-        if latest_api_key_failure_at is not None:
-            first_success_after_failure_result = await self.db.execute(
-                select(JobExecution.started_at)
-                .where(
-                    and_(
-                        JobExecution.status == JobStatus.SUCCESS,
-                        JobExecution.started_at > latest_api_key_failure_at,
-                    )
-                )
-                .order_by(JobExecution.started_at.asc())
-                .limit(1)
-            )
-            first_success_after_failure_at = (
-                first_success_after_failure_result.scalar_one_or_none()
-            )
-
-            recovery_candidates: list[datetime] = []
-            if first_success_after_failure_at is not None:
-                recovery_candidates.append(first_success_after_failure_at)
-            if (
-                key_resolved_at is not None
-                and key_resolved_at > latest_api_key_failure_at
-            ):
-                recovery_candidates.append(key_resolved_at)
-
-            if recovery_candidates:
-                # Keep a stable key per recovery event so dismiss persists.
-                recovery_reference_at = min(recovery_candidates)
-
+        """Get the same current health decision for every authenticated user."""
+        _credential, health = await synchronize_riot_credential_health(self.db)
+        is_under_maintenance = health.status in {
+            RiotCredentialStatus.MISSING,
+            RiotCredentialStatus.INVALID,
+        }
+        if health.status is RiotCredentialStatus.MISSING:
+            reason = "api_key_missing"
+        elif health.status is RiotCredentialStatus.INVALID:
+            reason = "api_key_invalid"
+        else:
+            reason = "ok"
         has_recent_recovery = (
-            recovery_reference_at is not None and not is_under_maintenance
-        )
-        recovery_notice_key = (
-            recovery_reference_at.isoformat() if recovery_reference_at else None
+            health.status is RiotCredentialStatus.VALID
+            and health.recovery_revision is not None
         )
 
         return ServiceStatusResponse(
             is_under_maintenance=is_under_maintenance,
-            reason="api_key_issue" if is_under_maintenance else "ok",
-            no_active_key_configured=no_active_key_configured,
-            latest_job_has_api_key_failure=has_unresolved_api_key_failure,
+            reason=reason,
+            active_source=health.source.value,
+            credential_status=health.status.value,
+            health_revision=health.revision,
+            observed_at=health.evidence_at,
             has_recent_recovery=has_recent_recovery,
-            recovery_notice_key=recovery_notice_key,
+            recovery_notice_key=(
+                f"credential-{health.recovery_revision}"
+                if health.recovery_revision is not None
+                else None
+            ),
         )
 
     async def update_setting(self, key: str, update: SettingUpdate) -> SettingResponse:
@@ -246,8 +135,11 @@ class SettingsService:
             logger.warning(
                 "setting_validation_failed",
                 key=key,
+                status=validation.status,
                 message=validation.message,
             )
+            if validation.status == "unavailable":
+                raise ValueError(validation.message)
             raise ValueError(f"Invalid Riot API key: {validation.message}")
 
         # Check if this exact key value already exists
@@ -257,9 +149,15 @@ class SettingsService:
 
         if existing_key_entry and existing_key_entry.is_active:
             # No-op: The key is already active and the same
-            existing_key_entry.last_used_at = datetime.now(timezone.utc)
+            evidence_at = datetime.now(timezone.utc)
+            existing_key_entry.last_used_at = evidence_at
             val = existing_key_entry.key_value
             masked = f"{val[:6]}...{val[-4:]}"
+            await mark_database_credential_valid(
+                self.db,
+                existing_key_entry,
+                evidence_at=evidence_at,
+            )
             await self.db.commit()
             await self.db.refresh(existing_key_entry)
             return SettingResponse(
@@ -291,7 +189,13 @@ class SettingsService:
             self.db.add(new_key)
             target_key = new_key
 
-        target_key.last_used_at = datetime.now(timezone.utc)
+        evidence_at = datetime.now(timezone.utc)
+        target_key.last_used_at = evidence_at
+        await mark_database_credential_valid(
+            self.db,
+            target_key,
+            evidence_at=evidence_at,
+        )
         await self.db.commit()
         await self.db.refresh(target_key)
 
@@ -323,6 +227,7 @@ class SettingsService:
         if not api_key or len(api_key) < 10:
             return SettingValidationResponse(
                 valid=False,
+                status="invalid",
                 message="API key is too short",
                 details="Riot API keys should start with 'RGAPI-'",
             )
@@ -330,6 +235,7 @@ class SettingsService:
         if not api_key.startswith("RGAPI-"):
             return SettingValidationResponse(
                 valid=False,
+                status="invalid",
                 message="Invalid API key format",
                 details="Riot API keys must start with 'RGAPI-'",
             )
@@ -355,6 +261,7 @@ class SettingsService:
             )
             return SettingValidationResponse(
                 valid=True,
+                status="valid",
                 message="API key is valid",
                 details="Successfully validated with Riot API",
             )
@@ -367,6 +274,7 @@ class SettingsService:
                 )
                 return SettingValidationResponse(
                     valid=False,
+                    status="invalid",
                     message="API key is invalid",
                     details="Received 401 Unauthorized from Riot API. The API key format is correct but the key itself is not recognized.",
                 )
@@ -376,6 +284,7 @@ class SettingsService:
                 )
                 return SettingValidationResponse(
                     valid=False,
+                    status="invalid",
                     message="API key has expired",
                     details="Received 403 Forbidden from Riot API. Development keys expire every 24 hours - please generate a new key at developer.riotgames.com",
                 )
@@ -387,6 +296,7 @@ class SettingsService:
                 )
                 return SettingValidationResponse(
                     valid=True,
+                    status="valid",
                     message="API key is valid",
                     details="Successfully validated with Riot API (test account not found, but authentication succeeded)",
                 )
@@ -415,14 +325,14 @@ class SettingsService:
 
         except Exception as e:
             logger.error(
-                "riot_api_key_validation_error",
-                error=str(e),
+                "riot_api_key_validation_unavailable",
                 error_type=type(e).__name__,
             )
             return SettingValidationResponse(
                 valid=False,
-                message="Failed to validate API key",
-                details=f"Unexpected error during validation: {str(e)}",
+                status="unavailable",
+                message="Riot API validation is temporarily unavailable",
+                details="The credential was not changed. Try again when Riot is reachable.",
             )
 
     async def test_riot_api_key(self, api_key: str) -> SettingTestResponse:
@@ -431,6 +341,7 @@ class SettingsService:
 
         return SettingTestResponse(
             success=validation.valid,
+            status=validation.status,
             message=validation.message,
             details=(
                 {"validation_details": validation.details}

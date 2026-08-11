@@ -453,8 +453,13 @@ The system retrieves the Riot API key with database priority:
 - Job terminates with `FAILED` status
 - `jobs.job_executions.has_api_key_error` is stored as `true` for the failed run
 - Error logged: "Authentication failure during {operation}"
-- Frontend header warning (red banner) is triggered when latest execution in
-  `/api/v1/jobs/status/overview` is `FAILED` with `has_api_key_error=true` and no
-  newer successful key validation/save has occurred in the active session
+- The tracked Riot client also records current-generation rejection in
+  `core.riot_credential_health`; both role-specific header presentations read
+  that shared state through `/api/v1/settings/service-status`
 
-**Resolution:** Update API key in Settings page or `.env` file
+Job history remains diagnostic and does not decide current credential health.
+A new credential generation immediately invalidates an old run's failure;
+`429`, upstream failures, and network errors do not mark a credential invalid.
+
+**Resolution:** Update the key in Settings, or update `RIOT_API_KEY` and its
+non-secret `RIOT_API_KEY_VERSION` together and restart the backend.

@@ -643,10 +643,33 @@ Storage for Riot API keys.
 | `key_value`    | varchar(42) | RGAPI-xxx format                             |
 | `is_active`    | boolean     | Currently in use                             |
 | `added_at`     | timestamptz | Insertion time and development-key age basis |
-| `last_used_at` | timestamptz | Last successful lookup/use time              |
+| `last_used_at` | timestamptz | Last successful Settings validation/save time |
 | `times_used`   | bigint      | Usage counter                                |
 
 **Constraint**: Key must match `RGAPI-%` pattern with length 42.
+
+### `core.riot_credential_health`
+
+Singleton, secret-free health for the effective database-first Riot credential.
+Revision `20260811_0007` creates this record; it stores no key value or
+key-derived fingerprint.
+
+| Column                   | Type        | Description                                                |
+| ------------------------ | ----------- | ---------------------------------------------------------- |
+| `id`                     | int         | Singleton primary key, constrained to `1`                  |
+| `generation`             | varchar(32) | Random generation for stale-evidence rejection             |
+| `source`                 | varchar(8)  | `none`, `db`, or `env`                                     |
+| `db_key_id`              | int         | Optional FK to the effective database key                  |
+| `environment_generation` | varchar(72) | Optional non-secret deployment/runtime generation          |
+| `status`                 | varchar(16) | `missing`, `unknown`, `valid`, or `invalid`                 |
+| `evidence`               | varchar(32) | Safe evidence category, never a provider payload           |
+| `evidence_at`            | timestamptz | Provider request start or configuration change time        |
+| `revision`               | bigint      | Positive incident/state revision for client refreshes      |
+| `recovered_at`           | timestamptz | Latest observed recovery time                               |
+| `recovery_revision`      | bigint      | Revision identifying that recovery notice                  |
+
+Provider evidence is accepted only for the current generation and in timestamp
+order. This makes key replacement and concurrent request completion race-safe.
 
 ### `jobs.job_configurations`
 

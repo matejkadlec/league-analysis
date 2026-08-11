@@ -536,6 +536,7 @@ export const SettingUpdateSchema = z.object({
 
 export const SettingTestResponseSchema = z.object({
   success: z.boolean(),
+  status: z.enum(["valid", "invalid", "unavailable"]),
   message: z.string(),
   details: z.record(z.string(), z.any()).nullable().optional(),
 });
