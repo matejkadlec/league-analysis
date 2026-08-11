@@ -113,7 +113,8 @@ def test_get_job_logs_never_touches_the_orm_instance() -> None:
 def test_failure_from_job_reports_a_stale_player_id() -> None:
     """The player card must explain a stale PUUID instead of a generic failure."""
     job = SimpleNamespace(
-        job_execution=SimpleNamespace(status=JobStatus.SUCCESS),
+        job_execution_id=11,
+        job_execution_status=JobStatus.SUCCESS,
         has_api_key_error=lambda: False,
         has_puuid_binding_error=lambda: True,
     )
@@ -128,7 +129,8 @@ def test_failure_from_job_reports_a_stale_player_id() -> None:
 def test_failure_from_job_keeps_the_key_error_precedence() -> None:
     """A rejected API key stays the more actionable diagnosis."""
     job = SimpleNamespace(
-        job_execution=SimpleNamespace(status=JobStatus.FAILED),
+        job_execution_id=12,
+        job_execution_status=JobStatus.FAILED,
         has_api_key_error=lambda: True,
         has_puuid_binding_error=lambda: True,
     )
@@ -141,7 +143,8 @@ def test_failure_from_job_keeps_the_key_error_precedence() -> None:
 def test_generic_failure_is_unchanged() -> None:
     """Unclassified failures keep their existing contract."""
     job = SimpleNamespace(
-        job_execution=SimpleNamespace(status=JobStatus.FAILED),
+        job_execution_id=13,
+        job_execution_status=JobStatus.FAILED,
         has_api_key_error=lambda: False,
         has_puuid_binding_error=lambda: False,
     )
@@ -158,3 +161,45 @@ def test_test_runs_keep_a_separate_runtime_key() -> None:
 
     assert regular.runtime_key == 7
     assert test_run.runtime_key == -7
+
+
+def test_failure_from_job_never_touches_the_execution_instance() -> None:
+    """The job session is already closed, so only cached scalars are safe."""
+
+    class _Exploding:
+        @property
+        def status(self):
+            raise AssertionError("expired ORM attribute was read")
+
+    job = SimpleNamespace(
+        job_execution=_Exploding(),
+        job_execution_id=99,
+        job_execution_status=JobStatus.SUCCESS,
+        has_api_key_error=lambda: False,
+        has_puuid_binding_error=lambda: True,
+    )
+
+    _, code, _ = _failure_from_job(job)
+
+    assert code == "PLAYER_ID_STALE"
+
+
+def test_missing_execution_still_reports_a_busy_writer() -> None:
+    """A writer that never started keeps the existing busy contract."""
+    job = SimpleNamespace(
+        job_execution_id=None,
+        job_execution_status=None,
+        has_api_key_error=lambda: False,
+        has_puuid_binding_error=lambda: False,
+    )
+
+    _, code, _ = _failure_from_job(job)
+
+    assert code == "SYNC_BUSY"
+
+
+def test_completion_flag_requires_a_successful_write() -> None:
+    """A swallowed completion-write failure must not disable the run guard."""
+    job = _Job(job_config_id=1)
+
+    assert job._completion_logged is False

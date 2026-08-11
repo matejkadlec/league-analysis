@@ -44,6 +44,9 @@ PUUID_REFERENCING_TABLES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("auth.user_tracked_players", "puuid", ("user_id",)),
     ("auth.user_settings", "current_player_puuid", ()),
     ("jobs.player_sync_runs", "puuid", ()),
+    # auth.users.puuid is a logical Riot-account link rather than a declared
+    # foreign key, so nothing would move it and the link would silently dangle.
+    ("auth.users", "puuid", ()),
 )
 
 
@@ -732,50 +735,11 @@ class PlayerService:
             )
             raise
 
-    async def _migrate_stale_player_puuid(
-        self, *, fresh_puuid: str, game_name: str, tag_line: str, platform: str
-    ) -> bool:
-        """Move an existing player onto a freshly issued PUUID.
-
-        Riot encrypts PUUIDs per developer account, so the same Riot ID resolves
-        to a new PUUID after an account change. Without this migration the
-        discovery path would leave the old row behind as a duplicate and strand
-        every match, league, and tracking row attached to it.
-
-        The caller already holds the shared Riot-writer table locks.
-        """
+    async def _repoint_puuid_references(
+        self, *, stale_puuid: str, fresh_puuid: str
+    ) -> None:
+        """Move every row referencing one stale PUUID onto the fresh one."""
         from sqlalchemy import text
-
-        stale = await self.db.scalar(
-            select(Player).where(
-                func.lower(Player.game_name) == game_name.lower(),
-                func.lower(Player.tag_line) == tag_line.lower(),
-                func.lower(Player.platform) == platform.lower(),
-                Player.puuid != fresh_puuid,
-            )
-        )
-        if stale is None:
-            return False
-
-        stale_puuid = stale.puuid
-        self.db.add(
-            Player(
-                puuid=fresh_puuid,
-                game_name=stale.game_name,
-                tag_line=stale.tag_line,
-                platform=stale.platform,
-                profile_icon_id=stale.profile_icon_id,
-                summoner_level=stale.summoner_level,
-                is_tracked=stale.is_tracked,
-                last_playstyle_analysis=stale.last_playstyle_analysis,
-                last_matchmaking_analysis=stale.last_matchmaking_analysis,
-                created_at=stale.created_at,
-                profile_synced_at=stale.profile_synced_at,
-                league_synced_at=stale.league_synced_at,
-                match_synced_at=stale.match_synced_at,
-            )
-        )
-        await self.db.flush()
 
         params = {"stale": stale_puuid, "fresh": fresh_puuid}
         for table, column, guard_columns in PUUID_REFERENCING_TABLES:
@@ -822,13 +786,73 @@ class PlayerService:
         await self.db.execute(
             text("DELETE FROM core.players WHERE puuid = :stale"), params
         )
+
+    async def _migrate_stale_player_puuids(
+        self, *, fresh_puuid: str, game_name: str, tag_line: str, platform: str
+    ) -> int:
+        """Move every stale row for one Riot ID onto its freshly issued PUUID.
+
+        Riot encrypts PUUIDs per developer account, so the same Riot ID resolves
+        to a new PUUID after an account change. Without this migration the
+        discovery path would leave the old rows behind as duplicates and strand
+        every match, league, and tracking row attached to them. A Riot ID can
+        accumulate more than one stale row across repeated account changes, and
+        the fresh row may already exist from match-participant discovery, so
+        neither case may skip the migration.
+
+        The caller already holds the shared Riot-writer table locks.
+        """
+        stale_players = (
+            await self.db.scalars(
+                select(Player).where(
+                    func.lower(Player.game_name) == game_name.lower(),
+                    func.lower(Player.tag_line) == tag_line.lower(),
+                    func.lower(Player.platform) == platform.lower(),
+                    Player.puuid != fresh_puuid,
+                )
+            )
+        ).all()
+        if not stale_players:
+            return 0
+
+        if await self.db.get(Player, fresh_puuid) is None:
+            template = stale_players[0]
+            self.db.add(
+                Player(
+                    puuid=fresh_puuid,
+                    game_name=template.game_name,
+                    tag_line=template.tag_line,
+                    platform=template.platform,
+                    profile_icon_id=template.profile_icon_id,
+                    summoner_level=template.summoner_level,
+                    is_tracked=template.is_tracked,
+                    last_playstyle_analysis=template.last_playstyle_analysis,
+                    last_matchmaking_analysis=template.last_matchmaking_analysis,
+                    created_at=template.created_at,
+                    profile_synced_at=template.profile_synced_at,
+                    league_synced_at=template.league_synced_at,
+                    match_synced_at=template.match_synced_at,
+                )
+            )
+            await self.db.flush()
+
+        stale_puuids = [stale.puuid for stale in stale_players]
+        for stale in stale_players:
+            self.db.expunge(stale)
+        for stale_puuid in stale_puuids:
+            await self._repoint_puuid_references(
+                stale_puuid=stale_puuid, fresh_puuid=fresh_puuid
+            )
+
+        await self._update_global_tracking_flag(fresh_puuid)
         logger.info(
             "player_puuid_migrated",
             game_name=game_name,
             tag_line=tag_line,
             platform=platform,
+            migrated_rows=len(stale_puuids),
         )
-        return True
+        return len(stale_puuids)
 
     async def discover_player(
         self,
@@ -850,15 +874,16 @@ class PlayerService:
             raise ValueError(f"Summoner not found for PUUID: {account.puuid}")
 
         now = datetime.now(timezone.utc)
+        # Runs before the row lookup: a stale row can survive alongside an
+        # already-created fresh row, so an existing fresh row must not skip it.
+        if await self._migrate_stale_player_puuids(
+            fresh_puuid=account.puuid,
+            game_name=account.game_name or game_name,
+            tag_line=account.tag_line or tag_line,
+            platform=platform_enum.value,
+        ):
+            await self.db.flush()
         player = await self.db.get(Player, account.puuid)
-        if player is None:
-            await self._migrate_stale_player_puuid(
-                fresh_puuid=account.puuid,
-                game_name=account.game_name or game_name,
-                tag_line=account.tag_line or tag_line,
-                platform=platform_enum.value,
-            )
-            player = await self.db.get(Player, account.puuid)
         if player is None:
             player = Player(
                 puuid=account.puuid,

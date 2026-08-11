@@ -178,7 +178,7 @@ async def test_new_player_uses_submitted_riot_id_when_account_omits_it(
         commit=AsyncMock(),
         refresh=AsyncMock(side_effect=populate_database_timestamps),
         # No prior row shares this Riot ID, so no PUUID migration is attempted.
-        scalar=AsyncMock(return_value=None),
+        scalars=AsyncMock(return_value=SimpleNamespace(all=lambda: [])),
     )
     service = PlayerService(db)
     service.track_player = AsyncMock(return_value=SimpleNamespace(puuid="safe"))  # type: ignore[method-assign]

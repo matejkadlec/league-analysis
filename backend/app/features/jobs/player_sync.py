@@ -78,9 +78,13 @@ async def get_active_player_sync(db: AsyncSession, puuid: str) -> PlayerSyncRun 
 
 
 def _failure_from_job(job) -> tuple[str, str, str]:
-    """Map an internal writer result to a stable client-safe terminal state."""
-    execution = job.job_execution
-    if execution is None:
+    """Map an internal writer result to a stable client-safe terminal state.
+
+    Reads only the writer's cached scalars. A per-player Riot failure rolls the
+    job session back and the session is already closed here, so touching the
+    `JobExecution` instance would raise instead of classifying the failure.
+    """
+    if job.job_execution_id is None:
         return (
             "failed",
             "SYNC_BUSY",
@@ -99,13 +103,13 @@ def _failure_from_job(job) -> tuple[str, str, str]:
             "Riot no longer recognizes this player's stored ID. "
             "Search for the player again to refresh it.",
         )
-    if execution.status == JobStatus.RATE_LIMITED:
+    if job.job_execution_status == JobStatus.RATE_LIMITED:
         return (
             "rate_limited",
             "RIOT_RATE_LIMITED",
             "The update reached Riot's rate limit. Please try again later.",
         )
-    if execution.status == JobStatus.CANCELLED:
+    if job.job_execution_status == JobStatus.CANCELLED:
         return (
             "cancelled",
             "SYNC_CANCELLED",
@@ -188,12 +192,10 @@ async def run_player_sync(sync_id: int) -> None:
             target_puuids={puuid},
         )
         await match_job.run()
-        match_execution_id = (
-            match_job.job_execution.id if match_job.job_execution is not None else None
-        )
+        match_execution_id = match_job.job_execution_id
         if (
-            match_job.job_execution is None
-            or match_job.job_execution.status != JobStatus.SUCCESS
+            match_execution_id is None
+            or match_job.job_execution_status != JobStatus.SUCCESS
             or match_job.has_errors()
         ):
             status, code, message = _failure_from_job(match_job)
@@ -218,14 +220,10 @@ async def run_player_sync(sync_id: int) -> None:
             target_puuids={puuid},
         )
         await profile_job.run()
-        profile_execution_id = (
-            profile_job.job_execution.id
-            if profile_job.job_execution is not None
-            else None
-        )
+        profile_execution_id = profile_job.job_execution_id
         if (
-            profile_job.job_execution is None
-            or profile_job.job_execution.status != JobStatus.SUCCESS
+            profile_execution_id is None
+            or profile_job.job_execution_status != JobStatus.SUCCESS
             or profile_job.has_errors()
         ):
             status, code, message = _failure_from_job(profile_job)

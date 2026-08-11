@@ -92,7 +92,8 @@ def test_unsuccessful_jobs_map_to_safe_non_success_sync_states(
     expected_code: str,
 ) -> None:
     job = SimpleNamespace(
-        job_execution=SimpleNamespace(status=status),
+        job_execution_id=5,
+        job_execution_status=status,
         has_api_key_error=lambda: False,
         has_puuid_binding_error=lambda: False,
     )

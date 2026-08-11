@@ -140,6 +140,9 @@ class BaseJob(ABC):
         # instance.
         self.job_execution_id: Optional[int] = None
         self.job_execution_started_at: Optional[datetime] = None
+        self.job_execution_status: Optional[JobStatus] = None
+        self.job_config_name: Optional[str] = None
+        self.job_config_type_value: Optional[str] = None
         self.metrics = defaultdict(int)
         self.metrics.update(
             {
@@ -206,11 +209,13 @@ class BaseJob(ABC):
             )
 
         self.job_config = job_config
+        self.job_config_name = job_config.name
+        self.job_config_type_value = job_config.job_type.value
         logger.debug(
             "Job configuration refreshed",
             job_config_id=self.job_config_id,
-            job_name=self.job_config.name,
-            job_type=self.job_config.job_type.value,
+            job_name=self.job_config_name,
+            job_type=self.job_config_type_value,
         )
 
     async def log_start(self, db: AsyncSession) -> None:
@@ -306,17 +311,19 @@ class BaseJob(ABC):
                 status,
             )
 
-            await self._execute_completion_update(db, update_stmt)
-            self._completion_logged = True
+            self._completion_logged = await self._execute_completion_update(
+                db, update_stmt
+            )
 
             # Update local execution object state
-            self.job_execution.completed_at = completed_at
-            # Use explicit status if provided, otherwise derive from success
-            self.job_execution.status = (
+            final_status = (
                 status
                 if status is not None
                 else (JobStatus.SUCCESS if success else JobStatus.FAILED)
             )
+            self.job_execution.completed_at = completed_at
+            self.job_execution.status = final_status
+            self.job_execution_status = final_status
 
         except Exception as e:
             await self._handle_completion_error(db, e)
@@ -380,8 +387,8 @@ class BaseJob(ABC):
         logger.error(
             "Job execution failed",
             job_config_id=self.job_config_id,
-            job_type=self.job_config.job_type.value if self.job_config else None,
-            job_name=self.job_config.name if self.job_config else None,
+            job_type=self.job_config_type_value,
+            job_name=self.job_config_name,
             execution_id=self.job_execution_id,
             error=error_message,
             error_type=type(error).__name__,
@@ -477,7 +484,7 @@ class BaseJob(ABC):
                 logger.warning(
                     "Job stopped due to rate limit",
                     job_config_id=self.job_config_id,
-                    job_name=self.job_config.name if self.job_config else None,
+                    job_name=self.job_config_name,
                     retry_after=rate_limit_signal.retry_after,
                 )
                 job_logs = self._get_job_logs()
@@ -802,13 +809,11 @@ class BaseJob(ABC):
         if self.job_config is None or self.job_execution is None:
             raise RuntimeError("Job context missing during completion logging")
 
-        job_config = self.job_config
-
         logger.debug(
             "Job execution completed",
             job_config_id=self.job_config_id,
-            job_type=job_config.job_type.value,
-            job_name=job_config.name,
+            job_type=self.job_config_type_value,
+            job_name=self.job_config_name,
             execution_id=self.job_execution_id,
             status=JobStatus.SUCCESS.value if success else JobStatus.FAILED.value,
             duration_seconds=duration,
@@ -856,14 +861,14 @@ class BaseJob(ABC):
             )
         )
 
-    async def _execute_completion_update(self, db: AsyncSession, stmt) -> None:
+    async def _execute_completion_update(self, db: AsyncSession, stmt) -> bool:
         """Execute the completion update with retry logic."""
         execution_id = self.job_execution_id
 
         try:
             await db.execute(stmt)
             if await self.safe_commit(db, "job completion"):
-                return
+                return True
         except Exception as execute_error:
             logger.error(
                 "Failed to execute job completion update",
@@ -882,6 +887,7 @@ class BaseJob(ABC):
                     "Successfully committed job completion on retry",
                     execution_id=execution_id,
                 )
+                return True
             else:
                 logger.warning(
                     "Job completion retry commit failed - job may remain stuck",
@@ -896,6 +902,8 @@ class BaseJob(ABC):
                 error_type=type(retry_error).__name__,
             )
             # Don't raise - we want the job to complete even if logging fails
+
+        return False
 
     async def _handle_completion_error(
         self, db: AsyncSession, error: Exception

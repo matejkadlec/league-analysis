@@ -79,10 +79,13 @@ details. Keep it synchronized with job changes.
 - A recorded `PuuidDecryptionError` sets `has_puuid_binding_error()`, which
   `player_sync` maps to `PLAYER_ID_STALE`. It stays a per-player warning, so a
   stale row never fails an entire scheduled run.
-- Never read `job_execution.id` or `job_execution.started_at` off the ORM
-  instance during completion. A rollback expires them and reloading outside
-  the async greenlet raises `MissingGreenlet`; use the cached
-  `job_execution_id` / `job_execution_started_at` instead.
+- Never read `job_execution` or `job_config` attributes off the ORM instance
+  during completion, nor after the job's session closes. A rollback expires
+  them and reloading outside the async greenlet raises `MissingGreenlet`. Use
+  the cached `job_execution_id`, `job_execution_started_at`,
+  `job_execution_status`, `job_config_name`, and `job_config_type_value`.
+  `player_sync` classifies writer outcomes from those scalars for the same
+  reason.
 - `run()` closes any execution that ends without recorded completion so a
   crash cannot leave the row `RUNNING` for the next tick to report as orphaned.
 - Regular Match Fetcher and Player Updater runs finish `SUCCESS` with warning
