@@ -40,6 +40,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import db_manager
 from app.core.riot_api.client import RiotAPIClient
+from app.core.riot_api.credential_health import create_tracked_riot_api_client
 from app.core.riot_api.db_rate_limiter import DBRateLimiter, RateLimitComponent
 from app.core.riot_api.errors import (
     AuthenticationError,
@@ -380,16 +381,14 @@ class MatchmakingAnalysisService:
         rate_limiter = None
         try:
             async with db_manager.get_session() as db:
-                from app.core.config import get_riot_api_key
-
                 try:
-                    api_key = await get_riot_api_key(db)
+                    riot_client = await create_tracked_riot_api_client(db)
                 except ValueError as error:
                     raise AuthenticationError(
                         "No active Riot API key configured"
                     ) from error
 
-                async with RiotAPIClient(api_key=api_key) as riot_client:
+                async with riot_client:
                     rate_limiter = DBRateLimiter(
                         db, RateLimitComponent.MATCHMAKING_ANALYSIS
                     )

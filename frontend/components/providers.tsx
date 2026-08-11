@@ -4,7 +4,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Suspense, useState } from "react";
 import { AuthProvider } from "@/features/auth";
 import { PlayerContextProvider } from "@/features/players";
-import { ApiKeyStatusProvider } from "@/lib/core/api-key-status-context";
 import { DDragonVersionProvider } from "@/lib/core/data-dragon-context";
 import { AuthGate } from "./auth-gate";
 
@@ -30,15 +29,13 @@ export function Providers({
   return (
     <DDragonVersionProvider version={ddragonVersion}>
       <QueryClientProvider client={queryClient}>
-        <ApiKeyStatusProvider>
-          <AuthProvider>
-            <Suspense fallback={null}>
-              <PlayerContextProvider>
-                <AuthGate>{children}</AuthGate>
-              </PlayerContextProvider>
-            </Suspense>
-          </AuthProvider>
-        </ApiKeyStatusProvider>
+        <AuthProvider>
+          <Suspense fallback={null}>
+            <PlayerContextProvider>
+              <AuthGate>{children}</AuthGate>
+            </PlayerContextProvider>
+          </Suspense>
+        </AuthProvider>
       </QueryClientProvider>
     </DDragonVersionProvider>
   );

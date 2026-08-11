@@ -16,7 +16,7 @@ Shared infrastructure for all features. Features depend on core, **core NEVER de
 | Module            | Description                                                    |
 | ----------------- | -------------------------------------------------------------- |
 | `database.py`     | Async session management, `get_db()` dependency                |
-| `config.py`       | Pydantic settings, `get_riot_api_key(db)`                      |
+| `config.py`       | Pydantic settings and compatibility credential lookup          |
 | `exceptions.py`   | Base exceptions (RiotAPIError, RateLimitError, etc.)           |
 | `dependencies.py` | Core DI (`get_riot_client()`)                                  |
 | `enums.py`        | Tier, Platform, QueueType enums                                |
@@ -62,7 +62,11 @@ logger.info("action_completed", puuid=puuid, count=count)
 
 Riot API key lookup prefers an active, non-expired row in
 `core.riot_api_keys` and falls back to `RIOT_API_KEY` from `.env` only when no
-valid database key exists. Never expose either value.
+valid database key exists. Runtime callers use the tracked client factory so
+direct Riot acceptance/rejection updates the secret-free current-generation
+health record. `RIOT_API_KEY_VERSION` may identify an environment deployment
+generation; it must never contain or derive from the key. Never expose either
+credential value.
 
 Key settings (from `.env`):
 

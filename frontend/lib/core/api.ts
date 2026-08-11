@@ -14,10 +14,7 @@ import {
   MatchmakingAnalysisStatusResponse,
   MatchmakingAnalysisHistoryResponse,
 } from "./schemas";
-import {
-  notifyApiKeyInvalid,
-  notifyApiKeyValid,
-} from "./api-key-status-context";
+import { notifyRiotCredentialHealthUpdated } from "./riot-credential-health-events";
 import {
   getAccessToken,
   refreshAccessToken,
@@ -51,80 +48,30 @@ export interface ApiError {
 export type ApiResponse<T> =
   { success: true; data: T } | { success: false; error: ApiError };
 
-// Endpoints that use the Riot API (when these succeed, API key is valid)
-const RIOT_API_ENDPOINTS = [
-  "/players/add-tracked",
-  "/players/search",
-  "/matches/sync",
-  "/refresh-league",
-  "/auth/connect-riot-account",
-];
-
-function isRiotApiEndpoint(url: string | undefined): boolean {
-  if (!url) return false;
-  return RIOT_API_ENDPOINTS.some((endpoint) => url.includes(endpoint));
-}
-
 // Standard error code returned by backend when Riot API key is invalid
 const RIOT_API_KEY_INVALID_CODE = "RIOT_API_KEY_INVALID";
 
-export type RiotApiKeySignal = "invalid" | "valid" | null;
+export type RiotApiKeySignal = "refresh" | null;
 
-export function getRiotApiKeySignal(
-  url: string | undefined,
-  responseData: unknown,
-): RiotApiKeySignal {
+export function getRiotApiKeySignal(responseData: unknown): RiotApiKeySignal {
   const data =
     typeof responseData === "object" && responseData !== null
       ? (responseData as Record<string, unknown>)
       : null;
-  if (data?.error_code === RIOT_API_KEY_INVALID_CODE) {
-    return "invalid";
-  }
-
-  if (!url) {
-    return null;
-  }
-
-  if (url.includes("/matchmaking-analysis")) {
-    if (url.includes("/check-matches")) {
-      return "valid";
-    }
-    if (url.includes("/status") && data?.status === "completed") {
-      return "valid";
-    }
-    return null;
-  }
-
-  return isRiotApiEndpoint(url) ? "valid" : null;
+  return data?.error_code === RIOT_API_KEY_INVALID_CODE ? "refresh" : null;
 }
 
 function isApiKeyError(response: AxiosResponse | undefined): boolean {
   if (!response) return false;
   const detail = response.data?.detail;
-  // Check for our specific API key error code first (most reliable)
-  if (detail === RIOT_API_KEY_INVALID_CODE) {
-    return true;
-  }
-  // Fallback: Check for API key error messages in response
-  return (
-    typeof detail === "string" &&
-    (detail.toLowerCase().includes("api key") ||
-      detail.toLowerCase().includes("unauthorized") ||
-      detail.toLowerCase().includes("expired"))
-  );
+  return detail === RIOT_API_KEY_INVALID_CODE;
 }
 
 api.interceptors.response.use(
   (response: AxiosResponse) => {
-    const apiKeySignal = getRiotApiKeySignal(
-      response.config.url,
-      response.data,
-    );
-    if (apiKeySignal === "invalid") {
-      notifyApiKeyInvalid();
-    } else if (apiKeySignal === "valid") {
-      notifyApiKeyValid();
+    const apiKeySignal = getRiotApiKeySignal(response.data);
+    if (apiKeySignal === "refresh") {
+      notifyRiotCredentialHealthUpdated();
     }
     return response;
   },
@@ -132,7 +79,7 @@ api.interceptors.response.use(
     // Check ALL responses for API key errors (503 with specific code)
     // This ensures any endpoint that internally uses Riot API will trigger the header
     if (isApiKeyError(error.response)) {
-      notifyApiKeyInvalid();
+      notifyRiotCredentialHealthUpdated();
     }
 
     const originalRequest = error.config as

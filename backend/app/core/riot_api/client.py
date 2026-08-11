@@ -2,13 +2,15 @@
 
 import asyncio
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Awaitable, Callable, Dict, List, Optional, Union
 
 import httpx
 import structlog
 
 from .constants import MatchType, Platform, QueueType, Region
+from .credential_health import RiotCredentialStatus
 from .endpoints import RiotAPIEndpoints
 from .errors import (
     AuthenticationError,
@@ -55,6 +57,9 @@ class RiotAPIClient:
         platform: Optional[Platform] = None,
         enable_logging: bool = True,
         request_callback: Optional[Callable[[str, int], None]] = None,
+        credential_health_callback: Optional[
+            Callable[[RiotCredentialStatus, datetime], Awaitable[None]]
+        ] = None,
     ):
         """
         Initialize Riot API client.
@@ -65,6 +70,7 @@ class RiotAPIClient:
             platform: Default platform for platform endpoints
             enable_logging: Enable request/response logging
             request_callback: Optional callback for tracking API requests (metric_name, count)
+            credential_health_callback: Durable observer for authenticated provider responses
         """
         if not api_key:
             raise ValueError(
@@ -77,6 +83,7 @@ class RiotAPIClient:
         self.platform = platform or Platform("eun1")
         self.enable_logging = enable_logging
         self.request_callback = request_callback
+        self.credential_health_callback = credential_health_callback
 
         # Initialize components
         self.rate_limiter = RateLimiter()
@@ -292,6 +299,7 @@ class RiotAPIClient:
         if self.session is None:
             raise RiotAPIError("Session not initialized")
 
+        evidence_at = datetime.now(timezone.utc)
         response = await self.session.request(method, url, params=params, json=data)
         response_headers = self._normalize_headers(dict(response.headers))
 
@@ -300,6 +308,7 @@ class RiotAPIClient:
             self.request_callback("requests_made", 1)
 
         try:
+            await self._record_credential_health(response.status_code, evidence_at)
             self.rate_limiter.update_limits(response_headers, url, method)
 
             # Handle error status codes
@@ -319,6 +328,20 @@ class RiotAPIClient:
             return response_data
         finally:
             await response.aclose()
+
+    async def _record_credential_health(
+        self, status_code: int, evidence_at: datetime
+    ) -> None:
+        """Record only responses that prove credential acceptance or rejection."""
+        if self.credential_health_callback is None:
+            return
+        if 200 <= status_code < 300 or status_code == 404:
+            status = RiotCredentialStatus.VALID
+        elif status_code in {401, 403}:
+            status = RiotCredentialStatus.INVALID
+        else:
+            return
+        await self.credential_health_callback(status, evidence_at)
 
     async def _make_request(
         self,

@@ -104,3 +104,7 @@ async def get_player_service(
   `ForbiddenError`, including during optional cache filling, must terminate with
   `error_code=RIOT_API_KEY_INVALID` so the shared frontend credential warning
   survives the background-run HTTP 200 polling boundary.
+- Settings exposes the same backend-owned credential source, status, and health
+  revision to admins and non-admins. Job history and browser memory are never
+  credential-health authority; all effective provider clients must use the
+  tracked core factory.

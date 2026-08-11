@@ -72,6 +72,10 @@ details. Keep it synchronized with job changes.
   `sync_job_configuration()`.
 - Preserve Riot API throttling and priority rules from
   [`../../../../docs/riot-api.md`](../../../../docs/riot-api.md).
+- Build job clients through `BaseJob.get_job_riot_api_client()` so every direct
+  provider response is tied to the effective credential generation. Job
+  execution history remains diagnostic and must not decide current header
+  health.
 - Record recoverable execution failures through `BaseJob.record_error()` with a
   static operation name and only reviewed identifiers. It stores bounded,
   secret-safe diagnostics for administrator execution details; never pass raw

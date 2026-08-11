@@ -16,6 +16,7 @@ Inherits repository-wide rules from
 | Module | Responsibility |
 | --- | --- |
 | `client.py` | Async `httpx` client, authentication header, response parsing, and callbacks |
+| `credential_health.py` | Database-first resolution, secret-free generation health, and tracked client factory |
 | `endpoints.py` | Regional/platform URL builders and rate-limit header parsers |
 | `constants.py` | `Region`, `Platform`, `QueueType`, and platform-to-region mapping |
 | `models.py` | Pydantic DTOs for Riot responses |
@@ -44,9 +45,13 @@ Inherits repository-wide rules from
   scoped and keep their original observed start; database coordination keeps
   cross-component priority. Do not bypass acquisition/recording, spacing,
   `Retry-After`, or 429 behavior.
-- Credential lookup is implemented by `app.core.config.get_riot_api_key`: an
-  active, non-expired `core.riot_api_keys` row has priority, with
-  `RIOT_API_KEY` as the development fallback.
+- Resolve effective runtime credentials with
+  `create_tracked_riot_api_client()`: an active, non-expired
+  `core.riot_api_keys` row has priority, with `RIOT_API_KEY` as the fallback.
+  Direct `2xx`/`404` responses validate the current generation; `401`/`403`
+  invalidate it. Rate limits, upstream/network failures, cached reads, and
+  application lifecycle results are neutral. Keep generation and timestamp
+  guards so stale requests cannot overwrite current evidence.
 - Never log or expose an API key.
 - A Riot 400 whose `status.message` reports a decryption failure becomes
   `PuuidDecryptionError`, not a plain `BadRequestError`. It means the stored
@@ -56,9 +61,9 @@ Inherits repository-wide rules from
 ## Usage
 
 ```python
-from app.core.riot_api import RiotAPIClient
+from app.core.riot_api.credential_health import create_tracked_riot_api_client
 
-async with RiotAPIClient(api_key=api_key) as client:
+async with await create_tracked_riot_api_client(db) as client:
     account = await client.get_account_by_puuid(puuid)
     matches = await client.get_match_list_by_puuid(puuid, queue=420)
     timeline = await client.get_match_timeline("EUN1_123456789")

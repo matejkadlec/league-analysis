@@ -1,6 +1,5 @@
 """Player API endpoints for the Riot API application."""
 
-import os
 import re
 from typing import Annotated, Optional
 
@@ -9,11 +8,11 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, R
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
-from app.core.config import settings
 from app.core.database import db_manager
 from app.core.dependencies import get_riot_client
 from app.core.riot_api.client import RiotAPIClient
 from app.core.riot_api.constants import Platform
+from app.core.riot_api.credential_health import create_tracked_riot_api_client
 from app.core.riot_api.errors import (
     AuthenticationError,
     NotFoundError,
@@ -550,10 +549,9 @@ async def run_background_match_sync(puuid: str, platform: str) -> None:
             await session.refresh(job_execution)
 
         # 2. Run the Sync Logic
-        api_key = getattr(settings, "riot_api_key", os.getenv("RIOT_API_KEY"))
-        riot_client = RiotAPIClient(api_key=api_key)
-
+        riot_client: RiotAPIClient | None = None
         try:
+            riot_client = await create_tracked_riot_api_client(session)
             match_service = MatchService(session)
             # Create a simple object with attributes
             player_obj = type("PlayerObj", (), {"puuid": puuid, "platform": platform})
@@ -605,7 +603,8 @@ async def run_background_match_sync(puuid: str, platform: str) -> None:
                 job_execution.error_message = str(e)
                 await session.commit()
         finally:
-            await riot_client.close()
+            if riot_client is not None:
+                await riot_client.close()
 
 
 async def run_background_player_update(puuid: str, platform: str) -> None:
@@ -653,10 +652,9 @@ async def run_background_player_update(puuid: str, platform: str) -> None:
             await session.refresh(job_execution)
 
         # Run the player update logic
-        api_key = getattr(settings, "riot_api_key", os.getenv("RIOT_API_KEY"))
-        riot_client = RiotAPIClient(api_key=api_key)
-
+        riot_client: RiotAPIClient | None = None
         try:
+            riot_client = await create_tracked_riot_api_client(session)
             player_service = PlayerService(session)
             player_model = await session.get(Player, puuid)
 
@@ -712,7 +710,8 @@ async def run_background_player_update(puuid: str, platform: str) -> None:
                 job_execution.error_message = str(e)
                 await session.commit()
         finally:
-            await riot_client.close()
+            if riot_client is not None:
+                await riot_client.close()
 
 
 @router.post("/add-tracked", response_model=PlayerResponse)

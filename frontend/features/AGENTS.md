@@ -107,4 +107,5 @@ export function MyComponent({ id }: MyComponentProps) {
   while its percentage/bar interpolate between authoritative player milestones.
   Persisted Matchmaking Analysis failures with
   `error_code=RIOT_API_KEY_INVALID` must activate the shared API-key header
-  signal; accepting or polling an active run must not mark the key valid.
+  refresh signal; accepting, polling, or completing a run must not mark the key
+  valid. Only backend-observed direct Riot responses own that decision.

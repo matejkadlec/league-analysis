@@ -73,9 +73,11 @@ async def test_player_add_writers_lock_and_honor_the_cleanup_interlock(
     async def fake_get_session():
         yield session
 
-    riot_client_factory = Mock()
+    riot_client_factory = AsyncMock()
     monkeypatch.setattr(players_router.db_manager, "get_session", fake_get_session)
-    monkeypatch.setattr(players_router, "RiotAPIClient", riot_client_factory)
+    monkeypatch.setattr(
+        players_router, "create_tracked_riot_api_client", riot_client_factory
+    )
 
     await runner("test-puuid", "eun1")
 
@@ -132,8 +134,8 @@ async def test_background_match_sync_records_rate_limit_retry_after(
     monkeypatch.setattr(job_models, "JobExecution", _FakeJobExecution)
     monkeypatch.setattr(
         players_router,
-        "RiotAPIClient",
-        Mock(return_value=riot_client),
+        "create_tracked_riot_api_client",
+        AsyncMock(return_value=riot_client),
     )
     monkeypatch.setattr(
         players_router, "MatchService", Mock(return_value=match_service)

@@ -5,7 +5,7 @@ from abc import ABC, abstractmethod
 from collections import defaultdict
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
-from typing import Any, Callable, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
 
 import structlog
 from sqlalchemy import select, update
@@ -13,6 +13,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from structlog import contextvars as structlog_contextvars
 
 from app.core import db_manager
+
+if TYPE_CHECKING:
+    from app.core.riot_api.client import RiotAPIClient
 
 from .control import (
     get_runtime_control_snapshot,
@@ -782,13 +785,19 @@ class BaseJob(ABC):
             f"{first_error['operation']} ({first_error['error_type']})"
         )
 
-    async def get_job_riot_api_key(self, db: AsyncSession) -> str:
-        """Load a Riot key and classify missing configuration as a key failure."""
-        from app.core.config import get_riot_api_key
+    async def get_job_riot_api_client(
+        self,
+        db: AsyncSession,
+        **client_options: Any,
+    ) -> RiotAPIClient:
+        """Build a tracked Riot client and classify missing configuration."""
+        from app.core.riot_api.credential_health import (
+            create_tracked_riot_api_client,
+        )
         from app.core.riot_api.errors import AuthenticationError
 
         try:
-            return await get_riot_api_key(db)
+            return await create_tracked_riot_api_client(db, **client_options)
         except ValueError as error:
             self.record_error(
                 error,

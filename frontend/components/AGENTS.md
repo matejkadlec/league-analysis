@@ -43,6 +43,10 @@ npx shadcn@latest add button card dialog table tabs
 - ❌ Don't skip TypeScript prop interfaces
 - ❌ Don't use direct axios calls (use TanStack Query)
 - ❌ Don't forget loading and error states
+- `header-messages.tsx` reads the shared backend credential health for every
+  authenticated role. Keep polling/focus/event refreshes, use the server health
+  revision for dismissible incident IDs, and never infer validity from cached
+  or locally completed work.
 - ❌ Don't use camelCase for component file names
 - Keep the sidebar player selector below the logo and above ordinary
   navigation. Selection persists through the player feature context; it must

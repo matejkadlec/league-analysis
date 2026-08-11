@@ -12,7 +12,7 @@ import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import TEST_PUUID
-from app.core.riot_api.client import APICallRecord, RiotAPIClient
+from app.core.riot_api.client import APICallRecord
 from app.core.riot_api.constants import Platform, get_region_by_platform
 from app.features.jobs.base import BaseJob
 from app.features.jobs.error_handling import is_riot_api_key_error
@@ -78,10 +78,8 @@ class TestMatchFetcherJob(BaseJob):
         region = get_region_by_platform(platform)
         platform_enum = Platform(platform)
 
-        api_key = await self.get_job_riot_api_key(db)
-
-        async with RiotAPIClient(
-            api_key=api_key,
+        async with await self.get_job_riot_api_client(
+            db,
             region=region,
             platform=platform_enum,
             request_callback=self._track_api_request,
@@ -174,10 +172,8 @@ class TestPlayerUpdaterJob(BaseJob):
         platform_enum = Platform(platform)
         region = get_region_by_platform(platform)
 
-        api_key = await self.get_job_riot_api_key(db)
-
-        async with RiotAPIClient(
-            api_key=api_key,
+        async with await self.get_job_riot_api_client(
+            db,
             region=region,
             platform=platform_enum,
             request_callback=self._track_api_request,

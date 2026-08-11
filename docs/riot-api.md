@@ -455,9 +455,47 @@ credential-error toast rather than exposing a server error.
 Background Matchmaking Analysis calls cannot return the original Riot `401` or
 `403` on the already-completed start request. Instead, they persist
 `error_code=RIOT_API_KEY_INVALID` on the failed run. The shared Axios response
-interceptor recognizes that code in the HTTP 200 lifecycle payload and activates
-the same global invalid/expired-key header. Pending/in-progress lifecycle
-responses are neutral; they do not prove the credential is valid.
+interceptor recognizes that code in the HTTP 200 lifecycle payload and asks the
+shared credential-health queries to refresh. Pending, completed, cached, and
+local lifecycle responses are all neutral; only a direct Riot response is
+credential evidence.
+
+### Credential Health Authority
+
+Credential resolution selects the newest active, non-expired row in
+`core.riot_api_keys`, then falls back to `RIOT_API_KEY` when no usable database
+key exists. The backend owns one secret-free `core.riot_credential_health`
+record for that effective credential generation. Its state is `missing`,
+`unknown`, `valid`, or `invalid`.
+
+Saving a provider-validated database key establishes a fresh/current valid
+generation. Replacing the effective key resets old evidence; a request from an
+older generation cannot overwrite the new state. Within a generation,
+request-start timestamps prevent a slow old response from overwriting newer
+evidence.
+
+Direct Riot `2xx` responses and authenticated `404` responses prove `valid`.
+Direct Riot `401` and `403` responses prove `invalid`. `400`, `429`, `5xx`,
+timeouts, connection failures, cached data, local database reads, accepted
+background work, and completed polling responses are neutral. All effective
+runtime clients must be created with `create_tracked_riot_api_client()` (or the
+FastAPI dependency that uses it); the candidate-key validation call before a
+save is deliberately separate.
+
+For the environment fallback, `RIOT_API_KEY_VERSION` is an optional non-secret
+deployment generation such as `production-2026-08-11-1`. Change it whenever
+`RIOT_API_KEY` changes, then restart the backend so both values are reloaded. It
+must contain only 1-64 letters, numbers, dots, underscores, or hyphens and must
+never contain the key. Without this variable, each backend process start uses a
+new random generation, safely returning health to `unknown` until Riot directly
+accepts or rejects the credential. No key hash, prefix, suffix, or other
+key-derived fingerprint is persisted or returned.
+
+Both admin and non-admin headers read `/api/v1/settings/service-status`.
+Browser refresh, another tab, polling, and exact invalid-key lifecycle signals
+therefore converge on the same durable backend state. Dismissal identifiers use
+the safe health revision, so dismissing one incident cannot suppress a later
+one.
 
 ### Player League Refresh
 

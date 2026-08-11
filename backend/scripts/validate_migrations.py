@@ -16,8 +16,8 @@ from sqlalchemy import URL, create_engine, text
 
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
 PROJECT_ROOT = BACKEND_ROOT.parent
-EXPECTED_REVISION = "20260811_0007"
-EXPECTED_TABLES = 23
+EXPECTED_REVISION = "20260812_0008"
+EXPECTED_TABLES = 24
 EXPECTED_ENUMS = 6
 EXPECTED_TRIGGERS = 1
 
@@ -330,6 +330,23 @@ def validate_catalog(database: str) -> None:
                     "AND indexdef LIKE '%lower((platform)::text)%'"
                 )
             ).scalar_one()
+            credential_health_column_count = connection.execute(
+                text(
+                    "SELECT COUNT(*) FROM information_schema.columns "
+                    "WHERE table_schema = 'core' "
+                    "AND table_name = 'riot_credential_health'"
+                )
+            ).scalar_one()
+            credential_health_check_count = connection.execute(
+                text(
+                    "SELECT COUNT(*) FROM pg_constraint con "
+                    "JOIN pg_class cls ON cls.oid = con.conrelid "
+                    "JOIN pg_namespace ns ON ns.oid = cls.relnamespace "
+                    "WHERE ns.nspname = 'core' "
+                    "AND cls.relname = 'riot_credential_health' "
+                    "AND con.contype = 'c'"
+                )
+            ).scalar_one()
     finally:
         engine.dispose()
 
@@ -352,6 +369,8 @@ def validate_catalog(database: str) -> None:
         player_sync_constraint_count,
         player_sync_active_index_count,
         player_riot_id_index_count,
+        credential_health_column_count,
+        credential_health_check_count,
     )
     expected = (
         EXPECTED_REVISION,
@@ -385,6 +404,8 @@ def validate_catalog(database: str) -> None:
         1,
         1,
         1,
+        13,
+        5,
     )
     if observed != expected:
         raise RuntimeError(f"Unexpected migrated schema inventory: {observed}")
