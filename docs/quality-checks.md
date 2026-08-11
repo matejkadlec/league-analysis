@@ -88,7 +88,7 @@ All modes run:
   Dockerfiles, including the backend and frontend production image contexts.
 - production Dockerfile/Compose/deploy-workflow invariants: lockfile installs,
   non-root production commands, internal PostgreSQL, migration/readiness
-  ordering, fixed pi5ram8 identities/ports, deployment serialization, and the
+  ordering, fixed pi5ram16 identities/ports, deployment serialization, and the
   permanent non-Docker `run.sh` boundary.
 
 The complete/backend gate also validates `.pre-commit-config.yaml` with the
@@ -196,7 +196,7 @@ frontend health, and PostgreSQL isolation before tearing it down.
 
 The separate `Deploy to Raspberry Pi` workflow has the same required validation
 triggers but its job skips pull requests. Master pushes and manual master runs
-serialize on the pi5ram8 runner with `cancel-in-progress: false`; cancelling an
+serialize on the pi5ram16 runner with `cancel-in-progress: false`; cancelling an
 active host mutation is less safe than queueing it. The repository deploy script
 holds an additional non-blocking host lock. Deployment does not duplicate the
 quality gate and never waits for application background jobs.

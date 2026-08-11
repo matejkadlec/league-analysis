@@ -192,7 +192,7 @@ isolated disposable stack and never reads the root `.env` or native database.
 ## Production Deployment
 
 The repository owns production Dockerfiles, `compose.production.yml`, the
-locked deployment script, and the `pi5ram8` GitHub Actions workflow. The stack
+locked deployment script, and the `pi5ram16` GitHub Actions workflow. The stack
 exposes the Next.js frontend on host port `8097`, FastAPI on `8098`, and keeps
 PostgreSQL 18.4 internal-only. A one-shot migration service completes before
 backend startup; backend readiness includes a database round trip, and

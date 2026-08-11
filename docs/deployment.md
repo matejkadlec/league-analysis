@@ -1,7 +1,7 @@
 # Production Containers and Pi Deployment
 
 > **Authority:** Repository-owned production images, Compose topology,
-> deployment execution, container validation, health checks, and the pi5ram8
+> deployment execution, container validation, health checks, and the pi5ram16
 > runtime boundary.
 >
 > **Maintenance:** Update whenever a production Dockerfile, Compose service,
@@ -81,12 +81,12 @@ the Pi host port.
 ## Private host configuration
 
 The production target is the ARM64 host identified by the SSH alias and runner
-label `pi5ram8`. The repository stores only
+label `pi5ram16`. The repository stores only
 [`deploy/production.env.example`](../deploy/production.env.example). On the
 host, create the private file without sharing its contents:
 
 ```bash
-ssh pi5ram8 '
+ssh pi5ram16 '
   set -eu
   install -d -m 700 "$HOME/.local/share/league-analysis"
   test ! -e "$HOME/.local/share/league-analysis/production.env"
@@ -103,7 +103,7 @@ are never Docker build arguments or image layers. The only frontend build
 arguments are intentionally public browser configuration.
 
 The GitHub repository also needs a self-hosted runner registered on that host
-with the custom label `pi5ram8`. Runner registration credentials are an owner
+with the custom label `pi5ram16`. Runner registration credentials are an owner
 configuration action; never put a registration token in repository files or
 Jira.
 
@@ -146,16 +146,16 @@ Only migration, container startup, and service health are deployment gates.
 
 ## Verification and diagnostics
 
-Secret-safe runtime checks on `pi5ram8`:
+Secret-safe runtime checks on `pi5ram16`:
 
 ```bash
-ssh pi5ram8 'docker ps --filter name=league-analysis --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"'
-ssh pi5ram8 'docker inspect --format "{{.Name}} project={{index .Config.Labels \"com.docker.compose.project\"}} service={{index .Config.Labels \"com.docker.compose.service\"}} image={{.Config.Image}}" league-analysis-frontend league-analysis-backend league-analysis-postgres'
-ssh pi5ram8 'curl --fail --silent http://127.0.0.1:8098/health/ready'
-ssh pi5ram8 'curl --fail --silent http://127.0.0.1:8097/ >/dev/null'
-ssh pi5ram8 'docker inspect --format "{{json .HostConfig.PortBindings}}" league-analysis-postgres'
-ssh pi5ram8 'docker logs --tail 100 league-analysis-backend'
-ssh pi5ram8 'docker logs --tail 100 league-analysis-frontend'
+ssh pi5ram16 'docker ps --filter name=league-analysis --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"'
+ssh pi5ram16 'docker inspect --format "{{.Name}} project={{index .Config.Labels \"com.docker.compose.project\"}} service={{index .Config.Labels \"com.docker.compose.service\"}} image={{.Config.Image}}" league-analysis-frontend league-analysis-backend league-analysis-postgres'
+ssh pi5ram16 'curl --fail --silent http://127.0.0.1:8098/health/ready'
+ssh pi5ram16 'curl --fail --silent http://127.0.0.1:8097/ >/dev/null'
+ssh pi5ram16 'docker inspect --format "{{json .HostConfig.PortBindings}}" league-analysis-postgres'
+ssh pi5ram16 'docker logs --tail 100 league-analysis-backend'
+ssh pi5ram16 'docker logs --tail 100 league-analysis-frontend'
 ```
 
 Do not run `docker compose config` without `--quiet` against the production
@@ -208,11 +208,11 @@ the authority:
 cd backend
 uv run python scripts/migrate_local_postgres_to_pi.py \
   --database league_analysis_local_dev \
-  --remote pi5ram8 \
+  --remote pi5ram16 \
   --remote-database league_analysis
 uv run python scripts/migrate_local_postgres_to_pi.py \
   --database league_analysis_local_dev \
-  --remote pi5ram8 \
+  --remote pi5ram16 \
   --remote-database league_analysis \
   --apply
 ```
@@ -233,7 +233,7 @@ the SHA-256 printed by the migration command with the pending state:
 
 ```bash
 SOURCE_SHA256=replace-with-the-printed-64-character-digest
-ssh pi5ram8 "\$HOME/.local/share/league-analysis/operations/pi-postgres-operations rollback-replacement --confirm-target league_analysis --expected-sha256 $SOURCE_SHA256"
+ssh pi5ram16 "\$HOME/.local/share/league-analysis/operations/pi-postgres-operations rollback-replacement --confirm-target league_analysis --expected-sha256 $SOURCE_SHA256"
 ```
 
 After successful external validation, finalize with the same digest. This
@@ -242,7 +242,7 @@ backup, and records Pi authority:
 
 ```bash
 SOURCE_SHA256=replace-with-the-printed-64-character-digest
-ssh pi5ram8 "\$HOME/.local/share/league-analysis/operations/pi-postgres-operations finalize-replacement --confirm-target league_analysis --expected-sha256 $SOURCE_SHA256"
+ssh pi5ram16 "\$HOME/.local/share/league-analysis/operations/pi-postgres-operations finalize-replacement --confirm-target league_analysis --expected-sha256 $SOURCE_SHA256"
 ```
 
 The database archive contains all schemas, application rows, identifiers,
@@ -259,7 +259,7 @@ Pi host timezone. `Persistent=true` catches up once after downtime; the shared
 non-blocking operations lock prevents overlap with migration, restore, or mirror
 exports.
 
-Install the reviewed operations snapshot and enable the timer on `pi5ram8`:
+Install the reviewed operations snapshot and enable the timer on `pi5ram16`:
 
 ```bash
 ./deploy/install-pi-postgres-backup-timer.sh
@@ -318,7 +318,7 @@ Pi host timezone. `Persistent=true` catches up once after downtime; the shared
 non-blocking operations lock prevents overlap with migration, restore, or mirror
 exports.
 
-Install the reviewed operations snapshot and enable the timer on `pi5ram8`:
+Install the reviewed operations snapshot and enable the timer on `pi5ram16`:
 
 ```bash
 ./deploy/install-pi-postgres-backup-timer.sh
@@ -374,7 +374,7 @@ After LGA-79 validation and the durable `authority=pi` marker, the only
 automatic data direction is:
 
 ```text
-pi5ram8 league_analysis -> local league_analysis_local_dev
+pi5ram16 league_analysis -> local league_analysis_local_dev
 ```
 
 The local database is disposable development data. Intentional local changes
@@ -390,13 +390,13 @@ the same implementation on demand:
 ```bash
 ./backend/scripts/mirror_pi_postgres_to_local.py \
   --database league_analysis_local_dev \
-  --remote pi5ram8 \
+  --remote pi5ram16 \
   --remote-database league_analysis \
   --config .env
 
 ./backend/scripts/mirror_pi_postgres_to_local.py \
   --database league_analysis_local_dev \
-  --remote pi5ram8 \
+  --remote pi5ram16 \
   --remote-database league_analysis \
   --config .env \
   --apply
@@ -445,7 +445,7 @@ journalctl --user -u league-analysis-local-postgres-mirror.service -n 50 --no-pa
 
 $HOME/.local/share/league-analysis/operations/local-postgres-mirror \
   --database league_analysis_local_dev \
-  --remote pi5ram8 \
+  --remote pi5ram16 \
   --remote-database league_analysis \
   --config "$HOME/projects/league-analysis/.env" \
   --apply

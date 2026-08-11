@@ -56,7 +56,7 @@ PYTHONDONTWRITEBYTECODE=1 /usr/bin/python3 -m py_compile \
   "$operations_directory/local-postgres-mirror"
 "$operations_directory/local-postgres-mirror" \
   --database league_analysis_local_dev \
-  --remote pi5ram8 \
+  --remote pi5ram16 \
   --remote-database league_analysis \
   --config "$config_file"
 

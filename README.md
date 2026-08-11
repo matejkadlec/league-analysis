@@ -20,7 +20,7 @@ guidance is indexed in [`docs/README.md`](docs/README.md).
 | Tooling | Node 26.7.0, npm 12.0.2, uv 0.12.1, GitHub Actions |
 
 The supported local development flow is non-Docker. Production packaging and
-the pi5ram8 deployment are repository-owned but remain an explicit, separate
+the pi5ram16 deployment are repository-owned but remain an explicit, separate
 path; see [the deployment guide](docs/deployment.md) and do not substitute
 container commands for the local workflow below.
 
@@ -124,7 +124,7 @@ without reading the native `.env` or database.
 - [Database and migration workflow](docs/database.md)
 - [Riot API integration](docs/riot-api.md)
 - [Quality checks and CI](docs/quality-checks.md)
-- [Production containers and pi5ram8 deployment](docs/deployment.md)
+- [Production containers and pi5ram16 deployment](docs/deployment.md)
 - [AI/Jira/GitHub delivery flow](docs/ai-development-flow.md)
 
 ## License

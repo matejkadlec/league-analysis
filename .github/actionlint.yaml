@@ -1,4 +1,4 @@
 self-hosted-runner:
-  # Repository-specific deployment runner registered on the pi5ram8 host.
+  # Repository-specific deployment runner registered on the pi5ram16 host.
   labels:
-    - pi5ram8
+    - pi5ram16
