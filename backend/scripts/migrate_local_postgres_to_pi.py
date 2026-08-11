@@ -27,7 +27,7 @@ PROJECT_ROOT = BACKEND_ROOT.parent
 SNAPSHOT_SQL = PROJECT_ROOT / "deploy" / "postgres-snapshot.sql"
 LOCAL_DATABASE = "league_analysis_local_dev"
 REMOTE_DATABASE = "league_analysis"
-REMOTE_HOST = "pi5ram8"
+REMOTE_HOST = "pi5ram16"
 REMOTE_SCRIPT = "$HOME/.local/share/league-analysis/operations/pi-postgres-operations"
 EXPECTED_ALEMBIC_HEAD = "20260809_0006"
 

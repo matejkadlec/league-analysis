@@ -22,7 +22,7 @@ from typing import NoReturn
 
 LOCAL_DATABASE = "league_analysis_local_dev"
 REMOTE_DATABASE = "league_analysis"
-REMOTE_HOST = "pi5ram8"
+REMOTE_HOST = "pi5ram16"
 EXPECTED_ALEMBIC_HEAD = "20260809_0006"
 REMOTE_SCRIPT = "$HOME/.local/share/league-analysis/operations/pi-postgres-operations"
 DEFAULT_CONFIG = Path.home() / "projects" / "league-analysis" / ".env"

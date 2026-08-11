@@ -701,7 +701,7 @@ generation but never creates application tables at runtime.
    production Compose contract runs the same command in a one-shot `migrate`
    service after PostgreSQL health and requires successful completion before
    the backend can start. Deploying a stale feature-branch image is forbidden;
-   the pi5ram8 workflow deploys the exact current `master` revision so every
+   the pi5ram16 workflow deploys the exact current `master` revision so every
    referenced migration is present.
 4. Run `../test.sh -b` during implementation and the complete `../test.sh`
    before publication. The backend gate validates the baseline on a clean
@@ -752,7 +752,7 @@ After LGA-79 established and validated Pi authority, the data authority is
 strictly one-way:
 
 ```text
-pi5ram8 league_analysis -> local league_analysis_local_dev
+pi5ram16 league_analysis -> local league_analysis_local_dev
 ```
 
 The local database is disposable development data. The recurring refresh can

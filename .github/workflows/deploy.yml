@@ -18,13 +18,13 @@ permissions:
 
 jobs:
   deploy:
-    name: Deploy master to pi5ram8
+    name: Deploy master to pi5ram16
     # The pull-request trigger validates this workflow without touching the Pi.
     # Manual runs are accepted only for the current master branch.
     if: >-
       github.event_name == 'push' ||
       (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/master')
-    runs-on: [self-hosted, pi5ram8]
+    runs-on: [self-hosted, pi5ram16]
     timeout-minutes: 45
     steps:
       - name: Check out the exact master revision
@@ -34,7 +34,7 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
-      - name: Deploy repository-owned stack on pi5ram8
+      - name: Deploy repository-owned stack on pi5ram16
         run: >-
           ./deploy/production-deploy.sh
           --source "$GITHUB_WORKSPACE"

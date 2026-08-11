@@ -125,7 +125,7 @@ tail -50 logs/frontend.log
 `./deploy/container-qa.sh` is the explicit Docker packaging/health path. It is
 never part of `./run.sh`, uses isolated names/ports/networks/volume, and removes
 its disposable stack. Production deployment is repository-owned and targets
-the `pi5ram8` runner; see [`docs/deployment.md`](docs/deployment.md).
+the `pi5ram16` runner; see [`docs/deployment.md`](docs/deployment.md).
 The Pi database is backed up at `00:00 Europe/Prague` by a user-systemd timer;
 the guarded operation retains seven successful private custom-format archives
 and provides an isolated restore test. Install or repair that timer only through

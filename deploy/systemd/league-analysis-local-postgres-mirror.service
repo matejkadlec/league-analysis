@@ -7,7 +7,7 @@ Wants=network-online.target
 Type=oneshot
 UMask=0077
 TimeoutStartSec=45min
-ExecStart=/usr/bin/python3 %h/.local/share/league-analysis/operations/local-postgres-mirror --database league_analysis_local_dev --remote pi5ram8 --remote-database league_analysis --config %h/projects/league-analysis/.env --apply
+ExecStart=/usr/bin/python3 %h/.local/share/league-analysis/operations/local-postgres-mirror --database league_analysis_local_dev --remote pi5ram16 --remote-database league_analysis --config %h/projects/league-analysis/.env --apply
 
 [Install]
 WantedBy=default.target
