@@ -135,10 +135,17 @@ async def _finish_sync(
     match_execution_id: int | None = None,
     profile_execution_id: int | None = None,
 ) -> None:
-    """Persist one safe lifecycle update from the background orchestrator."""
+    """Persist one safe lifecycle update from the background orchestrator.
+
+    A terminal row is never reopened. PUUID migration closes the runs of a
+    superseded PUUID, and this orchestrator may still be mid-flight, so an
+    unguarded write would revive a cancelled run and could then collide with a
+    replacement run on the freshly issued PUUID. The row lock makes the check
+    hold against a migration committing between the read and the write.
+    """
     async with db_manager.get_session() as db:
-        sync_run = await db.get(PlayerSyncRun, sync_id)
-        if sync_run is None:
+        sync_run = await db.get(PlayerSyncRun, sync_id, with_for_update=True)
+        if sync_run is None or sync_run.status not in ACTIVE_SYNC_STATUSES:
             return
         sync_run.status = status
         sync_run.error_code = error_code

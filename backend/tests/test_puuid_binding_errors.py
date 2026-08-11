@@ -7,6 +7,7 @@ import pytest
 
 from app.core.riot_api.client import RiotAPIClient
 from app.core.riot_api.errors import BadRequestError, PuuidDecryptionError
+from app.features.jobs import player_sync as player_sync_module
 from app.features.jobs.base import BaseJob
 from app.features.jobs.error_handling import is_riot_puuid_binding_error
 from app.features.jobs.models import (
@@ -16,7 +17,7 @@ from app.features.jobs.models import (
     JobStatus,
     PlayerSyncRun,
 )
-from app.features.jobs.player_sync import _failure_from_job
+from app.features.jobs.player_sync import _failure_from_job, _finish_sync
 from app.features.matchmaking_analysis.models import MatchmakingAnalysis
 from app.features.players.service import ACTIVE_RUN_TABLES, PUUID_REFERENCING_TABLES
 
@@ -314,7 +315,9 @@ def test_migration_closes_exactly_the_indexed_active_statuses(
     A status left open would move a second active row onto the fresh PUUID and
     violate that index, aborting the whole migration.
     """
-    configured = [statuses for name, _, statuses in ACTIVE_RUN_TABLES if name == table]
+    configured = [
+        statuses for name, _, statuses, _ in ACTIVE_RUN_TABLES if name == table
+    ]
     assert configured, f"{table} is never closed before repointing"
 
     assert set(configured[0]) == _indexed_active_statuses(model, index_name)
@@ -324,5 +327,86 @@ def test_every_closed_table_is_also_repointed() -> None:
     """Closing a run without moving it would strand it on the deleted PUUID."""
     repointed = {name for name, _, _ in PUUID_REFERENCING_TABLES}
 
-    for table, _, _ in ACTIVE_RUN_TABLES:
+    for table, _, _, _ in ACTIVE_RUN_TABLES:
         assert table in repointed
+
+
+def test_closing_a_run_clears_its_pending_deadlines() -> None:
+    """A terminal row must not keep a wait deadline it can never reach.
+
+    Every other terminal transition on `core.matchmaking_analyses` clears
+    `rate_limit_reset_at`, so migration has to clear it too.
+    """
+    cleared = {name: columns for name, _, _, columns in ACTIVE_RUN_TABLES}
+
+    assert "rate_limit_reset_at" in cleared["core.matchmaking_analyses"]
+
+    for table, columns in cleared.items():
+        model = (
+            MatchmakingAnalysis
+            if table == "core.matchmaking_analyses"
+            else PlayerSyncRun
+        )
+        for column in columns:
+            assert column in model.__table__.c, f"{table}.{column} does not exist"
+
+
+class _RecordingSession:
+    """Session that hands back one row and records whether a write happened."""
+
+    def __init__(self, run: object) -> None:
+        self._run = run
+        self.committed = False
+        self.locked = False
+
+    async def get(self, _model, _identity, with_for_update: bool = False):
+        self.locked = with_for_update
+        return self._run
+
+    async def commit(self) -> None:
+        self.committed = True
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *_exc) -> None:
+        return None
+
+
+@pytest.mark.asyncio
+async def test_a_cancelled_sync_run_is_never_reopened(monkeypatch) -> None:
+    """Migration closes the runs of a superseded PUUID.
+
+    The orchestrator may still be mid-flight, and an unguarded write would set
+    that row back to `running` and could then collide with a replacement run on
+    the freshly issued PUUID.
+    """
+    run = SimpleNamespace(status="cancelled", started_at=None, completed_at=None)
+    session = _RecordingSession(run)
+    monkeypatch.setattr(player_sync_module.db_manager, "get_session", lambda: session)
+
+    await _finish_sync(1, status="running")
+
+    assert run.status == "cancelled"
+    assert session.committed is False
+    assert session.locked is True, "the row must be locked against a live migration"
+
+
+@pytest.mark.asyncio
+async def test_an_active_sync_run_still_advances(monkeypatch) -> None:
+    """The guard must not block the ordinary lifecycle."""
+    run = SimpleNamespace(
+        status="pending",
+        started_at=None,
+        completed_at=None,
+        error_code=None,
+        error_message=None,
+        updated_at=None,
+    )
+    session = _RecordingSession(run)
+    monkeypatch.setattr(player_sync_module.db_manager, "get_session", lambda: session)
+
+    await _finish_sync(1, status="running")
+
+    assert run.status == "running"
+    assert session.committed is True

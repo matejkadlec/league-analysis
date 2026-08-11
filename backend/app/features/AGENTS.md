@@ -90,7 +90,10 @@ async def get_player_service(
   it. Those tables allow one active row per PUUID through a partial unique
   index, so moving a second active row onto the fresh PUUID would abort the
   migration. Add a table there whenever it gains such an index; the run is
-  already doomed, because Riot rejects the superseded PUUID.
+  already doomed, because Riot rejects the superseded PUUID. Closing clears the
+  listed pending-deadline columns too, so a terminal row never keeps a wait it
+  can never reach. A background orchestrator that is still mid-flight must not
+  reopen a row migration closed.
 - Keep `ix_players_lower_riot_id` aligned with the case-normalized Riot ID
   lookup that migration runs on every discovery while holding the shared
   Riot-writer locks.

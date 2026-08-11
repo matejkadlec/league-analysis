@@ -690,8 +690,11 @@ without storing provider payloads or credentials.
 That partial unique index also constrains PUUID migration. Moving a second
 active row onto a freshly issued PUUID would violate it, so migration closes
 the active rows of a superseded PUUID as `cancelled` before repointing them.
-`core.matchmaking_analyses` carries the same constraint and the same handling.
+`core.matchmaking_analyses` carries the same constraint and the same handling,
+and its `rate_limit_reset_at` is cleared so a closed row keeps no wait deadline.
 Such a run can only fail regardless, because Riot rejects the superseded PUUID.
+The background orchestrator locks a run row and writes only while it is still
+active, so a run closed by migration is never reopened.
 
 ---
 

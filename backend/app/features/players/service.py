@@ -50,15 +50,19 @@ PUUID_REFERENCING_TABLES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
 )
 
 # Tables whose partial unique index permits only one active row per PUUID, with
-# the statuses that index covers. Repointing a second active row onto the fresh
-# PUUID would raise instead of migrating, so migration closes these rows first.
-ACTIVE_RUN_TABLES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
+# the statuses that index covers and the columns a terminal row must not keep.
+# Repointing a second active row onto the fresh PUUID would raise instead of
+# migrating, so migration closes these rows first.
+ACTIVE_RUN_TABLES: tuple[tuple[str, str, tuple[str, ...], tuple[str, ...]], ...] = (
     (
         "core.matchmaking_analyses",
         "puuid",
         ("pending", "in_progress", "waiting_rate_limit"),
+        # Every other terminal transition clears this, so a closed row would
+        # otherwise carry a wait deadline it can never reach.
+        ("rate_limit_reset_at",),
     ),
-    ("jobs.player_sync_runs", "puuid", ("pending", "running")),
+    ("jobs.player_sync_runs", "puuid", ("pending", "running"), ()),
 )
 
 STALE_RUN_ERROR_CODE = "PLAYER_ID_STALE"
@@ -764,13 +768,14 @@ class PlayerService:
         """
         from sqlalchemy import text
 
-        for table, column, active_statuses in ACTIVE_RUN_TABLES:
+        for table, column, active_statuses, cleared_columns in ACTIVE_RUN_TABLES:
             statuses = ", ".join(f"'{status}'" for status in active_statuses)
+            cleared = "".join(f", {name} = NULL" for name in cleared_columns)
             await self.db.execute(
                 text(
                     f"UPDATE {table} SET status = 'cancelled',"
                     " completed_at = now(), error_code = :error_code,"
-                    " error_message = :error_message"
+                    f" error_message = :error_message{cleared}"
                     f" WHERE {column} = :stale AND status IN ({statuses})"
                 ),
                 {
