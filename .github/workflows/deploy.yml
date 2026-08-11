@@ -7,6 +7,10 @@ on:
   push:
     branches:
       - master
+    # Documentation-only pushes do not change the deployed containers.
+    paths-ignore:
+      - "docs/**"
+      - "**.md"
   workflow_dispatch:
 
 concurrency:
