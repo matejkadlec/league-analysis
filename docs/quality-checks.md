@@ -52,7 +52,7 @@ Frontend runs preserve the pre-existing tracked state of
 - Frontend dependencies install with `npm ci` from `package-lock.json`.
 - Backend and development dependencies install with
   `uv sync --frozen --all-groups` from `uv.lock`.
-- CI pins uv 0.12.1 through the immutable setup-uv 9.0.0 action.
+- CI pins uv 0.12.3 through the immutable setup-uv 9.0.0 action.
 - ShellCheck 0.11.0 and actionlint 1.7.12 installers verify both release archive
   and extracted binary SHA-256 checksums on Linux x86-64 and ARM64.
 - GitHub third-party actions are pinned by complete commit SHA with a readable

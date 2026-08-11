@@ -77,7 +77,7 @@ grep -Fq './deploy/production-deploy.sh' "$deployment_workflow" || fail 'Deploy 
 grep -Fqx '    name: Live production dependency audit' "$workflow" || fail 'the dependency audit job is missing.'
 grep -Fqx '        run: ./scripts/dependency-audit.sh "$CHANGE_BASE_SHA"' "$workflow" || fail 'the workflow must use the maintained comparative dependency audit.'
 [[ "$(grep -Fxc '        run: npm install --global npm@12.0.2 --ignore-scripts' "$workflow")" -eq 2 ]] || fail 'both workflow jobs must install the pinned npm release.'
-[[ "$(grep -Fxc '          version: "0.12.1"' "$workflow")" -eq 2 ]] || fail 'both workflow jobs must install the pinned uv release.'
+[[ "$(grep -Fxc '          version: "0.12.3"' "$workflow")" -eq 2 ]] || fail 'both workflow jobs must install the pinned uv release.'
 grep -Fqx '        image: postgres:18.4' "$workflow" || fail 'the CI database image must use the reviewed PostgreSQL minor.'
 grep -Fqx '    uv run python scripts/migrate.py upgrade head' "$ci_gate" || fail 'CI must use the locked Alembic migration command.'
 grep -Fq '"packageManager": "npm@12.0.2"' "$frontend_package" || fail 'the frontend package-manager pin changed.'
@@ -101,7 +101,7 @@ grep -Fq 'frontend-typecheck' "$pre_commit" || fail 'the fast frontend typecheck
   || fail 'frontend pre-commit hooks must resolve the linked-worktree root.'
 [[ "$(grep -Fxc '          source "$repository_root/scripts/use-project-node.sh" && cd "$repository_root/frontend" &&' "$pre_commit")" -eq 2 ]] \
   || fail 'frontend pre-commit hooks must select the project Node runtime.'
-grep -Fqx '    rev: v0.16.1' "$pre_commit" || fail 'pre-commit Ruff must match the backend tool pin.'
+grep -Fqx '    rev: v0.16.2' "$pre_commit" || fail 'pre-commit Ruff must match the backend tool pin.'
 grep -Fqx '        args: ["--fix", "--config=backend/pyproject.toml"]' "$pre_commit" \
   || fail 'pre-commit Ruff lint must use the backend tool configuration.'
 grep -Fqx '        args: ["--config=backend/pyproject.toml"]' "$pre_commit" \

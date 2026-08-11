@@ -120,11 +120,11 @@ Versions are pinned or constrained by `backend/pyproject.toml`,
 
 | Layer | Current basis |
 | --- | --- |
-| Backend runtime | Python `>=3.14.6,<3.15`, FastAPI 0.141.1, SQLAlchemy 2.0.51, Pydantic 2.13, structlog 26.1, APScheduler 3.11, httpx 0.28 |
-| Backend tooling | uv 0.12.1 in CI, Pyright 1.1.411, Ruff 0.16.1 |
+| Backend runtime | Python `>=3.14.7,<3.15`, FastAPI 0.141.1 on Starlette 1.6.0, SQLAlchemy 2.0.51, Pydantic 2.13, Alembic 1.19.1, structlog 26.1, APScheduler 3.11, httpx 0.28 |
+| Backend tooling | uv 0.12.3 in CI, Pyright 1.1.411, Ruff 0.16.2 |
 | Frontend runtime | Next.js 16.3.0, React 19.2.8, TypeScript 7.0.2 native compiler with TypeScript 6.0.2 API compatibility for ESLint, Tailwind CSS 4.3.3, shadcn/ui |
 | Frontend data/forms | TanStack Query 5, Zod 4, Axios, React Hook Form |
-| Frontend tooling | Node 26.7.0, npm 12.0.2 with `package-lock.json`, ESLint 10.8.0 with `@eslint/compat` for Next's legacy plugins, TypeScript 7.0.2 compiler, Vitest 4.1.10 with Testing Library and jsdom, Playwright 1.62.1 |
+| Frontend tooling | Node 26.7.0, npm 12.0.2 with `package-lock.json`, ESLint 10.8.1 with `@eslint/compat` for Next's legacy plugins, TypeScript 7.0.2 compiler, Vitest 4.1.10 with Testing Library and jsdom, Playwright 1.62.1 |
 | Database | PostgreSQL 18.4, asyncpg for application I/O, psycopg2 for APScheduler |
 | Production packaging | Docker Compose v2, Python/Node production images, PostgreSQL 18.4 |
 | External data | Riot Games API |
@@ -132,7 +132,9 @@ Versions are pinned or constrained by `backend/pyproject.toml`,
 Use `uv` for backend dependencies and commands. Use npm for frontend
 dependencies and commands; do not introduce a second package manager.
 The dated selection and security rationale is recorded in
-[`dependency-upgrade-2026-08-03.md`](dependency-upgrade-2026-08-03.md).
+[`dependency-upgrade-2026-08-03.md`](dependency-upgrade-2026-08-03.md) and the
+later maintenance refresh
+[`dependency-upgrade-2026-08-11.md`](dependency-upgrade-2026-08-11.md).
 
 ## Local Environment
 
@@ -153,7 +155,7 @@ nvm use 26.7.0
 npm install --global npm@12.0.2 --ignore-scripts
 ```
 
-CI pins uv 0.12.1. Local uv 0.12.1 can be installed through the official
+CI pins uv 0.12.3. Local uv 0.12.3 can be installed through the official
 installer or selected package manager; `uv lock --check` must accept the
 committed lock before development continues.
 
