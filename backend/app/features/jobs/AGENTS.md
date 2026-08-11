@@ -88,6 +88,12 @@ details. Keep it synchronized with job changes.
   reason.
 - `run()` closes any execution that ends without recorded completion so a
   crash cannot leave the row `RUNNING` for the next tick to report as orphaned.
+- Publish `job_execution_status` only once the completion write is persisted.
+  A status cached from a write that never landed would contradict the stored
+  row, which the fallback closes as `FAILED`.
+- Only a run skipped because the same job is already active sets
+  `skipped_as_already_running`, which `player_sync` maps to `SYNC_BUSY`. A run
+  whose start failed also has no execution id and must stay a real failure.
 - Regular Match Fetcher and Player Updater runs finish `SUCCESS` with warning
   diagnostics after isolated player, match, timeline, or provider-shape errors.
   Missing/rejected Riot credentials remain `FAILED`; rate exhaustion is

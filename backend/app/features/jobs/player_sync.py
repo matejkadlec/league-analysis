@@ -83,8 +83,12 @@ def _failure_from_job(job) -> tuple[str, str, str]:
     Reads only the writer's cached scalars. A per-player Riot failure rolls the
     job session back and the session is already closed here, so touching the
     `JobExecution` instance would raise instead of classifying the failure.
+
+    Only a run the scheduler skipped is busy. A run whose start failed also has
+    no execution id, but it is a genuine failure and must not be reported as a
+    competing update.
     """
-    if job.job_execution_id is None:
+    if job.skipped_as_already_running:
         return (
             "failed",
             "SYNC_BUSY",

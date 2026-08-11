@@ -181,6 +181,12 @@ collecting logs or writing the completion row, outside `execute()` — is closed
 as `FAILED` in the run's `finally` block. Without that guard the execution row
 stays `RUNNING` and the next scheduled tick reports it as an orphan.
 
+`SYNC_BUSY` reports only a run the scheduler skipped because the same job was
+already active. A run whose start failed also records no execution, but it is a
+database failure rather than a competing update and stays `SYNC_FAILED`. The
+cached terminal status is likewise published only once the completion write is
+persisted, so a client never reads a status the database rejected.
+
 The frontend polls this lifecycle, then invalidates and refetches active query
 keys containing that exact PUUID. The approved completion info toast is shown
 once only after those refetches succeed. Switching current player never starts

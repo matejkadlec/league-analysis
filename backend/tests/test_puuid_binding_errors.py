@@ -9,8 +9,16 @@ from app.core.riot_api.client import RiotAPIClient
 from app.core.riot_api.errors import BadRequestError, PuuidDecryptionError
 from app.features.jobs.base import BaseJob
 from app.features.jobs.error_handling import is_riot_puuid_binding_error
-from app.features.jobs.models import ExecutionType, JobExecution, JobStatus
+from app.features.jobs.models import (
+    ExecutionType,
+    JobConfiguration,
+    JobExecution,
+    JobStatus,
+    PlayerSyncRun,
+)
 from app.features.jobs.player_sync import _failure_from_job
+from app.features.matchmaking_analysis.models import MatchmakingAnalysis
+from app.features.players.service import ACTIVE_RUN_TABLES, PUUID_REFERENCING_TABLES
 
 
 class _Job(BaseJob):
@@ -115,6 +123,7 @@ def test_failure_from_job_reports_a_stale_player_id() -> None:
     job = SimpleNamespace(
         job_execution_id=11,
         job_execution_status=JobStatus.SUCCESS,
+        skipped_as_already_running=False,
         has_api_key_error=lambda: False,
         has_puuid_binding_error=lambda: True,
     )
@@ -131,6 +140,7 @@ def test_failure_from_job_keeps_the_key_error_precedence() -> None:
     job = SimpleNamespace(
         job_execution_id=12,
         job_execution_status=JobStatus.FAILED,
+        skipped_as_already_running=False,
         has_api_key_error=lambda: True,
         has_puuid_binding_error=lambda: True,
     )
@@ -145,6 +155,7 @@ def test_generic_failure_is_unchanged() -> None:
     job = SimpleNamespace(
         job_execution_id=13,
         job_execution_status=JobStatus.FAILED,
+        skipped_as_already_running=False,
         has_api_key_error=lambda: False,
         has_puuid_binding_error=lambda: False,
     )
@@ -175,6 +186,7 @@ def test_failure_from_job_never_touches_the_execution_instance() -> None:
         job_execution=_Exploding(),
         job_execution_id=99,
         job_execution_status=JobStatus.SUCCESS,
+        skipped_as_already_running=False,
         has_api_key_error=lambda: False,
         has_puuid_binding_error=lambda: True,
     )
@@ -184,11 +196,12 @@ def test_failure_from_job_never_touches_the_execution_instance() -> None:
     assert code == "PLAYER_ID_STALE"
 
 
-def test_missing_execution_still_reports_a_busy_writer() -> None:
-    """A writer that never started keeps the existing busy contract."""
+def test_a_skipped_writer_reports_a_busy_writer() -> None:
+    """A writer the scheduler skipped keeps the existing busy contract."""
     job = SimpleNamespace(
         job_execution_id=None,
         job_execution_status=None,
+        skipped_as_already_running=True,
         has_api_key_error=lambda: False,
         has_puuid_binding_error=lambda: False,
     )
@@ -198,8 +211,118 @@ def test_missing_execution_still_reports_a_busy_writer() -> None:
     assert code == "SYNC_BUSY"
 
 
-def test_completion_flag_requires_a_successful_write() -> None:
+def test_a_failed_start_is_not_reported_as_a_busy_writer() -> None:
+    """`run()` swallows a `log_start` failure and returns with no execution id.
+
+    Classifying that database failure as a competing update would tell the user
+    to wait for a run that never exists.
+    """
+    job = SimpleNamespace(
+        job_execution_id=None,
+        job_execution_status=None,
+        skipped_as_already_running=False,
+        has_api_key_error=lambda: False,
+        has_puuid_binding_error=lambda: False,
+    )
+
+    _, code, _ = _failure_from_job(job)
+
+    assert code == "SYNC_FAILED"
+
+
+class _FailingSession:
+    """Session whose every write fails, as a lost connection would."""
+
+    def __init__(self) -> None:
+        self.rollbacks = 0
+
+    async def execute(self, *args, **kwargs):
+        raise RuntimeError("connection lost")
+
+    async def commit(self) -> None:
+        raise RuntimeError("connection lost")
+
+    async def rollback(self) -> None:
+        self.rollbacks += 1
+
+
+@pytest.mark.asyncio
+async def test_completion_flag_requires_a_successful_write() -> None:
     """A swallowed completion-write failure must not disable the run guard."""
     job = _Job(job_config_id=1)
+    job.job_execution_id = 7
+    job.job_execution = cast(JobExecution, SimpleNamespace())
+    job.job_config = cast(JobConfiguration, SimpleNamespace())
+    job.job_config_name = "test job"
+    job.job_config_type_value = "match_fetcher"
+    db = _FailingSession()
+
+    await job.log_completion(cast(object, db), success=True)  # type: ignore[arg-type]
 
     assert job._completion_logged is False
+    # A status the database never accepted must not reach the classifier.
+    assert job.job_execution_status is None
+
+
+@pytest.mark.asyncio
+async def test_a_failed_completion_write_does_not_publish_its_status() -> None:
+    """The fallback persists FAILED, so a cached CANCELLED would contradict it."""
+    job = _Job(job_config_id=1)
+    job.job_execution_id = 8
+    job.job_execution = cast(JobExecution, SimpleNamespace())
+    job.job_config = cast(JobConfiguration, SimpleNamespace())
+    job.job_config_name = "test job"
+    job.job_config_type_value = "match_fetcher"
+    db = _FailingSession()
+
+    await job.log_completion(
+        cast(object, db),  # type: ignore[arg-type]
+        success=True,
+        status=JobStatus.CANCELLED,
+    )
+
+    assert job.job_execution_status is not JobStatus.CANCELLED
+
+
+def _indexed_active_statuses(model, index_name: str) -> set[str]:
+    """Read the statuses a table's partial unique index actually covers."""
+    for index in model.__table__.indexes:
+        if index.name != index_name:
+            continue
+        predicate = str(index.dialect_options["postgresql"]["where"])
+        listed = predicate.split("(")[1].split(")")[0]
+        return {entry.strip().strip("'") for entry in listed.split(",")}
+    raise AssertionError(f"{index_name} is missing")
+
+
+@pytest.mark.parametrize(
+    ("table", "model", "index_name"),
+    [
+        (
+            "core.matchmaking_analyses",
+            MatchmakingAnalysis,
+            "uq_matchmaking_analyses_active_puuid",
+        ),
+        ("jobs.player_sync_runs", PlayerSyncRun, "uq_player_sync_runs_active_puuid"),
+    ],
+)
+def test_migration_closes_exactly_the_indexed_active_statuses(
+    table: str, model: object, index_name: str
+) -> None:
+    """Migration must close every status the partial unique index covers.
+
+    A status left open would move a second active row onto the fresh PUUID and
+    violate that index, aborting the whole migration.
+    """
+    configured = [statuses for name, _, statuses in ACTIVE_RUN_TABLES if name == table]
+    assert configured, f"{table} is never closed before repointing"
+
+    assert set(configured[0]) == _indexed_active_statuses(model, index_name)
+
+
+def test_every_closed_table_is_also_repointed() -> None:
+    """Closing a run without moving it would strand it on the deleted PUUID."""
+    repointed = {name for name, _, _ in PUUID_REFERENCING_TABLES}
+
+    for table, _, _ in ACTIVE_RUN_TABLES:
+        assert table in repointed

@@ -86,6 +86,14 @@ async def get_player_service(
   created by match-participant discovery. Extend `PUUID_REFERENCING_TABLES`
   whenever a new table references `core.players(puuid)`; those foreign keys
   cascade on delete, so a missed table would destroy data.
+- Migration closes every run listed in `ACTIVE_RUN_TABLES` before repointing
+  it. Those tables allow one active row per PUUID through a partial unique
+  index, so moving a second active row onto the fresh PUUID would abort the
+  migration. Add a table there whenever it gains such an index; the run is
+  already doomed, because Riot rejects the superseded PUUID.
+- Keep `ix_players_lower_riot_id` aligned with the case-normalized Riot ID
+  lookup that migration runs on every discovery while holding the shared
+  Riot-writer locks.
 - Matchmaking Analysis start routes must return the persisted active run before
   Riot preflight/work begins. Preserve its explicit lifecycle states, one-active-
   run-per-PUUID database constraint, exact-run cancellation, and shared

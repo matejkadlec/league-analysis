@@ -157,6 +157,10 @@ class BaseJob(ABC):
         self._has_api_key_error: bool = False
         self._has_puuid_binding_error: bool = False
         self._completion_logged: bool = False
+        # A run skipped because the same job is already active never creates an
+        # execution row. It must stay distinguishable from a run whose start
+        # failed, which also leaves no execution id but is a genuine failure.
+        self.skipped_as_already_running: bool = False
         # Track API call records for detailed logging
         self._api_call_records: List[Any] = []
 
@@ -321,9 +325,14 @@ class BaseJob(ABC):
                 if status is not None
                 else (JobStatus.SUCCESS if success else JobStatus.FAILED)
             )
+            # Publish the terminal status only once it is actually persisted.
+            # A failed write falls through to `_fail_unfinished_execution`, and
+            # a cached status from a write that never landed would contradict
+            # the stored row for every reader that classifies from the scalar.
+            if self._completion_logged:
+                self.job_execution_status = final_status
             self.job_execution.completed_at = completed_at
             self.job_execution.status = final_status
-            self.job_execution_status = final_status
 
         except Exception as e:
             await self._handle_completion_error(db, e)
@@ -408,6 +417,7 @@ class BaseJob(ABC):
                     "Skipping job execution - already running",
                     job_config_id=self.job_config_id,
                 )
+                self.skipped_as_already_running = True
                 return
 
             try:
@@ -566,6 +576,7 @@ class BaseJob(ABC):
                 )
             )
             await db.commit()
+            self.job_execution_status = JobStatus.FAILED
         except Exception as error:
             logger.error(
                 "Failed to close unfinished job execution",

@@ -49,6 +49,23 @@ PUUID_REFERENCING_TABLES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("auth.users", "puuid", ()),
 )
 
+# Tables whose partial unique index permits only one active row per PUUID, with
+# the statuses that index covers. Repointing a second active row onto the fresh
+# PUUID would raise instead of migrating, so migration closes these rows first.
+ACTIVE_RUN_TABLES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
+    (
+        "core.matchmaking_analyses",
+        "puuid",
+        ("pending", "in_progress", "waiting_rate_limit"),
+    ),
+    ("jobs.player_sync_runs", "puuid", ("pending", "running")),
+)
+
+STALE_RUN_ERROR_CODE = "PLAYER_ID_STALE"
+STALE_RUN_ERROR_MESSAGE = (
+    "Riot re-issued this player's ID, so the run was closed during migration."
+)
+
 
 async def _ensure_riot_writer_maintenance_is_inactive(session: AsyncSession) -> None:
     """Avoid importing the jobs package until a direct Riot-data write runs."""
@@ -735,6 +752,34 @@ class PlayerService:
             )
             raise
 
+    async def _close_stale_active_runs(self, stale_puuid: str) -> None:
+        """Close every run still pinned to a PUUID Riot no longer resolves.
+
+        Each of these tables permits only one active row per PUUID through a
+        partial unique index, so repointing a second active row onto the fresh
+        PUUID would raise instead of migrating. Closing them unconditionally
+        also keeps repeated migrations safe: a row moved as active would make
+        the next stale PUUID collide. Such a run can only fail anyway, because
+        every Riot call for the stale PUUID is rejected.
+        """
+        from sqlalchemy import text
+
+        for table, column, active_statuses in ACTIVE_RUN_TABLES:
+            statuses = ", ".join(f"'{status}'" for status in active_statuses)
+            await self.db.execute(
+                text(
+                    f"UPDATE {table} SET status = 'cancelled',"
+                    " completed_at = now(), error_code = :error_code,"
+                    " error_message = :error_message"
+                    f" WHERE {column} = :stale AND status IN ({statuses})"
+                ),
+                {
+                    "stale": stale_puuid,
+                    "error_code": STALE_RUN_ERROR_CODE,
+                    "error_message": STALE_RUN_ERROR_MESSAGE,
+                },
+            )
+
     async def _repoint_puuid_references(
         self, *, stale_puuid: str, fresh_puuid: str
     ) -> None:
@@ -742,6 +787,7 @@ class PlayerService:
         from sqlalchemy import text
 
         params = {"stale": stale_puuid, "fresh": fresh_puuid}
+        await self._close_stale_active_runs(stale_puuid)
         for table, column, guard_columns in PUUID_REFERENCING_TABLES:
             guard = ""
             if guard_columns:
