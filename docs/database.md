@@ -735,6 +735,11 @@ safety backup and remained available as a rollback database through health and
 authentication validation. The full procedure, exact container boundary,
 authority marker, and rollback commands are maintained in
 [`deployment.md`](deployment.md#postgresql-data-authority-and-initial-migration).
+If that already-authoritative database is moved intact to a different Pi or SSH
+operating-system account without its operations state, use the documented
+relocated-authority adoption gate. It validates the live database and services,
+creates a new private safety backup, and records the backup digest without
+replacing or otherwise writing to the database.
 
 ### Pi backup authority
 
