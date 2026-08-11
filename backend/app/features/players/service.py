@@ -30,6 +30,46 @@ logger = structlog.get_logger(__name__)
 
 MAX_TRACKED_PLAYERS_PER_USER = 10
 
+# Every table that references core.players(puuid), with the columns that make a
+# repointed row collide. Riot re-issues a PUUID when the developer account
+# changes, so these rows must move onto the fresh PUUID instead of being
+# orphaned behind a duplicate player row. The foreign keys cascade on delete, so
+# a missed table would silently destroy match data.
+PUUID_REFERENCING_TABLES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
+    ("core.match_participants", "puuid", ("match_id",)),
+    ("core.match_timelines", "puuid", ("match_id",)),
+    ("core.player_leagues", "puuid", ()),
+    ("core.playstyle_analyses", "puuid", ()),
+    ("core.matchmaking_analyses", "puuid", ("created_at",)),
+    ("auth.user_tracked_players", "puuid", ("user_id",)),
+    ("auth.user_settings", "current_player_puuid", ()),
+    ("jobs.player_sync_runs", "puuid", ()),
+    # auth.users.puuid is a logical Riot-account link rather than a declared
+    # foreign key, so nothing would move it and the link would silently dangle.
+    ("auth.users", "puuid", ()),
+)
+
+# Tables whose partial unique index permits only one active row per PUUID, with
+# the statuses that index covers and the columns a terminal row must not keep.
+# Repointing a second active row onto the fresh PUUID would raise instead of
+# migrating, so migration closes these rows first.
+ACTIVE_RUN_TABLES: tuple[tuple[str, str, tuple[str, ...], tuple[str, ...]], ...] = (
+    (
+        "core.matchmaking_analyses",
+        "puuid",
+        ("pending", "in_progress", "waiting_rate_limit"),
+        # Every other terminal transition clears this, so a closed row would
+        # otherwise carry a wait deadline it can never reach.
+        ("rate_limit_reset_at",),
+    ),
+    ("jobs.player_sync_runs", "puuid", ("pending", "running"), ()),
+)
+
+STALE_RUN_ERROR_CODE = "PLAYER_ID_STALE"
+STALE_RUN_ERROR_MESSAGE = (
+    "Riot re-issued this player's ID, so the run was closed during migration."
+)
+
 
 async def _ensure_riot_writer_maintenance_is_inactive(session: AsyncSession) -> None:
     """Avoid importing the jobs package until a direct Riot-data write runs."""
@@ -716,6 +756,155 @@ class PlayerService:
             )
             raise
 
+    async def _close_stale_active_runs(self, stale_puuid: str) -> None:
+        """Close every run still pinned to a PUUID Riot no longer resolves.
+
+        Each of these tables permits only one active row per PUUID through a
+        partial unique index, so repointing a second active row onto the fresh
+        PUUID would raise instead of migrating. Closing them unconditionally
+        also keeps repeated migrations safe: a row moved as active would make
+        the next stale PUUID collide. Such a run can only fail anyway, because
+        every Riot call for the stale PUUID is rejected.
+        """
+        from sqlalchemy import text
+
+        for table, column, active_statuses, cleared_columns in ACTIVE_RUN_TABLES:
+            statuses = ", ".join(f"'{status}'" for status in active_statuses)
+            cleared = "".join(f", {name} = NULL" for name in cleared_columns)
+            await self.db.execute(
+                text(
+                    f"UPDATE {table} SET status = 'cancelled',"
+                    " completed_at = now(), error_code = :error_code,"
+                    f" error_message = :error_message{cleared}"
+                    f" WHERE {column} = :stale AND status IN ({statuses})"
+                ),
+                {
+                    "stale": stale_puuid,
+                    "error_code": STALE_RUN_ERROR_CODE,
+                    "error_message": STALE_RUN_ERROR_MESSAGE,
+                },
+            )
+
+    async def _repoint_puuid_references(
+        self, *, stale_puuid: str, fresh_puuid: str
+    ) -> None:
+        """Move every row referencing one stale PUUID onto the fresh one."""
+        from sqlalchemy import text
+
+        params = {"stale": stale_puuid, "fresh": fresh_puuid}
+        await self._close_stale_active_runs(stale_puuid)
+        for table, column, guard_columns in PUUID_REFERENCING_TABLES:
+            guard = ""
+            if guard_columns:
+                matched = " AND ".join(
+                    f"existing.{name} = target.{name}" for name in guard_columns
+                )
+                guard = (
+                    f" AND NOT EXISTS (SELECT 1 FROM {table} AS existing"
+                    f" WHERE existing.{column} = :fresh AND {matched})"
+                )
+            await self.db.execute(
+                text(
+                    f"UPDATE {table} AS target SET {column} = :fresh"
+                    f" WHERE target.{column} = :stale{guard}"
+                ),
+                params,
+            )
+
+        # A guarded row that could not move is already represented on the fresh
+        # PUUID, so only a genuine duplicate can remain.
+        await self.db.execute(
+            text("DELETE FROM auth.user_tracked_players WHERE puuid = :stale"),
+            params,
+        )
+
+        remaining = 0
+        for table, column, _ in PUUID_REFERENCING_TABLES:
+            remaining += (
+                await self.db.scalar(
+                    text(f"SELECT count(*) FROM {table} WHERE {column} = :stale"),
+                    params,
+                )
+                or 0
+            )
+        if remaining:
+            raise PlayerServiceError(
+                message="Cannot migrate player identity while references remain",
+                operation="migrate_stale_player_puuid",
+                context={"remaining_references": remaining},
+            )
+
+        await self.db.execute(
+            text("DELETE FROM core.players WHERE puuid = :stale"), params
+        )
+
+    async def _migrate_stale_player_puuids(
+        self, *, fresh_puuid: str, game_name: str, tag_line: str, platform: str
+    ) -> int:
+        """Move every stale row for one Riot ID onto its freshly issued PUUID.
+
+        Riot encrypts PUUIDs per developer account, so the same Riot ID resolves
+        to a new PUUID after an account change. Without this migration the
+        discovery path would leave the old rows behind as duplicates and strand
+        every match, league, and tracking row attached to them. A Riot ID can
+        accumulate more than one stale row across repeated account changes, and
+        the fresh row may already exist from match-participant discovery, so
+        neither case may skip the migration.
+
+        The caller already holds the shared Riot-writer table locks.
+        """
+        stale_players = (
+            await self.db.scalars(
+                select(Player).where(
+                    func.lower(Player.game_name) == game_name.lower(),
+                    func.lower(Player.tag_line) == tag_line.lower(),
+                    func.lower(Player.platform) == platform.lower(),
+                    Player.puuid != fresh_puuid,
+                )
+            )
+        ).all()
+        if not stale_players:
+            return 0
+
+        if await self.db.get(Player, fresh_puuid) is None:
+            template = stale_players[0]
+            self.db.add(
+                Player(
+                    puuid=fresh_puuid,
+                    game_name=template.game_name,
+                    tag_line=template.tag_line,
+                    platform=template.platform,
+                    profile_icon_id=template.profile_icon_id,
+                    summoner_level=template.summoner_level,
+                    is_tracked=template.is_tracked,
+                    last_playstyle_analysis=template.last_playstyle_analysis,
+                    last_matchmaking_analysis=template.last_matchmaking_analysis,
+                    created_at=template.created_at,
+                    profile_synced_at=template.profile_synced_at,
+                    league_synced_at=template.league_synced_at,
+                    match_synced_at=template.match_synced_at,
+                )
+            )
+            await self.db.flush()
+
+        stale_puuids = [stale.puuid for stale in stale_players]
+        for stale in stale_players:
+            self.db.expunge(stale)
+        for stale_puuid in stale_puuids:
+            await self._repoint_puuid_references(
+                stale_puuid=stale_puuid, fresh_puuid=fresh_puuid
+            )
+
+        await self._update_global_tracking_flag(fresh_puuid)
+        logger.info(
+            "player_puuid_migrated",
+            game_name=game_name,
+            tag_line=tag_line,
+            platform=platform,
+            migrated_rows=len(stale_puuids),
+        )
+        return len(stale_puuids)
+
     async def discover_player(
         self,
         riot_client: "RiotAPIClient",
@@ -736,6 +925,15 @@ class PlayerService:
             raise ValueError(f"Summoner not found for PUUID: {account.puuid}")
 
         now = datetime.now(timezone.utc)
+        # Runs before the row lookup: a stale row can survive alongside an
+        # already-created fresh row, so an existing fresh row must not skip it.
+        if await self._migrate_stale_player_puuids(
+            fresh_puuid=account.puuid,
+            game_name=account.game_name or game_name,
+            tag_line=account.tag_line or tag_line,
+            platform=platform_enum.value,
+        ):
+            await self.db.flush()
         player = await self.db.get(Player, account.puuid)
         if player is None:
             player = Player(

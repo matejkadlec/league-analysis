@@ -8,6 +8,7 @@ from sqlalchemy import (
     Index,
     Integer,
     String,
+    text,
 )
 from sqlalchemy import (
     DateTime as SQLDateTime,
@@ -22,7 +23,18 @@ class Player(Base):
     """Player model storing Riot API player data."""
 
     __tablename__ = "players"
-    __table_args__ = {"schema": "core"}
+    __table_args__ = (
+        # Player discovery looks a Riot ID up case-insensitively on every call
+        # to find rows stranded on a superseded PUUID, and it holds the shared
+        # Riot-writer locks while doing so.
+        Index(
+            "ix_players_lower_riot_id",
+            text("lower(game_name)"),
+            text("lower(tag_line)"),
+            text("lower(platform)"),
+        ),
+        {"schema": "core"},
+    )
 
     # Primary key - PUUID is the unique identifier from Riot API
     # Note: Riot PUUID is a base64-encoded string, not a standard UUID

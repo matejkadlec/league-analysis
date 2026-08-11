@@ -551,6 +551,14 @@ Central player registry using Riot PUUID as primary key.
 | `league_synced_at`  | timestamptz | Last successful Match Fetcher rank check         |
 | `match_synced_at`   | timestamptz | Last complete successful Match Fetcher data check |
 
+Revision `20260811_0007` adds `ix_players_lower_riot_id` on
+`(lower(game_name), lower(tag_line), lower(platform))`. Player discovery uses
+that exact case-normalized lookup on every call to find rows stranded on a
+superseded PUUID, and it holds the shared Riot-writer locks while doing so, so
+the lookup must not scan the table. Riot re-issues a PUUID when the developer
+account changes; see
+[`riot-api.md`](riot-api.md#puuids-are-bound-to-the-developer-account).
+
 ### `core.matches`
 
 Match metadata from Riot API.
@@ -678,6 +686,15 @@ update. It references the shared canonical PUUID and the two administrator job
 executions that performed the targeted work. Active `pending`/`running` rows
 are unique per PUUID; terminal states are retained for exact polling and audit
 without storing provider payloads or credentials.
+
+That partial unique index also constrains PUUID migration. Moving a second
+active row onto a freshly issued PUUID would violate it, so migration closes
+the active rows of a superseded PUUID as `cancelled` before repointing them.
+`core.matchmaking_analyses` carries the same constraint and the same handling,
+and its `rate_limit_reset_at` is cleared so a closed row keeps no wait deadline.
+Such a run can only fail regardless, because Riot rejects the superseded PUUID.
+The background orchestrator locks a run row and writes only while it is still
+active, so a run closed by migration is never reopened.
 
 ---
 

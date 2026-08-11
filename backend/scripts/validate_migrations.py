@@ -16,7 +16,7 @@ from sqlalchemy import URL, create_engine, text
 
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
 PROJECT_ROOT = BACKEND_ROOT.parent
-EXPECTED_REVISION = "20260809_0006"
+EXPECTED_REVISION = "20260811_0007"
 EXPECTED_TABLES = 23
 EXPECTED_ENUMS = 6
 EXPECTED_TRIGGERS = 1
@@ -319,6 +319,17 @@ def validate_catalog(database: str) -> None:
                     "AND indexname = 'uq_player_sync_runs_active_puuid'"
                 )
             ).scalar_one()
+            player_riot_id_index_count = connection.execute(
+                text(
+                    "SELECT COUNT(*) FROM pg_indexes "
+                    "WHERE schemaname = 'core' "
+                    "AND tablename = 'players' "
+                    "AND indexname = 'ix_players_lower_riot_id' "
+                    "AND indexdef LIKE '%lower((game_name)::text)%' "
+                    "AND indexdef LIKE '%lower((tag_line)::text)%' "
+                    "AND indexdef LIKE '%lower((platform)::text)%'"
+                )
+            ).scalar_one()
     finally:
         engine.dispose()
 
@@ -340,6 +351,7 @@ def validate_catalog(database: str) -> None:
         legacy_player_setting_count,
         player_sync_constraint_count,
         player_sync_active_index_count,
+        player_riot_id_index_count,
     )
     expected = (
         EXPECTED_REVISION,
@@ -370,6 +382,7 @@ def validate_catalog(database: str) -> None:
         3,
         2,
         0,
+        1,
         1,
         1,
     )

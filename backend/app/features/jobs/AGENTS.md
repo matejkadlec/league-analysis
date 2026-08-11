@@ -76,6 +76,28 @@ details. Keep it synchronized with job changes.
   static operation name and only reviewed identifiers. It stores bounded,
   secret-safe diagnostics for administrator execution details; never pass raw
   exception text, provider payloads, or credentials as context.
+- A recorded `PuuidDecryptionError` sets `has_puuid_binding_error()`, which
+  `player_sync` maps to `PLAYER_ID_STALE`. It stays a per-player warning, so a
+  stale row never fails an entire scheduled run.
+- Never read `job_execution` or `job_config` attributes off the ORM instance
+  during completion, nor after the job's session closes. A rollback expires
+  them and reloading outside the async greenlet raises `MissingGreenlet`. Use
+  the cached `job_execution_id`, `job_execution_started_at`,
+  `job_execution_status`, `job_config_name`, and `job_config_type_value`.
+  `player_sync` classifies writer outcomes from those scalars for the same
+  reason.
+- `run()` closes any execution that ends without recorded completion so a
+  crash cannot leave the row `RUNNING` for the next tick to report as orphaned.
+- Publish `job_execution_status` only once the completion write is persisted.
+  A status cached from a write that never landed would contradict the stored
+  row, which the fallback closes as `FAILED`.
+- Only a run skipped because the same job is already active sets
+  `skipped_as_already_running`, which `player_sync` maps to `SYNC_BUSY`. A run
+  whose start failed also has no execution id and must stay a real failure.
+- `_finish_sync` never reopens a terminal `PlayerSyncRun`. It locks the row and
+  writes only while the run is still active, because PUUID migration may close
+  it while this orchestrator is mid-flight; reviving it would also risk a
+  collision with a replacement run on the freshly issued PUUID.
 - Regular Match Fetcher and Player Updater runs finish `SUCCESS` with warning
   diagnostics after isolated player, match, timeline, or provider-shape errors.
   Missing/rejected Riot credentials remain `FAILED`; rate exhaustion is

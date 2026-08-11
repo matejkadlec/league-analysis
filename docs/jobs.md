@@ -169,6 +169,24 @@ executions finish `SUCCESS` without recoverable warnings. Client-visible
 errors are stable and safe; detailed provider diagnostics remain in the
 underlying administrator execution records and server logs.
 
+Client-visible failure codes are `RIOT_API_KEY_INVALID`, `RIOT_RATE_LIMITED`,
+`SYNC_CANCELLED`, `SYNC_BUSY`, `SYNC_CONFIGURATION_MISSING`, `PLAYER_ID_STALE`,
+and `SYNC_FAILED` as the unclassified fallback. `PLAYER_ID_STALE` means Riot
+rejected the stored PUUID because it was issued to a different developer
+account; searching for that player again re-resolves and migrates it. See
+[`riot-api.md`](riot-api.md#puuids-are-bound-to-the-developer-account).
+
+A job that ends without recording completion — an exception raised while
+collecting logs or writing the completion row, outside `execute()` — is closed
+as `FAILED` in the run's `finally` block. Without that guard the execution row
+stays `RUNNING` and the next scheduled tick reports it as an orphan.
+
+`SYNC_BUSY` reports only a run the scheduler skipped because the same job was
+already active. A run whose start failed also records no execution, but it is a
+database failure rather than a competing update and stays `SYNC_FAILED`. The
+cached terminal status is likewise published only once the completion write is
+persisted, so a client never reads a status the database rejected.
+
 The frontend polls this lifecycle, then invalidates and refetches active query
 keys containing that exact PUUID. The approved completion info toast is shown
 once only after those refetches succeed. Switching current player never starts

@@ -156,11 +156,14 @@ async def test_new_player_uses_submitted_riot_id_when_account_omits_it(
     )
 
     class _Statement:
-        def where(self, _condition: object) -> "_Statement":
+        def where(self, *_conditions: object) -> "_Statement":
             return self
 
     class _FakePlayer(SimpleNamespace):
         puuid = object()
+        game_name = object()
+        tag_line = object()
+        platform = object()
 
     monkeypatch.setattr(player_service_module, "select", lambda *_args: _Statement())
     monkeypatch.setattr(player_service_module, "Player", _FakePlayer)
@@ -174,6 +177,8 @@ async def test_new_player_uses_submitted_riot_id_when_account_omits_it(
         add=Mock(),
         commit=AsyncMock(),
         refresh=AsyncMock(side_effect=populate_database_timestamps),
+        # No prior row shares this Riot ID, so no PUUID migration is attempted.
+        scalars=AsyncMock(return_value=SimpleNamespace(all=lambda: [])),
     )
     service = PlayerService(db)
     service.track_player = AsyncMock(return_value=SimpleNamespace(puuid="safe"))  # type: ignore[method-assign]
