@@ -48,6 +48,10 @@ Inherits repository-wide rules from
   active, non-expired `core.riot_api_keys` row has priority, with
   `RIOT_API_KEY` as the development fallback.
 - Never log or expose an API key.
+- A Riot 400 whose `status.message` reports a decryption failure becomes
+  `PuuidDecryptionError`, not a plain `BadRequestError`. It means the stored
+  PUUID belongs to another developer account. Keep the condition on the
+  exception type and keep the provider payload out of the message.
 
 ## Usage
 

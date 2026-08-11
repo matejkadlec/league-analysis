@@ -15,6 +15,7 @@ from .errors import (
     BadRequestError,
     ForbiddenError,
     NotFoundError,
+    PuuidDecryptionError,
     RateLimitError,
     RiotAPIError,
     ServiceUnavailableError,
@@ -156,9 +157,32 @@ class RiotAPIClient:
             )
         )
 
-    def _raise_client_error_if_needed(self, status: int) -> None:
+    @staticmethod
+    def _extract_riot_status_message(response: Any) -> Optional[str]:
+        """Return Riot's `status.message` for an error response, if present."""
+        try:
+            payload = response.json()
+        except Exception:
+            return None
+
+        if not isinstance(payload, dict):
+            return None
+        status_block = payload.get("status")
+        if not isinstance(status_block, dict):
+            return None
+        message = status_block.get("message")
+        return message if isinstance(message, str) else None
+
+    def _raise_client_error_if_needed(
+        self, status: int, riot_message: Optional[str] = None
+    ) -> None:
         """Raise specific RiotAPIError subclass for client errors."""
         if status == 400:
+            if riot_message and "exception decrypting" in riot_message.lower():
+                raise PuuidDecryptionError(
+                    "Stored PUUID was issued to a different developer account",
+                    status_code=status,
+                )
             raise BadRequestError("Invalid request parameters", status_code=status)
         elif status == 401:
             raise AuthenticationError("Invalid API key", status_code=status)
@@ -226,7 +250,12 @@ class RiotAPIClient:
             raise RiotAPIError(f"Server error {status}", status_code=status)
 
     async def _handle_http_error_status(
-        self, status: int, headers: dict[str, str], attempt: int, max_retries: int
+        self,
+        status: int,
+        headers: dict[str, str],
+        attempt: int,
+        max_retries: int,
+        riot_message: Optional[str] = None,
     ) -> tuple[bool, int]:
         """
         Handle HTTP error status codes.
@@ -238,7 +267,7 @@ class RiotAPIClient:
             RiotAPIError: For non-retryable errors
         """
         # Non-retryable client errors
-        self._raise_client_error_if_needed(status)
+        self._raise_client_error_if_needed(status, riot_message)
 
         # Rate limit - retryable
         if status == 429:
@@ -276,7 +305,11 @@ class RiotAPIClient:
             # Handle error status codes
             if response.status_code != 200:
                 should_retry, sleep_seconds = await self._handle_http_error_status(
-                    response.status_code, response_headers, attempt, max_retries
+                    response.status_code,
+                    response_headers,
+                    attempt,
+                    max_retries,
+                    self._extract_riot_status_message(response),
                 )
                 if should_retry:
                     await asyncio.sleep(sleep_seconds)

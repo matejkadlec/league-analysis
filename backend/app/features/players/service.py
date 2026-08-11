@@ -30,6 +30,22 @@ logger = structlog.get_logger(__name__)
 
 MAX_TRACKED_PLAYERS_PER_USER = 10
 
+# Every table that references core.players(puuid), with the columns that make a
+# repointed row collide. Riot re-issues a PUUID when the developer account
+# changes, so these rows must move onto the fresh PUUID instead of being
+# orphaned behind a duplicate player row. The foreign keys cascade on delete, so
+# a missed table would silently destroy match data.
+PUUID_REFERENCING_TABLES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
+    ("core.match_participants", "puuid", ("match_id",)),
+    ("core.match_timelines", "puuid", ("match_id",)),
+    ("core.player_leagues", "puuid", ()),
+    ("core.playstyle_analyses", "puuid", ()),
+    ("core.matchmaking_analyses", "puuid", ("created_at",)),
+    ("auth.user_tracked_players", "puuid", ("user_id",)),
+    ("auth.user_settings", "current_player_puuid", ()),
+    ("jobs.player_sync_runs", "puuid", ()),
+)
+
 
 async def _ensure_riot_writer_maintenance_is_inactive(session: AsyncSession) -> None:
     """Avoid importing the jobs package until a direct Riot-data write runs."""
@@ -716,6 +732,104 @@ class PlayerService:
             )
             raise
 
+    async def _migrate_stale_player_puuid(
+        self, *, fresh_puuid: str, game_name: str, tag_line: str, platform: str
+    ) -> bool:
+        """Move an existing player onto a freshly issued PUUID.
+
+        Riot encrypts PUUIDs per developer account, so the same Riot ID resolves
+        to a new PUUID after an account change. Without this migration the
+        discovery path would leave the old row behind as a duplicate and strand
+        every match, league, and tracking row attached to it.
+
+        The caller already holds the shared Riot-writer table locks.
+        """
+        from sqlalchemy import text
+
+        stale = await self.db.scalar(
+            select(Player).where(
+                func.lower(Player.game_name) == game_name.lower(),
+                func.lower(Player.tag_line) == tag_line.lower(),
+                func.lower(Player.platform) == platform.lower(),
+                Player.puuid != fresh_puuid,
+            )
+        )
+        if stale is None:
+            return False
+
+        stale_puuid = stale.puuid
+        self.db.add(
+            Player(
+                puuid=fresh_puuid,
+                game_name=stale.game_name,
+                tag_line=stale.tag_line,
+                platform=stale.platform,
+                profile_icon_id=stale.profile_icon_id,
+                summoner_level=stale.summoner_level,
+                is_tracked=stale.is_tracked,
+                last_playstyle_analysis=stale.last_playstyle_analysis,
+                last_matchmaking_analysis=stale.last_matchmaking_analysis,
+                created_at=stale.created_at,
+                profile_synced_at=stale.profile_synced_at,
+                league_synced_at=stale.league_synced_at,
+                match_synced_at=stale.match_synced_at,
+            )
+        )
+        await self.db.flush()
+
+        params = {"stale": stale_puuid, "fresh": fresh_puuid}
+        for table, column, guard_columns in PUUID_REFERENCING_TABLES:
+            guard = ""
+            if guard_columns:
+                matched = " AND ".join(
+                    f"existing.{name} = target.{name}" for name in guard_columns
+                )
+                guard = (
+                    f" AND NOT EXISTS (SELECT 1 FROM {table} AS existing"
+                    f" WHERE existing.{column} = :fresh AND {matched})"
+                )
+            await self.db.execute(
+                text(
+                    f"UPDATE {table} AS target SET {column} = :fresh"
+                    f" WHERE target.{column} = :stale{guard}"
+                ),
+                params,
+            )
+
+        # A guarded row that could not move is already represented on the fresh
+        # PUUID, so only a genuine duplicate can remain.
+        await self.db.execute(
+            text("DELETE FROM auth.user_tracked_players WHERE puuid = :stale"),
+            params,
+        )
+
+        remaining = 0
+        for table, column, _ in PUUID_REFERENCING_TABLES:
+            remaining += (
+                await self.db.scalar(
+                    text(f"SELECT count(*) FROM {table} WHERE {column} = :stale"),
+                    params,
+                )
+                or 0
+            )
+        if remaining:
+            raise PlayerServiceError(
+                message="Cannot migrate player identity while references remain",
+                operation="migrate_stale_player_puuid",
+                context={"remaining_references": remaining},
+            )
+
+        await self.db.execute(
+            text("DELETE FROM core.players WHERE puuid = :stale"), params
+        )
+        logger.info(
+            "player_puuid_migrated",
+            game_name=game_name,
+            tag_line=tag_line,
+            platform=platform,
+        )
+        return True
+
     async def discover_player(
         self,
         riot_client: "RiotAPIClient",
@@ -737,6 +851,14 @@ class PlayerService:
 
         now = datetime.now(timezone.utc)
         player = await self.db.get(Player, account.puuid)
+        if player is None:
+            await self._migrate_stale_player_puuid(
+                fresh_puuid=account.puuid,
+                game_name=account.game_name or game_name,
+                tag_line=account.tag_line or tag_line,
+                platform=platform_enum.value,
+            )
+            player = await self.db.get(Player, account.puuid)
         if player is None:
             player = Player(
                 puuid=account.puuid,

@@ -48,6 +48,28 @@ Plan any future switch of the production key to a different developer account
 (for example after Riot application review) as a data migration, not a
 configuration change.
 
+#### How the code detects and repairs the condition
+
+- The client inspects Riot's `status.message` on a 400 and raises
+  `PuuidDecryptionError` (a `BadRequestError` subclass) when it reports a
+  decryption failure. The condition travels as an exception type, so no PUUID
+  payload rides along with the error.
+- `is_riot_puuid_binding_error()` recognizes it anywhere in an error chain, and
+  a job that records one reports `has_puuid_binding_error()`. Player sync turns
+  that into `PLAYER_ID_STALE` with an actionable message instead of the generic
+  `SYNC_FAILED`. It stays a per-player warning at job level, so an unrelated
+  stale row never fails a whole scheduled run.
+- `PlayerService.discover_player()` repairs one player on demand: when a Riot ID
+  resolves to a PUUID that has no row, it migrates the existing row for that
+  Riot ID onto the new PUUID, repointing every table in
+  `PUUID_REFERENCING_TABLES` before deleting the old row. Searching for an
+  affected player is therefore the supported self-service recovery.
+
+Those foreign keys cascade on delete, so the migration aborts rather than
+deleting a player row while any reference still points at the old PUUID. A
+bulk switch still needs a deliberate migration pass; the discovery path only
+heals players as they are looked up.
+
 ### Routing
 
 Riot APIs use two routing schemas. Mixing them causes 403/404 errors.

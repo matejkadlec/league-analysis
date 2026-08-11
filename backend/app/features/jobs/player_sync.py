@@ -92,6 +92,13 @@ def _failure_from_job(job) -> tuple[str, str, str]:
             "RIOT_API_KEY_INVALID",
             "The Riot API key must be updated before player data can refresh.",
         )
+    if job.has_puuid_binding_error():
+        return (
+            "failed",
+            "PLAYER_ID_STALE",
+            "Riot no longer recognizes this player's stored ID. "
+            "Search for the player again to refresh it.",
+        )
     if execution.status == JobStatus.RATE_LIMITED:
         return (
             "rate_limited",

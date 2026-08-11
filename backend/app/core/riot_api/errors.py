@@ -77,3 +77,15 @@ class BadRequestError(RiotAPIError):
     """Bad request (400) - invalid parameters."""
 
     pass
+
+
+class PuuidDecryptionError(BadRequestError):
+    """Bad request (400) - a stored PUUID belongs to another developer account.
+
+    Riot encrypts PUUIDs per developer account, so a PUUID captured under a
+    different account cannot be decrypted by the active key and every endpoint
+    rejects it. The condition is carried by the exception type rather than the
+    provider message so no PUUID payload travels with the error.
+    """
+
+    pass

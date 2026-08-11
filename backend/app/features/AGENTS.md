@@ -80,6 +80,10 @@ async def get_player_service(
   Current selection, tracked mappings, and recent ordering are always scoped by
   authenticated application user ID. Never infer one from the other.
 - Keep routes thin, logic in services
+- `discover_player` migrates an existing player onto a freshly issued PUUID
+  instead of inserting a duplicate row. Extend `PUUID_REFERENCING_TABLES`
+  whenever a new table references `core.players(puuid)`; those foreign keys
+  cascade on delete, so a missed table would destroy data.
 - Matchmaking Analysis start routes must return the persisted active run before
   Riot preflight/work begins. Preserve its explicit lifecycle states, one-active-
   run-per-PUUID database constraint, exact-run cancellation, and shared

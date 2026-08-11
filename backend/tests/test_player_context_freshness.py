@@ -94,6 +94,7 @@ def test_unsuccessful_jobs_map_to_safe_non_success_sync_states(
     job = SimpleNamespace(
         job_execution=SimpleNamespace(status=status),
         has_api_key_error=lambda: False,
+        has_puuid_binding_error=lambda: False,
     )
 
     mapped_status, code, message = _failure_from_job(job)

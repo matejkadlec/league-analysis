@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional
 
 import structlog
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from structlog import contextvars as structlog_contextvars
 
@@ -20,7 +20,11 @@ from .control import (
     register_runtime_control,
     unregister_runtime_control,
 )
-from .error_handling import RateLimitSignal, diagnostic_error
+from .error_handling import (
+    RateLimitSignal,
+    diagnostic_error,
+    is_riot_puuid_binding_error,
+)
 from .log_capture import job_log_capture
 from .maintenance import is_riot_writer_maintenance_active
 from .models import ExecutionType, JobConfiguration, JobExecution, JobStatus
@@ -130,6 +134,12 @@ class BaseJob(ABC):
         self.execution_type = execution_type
         self.job_config: Optional[JobConfiguration] = None
         self.job_execution: Optional[JobExecution] = None
+        # Plain copies of the identity and start time. A rollback expires every
+        # ORM attribute, and reloading one outside the async greenlet raises
+        # MissingGreenlet, so completion paths must never read them off the
+        # instance.
+        self.job_execution_id: Optional[int] = None
+        self.job_execution_started_at: Optional[datetime] = None
         self.metrics = defaultdict(int)
         self.metrics.update(
             {
@@ -142,6 +152,8 @@ class BaseJob(ABC):
         # Track safe, structured diagnostics for errors encountered during execution.
         self._errors_encountered: List[Dict[str, Any]] = []
         self._has_api_key_error: bool = False
+        self._has_puuid_binding_error: bool = False
+        self._completion_logged: bool = False
         # Track API call records for detailed logging
         self._api_call_records: List[Any] = []
 
@@ -220,11 +232,13 @@ class BaseJob(ABC):
             if not await self.safe_commit(db, "job start"):
                 raise Exception("Failed to create job execution record")
             await db.refresh(self.job_execution)
+            self.job_execution_id = self.job_execution.id
+            self.job_execution_started_at = self.job_execution.started_at
 
             logger.debug(
                 "Job execution started",
                 job_config_id=self.job_config_id,
-                execution_id=self.job_execution.id,
+                execution_id=self.job_execution_id,
             )
 
         except Exception as e:
@@ -263,7 +277,8 @@ class BaseJob(ABC):
 
         try:
             completed_at = datetime.now(timezone.utc)
-            duration = (completed_at - self.job_execution.started_at).total_seconds()
+            started_at = self.job_execution_started_at or completed_at
+            duration = (completed_at - started_at).total_seconds()
 
             self._log_completion_details(success, duration)
 
@@ -292,6 +307,7 @@ class BaseJob(ABC):
             )
 
             await self._execute_completion_update(db, update_stmt)
+            self._completion_logged = True
 
             # Update local execution object state
             self.job_execution.completed_at = completed_at
@@ -366,7 +382,7 @@ class BaseJob(ABC):
             job_config_id=self.job_config_id,
             job_type=self.job_config.job_type.value if self.job_config else None,
             job_name=self.job_config.name if self.job_config else None,
-            execution_id=self.job_execution.id if self.job_execution else None,
+            execution_id=self.job_execution_id,
             error=error_message,
             error_type=type(error).__name__,
         )
@@ -414,7 +430,7 @@ class BaseJob(ABC):
 
                 if self.job_execution:
                     structlog_contextvars.bind_contextvars(
-                        job_execution_id=self.job_execution.id,
+                        job_execution_id=self.job_execution_id,
                         job_name=job_config.name,
                         job_type=job_config.job_type.value,
                     )
@@ -512,8 +528,44 @@ class BaseJob(ABC):
                         logs=job_logs,
                     )
             finally:
+                await self._fail_unfinished_execution(db)
                 unregister_runtime_control(self.runtime_key)
                 structlog_contextvars.clear_contextvars()
+
+    async def _fail_unfinished_execution(self, db: AsyncSession) -> None:
+        """Close an execution whose completion logging never ran.
+
+        An exception raised outside `execute()` — while collecting logs or
+        writing completion — would otherwise leave the row `RUNNING` forever,
+        so the next scheduled tick reports it as an orphan.
+        """
+        if self.job_execution_id is None or self._completion_logged:
+            return
+
+        logger.error(
+            "Job execution ended without recorded completion",
+            job_config_id=self.job_config_id,
+            execution_id=self.job_execution_id,
+        )
+        try:
+            await db.rollback()
+            await db.execute(
+                update(JobExecution)
+                .where(JobExecution.id == self.job_execution_id)
+                .values(
+                    status=JobStatus.FAILED,
+                    completed_at=datetime.now(timezone.utc),
+                    error_message="Execution ended before completion was recorded",
+                )
+            )
+            await db.commit()
+        except Exception as error:
+            logger.error(
+                "Failed to close unfinished job execution",
+                job_config_id=self.job_config_id,
+                execution_id=self.job_execution_id,
+                error_type=type(error).__name__,
+            )
 
     async def check_control_state(self, db: AsyncSession) -> None:
         """Check pause/stop state and block while paused."""
@@ -581,7 +633,7 @@ class BaseJob(ABC):
                 error=str(e),
                 error_type=type(e).__name__,
                 job_config_id=self.job_config_id,
-                execution_id=self.job_execution.id if self.job_execution else None,
+                execution_id=self.job_execution_id,
             )
             return False
 
@@ -600,7 +652,7 @@ class BaseJob(ABC):
         return [
             entry
             for entry in job_log_capture.entries
-            if entry.get("job_execution_id") == self.job_execution.id
+            if entry.get("job_execution_id") == self.job_execution_id
         ]
 
     def _strip_redundant_fields(
@@ -686,6 +738,8 @@ class BaseJob(ABC):
             self.execution_log["errors_truncated"] = len(self._errors_encountered) - 20
         if is_api_key_error:
             self._has_api_key_error = True
+        if isinstance(error, Exception) and is_riot_puuid_binding_error(error):
+            self._has_puuid_binding_error = True
 
     def _get_error_summary(self) -> str:
         """Return an actionable, secret-safe completion summary."""
@@ -733,6 +787,10 @@ class BaseJob(ABC):
         """Check if an API key error was encountered."""
         return self._has_api_key_error
 
+    def has_puuid_binding_error(self) -> bool:
+        """Check whether Riot rejected a PUUID from another developer account."""
+        return self._has_puuid_binding_error
+
     def add_log_entry(self, key: str, value: Any) -> None:
         """Add an entry to the execution log."""
         self.execution_log[key] = value
@@ -745,14 +803,13 @@ class BaseJob(ABC):
             raise RuntimeError("Job context missing during completion logging")
 
         job_config = self.job_config
-        job_execution = self.job_execution
 
         logger.debug(
             "Job execution completed",
             job_config_id=self.job_config_id,
             job_type=job_config.job_type.value,
             job_name=job_config.name,
-            execution_id=job_execution.id,
+            execution_id=self.job_execution_id,
             status=JobStatus.SUCCESS.value if success else JobStatus.FAILED.value,
             duration_seconds=duration,
             api_requests=self.metrics["api_requests_made"],
@@ -785,7 +842,7 @@ class BaseJob(ABC):
 
         return (
             update(job_execution_model)
-            .where(job_execution_model.id == self.job_execution.id)
+            .where(job_execution_model.id == self.job_execution_id)
             .values(
                 completed_at=completed_at,
                 status=final_status,
@@ -801,7 +858,7 @@ class BaseJob(ABC):
 
     async def _execute_completion_update(self, db: AsyncSession, stmt) -> None:
         """Execute the completion update with retry logic."""
-        execution_id = self.job_execution.id if self.job_execution else None
+        execution_id = self.job_execution_id
 
         try:
             await db.execute(stmt)
@@ -847,7 +904,7 @@ class BaseJob(ABC):
         logger.error(
             "Failed to log job completion",
             job_config_id=self.job_config_id,
-            execution_id=self.job_execution.id if self.job_execution else None,
+            execution_id=self.job_execution_id,
             error=str(error),
             error_type=type(error).__name__,
             exc_info=True,

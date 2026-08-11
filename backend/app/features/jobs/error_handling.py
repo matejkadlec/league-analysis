@@ -16,7 +16,12 @@ import structlog
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.exceptions import DatabaseError
-from app.core.riot_api.errors import AuthenticationError, ForbiddenError, RateLimitError
+from app.core.riot_api.errors import (
+    AuthenticationError,
+    ForbiddenError,
+    PuuidDecryptionError,
+    RateLimitError,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -77,6 +82,13 @@ def is_riot_api_key_error(error: Exception) -> bool:
         isinstance(item, (AuthenticationError, ForbiddenError))
         or getattr(item, "status_code", None) in (401, 403)
         for item in iter_error_chain(error)
+    )
+
+
+def is_riot_puuid_binding_error(error: Exception) -> bool:
+    """Return whether Riot rejected a PUUID issued to another developer account."""
+    return any(
+        isinstance(item, PuuidDecryptionError) for item in iter_error_chain(error)
     )
 
 
