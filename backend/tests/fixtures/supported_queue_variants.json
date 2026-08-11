@@ -1,0 +1,19 @@
+{
+  "source": "Synthetic queue variants derived from the sanitized 2026-08-08 classic and ARAM fixtures; queue IDs are the LGA-51 verified Riot queue identities.",
+  "queues": [
+    {
+      "id": 480,
+      "name": "Swiftplay",
+      "base_fixture": "400",
+      "game_mode": "CLASSIC",
+      "map_id": 11
+    },
+    {
+      "id": 2400,
+      "name": "ARAM: Mayhem",
+      "base_fixture": "450",
+      "game_mode": "ARAM",
+      "map_id": 12
+    }
+  ]
+}

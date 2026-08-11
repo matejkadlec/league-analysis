@@ -1,14 +1,13 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
-import { validatedPost, validatedGet, validatedPut } from "@/lib/core/api";
+import { validatedPost, validatedGet } from "@/lib/core/api";
 import {
   JobConfiguration,
   JobControlActionResponseSchema,
   JobTriggerResponseSchema,
   JobExecutionListResponseSchema,
-  JobConfigurationSchema,
 } from "@/lib/core/schemas";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -128,48 +127,13 @@ function formatRelativeTime(timestamp: string): string {
 function getJobDescription(jobType: string): string {
   const descriptions: Record<string, string> = {
     MATCH_FETCHER:
-      "Fetches new matches and updates player's match history and rank progression",
+      "Fetches every supported League queue and updates match history and rank progression",
     PLAYER_UPDATER:
       "Fetches player info and updates player name, tag, icon and level",
   };
   return (
     descriptions[jobType] ||
     `Executes ${jobType.replace(/_/g, " ").toLowerCase()} tasks`
-  );
-}
-
-const MATCH_FETCHER_QUEUE_OPTIONS: Array<{ id: number; label: string }> = [
-  { id: 420, label: "Ranked Solo/Duo" },
-  { id: 440, label: "Ranked Flex" },
-  { id: 400, label: "Normal Draft" },
-  { id: 450, label: "ARAM" },
-];
-
-const MATCH_FETCHER_DEFAULT_QUEUE_IDS = [420, 440, 400, 450];
-const TOGGLE_COOLDOWN_MS = 2000;
-
-function getEnabledQueueIds(config: JobConfiguration["config_json"]): number[] {
-  const rawQueueIds = config?.enabled_queue_ids;
-  if (!Array.isArray(rawQueueIds)) {
-    return [...MATCH_FETCHER_DEFAULT_QUEUE_IDS];
-  }
-
-  if (rawQueueIds.length === 0) {
-    return [];
-  }
-
-  const rawSet = new Set(
-    rawQueueIds
-      .map((value) => Number(value))
-      .filter((value) => MATCH_FETCHER_DEFAULT_QUEUE_IDS.includes(value)),
-  );
-
-  if (rawSet.size === 0) {
-    return [...MATCH_FETCHER_DEFAULT_QUEUE_IDS];
-  }
-
-  return MATCH_FETCHER_DEFAULT_QUEUE_IDS.filter((queueId) =>
-    rawSet.has(queueId),
   );
 }
 
@@ -181,11 +145,6 @@ export function JobCard({ job, onExecutionClick }: JobCardProps) {
   >(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const queueToggleCooldownRef = useRef(0);
-  const isMatchFetcher = job.job_type === "MATCH_FETCHER";
-  const enabledQueueIds = isMatchFetcher
-    ? getEnabledQueueIds(job.config_json)
-    : [];
 
   const isRunning = job.is_running;
 
@@ -287,36 +246,6 @@ export function JobCard({ job, onExecutionClick }: JobCardProps) {
       toast({
         title: "Error",
         description: "Failed to trigger job",
-        variant: "error",
-      });
-    },
-  });
-
-  const updateMatchFetcherQueuesMutation = useMutation({
-    mutationFn: (queueIds: number[]) =>
-      validatedPut(JobConfigurationSchema, `/jobs/${job.id}`, {
-        config_json: { enabled_queue_ids: queueIds },
-      }),
-    onSuccess: (result) => {
-      if (result.success) {
-        toast({
-          title: "Configuration Updated",
-          description: "Match queues were updated successfully",
-          variant: "success",
-        });
-        refreshJobsData();
-      } else {
-        toast({
-          title: "Failed to Update Configuration",
-          description: result.error.message,
-          variant: "error",
-        });
-      }
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error?.message || "Failed to update match queues",
         variant: "error",
       });
     },
@@ -598,30 +527,6 @@ export function JobCard({ job, onExecutionClick }: JobCardProps) {
     setShowHistory(!showHistory);
   };
 
-  const handleQueueToggle = (
-    queueId: number,
-    checked: boolean,
-    timestamp: number,
-  ) => {
-    const now = timestamp;
-    if (now < queueToggleCooldownRef.current) {
-      toast({
-        title: "Please wait",
-        description: "You need to wait a few seconds to repeat this action",
-        variant: "error",
-      });
-      return;
-    }
-
-    queueToggleCooldownRef.current = now + TOGGLE_COOLDOWN_MS;
-
-    const nextQueueIds = checked
-      ? [...new Set([...enabledQueueIds, queueId])]
-      : enabledQueueIds.filter((id) => id !== queueId);
-
-    updateMatchFetcherQueuesMutation.mutate(nextQueueIds);
-  };
-
   const isControlMutationPending =
     pauseMutation.isPending ||
     resumeMutation.isPending ||
@@ -691,7 +596,7 @@ export function JobCard({ job, onExecutionClick }: JobCardProps) {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className={isMatchFetcher ? "grid gap-4 md:grid-cols-2" : ""}>
+        <div>
           <div className="space-y-4">
             {/* Schedule */}
             <div className="flex items-start gap-2 text-sm">
@@ -738,34 +643,6 @@ export function JobCard({ job, onExecutionClick }: JobCardProps) {
               </div>
             </div>
           </div>
-
-          {isMatchFetcher && (
-            <div className="rounded-md border">
-              <div className="grid h-full grid-rows-4">
-                {MATCH_FETCHER_QUEUE_OPTIONS.map((queueOption) => (
-                  <label
-                    key={queueOption.id}
-                    className="flex min-h-11 items-center justify-between px-3 text-sm border-b last:border-b-0"
-                  >
-                    <span className="font-medium">{queueOption.label}</span>
-                    <input
-                      type="checkbox"
-                      checked={enabledQueueIds.includes(queueOption.id)}
-                      onChange={(event) =>
-                        handleQueueToggle(
-                          queueOption.id,
-                          event.target.checked,
-                          event.timeStamp,
-                        )
-                      }
-                      className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-                      disabled={updateMatchFetcherQueuesMutation.isPending}
-                    />
-                  </label>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Action Buttons */}

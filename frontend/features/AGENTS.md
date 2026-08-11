@@ -86,6 +86,13 @@ export function MyComponent({ id }: MyComponentProps) {
 - The shared `["player", puuid]` query stores a validated raw `Player` through
   `playerQueryOptions()`. Never cache an API-result envelope or attach a query
   function with a different return shape to that key.
+- Match History queue labels, filter order, query IDs, and fixed label widths
+  live in `matches/queue-catalog.ts`. Keep All Queues unrestricted, reset local
+  pagination on a filter change, and preserve unknown IDs as `Queue N` instead
+  of mapping them to a supported mode.
+- The Match Fetcher Jobs card has no per-queue checkboxes. Backend product
+  support determines its complete queue set; the UI retains only job-level
+  status, schedule, triggering, testing, pause/stop, and history controls.
 - The Manage Tracked Players dialog presents the player rows directly without
   a second title, count, search field, or expand/collapse control. Show up to
   five rows before enabling vertical scrolling.

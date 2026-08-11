@@ -25,7 +25,7 @@ details. Keep it synchronized with job changes.
 | `scheduler.py` | APScheduler startup, persistence, overdue runs, and schedule synchronization |
 | `service.py` | Configuration/execution queries, updates, and orphan cleanup |
 | `router.py` | Admin-only `/api/v1/jobs` endpoints |
-| `queue_config.py` | Match Fetcher queue validation and defaults |
+| `queue_config.py` | Canonical Match Fetcher queue access and legacy-config cleanup |
 | `error_handling.py` | Riot error to job-signal translation |
 | `log_capture.py` | Structured execution-log capture |
 | `maintenance.py` | Persistent local Riot-writer maintenance interlock |
@@ -63,9 +63,11 @@ details. Keep it synchronized with job changes.
 - Prevent concurrent regular runs of the same job type. Test runs use the
   negative configuration ID as their runtime key.
 - A regular manual trigger may force-stop its active test run before starting.
-- Keep Match Fetcher queue configuration in
-  `config_json.enabled_queue_ids`; validate it against the central product
-  allowlist (400, 420, 440, 450), and let an empty list disable the job.
+- Match Fetcher always processes the complete central product allowlist (420,
+  440, 480, 400, 450, 2400). Never reintroduce per-queue configuration.
+  Historical `config_json.enabled_queue_ids` values are ignored at runtime and
+  stripped from API responses/ordinary configuration updates; active state and
+  scheduling remain independent job-level controls.
 - Update APScheduler immediately after configuration changes through
   `sync_job_configuration()`.
 - Preserve Riot API throttling and priority rules from

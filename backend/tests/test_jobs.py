@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from app.core.riot_api.constants import PRODUCT_SUPPORTED_QUEUE_IDS
 from app.core.riot_api.errors import (
     AuthenticationError,
     ForbiddenError,
@@ -30,9 +31,7 @@ from app.features.jobs.maintenance import (
 )
 from app.features.jobs.models import ExecutionType, JobStatus, JobType
 from app.features.jobs.queue_config import (
-    MATCH_FETCHER_DEFAULT_QUEUE_IDS,
-    get_enabled_match_fetcher_queue_ids,
-    has_enabled_match_fetcher_queue,
+    get_match_fetcher_queue_ids,
     normalize_match_fetcher_config,
 )
 from app.features.jobs.schemas import JobConfigurationUpdate
@@ -59,17 +58,13 @@ async def test_scheduler_shutdown_does_not_drain_running_jobs(monkeypatch) -> No
     assert scheduler_module.get_scheduler() is None
 
 
-def test_queue_configuration_defaults_and_preserves_known_order() -> None:
-    assert get_enabled_match_fetcher_queue_ids(None) == MATCH_FETCHER_DEFAULT_QUEUE_IDS
-    assert get_enabled_match_fetcher_queue_ids({"enabled_queue_ids": []}) == []
-    assert get_enabled_match_fetcher_queue_ids(
-        {"enabled_queue_ids": [450, "420", 999, 420]}
-    ) == [420, 450]
-    assert normalize_match_fetcher_config({"other": "value"}) == {
-        "other": "value",
-        "enabled_queue_ids": MATCH_FETCHER_DEFAULT_QUEUE_IDS,
-    }
-    assert not has_enabled_match_fetcher_queue({"enabled_queue_ids": []})
+def test_match_fetcher_uses_every_canonical_queue_and_strips_legacy_config() -> None:
+    assert get_match_fetcher_queue_ids() == list(PRODUCT_SUPPORTED_QUEUE_IDS)
+    assert get_match_fetcher_queue_ids() == [420, 440, 480, 400, 450, 2400]
+    assert normalize_match_fetcher_config(None) == {}
+    assert normalize_match_fetcher_config(
+        {"enabled_queue_ids": [], "interval_seconds": 3600}
+    ) == {"interval_seconds": 3600}
 
 
 @pytest.mark.asyncio
@@ -186,7 +181,7 @@ def test_job_configuration_updates_preserve_an_active_maintenance_interlock() ->
 async def test_job_configuration_update_locks_cleanup_tables_before_its_row(
     monkeypatch,
 ) -> None:
-    """A queue-toggle write cannot overwrite cleanup's interlock from a stale read."""
+    """A stale queue field cannot overwrite cleanup's interlock or active state."""
     job = SimpleNamespace(
         id=7,
         job_type=JobType.MATCH_FETCHER,
@@ -231,8 +226,8 @@ async def test_job_configuration_update_locks_cleanup_tables_before_its_row(
     assert getattr(session.statements[1], "_for_update_arg") is not None
     assert updated.config_json == {
         RIOT_MAINTENANCE_MODE_KEY: True,
-        "enabled_queue_ids": [440],
     }
+    assert updated.is_active is True
 
 
 class _MaintenanceBlockedJob(BaseJob):

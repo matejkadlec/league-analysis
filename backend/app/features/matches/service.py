@@ -1736,9 +1736,9 @@ class MatchService:
                 return 0
 
             target_queue_ids = self._normalize_sync_queue_ids(queue_ids)
-            target_queue_ids = [qid for qid in target_queue_ids if qid != 450]
             if not target_queue_ids:
-                target_queue_ids = [420, 440, 400]
+                logger.info("No supported queues requested for analysis", puuid=puuid)
+                return 0
 
             # 1. Get recent match IDs from Riot API for each target queue.
             api_match_ids: list[str] = []
@@ -2079,7 +2079,6 @@ class MatchService:
         riot_client: "RiotAPIClient",
         player: Any,
         rate_limiter: Optional[DBRateLimiter] = None,
-        enabled_queue_ids: Optional[list[int]] = None,
         on_failure: Optional[Callable[[str, Exception, dict[str, Any]], None]] = None,
     ) -> int:
         """
@@ -2090,7 +2089,6 @@ class MatchService:
             riot_client: The Riot API client
             player: Player object with puuid and platform
             rate_limiter: Optional DB rate limiter for coordinated rate limiting
-            enabled_queue_ids: Optional queue IDs to fetch. Default: [420]
         """
         puuid = getattr(player, "puuid", None)
         platform = getattr(player, "platform", None)
@@ -2100,20 +2098,13 @@ class MatchService:
             return 0
 
         region = get_region_by_platform(platform)
-        queue_ids = self._normalize_sync_queue_ids(enabled_queue_ids)
-        if not queue_ids:
-            logger.info(
-                "Skipping match sync - no queues enabled",
-                puuid=puuid,
-                platform=platform,
-            )
-            return 0
+        queue_ids = list(self.SUPPORTED_SYNC_QUEUE_IDS)
 
         logger.info(
-            "Starting match sync",
+            "Starting supported-queue match sync",
             puuid=puuid,
             platform=platform,
-            enabled_queue_ids=queue_ids,
+            supported_queue_ids=queue_ids,
         )
 
         total_stored = 0
@@ -2150,15 +2141,14 @@ class MatchService:
         return total_stored
 
     def _normalize_sync_queue_ids(self, queue_ids: Optional[list[int]]) -> list[int]:
-        """Normalize enabled queue IDs for sync operations."""
+        """Normalize an optional explicit queue subset for analysis operations."""
         if queue_ids is None:
-            return [420]
+            return list(self.SUPPORTED_SYNC_QUEUE_IDS)
 
         if len(queue_ids) == 0:
             return []
 
-        normalized: list[int] = []
-        seen: set[int] = set()
+        requested: set[int] = set()
 
         for raw_queue_id in queue_ids:
             try:
@@ -2166,17 +2156,14 @@ class MatchService:
             except TypeError, ValueError:
                 continue
 
-            if queue_id not in self.SUPPORTED_SYNC_QUEUE_IDS or queue_id in seen:
-                continue
+            if queue_id in self.SUPPORTED_SYNC_QUEUE_IDS:
+                requested.add(queue_id)
 
-            normalized.append(queue_id)
-            seen.add(queue_id)
-
-        # If caller provided a non-empty list but none were valid, fall back safely.
-        if not normalized:
-            return [420]
-
-        return normalized
+        return [
+            queue_id
+            for queue_id in self.SUPPORTED_SYNC_QUEUE_IDS
+            if queue_id in requested
+        ]
 
     async def _sync_single_queue_for_player(
         self,

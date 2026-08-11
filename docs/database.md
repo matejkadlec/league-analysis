@@ -651,9 +651,12 @@ Background job definitions.
 | `schedule`    | varchar(256)  | Interval in seconds                                           |
 | `is_active`   | boolean       | Scheduled for execution                                       |
 | `is_paused`   | boolean       | Runtime pause flag for active execution                       |
-| `config_json` | jsonb         | Job-specific config (`interval_seconds`, queue toggles, etc.) |
+| `config_json` | jsonb         | Job-specific config (`interval_seconds`, maintenance interlock, etc.) |
 
-**Default Match Fetcher config**: `enabled_queue_ids = [420, 440, 400, 450]` (Solo, Flex, Draft, ARAM).
+Match Fetcher queue selection is not configurable. It always uses the
+canonical product-supported set (420, 440, 480, 400, 450, 2400). Historical
+`enabled_queue_ids` values are ignored and removed by ordinary configuration
+updates, so stale stored values cannot restrict future runs.
 
 ### `jobs.job_executions`
 

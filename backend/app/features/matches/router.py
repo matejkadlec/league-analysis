@@ -154,7 +154,7 @@ async def _run_analysis_task(
     """Background task for analysis.
 
     Scenarios:
-    1. Fetch last 100 matches per queue from Riot API (queues: 420/440/400)
+    1. Fetch the last 100 matches for every product-supported queue
     2. Upsert them to DB
     3. Update job status
     """
@@ -226,13 +226,12 @@ async def _run_analysis_task(
                     file=sys.stderr,
                 )
 
-                # Analyze ranked + normal draft queues (no ARAM).
+                # Analyze the complete canonical product-supported queue set.
                 count = await match_service.analyze_match_history(
                     client,
                     puuid,
                     progress_callback=progress_callback,
                     should_cancel=should_cancel,
-                    queue_ids=[420, 440, 400],
                     rate_limiter=rate_limiter,
                 )
 

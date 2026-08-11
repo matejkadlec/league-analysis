@@ -28,7 +28,7 @@ class JobConfigurationBase(BaseModel):
     )
     config_json: Optional[Dict[str, Any]] = Field(
         None,
-        description="Job-specific configuration (e.g. interval_seconds, enabled_queue_ids)",
+        description="Job-specific configuration (for example interval_seconds)",
     )
 
 

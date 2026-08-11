@@ -212,15 +212,15 @@ windows without being coupled to the frontend's normal request timeout.
 
 - **Job Type:** `MATCH_FETCHER`
 - **Default schedule:** Every 1 hour (`3600` seconds; configurable)
-- **Purpose:** Fetch new matches for tracked players (configurable queues) and
-  update Solo/Duo rank snapshots.
+- **Purpose:** Fetch new matches for tracked players across every
+  product-supported queue and update Solo/Duo rank snapshots.
 
 ### Workflow
 
 ```
 For each tracked player:
 1. sync_matches_for_player()
-   ├── For each enabled queue in config_json.enabled_queue_ids:
+   ├── For each queue in the canonical product-supported set:
    │   ├── Fetch match IDs from Riot API (batches of 100)
    │   ├── Filter out already-analyzed matches
    │   ├── For each new match:
@@ -247,12 +247,12 @@ source timestamp.
 
 ### Riot API Calls Made
 
-| Endpoint                                         | Parameters                                                         | Purpose                                              |
-| ------------------------------------------------ | ------------------------------------------------------------------ | ---------------------------------------------------- |
-| `GET /lol/match/v5/matches/by-puuid/{puuid}/ids` | `start=0, count=100, queue in [420, 440, 400, 450]` (enabled only) | Get queue-specific match IDs                         |
-| `GET /lol/match/v5/matches/{matchId}`            | -                                                                  | Get full match details                               |
-| `GET /lol/match/v5/matches/{matchId}/timeline`   | -                                                                  | Get timeline events for objective aggregates         |
-| `GET /lol/league/v4/entries/by-puuid/{puuid}`    | -                                                                  | Get current ranked entries (Solo used for snapshots) |
+| Endpoint                                         | Parameters                                                      | Purpose                                              |
+| ------------------------------------------------ | --------------------------------------------------------------- | ---------------------------------------------------- |
+| `GET /lol/match/v5/matches/by-puuid/{puuid}/ids` | `start=0, count=100, queue in [420, 440, 480, 400, 450, 2400]` | Get queue-specific match IDs                         |
+| `GET /lol/match/v5/matches/{matchId}`            | -                                                               | Get full match details                               |
+| `GET /lol/match/v5/matches/{matchId}/timeline`   | -                                                               | Get timeline events for objective aggregates         |
+| `GET /lol/league/v4/entries/by-puuid/{puuid}`    | -                                                               | Get current ranked entries (Solo used for snapshots) |
 
 ### Rate Limiting Strategy
 
@@ -313,8 +313,7 @@ In `jobs.job_configurations` table:
   "name": "Match Fetcher",
   "schedule": "3600",
   "config_json": {
-    "interval_seconds": 3600,
-    "enabled_queue_ids": [420, 440, 400, 450]
+    "interval_seconds": 3600
   },
   "is_active": true
 }
@@ -324,17 +323,21 @@ Queue meanings:
 
 - `420` = Ranked Solo/Duo
 - `440` = Ranked Flex
+- `480` = Swiftplay
 - `400` = Normal Draft
 - `450` = ARAM
+- `2400` = ARAM: Mayhem
 
-These four IDs come from the central product allowlist shared by the Riot
-client and job validation. The larger `QueueType` reference catalog does not
-automatically enable new or rotating modes.
+These six IDs come from the central product allowlist shared by the Riot client
+and Match Fetcher. The larger `QueueType` reference catalog does not
+automatically enable new or rotating modes. A newly reviewed product-supported
+queue is included automatically when it is added to that allowlist.
 
-Active-state behavior:
-
-- If `enabled_queue_ids` is empty, Match Fetcher `is_active=false`
-- If at least one queue is enabled, Match Fetcher `is_active=true`
+`enabled_queue_ids` is an obsolete historical `config_json` field. Runtime
+execution ignores it, API responses omit it, and ordinary Match Fetcher
+configuration updates remove it. The Jobs UI no longer exposes per-queue
+checkboxes. `is_active`, schedule, Trigger Now, tests, pause/stop, and History
+remain independent job-level controls.
 
 ### Execution Flow
 
