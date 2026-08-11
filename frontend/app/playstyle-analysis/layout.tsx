@@ -1,9 +1,9 @@
 import { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Playstyle Analysis",
+  title: "Player Overview",
   description:
-    "Analyze League of Legends players playstyle patterns, role preferences, and characteristics.",
+    "Compatibility route for the selected player's League of Legends overview.",
 };
 
 export default function PlaystyleAnalysisLayout({

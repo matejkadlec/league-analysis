@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/lib/core/hooks";
 import { trackPlayer, untrackPlayer, getTrackingStatus } from "@/lib/core/api";
 import { useAuth } from "@/features/auth";
+import { cn } from "@/lib/core/utils";
 
 interface TrackPlayerButtonProps {
   puuid: string;
@@ -120,21 +121,41 @@ export function TrackPlayerButton({
     <Button
       variant={variant}
       size={size}
-      className={className}
+      className={cn(
+        "tracking-status-toggle group min-w-[6.5rem] px-2 text-xs",
+        className,
+      )}
       onClick={handleToggleTracking}
       disabled={isLoading}
+      aria-label={
+        isLoading
+          ? "Updating player tracking status"
+          : isTracked
+            ? "Untrack player"
+            : "Track player"
+      }
+      data-tracking-state={isTracked ? "tracked" : "untracked"}
     >
       {isLoading ? (
         <Loader2 className="h-4 w-4 animate-spin" />
-      ) : isTracked ? (
-        <>
-          <StarOff className="mr-2 h-4 w-4" />
-          Untrack
-        </>
       ) : (
         <>
-          <Star className="mr-2 h-4 w-4" />
-          Track
+          <span className="flex items-center gap-0.5 group-hover:hidden group-focus-visible:hidden">
+            {isTracked ? (
+              <Star className="h-4 w-4 fill-current" />
+            ) : (
+              <StarOff className="h-4 w-4" />
+            )}
+            {isTracked ? "Tracked" : "Untracked"}
+          </span>
+          <span className="hidden items-center gap-0.5 group-hover:flex group-focus-visible:flex">
+            {isTracked ? (
+              <StarOff className="h-4 w-4" />
+            ) : (
+              <Star className="h-4 w-4 fill-current" />
+            )}
+            {isTracked ? "Untrack" : "Track"}
+          </span>
         </>
       )}
     </Button>

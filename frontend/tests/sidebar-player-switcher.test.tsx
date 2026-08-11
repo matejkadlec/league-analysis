@@ -12,6 +12,11 @@ const { apiPost, selectPlayer, toast, validatedGet } = vi.hoisted(() => ({
   validatedGet: vi.fn(),
 }));
 
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/match-history",
+  useSearchParams: () => new URLSearchParams("puuid=current-puuid"),
+}));
+
 const currentPlayer = {
   puuid: "current-puuid",
   game_name: "Current",
@@ -51,14 +56,14 @@ vi.mock("@/lib/core/hooks", () => ({
 
 import { SidebarPlayerSwitcher } from "@/features/players/components/sidebar-player-switcher";
 
-function renderSwitcher() {
+function renderSwitcher(manageOpen = false) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
   render(
     <QueryClientProvider client={queryClient}>
       <SidebarPlayerSwitcher
-        manageOpen={false}
+        manageOpen={manageOpen}
         onManageOpenChange={vi.fn()}
       />
     </QueryClientProvider>,
@@ -77,13 +82,27 @@ describe("SidebarPlayerSwitcher", () => {
 
   afterEach(() => cleanup());
 
-  it("deduplicates current player and limits the normal recent list to three", () => {
+  it("shows only the current player and links it to Player Overview", () => {
     renderSwitcher();
 
-    expect(screen.getByText("Current#ONE")).not.toBeNull();
-    expect(screen.getByText("Recent One#ONE")).not.toBeNull();
-    expect(screen.getByText("Recent Three#ONE")).not.toBeNull();
+    const currentPlayerLink = screen.getByRole("link", {
+      name: "Current#ONE",
+    });
+    expect(currentPlayerLink.getAttribute("href")).toBe(
+      "/player-overview?puuid=current-puuid",
+    );
+    expect(screen.queryByText("Recent One#ONE")).toBeNull();
+    expect(screen.queryByText("Recent Three#ONE")).toBeNull();
     expect(screen.queryByText("Hidden Four#ONE")).toBeNull();
+  });
+
+  it("uses the Tracked Players dialog title", () => {
+    renderSwitcher(true);
+
+    expect(
+      screen.getByRole("heading", { name: "Tracked Players" }),
+    ).not.toBeNull();
+    expect(screen.queryByText("Manage Tracked Players")).toBeNull();
   });
 
   it("asks for a server only after an unknown one-field Riot ID is submitted", async () => {

@@ -10,11 +10,6 @@ import {
   Clock,
   ListRestart,
   Swords,
-  Crown,
-  Eye,
-  Flame,
-  Landmark,
-  Shield,
 } from "lucide-react";
 import { toast } from "sonner";
 import Image from "next/image";
@@ -60,6 +55,7 @@ import {
   MatchHistoryQueueFilter,
   selectMatchHistoryQueue,
 } from "../queue-catalog";
+import { TeamObjectiveStats } from "./objective-icons";
 
 interface MatchHistoryProps {
   puuid: string;
@@ -291,93 +287,12 @@ function MatchRow({
     );
   };
 
-  // Voidgrub SVG icon component
-  const VoidgrubIcon = ({ color }: { color: string }) => (
-    <svg
-      viewBox="0 0 16 16"
-      className="h-5 w-5"
-      fill={color}
-      fillRule="evenodd"
-      clipRule="evenodd"
-    >
-      <path d="M8 1 6.333 2.42s-.87.798-1.151.798H3.928c-.928 0-2.261.978-2.557 2.68-.074.429-.098 1.282.56 2.168L1 8.812s1.333.71 1.667 2.131C3 12.363 5.088 13.704 6.9 14.088l1.08.881V15L8 14.985l.019.015v-.031l1.08-.881c1.813-.384 3.901-1.724 4.234-3.145.334-1.42 1.667-2.13 1.667-2.13l-.931-.747c.658-.886.637-1.726.56-2.169-.296-1.701-1.629-2.68-2.557-2.68h-1.254c-.28 0-1.151-.797-1.151-.797zm.149 3.245a.2.2 0 0 0-.298 0L5.434 6.93a.2.2 0 0 0 .021.29c.275.228.818.687 1.007.914.21.255-1.316 1.405-1.862 1.804a.202.202 0 0 0-.026.304l1.84 1.88a.2.2 0 0 0 .285 0l1.158-1.183a.2.2 0 0 1 .286 0L9.3 12.122a.2.2 0 0 0 .286 0l1.84-1.88a.202.202 0 0 0-.026-.304c-.546-.399-2.073-1.549-1.862-1.804.189-.227.732-.686 1.007-.913a.2.2 0 0 0 .021-.29z" />
-    </svg>
-  );
-
-  // Render objective icon with team color
-  // Turret icon is 30% bigger (h-[26px] w-[26px] instead of h-5 w-5 which is 20px)
-  // To adjust turret size: change the h-[26px] w-[26px] values (26px = 20px * 1.3)
-  const renderObjectiveIcon = (
-    objective:
-      "turret" | "inhibitor" | "dragon" | "voidgrub" | "herald" | "baron",
-    count: number | null | undefined,
-    title: string,
-    team: "blue" | "red",
-  ) => {
-    // Turret gets 30% bigger size
-    const isTurret = objective === "turret";
-    const iconSizeClass = isTurret ? "h-[26px] w-[26px]" : "h-5 w-5";
-    const objectiveColorClass =
-      team === "blue" ? "text-cyan-400" : "text-rose-500";
-
-    // Display '?' for null/undefined counts (timeline data unavailable)
-    const displayCount =
-      count === null || count === undefined ? "?" : String(count);
-
-    return (
-      // Added 'w-full' and 'justify-center' to center within the grid column
-      <div
-        className="flex w-full h-full items-center justify-center"
-        title={title}
-      >
-        {objective === "voidgrub" ? (
-          <VoidgrubIcon color={team === "blue" ? "#0A96AA" : "#BE1E37"} />
-        ) : (
-          <>
-            {objective === "turret" && (
-              <Landmark className={`${iconSizeClass} ${objectiveColorClass}`} />
-            )}
-            {objective === "inhibitor" && (
-              <Shield className={`${iconSizeClass} ${objectiveColorClass}`} />
-            )}
-            {objective === "dragon" && (
-              <Flame className={`${iconSizeClass} ${objectiveColorClass}`} />
-            )}
-            {objective === "herald" && (
-              <Eye className={`${iconSizeClass} ${objectiveColorClass}`} />
-            )}
-            {objective === "baron" && (
-              <Crown className={`${iconSizeClass} ${objectiveColorClass}`} />
-            )}
-          </>
-        )}
-        {/* Added 'w-5' and 'text-center' to reserve fixed space for 1 or 2 digits */}
-        <span className="w-5 text-center text-xs">{displayCount}</span>
-      </div>
-    );
-  };
-
-  // Render team stats row with team color
   const renderTeamStatsRow = (
     stats: TeamStats | null,
     team: "blue" | "red",
   ) => {
     if (!stats) return null;
-    return (
-      <div className="grid grid-cols-6 h-full w-full gap-1.5 text-xs">
-        {renderObjectiveIcon("turret", stats.turrets, "Turrets", team)}
-        {renderObjectiveIcon("inhibitor", stats.inhibitors, "Inhibitors", team)}
-        {renderObjectiveIcon("dragon", stats.dragons, "Dragons", team)}
-        {renderObjectiveIcon("voidgrub", stats.voidgrubs, "Voidgrubs", team)}
-        {renderObjectiveIcon(
-          "herald",
-          stats.rift_heralds,
-          "Rift Heralds",
-          team,
-        )}
-        {renderObjectiveIcon("baron", stats.barons, "Barons", team)}
-      </div>
-    );
+    return <TeamObjectiveStats stats={stats} team={team} />;
   };
 
   // Render a champion icon for team compositions

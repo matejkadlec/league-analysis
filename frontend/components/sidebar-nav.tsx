@@ -12,27 +12,12 @@ import { SidebarPlayerSwitcher } from "@/features/players";
 interface NavItem {
   name: string;
   path: string;
-  hasDropdown?: boolean;
-  dropdownItems?: { name: string; anchor: string }[];
 }
 
 const navItems: NavItem[] = [
   { name: "Home", path: "/" },
-  // Anchor metadata is intentionally preserved for future re-enable of the
-  // in-page My Profile dropdown navigation.
-  {
-    name: "My Profile",
-    path: "/my-profile",
-    hasDropdown: true,
-    dropdownItems: [
-      { name: "Player Summary", anchor: "#player-summary" },
-      { name: "Recent Performance", anchor: "#recent-performance" },
-      { name: "Top Champions", anchor: "#top-champions" },
-      { name: "Role Performance", anchor: "#role-performance" },
-      { name: "Match History", anchor: "#match-history" },
-    ],
-  },
-  { name: "Playstyle Analysis", path: "/playstyle-analysis" },
+  { name: "Player Overview", path: "/player-overview" },
+  { name: "Match History", path: "/match-history" },
   { name: "Matchmaking Analysis", path: "/matchmaking-analysis" },
 ];
 
@@ -57,16 +42,6 @@ export function SidebarNav() {
       return pathname === "/";
     }
     return pathname.startsWith(path);
-  };
-
-  // Intentionally kept for future My Profile anchor dropdown support.
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const handleAnchorClick = (anchor: string) => {
-    setMenuOpen(false);
-    const element = document.querySelector(anchor);
-    if (element) {
-      element.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
   };
 
   return (
@@ -155,9 +130,9 @@ export function SidebarNav() {
               variant="ghost"
               size="sm"
               onClick={() => setManagePlayersOpen(true)}
-              className="mx-3 mt-auto h-8 shrink-0 justify-start px-2 text-xs text-white/65 hover:bg-white/10 hover:text-white"
+              className="mx-3 mt-auto h-8 shrink-0 justify-start gap-1 px-2 text-xs text-white/65 hover:bg-white/10 hover:text-white"
             >
-              <Users className="mr-2 h-3.5 w-3.5" /> Manage Tracked Players
+              <Users className="h-3.5 w-3.5" /> View Tracked Players
             </Button>
           </nav>
 

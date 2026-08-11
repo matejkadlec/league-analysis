@@ -52,10 +52,14 @@ TanStack Query owns server-data fetching and cache state. Zod validates API
 payloads at the frontend boundary.
 
 The authenticated player provider owns the normal current-player context.
-My Profile and Playstyle Analysis use an explicit `?puuid=` as the tab-local
+Player Overview and Match History use an explicit `?puuid=` as the tab-local
 authority and the account's saved current PUUID only as the default for new
-navigation. The sidebar is the canonical search, quick-switch, and tracked-list
-management surface; `/tracked-players` is compatibility-only.
+navigation. Player Overview owns aggregate/statistical cards; Match History is
+a separate top-level detailed workflow. The sidebar is the canonical search
+and current-player surface, while the Tracked Players dialog owns the complete
+tracked-list switch/management flow. `/my-profile`, `/playstyle-analysis`, and
+`/tracked-players` are PUUID-preserving compatibility redirects to Player
+Overview.
 
 The sign-in flow keeps its password-visibility control accessible and preserves
 the entered value while it toggles. It bounds the browser login request and maps

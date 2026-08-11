@@ -1,0 +1,38 @@
+"use client";
+
+import { MatchHistorySkeleton } from "@/components/loading-skeleton";
+import { Card } from "@/components/ui/card";
+import { ProtectedRoute } from "@/features/auth";
+import { MatchHistory } from "@/features/matches";
+import { SelectPlayerCard, usePlayerContext } from "@/features/players";
+
+export default function MatchHistoryPage() {
+  const { currentPlayer, isLoading } = usePlayerContext();
+
+  return (
+    <ProtectedRoute>
+      <div className="container mx-auto px-4 py-8">
+        <div className="space-y-6">
+          <Card id="header-card" className="p-6 text-white">
+            <h1 className="text-2xl font-semibold">Match History</h1>
+            <p className="mt-4 text-sm leading-relaxed">
+              Explore the selected player&apos;s matches, queue results, team
+              objectives, builds, runes, and performance details.
+            </p>
+          </Card>
+
+          {isLoading ? (
+            <MatchHistorySkeleton />
+          ) : currentPlayer ? (
+            <MatchHistory
+              puuid={currentPlayer.puuid}
+              lastUpdated={currentPlayer.match_synced_at}
+            />
+          ) : (
+            <SelectPlayerCard />
+          )}
+        </div>
+      </div>
+    </ProtectedRoute>
+  );
+}

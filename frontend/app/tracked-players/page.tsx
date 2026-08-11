@@ -1,5 +1,7 @@
 import { redirect } from "next/navigation";
 
+import { playerOverviewRoute } from "@/features/players/player-routes";
+
 interface TrackedPlayersRedirectProps {
   searchParams: Promise<{ puuid?: string | string[] }>;
 }
@@ -9,7 +11,5 @@ export default async function TrackedPlayersRedirect({
 }: TrackedPlayersRedirectProps) {
   const params = await searchParams;
   const puuid = Array.isArray(params.puuid) ? params.puuid[0] : params.puuid;
-  redirect(
-    puuid ? `/my-profile?puuid=${encodeURIComponent(puuid)}` : "/my-profile",
-  );
+  redirect(playerOverviewRoute(puuid));
 }

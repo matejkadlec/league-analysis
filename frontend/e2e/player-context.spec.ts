@@ -95,10 +95,11 @@ const players = {
   },
 };
 
-test("quick-switches the URL-scoped current player without starting sync", async ({
+test("keeps player routes, sidebar switching, and dialog scroll lock deterministic", async ({
   page,
 }) => {
-  await page.setViewportSize({ width: 1440, height: 900 });
+  test.setTimeout(60_000);
+  await page.setViewportSize({ width: 1440, height: 650 });
   let currentPuuid = CURRENT_PUUID;
   let syncStarts = 0;
 
@@ -280,22 +281,19 @@ test("quick-switches the URL-scoped current player without starting sync", async
     await route.fulfill({ status: 404, body: "Not found" });
   });
 
-  await page.goto("/my-profile");
+  await page.goto("/player-overview");
   await page.getByRole("button", { name: "Accept necessary" }).click();
 
   await expect(page).toHaveURL(new RegExp(`puuid=${CURRENT_PUUID}`));
-  await expect(page.getByText("Current#ONE").first()).toBeVisible();
-  await page.getByRole("button", { name: "Recent#TWO" }).click();
-
-  await expect(page).toHaveURL(new RegExp(`puuid=${RECENT_PUUID}`));
-  await expect(page.getByText("Recent#TWO").first()).toBeVisible();
-  expect(syncStarts).toBe(0);
+  const currentPlayerLink = page.getByTestId("current-player-link");
+  await expect(currentPlayerLink).toBeVisible();
+  await expect(page.getByText("Recent#TWO")).toHaveCount(0);
   await expect(page.locator("#player-summary")).toBeVisible();
   await expect(page.locator("#recent-performance")).toBeVisible();
   await expect(page.locator("#top-champions")).toBeVisible();
   await expect(page.locator("#role-performance")).toBeVisible();
-  await expect(page.locator("#match-history")).toBeVisible();
-  await expect(page.getByText(/^Updated /)).toHaveCount(5);
+  await expect(page.locator("#match-history")).toHaveCount(0);
+  await expect(page.getByText(/^Updated /)).toHaveCount(4);
 
   const quickNavigation = page.getByRole("button", {
     name: "Open page navigation",
@@ -307,9 +305,12 @@ test("quick-switches the URL-scoped current player without starting sync", async
   await expect(
     page.getByRole("button", { name: "Player Summary" }),
   ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Match History" }),
+  ).toHaveCount(0);
 
   const manageButton = page.getByRole("button", {
-    name: "Manage Tracked Players",
+    name: "View Tracked Players",
   });
   const matchmakingLink = page.getByRole("link", {
     name: "Matchmaking Analysis",
@@ -330,11 +331,19 @@ test("quick-switches the URL-scoped current player without starting sync", async
     ((manageBox?.x ?? 0) + (manageBox?.width ?? 0));
   expect(Math.abs(leftInset - rightInset)).toBeLessThanOrEqual(1);
 
+  expect(
+    await page.evaluate(() => document.documentElement.scrollHeight > innerHeight),
+  ).toBe(true);
+  const activeRowBeforeDialog = await currentPlayerLink.boundingBox();
   await manageButton.click();
   const dialog = page.getByRole("dialog");
   await expect(
-    dialog.getByRole("heading", { name: "Manage Tracked Players" }),
+    dialog.getByRole("heading", { name: "Tracked Players" }),
   ).toBeVisible();
+  const activeRowDuringDialog = await currentPlayerLink.boundingBox();
+  expect(
+    Math.abs((activeRowDuringDialog?.x ?? 0) - (activeRowBeforeDialog?.x ?? 0)),
+  ).toBeLessThanOrEqual(0.5);
   const dialogBox = await dialog.boundingBox();
   const viewport = page.viewportSize();
   const topSpace = dialogBox?.y ?? 0;
@@ -342,9 +351,7 @@ test("quick-switches the URL-scoped current player without starting sync", async
     (viewport?.height ?? 0) -
     ((dialogBox?.y ?? 0) + (dialogBox?.height ?? 0));
   expect(Math.abs(bottomSpace - topSpace * 2)).toBeLessThanOrEqual(2);
-  await expect(dialog.getByText("Tracked Players", { exact: true })).toHaveCount(
-    0,
-  );
+  await expect(dialog.getByText("Manage Tracked Players")).toHaveCount(0);
   await expect(dialog.getByLabel("Search tracked players")).toHaveCount(0);
   await expect(
     dialog.getByRole("button", { name: /expand|collapse/i }),
@@ -361,4 +368,56 @@ test("quick-switches the URL-scoped current player without starting sync", async
       (element) => element.scrollHeight > element.clientHeight,
     ),
   ).toBe(true);
+
+  const recentPlayerRow = dialog.getByTestId(
+    `tracked-player-row-${RECENT_PUUID}`,
+  );
+  await recentPlayerRow.getByRole("button", { name: "View" }).click();
+  await expect(page).toHaveURL(
+    new RegExp(`/player-overview\\?puuid=${RECENT_PUUID}`),
+  );
+  await expect(page.getByRole("link", { name: "Recent#TWO" })).toBeVisible();
+  expect(syncStarts).toBe(0);
+
+  await page.getByRole("link", { name: "Match History" }).click();
+  await expect(page).toHaveURL(
+    new RegExp(`/match-history\\?puuid=${RECENT_PUUID}`),
+  );
+  await expect(page.locator("#match-history")).toBeVisible();
+  await expect(page.locator("#player-summary")).toHaveCount(0);
+
+  const activePlayerFromMatchHistory = page.getByTestId("current-player-link");
+  await expect(activePlayerFromMatchHistory).toHaveAttribute(
+    "href",
+    `/player-overview?puuid=${RECENT_PUUID}`,
+  );
+  await activePlayerFromMatchHistory.click();
+  await expect(page).toHaveURL(
+    new RegExp(`/player-overview\\?puuid=${RECENT_PUUID}`),
+  );
+  const overviewUrl = page.url();
+  await page.getByTestId("current-player-link").click();
+  expect(page.url()).toBe(overviewUrl);
+
+  await page.setViewportSize({ width: 1440, height: 2000 });
+  expect(
+    await page.evaluate(() => document.documentElement.scrollHeight <= innerHeight),
+  ).toBe(true);
+  const noScrollRow = page.getByTestId("current-player-link");
+  const noScrollBefore = await noScrollRow.boundingBox();
+  await page.getByRole("button", { name: "View Tracked Players" }).click();
+  const noScrollDuring = await noScrollRow.boundingBox();
+  expect(
+    Math.abs((noScrollDuring?.x ?? 0) - (noScrollBefore?.x ?? 0)),
+  ).toBeLessThanOrEqual(0.5);
+  await page.keyboard.press("Escape");
+
+  await page.goto(`/my-profile?puuid=${CURRENT_PUUID}`);
+  await expect(page).toHaveURL(
+    new RegExp(`/player-overview\\?puuid=${CURRENT_PUUID}`),
+  );
+  await page.goto(`/playstyle-analysis?puuid=${RECENT_PUUID}`);
+  await expect(page).toHaveURL(
+    new RegExp(`/player-overview\\?puuid=${RECENT_PUUID}`),
+  );
 });

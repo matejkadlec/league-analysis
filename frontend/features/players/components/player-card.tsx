@@ -327,7 +327,7 @@ export function PlayerCard({ player, onRefreshAll }: PlayerCardProps) {
                 </Button>
               </div>
             </div>
-            <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
+            <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
               <span>{getPlatformDisplayName(player.platform)}</span>
               <span>•</span>
               <span>Level {player.summoner_level}</span>
@@ -414,13 +414,7 @@ export function PlayerCard({ player, onRefreshAll }: PlayerCardProps) {
         ) : null}
 
         {/* Analysis Timestamps */}
-        <div className="grid grid-cols-3 gap-3 text-sm pt-1">
-          <div>
-            <p className="font-medium text-muted-foreground">
-              Last Playstyle Analysis
-            </p>
-            <p>{formatDate(player.last_playstyle_analysis)}</p>
-          </div>
+        <div className="grid grid-cols-2 gap-3 pt-1 text-sm">
           <div>
             <p className="font-medium text-muted-foreground">
               Last Matchmaking Analysis
@@ -461,7 +455,7 @@ export function PlayerCard({ player, onRefreshAll }: PlayerCardProps) {
             <div className="grid grid-cols-3 gap-3">
               <div className="text-center p-2 rounded-lg bg-muted/50">
                 <p className="text-lg font-bold">{stats.avg_kda.toFixed(2)}</p>
-                <p className="text-xs text-muted-foreground">KDA</p>
+                <p className="text-xs text-muted-foreground">Avg KDA</p>
               </div>
               <div className="text-center p-2 rounded-lg bg-muted/50">
                 <p className="text-lg font-bold">{stats.avg_cs.toFixed(0)}</p>

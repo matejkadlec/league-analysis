@@ -1,6 +1,6 @@
-# Profile Feature (`features/profile/`)
+# Player Overview Profile Feature (`features/profile/`)
 
-> **Scope:** Intentional behaviors of the My Profile statistics cards under
+> **Scope:** Intentional behaviors of the Player Overview statistics cards under
 > `frontend/features/profile/`.
 >
 > **Maintenance:** Update when an intentional card behavior changes. Component
@@ -15,6 +15,7 @@ Intentional behaviors (regression-protected — the Vitest suite covers the
 Top Champions pagination boundaries and the Playwright suite covers its
 browser interaction):
 
+- Cards render aggregate statistics for the globally selected player.
 - Top Champions shows exactly five champion rows per local page with a stable
   card height on a partial final page; the backend returns the complete
   ordered aggregate and the card paginates locally.

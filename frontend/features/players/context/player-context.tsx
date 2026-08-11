@@ -15,9 +15,9 @@ import { useAuth } from "@/features/auth";
 import { validatedGet, validatedPut } from "@/lib/core/api";
 import { PlayerContextSchema, type Player } from "@/lib/core/schemas";
 import { playerQueryKey, playerQueryOptions } from "../player-query";
+import { isPlayerCentricPath, playerRoute } from "../player-routes";
 
 const PLAYER_CONTEXT_QUERY_KEY = ["player-context"] as const;
-const PLAYER_CENTRIC_PATHS = new Set(["/my-profile", "/playstyle-analysis"]);
 
 interface PlayerContextValue {
   currentPlayer: Player | null;
@@ -28,19 +28,6 @@ interface PlayerContextValue {
 }
 
 const PlayerContext = createContext<PlayerContextValue | null>(null);
-
-function playerUrl(
-  pathname: string,
-  searchParams: URLSearchParams,
-  puuid: string,
-) {
-  const targetPath = PLAYER_CENTRIC_PATHS.has(pathname)
-    ? pathname
-    : "/my-profile";
-  const nextParams = new URLSearchParams(searchParams);
-  nextParams.set("puuid", puuid);
-  return `${targetPath}?${nextParams.toString()}`;
-}
 
 export function PlayerContextProvider({
   children,
@@ -53,7 +40,7 @@ export function PlayerContextProvider({
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const persistedUrlPuuidRef = useRef<string | null>(null);
-  const isPlayerRoute = PLAYER_CENTRIC_PATHS.has(pathname);
+  const isPlayerRoute = isPlayerCentricPath(pathname);
   const urlPuuid = isPlayerRoute ? searchParams.get("puuid") : null;
 
   const contextQuery = useQuery({
@@ -93,7 +80,11 @@ export function PlayerContextProvider({
     const savedPlayer = contextQuery.data?.current_player;
     if (!isPlayerRoute || urlPuuid || !savedPlayer) return;
     router.replace(
-      playerUrl(pathname, new URLSearchParams(searchParams), savedPlayer.puuid),
+      playerRoute(
+        pathname,
+        new URLSearchParams(searchParams),
+        savedPlayer.puuid,
+      ),
       { scroll: false },
     );
   }, [
@@ -127,7 +118,7 @@ export function PlayerContextProvider({
       await updateCurrentMutation.mutateAsync(player.puuid);
       queryClient.setQueryData(playerQueryKey(player.puuid), player);
       router.push(
-        playerUrl(pathname, new URLSearchParams(searchParams), player.puuid),
+        playerRoute(pathname, new URLSearchParams(searchParams), player.puuid),
         { scroll: false },
       );
     },

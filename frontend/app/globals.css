@@ -86,20 +86,14 @@
     border-color: var(--color-border);
   }
 
-  html {
-    scrollbar-gutter: stable;
-  }
-
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
     font-family: var(--font-sans);
-    scrollbar-gutter: stable;
   }
 
   #content {
     position: relative;
-    scrollbar-gutter: stable;
     background-image:
       linear-gradient(rgba(0, 9, 26, 0.6), rgba(0, 9, 26, 0.6)),
       url(/background.jpg);
@@ -317,6 +311,23 @@
   /* Muted blue-gray edge shared by the player manager and its player rows. */
   .player-management-border {
     border: 1px solid rgb(120 147 178 / 55%);
+  }
+
+  .tracking-status-toggle {
+    border-color: #b48a1d !important;
+    background: #cfa93a !important;
+    color: #0a1428 !important;
+  }
+
+  .tracking-status-toggle:hover {
+    background: #dfbd55 !important;
+  }
+
+  .tracking-status-toggle:focus-visible {
+    border-color: #f1d77b !important;
+    outline: 2px solid #f1d77b !important;
+    outline-offset: 2px;
+    box-shadow: none !important;
   }
 }
 

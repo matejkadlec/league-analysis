@@ -34,10 +34,17 @@ public API via `index.ts`.
   live in `matches/queue-catalog.ts`. Keep All Queues unrestricted, reset local
   pagination on a filter change, and preserve unknown IDs as `Queue N` instead
   of mapping them to a supported mode.
+- Match History objective order, accessible labels, counts, and dedicated
+  silhouettes live in `matches/components/objective-icons.tsx`. Preserve the
+  custom Voidgrub glyph and the shared semantic mapping for every consumer.
+  The audited Turret, Inhibitor, Dragon, and Baron silhouettes replace the
+  misleading generic landmark, shield, flame, and crown icons. Rift Herald
+  keeps the eye symbol because its exposed eye remains the clearest compact
+  semantic representation in the installed icon set.
 - The Match Fetcher Jobs card has no per-queue checkboxes. Backend product
   support determines its complete queue set; the UI retains only job-level
   status, schedule, triggering, testing, pause/stop, and history controls.
-- The Manage Tracked Players dialog presents the player rows directly without
+- The Tracked Players dialog presents the player rows directly without
   a second title, count, search field, or expand/collapse control. Show up to
   five rows before enabling vertical scrolling.
 - Use `profile_synced_at`, `league_synced_at`, or `match_synced_at` according to

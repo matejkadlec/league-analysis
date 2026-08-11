@@ -133,7 +133,7 @@ test.beforeEach(async ({ page }) => {
 test("navigates complete Top Champions results in fixed five-row pages", async ({
   page,
 }) => {
-  await page.goto(`/my-profile?puuid=${PUUID}`);
+  await page.goto(`/player-overview?puuid=${PUUID}`);
   await page.getByRole("button", { name: "Accept necessary" }).click();
 
   const previous = page.getByRole("button", { name: "Previous champions" });
