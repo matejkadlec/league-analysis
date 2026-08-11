@@ -33,6 +33,7 @@ usage() {
     '  snapshot --confirm-target DATABASE' \
     '  dump --confirm-target DATABASE' \
     '  safety-backup --label LABEL --confirm-target DATABASE' \
+    '  adopt-relocated-authority --confirm-target DATABASE' \
     '  daily-backup --confirm-target DATABASE' \
     '  restore-test --confirm-target DATABASE --archive ARCHIVE' \
     '  mirror-dump --confirm-target DATABASE' \
@@ -568,6 +569,31 @@ confirm_authority() {
   printf 'Pi PostgreSQL authority recorded after migration validation.\n'
 }
 
+adopt_relocated_authority() {
+  local target="$1"
+  local admin_count
+  local safety_backup
+  local safety_sha256
+  confirm_target "$target"
+  confirmed_authority \
+    && die 'Pi database authority is already confirmed'
+  [[ ! -e "$replacement_state" && ! -L "$replacement_state" ]] \
+    || die 'database replacement still has unresolved rollback state'
+  validate_database "$target"
+  wait_healthy "$backend_container" || die 'backend is not healthy'
+  wait_healthy "$frontend_container" || die 'frontend is not healthy'
+  admin_count="$(container_psql "$target" \
+    "SELECT count(*) FROM auth.users WHERE lower(email) IN ('mat.kadlec@email.cz','marek.hovadik@seznam.cz') AND is_active AND is_admin AND email_verified;")"
+  [[ "$admin_count" == "2" ]] || die 'both validated full administrators are required'
+
+  safety_backup="$(create_backup "$target" pre-authority-adoption)"
+  safety_sha256="$(sha256sum "$safety_backup" | awk '{print $1}')"
+  write_authority_marker "$safety_sha256"
+  printf 'Relocated Pi PostgreSQL authority recorded after live validation.\n'
+  printf 'Pre-adoption safety backup: %s\n' "$safety_backup"
+  printf 'Safety backup SHA-256: %s\n' "$safety_sha256"
+}
+
 finalize_replacement() {
   local target="$1"
   local expected_sha="$2"
@@ -672,6 +698,10 @@ case "$command_name" in
     target="$4"
     confirm_target "$target"
     create_backup "$target" "$label"
+    ;;
+  adopt-relocated-authority)
+    target="$(parse_target_option "$@")"
+    adopt_relocated_authority "$target"
     ;;
   daily-backup)
     target="$(parse_target_option "$@")"

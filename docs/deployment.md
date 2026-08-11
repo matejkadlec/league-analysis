@@ -250,64 +250,28 @@ foreign keys, timestamps, and sequences. It does not contain `.env` files or
 filesystem configuration. Do not delete the pre-LGA-79 safety archive until a
 separate reviewed retention decision explicitly covers it.
 
-## PostgreSQL daily backups and restore tests
+### Adopting authority after a complete host or SSH-account move
 
-The authoritative Pi database has a user-systemd timer named
-`league-analysis-postgres-backup.timer`. It runs at exactly `00:00` in the
-`Europe/Prague` timezone, including daylight-saving changes, regardless of the
-Pi host timezone. `Persistent=true` catches up once after downtime; the shared
-non-blocking operations lock prevents overlap with migration, restore, or mirror
-exports.
-
-Install the reviewed operations snapshot and enable the timer on `pi5ram16`:
-
-```bash
-./deploy/install-pi-postgres-backup-timer.sh
-```
-
-The service verifies the exact Compose project, PostgreSQL service/container,
-database name, absent host port, Alembic head, and Pi-authority marker. It writes
-a PostgreSQL 18 custom-format gzip archive to a mode-`0700` host directory at
-`$HOME/.local/share/league-analysis/backups/postgres`. The dump first uses a
-private `.in-progress` file, validates it with `pg_restore --list`, syncs it,
-and atomically renames it to this deterministic timestamp shape:
-
-```text
-league-analysis-postgres-daily-YYYYMMDDTHHMMSS+ZZZZ.dump
-```
-
-Only after that success does retention remove daily archives older than the
-newest seven. It matches only exact successful daily filenames. Partial files,
-the pre-LGA-79 archive, and unrelated artifacts neither count toward retention
-nor get deleted. Failures are nonzero in the user journal and do not remove a
-previous successful backup.
-
-Inspect scheduling and the most recent service result without exposing runtime
-configuration:
-
-```bash
-systemctl --user list-timers league-analysis-postgres-backup.timer
-systemctl --user status league-analysis-postgres-backup.service --no-pager
-journalctl --user -u league-analysis-postgres-backup.service -n 50 --no-pager
-```
-
-Run an on-demand backup and test a selected daily archive as follows:
+When the already-authoritative database is moved intact to a new Pi or the
+approved SSH account changes without carrying over the private operations
+state, do not forge or blindly copy an authority marker. Install the reviewed
+operations snapshot for the SSH account used by the mirror, confirm that
+`identity` reports the expected database with `authority=unconfirmed`, and run:
 
 ```bash
 PI_OPERATIONS="$HOME/.local/share/league-analysis/operations/pi-postgres-operations"
-"$PI_OPERATIONS" daily-backup --confirm-target league_analysis
-"$PI_OPERATIONS" restore-test \
-  --confirm-target league_analysis \
-  --archive "$HOME/.local/share/league-analysis/backups/postgres/league-analysis-postgres-daily-YYYYMMDDTHHMMSS+ZZZZ.dump"
+"$PI_OPERATIONS" adopt-relocated-authority --confirm-target league_analysis
+"$PI_OPERATIONS" identity
 ```
 
-The restore test accepts only a private, current-user-owned daily archive
-directly inside the managed backup directory. It creates a generated temporary
-database, restores with ownership and ACL replay disabled, validates Alembic,
-constraints, application tables, both administrator flags, and a deterministic
-snapshot, then drops the temporary database. It never replaces or exposes the
-production database. A nonzero restore test preserves the archive and removes
-the generated test database through the failure trap.
+This explicit adoption is valid only after the owner has declared the moved
+database authoritative. It verifies the exact League Analysis Compose and
+container identity, absent PostgreSQL host binding, migration head,
+constraints, both administrator records, and backend/frontend health. It then
+creates a private PostgreSQL custom-format `pre-authority-adoption` safety
+backup, records that archive's SHA-256 in the durable authority marker, and
+leaves the live database unchanged. A failed backup or validation leaves
+authority unconfirmed and mirror exports disabled.
 
 ## PostgreSQL daily backups and restore tests
 

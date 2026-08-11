@@ -72,6 +72,20 @@ grep -Fq 'finalize-replacement' "$pi_operations" \
   || fail 'the explicit finalize path is missing.'
 grep -Fq 'pi-authoritative.state' "$pi_operations" \
   || fail 'the durable Pi authority gate is missing.'
+grep -Fq 'adopt-relocated-authority --confirm-target DATABASE' "$pi_operations" \
+  || fail 'the explicit relocated-authority adoption path is missing.'
+adoption_function="$(sed -n '/^adopt_relocated_authority()/,/^}/p' "$pi_operations")"
+for required_adoption_gate in \
+  'confirmed_authority' \
+  'validate_database "$target"' \
+  'wait_healthy "$backend_container"' \
+  'wait_healthy "$frontend_container"' \
+  'both validated full administrators are required' \
+  'create_backup "$target" pre-authority-adoption' \
+  'write_authority_marker "$safety_sha256"'; do
+  grep -Fq "$required_adoption_gate" <<< "$adoption_function" \
+    || fail "relocated authority adoption is missing: $required_adoption_gate"
+done
 grep -Fq 'initial local-to-Pi replacement is disabled' "$pi_operations" \
   || fail 'confirmed Pi authority must disable repeated initial replacement.'
 grep -Fq 'daily backups require confirmed Pi database authority' "$pi_operations" \
