@@ -396,34 +396,17 @@ class MatchmakingAnalysisService:
                     service.rate_limiter = rate_limiter
                     await service._run_analysis(puuid, created_at)
         except asyncio.CancelledError:
-            logger.info("Background analysis cancelled", puuid=puuid)
-            try:
-                async with db_manager.get_session() as db:
-                    await _ensure_riot_writer_maintenance_is_inactive(db)
-                    await db.execute(
-                        update(MatchmakingAnalysis)
-                        .where(
-                            and_(
-                                MatchmakingAnalysis.puuid == puuid,
-                                MatchmakingAnalysis.created_at == created_at,
-                                MatchmakingAnalysis.status.in_(
-                                    ACTIVE_ANALYSIS_STATUSES
-                                ),
-                            )
-                        )
-                        .values(
-                            status="cancelled",
-                            completed_at=datetime.now(timezone.utc),
-                            rate_limit_reset_at=None,
-                        )
-                    )
-                    await db.commit()
-            except Exception:
-                logger.warning(
-                    "Could not persist interrupted analysis cancellation",
-                    puuid=puuid,
-                    created_at=created_at,
-                )
+            # Deliberately leaves the persisted row active. This also fires when
+            # process shutdown cancels the task, and the documented contract is
+            # that a restart resumes the run with its completed progress intact;
+            # writing `cancelled` here would discard that work on every deploy.
+            # An explicit user cancellation is unaffected: `cancel_analysis`
+            # commits the terminal row before cancelling this task.
+            logger.info(
+                "Background analysis task cancelled; persisted run left active",
+                puuid=puuid,
+                created_at=created_at,
+            )
             raise
         except Exception as e:
             logger.error(

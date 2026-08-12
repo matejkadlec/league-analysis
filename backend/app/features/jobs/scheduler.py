@@ -126,24 +126,59 @@ def _parse_interval_from_schedule(schedule: str) -> Optional[int]:
     return None
 
 
+class StartupRecoveryError(RuntimeError):
+    """A mandatory startup recovery step did not complete.
+
+    Serving after this would look healthy while leaving every active player
+    sync row stranded, so it must reach the application lifespan rather than
+    being logged and forgotten.
+    """
+
+
 async def _run_startup_recovery() -> None:
     """Reclassify persisted state left behind by a previous process.
 
     Each step owns a separate session, and the whole block around each one is
-    shielded. Neither a step's own failure nor a failure while its session rolls
-    back or closes may skip the step that follows.
+    shielded, so neither a step's own failure nor a failure while its session
+    rolls back or closes may skip the step that follows. Every step therefore
+    runs before any failure is raised.
+
+    Cancelling orphaned player syncs is mandatory. A stranded active row is
+    handed back to the next request with `created=False`, so no worker is
+    scheduled and the client polls `pending` forever without ever seeing a
+    terminal error. Failing startup is the honest outcome: production runs
+    `restart: unless-stopped`, so a transient fault gets a clean retry.
+
+    Raises:
+        StartupRecoveryError: If a mandatory step failed.
     """
-    for step in (_mark_stale_jobs_as_failed, _cancel_orphaned_player_syncs):
+    # (step, mandatory). Mandatory is an explicit flag rather than a name match,
+    # so the decision cannot drift when a step is renamed or wrapped.
+    steps = (
+        ("job executions", _mark_stale_jobs_as_failed, False),
+        ("orphaned player syncs", _cancel_orphaned_player_syncs, True),
+    )
+    blocking: list[str] = []
+
+    for label, step, is_mandatory in steps:
         try:
             async with db_manager.get_session() as db:
                 await step(db)
         except Exception as error:
+            if is_mandatory:
+                blocking.append(label)
             logger.error(
                 "Startup recovery step failed",
-                step=step.__name__,
+                step=label,
+                mandatory=is_mandatory,
                 error=str(error),
                 error_type=type(error).__name__,
             )
+
+    if blocking:
+        raise StartupRecoveryError(
+            f"Mandatory startup recovery failed: {', '.join(blocking)}"
+        )
 
 
 async def _cancel_orphaned_player_syncs(db: AsyncSession) -> None:
@@ -165,12 +200,14 @@ async def _cancel_orphaned_player_syncs(db: AsyncSession) -> None:
     would discard that progress. See
     [`docs/matchmaking-analysis.md`](../../../../docs/matchmaking-analysis.md).
 
-    A failure is logged and swallowed, matching execution recovery: startup must
-    not be blocked, and the next restart retries. The cost of a failure is
-    bounded to players whose sync row stays active until then.
+    A failure rolls back and propagates, because serving with rows still
+    stranded looks healthy while every affected player polls forever.
 
     Args:
         db: Database session for updating the player sync records.
+
+    Raises:
+        Exception: Whatever the update or commit raised, after rolling back.
     """
     from datetime import timezone
 
@@ -201,7 +238,7 @@ async def _cancel_orphaned_player_syncs(db: AsyncSession) -> None:
             error_type=type(error).__name__,
         )
         await db.rollback()
-        return
+        raise
 
     cancelled = result.rowcount or 0  # type: ignore[union-attr]
     if cancelled:

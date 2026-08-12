@@ -142,9 +142,16 @@ details. Keep it synchronized with job changes.
   [`../../../../docs/matchmaking-analysis.md`](../../../../docs/matchmaking-analysis.md).
 - Each recovery step runs on its own session through `_run_startup_recovery()`,
   which shields the whole block around each one. Neither a step's own failure
-  nor a failure while its session rolls back or closes may skip the next step. A
-  failure is logged and swallowed; startup must not be blocked and the next
-  restart retries.
+  nor a failure while its session rolls back or closes may skip the next step,
+  so every step runs before any failure is raised.
+- Cancelling orphaned player syncs is *mandatory*: a failure raises
+  `StartupRecoveryError`, which `_start_scheduler_safely` re-raises while still
+  swallowing ordinary scheduler faults. Serving with rows stranded would look
+  healthy while the route hands each orphan back with `created=False`, so no
+  worker is scheduled and the client polls `pending` forever with no terminal
+  status. Production runs `restart: unless-stopped`, so a transient fault gets a
+  clean retry. Mark mandatory steps with the explicit flag in the step tuple,
+  never by matching a function name.
 - Stop APScheduler with `wait=False` during process shutdown. Deployment must
   never drain or wait for long-running Riot executions; startup recovery owns
   the interrupted persisted state.

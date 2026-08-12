@@ -4,6 +4,7 @@ from .log_capture import job_log_capture
 from .models import ExecutionType, JobConfiguration, JobExecution, JobStatus, JobType
 from .router import router as jobs_router
 from .scheduler import (
+    StartupRecoveryError,
     get_scheduler,
     shutdown_scheduler,
     start_scheduler,
@@ -38,6 +39,7 @@ __all__ = [
     # Scheduler
     "start_scheduler",
     "shutdown_scheduler",
+    "StartupRecoveryError",
     "get_scheduler",
     "sync_job_configuration",
     # Utilities

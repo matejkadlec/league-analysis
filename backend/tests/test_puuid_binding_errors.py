@@ -533,11 +533,12 @@ async def test_startup_recovery_matches_the_partial_index_exactly() -> None:
 
 
 @pytest.mark.asyncio
-async def test_matchmaking_analysis_survives_a_restart() -> None:
-    """Cancelling an active analysis would discard its persisted progress.
+async def test_startup_recovery_never_touches_matchmaking_analyses() -> None:
+    """Cancelling an active analysis here would discard its persisted progress.
 
     `start_analysis` attaches to an active row and relaunches its worker, so the
-    documented restart contract is resume, not cancel.
+    documented restart contract is resume, not cancel. This covers only the
+    startup helper; the shutdown path has its own regression below.
     """
     from app.features.jobs.scheduler import _cancel_orphaned_player_syncs
 
@@ -547,6 +548,129 @@ async def test_matchmaking_analysis_survives_a_restart() -> None:
 
     touched = {statement.table.fullname for statement in session.executed}
     assert "core.matchmaking_analyses" not in touched
+
+
+@pytest.mark.asyncio
+async def test_task_cancellation_leaves_the_analysis_resumable(monkeypatch) -> None:
+    """Process shutdown cancels the task; the persisted run must stay active.
+
+    Writing a terminal row here would discard completed progress on every
+    deployment, contradicting the documented restart contract. Explicit user
+    cancellation is unaffected because `cancel_analysis` commits the terminal
+    row before it cancels this task.
+    """
+    import asyncio
+
+    from app.features.matchmaking_analysis import service as analysis_module
+
+    opened: list[object] = []
+
+    class _Session:
+        async def __aenter__(self):
+            opened.append(self)
+            return self
+
+        async def __aexit__(self, *_exc) -> None:
+            return None
+
+    monkeypatch.setattr(analysis_module.db_manager, "get_session", lambda: _Session())
+
+    async def _cancelled(*_args, **_kwargs):
+        raise asyncio.CancelledError()
+
+    monkeypatch.setattr(analysis_module, "create_tracked_riot_api_client", _cancelled)
+
+    service = analysis_module.MatchmakingAnalysisService(
+        cast(AsyncSession, _Session()), cast(RiotAPIClient, SimpleNamespace())
+    )
+
+    with pytest.raises(asyncio.CancelledError):
+        await service._run_analysis_background("p" * 78, datetime.now(timezone.utc))
+
+    # A terminal write would have opened a second session in the handler.
+    assert len(opened) == 1, "cancellation must not persist a terminal row"
+
+
+@pytest.mark.asyncio
+async def test_failed_mandatory_recovery_stops_startup(monkeypatch) -> None:
+    """Serving with sync rows stranded looks healthy while players poll forever.
+
+    The route hands an orphaned active row back with `created=False`, so no
+    worker is scheduled and the client never receives a terminal status.
+    """
+    from app.features.jobs import scheduler as scheduler_module
+
+    ran: list[str] = []
+
+    class _Session:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_exc) -> None:
+            return None
+
+    monkeypatch.setattr(scheduler_module.db_manager, "get_session", lambda: _Session())
+    monkeypatch.setattr(
+        scheduler_module,
+        "_mark_stale_jobs_as_failed",
+        AsyncMock(side_effect=lambda _db: ran.append("executions")),
+    )
+    monkeypatch.setattr(
+        scheduler_module,
+        "_cancel_orphaned_player_syncs",
+        AsyncMock(side_effect=RuntimeError("database is gone")),
+    )
+
+    with pytest.raises(scheduler_module.StartupRecoveryError):
+        await scheduler_module._run_startup_recovery()
+
+    assert ran == ["executions"], "every step still runs before the failure is raised"
+
+
+@pytest.mark.asyncio
+async def test_a_failed_optional_recovery_does_not_stop_startup(monkeypatch) -> None:
+    """Job-execution recovery stays best-effort; a degraded scheduler still serves."""
+    from app.features.jobs import scheduler as scheduler_module
+
+    class _Session:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_exc) -> None:
+            return None
+
+    monkeypatch.setattr(scheduler_module.db_manager, "get_session", lambda: _Session())
+    monkeypatch.setattr(
+        scheduler_module,
+        "_mark_stale_jobs_as_failed",
+        AsyncMock(side_effect=RuntimeError("transient")),
+    )
+    monkeypatch.setattr(
+        scheduler_module, "_cancel_orphaned_player_syncs", AsyncMock(return_value=None)
+    )
+
+    await scheduler_module._run_startup_recovery()
+
+
+@pytest.mark.asyncio
+async def test_startup_recovery_failure_reaches_the_application(monkeypatch) -> None:
+    """`_start_scheduler_safely` swallows scheduler faults but not this one."""
+    from app import main as main_module
+
+    monkeypatch.setattr(
+        main_module,
+        "start_scheduler",
+        AsyncMock(side_effect=main_module.StartupRecoveryError("stranded")),
+    )
+
+    with pytest.raises(main_module.StartupRecoveryError):
+        await main_module._start_scheduler_safely()
+
+    monkeypatch.setattr(
+        main_module, "start_scheduler", AsyncMock(side_effect=RuntimeError("degraded"))
+    )
+
+    await main_module._start_scheduler_safely()
 
 
 @pytest.mark.asyncio

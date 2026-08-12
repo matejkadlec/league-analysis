@@ -19,6 +19,7 @@ from app.core.database import db_manager
 from app.core.rate_limiter import limiter
 from app.features.auth import auth_router
 from app.features.jobs import (
+    StartupRecoveryError,
     job_log_capture,
     jobs_router,
     shutdown_scheduler,
@@ -86,11 +87,19 @@ async def _validate_api_key_configuration() -> None:
 
 
 async def _start_scheduler_safely() -> None:
-    """Start job scheduler with error handling."""
+    """Start job scheduler with error handling.
+
+    A failed scheduler is degraded but serviceable, so it must not stop the
+    application. `StartupRecoveryError` is the exception: it means persisted
+    application state was left stranded, and serving would look healthy while
+    every affected player polls an update that can never finish.
+    """
     try:
         scheduler = await start_scheduler()
         if scheduler:
             logger.info("Job scheduler started")
+    except StartupRecoveryError:
+        raise
     except Exception as e:
         logger.error(
             "Failed to start job scheduler",

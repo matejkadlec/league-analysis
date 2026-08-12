@@ -48,9 +48,11 @@ dispatches but never drains Match Fetcher, Player Updater, tests, or other
 long-running Riot work. A production restart therefore has a bounded shutdown
 instead of waiting through provider rate-limit windows. The next startup uses
 the recovery step above to mark interrupted `RUNNING`/`PAUSED` regular
-executions `CANCELLED`; Matchmaking Analysis retains its separate persisted
-cancellation/retry lifecycle. Deployment readiness never requires an idle job
-queue.
+executions `CANCELLED`; Matchmaking Analysis instead keeps its active run so the
+next explicit start resumes it. Deployment readiness never requires an idle job
+queue, but it does require that orphaned player sync runs were closed: that
+recovery step is mandatory and a failure stops the application rather than
+serving with rows no worker owns.
 
 ### Access Control
 
@@ -229,9 +231,11 @@ windows without being coupled to the frontend's normal request timeout.
 - Successful completion invalidates/refetches the current result and history
   queries. Failures retain a stable client-safe code/message while detailed
   internal diagnostics stay in server logs.
-- Interrupted process-local workers are marked `cancelled` when their
-  cancellation can be persisted safely. A later explicit start remains
-  retryable and cannot collide with an older active row.
+- A process-local worker cancelled by shutdown leaves its persisted run
+  **active** on purpose, so the next explicit start resumes it with completed
+  progress intact. Writing a terminal row there would discard that work on every
+  deployment. Explicit user cancellation is unaffected: it commits the
+  `cancelled` row before cancelling the worker.
 
 ---
 
