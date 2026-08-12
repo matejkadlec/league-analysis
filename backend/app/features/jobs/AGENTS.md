@@ -99,9 +99,9 @@ details. Keep it synchronized with job changes.
   `skipped_as_already_running`, which `player_sync` maps to `SYNC_BUSY`. A run
   whose start failed also has no execution id and must stay a real failure.
 - `_finish_sync` never reopens a terminal `PlayerSyncRun`. It locks the row and
-  writes only while the run is still active, because PUUID migration may close
-  it while this orchestrator is mid-flight; reviving it would also risk a
-  collision with a replacement run on the freshly issued PUUID.
+  writes only while the run is still active, because an operator stop or startup
+  recovery may cancel it while this orchestrator is mid-flight; reviving it
+  would also risk a collision with a replacement run on the same PUUID.
 - Regular Match Fetcher and Player Updater runs finish `SUCCESS` with warning
   diagnostics after isolated player, match, timeline, or provider-shape errors.
   Missing/rejected Riot credentials remain `FAILED`; rate exhaustion is
@@ -126,6 +126,32 @@ details. Keep it synchronized with job changes.
 - Reset persisted pause flags because pause is runtime-only.
 - Mark `RUNNING`/`PAUSED` executions left by an ungraceful shutdown as
   `CANCELLED`.
+- Cancel every active `jobs.player_sync_runs` row too. Its worker is
+  in-process, so no row left active by a previous process can still be owned;
+  the table allows one active row per PUUID and the route schedules work only
+  for a newly created row, so an orphan blocks that player's updates. Startup is
+  the only safe place: a live process cannot tell an abandoned row from one a
+  running worker owns. Set `updated_at` explicitly, because a Core update
+  bypasses the model's application-side `onupdate`. Keep the status predicate
+  equal to `uq_player_sync_runs_active_puuid`'s set — a missing status strands
+  rows, an extra one rewrites terminal runs.
+- Never cancel `core.matchmaking_analyses` at startup. It has the opposite
+  contract: `start_analysis` attaches to an active row and relaunches its
+  worker, preserving completed progress across a restart, so cancelling would
+  discard that progress. See
+  [`../../../../docs/matchmaking-analysis.md`](../../../../docs/matchmaking-analysis.md).
+- Each recovery step runs on its own session through `_run_startup_recovery()`,
+  which shields the whole block around each one. Neither a step's own failure
+  nor a failure while its session rolls back or closes may skip the next step,
+  so every step runs before any failure is raised.
+- Cancelling orphaned player syncs is *mandatory*: a failure raises
+  `StartupRecoveryError`, which `_start_scheduler_safely` re-raises while still
+  swallowing ordinary scheduler faults. Serving with rows stranded would look
+  healthy while the route hands each orphan back with `created=False`, so no
+  worker is scheduled and the client polls `pending` forever with no terminal
+  status. Production runs `restart: unless-stopped`, so a transient fault gets a
+  clean retry. Mark mandatory steps with the explicit flag in the step tuple,
+  never by matching a function name.
 - Stop APScheduler with `wait=False` during process shutdown. Deployment must
   never drain or wait for long-running Riot executions; startup recovery owns
   the interrupted persisted state.

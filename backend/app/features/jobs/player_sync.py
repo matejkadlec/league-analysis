@@ -105,7 +105,7 @@ def _failure_from_job(job) -> tuple[str, str, str]:
             "failed",
             "PLAYER_ID_STALE",
             "Riot no longer recognizes this player's stored ID. "
-            "Search for the player again to refresh it.",
+            "This player needs to be re-added before it can update.",
         )
     if job.job_execution_status == JobStatus.RATE_LIMITED:
         return (
@@ -137,11 +137,11 @@ async def _finish_sync(
 ) -> None:
     """Persist one safe lifecycle update from the background orchestrator.
 
-    A terminal row is never reopened. PUUID migration closes the runs of a
-    superseded PUUID, and this orchestrator may still be mid-flight, so an
-    unguarded write would revive a cancelled run and could then collide with a
-    replacement run on the freshly issued PUUID. The row lock makes the check
-    hold against a migration committing between the read and the write.
+    A terminal row is never reopened. Startup recovery cancels runs orphaned by
+    a restart and an operator may cancel one directly, while this orchestrator
+    is still mid-flight, so an unguarded write would revive a cancelled run and
+    could then collide with its replacement. The row lock makes the check hold
+    against a cancellation committing between the read and the write.
     """
     async with db_manager.get_session() as db:
         sync_run = await db.get(PlayerSyncRun, sync_id, with_for_update=True)

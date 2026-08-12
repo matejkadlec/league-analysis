@@ -1,9 +1,12 @@
 """Regressions for stale-PUUID classification and job completion bookkeeping."""
 
+from datetime import datetime, timezone
 from types import SimpleNamespace
-from typing import cast
+from typing import Any, cast
+from unittest.mock import AsyncMock, Mock
 
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.riot_api.client import RiotAPIClient
 from app.core.riot_api.errors import BadRequestError, PuuidDecryptionError
@@ -15,11 +18,20 @@ from app.features.jobs.models import (
     JobConfiguration,
     JobExecution,
     JobStatus,
-    PlayerSyncRun,
 )
 from app.features.jobs.player_sync import _failure_from_job, _finish_sync
-from app.features.matchmaking_analysis.models import MatchmakingAnalysis
-from app.features.players.service import ACTIVE_RUN_TABLES, PUUID_REFERENCING_TABLES
+from app.features.players import service as player_service_module
+from app.features.players.service import PlayerService
+
+# `Player` relationships are resolved by name, so every related mapper has to be
+# imported before the real model can be instantiated.
+from app.features.auth import models as _auth_models  # noqa: F401  isort:skip
+from app.features.matches import models as _match_models  # noqa: F401  isort:skip
+from app.features.matchmaking_analysis import models as _mm_models  # noqa: F401  isort:skip
+from app.features.players import leagues as _league_models  # noqa: F401  isort:skip
+from app.features.playstyle_analysis import models as _ps_models  # noqa: F401  isort:skip
+
+FRESH_PUUID = "f" * 78
 
 
 class _Job(BaseJob):
@@ -133,7 +145,9 @@ def test_failure_from_job_reports_a_stale_player_id() -> None:
 
     assert status == "failed"
     assert code == "PLAYER_ID_STALE"
-    assert "Search for the player again" in message
+    # Discovery does not repair a stale row, so the message must not promise it.
+    assert "re-added" in message
+    assert "Search for the player again" not in message
 
 
 def test_failure_from_job_keeps_the_key_error_precedence() -> None:
@@ -285,72 +299,6 @@ async def test_a_failed_completion_write_does_not_publish_its_status() -> None:
     assert job.job_execution_status is not JobStatus.CANCELLED
 
 
-def _indexed_active_statuses(model, index_name: str) -> set[str]:
-    """Read the statuses a table's partial unique index actually covers."""
-    for index in model.__table__.indexes:
-        if index.name != index_name:
-            continue
-        predicate = str(index.dialect_options["postgresql"]["where"])
-        listed = predicate.split("(")[1].split(")")[0]
-        return {entry.strip().strip("'") for entry in listed.split(",")}
-    raise AssertionError(f"{index_name} is missing")
-
-
-@pytest.mark.parametrize(
-    ("table", "model", "index_name"),
-    [
-        (
-            "core.matchmaking_analyses",
-            MatchmakingAnalysis,
-            "uq_matchmaking_analyses_active_puuid",
-        ),
-        ("jobs.player_sync_runs", PlayerSyncRun, "uq_player_sync_runs_active_puuid"),
-    ],
-)
-def test_migration_closes_exactly_the_indexed_active_statuses(
-    table: str, model: object, index_name: str
-) -> None:
-    """Migration must close every status the partial unique index covers.
-
-    A status left open would move a second active row onto the fresh PUUID and
-    violate that index, aborting the whole migration.
-    """
-    configured = [
-        statuses for name, _, statuses, _ in ACTIVE_RUN_TABLES if name == table
-    ]
-    assert configured, f"{table} is never closed before repointing"
-
-    assert set(configured[0]) == _indexed_active_statuses(model, index_name)
-
-
-def test_every_closed_table_is_also_repointed() -> None:
-    """Closing a run without moving it would strand it on the deleted PUUID."""
-    repointed = {name for name, _, _ in PUUID_REFERENCING_TABLES}
-
-    for table, _, _, _ in ACTIVE_RUN_TABLES:
-        assert table in repointed
-
-
-def test_closing_a_run_clears_its_pending_deadlines() -> None:
-    """A terminal row must not keep a wait deadline it can never reach.
-
-    Every other terminal transition on `core.matchmaking_analyses` clears
-    `rate_limit_reset_at`, so migration has to clear it too.
-    """
-    cleared = {name: columns for name, _, _, columns in ACTIVE_RUN_TABLES}
-
-    assert "rate_limit_reset_at" in cleared["core.matchmaking_analyses"]
-
-    for table, columns in cleared.items():
-        model = (
-            MatchmakingAnalysis
-            if table == "core.matchmaking_analyses"
-            else PlayerSyncRun
-        )
-        for column in columns:
-            assert column in model.__table__.c, f"{table}.{column} does not exist"
-
-
 class _RecordingSession:
     """Session that hands back one row and records whether a write happened."""
 
@@ -375,11 +323,11 @@ class _RecordingSession:
 
 @pytest.mark.asyncio
 async def test_a_cancelled_sync_run_is_never_reopened(monkeypatch) -> None:
-    """Migration closes the runs of a superseded PUUID.
+    """An operator stop or startup recovery may cancel a run mid-flight.
 
-    The orchestrator may still be mid-flight, and an unguarded write would set
-    that row back to `running` and could then collide with a replacement run on
-    the freshly issued PUUID.
+    The orchestrator may still be running, and an unguarded write would set that
+    terminal row back to `running` and could then collide with a replacement run
+    on the same PUUID.
     """
     run = SimpleNamespace(status="cancelled", started_at=None, completed_at=None)
     session = _RecordingSession(run)
@@ -389,7 +337,7 @@ async def test_a_cancelled_sync_run_is_never_reopened(monkeypatch) -> None:
 
     assert run.status == "cancelled"
     assert session.committed is False
-    assert session.locked is True, "the row must be locked against a live migration"
+    assert session.locked is True, "the row must be locked against a concurrent write"
 
 
 @pytest.mark.asyncio
@@ -410,3 +358,388 @@ async def test_an_active_sync_run_still_advances(monkeypatch) -> None:
 
     assert run.status == "running"
     assert session.committed is True
+
+
+class _NoMergeSession:
+    """Session that fails the test if discovery reaches for another player row.
+
+    Discovery may look the resolved PUUID up by primary key and insert or update
+    that one row. Any statement execution, bulk query, or delete would mean it
+    went looking for rows sharing the Riot ID, which is exactly the merge this
+    regression forbids.
+    """
+
+    def __init__(self) -> None:
+        self.added: list[Any] = []
+
+    async def get(self, _model, identity, **_kwargs):
+        assert identity == FRESH_PUUID, "discovery must only load the resolved PUUID"
+        return None
+
+    def add(self, instance: Any) -> None:
+        self.added.append(instance)
+
+    async def commit(self) -> None:
+        return None
+
+    async def refresh(self, instance: Any) -> None:
+        instance.created_at = datetime.now(timezone.utc)
+        instance.updated_at = datetime.now(timezone.utc)
+
+    async def execute(self, *_args, **_kwargs):
+        raise AssertionError("discovery must not run a statement against other rows")
+
+    async def scalars(self, *_args, **_kwargs):
+        raise AssertionError("discovery must not search for rows sharing the Riot ID")
+
+    async def scalar(self, *_args, **_kwargs):
+        raise AssertionError("discovery must not search for rows sharing the Riot ID")
+
+    async def delete(self, *_args, **_kwargs):
+        raise AssertionError("discovery must never delete a player row")
+
+    def expunge(self, *_args, **_kwargs):
+        raise AssertionError("discovery must not detach another player row")
+
+
+@pytest.mark.asyncio
+async def test_discovery_never_merges_a_row_sharing_the_riot_id(monkeypatch) -> None:
+    """A stale-looking row must survive discovery untouched.
+
+    Discovery cannot tell a PUUID re-encrypted under a new developer account
+    apart from a Riot ID renamed away and reclaimed by someone else. Every table
+    referencing `core.players(puuid)` cascades on delete, so a wrong merge would
+    destroy one player's history. A duplicate row is the accepted outcome.
+    """
+    monkeypatch.setattr(
+        player_service_module,
+        "_ensure_riot_writer_maintenance_is_inactive",
+        AsyncMock(),
+    )
+    session = _NoMergeSession()
+    service = PlayerService(cast(AsyncSession, session))
+    riot_client = SimpleNamespace(
+        get_account_by_riot_id=AsyncMock(
+            return_value=SimpleNamespace(
+                puuid=FRESH_PUUID, game_name="Shared Name", tag_line="TAG"
+            )
+        ),
+        get_summoner_by_puuid=AsyncMock(
+            return_value=SimpleNamespace(profile_icon_id=7, summoner_level=42)
+        ),
+    )
+
+    response = await service.discover_player(
+        riot_client=cast(RiotAPIClient, riot_client),
+        game_name="Shared Name",
+        tag_line="TAG",
+        platform="eun1",
+    )
+
+    assert response.puuid == FRESH_PUUID
+    assert [player.puuid for player in session.added] == [FRESH_PUUID]
+
+
+class _CapturingSession:
+    """Session that records the statements startup recovery issues."""
+
+    def __init__(self) -> None:
+        self.executed: list[Any] = []
+        self.committed = False
+
+    async def execute(self, statement):
+        self.executed.append(statement)
+        return SimpleNamespace(rowcount=1)
+
+    async def commit(self) -> None:
+        self.committed = True
+
+    async def rollback(self) -> None:  # pragma: no cover - failure path only
+        return None
+
+
+def _compiled(statement) -> tuple[str, dict[str, Any]]:
+    """Return one UPDATE's target table and its bound parameter values."""
+    compiled = statement.compile()
+    return statement.table.fullname, dict(compiled.params)
+
+
+def _indexed_active_statuses(model, index_name: str) -> set[str]:
+    """Read the statuses a table's partial unique index actually covers."""
+    for index in model.__table__.indexes:
+        if index.name != index_name:
+            continue
+        predicate = str(index.dialect_options["postgresql"]["where"])
+        listed = predicate.split("(")[1].split(")")[0]
+        return {entry.strip().strip("'") for entry in listed.split(",")}
+    raise AssertionError(f"{index_name} is missing")
+
+
+@pytest.mark.asyncio
+async def test_startup_cancels_orphaned_player_syncs() -> None:
+    """A restart must terminalize sync runs whose in-process worker is gone.
+
+    `jobs.player_sync_runs` allows one active row per PUUID, and the route
+    schedules work only for a newly created row, so an orphan left by an
+    ungraceful shutdown blocks that player's updates until something closes it.
+    """
+    from app.features.jobs.scheduler import _cancel_orphaned_player_syncs
+
+    session = _CapturingSession()
+
+    await _cancel_orphaned_player_syncs(cast(AsyncSession, session))
+
+    assert session.committed is True
+    written = dict(_compiled(statement) for statement in session.executed)
+    assert set(written) == {"jobs.player_sync_runs"}, (
+        "core.matchmaking_analyses resumes across a restart and must be left alone"
+    )
+
+    sync = written["jobs.player_sync_runs"]
+    assert sync["status"] == "cancelled"
+    assert sync["completed_at"] is not None
+    assert sync["error_code"] == "SYNC_CANCELLED"
+    assert sync["error_message"] == (
+        "The player update was cancelled before it finished."
+    )
+    # A Core update bypasses the model's application-side onupdate.
+    assert sync["updated_at"] is not None
+
+
+@pytest.mark.asyncio
+async def test_startup_recovery_matches_the_partial_index_exactly() -> None:
+    """The predicate must equal the indexed active set, not merely overlap it.
+
+    A missing status strands the rows this exists to release; an extra one would
+    rewrite already-terminal runs as cancelled.
+    """
+    from app.features.jobs.models import PlayerSyncRun
+    from app.features.jobs.scheduler import _cancel_orphaned_player_syncs
+
+    session = _CapturingSession()
+
+    await _cancel_orphaned_player_syncs(cast(AsyncSession, session))
+
+    (statement,) = session.executed
+    predicate = str(
+        statement.whereclause.compile(compile_kwargs={"literal_binds": True})
+    )
+    listed = predicate.split("(")[1].split(")")[0]
+    targeted = {entry.strip().strip("'") for entry in listed.split(",")}
+
+    assert targeted == _indexed_active_statuses(
+        PlayerSyncRun, "uq_player_sync_runs_active_puuid"
+    )
+
+
+@pytest.mark.asyncio
+async def test_startup_recovery_never_touches_matchmaking_analyses() -> None:
+    """Cancelling an active analysis here would discard its persisted progress.
+
+    `start_analysis` attaches to an active row and relaunches its worker, so the
+    documented restart contract is resume, not cancel. This covers only the
+    startup helper; the shutdown path has its own regression below.
+    """
+    from app.features.jobs.scheduler import _cancel_orphaned_player_syncs
+
+    session = _CapturingSession()
+
+    await _cancel_orphaned_player_syncs(cast(AsyncSession, session))
+
+    touched = {statement.table.fullname for statement in session.executed}
+    assert "core.matchmaking_analyses" not in touched
+
+
+@pytest.mark.asyncio
+async def test_task_cancellation_leaves_the_analysis_resumable(monkeypatch) -> None:
+    """Process shutdown cancels the task; the persisted run must stay active.
+
+    Writing a terminal row here would discard completed progress on every
+    deployment, contradicting the documented restart contract. Explicit user
+    cancellation is unaffected because `cancel_analysis` commits the terminal
+    row before it cancels this task.
+    """
+    import asyncio
+
+    from app.features.matchmaking_analysis import service as analysis_module
+
+    opened: list[object] = []
+
+    class _Session:
+        async def __aenter__(self):
+            opened.append(self)
+            return self
+
+        async def __aexit__(self, *_exc) -> None:
+            return None
+
+    monkeypatch.setattr(analysis_module.db_manager, "get_session", lambda: _Session())
+
+    async def _cancelled(*_args, **_kwargs):
+        raise asyncio.CancelledError()
+
+    monkeypatch.setattr(analysis_module, "create_tracked_riot_api_client", _cancelled)
+
+    service = analysis_module.MatchmakingAnalysisService(
+        cast(AsyncSession, _Session()), cast(RiotAPIClient, SimpleNamespace())
+    )
+
+    with pytest.raises(asyncio.CancelledError):
+        await service._run_analysis_background("p" * 78, datetime.now(timezone.utc))
+
+    # A terminal write would have opened a second session in the handler.
+    assert len(opened) == 1, "cancellation must not persist a terminal row"
+
+
+@pytest.mark.asyncio
+async def test_failed_mandatory_recovery_stops_startup(monkeypatch) -> None:
+    """Serving with sync rows stranded looks healthy while players poll forever.
+
+    The route hands an orphaned active row back with `created=False`, so no
+    worker is scheduled and the client never receives a terminal status.
+    """
+    from app.features.jobs import scheduler as scheduler_module
+
+    ran: list[str] = []
+
+    class _Session:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_exc) -> None:
+            return None
+
+    monkeypatch.setattr(scheduler_module.db_manager, "get_session", lambda: _Session())
+    monkeypatch.setattr(
+        scheduler_module,
+        "_mark_stale_jobs_as_failed",
+        AsyncMock(side_effect=lambda _db: ran.append("executions")),
+    )
+    monkeypatch.setattr(
+        scheduler_module,
+        "_cancel_orphaned_player_syncs",
+        AsyncMock(side_effect=RuntimeError("database is gone")),
+    )
+
+    with pytest.raises(scheduler_module.StartupRecoveryError):
+        await scheduler_module._run_startup_recovery()
+
+    assert ran == ["executions"], "every step still runs before the failure is raised"
+
+
+@pytest.mark.asyncio
+async def test_a_failed_optional_recovery_does_not_stop_startup(monkeypatch) -> None:
+    """Job-execution recovery stays best-effort; a degraded scheduler still serves."""
+    from app.features.jobs import scheduler as scheduler_module
+
+    class _Session:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_exc) -> None:
+            return None
+
+    monkeypatch.setattr(scheduler_module.db_manager, "get_session", lambda: _Session())
+    monkeypatch.setattr(
+        scheduler_module,
+        "_mark_stale_jobs_as_failed",
+        AsyncMock(side_effect=RuntimeError("transient")),
+    )
+    monkeypatch.setattr(
+        scheduler_module, "_cancel_orphaned_player_syncs", AsyncMock(return_value=None)
+    )
+
+    await scheduler_module._run_startup_recovery()
+
+
+@pytest.mark.asyncio
+async def test_startup_recovery_failure_reaches_the_application(monkeypatch) -> None:
+    """`_start_scheduler_safely` swallows scheduler faults but not this one."""
+    from app import main as main_module
+
+    monkeypatch.setattr(
+        main_module,
+        "start_scheduler",
+        AsyncMock(side_effect=main_module.StartupRecoveryError("stranded")),
+    )
+
+    with pytest.raises(main_module.StartupRecoveryError):
+        await main_module._start_scheduler_safely()
+
+    monkeypatch.setattr(
+        main_module, "start_scheduler", AsyncMock(side_effect=RuntimeError("degraded"))
+    )
+
+    await main_module._start_scheduler_safely()
+
+
+@pytest.mark.asyncio
+async def test_each_recovery_step_gets_its_own_session(monkeypatch) -> None:
+    """One step's failure — including its session teardown — must not skip the next."""
+    from app.features.jobs import scheduler as scheduler_module
+
+    calls: list[str] = []
+    sessions: list[object] = []
+
+    class _Session:
+        def __init__(self, fail_on_exit: bool) -> None:
+            self._fail_on_exit = fail_on_exit
+
+        async def __aenter__(self):
+            sessions.append(self)
+            return self
+
+        async def __aexit__(self, *_exc) -> None:
+            if self._fail_on_exit:
+                raise RuntimeError("session teardown failed")
+
+    opened = iter([_Session(fail_on_exit=True), _Session(fail_on_exit=False)])
+    monkeypatch.setattr(
+        scheduler_module.db_manager, "get_session", lambda: next(opened)
+    )
+    monkeypatch.setattr(
+        scheduler_module,
+        "_mark_stale_jobs_as_failed",
+        AsyncMock(side_effect=lambda _db: calls.append("executions")),
+    )
+    monkeypatch.setattr(
+        scheduler_module,
+        "_cancel_orphaned_player_syncs",
+        AsyncMock(side_effect=lambda _db: calls.append("player_syncs")),
+    )
+
+    await scheduler_module._run_startup_recovery()
+
+    assert calls == ["executions", "player_syncs"]
+    assert len(sessions) == 2
+    assert sessions[0] is not sessions[1], "each step needs its own session"
+
+
+@pytest.mark.asyncio
+async def test_scheduler_startup_runs_recovery(monkeypatch) -> None:
+    """Pins the real `start_scheduler` call site, not just the helper.
+
+    A test that only calls `_run_startup_recovery()` would stay green if the
+    production call were deleted.
+    """
+    from app.features.jobs import scheduler as scheduler_module
+
+    ran: list[str] = []
+    monkeypatch.setattr(
+        scheduler_module,
+        "_run_startup_recovery",
+        AsyncMock(side_effect=lambda: ran.append("recovery")),
+    )
+    monkeypatch.setattr(
+        scheduler_module, "_check_and_run_overdue_jobs", AsyncMock(return_value=None)
+    )
+    monkeypatch.setattr(
+        scheduler_module, "_load_and_schedule_jobs", AsyncMock(return_value=None)
+    )
+    monkeypatch.setattr(scheduler_module, "AsyncIOScheduler", Mock())
+    monkeypatch.setattr(scheduler_module, "SQLAlchemyJobStore", Mock())
+    monkeypatch.setattr(scheduler_module, "_scheduler", None)
+
+    await scheduler_module.start_scheduler()
+
+    assert ran == ["recovery"]

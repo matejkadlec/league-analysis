@@ -48,9 +48,11 @@ dispatches but never drains Match Fetcher, Player Updater, tests, or other
 long-running Riot work. A production restart therefore has a bounded shutdown
 instead of waiting through provider rate-limit windows. The next startup uses
 the recovery step above to mark interrupted `RUNNING`/`PAUSED` regular
-executions `CANCELLED`; Matchmaking Analysis retains its separate persisted
-cancellation/retry lifecycle. Deployment readiness never requires an idle job
-queue.
+executions `CANCELLED`; Matchmaking Analysis instead keeps its active run so the
+next explicit start resumes it. Deployment readiness never requires an idle job
+queue, but it does require that orphaned player sync runs were closed: that
+recovery step is mandatory and a failure stops the application rather than
+serving with rows no worker owns.
 
 ### Access Control
 
@@ -173,7 +175,9 @@ Client-visible failure codes are `RIOT_API_KEY_INVALID`, `RIOT_RATE_LIMITED`,
 `SYNC_CANCELLED`, `SYNC_BUSY`, `SYNC_CONFIGURATION_MISSING`, `PLAYER_ID_STALE`,
 and `SYNC_FAILED` as the unclassified fallback. `PLAYER_ID_STALE` means Riot
 rejected the stored PUUID because it was issued to a different developer
-account; searching for that player again re-resolves and migrates it. See
+account; searching for that player again resolves the current PUUID into a
+separate row, which an operator then reconciles. Discovery never merges the two
+rows automatically. See
 [`riot-api.md`](riot-api.md#puuids-are-bound-to-the-developer-account).
 
 A job that ends without recording completion — an exception raised while
@@ -186,6 +190,13 @@ already active. A run whose start failed also records no execution, but it is a
 database failure rather than a competing update and stays `SYNC_FAILED`. The
 cached terminal status is likewise published only once the completion write is
 persisted, so a client never reads a status the database rejected.
+
+Startup cancels every `pending`/`running` run left behind by a previous
+process. The worker is in-process, so no such row can still be owned, and the
+route hands back an existing active row instead of scheduling new work — an
+orphaned row would otherwise block that player's updates. Matchmaking Analysis
+is not cancelled at startup: its next explicit start resumes the persisted run
+instead.
 
 The frontend polls this lifecycle, then invalidates and refetches active query
 keys containing that exact PUUID. The approved completion info toast is shown
@@ -220,9 +231,11 @@ windows without being coupled to the frontend's normal request timeout.
 - Successful completion invalidates/refetches the current result and history
   queries. Failures retain a stable client-safe code/message while detailed
   internal diagnostics stay in server logs.
-- Interrupted process-local workers are marked `cancelled` when their
-  cancellation can be persisted safely. A later explicit start remains
-  retryable and cannot collide with an older active row.
+- A process-local worker cancelled by shutdown leaves its persisted run
+  **active** on purpose, so the next explicit start resumes it with completed
+  progress intact. Writing a terminal row there would discard that work on every
+  deployment. Explicit user cancellation is unaffected: it commits the
+  `cancelled` row before cancelling the worker.
 
 ---
 

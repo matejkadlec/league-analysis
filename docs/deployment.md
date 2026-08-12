@@ -140,8 +140,11 @@ Deployment deliberately does not query, pause, drain, or wait for Match
 Fetcher, Player Updater, Matchmaking Analysis, or any other application work.
 Scheduler shutdown stops future dispatches with `wait=False`; Docker gives the
 backend a bounded grace period. Persisted regular executions interrupted by a
-restart are classified `CANCELLED` by startup recovery, and persisted
-application-run lifecycles retain their existing cancellation/retry behavior.
+restart are classified `CANCELLED` by startup recovery, which also cancels
+every active `jobs.player_sync_runs` row: its worker is in-process, so no row
+left active by the previous process can still be owned, and an orphan would
+block that player's next update. Active `core.matchmaking_analyses` rows are
+deliberately left alone; the next explicit start resumes them.
 Only migration, container startup, and service health are deployment gates.
 
 ## Verification and diagnostics

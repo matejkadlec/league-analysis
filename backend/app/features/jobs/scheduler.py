@@ -126,6 +126,128 @@ def _parse_interval_from_schedule(schedule: str) -> Optional[int]:
     return None
 
 
+class StartupRecoveryError(RuntimeError):
+    """A mandatory startup recovery step did not complete.
+
+    Serving after this would look healthy while leaving every active player
+    sync row stranded, so it must reach the application lifespan rather than
+    being logged and forgotten.
+    """
+
+
+async def _run_startup_recovery() -> None:
+    """Reclassify persisted state left behind by a previous process.
+
+    Each step owns a separate session, and the whole block around each one is
+    shielded, so neither a step's own failure nor a failure while its session
+    rolls back or closes may skip the step that follows. Every step therefore
+    runs before any failure is raised.
+
+    Cancelling orphaned player syncs is mandatory. A stranded active row is
+    handed back to the next request with `created=False`, so no worker is
+    scheduled and the client polls `pending` forever without ever seeing a
+    terminal error. Failing startup is the honest outcome: production runs
+    `restart: unless-stopped`, so a transient fault gets a clean retry.
+
+    Raises:
+        StartupRecoveryError: If a mandatory step failed.
+    """
+    # (step, mandatory). Mandatory is an explicit flag rather than a name match,
+    # so the decision cannot drift when a step is renamed or wrapped.
+    steps = (
+        ("job executions", _mark_stale_jobs_as_failed, False),
+        ("orphaned player syncs", _cancel_orphaned_player_syncs, True),
+    )
+    blocking: list[str] = []
+
+    for label, step, is_mandatory in steps:
+        try:
+            async with db_manager.get_session() as db:
+                await step(db)
+        except Exception as error:
+            if is_mandatory:
+                blocking.append(label)
+            logger.error(
+                "Startup recovery step failed",
+                step=label,
+                mandatory=is_mandatory,
+                error=str(error),
+                error_type=type(error).__name__,
+            )
+
+    if blocking:
+        raise StartupRecoveryError(
+            f"Mandatory startup recovery failed: {', '.join(blocking)}"
+        )
+
+
+async def _cancel_orphaned_player_syncs(db: AsyncSession) -> None:
+    """Close player sync runs whose in-process worker did not survive.
+
+    `jobs.player_sync_runs` is driven by an in-process worker, so no row left
+    active by a previous process can still be owned. The table allows one active
+    row per PUUID and `start_player_sync` hands back an existing active row
+    while the route schedules work only for a newly created one, so an orphan
+    blocks that player's updates until something closes it.
+
+    Startup is the only safe place to do this. A live process cannot tell an
+    abandoned row apart from one a running worker still owns, and no Riot
+    identity is involved here, so nothing has to be matched by Riot ID.
+
+    `core.matchmaking_analyses` is deliberately excluded. It has the opposite
+    contract: `start_analysis` attaches to an active row and relaunches its
+    worker, preserving completed progress across a restart. Cancelling it here
+    would discard that progress. See
+    [`docs/matchmaking-analysis.md`](../../../../docs/matchmaking-analysis.md).
+
+    A failure rolls back and propagates, because serving with rows still
+    stranded looks healthy while every affected player polls forever.
+
+    Args:
+        db: Database session for updating the player sync records.
+
+    Raises:
+        Exception: Whatever the update or commit raised, after rolling back.
+    """
+    from datetime import timezone
+
+    from sqlalchemy import update
+
+    from .models import PlayerSyncRun
+    from .player_sync import ACTIVE_SYNC_STATUSES
+
+    try:
+        now = datetime.now(timezone.utc)
+        result = await db.execute(
+            update(PlayerSyncRun)
+            .where(PlayerSyncRun.status.in_(ACTIVE_SYNC_STATUSES))
+            .values(
+                status="cancelled",
+                completed_at=now,
+                # A Core update bypasses the model's application-side onupdate.
+                updated_at=now,
+                error_code="SYNC_CANCELLED",
+                error_message="The player update was cancelled before it finished.",
+            )
+        )
+        await db.commit()
+    except Exception as error:
+        logger.error(
+            "Failed to cancel player sync runs orphaned by a restart",
+            error=str(error),
+            error_type=type(error).__name__,
+        )
+        await db.rollback()
+        raise
+
+    cancelled = result.rowcount or 0  # type: ignore[union-attr]
+    if cancelled:
+        logger.info(
+            "Cancelled player sync runs orphaned by a restart",
+            player_sync_runs=cancelled,
+        )
+
+
 async def _mark_stale_jobs_as_failed(db: AsyncSession) -> None:
     """Mark jobs that are stuck in 'running' state as failed on startup.
 
@@ -260,9 +382,7 @@ async def start_scheduler() -> AsyncIOScheduler:
             timezone="UTC",
         )
 
-        # Mark stale jobs as failed before starting
-        async with db_manager.get_session() as db:
-            await _mark_stale_jobs_as_failed(db)
+        await _run_startup_recovery()
 
         # Start the scheduler
         _scheduler.start()

@@ -38,17 +38,18 @@ Consequences:
   stored PUUID. Rotating keys within the same account is safe.
 - Datasets fetched under different developer accounts cannot be merged as-is;
   the same player appears under two unrelated PUUIDs.
-- The recovery path is ACCOUNT-V1 **Get Account by Riot ID** (`game_name` and
-  `tag_line` are stored in `core.players`): resolve the player under the
-  current key, then remap the stored PUUID and every referencing row
-  (`core.players` is referenced by puuid from match, league, analysis, sync,
-  and tracking tables).
+- ACCOUNT-V1 **Get Account by Riot ID** (`game_name` and `tag_line` are stored
+  in `core.players`) resolves the player's current PUUID under the current key.
+  That resolution alone is **not** a repair: remapping the stored PUUID and its
+  referencing rows requires reviewed operator evidence that the two PUUIDs are
+  the same Riot account, because a Riot ID can also have changed hands. See
+  [Why discovery never merges two rows automatically](#why-discovery-never-merges-two-rows-automatically).
 
 Plan any future switch of the production key to a different developer account
 (for example after Riot application review) as a data migration, not a
 configuration change.
 
-#### How the code detects and repairs the condition
+#### How the code detects the condition
 
 - The client inspects Riot's `status.message` on a 400 and raises
   `PuuidDecryptionError` (a `BadRequestError` subclass) when it reports a
@@ -59,22 +60,37 @@ configuration change.
   that into `PLAYER_ID_STALE` with an actionable message instead of the generic
   `SYNC_FAILED`. It stays a per-player warning at job level, so an unrelated
   stale row never fails a whole scheduled run.
-- `PlayerService.discover_player()` repairs one player on demand: it migrates
-  every stale row carrying that Riot ID onto the freshly resolved PUUID,
-  repointing each table in `PUUID_REFERENCING_TABLES` before deleting the stale
-  row. Searching for an affected player is therefore the supported self-service
-  recovery. The migration runs before the fresh row is looked up, because a
-  stale row can outlive the creation of a fresh one — match-participant
-  discovery creates rows for PUUIDs seen in match payloads — and a Riot ID can
-  accumulate several stale rows across repeated account changes.
-- `PUUID_REFERENCING_TABLES` also covers `auth.users.puuid`, which links a user
-  to a Riot account without a declared foreign key. Nothing else would move it,
-  so the link would silently dangle.
+- `PlayerService.discover_player()` deliberately does **not** repair the row. It
+  inserts or updates the freshly resolved PUUID and leaves any row carrying the
+  same Riot ID under a different PUUID untouched, so a duplicate player row is
+  the visible outcome.
 
-Those foreign keys cascade on delete, so the migration aborts rather than
-deleting a player row while any reference still points at the old PUUID. A
-bulk switch still needs a deliberate migration pass; the discovery path only
-heals players as they are looked up.
+#### Why discovery never merges two rows automatically
+
+These two states are indistinguishable from inside discovery:
+
+- the same player, whose PUUID was re-encrypted under a new developer account;
+- a different player, who claimed a Riot ID its previous owner renamed away
+  from.
+
+Riot permits a Riot ID change whenever the complete `gameName#tagLine` is free,
+and `core.players` accumulates at-match-time Riot IDs for every participant ever
+ingested, so the second state is reachable in normal operation. Every table
+referencing `core.players(puuid)` cascades on delete, so an automatic merge that
+guessed wrong would move one player's match, league, analysis, and tracking rows
+onto another player and delete the original. A duplicate row is recoverable; a
+wrong merge is not.
+
+A live check on the superseded PUUID is not sufficient authorization either. A
+decryption 400 proves only that the stored PUUID belongs to another developer
+account's namespace; it cannot prove that the name-resolved PUUID is the same
+Riot account. Treat it as a veto, never as permission.
+
+Repair any stale population through an explicit operator-run pass with a
+reviewed old-to-new mapping, built from immutable correlation (for example the
+same stored match ID and participant slot re-fetched under the new key) or from
+dual-key evidence captured during a planned cutover. Rows without reliable
+evidence stay untouched.
 
 ### Routing
 
