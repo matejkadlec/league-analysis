@@ -51,12 +51,10 @@ used.
 
 ### Product queue set
 
-The only product-supported queues are **420, 440, 480, 400, 450, 2400**
-(Ranked Solo/Duo, Ranked Flex, Swiftplay, Normal Draft, ARAM, ARAM: Mayhem),
-defined once as `PRODUCT_SUPPORTED_QUEUE_IDS` in
-`backend/app/core/riot_api/constants.py`. Match Fetcher queue selection is not
-configurable; historical `enabled_queue_ids` config values are ignored and
-stripped (see [`jobs.md`](jobs.md)).
+`PRODUCT_SUPPORTED_QUEUE_IDS` in `backend/app/core/riot_api/constants.py` is
+the single definition of the supported queue set. Match Fetcher queue selection
+is not configurable: historical `enabled_queue_ids` config values are ignored
+and stripped (see [`jobs.md`](jobs.md)).
 
 ### Versioned user card preferences coexist
 
