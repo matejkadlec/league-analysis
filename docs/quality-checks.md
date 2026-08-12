@@ -45,8 +45,11 @@ so it is safe to call from the main checkout or any worktree.
   is LGA-10.
 - **Tests never need a real Riot API key, network access, or a real database
   password.** CI and local runs pass explicit safe test-only values.
-- **A documentation-only change runs the repository gate only.**
-  `scripts/detect-docs-only-change.sh` makes that call in CI.
+- **CI always runs the complete gate.** `./test.sh -r` exists for local
+  documentation-only feedback, but CI does not try to detect that case: a
+  required check that skips itself has to be wired through every step, and the
+  minutes saved are not worth that. The deploy workflow does skip
+  documentation, through `paths-ignore`, because it is not a required check.
 - **Deploy runs are serialised, never cancelled.** The deploy workflow uses
   `cancel-in-progress: false` on the pi5ram16 runner, because interrupting a
   host mutation is less safe than queueing it. Quality runs are cancelled when

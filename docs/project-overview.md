@@ -256,9 +256,9 @@ available.
 ./test.sh
 ```
 
-This is the authoritative developer gate and the core of `scripts/ci.sh` used
-by GitHub Actions. It runs repository, frontend, and backend checks with clear,
-fail-fast step names.
+This is the authoritative developer gate, and GitHub Actions runs the same
+script. It runs repository, frontend, and backend checks with clear, fail-fast
+step names.
 
 ### Commits and GitHub
 

@@ -7,28 +7,20 @@ on:
   push:
     branches:
       - master
-      # Bootstrap this first workflow before it exists on master.
-      - flow1/lga-14-quality-checks
   workflow_dispatch:
 
 concurrency:
-  group: quality-checks-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: quality-checks-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 permissions:
   contents: read
-
-env:
-  CHANGE_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before || github.sha }}
-  PYTHON_VERSION: "3.14.7"
 
 jobs:
   quality-gate:
     name: Deterministic full-project gate
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    outputs:
-      docs_only: ${{ steps.changes.outputs.docs_only }}
     services:
       postgres:
         image: postgres:18.4
@@ -48,15 +40,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 0
           persist-credentials: false
 
-      - name: Detect documentation-only change
-        id: changes
-        run: ./scripts/detect-docs-only-change.sh "$CHANGE_BASE_SHA"
-
       - name: Set up Node.js
-        if: steps.changes.outputs.docs_only != 'true'
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .nvmrc
@@ -64,18 +50,15 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install pinned npm
-        if: steps.changes.outputs.docs_only != 'true'
         run: npm install --global npm@12.0.2 --ignore-scripts
 
       - name: Set up uv
-        if: steps.changes.outputs.docs_only != 'true'
         uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
           version: "0.12.3"
 
       - name: Install pinned Python
-        if: steps.changes.outputs.docs_only != 'true'
-        run: uv python install "$PYTHON_VERSION"
+        run: uv python install "$(cat .python-version)"
 
       - name: Install pinned shell tooling
         env:
@@ -87,12 +70,7 @@ jobs:
           echo "$SHELLCHECK_BIN_DIR" >> "$GITHUB_PATH"
           echo "$ACTIONLINT_BIN_DIR" >> "$GITHUB_PATH"
 
-      - name: Run repository checks for a documentation-only change
-        if: steps.changes.outputs.docs_only == 'true'
-        run: ./test.sh --repo
-
-      - name: Run deterministic CI gate
-        if: steps.changes.outputs.docs_only != 'true'
+      - name: Run the gate and apply migrations to a clean database
         env:
           POSTGRES_DB: league_analysis_ci
           POSTGRES_USER: league_analysis_ci
@@ -102,32 +80,28 @@ jobs:
           DEBUG: "false"
           JWT_SECRET_KEY: league-analysis-ci-jwt-secret-32-characters
           ENVIRONMENT: test
-          LGA_VALIDATE_MIGRATIONS: "1"
           LGA_POSTGRES_CLIENT_CONTAINER: ${{ job.services.postgres.id }}
-        run: ./scripts/ci.sh
+        run: |
+          ./test.sh
+          cd backend
+          uv run python scripts/migrate.py upgrade head
 
       - name: Build and verify isolated production containers
-        if: steps.changes.outputs.docs_only != 'true'
         run: ./deploy/container-qa.sh
 
   dependency-audit:
     name: Live production dependency audit
-    needs: quality-gate
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          # The audit compares the base revision's locks with this revision's.
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Skip audit for a documentation-only change
-        if: needs.quality-gate.outputs.docs_only == 'true'
-        run: printf 'Documentation-only change; the live dependency audit is not applicable.\n'
-
       - name: Set up Node.js
-        if: needs.quality-gate.outputs.docs_only != 'true'
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .nvmrc
@@ -135,19 +109,17 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install pinned npm
-        if: needs.quality-gate.outputs.docs_only != 'true'
         run: npm install --global npm@12.0.2 --ignore-scripts
 
       - name: Set up uv
-        if: needs.quality-gate.outputs.docs_only != 'true'
         uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
           version: "0.12.3"
 
       - name: Install pinned Python
-        if: needs.quality-gate.outputs.docs_only != 'true'
-        run: uv python install "$PYTHON_VERSION"
+        run: uv python install "$(cat .python-version)"
 
       - name: Run live dependency audit
-        if: needs.quality-gate.outputs.docs_only != 'true'
+        env:
+          CHANGE_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before || github.sha }}
         run: ./scripts/dependency-audit.sh "$CHANGE_BASE_SHA"
