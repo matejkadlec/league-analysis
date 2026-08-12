@@ -126,20 +126,25 @@ details. Keep it synchronized with job changes.
 - Reset persisted pause flags because pause is runtime-only.
 - Mark `RUNNING`/`PAUSED` executions left by an ungraceful shutdown as
   `CANCELLED`.
-- Cancel every active `jobs.player_sync_runs` and `core.matchmaking_analyses`
-  row too. Both are driven by an in-process worker, so no row left active by a
-  previous process can still be owned, and both allow only one active row per
-  PUUID while their routes hand back an existing active row instead of
-  scheduling work — an orphan would block that player permanently. Startup is
+- Cancel every active `jobs.player_sync_runs` row too. Its worker is
+  in-process, so no row left active by a previous process can still be owned;
+  the table allows one active row per PUUID and the route schedules work only
+  for a newly created row, so an orphan blocks that player's updates. Startup is
   the only safe place: a live process cannot tell an abandoned row from one a
-  running worker owns. `PlayerSyncRun` must set `updated_at` explicitly, because
-  a Core update bypasses the model's application-side `onupdate`;
-  `MatchmakingAnalysis` has no such column and instead clears
-  `rate_limit_reset_at`, matching its explicit cancellation path.
+  running worker owns. Set `updated_at` explicitly, because a Core update
+  bypasses the model's application-side `onupdate`. Keep the status predicate
+  equal to `uq_player_sync_runs_active_puuid`'s set — a missing status strands
+  rows, an extra one rewrites terminal runs.
+- Never cancel `core.matchmaking_analyses` at startup. It has the opposite
+  contract: `start_analysis` attaches to an active row and relaunches its
+  worker, preserving completed progress across a restart, so cancelling would
+  discard that progress. See
+  [`../../../../docs/matchmaking-analysis.md`](../../../../docs/matchmaking-analysis.md).
 - Each recovery step runs on its own session through `_run_startup_recovery()`,
-  so a failure reclassifying job executions cannot skip the application-run
-  recovery after it. A failure in either is logged and swallowed; startup must
-  not be blocked and the next restart retries.
+  which shields the whole block around each one. Neither a step's own failure
+  nor a failure while its session rolls back or closes may skip the next step. A
+  failure is logged and swallowed; startup must not be blocked and the next
+  restart retries.
 - Stop APScheduler with `wait=False` during process shutdown. Deployment must
   never drain or wait for long-running Riot executions; startup recovery owns
   the interrupted persisted state.

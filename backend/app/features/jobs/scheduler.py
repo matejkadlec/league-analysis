@@ -129,92 +129,85 @@ def _parse_interval_from_schedule(schedule: str) -> Optional[int]:
 async def _run_startup_recovery() -> None:
     """Reclassify persisted state left behind by a previous process.
 
-    Each step gets its own session, so a failure recovering job executions
-    cannot skip the application-run recovery that follows it.
+    Each step owns a separate session, and the whole block around each one is
+    shielded. Neither a step's own failure nor a failure while its session rolls
+    back or closes may skip the step that follows.
     """
-    async with db_manager.get_session() as db:
-        await _mark_stale_jobs_as_failed(db)
-    async with db_manager.get_session() as db:
-        await _cancel_orphaned_application_runs(db)
+    for step in (_mark_stale_jobs_as_failed, _cancel_orphaned_player_syncs):
+        try:
+            async with db_manager.get_session() as db:
+                await step(db)
+        except Exception as error:
+            logger.error(
+                "Startup recovery step failed",
+                step=step.__name__,
+                error=str(error),
+                error_type=type(error).__name__,
+            )
 
 
-async def _cancel_orphaned_application_runs(db: AsyncSession) -> None:
-    """Close application-run rows whose in-process worker did not survive.
+async def _cancel_orphaned_player_syncs(db: AsyncSession) -> None:
+    """Close player sync runs whose in-process worker did not survive.
 
-    `jobs.player_sync_runs` and `core.matchmaking_analyses` are driven by an
-    in-process worker, so no row left active by a previous process can still be
-    owned. Each table also allows only one active row per PUUID, and the routes
-    hand back an existing active row instead of scheduling new work, so a row
-    left behind by an ungraceful shutdown would block that player forever.
+    `jobs.player_sync_runs` is driven by an in-process worker, so no row left
+    active by a previous process can still be owned. The table allows one active
+    row per PUUID and `start_player_sync` hands back an existing active row
+    while the route schedules work only for a newly created one, so an orphan
+    blocks that player's updates until something closes it.
 
     Startup is the only safe place to do this. A live process cannot tell an
     abandoned row apart from one a running worker still owns, and no Riot
     identity is involved here, so nothing has to be matched by Riot ID.
 
-    Runs on its own session so a failure recovering job executions cannot skip
-    it. Its own failure is logged and swallowed, matching execution recovery:
-    startup must not be blocked, and the next restart retries.
+    `core.matchmaking_analyses` is deliberately excluded. It has the opposite
+    contract: `start_analysis` attaches to an active row and relaunches its
+    worker, preserving completed progress across a restart. Cancelling it here
+    would discard that progress. See
+    [`docs/matchmaking-analysis.md`](../../../../docs/matchmaking-analysis.md).
+
+    A failure is logged and swallowed, matching execution recovery: startup must
+    not be blocked, and the next restart retries. The cost of a failure is
+    bounded to players whose sync row stays active until then.
 
     Args:
-        db: Database session for updating the application-run records.
+        db: Database session for updating the player sync records.
     """
     from datetime import timezone
 
     from sqlalchemy import update
-
-    from app.features.matchmaking_analysis.models import MatchmakingAnalysis
-    from app.features.matchmaking_analysis.service import ACTIVE_ANALYSIS_STATUSES
 
     from .models import PlayerSyncRun
     from .player_sync import ACTIVE_SYNC_STATUSES
 
     try:
         now = datetime.now(timezone.utc)
-
-        sync_result = await db.execute(
+        result = await db.execute(
             update(PlayerSyncRun)
             .where(PlayerSyncRun.status.in_(ACTIVE_SYNC_STATUSES))
             .values(
                 status="cancelled",
                 completed_at=now,
                 # A Core update bypasses the model's application-side onupdate.
-                # Only this table has the column; MatchmakingAnalysis has none.
                 updated_at=now,
                 error_code="SYNC_CANCELLED",
                 error_message="The player update was cancelled before it finished.",
             )
         )
-        analysis_result = await db.execute(
-            update(MatchmakingAnalysis)
-            .where(MatchmakingAnalysis.status.in_(ACTIVE_ANALYSIS_STATUSES))
-            .values(
-                # Matches the explicit cancellation path, which records no error.
-                status="cancelled",
-                completed_at=now,
-                error_code=None,
-                error_message=None,
-                # Every other terminal transition clears this, so a closed row
-                # must not keep a wait deadline it can never reach.
-                rate_limit_reset_at=None,
-            )
-        )
         await db.commit()
     except Exception as error:
         logger.error(
-            "Failed to cancel application runs orphaned by a restart",
+            "Failed to cancel player sync runs orphaned by a restart",
             error=str(error),
             error_type=type(error).__name__,
         )
         await db.rollback()
         return
 
-    cancelled_syncs = sync_result.rowcount or 0  # type: ignore[union-attr]
-    cancelled_analyses = analysis_result.rowcount or 0  # type: ignore[union-attr]
-    if cancelled_syncs or cancelled_analyses:
+    cancelled = result.rowcount or 0  # type: ignore[union-attr]
+    if cancelled:
         logger.info(
-            "Cancelled application runs orphaned by a restart",
-            player_sync_runs=cancelled_syncs,
-            matchmaking_analyses=cancelled_analyses,
+            "Cancelled player sync runs orphaned by a restart",
+            player_sync_runs=cancelled,
         )
 
 

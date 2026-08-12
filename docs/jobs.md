@@ -192,8 +192,9 @@ persisted, so a client never reads a status the database rejected.
 Startup cancels every `pending`/`running` run left behind by a previous
 process. The worker is in-process, so no such row can still be owned, and the
 route hands back an existing active row instead of scheduling new work — an
-orphaned row would otherwise block that player's updates permanently. Active
-Matchmaking Analysis rows are cancelled at startup for the same reason.
+orphaned row would otherwise block that player's updates. Matchmaking Analysis
+is not cancelled at startup: its next explicit start resumes the persisted run
+instead.
 
 The frontend polls this lifecycle, then invalidates and refetches active query
 keys containing that exact PUUID. The approved completion info toast is shown

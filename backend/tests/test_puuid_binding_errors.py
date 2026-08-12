@@ -3,7 +3,7 @@
 from datetime import datetime, timezone
 from types import SimpleNamespace
 from typing import Any, cast
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -464,79 +464,115 @@ def _compiled(statement) -> tuple[str, dict[str, Any]]:
     return statement.table.fullname, dict(compiled.params)
 
 
-@pytest.mark.asyncio
-async def test_startup_cancels_orphaned_application_runs() -> None:
-    """A restart must terminalize runs whose in-process worker is gone.
+def _indexed_active_statuses(model, index_name: str) -> set[str]:
+    """Read the statuses a table's partial unique index actually covers."""
+    for index in model.__table__.indexes:
+        if index.name != index_name:
+            continue
+        predicate = str(index.dialect_options["postgresql"]["where"])
+        listed = predicate.split("(")[1].split(")")[0]
+        return {entry.strip().strip("'") for entry in listed.split(",")}
+    raise AssertionError(f"{index_name} is missing")
 
-    Both tables allow one active row per PUUID and their routes hand back an
-    existing active row instead of scheduling work, so an orphan left by an
-    ungraceful shutdown would block that player permanently.
+
+@pytest.mark.asyncio
+async def test_startup_cancels_orphaned_player_syncs() -> None:
+    """A restart must terminalize sync runs whose in-process worker is gone.
+
+    `jobs.player_sync_runs` allows one active row per PUUID, and the route
+    schedules work only for a newly created row, so an orphan left by an
+    ungraceful shutdown blocks that player's updates until something closes it.
     """
-    from app.features.jobs.scheduler import _cancel_orphaned_application_runs
+    from app.features.jobs.scheduler import _cancel_orphaned_player_syncs
 
     session = _CapturingSession()
 
-    await _cancel_orphaned_application_runs(cast(AsyncSession, session))
+    await _cancel_orphaned_player_syncs(cast(AsyncSession, session))
 
     assert session.committed is True
     written = dict(_compiled(statement) for statement in session.executed)
-    assert set(written) == {"jobs.player_sync_runs", "core.matchmaking_analyses"}
+    assert set(written) == {"jobs.player_sync_runs"}, (
+        "core.matchmaking_analyses resumes across a restart and must be left alone"
+    )
 
     sync = written["jobs.player_sync_runs"]
     assert sync["status"] == "cancelled"
     assert sync["completed_at"] is not None
     assert sync["error_code"] == "SYNC_CANCELLED"
+    assert sync["error_message"] == (
+        "The player update was cancelled before it finished."
+    )
     # A Core update bypasses the model's application-side onupdate.
     assert sync["updated_at"] is not None
 
-    analysis = written["core.matchmaking_analyses"]
-    assert analysis["status"] == "cancelled"
-    assert analysis["completed_at"] is not None
-    # Every other terminal transition clears the wait deadline.
-    assert analysis["rate_limit_reset_at"] is None
-    assert "updated_at" not in analysis, "MatchmakingAnalysis has no updated_at column"
-
 
 @pytest.mark.asyncio
-async def test_startup_recovery_covers_every_indexed_active_status() -> None:
-    """Leaving a status out would strand exactly the rows this must release."""
-    from app.features.jobs.scheduler import _cancel_orphaned_application_runs
+async def test_startup_recovery_matches_the_partial_index_exactly() -> None:
+    """The predicate must equal the indexed active set, not merely overlap it.
+
+    A missing status strands the rows this exists to release; an extra one would
+    rewrite already-terminal runs as cancelled.
+    """
+    from app.features.jobs.models import PlayerSyncRun
+    from app.features.jobs.scheduler import _cancel_orphaned_player_syncs
 
     session = _CapturingSession()
 
-    await _cancel_orphaned_application_runs(cast(AsyncSession, session))
+    await _cancel_orphaned_player_syncs(cast(AsyncSession, session))
 
-    predicates = {
-        statement.table.fullname: str(
-            statement.whereclause.compile(compile_kwargs={"literal_binds": True})
-        )
-        for statement in session.executed
-    }
-    for status in ("pending", "running"):
-        assert status in predicates["jobs.player_sync_runs"]
-    for status in ("pending", "in_progress", "waiting_rate_limit"):
-        assert status in predicates["core.matchmaking_analyses"]
+    (statement,) = session.executed
+    predicate = str(
+        statement.whereclause.compile(compile_kwargs={"literal_binds": True})
+    )
+    listed = predicate.split("(")[1].split(")")[0]
+    targeted = {entry.strip().strip("'") for entry in listed.split(",")}
+
+    assert targeted == _indexed_active_statuses(
+        PlayerSyncRun, "uq_player_sync_runs_active_puuid"
+    )
 
 
 @pytest.mark.asyncio
-async def test_scheduler_startup_runs_application_run_recovery(monkeypatch) -> None:
-    """The helper is only useful if startup actually calls it.
+async def test_matchmaking_analysis_survives_a_restart() -> None:
+    """Cancelling an active analysis would discard its persisted progress.
 
-    Asserted separately from its behavior, because a test that calls the helper
-    directly would still pass if the production call site were deleted.
+    `start_analysis` attaches to an active row and relaunches its worker, so the
+    documented restart contract is resume, not cancel.
     """
+    from app.features.jobs.scheduler import _cancel_orphaned_player_syncs
+
+    session = _CapturingSession()
+
+    await _cancel_orphaned_player_syncs(cast(AsyncSession, session))
+
+    touched = {statement.table.fullname for statement in session.executed}
+    assert "core.matchmaking_analyses" not in touched
+
+
+@pytest.mark.asyncio
+async def test_each_recovery_step_gets_its_own_session(monkeypatch) -> None:
+    """One step's failure — including its session teardown — must not skip the next."""
     from app.features.jobs import scheduler as scheduler_module
 
     calls: list[str] = []
+    sessions: list[object] = []
 
     class _Session:
+        def __init__(self, fail_on_exit: bool) -> None:
+            self._fail_on_exit = fail_on_exit
+
         async def __aenter__(self):
+            sessions.append(self)
             return self
 
         async def __aexit__(self, *_exc) -> None:
-            return None
+            if self._fail_on_exit:
+                raise RuntimeError("session teardown failed")
 
-    monkeypatch.setattr(scheduler_module.db_manager, "get_session", lambda: _Session())
+    opened = iter([_Session(fail_on_exit=True), _Session(fail_on_exit=False)])
+    monkeypatch.setattr(
+        scheduler_module.db_manager, "get_session", lambda: next(opened)
+    )
     monkeypatch.setattr(
         scheduler_module,
         "_mark_stale_jobs_as_failed",
@@ -544,10 +580,42 @@ async def test_scheduler_startup_runs_application_run_recovery(monkeypatch) -> N
     )
     monkeypatch.setattr(
         scheduler_module,
-        "_cancel_orphaned_application_runs",
-        AsyncMock(side_effect=lambda _db: calls.append("application_runs")),
+        "_cancel_orphaned_player_syncs",
+        AsyncMock(side_effect=lambda _db: calls.append("player_syncs")),
     )
 
     await scheduler_module._run_startup_recovery()
 
-    assert calls == ["executions", "application_runs"]
+    assert calls == ["executions", "player_syncs"]
+    assert len(sessions) == 2
+    assert sessions[0] is not sessions[1], "each step needs its own session"
+
+
+@pytest.mark.asyncio
+async def test_scheduler_startup_runs_recovery(monkeypatch) -> None:
+    """Pins the real `start_scheduler` call site, not just the helper.
+
+    A test that only calls `_run_startup_recovery()` would stay green if the
+    production call were deleted.
+    """
+    from app.features.jobs import scheduler as scheduler_module
+
+    ran: list[str] = []
+    monkeypatch.setattr(
+        scheduler_module,
+        "_run_startup_recovery",
+        AsyncMock(side_effect=lambda: ran.append("recovery")),
+    )
+    monkeypatch.setattr(
+        scheduler_module, "_check_and_run_overdue_jobs", AsyncMock(return_value=None)
+    )
+    monkeypatch.setattr(
+        scheduler_module, "_load_and_schedule_jobs", AsyncMock(return_value=None)
+    )
+    monkeypatch.setattr(scheduler_module, "AsyncIOScheduler", Mock())
+    monkeypatch.setattr(scheduler_module, "SQLAlchemyJobStore", Mock())
+    monkeypatch.setattr(scheduler_module, "_scheduler", None)
+
+    await scheduler_module.start_scheduler()
+
+    assert ran == ["recovery"]
