@@ -19,6 +19,9 @@ if [[ ! -e "$expected_head_file" && ! -L "$expected_head_file" ]]; then
   expected_head_file="$script_directory/../backend/alembic/expected-head.txt"
 fi
 retention_tool="$script_directory/prune-postgres-daily-backups"
+if [[ ! -e "$retention_tool" && ! -L "$retention_tool" ]]; then
+  retention_tool="$script_directory/prune-postgres-daily-backups.sh"
+fi
 deployed_commit_file="$deployment_root/state/deployed-commit"
 expected_alembic_head=""
 
