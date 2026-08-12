@@ -6,7 +6,6 @@ postgres_container="${LGA_POSTGRES_CONTAINER_NAME:-league-analysis-postgres}"
 backend_container="${LGA_BACKEND_CONTAINER_NAME:-league-analysis-backend}"
 frontend_container="${LGA_FRONTEND_CONTAINER_NAME:-league-analysis-frontend}"
 compose_project="${LGA_COMPOSE_PROJECT_NAME:-league-analysis}"
-expected_alembic_head="20260809_0006"
 deployment_root="${LGA_DEPLOY_ROOT:-$HOME/.local/share/league-analysis}"
 backup_root="${LGA_POSTGRES_BACKUP_ROOT:-$deployment_root/backups/postgres}"
 state_directory="$deployment_root/state/postgres-operations"
@@ -15,7 +14,13 @@ authority_marker="$state_directory/pi-authoritative.state"
 operation_lock="$deployment_root/.postgres-operations.lock"
 script_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 snapshot_sql="$script_directory/postgres-snapshot.sql"
+expected_head_file="$script_directory/expected-alembic-head.txt"
+if [[ ! -e "$expected_head_file" && ! -L "$expected_head_file" ]]; then
+  expected_head_file="$script_directory/../backend/alembic/expected-head.txt"
+fi
 retention_tool="$script_directory/prune-postgres-daily-backups"
+deployed_commit_file="$deployment_root/state/deployed-commit"
+expected_alembic_head=""
 
 incoming_archive=""
 replacement_started=0
@@ -35,7 +40,9 @@ usage() {
     '  safety-backup --label LABEL --confirm-target DATABASE' \
     '  adopt-relocated-authority --confirm-target DATABASE' \
     '  daily-backup --confirm-target DATABASE' \
+    '  pre-deploy-backup --confirm-target DATABASE --commit FULL_SHA' \
     '  restore-test --confirm-target DATABASE --archive ARCHIVE' \
+    '  restore-production --confirm-target DATABASE --archive ARCHIVE --expected-sha256 SHA256 --confirm-replace DATABASE' \
     '  mirror-dump --confirm-target DATABASE' \
     '  replace-from-stdin --confirm-target DATABASE --expected-sha256 SHA256' \
     '  activate-replacement --confirm-target DATABASE --expected-sha256 SHA256' \
@@ -56,6 +63,10 @@ require_database_name() {
 
 require_sha256() {
   [[ "$1" =~ ^[0-9a-f]{64}$ ]] || die 'a lowercase SHA-256 digest is required'
+}
+
+require_commit() {
+  [[ "$1" =~ ^[0-9a-f]{40}$ ]] || die 'a full lowercase Git commit is required'
 }
 
 require_label() {
@@ -79,6 +90,11 @@ require_host_paths() {
   done
   [[ -f "$snapshot_sql" && ! -L "$snapshot_sql" ]] \
     || die 'the installed snapshot SQL file is missing or is a symlink'
+  [[ -f "$expected_head_file" && ! -L "$expected_head_file" ]] \
+    || die 'the installed expected Alembic head is missing or is a symlink'
+  expected_alembic_head="$(<"$expected_head_file")"
+  [[ "$expected_alembic_head" =~ ^[0-9]{8}_[0-9]{4}$ ]] \
+    || die 'the installed expected Alembic head has an invalid shape'
 }
 
 container_label() {
@@ -184,13 +200,15 @@ restore_archive() {
     -- "$database" < "$archive"
 }
 
-validate_database() {
+database_alembic_head() {
+  container_psql "$1" 'SELECT version_num FROM public.alembic_version;'
+}
+
+validate_database_baseline() {
   local database="$1"
-  local alembic_head
   local unvalidated
-  alembic_head="$(container_psql "$database" 'SELECT version_num FROM public.alembic_version;')"
-  [[ "$alembic_head" == "$expected_alembic_head" ]] \
-    || die "database $database has unexpected Alembic head $alembic_head"
+  [[ "$(database_alembic_head "$database")" =~ ^[0-9]{8}_[0-9]{4}$ ]] \
+    || die "database $database has an invalid Alembic ledger"
   unvalidated="$(container_psql "$database" \
     "SELECT count(*) FROM pg_constraint WHERE connamespace IN (SELECT oid FROM pg_namespace WHERE nspname IN ('auth','core','jobs','public')) AND NOT convalidated;")"
   [[ "$unvalidated" == "0" ]] \
@@ -199,17 +217,29 @@ validate_database() {
     || die "database $database contains no application tables"
 }
 
+validate_database() {
+  local database="$1"
+  local alembic_head
+  validate_database_baseline "$database"
+  alembic_head="$(database_alembic_head "$database")"
+  [[ "$alembic_head" == "$expected_alembic_head" ]] \
+    || die "database $database has unexpected Alembic head $alembic_head"
+}
+
 create_backup() {
   local database="$1"
   local label="$2"
+  local suffix="${3:-}"
   local timestamp
   local completed
   local temporary
   require_label "$label"
+  [[ -z "$suffix" || "$suffix" =~ ^-[0-9a-f]{12}$ ]] \
+    || die 'backup suffix must be empty or one hyphen plus 12 lowercase hex characters'
   timestamp="$(TZ=Europe/Prague date '+%Y%m%dT%H%M%S%z')"
-  completed="$backup_root/league-analysis-postgres-${label}-${timestamp}.dump"
+  completed="$backup_root/league-analysis-postgres-${label}-${timestamp}${suffix}.dump"
   [[ ! -e "$completed" && ! -L "$completed" ]] || die 'backup destination already exists'
-  temporary="$(mktemp "$backup_root/.league-analysis-postgres-${label}-${timestamp}.dump.in-progress.XXXXXX")"
+  temporary="$(mktemp "$backup_root/.league-analysis-postgres-${label}-${timestamp}${suffix}.dump.in-progress.XXXXXX")"
   chmod 600 -- "$temporary"
   if ! dump_database "$database" > "$temporary"; then
     rm -f -- "$temporary"
@@ -244,23 +274,64 @@ daily_backup() {
   printf 'Archive bytes: %s\n' "$archive_size"
 }
 
-validate_daily_archive_path() {
+pre_deploy_backup() {
+  local target="$1"
+  local target_commit="$2"
+  local current_commit
+  local archive
+  local archive_sha256
+  local archive_size
+  local current_head
+  confirm_target "$target"
+  require_commit "$target_commit"
+  confirmed_authority || die 'pre-deployment backups require confirmed Pi database authority'
+  [[ ! -e "$replacement_state" && ! -L "$replacement_state" ]] \
+    || die 'database replacement still has unresolved rollback state'
+  [[ -f "$deployed_commit_file" && ! -L "$deployed_commit_file" ]] \
+    || die 'the current deployed-commit record is missing or is a symlink'
+  current_commit="$(<"$deployed_commit_file")"
+  require_commit "$current_commit"
+  [[ "$(docker inspect --format '{{.Config.Image}}' "$backend_container")" == \
+    "league-analysis-backend:$current_commit" ]] \
+    || die 'the backend image does not match the current deployed-commit record'
+  [[ "$(docker inspect --format '{{.Config.Image}}' "$frontend_container")" == \
+    "league-analysis-frontend:$current_commit" ]] \
+    || die 'the frontend image does not match the current deployed-commit record'
+  validate_database_baseline "$target"
+  current_head="$(database_alembic_head "$target")"
+  [[ -x "$retention_tool" && ! -L "$retention_tool" ]] \
+    || die 'the installed backup retention tool is missing or is a symlink'
+
+  archive="$(create_backup "$target" pre-deploy "-${target_commit:0:12}")"
+  archive_sha256="$(sha256sum "$archive" | awk '{print $1}')"
+  archive_size="$(stat -c '%s' "$archive")"
+  "$retention_tool" "$backup_root"
+  printf 'Pre-deployment PostgreSQL backup completed: %s\n' "$archive"
+  printf 'Archive SHA-256: %s\n' "$archive_sha256"
+  printf 'Archive bytes: %s\n' "$archive_size"
+  printf 'Database Alembic head: %s\n' "$current_head"
+  printf 'Current deployed commit: %s\n' "$current_commit"
+  printf 'Target deployment commit: %s\n' "$target_commit"
+}
+
+validate_managed_archive_path() {
   local requested="$1"
   local resolved
   local basename
-  [[ -n "$requested" ]] || die 'a daily backup archive path is required'
+  [[ -n "$requested" ]] || die 'a managed backup archive path is required'
   [[ -f "$requested" && ! -L "$requested" ]] \
-    || die 'the restore-test archive must be a regular non-symlink file'
+    || die 'the backup archive must be a regular non-symlink file'
   resolved="$(realpath -e -- "$requested")"
   [[ "$(dirname "$resolved")" == "$backup_root" ]] \
-    || die 'the restore-test archive must be directly inside the managed backup root'
+    || die 'the backup archive must be directly inside the managed backup root'
   basename="$(basename "$resolved")"
-  [[ "$basename" =~ ^league-analysis-postgres-daily-[0-9]{8}T[0-9]{6}[+-][0-9]{4}\.dump$ ]] \
-    || die 'restore-test accepts only an exact daily-backup filename'
+  [[ "$basename" =~ ^league-analysis-postgres-(daily|pre-restore)-[0-9]{8}T[0-9]{6}[+-][0-9]{4}\.dump$ || \
+    "$basename" =~ ^league-analysis-postgres-pre-deploy-[0-9]{8}T[0-9]{6}[+-][0-9]{4}-[0-9a-f]{12}\.dump$ ]] \
+    || die 'the backup archive name is outside the managed restore contract'
   [[ "$(stat -c '%a' "$resolved")" == "600" ]] \
-    || die 'the restore-test archive must have mode 0600'
+    || die 'the backup archive must have mode 0600'
   [[ "$(stat -c '%u' "$resolved")" == "$(id -u)" ]] \
-    || die 'the restore-test archive must be owned by the current Pi user'
+    || die 'the backup archive must be owned by the current Pi user'
   printf '%s' "$resolved"
 }
 
@@ -274,7 +345,7 @@ restore_test() {
   local admin_count
   confirm_target "$target"
   confirmed_authority || die 'restore tests require confirmed Pi database authority'
-  archive="$(validate_daily_archive_path "$requested_archive")"
+  archive="$(validate_managed_archive_path "$requested_archive")"
   list_archive "$archive" || die 'the selected daily backup is not a readable PostgreSQL archive'
 
   timestamp="$(TZ=Europe/Prague date '+%Y%m%dt%H%M%S')"
@@ -294,6 +365,74 @@ restore_test() {
   printf 'Restore test completed in an isolated temporary database and removed it.\n'
   printf 'Archive SHA-256: %s\n' "$(sha256sum "$archive" | awk '{print $1}')"
   printf 'Restored snapshot SHA-256: %s\n' "$restored_snapshot_sha256"
+}
+
+restore_production() {
+  local target="$1"
+  local requested_archive="$2"
+  local expected_sha="$3"
+  local replacement_confirmation="$4"
+  local archive
+  local actual_sha
+  local timestamp
+  local safety_backup
+  local admin_count
+  local restored_snapshot_sha256
+  [[ "$replacement_confirmation" == "$target" ]] \
+    || die 'the destructive replacement confirmation must exactly match the target database'
+  confirm_target "$target"
+  require_sha256 "$expected_sha"
+  confirmed_authority || die 'production restore requires confirmed Pi database authority'
+  [[ ! -e "$replacement_state" && ! -L "$replacement_state" ]] \
+    || die 'a previous database replacement still awaits finalize or rollback'
+  archive="$(validate_managed_archive_path "$requested_archive")"
+  actual_sha="$(sha256sum "$archive" | awk '{print $1}')"
+  [[ "$actual_sha" == "$expected_sha" ]] \
+    || die 'backup archive SHA-256 does not match the explicit confirmation'
+  list_archive "$archive" || die 'the selected production backup is not readable by PostgreSQL 18'
+
+  safety_backup="$(create_backup "$target" pre-restore)"
+  timestamp="$(TZ=Europe/Prague date '+%Y%m%dt%H%M%S')"
+  replacement_target="$target"
+  replacement_stage="${target}_restore_stage_${timestamp}"
+  replacement_rollback="${target}_restore_rollback_${timestamp}"
+  require_database_name "$replacement_stage"
+  require_database_name "$replacement_rollback"
+  database_exists "$replacement_stage" && die 'generated restore staging database already exists'
+  database_exists "$replacement_rollback" && die 'generated restore rollback database already exists'
+
+  create_database "$replacement_stage"
+  restore_archive "$replacement_stage" "$archive"
+  validate_database "$replacement_stage"
+  admin_count="$(container_psql "$replacement_stage" \
+    "SELECT count(*) FROM auth.users WHERE lower(email) IN ('mat.kadlec@email.cz','marek.hovadik@seznam.cz') AND is_active AND is_admin AND email_verified;")"
+  [[ "$admin_count" == "2" ]] \
+    || die 'the restored production backup does not contain both validated administrators'
+  restored_snapshot_sha256="$(snapshot_database "$replacement_stage" | sha256sum | awk '{print $1}')"
+  write_replacement_state restore_prepared "$target" "$replacement_stage" \
+    "$replacement_rollback" "$expected_sha" "$safety_backup"
+
+  replacement_started=1
+  stop_application
+  set_connections_allowed "$target" false
+  terminate_database_connections "$target"
+  rename_database "$target" "$replacement_rollback"
+  rename_database "$replacement_stage" "$target"
+  write_replacement_state swapped "$target" "$replacement_stage" \
+    "$replacement_rollback" "$expected_sha" "$safety_backup"
+  replacement_healthy=0
+  if ! start_application; then
+    die 'restored application containers did not become healthy'
+  fi
+  validate_database "$target"
+  write_replacement_state awaiting_validation "$target" "$replacement_stage" \
+    "$replacement_rollback" "$expected_sha" "$safety_backup"
+  replacement_healthy=1
+  printf 'Production restore is healthy and awaits external validation.\n'
+  printf 'Archive SHA-256: %s\n' "$expected_sha"
+  printf 'Restored snapshot SHA-256: %s\n' "$restored_snapshot_sha256"
+  printf 'Pre-restore safety backup: %s\n' "$safety_backup"
+  printf 'Use finalize-replacement or rollback-replacement with the archive SHA-256.\n'
 }
 
 snapshot_database() {
@@ -707,6 +846,14 @@ case "$command_name" in
     target="$(parse_target_option "$@")"
     daily_backup "$target"
     ;;
+  pre-deploy-backup)
+    [[ "${1:-}" == "--confirm-target" && -n "${2:-}" && \
+      "${3:-}" == "--commit" && -n "${4:-}" && $# -eq 4 ]] || {
+      usage >&2
+      exit 2
+    }
+    pre_deploy_backup "$2" "$4"
+    ;;
   restore-test)
     [[ "${1:-}" == "--confirm-target" && -n "${2:-}" && \
       "${3:-}" == "--archive" && -n "${4:-}" && $# -eq 4 ]] || {
@@ -714,6 +861,16 @@ case "$command_name" in
       exit 2
     }
     restore_test "$2" "$4"
+    ;;
+  restore-production)
+    [[ "${1:-}" == "--confirm-target" && -n "${2:-}" && \
+      "${3:-}" == "--archive" && -n "${4:-}" && \
+      "${5:-}" == "--expected-sha256" && -n "${6:-}" && \
+      "${7:-}" == "--confirm-replace" && -n "${8:-}" && $# -eq 8 ]] || {
+      usage >&2
+      exit 2
+    }
+    restore_production "$2" "$4" "$6" "$8"
     ;;
   mirror-dump)
     target="$(parse_target_option "$@")"

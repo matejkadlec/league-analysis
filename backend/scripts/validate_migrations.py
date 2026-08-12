@@ -8,15 +8,18 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from uuid import uuid4
 
 from dotenv import load_dotenv
+from migration_contract import EXPECTED_ALEMBIC_HEAD
 from sqlalchemy import URL, create_engine, text
 
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
 PROJECT_ROOT = BACKEND_ROOT.parent
-EXPECTED_REVISION = "20260812_0009"
+SNAPSHOT_SQL = PROJECT_ROOT / "deploy" / "postgres-snapshot.sql"
+EXPECTED_REVISION = EXPECTED_ALEMBIC_HEAD
 EXPECTED_TABLES = 24
 EXPECTED_ENUMS = 6
 EXPECTED_TRIGGERS = 1
@@ -94,6 +97,94 @@ def migration_environment(database: str) -> dict[str, str]:
     environment = os.environ.copy()
     environment["POSTGRES_DB"] = database
     return environment
+
+
+def postgres_client_environment() -> dict[str, str]:
+    """Keep the validation password in child process state and off argv."""
+    environment = os.environ.copy()
+    environment["PGPASSWORD"] = required_environment("POSTGRES_PASSWORD")
+    return environment
+
+
+def postgres_connection_arguments(database: str) -> list[str]:
+    """Return the common non-secret PostgreSQL client arguments."""
+    return [
+        "--host",
+        required_environment("POSTGRES_HOST"),
+        "--port",
+        required_environment("POSTGRES_PORT"),
+        "--username",
+        required_environment("POSTGRES_USER"),
+        "--dbname",
+        database,
+    ]
+
+
+def create_restore_archive(database: str, archive: Path) -> None:
+    """Create and inspect one private custom-format validation archive."""
+    descriptor = os.open(archive, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        with os.fdopen(descriptor, "wb") as archive_output:
+            subprocess.run(
+                [
+                    "pg_dump",
+                    *postgres_connection_arguments(database),
+                    "--format=custom",
+                    "--compress=gzip:9",
+                    "--no-password",
+                ],
+                env=postgres_client_environment(),
+                stdout=archive_output,
+                check=True,
+            )
+            archive_output.flush()
+            os.fsync(archive_output.fileno())
+    except BaseException:
+        archive.unlink(missing_ok=True)
+        raise
+    subprocess.run(
+        ["pg_restore", "--list", str(archive)],
+        stdout=subprocess.DEVNULL,
+        check=True,
+    )
+
+
+def restore_validation_archive(database: str, archive: Path) -> None:
+    """Restore a complete archive into one already-created isolated database."""
+    subprocess.run(
+        [
+            "pg_restore",
+            *postgres_connection_arguments(database),
+            "--no-owner",
+            "--no-privileges",
+            "--exit-on-error",
+            str(archive),
+        ],
+        env=postgres_client_environment(),
+        check=True,
+    )
+
+
+def deterministic_snapshot(database: str) -> str:
+    """Return the secret-free schema/count/sequence snapshot for comparison."""
+    result = subprocess.run(
+        [
+            "psql",
+            *postgres_connection_arguments(database),
+            "--no-psqlrc",
+            "--set",
+            "ON_ERROR_STOP=1",
+            "--tuples-only",
+            "--no-align",
+            "--file",
+            str(SNAPSHOT_SQL),
+        ],
+        env=postgres_client_environment(),
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return result.stdout.strip()
 
 
 def run_upgrade(database: str, revision: str = "head") -> None:
@@ -468,10 +559,12 @@ async def verify_application_database_access(database: str) -> None:
 
 
 def main() -> int:
-    """Create, validate, and remove one isolated migration database."""
+    """Validate migration plus full backup/restore in isolated databases."""
     database = temporary_database_name()
+    restored_database = temporary_database_name()
     url = administration_url()
     created = False
+    restored_created = False
     try:
         create_database(url, database)
         created = True
@@ -481,14 +574,33 @@ def main() -> int:
         run_upgrade(database)
         validate_catalog(database)
         asyncio.run(verify_application_database_access(database))
+        with tempfile.TemporaryDirectory(
+            prefix="league-analysis-restore-validation-"
+        ) as temporary_directory:
+            archive = Path(temporary_directory) / "source.dump"
+            create_restore_archive(database, archive)
+            create_database(url, restored_database)
+            restored_created = True
+            restore_validation_archive(restored_database, archive)
+            validate_catalog(restored_database)
+            if deterministic_snapshot(restored_database) != deterministic_snapshot(
+                database
+            ):
+                raise RuntimeError(
+                    "restored PostgreSQL snapshot differs from its source"
+                )
     except Exception as error:
         print(f"Migration validation failed: {type(error).__name__}", file=sys.stderr)
         return 1
     finally:
+        if restored_created:
+            drop_database(url, restored_database)
         if created:
             drop_database(url, database)
 
-    print("Alembic baseline passed clean-database and application-access validation.")
+    print(
+        "Alembic baseline and disposable PostgreSQL 18 backup/restore validation passed."
+    )
     return 0
 
 

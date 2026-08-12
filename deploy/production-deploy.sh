@@ -131,6 +131,15 @@ compose() {
   env \
     COMPOSE_DISABLE_ENV_FILE=1 \
     LGA_IMAGE_TAG="$commit" \
+    LGA_COMPOSE_PROJECT_NAME=league-analysis \
+    LGA_POSTGRES_CONTAINER_NAME=league-analysis-postgres \
+    LGA_BACKEND_CONTAINER_NAME=league-analysis-backend \
+    LGA_FRONTEND_CONTAINER_NAME=league-analysis-frontend \
+    LGA_POSTGRES_VOLUME_NAME=league-analysis-postgres-data \
+    LGA_APPLICATION_NETWORK_NAME=league-analysis-application \
+    LGA_DATABASE_NETWORK_NAME=league-analysis-database \
+    LGA_FRONTEND_PORT=8097 \
+    LGA_BACKEND_PORT=8098 \
     docker compose \
       --env-file "$environment_file" \
       --file "$release_directory/compose.production.yml" \
@@ -139,6 +148,26 @@ compose() {
 
 compose config --quiet
 compose build --pull
+
+existing_postgres_container="$(compose ps --all --quiet postgres)"
+if [[ -n "$existing_postgres_container" ]]; then
+  "$release_directory/deploy/pi-postgres-operations.sh" \
+    pre-deploy-backup \
+    --confirm-target league_analysis \
+    --commit "$commit"
+else
+  existing_postgres_volume="$(
+    docker volume ls \
+      --filter label=com.docker.compose.project=league-analysis \
+      --filter label=com.docker.compose.volume=postgres_data \
+      --format '{{.Name}}'
+  )"
+  if [[ -n "$existing_postgres_volume" ]]; then
+    printf 'A League Analysis PostgreSQL volume exists without the exact container; refusing to skip the pre-deployment backup.\n' >&2
+    exit 1
+  fi
+  printf 'No existing League Analysis PostgreSQL container; pre-deployment backup is not applicable.\n'
+fi
 
 # Never poll or drain application jobs here. Container shutdown is bounded;
 # interrupted job records are reconciled by the backend's startup recovery.
@@ -172,5 +201,7 @@ ln -s "releases/$commit" "$next_link"
 mv -Tf -- "$next_link" "$deployment_root/current"
 printf '%s\n' "$commit" > "$state_directory/deployed-commit"
 chmod 600 "$state_directory/deployed-commit"
+
+"$release_directory/deploy/install-pi-postgres-backup-timer.sh"
 
 printf 'League Analysis deployment completed at %s.\n' "$commit"

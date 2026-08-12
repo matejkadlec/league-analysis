@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Retain only the seven newest successful League Analysis daily archives.
+# Retain bounded successful League Analysis daily and pre-deployment archives.
 set -Eeuo pipefail
 
 if [[ $# -ne 1 ]]; then
@@ -21,23 +21,38 @@ die() {
 [[ -d "$backup_directory" && ! -L "$backup_directory" ]] \
   || die 'backup directory must be a regular non-symlink directory'
 
-mapfile -t daily_archives < <(
-  find "$backup_directory" -maxdepth 1 -type f \
-    -regextype posix-extended \
-    -regex '.*/league-analysis-postgres-daily-[0-9]{8}T[0-9]{6}[+-][0-9]{4}\.dump' \
-    -printf '%f\n' | LC_ALL=C sort -r
-)
+prune_family() {
+  local family="$1"
+  local find_regex="$2"
+  local validation_regex="$3"
+  local archive
+  local basename
+  local -a archives
 
-if ((${#daily_archives[@]} <= retention_count)); then
-  exit 0
-fi
+  mapfile -t archives < <(
+    find "$backup_directory" -maxdepth 1 -type f \
+      -regextype posix-extended \
+      -regex "$find_regex" \
+      -printf '%f\n' | LC_ALL=C sort -r
+  )
+  ((${#archives[@]} > retention_count)) || return 0
 
-for basename in "${daily_archives[@]:retention_count}"; do
-  [[ "$basename" =~ ^league-analysis-postgres-daily-[0-9]{8}T[0-9]{6}[+-][0-9]{4}\.dump$ ]] \
-    || die 'find returned an unexpected archive name'
-  archive="$backup_directory/$basename"
-  [[ -f "$archive" && ! -L "$archive" ]] \
-    || die "retention target changed before removal: $basename"
-  rm -- "$archive"
-  printf 'Expired daily PostgreSQL backup: %s\n' "$archive"
-done
+  for basename in "${archives[@]:retention_count}"; do
+    [[ "$basename" =~ $validation_regex ]] \
+      || die 'find returned an unexpected archive name'
+    archive="$backup_directory/$basename"
+    [[ -f "$archive" && ! -L "$archive" ]] \
+      || die "retention target changed before removal: $basename"
+    rm -- "$archive"
+    printf 'Expired %s PostgreSQL backup: %s\n' "$family" "$archive"
+  done
+}
+
+prune_family \
+  daily \
+  '.*/league-analysis-postgres-daily-[0-9]{8}T[0-9]{6}[+-][0-9]{4}\.dump' \
+  '^league-analysis-postgres-daily-[0-9]{8}T[0-9]{6}[+-][0-9]{4}\.dump$'
+prune_family \
+  pre-deployment \
+  '.*/league-analysis-postgres-pre-deploy-[0-9]{8}T[0-9]{6}[+-][0-9]{4}-[0-9a-f]{12}\.dump' \
+  '^league-analysis-postgres-pre-deploy-[0-9]{8}T[0-9]{6}[+-][0-9]{4}-[0-9a-f]{12}\.dump$'

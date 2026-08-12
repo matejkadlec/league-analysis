@@ -45,6 +45,8 @@ fi
 qa_directory="$(mktemp -d "${TMPDIR:-/tmp}/league-analysis-container-qa.XXXXXX")"
 qa_identity="lga-qa-$(id -u)-$$"
 environment_file="$qa_directory/container-qa.env"
+restore_archive="$qa_directory/postgres-restore-qa.dump"
+restore_database="league_analysis_container_qa_restore"
 umask 077
 cat > "$environment_file" <<EOF
 POSTGRES_DB=league_analysis_container_qa
@@ -123,5 +125,36 @@ compose exec -T backend python -c \
 compose exec -T frontend node -e \
   "fetch('http://127.0.0.1:3000/').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))" \
   >/dev/null
+
+docker exec --user postgres "$postgres_container" sh -ceu \
+  'exec pg_dump --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" --format=custom --compress=gzip:9 --no-password' \
+  > "$restore_archive"
+chmod 600 "$restore_archive"
+docker exec --interactive --user postgres "$postgres_container" \
+  pg_restore --list < "$restore_archive" >/dev/null
+docker exec --user postgres "$postgres_container" sh -ceu \
+  'exec createdb --username "$POSTGRES_USER" --owner "$POSTGRES_USER" --template template0 "$1"' \
+  -- "$restore_database"
+docker exec --interactive --user postgres "$postgres_container" sh -ceu \
+  'exec pg_restore --username "$POSTGRES_USER" --dbname "$1" --no-owner --no-privileges --exit-on-error' \
+  -- "$restore_database" < "$restore_archive"
+source_snapshot="$(
+  docker exec --interactive --user postgres "$postgres_container" sh -ceu \
+    'exec psql --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" --no-psqlrc --set ON_ERROR_STOP=1 --tuples-only --no-align' \
+    < "$repository_root/deploy/postgres-snapshot.sql"
+)"
+restored_snapshot="$(
+  docker exec --interactive --user postgres "$postgres_container" sh -ceu \
+    'exec psql --username "$POSTGRES_USER" --dbname "$1" --no-psqlrc --set ON_ERROR_STOP=1 --tuples-only --no-align' \
+    -- "$restore_database" < "$repository_root/deploy/postgres-snapshot.sql"
+)"
+if [[ "$restored_snapshot" != "$source_snapshot" ]]; then
+  printf 'The disposable PostgreSQL restore snapshot does not match its source.\n' >&2
+  exit 1
+fi
+docker exec --user postgres "$postgres_container" sh -ceu \
+  'exec dropdb --username "$POSTGRES_USER" --force "$1"' \
+  -- "$restore_database"
+printf 'Disposable PostgreSQL 18 backup and restore rehearsal passed.\n'
 
 printf 'Disposable container QA passed; the isolated stack will now be removed.\n'
