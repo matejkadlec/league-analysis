@@ -95,10 +95,11 @@ const players = {
   },
 };
 
-test("quick-switches the URL-scoped current player without starting sync", async ({
+test("keeps player routes, sidebar switching, and dialog scroll lock deterministic", async ({
   page,
 }) => {
-  await page.setViewportSize({ width: 1440, height: 900 });
+  test.setTimeout(60_000);
+  await page.setViewportSize({ width: 1440, height: 650 });
   let currentPuuid = CURRENT_PUUID;
   let syncStarts = 0;
 
@@ -254,6 +255,14 @@ test("quick-switches the URL-scoped current player without starting sync", async
       return;
     }
 
+    if (path.endsWith("/tracking-status")) {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({ is_tracked: !path.includes(RECENT_PUUID) }),
+      });
+      return;
+    }
+
     const player = Object.values(players).find((candidate) =>
       path.endsWith(`/players/${candidate.puuid}`),
     );
@@ -280,22 +289,40 @@ test("quick-switches the URL-scoped current player without starting sync", async
     await route.fulfill({ status: 404, body: "Not found" });
   });
 
-  await page.goto("/my-profile");
+  await page.goto("/player-overview");
   await page.getByRole("button", { name: "Accept necessary" }).click();
 
   await expect(page).toHaveURL(new RegExp(`puuid=${CURRENT_PUUID}`));
-  await expect(page.getByText("Current#ONE").first()).toBeVisible();
-  await page.getByRole("button", { name: "Recent#TWO" }).click();
-
-  await expect(page).toHaveURL(new RegExp(`puuid=${RECENT_PUUID}`));
-  await expect(page.getByText("Recent#TWO").first()).toBeVisible();
-  expect(syncStarts).toBe(0);
+  const currentPlayerButton = page.getByTestId("current-player-button");
+  await expect(currentPlayerButton).toBeVisible();
+  await expect(page.getByText("Recent#TWO")).toHaveCount(0);
   await expect(page.locator("#player-summary")).toBeVisible();
   await expect(page.locator("#recent-performance")).toBeVisible();
   await expect(page.locator("#top-champions")).toBeVisible();
   await expect(page.locator("#role-performance")).toBeVisible();
-  await expect(page.locator("#match-history")).toBeVisible();
-  await expect(page.getByText(/^Updated /)).toHaveCount(5);
+  await expect(page.locator("#match-history")).toHaveCount(0);
+  await expect(page.getByText(/^Updated /)).toHaveCount(4);
+  await expect(
+    page.getByText(
+      "Review player's rank, recent performance, champion statistics, and role performance in one dashboard.",
+    ),
+  ).toBeVisible();
+
+  const trackingTag = page.locator(".tracking-status-toggle");
+  await expect(trackingTag).toBeVisible();
+  await expect(trackingTag).toHaveText(/Tracked/);
+  const trackingTagBeforeHover = await trackingTag.boundingBox();
+  expect(trackingTagBeforeHover?.width).toBe(72);
+  expect(trackingTagBeforeHover?.height).toBe(24);
+  expect(
+    await trackingTag.evaluate(
+      (element) => element.scrollWidth <= element.clientWidth,
+    ),
+  ).toBe(true);
+  await trackingTag.hover();
+  await expect(trackingTag).toHaveText(/Untrack/);
+  const trackingTagDuringHover = await trackingTag.boundingBox();
+  expect(trackingTagDuringHover).toEqual(trackingTagBeforeHover);
 
   const quickNavigation = page.getByRole("button", {
     name: "Open page navigation",
@@ -307,34 +334,30 @@ test("quick-switches the URL-scoped current player without starting sync", async
   await expect(
     page.getByRole("button", { name: "Player Summary" }),
   ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Match History" }),
+  ).toHaveCount(0);
 
-  const manageButton = page.getByRole("button", {
-    name: "Manage Tracked Players",
-  });
-  const matchmakingLink = page.getByRole("link", {
-    name: "Matchmaking Analysis",
-  });
-  const userName = page.getByText("QA User", { exact: true });
-  const [sidebarBox, manageBox, matchmakingBox, userBox] = await Promise.all([
-    page.locator("aside").boundingBox(),
-    manageButton.boundingBox(),
-    matchmakingLink.boundingBox(),
-    userName.boundingBox(),
-  ]);
-  expect(manageBox?.y).toBeGreaterThan(matchmakingBox?.y ?? 0);
-  expect(manageBox?.y).toBeLessThan(userBox?.y ?? Number.POSITIVE_INFINITY);
-  const leftInset = (manageBox?.x ?? 0) - (sidebarBox?.x ?? 0);
-  const rightInset =
-    (sidebarBox?.x ?? 0) +
-    (sidebarBox?.width ?? 0) -
-    ((manageBox?.x ?? 0) + (manageBox?.width ?? 0));
-  expect(Math.abs(leftInset - rightInset)).toBeLessThanOrEqual(1);
+  await expect(page.getByTestId("view-tracked-players-button")).toBeHidden();
 
-  await manageButton.click();
+  expect(
+    await page.evaluate(() => document.documentElement.scrollHeight > innerHeight),
+  ).toBe(true);
+  const activeRowBeforeDialog = await currentPlayerButton.boundingBox();
+  const pageUrlBeforeDialog = page.url();
+  await currentPlayerButton.click();
+  expect(page.url()).toBe(pageUrlBeforeDialog);
   const dialog = page.getByRole("dialog");
   await expect(
-    dialog.getByRole("heading", { name: "Manage Tracked Players" }),
+    dialog.getByRole("heading", { name: "Tracked Players" }),
   ).toBeVisible();
+  await expect(
+    dialog.getByText("View, add or remove tracked players."),
+  ).toBeVisible();
+  const activeRowDuringDialog = await currentPlayerButton.boundingBox();
+  expect(
+    Math.abs((activeRowDuringDialog?.x ?? 0) - (activeRowBeforeDialog?.x ?? 0)),
+  ).toBeLessThanOrEqual(0.5);
   const dialogBox = await dialog.boundingBox();
   const viewport = page.viewportSize();
   const topSpace = dialogBox?.y ?? 0;
@@ -342,9 +365,7 @@ test("quick-switches the URL-scoped current player without starting sync", async
     (viewport?.height ?? 0) -
     ((dialogBox?.y ?? 0) + (dialogBox?.height ?? 0));
   expect(Math.abs(bottomSpace - topSpace * 2)).toBeLessThanOrEqual(2);
-  await expect(dialog.getByText("Tracked Players", { exact: true })).toHaveCount(
-    0,
-  );
+  await expect(dialog.getByText("Manage Tracked Players")).toHaveCount(0);
   await expect(dialog.getByLabel("Search tracked players")).toHaveCount(0);
   await expect(
     dialog.getByRole("button", { name: /expand|collapse/i }),
@@ -361,4 +382,163 @@ test("quick-switches the URL-scoped current player without starting sync", async
       (element) => element.scrollHeight > element.clientHeight,
     ),
   ).toBe(true);
+
+  const recentPlayerRow = dialog.getByTestId(
+    `tracked-player-row-${RECENT_PUUID}`,
+  );
+  await recentPlayerRow.getByRole("button", { name: "View" }).click();
+  await expect(page).toHaveURL(
+    new RegExp(`/player-overview\\?puuid=${RECENT_PUUID}`),
+  );
+  await expect(page.getByRole("button", { name: "Recent#TWO" })).toBeVisible();
+  expect(syncStarts).toBe(0);
+
+  const untrackedTag = page.locator(".tracking-status-toggle");
+  await expect(untrackedTag).toHaveText(/Untracked/);
+  const untrackedTagBeforeHover = await untrackedTag.boundingBox();
+  expect(untrackedTagBeforeHover?.width).toBe(72);
+  expect(untrackedTagBeforeHover?.height).toBe(24);
+  const untrackedTagMetrics = await untrackedTag.evaluate((element) => ({
+    clientWidth: element.clientWidth,
+    scrollWidth: element.scrollWidth,
+  }));
+  expect(untrackedTagMetrics.scrollWidth).toBeLessThanOrEqual(
+    untrackedTagMetrics.clientWidth,
+  );
+  await untrackedTag.hover();
+  await expect(untrackedTag).toHaveText(/Track/);
+  expect(await untrackedTag.boundingBox()).toEqual(untrackedTagBeforeHover);
+
+  const matchHistoryNav = page.getByRole("link", { name: "Match History" });
+  await expect(matchHistoryNav).toHaveAttribute(
+    "href",
+    `/match-history?puuid=${RECENT_PUUID}`,
+  );
+  await matchHistoryNav.click();
+  await expect(page).toHaveURL(
+    new RegExp(`/match-history\\?puuid=${RECENT_PUUID}`),
+  );
+  await expect(page.locator("#match-history")).toBeVisible();
+  await expect(page.locator("#player-summary")).toHaveCount(0);
+  await expect(
+    page.getByText(
+      "Explore player's matches, queue results, team objectives, builds, runes, and performance details.",
+    ),
+  ).toBeVisible();
+
+  const activePlayerFromMatchHistory = page.getByTestId(
+    "current-player-button",
+  );
+  const matchHistoryUrl = page.url();
+  await activePlayerFromMatchHistory.click();
+  expect(page.url()).toBe(matchHistoryUrl);
+  await expect(
+    page.getByRole("dialog").getByRole("heading", { name: "Tracked Players" }),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
+
+  await page.setViewportSize({ width: 1440, height: 2000 });
+  expect(
+    await page.evaluate(() => document.documentElement.scrollHeight > innerHeight),
+  ).toBe(true);
+  const matchCardBeforeFilter = await page.locator("#match-history").boundingBox();
+  await page.getByRole("button", { name: "ARAM: Mayhem" }).click();
+  await expect(
+    page.getByRole("button", { name: "ARAM: Mayhem" }),
+  ).toHaveAttribute("aria-pressed", "true");
+  const matchCardAfterFilter = await page.locator("#match-history").boundingBox();
+  expect(
+    Math.abs((matchCardAfterFilter?.x ?? 0) - (matchCardBeforeFilter?.x ?? 0)),
+  ).toBeLessThanOrEqual(0.5);
+
+  const playerOverviewLink = page.getByRole("link", {
+    name: "Player Overview",
+  });
+  await expect(playerOverviewLink).toHaveAttribute(
+    "href",
+    `/player-overview?puuid=${RECENT_PUUID}`,
+  );
+  await playerOverviewLink.click();
+  await expect(page).toHaveURL(
+    new RegExp(`/player-overview\\?puuid=${RECENT_PUUID}`),
+  );
+  expect(
+    await page.evaluate(() => document.documentElement.scrollHeight <= innerHeight),
+  ).toBe(true);
+  const noScrollRow = page.getByTestId("current-player-button");
+  const noScrollBefore = await noScrollRow.boundingBox();
+  await noScrollRow.click();
+  const noScrollDuring = await noScrollRow.boundingBox();
+  expect(
+    Math.abs((noScrollDuring?.x ?? 0) - (noScrollBefore?.x ?? 0)),
+  ).toBeLessThanOrEqual(0.5);
+  await page.keyboard.press("Escape");
+
+  const playerOverviewNav = page.getByRole("link", {
+    name: "Player Overview",
+  });
+  await expect
+    .poll(() =>
+      playerOverviewNav.evaluate(
+        (element) => getComputedStyle(element).borderLeftColor,
+      ),
+    )
+    .toBe("rgb(207, 169, 58)");
+  const overviewTextX = (await playerOverviewNav.locator("span").boundingBox())?.x;
+  const overviewNavStyle = await playerOverviewNav.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return {
+      borderLeftColor: style.borderLeftColor,
+      borderLeftWidth: style.borderLeftWidth,
+      transitionProperty: style.transitionProperty,
+    };
+  });
+  await page.getByRole("link", { name: "Home", exact: true }).click();
+  await expect(page).toHaveURL("/");
+  const homeNav = page.getByRole("link", { name: "Home", exact: true });
+  await expect(homeNav).toHaveAttribute("data-active", "true");
+  await expect(
+    page.getByText(
+      "Welcome to League Analysis - your all in one tool for comprehensive analysis of League of Legends players, matches and matchmaking fairness as well as a great multiple player tracking tool.",
+    ),
+  ).toBeVisible();
+  await expect
+    .poll(() =>
+      homeNav.evaluate((element) => getComputedStyle(element).borderLeftColor),
+    )
+    .toBe("rgb(207, 169, 58)");
+  const homeTextX = (await homeNav.locator("span").boundingBox())?.x;
+  const homeNavStyle = await homeNav.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return {
+      borderLeftColor: style.borderLeftColor,
+      borderLeftWidth: style.borderLeftWidth,
+      transitionProperty: style.transitionProperty,
+    };
+  });
+  expect(homeNavStyle.borderLeftWidth).toBe("4px");
+  expect(homeNavStyle.borderLeftColor).toBe(overviewNavStyle.borderLeftColor);
+  expect(homeNavStyle.transitionProperty).toBe(
+    overviewNavStyle.transitionProperty,
+  );
+  expect(homeNavStyle.transitionProperty).not.toBe("all");
+  expect(Math.abs((homeTextX ?? 0) - (overviewTextX ?? 0))).toBeLessThanOrEqual(
+    0.5,
+  );
+
+  await page.getByRole("link", { name: "Matchmaking Analysis" }).click();
+  await expect(
+    page.getByText(
+      "Analyze matchmaking fairness by comparing average winrates of teammates vs enemies in recent ranked matches.",
+    ),
+  ).toBeVisible();
+
+  await page.goto(`/my-profile?puuid=${CURRENT_PUUID}`);
+  await expect(page).toHaveURL(
+    new RegExp(`/player-overview\\?puuid=${CURRENT_PUUID}`),
+  );
+  await page.goto(`/playstyle-analysis?puuid=${RECENT_PUUID}`);
+  await expect(page).toHaveURL(
+    new RegExp(`/player-overview\\?puuid=${RECENT_PUUID}`),
+  );
 });

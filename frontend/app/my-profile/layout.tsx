@@ -1,9 +1,9 @@
 import { ReactNode } from "react";
 
 export const metadata = {
-  title: "My Profile",
+  title: "Player Overview",
   description:
-    "View your League of Legends profile, match history, and personal statistics.",
+    "Compatibility route for the selected player's League of Legends overview.",
 };
 
 export default function MyProfileLayout({ children }: { children: ReactNode }) {

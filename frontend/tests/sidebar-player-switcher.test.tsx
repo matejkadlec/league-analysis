@@ -12,6 +12,11 @@ const { apiPost, selectPlayer, toast, validatedGet } = vi.hoisted(() => ({
   validatedGet: vi.fn(),
 }));
 
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/match-history",
+  useSearchParams: () => new URLSearchParams("puuid=current-puuid"),
+}));
+
 const currentPlayer = {
   puuid: "current-puuid",
   game_name: "Current",
@@ -51,15 +56,18 @@ vi.mock("@/lib/core/hooks", () => ({
 
 import { SidebarPlayerSwitcher } from "@/features/players/components/sidebar-player-switcher";
 
-function renderSwitcher() {
+function renderSwitcher(
+  manageOpen = false,
+  onManageOpenChange = vi.fn(),
+) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
   render(
     <QueryClientProvider client={queryClient}>
       <SidebarPlayerSwitcher
-        manageOpen={false}
-        onManageOpenChange={vi.fn()}
+        manageOpen={manageOpen}
+        onManageOpenChange={onManageOpenChange}
       />
     </QueryClientProvider>,
   );
@@ -77,13 +85,35 @@ describe("SidebarPlayerSwitcher", () => {
 
   afterEach(() => cleanup());
 
-  it("deduplicates current player and limits the normal recent list to three", () => {
-    renderSwitcher();
+  it("shows only the current player and opens its dialog without a link", async () => {
+    const user = userEvent.setup();
+    const onManageOpenChange = vi.fn();
+    renderSwitcher(false, onManageOpenChange);
 
-    expect(screen.getByText("Current#ONE")).not.toBeNull();
-    expect(screen.getByText("Recent One#ONE")).not.toBeNull();
-    expect(screen.getByText("Recent Three#ONE")).not.toBeNull();
+    const currentPlayerButton = screen.getByRole("button", {
+      name: "Current#ONE",
+    });
+    expect(currentPlayerButton.getAttribute("aria-haspopup")).toBe("dialog");
+    expect(currentPlayerButton.parentElement?.parentElement?.className).toContain(
+      "pb-3",
+    );
+    expect(screen.queryByRole("link", { name: "Current#ONE" })).toBeNull();
+    expect(screen.queryByText("Recent One#ONE")).toBeNull();
+    expect(screen.queryByText("Recent Three#ONE")).toBeNull();
     expect(screen.queryByText("Hidden Four#ONE")).toBeNull();
+
+    await user.click(currentPlayerButton);
+    expect(onManageOpenChange).toHaveBeenCalledWith(true);
+  });
+
+  it("uses the Tracked Players dialog title", () => {
+    renderSwitcher(true);
+
+    expect(
+      screen.getByRole("heading", { name: "Tracked Players" }),
+    ).not.toBeNull();
+    expect(screen.getByText("View, add or remove tracked players.")).not.toBeNull();
+    expect(screen.queryByText("Manage Tracked Players")).toBeNull();
   });
 
   it("asks for a server only after an unknown one-field Riot ID is submitted", async () => {

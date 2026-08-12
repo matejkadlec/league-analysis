@@ -83,7 +83,10 @@ function TrackedPlayerRow({
   const leagueColors = league ? getRankColors(league.tier) : null;
 
   return (
-    <div className="player-management-border flex min-h-[88px] items-center justify-between rounded-lg bg-card p-4 transition-colors hover:bg-accent/50">
+    <div
+      data-testid={`tracked-player-row-${player.puuid}`}
+      className="player-management-border flex min-h-[88px] items-center justify-between rounded-lg bg-card p-4 transition-colors hover:bg-accent/50"
+    >
       <div className="flex-1">
         <div className="flex items-center gap-2">
           <h3 className="font-semibold">{player.game_name}</h3>

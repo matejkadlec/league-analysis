@@ -17,7 +17,7 @@ already contain product thresholds or filtering expectations:
 - **Recent Performance**: how much a recent value must differ from the overall
   baseline before the UI labels it improving or declining.
 
-The recommendation deliberately keeps the profile's ranked-solo/duo context
+The recommendation deliberately keeps Player Overview's ranked-solo/duo context
 and five-card layout stable. It does not add a dashboard builder, persist a
 player's data twice, change a Riot ingestion job, or turn a visual color cue
 into an analytical verdict.
@@ -36,14 +36,13 @@ secret.
 | **Recent Performance** | The card requests the latest 10 ranked-solo/duo matches and an overall ranked-solo/duo request without a limit; the service currently caps that overall fetch at 10,000 matches. A win-rate change must exceed 5 percentage points; every other metric must differ by more than 5% of its overall value. | **Configurable** | The threshold is hard-coded and the landing page identifies performance trends as the primary configurable-card use case. |
 | **Role Performance** | `GET /matches/player/{puuid}/lane-stats?queue=420` groups recognized positions and orders them by games played. Win-rate and KDA color bands are display-only. | Not configurable in v1 | A role selector on this card would hide the comparison it is meant to show. The Top Champions role filter gives a useful, non-duplicated role choice. |
 | **Player summary** | A `PlayerCard` combines identity, rank, refresh/tracking controls, and unfiltered summary statistics. | Not configurable in v1 | It is a profile summary and action surface, not a filtered analytical result. |
-| **Playstyle Analysis summary cards** | The page renders the result of its existing analysis model, including summary metrics, main role/champion, and tags. | Deferred to LGA-33 | Its model, calculations, terminology, and first-release scope require the separate Player Analysis decision. |
+| **Playstyle card** | The underlying analysis model is retained for a future reusable Player Overview card, but the old dedicated page is retired. | Deferred to LGA-33 | Its formulas, terminology, and first-release scope require the separate evidence-based Playstyle decision. |
 | **Matchmaking Analysis result** | The result explains one explicitly requested matchmaking analysis and its inputs. | Not configurable in v1 | Its inputs belong to the analysis invocation and require a separate methodology decision. |
 | **Match History** | This is a chronological exploration component rather than a configured result card. | Deferred to LGA-29 | Expanding/filtering match history has its own data-contract and UX decision. |
 
-The shared profile page (`/my-profile`, driven by the current-player context
-and `?puuid=`) intentionally uses the same three profile-stat cards for the
-owner's profile and a tracked player. The configurable cards therefore need
-one viewer-scoped contract, not route-specific or player-specific copies.
+Player Overview intentionally uses the same three profile-stat cards for any
+globally selected player. The configurable cards therefore need one
+viewer-scoped contract, not route-specific or player-specific copies.
 
 ## Proposed catalog
 

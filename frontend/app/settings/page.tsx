@@ -1167,8 +1167,8 @@ function AccountSettingsCard({
                 <Label>Connected Riot Account</Label>
                 <p className="text-xs text-muted-foreground">
                   {user?.riot_account_connected
-                    ? "Update your connected account for My Profile"
-                    : "Connect an account to view your profile"}
+                    ? "Update the Riot account linked to your application account"
+                    : "Connect a Riot account to your application account"}
                 </p>
               </div>
               <div className="flex items-center justify-end">

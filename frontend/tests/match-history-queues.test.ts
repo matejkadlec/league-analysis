@@ -27,6 +27,18 @@ describe("Match History queue catalog", () => {
         widthClass.startsWith("w-["),
       ),
     ).toBe(true);
+    expect(
+      Object.fromEntries(
+        MATCH_HISTORY_QUEUE_FILTERS.map(({ label, widthClass }) => [
+          label,
+          widthClass,
+        ]),
+      ),
+    ).toMatchObject({
+      "Ranked Flex": "w-[108px]",
+      "Normal Draft": "w-[116px]",
+      "ARAM: Mayhem": "w-[132px]",
+    });
   });
 
   it("maps supported modes without relabeling unknown queues", () => {

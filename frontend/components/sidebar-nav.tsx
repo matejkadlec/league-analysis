@@ -2,37 +2,25 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import { Menu, X, User, LogOut, Settings, Users, Wrench } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/features/auth";
-import { SidebarPlayerSwitcher } from "@/features/players";
+import {
+  playerNavigationRoute,
+  SidebarPlayerSwitcher,
+} from "@/features/players";
 
 interface NavItem {
   name: string;
   path: string;
-  hasDropdown?: boolean;
-  dropdownItems?: { name: string; anchor: string }[];
 }
 
 const navItems: NavItem[] = [
   { name: "Home", path: "/" },
-  // Anchor metadata is intentionally preserved for future re-enable of the
-  // in-page My Profile dropdown navigation.
-  {
-    name: "My Profile",
-    path: "/my-profile",
-    hasDropdown: true,
-    dropdownItems: [
-      { name: "Player Summary", anchor: "#player-summary" },
-      { name: "Recent Performance", anchor: "#recent-performance" },
-      { name: "Top Champions", anchor: "#top-champions" },
-      { name: "Role Performance", anchor: "#role-performance" },
-      { name: "Match History", anchor: "#match-history" },
-    ],
-  },
-  { name: "Playstyle Analysis", path: "/playstyle-analysis" },
+  { name: "Player Overview", path: "/player-overview" },
+  { name: "Match History", path: "/match-history" },
   { name: "Matchmaking Analysis", path: "/matchmaking-analysis" },
 ];
 
@@ -40,6 +28,8 @@ export function SidebarNav() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [managePlayersOpen, setManagePlayersOpen] = useState(false);
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const urlPuuid = searchParams.get("puuid");
   const { user, logout, isAuthenticated, isLoading } = useAuth();
 
   // Hide sidebar on public auth pages or when not authenticated
@@ -57,16 +47,6 @@ export function SidebarNav() {
       return pathname === "/";
     }
     return pathname.startsWith(path);
-  };
-
-  // Intentionally kept for future My Profile anchor dropdown support.
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const handleAnchorClick = (anchor: string) => {
-    setMenuOpen(false);
-    const element = document.querySelector(anchor);
-    if (element) {
-      element.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
   };
 
   return (
@@ -93,7 +73,7 @@ export function SidebarNav() {
           <div className="border-b border-white/10 p-5">
             <Link
               href="/"
-              className="block cursor-pointer transition-opacity duration-300 hover:opacity-80"
+              className="sidebar-logo-link block cursor-pointer transition-opacity duration-300 hover:opacity-80"
               onClick={() => setMenuOpen(false)}
             >
               <div className="relative mx-auto hidden h-[55px] w-[165px] md:block">
@@ -124,30 +104,36 @@ export function SidebarNav() {
             suppressHydrationWarning
           >
             <ul className="min-h-0 flex-1 space-y-2 overflow-y-auto">
-              {navItems.map((item) => (
-                <li key={item.name}>
-                  <Link
-                    href={item.path}
-                    onClick={() => setMenuOpen(false)}
-                    className={`block border-l-4 px-6 py-3 text-white transition-all duration-300 hover:bg-white/10 ${
-                      isActive(item.path)
-                        ? "border-[#cfa93a] bg-white/5"
-                        : "border-transparent hover:border-[#cfa93a]/50"
-                    }`}
-                  >
-                    <span
-                      suppressHydrationWarning
-                      className={`transition-colors duration-300 ${
-                        isActive(item.path)
-                          ? "text-[#cfa93a] font-medium"
-                          : "hover:text-[#cfa93a]"
+              {navItems.map((item) => {
+                const active = isActive(item.path);
+                const href = playerNavigationRoute(item.path, urlPuuid);
+
+                return (
+                  <li key={item.name}>
+                    <Link
+                      href={href}
+                      onClick={() => setMenuOpen(false)}
+                      data-active={active}
+                      className={`block border-l-4 px-6 py-3 text-white transition-colors duration-300 hover:bg-white/10 ${
+                        active
+                          ? "border-[#cfa93a] bg-white/5"
+                          : "border-transparent hover:border-[#cfa93a]/50"
                       }`}
                     >
-                      {item.name}
-                    </span>
-                  </Link>
-                </li>
-              ))}
+                      <span
+                        suppressHydrationWarning
+                        className={`transition-colors duration-300 ${
+                          active
+                            ? "text-[#cfa93a] font-medium"
+                            : "hover:text-[#cfa93a]"
+                        }`}
+                      >
+                        {item.name}
+                      </span>
+                    </Link>
+                  </li>
+                );
+              })}
             </ul>
 
             <Button
@@ -155,9 +141,10 @@ export function SidebarNav() {
               variant="ghost"
               size="sm"
               onClick={() => setManagePlayersOpen(true)}
-              className="mx-3 mt-auto h-8 shrink-0 justify-start px-2 text-xs text-white/65 hover:bg-white/10 hover:text-white"
+              data-testid="view-tracked-players-button"
+              className="mx-3 mt-auto hidden h-8 shrink-0 justify-start gap-2 px-2 text-xs text-white/65 hover:bg-white/10 hover:text-white"
             >
-              <Users className="mr-2 h-3.5 w-3.5" /> Manage Tracked Players
+              <Users className="h-3.5 w-3.5" /> View Tracked Players
             </Button>
           </nav>
 

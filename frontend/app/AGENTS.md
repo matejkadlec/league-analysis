@@ -14,10 +14,12 @@ frontend rules from [`../AGENTS.md`](../AGENTS.md).
   loading/error/success states.
 - Add new pages to `components/sidebar-nav.tsx`.
 - Use the container pattern: `<div className="container mx-auto py-8">`.
-- My Profile and Playstyle Analysis consume the shared current-player context;
+- Player Overview and Match History consume the shared current-player context;
   they must not restore duplicated large Player Search cards. Preserve
   `?puuid=` for deep links, history, and independent browser tabs — the
-  explicit URL PUUID is authoritative for the current tab.
+  explicit URL PUUID is authoritative for the current tab. Keep `/my-profile`
+  and `/playstyle-analysis` as PUUID-preserving compatibility redirects rather
+  than normal destinations.
 - Tracked-player management lives in the sidebar dialog. Keep the retired
   `/tracked-players` route as a safe redirect and preserve a supplied PUUID.
 - `/jobs` is admin-only. Public routes (`/license`, `/privacy-policy`,

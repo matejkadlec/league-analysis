@@ -62,7 +62,7 @@ function MatchmakingAnalysisContent() {
             </div>
             <p className="text-sm leading-relaxed">
               Analyze matchmaking fairness by comparing average winrates of
-              teammates vs enemies in recent ranked matches
+              teammates vs enemies in recent ranked matches.
             </p>
           </Card>
         </div>

@@ -11,11 +11,11 @@ export const MATCH_QUEUE_NAMES: Readonly<Record<number, string>> = {
 export const MATCH_HISTORY_QUEUE_FILTERS = [
   { id: "ALL", label: "All Queues", widthClass: "w-[96px]" },
   { id: 420, label: "Ranked Solo/Duo", widthClass: "w-[140px]" },
-  { id: 440, label: "Ranked Flex", widthClass: "w-[96px]" },
+  { id: 440, label: "Ranked Flex", widthClass: "w-[108px]" },
   { id: 480, label: "Swiftplay", widthClass: "w-[84px]" },
-  { id: 400, label: "Normal Draft", widthClass: "w-[100px]" },
+  { id: 400, label: "Normal Draft", widthClass: "w-[116px]" },
   { id: 450, label: "ARAM", widthClass: "w-[64px]" },
-  { id: 2400, label: "ARAM: Mayhem", widthClass: "w-[116px]" },
+  { id: 2400, label: "ARAM: Mayhem", widthClass: "w-[132px]" },
 ] as const;
 
 export type MatchHistoryQueueFilter =

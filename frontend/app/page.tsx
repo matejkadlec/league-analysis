@@ -33,7 +33,7 @@ export default function Home() {
               Welcome to League Analysis - your all in one tool for
               comprehensive analysis of League of Legends players, matches and
               matchmaking fairness as well as a great multiple player tracking
-              toool.
+              tool.
             </p>
           </CardContent>
         </Card>
@@ -85,12 +85,11 @@ export default function Home() {
                 </ul>
               </li>
               <li>
-                Playstyle Analysis page overhaul.
+                Evidence-based Playstyle card for Player Overview.
                 <ul className="list-disc space-y-1 pl-6 marker:text-[#cfa93a]/80">
-                  <li>Will be renamed to Player Analysis.</li>
                   <li>
-                    Add more analyses working with different approaches and
-                    using different sets of variables.
+                    Research meaningful formulas and tags before presenting
+                    them as player-level analysis.
                   </li>
                 </ul>
               </li>

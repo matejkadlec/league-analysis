@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Loader2, Search, Star, StopCircle, Users } from "lucide-react";
 import { z } from "zod";
@@ -65,8 +65,7 @@ export function SidebarPlayerSwitcher({
   onNavigate,
 }: SidebarPlayerSwitcherProps) {
   const { toast } = useToast();
-  const { currentPlayer, trackedPlayers, selectPlayer, isLoading } =
-    usePlayerContext();
+  const { currentPlayer, selectPlayer, isLoading } = usePlayerContext();
   const [searchValue, setSearchValue] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [activeSuggestion, setActiveSuggestion] = useState(0);
@@ -166,16 +165,13 @@ export function SidebarPlayerSwitcher({
     }
   };
 
-  const recentPlayers = useMemo(
-    () =>
-      trackedPlayers
-        .filter((player) => player.puuid !== currentPlayer?.puuid)
-        .slice(0, 3),
-    [currentPlayer?.puuid, trackedPlayers],
-  );
+  const handleCurrentPlayerClick = () => {
+    onManageOpenChange(true);
+    onNavigate?.();
+  };
 
   return (
-    <div className="border-b border-white/10 px-3 pt-4 pb-2">
+    <div className="border-b border-white/10 px-3 pt-4 pb-3">
       <div className="relative">
         <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-white/50" />
         <Input
@@ -234,7 +230,7 @@ export function SidebarPlayerSwitcher({
         )}
       </div>
 
-      <div className="mt-3 space-y-1" aria-label="Current and recent players">
+      <div className="mt-3" aria-label="Current player">
         {isLoading ? (
           <div className="flex items-center gap-2 px-2 py-2 text-xs text-white/60">
             <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading players
@@ -242,9 +238,11 @@ export function SidebarPlayerSwitcher({
         ) : currentPlayer ? (
           <button
             type="button"
-            onClick={() => void choosePlayer(currentPlayer)}
-            className="flex w-full items-center gap-2 rounded border border-[#cfa93a]/45 bg-[#cfa93a]/10 px-2 py-2 text-left text-xs font-medium text-[#e4c96f]"
-            aria-current="true"
+            onClick={handleCurrentPlayerClick}
+            data-testid="current-player-button"
+            className="flex w-full items-center gap-2 rounded border border-[#cfa93a]/45 bg-[#cfa93a]/10 px-2 py-2 text-left text-xs font-medium text-[#e4c96f] transition-colors hover:border-[#cfa93a] hover:bg-[#cfa93a]/15 focus-visible:border-[#cfa93a] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#cfa93a] motion-reduce:transition-none"
+            aria-haspopup="dialog"
+            aria-expanded={manageOpen}
           >
             <Star className="h-3.5 w-3.5 fill-current" />
             <span className="truncate">{playerLabel(currentPlayer)}</span>
@@ -252,28 +250,16 @@ export function SidebarPlayerSwitcher({
         ) : (
           <p className="px-2 py-2 text-xs text-white/55">Select a player</p>
         )}
-
-        {recentPlayers.map((player) => (
-          <button
-            key={player.puuid}
-            type="button"
-            onClick={() => void choosePlayer(player)}
-            className="block w-full truncate rounded px-2 py-1.5 text-left text-xs text-white/80 transition-all hover:bg-white/10 hover:text-[#cfa93a] motion-reduce:transition-none"
-          >
-            {playerLabel(player)}
-          </button>
-        ))}
       </div>
 
       <Dialog open={manageOpen} onOpenChange={onManageOpenChange}>
         <DialogContent className="dialog-white-border player-management-border max-h-[85vh] max-w-3xl overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Users className="h-5 w-5 text-[#cfa93a]" /> Manage Tracked
-              Players
+              <Users className="h-5 w-5 text-[#cfa93a]" /> Tracked Players
             </DialogTitle>
             <DialogDescription>
-              Select a current player or remove players from your tracked list.
+              View, add or remove tracked players.
             </DialogDescription>
           </DialogHeader>
           <TrackedPlayersList
