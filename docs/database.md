@@ -31,14 +31,9 @@
   the backend starts. Deploying a stale feature-branch image is forbidden —
   the pi5ram16 workflow deploys the exact current `master` revision so every
   referenced migration is present.
-- A populated database with no Alembic marker is adopted with
-  `backend/scripts/adopt_migrations.py --database <verified_local_database>`:
-  first the read-only schema comparison must pass, only then repeat with
-  `--apply`. It compares against the baseline, stamps it, and upgrades to head
-  while proving existing application row counts did not change.
-- A new revision also requires updating `EXPECTED_REVISION` **and** the
-  expected snapshot tuple in `backend/scripts/validate_migrations.py`; the
-  backend test gate validates the baseline on a clean isolated database.
+- A new revision also requires updating the expected snapshot tuple in
+  `backend/scripts/validate_migrations.py`; the backend test gate validates the
+  baseline on a clean isolated database.
 
 ## Durable Data Invariants
 

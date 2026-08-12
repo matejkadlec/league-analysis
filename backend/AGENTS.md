@@ -47,9 +47,7 @@ objects explicitly, and apply it through the locked `scripts/migrate.py`
 command. The baseline revision is intentionally non-reversible; restore a
 verified backup rather than dropping a populated application schema.
 The repository-root `run.sh` applies `upgrade head` before starting application
-writers and aborts startup if migration fails. Populated unmarked databases
-must first pass the explicit `scripts/adopt_migrations.py` verification and
-`--apply` flow documented in `docs/database.md`.
+writers and aborts startup if migration fails.
 
 The local Riot-data cleanup command also owns its persistent regular-job
 maintenance interlock. Do not bypass `config_json.riot_maintenance_mode` in a

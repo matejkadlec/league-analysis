@@ -49,7 +49,12 @@ def main() -> int:
         is_deployment_workflow = workflow.name == "deploy.yml"
         if "pull_request_target:" in text:
             errors.append(f"{relative} must not use pull_request_target")
-        for required_trigger in ("  pull_request:", "  push:", "  workflow_dispatch:"):
+        # A workflow that never runs on pull requests, such as the production
+        # deployment, must not be forced to declare that trigger.
+        required_triggers = ["  push:", "  workflow_dispatch:"]
+        if not is_deployment_workflow:
+            required_triggers.append("  pull_request:")
+        for required_trigger in required_triggers:
             if required_trigger not in lines:
                 errors.append(
                     f"{relative} is missing trigger {required_trigger.strip()}"
