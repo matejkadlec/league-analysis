@@ -122,7 +122,7 @@ real Riot API key or network access.
 
 | Boundary | Required checks |
 | --- | --- |
-| Before commit | Configured pre-commit hooks: hygiene/format hooks, Ruff, frontend ESLint, and frontend TypeScript when matching files changed |
+| Before commit | Configured pre-commit hooks: hygiene/format hooks, Ruff, frontend ESLint and TypeScript, ShellCheck, and actionlint when matching files changed |
 | During implementation | `./test.sh -f` or `./test.sh -b` for the affected domain |
 | Before pull request | Complete `./test.sh`; never substitute focused output |
 | GitHub `Quality Checks` | Stable jobs `Deterministic full-project gate` and `Live production dependency audit`; the deterministic job also builds and health-checks the isolated production containers |
