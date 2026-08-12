@@ -92,11 +92,14 @@ database, and applies reviewed Alembic revisions through the locked migration
 runner before starting services; a migration failure cancels startup. Backend
 API docs are at `http://localhost:8000/api`; the frontend is at
 `http://localhost:3000`. Do not restart an already running development session
-unless necessary. `./deploy/container-qa.sh` is the explicit Docker
+unless necessary; stop the current session first and tell the user at handoff
+when a restart is required. `./deploy/container-qa.sh` is the explicit Docker
 packaging/health path, never part of `./run.sh`. Production runs on a shared
 Raspberry Pi that hosts multiple projects: target only League Analysis
 resources and verify their Compose labels first — see
-[`docs/deployment.md`](docs/deployment.md#production-topology).
+[`docs/deployment.md`](docs/deployment.md#production-topology). Install or
+repair the Pi database backup timer only through the reviewed repository
+installer documented in [`docs/deployment.md`](docs/deployment.md).
 
 ## Validation
 
@@ -121,8 +124,10 @@ inspect both logs before changing code.
   request secrets or complete environment files in chat or Jira. The only
   documented exception is LGA-11's deliberately non-secret, local-only QA
   fixtures (admin `mat.kadlec@email.cz` / `LocalAdminQa123!`, client
-  `scipiocz@gmail.com` / `LocalUserQa123!`), reset only through the guarded
-  `backend/scripts/cleanse_local_riot_data.py`; see
+  `scipiocz@gmail.com` / `LocalUserQa123!`). Keep these fixture values stable
+  for local browser/API smoke tests, reset only these accounts through the
+  guarded `backend/scripts/cleanse_local_riot_data.py`, and do not use the
+  command or fixture passwords for arbitrary accounts; see
   [`docs/database.md`](docs/database.md).
 - Do not commit, push, or publish unless the user request or an explicitly
   named workflow authorizes that delivery step. Never use unsafe force push;
