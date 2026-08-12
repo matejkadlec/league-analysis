@@ -1,9 +1,12 @@
 """Regressions for stale-PUUID classification and job completion bookkeeping."""
 
+from datetime import datetime, timezone
 from types import SimpleNamespace
-from typing import cast
+from typing import Any, cast
+from unittest.mock import AsyncMock
 
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.riot_api.client import RiotAPIClient
 from app.core.riot_api.errors import BadRequestError, PuuidDecryptionError
@@ -17,6 +20,18 @@ from app.features.jobs.models import (
     JobStatus,
 )
 from app.features.jobs.player_sync import _failure_from_job, _finish_sync
+from app.features.players import service as player_service_module
+from app.features.players.service import PlayerService
+
+# `Player` relationships are resolved by name, so every related mapper has to be
+# imported before the real model can be instantiated.
+from app.features.auth import models as _auth_models  # noqa: F401  isort:skip
+from app.features.matches import models as _match_models  # noqa: F401  isort:skip
+from app.features.matchmaking_analysis import models as _mm_models  # noqa: F401  isort:skip
+from app.features.players import leagues as _league_models  # noqa: F401  isort:skip
+from app.features.playstyle_analysis import models as _ps_models  # noqa: F401  isort:skip
+
+FRESH_PUUID = "f" * 78
 
 
 class _Job(BaseJob):
@@ -130,7 +145,9 @@ def test_failure_from_job_reports_a_stale_player_id() -> None:
 
     assert status == "failed"
     assert code == "PLAYER_ID_STALE"
-    assert "Search for the player again" in message
+    # Discovery does not repair a stale row, so the message must not promise it.
+    assert "re-added" in message
+    assert "Search for the player again" not in message
 
 
 def test_failure_from_job_keeps_the_key_error_precedence() -> None:
@@ -341,3 +358,118 @@ async def test_an_active_sync_run_still_advances(monkeypatch) -> None:
 
     assert run.status == "running"
     assert session.committed is True
+
+
+class _NoMergeSession:
+    """Session that fails the test if discovery reaches for another player row.
+
+    Discovery may look the resolved PUUID up by primary key and insert or update
+    that one row. Any statement execution, bulk query, or delete would mean it
+    went looking for rows sharing the Riot ID, which is exactly the merge this
+    regression forbids.
+    """
+
+    def __init__(self) -> None:
+        self.added: list[Any] = []
+
+    async def get(self, _model, identity, **_kwargs):
+        assert identity == FRESH_PUUID, "discovery must only load the resolved PUUID"
+        return None
+
+    def add(self, instance: Any) -> None:
+        self.added.append(instance)
+
+    async def commit(self) -> None:
+        return None
+
+    async def refresh(self, instance: Any) -> None:
+        instance.created_at = datetime.now(timezone.utc)
+        instance.updated_at = datetime.now(timezone.utc)
+
+    async def execute(self, *_args, **_kwargs):
+        raise AssertionError("discovery must not run a statement against other rows")
+
+    async def scalars(self, *_args, **_kwargs):
+        raise AssertionError("discovery must not search for rows sharing the Riot ID")
+
+    async def scalar(self, *_args, **_kwargs):
+        raise AssertionError("discovery must not search for rows sharing the Riot ID")
+
+    async def delete(self, *_args, **_kwargs):
+        raise AssertionError("discovery must never delete a player row")
+
+    def expunge(self, *_args, **_kwargs):
+        raise AssertionError("discovery must not detach another player row")
+
+
+@pytest.mark.asyncio
+async def test_discovery_never_merges_a_row_sharing_the_riot_id(monkeypatch) -> None:
+    """A stale-looking row must survive discovery untouched.
+
+    Discovery cannot tell a PUUID re-encrypted under a new developer account
+    apart from a Riot ID renamed away and reclaimed by someone else. Every table
+    referencing `core.players(puuid)` cascades on delete, so a wrong merge would
+    destroy one player's history. A duplicate row is the accepted outcome.
+    """
+    monkeypatch.setattr(
+        player_service_module,
+        "_ensure_riot_writer_maintenance_is_inactive",
+        AsyncMock(),
+    )
+    session = _NoMergeSession()
+    service = PlayerService(cast(AsyncSession, session))
+    riot_client = SimpleNamespace(
+        get_account_by_riot_id=AsyncMock(
+            return_value=SimpleNamespace(
+                puuid=FRESH_PUUID, game_name="Shared Name", tag_line="TAG"
+            )
+        ),
+        get_summoner_by_puuid=AsyncMock(
+            return_value=SimpleNamespace(profile_icon_id=7, summoner_level=42)
+        ),
+    )
+
+    response = await service.discover_player(
+        riot_client=cast(RiotAPIClient, riot_client),
+        game_name="Shared Name",
+        tag_line="TAG",
+        platform="eun1",
+    )
+
+    assert response.puuid == FRESH_PUUID
+    assert [player.puuid for player in session.added] == [FRESH_PUUID]
+
+
+@pytest.mark.asyncio
+async def test_startup_cancels_orphaned_application_runs() -> None:
+    """A restart must terminalize runs whose in-process worker is gone.
+
+    Both tables allow one active row per PUUID and their routes hand back an
+    existing active row instead of scheduling work, so an orphan left by an
+    ungraceful shutdown would block that player permanently.
+    """
+    from app.features.jobs.scheduler import _cancel_orphaned_application_runs
+
+    executed: list[Any] = []
+
+    class _Session:
+        async def execute(self, statement):
+            executed.append(statement)
+            return SimpleNamespace(rowcount=1)
+
+        async def commit(self) -> None:
+            return None
+
+    await _cancel_orphaned_application_runs(cast(AsyncSession, _Session()))
+
+    assert len(executed) == 2
+    assert {statement.table.fullname for statement in executed} == {
+        "jobs.player_sync_runs",
+        "core.matchmaking_analyses",
+    }
+    for statement in executed:
+        values = {
+            column.name: bound.value for column, bound in statement._values.items()
+        }
+        assert values["status"] == "cancelled"
+        assert values["completed_at"] is not None

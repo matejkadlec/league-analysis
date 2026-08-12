@@ -38,17 +38,18 @@ Consequences:
   stored PUUID. Rotating keys within the same account is safe.
 - Datasets fetched under different developer accounts cannot be merged as-is;
   the same player appears under two unrelated PUUIDs.
-- The recovery path is ACCOUNT-V1 **Get Account by Riot ID** (`game_name` and
-  `tag_line` are stored in `core.players`): resolve the player under the
-  current key, then remap the stored PUUID and every referencing row
-  (`core.players` is referenced by puuid from match, league, analysis, sync,
-  and tracking tables).
+- ACCOUNT-V1 **Get Account by Riot ID** (`game_name` and `tag_line` are stored
+  in `core.players`) resolves the player's current PUUID under the current key.
+  That resolution alone is **not** a repair: remapping the stored PUUID and its
+  referencing rows requires reviewed operator evidence that the two PUUIDs are
+  the same Riot account, because a Riot ID can also have changed hands. See
+  [Why discovery never merges two rows automatically](#why-discovery-never-merges-two-rows-automatically).
 
 Plan any future switch of the production key to a different developer account
 (for example after Riot application review) as a data migration, not a
 configuration change.
 
-#### How the code detects and repairs the condition
+#### How the code detects the condition
 
 - The client inspects Riot's `status.message` on a 400 and raises
   `PuuidDecryptionError` (a `BadRequestError` subclass) when it reports a

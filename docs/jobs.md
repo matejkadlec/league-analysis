@@ -189,6 +189,12 @@ database failure rather than a competing update and stays `SYNC_FAILED`. The
 cached terminal status is likewise published only once the completion write is
 persisted, so a client never reads a status the database rejected.
 
+Startup cancels every `pending`/`running` run left behind by a previous
+process. The worker is in-process, so no such row can still be owned, and the
+route hands back an existing active row instead of scheduling new work — an
+orphaned row would otherwise block that player's updates permanently. Active
+Matchmaking Analysis rows are cancelled at startup for the same reason.
+
 The frontend polls this lifecycle, then invalidates and refetches active query
 keys containing that exact PUUID. The approved completion info toast is shown
 once only after those refetches succeed. Switching current player never starts
