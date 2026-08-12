@@ -1,34 +1,8 @@
-import { Eye } from "lucide-react";
-
 import type { TeamStats } from "@/lib/core/schemas";
+import { RIOT_OBJECTIVE_ICON_SOURCES } from "./objective-icon-assets";
 
 interface ObjectiveGlyphProps {
   className: string;
-}
-
-function TurretGlyph({ className }: ObjectiveGlyphProps) {
-  return (
-    <svg viewBox="0 0 24 24" className={className} fill="currentColor">
-      <path d="M5 3h3v3h2V3h4v3h2V3h3v7l-2 2v7h2v2H5v-2h2v-7l-2-2V3Zm5 9v7h4v-7l2-2H8l2 2Z" />
-    </svg>
-  );
-}
-
-function InhibitorGlyph({ className }: ObjectiveGlyphProps) {
-  return (
-    <svg viewBox="0 0 24 24" className={className} fill="currentColor">
-      <path d="m12 2 5 5-2 7H9L7 7l5-5Zm0 3.1L9.7 7.4l1.1 4.1h2.4l1.1-4.1L12 5.1Z" />
-      <path d="M7 15h10l2 3v3H5v-3l2-3Zm1.1 3-.7 1h9.2l-.7-1H8.1Z" />
-    </svg>
-  );
-}
-
-function DragonGlyph({ className }: ObjectiveGlyphProps) {
-  return (
-    <svg viewBox="0 0 24 24" className={className} fill="currentColor">
-      <path d="M3 5c4.4.1 7.2 1.4 9 4 1.8-2.6 4.6-3.9 9-4-1.1 2.7-2.6 4.6-4.6 5.7l2.1 1.1-2.4 2.1.8 3.8-3.2-1.4L12 22l-1.7-5.7-3.2 1.4.8-3.8-2.4-2.1 2.1-1.1C5.6 9.6 4.1 7.7 3 5Zm7.1 5.5 1.9 2 1.9-2L12 8.8l-1.9 1.7Zm.5 3.5.5 2.1h1.8l.5-2.1H10.6Z" />
-    </svg>
-  );
 }
 
 function VoidgrubGlyph({ className }: ObjectiveGlyphProps) {
@@ -45,20 +19,12 @@ function VoidgrubGlyph({ className }: ObjectiveGlyphProps) {
   );
 }
 
-function BaronGlyph({ className }: ObjectiveGlyphProps) {
-  return (
-    <svg viewBox="0 0 24 24" className={className} fill="currentColor">
-      <path d="M4 3c3.2.5 5.7 1.7 8 3.8C14.3 4.7 16.8 3.5 20 3l-2.2 4.5 2.2 2.2-3.1 1.1.6 4.8-3.1 4.9L12 22l-2.4-1.5-3.1-4.9.6-4.8L4 9.7l2.2-2.2L4 3Zm4.8 7.2-.4 4.7 2.2 3.5h2.8l2.2-3.5-.4-4.7L12 8.1l-3.2 2.1Zm.8 2.1 1.7.6-.7 1.4-1-.4v-1.6Zm4.8 0v1.6l-1 .4-.7-1.4 1.7-.6Z" />
-    </svg>
-  );
-}
-
 export const OBJECTIVE_DEFINITIONS = [
   { id: "turret", label: "Turrets", statKey: "turrets" },
   { id: "inhibitor", label: "Inhibitors", statKey: "inhibitors" },
   { id: "dragon", label: "Dragons", statKey: "dragons" },
   { id: "voidgrub", label: "Voidgrubs", statKey: "voidgrubs" },
-  { id: "herald", label: "Rift Heralds", statKey: "rift_heralds" },
+  { id: "herald", label: "Rift Herald", statKey: "rift_heralds" },
   { id: "baron", label: "Barons", statKey: "barons" },
 ] as const;
 
@@ -67,15 +33,30 @@ type ObjectiveId = (typeof OBJECTIVE_DEFINITIONS)[number]["id"];
 function ObjectiveGlyph({
   objective,
   className,
-}: ObjectiveGlyphProps & { objective: ObjectiveId }) {
-  if (objective === "turret") return <TurretGlyph className={className} />;
-  if (objective === "inhibitor")
-    return <InhibitorGlyph className={className} />;
-  if (objective === "dragon") return <DragonGlyph className={className} />;
+  team,
+}: ObjectiveGlyphProps & { objective: ObjectiveId; team: "blue" | "red" }) {
   if (objective === "voidgrub")
     return <VoidgrubGlyph className={className} />;
-  if (objective === "herald") return <Eye className={className} />;
-  return <BaronGlyph className={className} />;
+
+  const source =
+    objective === "turret"
+      ? RIOT_OBJECTIVE_ICON_SOURCES.tower
+      : RIOT_OBJECTIVE_ICON_SOURCES[objective];
+
+  return (
+    <span
+      aria-hidden="true"
+      data-icon-source="riot-match-history"
+      className={`${className} block bg-contain bg-center bg-no-repeat`}
+      style={{
+        backgroundImage: `url(${source})`,
+        filter:
+          team === "blue"
+            ? "saturate(1.7) brightness(1.25)"
+            : "hue-rotate(150deg) saturate(2.2) brightness(1.15)",
+      }}
+    />
+  );
 }
 
 function ObjectiveStat({
@@ -91,7 +72,8 @@ function ObjectiveStat({
 }) {
   const displayCount = count === null || count === undefined ? "?" : String(count);
   const colorClass = team === "blue" ? "text-cyan-400" : "text-rose-500";
-  const sizeClass = objective === "turret" ? "h-[26px] w-[26px]" : "h-5 w-5";
+  const sizeClass =
+    objective === "voidgrub" ? "h-5 w-5" : "h-[26px] w-[26px]";
 
   return (
     <div
@@ -102,7 +84,11 @@ function ObjectiveStat({
       className="flex h-full w-full items-center justify-center"
     >
       <span aria-hidden="true" className={colorClass}>
-        <ObjectiveGlyph objective={objective} className={sizeClass} />
+        <ObjectiveGlyph
+          objective={objective}
+          className={sizeClass}
+          team={team}
+        />
       </span>
       <span aria-hidden="true" className="w-5 text-center text-xs">
         {displayCount}

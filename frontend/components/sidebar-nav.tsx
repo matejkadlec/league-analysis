@@ -68,7 +68,7 @@ export function SidebarNav() {
           <div className="border-b border-white/10 p-5">
             <Link
               href="/"
-              className="block cursor-pointer transition-opacity duration-300 hover:opacity-80"
+              className="sidebar-logo-link block cursor-pointer transition-opacity duration-300 hover:opacity-80"
               onClick={() => setMenuOpen(false)}
             >
               <div className="relative mx-auto hidden h-[55px] w-[165px] md:block">
@@ -99,30 +99,35 @@ export function SidebarNav() {
             suppressHydrationWarning
           >
             <ul className="min-h-0 flex-1 space-y-2 overflow-y-auto">
-              {navItems.map((item) => (
-                <li key={item.name}>
-                  <Link
-                    href={item.path}
-                    onClick={() => setMenuOpen(false)}
-                    className={`block border-l-4 px-6 py-3 text-white transition-all duration-300 hover:bg-white/10 ${
-                      isActive(item.path)
-                        ? "border-[#cfa93a] bg-white/5"
-                        : "border-transparent hover:border-[#cfa93a]/50"
-                    }`}
-                  >
-                    <span
-                      suppressHydrationWarning
-                      className={`transition-colors duration-300 ${
-                        isActive(item.path)
-                          ? "text-[#cfa93a] font-medium"
-                          : "hover:text-[#cfa93a]"
+              {navItems.map((item) => {
+                const active = isActive(item.path);
+
+                return (
+                  <li key={item.name}>
+                    <Link
+                      href={item.path}
+                      onClick={() => setMenuOpen(false)}
+                      data-active={active}
+                      className={`block border-l-4 px-6 py-3 text-white transition-colors duration-300 hover:bg-white/10 ${
+                        active
+                          ? "border-[#cfa93a] bg-white/5"
+                          : "border-transparent hover:border-[#cfa93a]/50"
                       }`}
                     >
-                      {item.name}
-                    </span>
-                  </Link>
-                </li>
-              ))}
+                      <span
+                        suppressHydrationWarning
+                        className={`transition-colors duration-300 ${
+                          active
+                            ? "text-[#cfa93a] font-medium"
+                            : "hover:text-[#cfa93a]"
+                        }`}
+                      >
+                        {item.name}
+                      </span>
+                    </Link>
+                  </li>
+                );
+              })}
             </ul>
 
             <Button
@@ -130,7 +135,8 @@ export function SidebarNav() {
               variant="ghost"
               size="sm"
               onClick={() => setManagePlayersOpen(true)}
-              className="mx-3 mt-auto h-8 shrink-0 justify-start gap-1 px-2 text-xs text-white/65 hover:bg-white/10 hover:text-white"
+              data-testid="view-tracked-players-button"
+              className="mx-3 mt-auto hidden h-8 shrink-0 justify-start gap-2 px-2 text-xs text-white/65 hover:bg-white/10 hover:text-white"
             >
               <Users className="h-3.5 w-3.5" /> View Tracked Players
             </Button>

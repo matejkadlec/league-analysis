@@ -28,7 +28,7 @@ go in `features/`.
   navigation. Selection persists through the player feature context; it must
   not silently track a player or start Riot synchronization.
 - Show only the current player below sidebar search. Clicking that row opens
-  the Tracked Players dialog without changing route. Keep the hidden View
-  Tracked Players action at the bottom of the ordinary navigation group so it
-  can be restored without recreating the trigger; the dialog remains the
+  the Tracked Players dialog in place without changing route. Keep the hidden
+  View Tracked Players action at the bottom of the ordinary navigation group
+  so it can be restored without recreating the trigger; the dialog remains the
   complete switching and management surface.

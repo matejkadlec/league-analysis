@@ -56,7 +56,8 @@ Player Overview and Match History use an explicit `?puuid=` as the tab-local
 authority and the account's saved current PUUID only as the default for new
 navigation. Player Overview owns aggregate/statistical cards; Match History is
 a separate top-level detailed workflow. The sidebar is the canonical search
-and current-player surface, while the Tracked Players dialog owns the complete
+and current-player surface. Clicking the current-player row opens the Tracked
+Players dialog without changing the active route; that dialog owns the complete
 tracked-list switch/management flow. `/my-profile`, `/playstyle-analysis`, and
 `/tracked-players` are PUUID-preserving compatibility redirects to Player
 Overview.

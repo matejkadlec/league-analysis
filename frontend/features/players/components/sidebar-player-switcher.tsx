@@ -1,8 +1,6 @@
 "use client";
 
-import { useEffect, useState, type MouseEvent } from "react";
-import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Loader2, Search, Star, StopCircle, Users } from "lucide-react";
 import { z } from "zod";
@@ -27,7 +25,6 @@ import {
 } from "@/components/ui/select";
 import { TrackedPlayersList } from "@/features/players/components/tracked-players-list";
 import { usePlayerContext } from "@/features/players/context/player-context";
-import { playerOverviewRoute } from "@/features/players/player-routes";
 import {
   parseRiotId,
   type RiotIdParts,
@@ -69,8 +66,6 @@ export function SidebarPlayerSwitcher({
 }: SidebarPlayerSwitcherProps) {
   const { toast } = useToast();
   const { currentPlayer, selectPlayer, isLoading } = usePlayerContext();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
   const [searchValue, setSearchValue] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [activeSuggestion, setActiveSuggestion] = useState(0);
@@ -170,17 +165,13 @@ export function SidebarPlayerSwitcher({
     }
   };
 
-  const currentPlayerHref = playerOverviewRoute(currentPlayer?.puuid);
-  const isCurrentPlayerOverview =
-    pathname === "/player-overview" &&
-    searchParams.get("puuid") === currentPlayer?.puuid;
-  const handleCurrentPlayerClick = (event: MouseEvent<HTMLAnchorElement>) => {
-    if (isCurrentPlayerOverview) event.preventDefault();
+  const handleCurrentPlayerClick = () => {
+    onManageOpenChange(true);
     onNavigate?.();
   };
 
   return (
-    <div className="border-b border-white/10 px-3 pt-4 pb-2">
+    <div className="border-b border-white/10 px-3 pt-4 pb-3">
       <div className="relative">
         <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-white/50" />
         <Input
@@ -245,16 +236,17 @@ export function SidebarPlayerSwitcher({
             <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading players
           </div>
         ) : currentPlayer ? (
-          <Link
-            href={currentPlayerHref}
+          <button
+            type="button"
             onClick={handleCurrentPlayerClick}
-            data-testid="current-player-link"
+            data-testid="current-player-button"
             className="flex w-full items-center gap-2 rounded border border-[#cfa93a]/45 bg-[#cfa93a]/10 px-2 py-2 text-left text-xs font-medium text-[#e4c96f] transition-colors hover:border-[#cfa93a] hover:bg-[#cfa93a]/15 focus-visible:border-[#cfa93a] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#cfa93a] motion-reduce:transition-none"
-            aria-current={isCurrentPlayerOverview ? "page" : undefined}
+            aria-haspopup="dialog"
+            aria-expanded={manageOpen}
           >
             <Star className="h-3.5 w-3.5 fill-current" />
             <span className="truncate">{playerLabel(currentPlayer)}</span>
-          </Link>
+          </button>
         ) : (
           <p className="px-2 py-2 text-xs text-white/55">Select a player</p>
         )}

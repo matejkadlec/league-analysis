@@ -33,7 +33,7 @@ describe("Match History objective icons", () => {
       "Inhibitors",
       "Dragons",
       "Voidgrubs",
-      "Rift Heralds",
+      "Rift Herald",
       "Barons",
     ]);
     expect(
@@ -53,9 +53,15 @@ describe("Match History objective icons", () => {
     expect(screen.getByRole("img", { name: "Dragons: 4" })).not.toBeNull();
     expect(screen.getByRole("img", { name: "Voidgrubs: 3" })).not.toBeNull();
     expect(
-      screen.getByRole("img", { name: "Rift Heralds: 1" }),
+      screen.getByRole("img", { name: "Rift Herald: 1" }),
     ).not.toBeNull();
     expect(screen.getByRole("img", { name: "Barons: 2" })).not.toBeNull();
+    expect(
+      container.querySelectorAll('[data-icon-source="riot-match-history"]'),
+    ).toHaveLength(5);
+    expect(
+      container.querySelector('[data-objective="voidgrub"] svg'),
+    ).not.toBeNull();
   });
 
   it("preserves unknown timeline counts", () => {

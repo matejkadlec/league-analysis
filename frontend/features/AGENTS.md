@@ -37,10 +37,11 @@ public API via `index.ts`.
 - Match History objective order, accessible labels, counts, and dedicated
   silhouettes live in `matches/components/objective-icons.tsx`. Preserve the
   custom Voidgrub glyph and the shared semantic mapping for every consumer.
-  The audited Turret, Inhibitor, Dragon, and Baron silhouettes replace the
-  misleading generic landmark, shield, flame, and crown icons. Rift Herald
-  keeps the eye symbol because its exposed eye remains the clearest compact
-  semantic representation in the installed icon set.
+  Riot-derived match-history art for Turret, Inhibitor, Dragon, Rift Herald,
+  and Baron lives in `matches/components/objective-icon-assets.ts`; do not
+  replace those silhouettes with generic icon-library approximations. The
+  Rift Herald asset retains the exposed eye and horns used by the in-game
+  match-history representation.
 - The Match Fetcher Jobs card has no per-queue checkboxes. Backend product
   support determines its complete queue set; the UI retains only job-level
   status, schedule, triggering, testing, pause/stop, and history controls.

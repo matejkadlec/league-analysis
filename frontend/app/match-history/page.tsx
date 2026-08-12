@@ -11,7 +11,10 @@ export default function MatchHistoryPage() {
 
   return (
     <ProtectedRoute>
-      <div className="container mx-auto px-4 py-8">
+      <div
+        className="container mx-auto min-h-[calc(100dvh+1px)] px-4 py-8"
+        data-testid="match-history-page"
+      >
         <div className="space-y-6">
           <Card id="header-card" className="p-6 text-white">
             <h1 className="text-2xl font-semibold">Match History</h1>

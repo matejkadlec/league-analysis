@@ -261,14 +261,14 @@
   }
 
   /* Remove focus outline from logo */
-  aside a[href="/"] {
+  .sidebar-logo-link {
     outline: none !important;
     pointer-events: auto !important;
   }
 
-  aside a[href="/"]:focus,
-  aside a[href="/"]:focus-visible,
-  aside a[href="/"]:active {
+  .sidebar-logo-link:focus,
+  .sidebar-logo-link:focus-visible,
+  .sidebar-logo-link:active {
     outline: none !important;
     box-shadow: none !important;
     border: none !important;

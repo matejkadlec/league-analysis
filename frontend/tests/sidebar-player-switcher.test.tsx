@@ -56,7 +56,10 @@ vi.mock("@/lib/core/hooks", () => ({
 
 import { SidebarPlayerSwitcher } from "@/features/players/components/sidebar-player-switcher";
 
-function renderSwitcher(manageOpen = false) {
+function renderSwitcher(
+  manageOpen = false,
+  onManageOpenChange = vi.fn(),
+) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
@@ -64,7 +67,7 @@ function renderSwitcher(manageOpen = false) {
     <QueryClientProvider client={queryClient}>
       <SidebarPlayerSwitcher
         manageOpen={manageOpen}
-        onManageOpenChange={vi.fn()}
+        onManageOpenChange={onManageOpenChange}
       />
     </QueryClientProvider>,
   );
@@ -82,18 +85,25 @@ describe("SidebarPlayerSwitcher", () => {
 
   afterEach(() => cleanup());
 
-  it("shows only the current player and links it to Player Overview", () => {
-    renderSwitcher();
+  it("shows only the current player and opens its dialog without a link", async () => {
+    const user = userEvent.setup();
+    const onManageOpenChange = vi.fn();
+    renderSwitcher(false, onManageOpenChange);
 
-    const currentPlayerLink = screen.getByRole("link", {
+    const currentPlayerButton = screen.getByRole("button", {
       name: "Current#ONE",
     });
-    expect(currentPlayerLink.getAttribute("href")).toBe(
-      "/player-overview?puuid=current-puuid",
+    expect(currentPlayerButton.getAttribute("aria-haspopup")).toBe("dialog");
+    expect(currentPlayerButton.parentElement?.parentElement?.className).toContain(
+      "pb-3",
     );
+    expect(screen.queryByRole("link", { name: "Current#ONE" })).toBeNull();
     expect(screen.queryByText("Recent One#ONE")).toBeNull();
     expect(screen.queryByText("Recent Three#ONE")).toBeNull();
     expect(screen.queryByText("Hidden Four#ONE")).toBeNull();
+
+    await user.click(currentPlayerButton);
+    expect(onManageOpenChange).toHaveBeenCalledWith(true);
   });
 
   it("uses the Tracked Players dialog title", () => {

@@ -285,8 +285,8 @@ test("keeps player routes, sidebar switching, and dialog scroll lock determinist
   await page.getByRole("button", { name: "Accept necessary" }).click();
 
   await expect(page).toHaveURL(new RegExp(`puuid=${CURRENT_PUUID}`));
-  const currentPlayerLink = page.getByTestId("current-player-link");
-  await expect(currentPlayerLink).toBeVisible();
+  const currentPlayerButton = page.getByTestId("current-player-button");
+  await expect(currentPlayerButton).toBeVisible();
   await expect(page.getByText("Recent#TWO")).toHaveCount(0);
   await expect(page.locator("#player-summary")).toBeVisible();
   await expect(page.locator("#recent-performance")).toBeVisible();
@@ -309,38 +309,20 @@ test("keeps player routes, sidebar switching, and dialog scroll lock determinist
     page.getByRole("button", { name: "Match History" }),
   ).toHaveCount(0);
 
-  const manageButton = page.getByRole("button", {
-    name: "View Tracked Players",
-  });
-  const matchmakingLink = page.getByRole("link", {
-    name: "Matchmaking Analysis",
-  });
-  const userName = page.getByText("QA User", { exact: true });
-  const [sidebarBox, manageBox, matchmakingBox, userBox] = await Promise.all([
-    page.locator("aside").boundingBox(),
-    manageButton.boundingBox(),
-    matchmakingLink.boundingBox(),
-    userName.boundingBox(),
-  ]);
-  expect(manageBox?.y).toBeGreaterThan(matchmakingBox?.y ?? 0);
-  expect(manageBox?.y).toBeLessThan(userBox?.y ?? Number.POSITIVE_INFINITY);
-  const leftInset = (manageBox?.x ?? 0) - (sidebarBox?.x ?? 0);
-  const rightInset =
-    (sidebarBox?.x ?? 0) +
-    (sidebarBox?.width ?? 0) -
-    ((manageBox?.x ?? 0) + (manageBox?.width ?? 0));
-  expect(Math.abs(leftInset - rightInset)).toBeLessThanOrEqual(1);
+  await expect(page.getByTestId("view-tracked-players-button")).toBeHidden();
 
   expect(
     await page.evaluate(() => document.documentElement.scrollHeight > innerHeight),
   ).toBe(true);
-  const activeRowBeforeDialog = await currentPlayerLink.boundingBox();
-  await manageButton.click();
+  const activeRowBeforeDialog = await currentPlayerButton.boundingBox();
+  const pageUrlBeforeDialog = page.url();
+  await currentPlayerButton.click();
+  expect(page.url()).toBe(pageUrlBeforeDialog);
   const dialog = page.getByRole("dialog");
   await expect(
     dialog.getByRole("heading", { name: "Tracked Players" }),
   ).toBeVisible();
-  const activeRowDuringDialog = await currentPlayerLink.boundingBox();
+  const activeRowDuringDialog = await currentPlayerButton.boundingBox();
   expect(
     Math.abs((activeRowDuringDialog?.x ?? 0) - (activeRowBeforeDialog?.x ?? 0)),
   ).toBeLessThanOrEqual(0.5);
@@ -376,7 +358,7 @@ test("keeps player routes, sidebar switching, and dialog scroll lock determinist
   await expect(page).toHaveURL(
     new RegExp(`/player-overview\\?puuid=${RECENT_PUUID}`),
   );
-  await expect(page.getByRole("link", { name: "Recent#TWO" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Recent#TWO" })).toBeVisible();
   expect(syncStarts).toBe(0);
 
   await page.getByRole("link", { name: "Match History" }).click();
@@ -386,31 +368,93 @@ test("keeps player routes, sidebar switching, and dialog scroll lock determinist
   await expect(page.locator("#match-history")).toBeVisible();
   await expect(page.locator("#player-summary")).toHaveCount(0);
 
-  const activePlayerFromMatchHistory = page.getByTestId("current-player-link");
-  await expect(activePlayerFromMatchHistory).toHaveAttribute(
-    "href",
-    `/player-overview?puuid=${RECENT_PUUID}`,
+  const activePlayerFromMatchHistory = page.getByTestId(
+    "current-player-button",
   );
+  const matchHistoryUrl = page.url();
   await activePlayerFromMatchHistory.click();
-  await expect(page).toHaveURL(
-    new RegExp(`/player-overview\\?puuid=${RECENT_PUUID}`),
-  );
-  const overviewUrl = page.url();
-  await page.getByTestId("current-player-link").click();
-  expect(page.url()).toBe(overviewUrl);
+  expect(page.url()).toBe(matchHistoryUrl);
+  await expect(
+    page.getByRole("dialog").getByRole("heading", { name: "Tracked Players" }),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
 
   await page.setViewportSize({ width: 1440, height: 2000 });
   expect(
+    await page.evaluate(() => document.documentElement.scrollHeight > innerHeight),
+  ).toBe(true);
+  const matchCardBeforeFilter = await page.locator("#match-history").boundingBox();
+  await page.getByRole("button", { name: "ARAM: Mayhem" }).click();
+  await expect(
+    page.getByRole("button", { name: "ARAM: Mayhem" }),
+  ).toHaveAttribute("aria-pressed", "true");
+  const matchCardAfterFilter = await page.locator("#match-history").boundingBox();
+  expect(
+    Math.abs((matchCardAfterFilter?.x ?? 0) - (matchCardBeforeFilter?.x ?? 0)),
+  ).toBeLessThanOrEqual(0.5);
+
+  await page.getByRole("link", { name: "Player Overview" }).click();
+  await expect(page).toHaveURL(
+    new RegExp(`/player-overview\\?puuid=${RECENT_PUUID}`),
+  );
+  expect(
     await page.evaluate(() => document.documentElement.scrollHeight <= innerHeight),
   ).toBe(true);
-  const noScrollRow = page.getByTestId("current-player-link");
+  const noScrollRow = page.getByTestId("current-player-button");
   const noScrollBefore = await noScrollRow.boundingBox();
-  await page.getByRole("button", { name: "View Tracked Players" }).click();
+  await noScrollRow.click();
   const noScrollDuring = await noScrollRow.boundingBox();
   expect(
     Math.abs((noScrollDuring?.x ?? 0) - (noScrollBefore?.x ?? 0)),
   ).toBeLessThanOrEqual(0.5);
   await page.keyboard.press("Escape");
+
+  const playerOverviewNav = page.getByRole("link", {
+    name: "Player Overview",
+  });
+  await expect
+    .poll(() =>
+      playerOverviewNav.evaluate(
+        (element) => getComputedStyle(element).borderLeftColor,
+      ),
+    )
+    .toBe("rgb(207, 169, 58)");
+  const overviewTextX = (await playerOverviewNav.locator("span").boundingBox())?.x;
+  const overviewNavStyle = await playerOverviewNav.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return {
+      borderLeftColor: style.borderLeftColor,
+      borderLeftWidth: style.borderLeftWidth,
+      transitionProperty: style.transitionProperty,
+    };
+  });
+  await page.getByRole("link", { name: "Home", exact: true }).click();
+  await expect(page).toHaveURL("/");
+  const homeNav = page.getByRole("link", { name: "Home", exact: true });
+  await expect(homeNav).toHaveAttribute("data-active", "true");
+  await expect
+    .poll(() =>
+      homeNav.evaluate((element) => getComputedStyle(element).borderLeftColor),
+    )
+    .toBe("rgb(207, 169, 58)");
+  const homeTextX = (await homeNav.locator("span").boundingBox())?.x;
+  const homeNavStyle = await homeNav.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return {
+      borderLeftColor: style.borderLeftColor,
+      borderLeftWidth: style.borderLeftWidth,
+      transitionProperty: style.transitionProperty,
+    };
+  });
+  expect(homeNavStyle.borderLeftWidth).toBe("4px");
+  expect(homeNavStyle.borderLeftColor).toBe(overviewNavStyle.borderLeftColor);
+  expect(homeNavStyle.transitionProperty).toBe(
+    overviewNavStyle.transitionProperty,
+  );
+  expect(homeNavStyle.transitionProperty).not.toBe("all");
+  expect(Math.abs((homeTextX ?? 0) - (overviewTextX ?? 0))).toBeLessThanOrEqual(
+    0.5,
+  );
 
   await page.goto(`/my-profile?puuid=${CURRENT_PUUID}`);
   await expect(page).toHaveURL(
