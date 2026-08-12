@@ -278,7 +278,13 @@ authority unconfirmed and mirror exports disabled.
 
 ## PostgreSQL daily backups and restore tests
 
-The authoritative Pi database has a user-systemd timer named
+> **Installation status (2026-08-12): the backup timer is NOT installed on
+> `pi5ram16` — no automatic backups run.** This section documents the reviewed
+> installer and its intended contract. Verify the timer with the inspection
+> commands below before relying on automatic backups, and treat a missing
+> timer as an open operational risk until the installer has been run.
+
+The reviewed design is a user-systemd timer named
 `league-analysis-postgres-backup.timer`. It runs at exactly `00:00` in the
 `Europe/Prague` timezone, including daylight-saving changes, regardless of the
 Pi host timezone. `Persistent=true` catches up once after downtime; the shared

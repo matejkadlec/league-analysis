@@ -1,7 +1,8 @@
 # Runtime and Dependency Upgrade Review (2026-08-11)
 
-> **Authority:** Dated maintenance-refresh record. The live manifests and
-> lockfiles remain authoritative after this review. The prior baseline is
+> **Frozen historical snapshot — do not update to reflect current state.**
+> The live manifests and lockfiles are the current version authority. The
+> prior baseline is
 > [`dependency-upgrade-2026-08-03.md`](dependency-upgrade-2026-08-03.md).
 
 ## Method and selection rules

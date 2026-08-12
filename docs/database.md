@@ -1,812 +1,158 @@
 # Database Schema
 
-> **Authority:** Maintained explanation of the PostgreSQL model and safe schema
-> change workflow. Ordered Alembic revisions in
+> **Authority:** Durable database invariants, rationale, and operational
+> procedures. Ordered Alembic revisions in
 > [`../backend/alembic/versions/`](../backend/alembic/versions/) are the
-> executable schema source of truth.
+> executable schema source of truth; consult them (and the SQLAlchemy models)
+> for tables, columns, enums, indexes, and constraints.
 >
-> **Maintenance:** Update this document with every schema or SQLAlchemy model
-> change.
-
-**Database**: PostgreSQL 18
-**ORM**: SQLAlchemy 2.0+
-**Schemas**: `auth`, `core`, `jobs`
-
----
-
-## Entity Relationships
-
-### Auth Schema
-
-```mermaid
-erDiagram
-    users ||--|| user_settings : "1:1"
-    users ||--o{ user_card_preferences : "1:M"
-    users ||--o| user_cookie_consents : "1:0..1"
-    users ||--o| email_change_requests : "1:0..1"
-    users ||--o{ user_tracked_players : "1:M"
-
-    users {
-        int id PK
-        string email UK
-        string password_hash
-        string display_name
-        boolean is_active
-        boolean is_admin
-        boolean email_verified
-        string email_verified_at
-        string last_login
-        boolean riot_account_connected
-        string puuid
-        string created_at
-        string updated_at
-    }
-
-    user_settings {
-        int user_id PK, FK
-        string theme
-        string current_player_puuid FK
-        string default_platform
-        string created_at
-        string updated_at
-    }
-
-    user_card_preferences {
-        int user_id PK, FK
-        string card_id PK
-        int version PK
-        jsonb settings
-        string created_at
-        string updated_at
-    }
-
-    user_cookie_consents {
-        int user_id PK, FK
-        string consent_level
-        string consent_version
-        string consent_source
-        string consented_at
-        string updated_at
-    }
-
-    user_tracked_players {
-        int user_id PK, FK
-        string puuid PK, FK
-        string tracked_at
-        string last_selected_at
-    }
-
-    email_change_requests {
-        int user_id PK, FK
-        string pending_email
-        string verification_code_hash
-        string code_expires_at
-        int failed_attempts
-        string locked_until
-        string created_at
-        string updated_at
-    }
-
-    subject_counts {
-        int id PK
-        int beta_tester
-        int full_stack_developer
-        int other
-    }
-
-    join_us_contact_submissions {
-        int id PK
-        string remote_ip
-        string subject
-        boolean is_test
-        string submitted_at
-    }
-```
-
-### Core Schema
-
-```mermaid
-erDiagram
-    players ||--o{ match_participants : "1:M"
-    players ||--o{ match_timelines : "1:M"
-    players ||--o{ player_leagues : "1:M"
-    players ||--o{ playstyle_analyses : "1:M"
-    players ||--o{ matchmaking_analyses : "1:M"
-    matches ||--o{ match_participants : "1:M"
-    matches ||--o{ match_timelines : "1:M"
-
-    players {
-        string puuid PK
-        string game_name
-        string tag_line
-        string platform
-        int profile_icon_id
-        int summoner_level
-        boolean is_tracked
-        string last_playstyle_analysis
-        string last_matchmaking_analysis
-        string created_at
-        string updated_at
-    }
-
-    matches {
-        string match_id PK
-        string game_mode
-        string game_type
-        int queue_id
-        string game_version
-        int map_id
-        string platform
-        int game_creation_timestamp
-        int game_start_timestamp
-        string game_start_timestamp_source
-        int game_end_timestamp
-        int game_duration
-        boolean early_surrender
-        boolean surrender
-        string game_result
-        boolean fully_analyzed
-        string created_at
-        string updated_at
-    }
-
-    match_participants {
-        string match_id PK, FK
-        int participant_id PK
-        string puuid FK
-        string game_name
-        string tag_line
-        int team_id
-        string team_position
-        int champion_id
-        string champion_name
-        boolean win
-        int kills
-        int deaths
-        int assists
-        float kda
-        string runes
-        string advanced_stats
-    }
-
-    match_timelines {
-        string match_id PK, FK
-        string puuid PK, FK
-        int participant_id
-        int team_id
-        int objective_takedowns_total
-        int turret_takedowns
-        int inhibitor_takedowns
-        int dragon_takedowns
-        int rift_herald_takedowns
-        int team_turrets_destroyed
-        int team_dragons_slain
-        string objective_events
-    }
-
-    player_leagues {
-        string puuid FK
-        string league_id "nullable"
-        string queue_type
-        string tier
-        string rank
-        int league_points
-        int wins
-        int losses
-        boolean veteran
-        boolean hot_streak
-        string created_at
-    }
-
-    playstyle_analyses {
-        int id PK
-        string puuid FK
-        string status
-        string tags
-        string summary_stats
-        string created_at
-        string updated_at
-    }
-
-    matchmaking_analyses {
-        string puuid PK, FK
-        string created_at PK
-        string status
-        string results
-        string started_at
-        string completed_at
-        string error_code
-        string error_message
-        string puuid_progress
-        int requests_saved
-        string rate_limit_reset_at
-    }
-```
-
-### Jobs Schema
-
-```mermaid
-erDiagram
-    job_configurations ||--o{ job_executions : "1:M"
-    job_executions ||--o{ player_sync_runs : "targeted executions"
-
-    job_configurations {
-        int id PK
-        string job_type
-        string name UK
-        string description
-        string schedule
-        boolean is_active
-        boolean is_paused
-        string config_json
-        string created_at
-        string updated_at
-    }
-
-    job_executions {
-        int id PK
-        int job_config_id FK
-        string started_at
-        string completed_at
-        string status
-        int api_requests_made
-        int records_created
-        int records_updated
-        string error_message
-        string execution_log
-        string detailed_logs
-        string execution_type
-    }
-
-    player_sync_runs {
-        int id PK
-        int user_id FK
-        string puuid FK
-        string status
-        int match_execution_id FK
-        int profile_execution_id FK
-        string error_code
-        string error_message
-        string created_at
-        string started_at
-        string completed_at
-        string updated_at
-    }
-```
-
----
-
-## Enum Types
-
-### `core.matchmaking_analyses.status`
-
-This lifecycle uses a checked string column rather than a PostgreSQL enum so an
-incremental migration can safely classify legacy rows.
-
-- `pending` - accepted and queued for the process-local background worker
-- `in_progress` - actively calculating or fetching data
-- `waiting_rate_limit` - still active, waiting until `rate_limit_reset_at`
-- `completed` - terminal success with immutable result data
-- `failed` - terminal failure with a stable safe error code/message
-- `cancelled` - terminal, and only from an explicit user cancellation. A worker
-  cancelled by process shutdown deliberately leaves its row active so the next
-  explicit start resumes it.
-
-The partial unique index `uq_matchmaking_analyses_active_puuid` covers the
-three active states and prevents concurrent analyses for the same PUUID.
-
-### `jobs.job_status_enum`
-
-- `PENDING` - Job queued
-- `RUNNING` - Currently executing
-- `PAUSED` - Waiting at a runtime control checkpoint
-- `SUCCESS` - Completed successfully
-- `FAILED` - Error occurred
-- `CANCELLED` - Stopped or interrupted
-- `RATE_LIMITED` - Stopped due to API rate limits
-
-### `jobs.job_type_enum`
-
-- `MATCH_FETCHER` - Fetches new matches
-- `PLAYER_UPDATER` - Updates tracked player profile data
-
-### `jobs.execution_type_enum`
-
-- `REGULAR` - Scheduled or manually triggered data-writing run
-- `TEST` - API exercise run that does not write gameplay data
-
-### `core.analysis_status_enum`
-
-- `PENDING` - Analysis queued
-- `IN_PROGRESS` - Currently running
-- `COMPLETED` - Finished successfully
-- `FAILED` - Error occurred
-- `CANCELLED` - User cancelled
-
-### `auth.theme_enum`
-
-- `LIGHT`
-- `DARK`
-
-### `auth.cookie_consent_level_enum`
-
-- `necessary`
-- `all`
-
----
-
-## Key Tables
-
-### `auth.users`
-
-User authentication and authorization.
-
-| Column                  | Type         | Description                                       |
-| ----------------------- | ------------ | ------------------------------------------------- |
-| `id`                    | bigint       | Primary key                                       |
-| `email`                 | varchar(255) | Unique email                                      |
-| `password_hash`         | text         | Argon2id password hash                            |
-| `display_name`          | varchar(128) | User display name                                 |
-| `is_active`             | boolean      | Account enabled                                   |
-| `is_admin`              | boolean      | Admin privileges                                  |
-| `failed_login_attempts` | int          | Consecutive failed login attempts                 |
-| `last_failed_login`     | timestamptz  | Latest failed login timestamp                     |
-| `locked_until`          | timestamptz  | Temporary lock expiration after too many failures |
-| `puuid`                 | varchar(78)  | Linked Riot account (optional)                    |
-
-**Trigger**: `trg_create_user_settings_after_user_insert` automatically creates `user_settings` record.
-
-`current_player_puuid` is the per-account default for new player-centric
-navigation. Explicit `?puuid=` page state remains authoritative within an open
-tab. Revision `20260809_0006` backfills this value from a valid legacy viewed
-player or linked Riot account and removes the obsolete per-page save-search
-columns.
-
-### `auth.user_card_preferences`
-
-Version-coexistent viewer-owned overrides for the approved analytical-card
-catalog. A preference never includes a PUUID, Riot ID, match data, or another
-user's identifier.
-
-| Column       | Type        | Description                                                     |
-| ------------ | ----------- | --------------------------------------------------------------- |
-| `user_id`    | bigint      | PK + FK to `auth.users.id`; authenticated viewer owner          |
-| `card_id`    | varchar(64) | PK; stable approved card identifier                             |
-| `version`    | int         | PK; positive card-settings contract version                     |
-| `settings`   | jsonb       | Validated mutable fields only; defaults are added on API reads  |
-| `created_at` | timestamptz | When this versioned override was first stored                   |
-| `updated_at` | timestamptz | When this versioned override was last atomically replaced       |
-
-**Primary Key**: (`user_id`, `card_id`, `version`). The composite key permits
-a future-version row to coexist with v1. LGA-24 reads and changes only the
-supported v1 row, so reset and upsert cannot discard a later compatible
-server's settings. The `version > 0` database check complements the API's
-card-specific validation.
-
-### `auth.refresh_tokens`
-
-Rotating refresh-token session store.
-
-| Column       | Type        | Description                          |
-| ------------ | ----------- | ------------------------------------ |
-| `id`         | bigint      | Primary key                          |
-| `user_id`    | bigint      | FK to `auth.users.id`                |
-| `token_id`   | varchar(36) | Refresh token identifier             |
-| `token_hash` | text        | SHA-256 hash of raw refresh token    |
-| `expires_at` | timestamptz | Expiration time                      |
-| `revoked_at` | timestamptz | Revocation time (`NULL` when active) |
-
-### `auth.revoked_access_tokens`
-
-Blacklist for JWT access token revocation by `jti`.
-
-| Column       | Type        | Description                              |
-| ------------ | ----------- | ---------------------------------------- |
-| `id`         | bigint      | Primary key                              |
-| `user_id`    | bigint      | FK to `auth.users.id`                    |
-| `token_id`   | varchar(36) | Revoked JWT `jti` claim                  |
-| `revoked_at` | timestamptz | When token was revoked                   |
-| `expires_at` | timestamptz | Original token expiration                |
-| `reason`     | varchar(64) | Revocation reason (`logout`, `security`) |
-
-### `auth.user_tracked_players`
-
-User-specific tracked player mappings.
-
-| Column       | Type        | Description                            |
-| ------------ | ----------- | -------------------------------------- |
-| `user_id`    | bigint      | FK to `auth.users.id`                  |
-| `puuid`      | varchar(78) | FK to `core.players.puuid`             |
-| `tracked_at` | timestamptz | When the player was added to this user |
-| `last_selected_at` | timestamptz | Recent-selection ordering for the sidebar |
-
-**Primary Key**: (`user_id`, `puuid`)
-**Behavior**: Jobs process players tracked by any user (distinct `puuid` set).
-
-### Local Riot-data cleanup and QA fixtures
+> **Maintenance:** Update this document only when a durable invariant, a
+> decision's rationale, an external or production fact, or an operational
+> procedure changes. Mechanical schema changes belong in a reviewed Alembic
+> revision, not here.
+
+**Database**: PostgreSQL 18 · **ORM**: SQLAlchemy 2.0+ · **Schemas**: `auth`, `core`, `jobs`
+
+## Schema Authority and Migration Rules
+
+- Never use `Base.metadata.create_all()`, direct schema-reset scripts, or an
+  unverified `alembic stamp` against a populated database. Never reset, drop,
+  or recreate populated schemas. SQLAlchemy metadata supports revision
+  generation but never creates application tables at runtime.
+- The initial baseline revision intentionally has no downgrade because
+  dropping the application schemas is unsafe. Restore a verified backup when
+  reversal is required.
+- Apply reviewed revisions only through
+  `backend/scripts/migrate.py` (`uv run python scripts/migrate.py upgrade head`).
+  It holds a session-scoped PostgreSQL advisory lock so two application
+  containers cannot race migrations. `../run.sh` runs it before starting
+  backend writers and cancels startup on failure; the production Compose
+  contract runs it in a one-shot `migrate` service that must succeed before
+  the backend starts. Deploying a stale feature-branch image is forbidden —
+  the pi5ram16 workflow deploys the exact current `master` revision so every
+  referenced migration is present.
+- A populated database with no Alembic marker is adopted with
+  `backend/scripts/adopt_migrations.py --database <verified_local_database>`:
+  first the read-only schema comparison must pass, only then repeat with
+  `--apply`. It compares against the baseline, stamps it, and upgrades to head
+  while proving existing application row counts did not change.
+- A new revision also requires updating `EXPECTED_REVISION` **and** the
+  expected snapshot tuple in `backend/scripts/validate_migrations.py`; the
+  backend test gate validates the baseline on a clean isolated database.
+
+## Durable Data Invariants
+
+### PUUIDs are per developer account; duplicate players are never auto-merged
+
+A stored PUUID is only valid under the developer account that fetched it (see
+[`riot-api.md`](riot-api.md#puuids-are-bound-to-the-developer-account)). After
+a key switch, re-searching a player creates a **separate** `core.players` row
+under the new PUUID. Discovery must never merge the old row into the new one
+automatically: `players.puuid` cascades into matches, timelines, leagues, and
+analyses, so a wrong merge deletes history unrecoverably. An operator
+reconciles duplicates deliberately. Revision `20260812_0009` dropped the
+case-normalized Riot-ID lookup index that only the removed automatic merge
+used.
+
+### Product queue set
+
+The only product-supported queues are **420, 440, 480, 400, 450, 2400**
+(Ranked Solo/Duo, Ranked Flex, Swiftplay, Normal Draft, ARAM, ARAM: Mayhem),
+defined once as `PRODUCT_SUPPORTED_QUEUE_IDS` in
+`backend/app/core/riot_api/constants.py`. Match Fetcher queue selection is not
+configurable; historical `enabled_queue_ids` config values are ignored and
+stripped (see [`jobs.md`](jobs.md)).
+
+### Versioned user card preferences coexist
+
+`auth.user_card_preferences` has primary key (`user_id`, `card_id`,
+`version`) precisely so a future-version row can coexist with v1. v1 reads
+ignore future-version rows, v1 upsert/reset touch only the v1 row and preserve
+any future-version row, and attempts to write an unsupported version are
+rejected — so a rollback to v1 code never discards a later compatible
+server's settings. A preference never contains a PUUID, Riot ID, match data,
+or another user's identifier.
+
+### Freshness timestamps advance only on clean success
+
+`core.players.profile_synced_at`, `league_synced_at`, and `match_synced_at`
+advance only when the owning provider check completes without a recoverable
+failure — including a clean check that found nothing new. Failed, cancelled,
+warning-bearing, or rate-limited work must not advance the affected timestamp,
+because these values drive staleness decisions.
+
+### Other invariants worth knowing
+
+- `core.player_leagues` is immutable rank history: one snapshot row per rank
+  change, no primary key by design; `league_id` is nullable because current
+  by-PUUID responses may omit it.
+- `core.matches` keeps both `game_creation_timestamp` and
+  `game_start_timestamp` with a `game_start_timestamp_source` marker
+  (`riot_game_start` vs `legacy_game_creation`), so the provenance of every
+  ordering/analysis anchor is inspectable without a bulk provider refetch.
+- `core.riot_credential_health` (revision `20260812_0008`) is a singleton,
+  secret-free record: it stores no key value or key-derived fingerprint, and
+  provider evidence is accepted only for the current random `generation` and
+  in timestamp order, making key replacement race-safe against concurrent
+  request completion.
+- One-active-row-per-PUUID partial unique indexes guard both
+  `jobs.player_sync_runs` and `core.matchmaking_analyses`; their lifecycle
+  contracts are in [`jobs.md`](jobs.md).
+
+## Local Riot-Data Cleanse and QA Fixtures (LGA-11)
 
 `backend/scripts/cleanse_local_riot_data.py` is the only reviewed maintenance
-command for LGA-11's local data reset. It deletes the reviewed Riot-derived
-tables in foreign-key-safe order, clears Riot links from user accounts, and
-preserves application configuration, user settings, job configuration, and job
-execution history. It resets the documented local-only admin fixture and
-creates or normalizes the documented non-admin client fixture.
+command for the local Riot-data reset. It deletes Riot-derived tables in
+FK-safe order, clears Riot links from accounts, preserves application/job
+configuration and execution history plus revoked access-token blacklist
+entries, and resets the documented local-only fixtures (admin
+`mat.kadlec@email.cz`, client `scipiocz@gmail.com` — never valid outside local
+development).
 
-The command is read-only by default. It refuses to run unless all of these are
-true: `ENVIRONMENT=dev` is explicit, `POSTGRES_HOST`, every PostgreSQL
-`listen_addresses` bind, and the active listener are loopback-only,
-`--database` exactly matches `POSTGRES_DB`, and the reviewed application tables
-exist. The configured environment, host, and database name are checked before a
-database session opens. Applying changes also requires a new canonical backup
-path outside the repository whose parent is not writable by group or other
-accounts and whose non-sticky directory ancestors are not writable by group or
-other accounts. The command blocks writers to every table it will change before
-creating the custom-format `pg_dump`, keeps those locks through the cleanup
-transaction, and creates a new owner-only `0600` archive with no-follow
-semantics before `pg_dump` receives any database data. The command re-verifies
-the archive's descriptor identity and permissions before
-`pg_restore --list`; if the filesystem cannot honor them, it securely removes
-only that verified file and refuses before any database mutation. It also
-clears all saved Riot PUUID URL preferences while preserving settings rows and
-revoked access-token blacklist entries.
+Safety contract (read-only by default; all checked before a session opens):
+explicit `ENVIRONMENT=dev`; `POSTGRES_HOST`, every PostgreSQL
+`listen_addresses` bind, and the active listener loopback-only; `--database`
+exactly matching `POSTGRES_DB`. `--apply` additionally requires a canonical
+backup path outside the repository with owner-only `0600` permissions and
+non-group/other-writable ancestors; the command blocks writers to every table
+it will change before taking the custom-format `pg_dump` and keeps those locks
+through the cleanup transaction.
 
-Before an apply, the command locks the two writer job tables, refuses if a
-regular Match Fetcher or Player Updater execution is `RUNNING` or `PAUSED`,
-requires exactly one Match Fetcher and one Player Updater configuration to
-receive the interlock, and persists a `riot_maintenance_mode` interlock on them.
-Regular scheduled writers record a
-`CANCELLED` execution before a Riot-data write. Direct account linking, player
-tracking/refresh, match-history storage, and matchmaking analysis acquire
-gameplay and job-table locks in cleanup order, then re-read the interlock before
-a core/auth write or Riot-data request. The interlock stays enabled after cleanup
-so the emptied database cannot be immediately repopulated. Do not clear it with the jobs API;
-resume only through the separately guarded command after local maintenance is
-complete.
-
-```bash
-cd backend
-uv run python scripts/cleanse_local_riot_data.py \
-  --database league_analysis_local_dev
-
-install -d -m 700 "$HOME/.local/state/league-analysis/backups"
-uv run python scripts/cleanse_local_riot_data.py \
-  --database league_analysis_local_dev \
-  --apply \
-  --backup-path "$HOME/.local/state/league-analysis/backups/pre-lga-11.dump"
-
-uv run python scripts/cleanse_local_riot_data.py \
-  --database league_analysis_local_dev \
-  --resume-writers
-```
+Before an apply it locks the two writer job tables, refuses if a regular Match
+Fetcher or Player Updater execution is `RUNNING`/`PAUSED`, requires exactly
+one configuration per writer type, and persists the `riot_maintenance_mode`
+interlock on them. **The interlock deliberately stays enabled after cleanup**
+so the emptied database cannot be immediately repopulated; only
+`--resume-writers` clears it. The jobs API cannot create or clear it —
+`preserve_riot_writer_maintenance_mode` in
+`backend/app/features/jobs/maintenance.py` enforces that on every
+configuration update.
 
 Never point this command at production, a shared environment, a remote host,
 or a database whose identity cannot be proven. Restore the verified backup
 instead of attempting an ad-hoc reversal.
 
-### `auth.user_cookie_consents`
+## Data Authority: Pi Is Authoritative (LGA-79)
 
-Authenticated user cookie-consent audit record.
-
-| Column            | Type        | Description                                             |
-| ----------------- | ----------- | ------------------------------------------------------- |
-| `user_id`         | bigint      | PK + FK to `auth.users.id`                              |
-| `consent_level`   | enum        | `necessary` or `all`                                    |
-| `consent_version` | varchar(16) | Consent policy/version identifier (for re-prompt logic) |
-| `consent_source`  | varchar(32) | Where consent was captured (`banner`, `settings`)       |
-| `consented_at`    | timestamptz | Last explicit consent timestamp                         |
-| `updated_at`      | timestamptz | Last row update timestamp                               |
-
-### `auth.email_change_requests`
-
-Per-user state for the change-email verification workflow.
-
-| Column                   | Type         | Description                                |
-| ------------------------ | ------------ | ------------------------------------------ |
-| `user_id`                | bigint       | PK + FK to `auth.users.id`                 |
-| `pending_email`          | varchar(255) | New email waiting for code verification    |
-| `verification_code_hash` | varchar(64)  | SHA-256 hash of the active 6-digit code    |
-| `code_expires_at`        | timestamptz  | Code expiration timestamp                  |
-| `failed_attempts`        | int          | Failed attempts for current code           |
-| `locked_until`           | timestamptz  | Lock expiry after too many failed attempts |
-
-**Behavior**: Locks email-change verification for 5 minutes after 3 failed code attempts.
-
-### `auth.subject_counts`
-
-Singleton counter row for Join Us contact-form email sequencing.
-
-| Column                 | Type     | Description                                    |
-| ---------------------- | -------- | ---------------------------------------------- |
-| `id`                   | smallint | Singleton primary key (`1`)                    |
-| `beta_tester`          | int      | Number of submitted Beta Tester forms          |
-| `full_stack_developer` | int      | Number of submitted Full-Stack Developer forms |
-| `other`                | int      | Number of submitted forms with subject `Other` |
-
-**Behavior**: Contact emails use `League Analysis <Subject> #<counter>` based on these values.
-
-### `auth.join_us_contact_submissions`
-
-Join Us submission metadata used for anti-spam checks.
-
-| Column         | Type        | Description                                  |
-| -------------- | ----------- | -------------------------------------------- |
-| `id`           | bigint      | Primary key                                  |
-| `remote_ip`    | varchar(45) | Source IP address                            |
-| `subject`      | varchar(32) | Submitted subject (`beta_tester`, etc.)      |
-| `is_test`      | boolean     | `TRUE` when body ends with `#nl` test suffix |
-| `submitted_at` | timestamptz | Accepted submission timestamp                |
-
-**Behavior**: Regular (non-test) Join Us submissions are capped at 3 per hour per IP.
-
-### `core.players`
-
-Central player registry using Riot PUUID as primary key.
-
-| Column              | Type        | Description                                      |
-| ------------------- | ----------- | ------------------------------------------------ |
-| `puuid`             | varchar(78) | Primary key (Riot PUUID)                         |
-| `game_name`         | varchar(16) | Riot ID game name                                |
-| `tag_line`          | varchar(5)  | Riot ID tag                                      |
-| `platform`          | varchar(4)  | e.g., EUN1, EUW1                                 |
-| `is_tracked`        | boolean     | Derived global tracked flag                      |
-| `profile_synced_at` | timestamptz | Last successful Player Updater profile check     |
-| `league_synced_at`  | timestamptz | Last successful Match Fetcher rank check         |
-| `match_synced_at`   | timestamptz | Last complete successful Match Fetcher data check |
-
-Revision `20260811_0007` added `ix_players_lower_riot_id` on
-`(lower(game_name), lower(tag_line), lower(platform))` for the case-normalized
-lookup that the automatic PUUID merge ran on every discovery. Revision
-`20260812_0009` drops it again: that merge was removed, and no remaining query
-uses the expression. A Riot ID whose stored row carries a superseded PUUID now
-stays as a separate row for an operator to reconcile; see
-[`riot-api.md`](riot-api.md#puuids-are-bound-to-the-developer-account).
-
-### `core.matches`
-
-Match metadata from Riot API.
-
-| Column                        | Type        | Description                                                     |
-| ----------------------------- | ----------- | --------------------------------------------------------------- |
-| `match_id`                    | varchar(20) | Primary key (e.g., EUN1_1234567)                                |
-| `queue_id`                    | int         | Product-supported: 400, 420, 440, or 450                        |
-| `game_version`                | varchar(32) | Patch (e.g., "16.15.1")                                         |
-| `game_creation_timestamp`     | bigint      | Riot `gameCreation`, when the loading screen began              |
-| `game_start_timestamp`        | bigint      | Actual start, or a legacy creation-time fallback                |
-| `game_start_timestamp_source` | varchar(32) | `riot_game_start` or `legacy_game_creation`                     |
-| `fully_analyzed`              | boolean     | All participants processed                                      |
-
-Revision `20260808_0004` copies the prior single timestamp into
-`game_creation_timestamp` and marks those rows `legacy_game_creation`; it does
-not invent an actual start or require a bulk provider refetch. Normal refetch
-and re-analysis paths replace both timestamps and mark `riot_game_start`.
-Ordering and analysis anchors continue to use the effective
-`game_start_timestamp`, whose source is therefore always inspectable.
-
-### `core.match_participants`
-
-Player performance data per match.
-
-| Column           | Type        | Description                 |
-| ---------------- | ----------- | --------------------------- |
-| `match_id`       | varchar(20) | Part of composite PK        |
-| `participant_id` | int         | Part of composite PK (1-10) |
-| `puuid`          | varchar(78) | Player reference            |
-| `kda`            | numeric     | Computed: (K+A)/D           |
-| `runes`          | jsonb       | Full rune configuration     |
-| `advanced_stats` | jsonb       | Riot "challenges" data      |
-
-### `core.match_timelines`
-
-Objective-focused timeline aggregates (1 row per participant per match).
-
-| Column                      | Type        | Description                                                     |
-| --------------------------- | ----------- | --------------------------------------------------------------- |
-| `match_id`                  | varchar(20) | Part of composite PK, FK to `core.matches`                      |
-| `puuid`                     | varchar(78) | Part of composite PK, FK to `core.players`                      |
-| `participant_id`            | int         | Riot participant slot (1-10), unique per match                  |
-| `objective_takedowns_total` | int         | Total objective participations (killer or assister)             |
-| `turret_takedowns`          | int         | Player turret takedowns (kill or assist)                        |
-| `inhibitor_takedowns`       | int         | Player inhibitor takedowns (kill or assist)                     |
-| `dragon_takedowns`          | int         | Player dragon takedowns (kill or assist)                        |
-| `rift_herald_takedowns`     | int         | Player Rift Herald takedowns (kill or assist)                   |
-| `team_turrets_destroyed`    | int         | Team turret total from timeline events                          |
-| `team_dragons_slain`        | int         | Team dragon total from timeline events                          |
-| `objective_events`          | jsonb       | Compact objective event log (`t`,`o`,`r`, optional `l`,`s`,`m`) |
-
-Dedicated Atakhan counters remain for historical rows and downgrade-safe data
-retention. Current 2026 ingestion sends an unexpected Atakhan event through the
-generic epic-monster map/event path, like any other unknown objective.
-
-### `core.player_leagues`
-
-Immutable league history snapshots (one row per rank change).
-
-| Column          | Type        | Description                                             |
-| --------------- | ----------- | ------------------------------------------------------- |
-| `puuid`         | varchar(78) | Player reference                                        |
-| `league_id`     | varchar(36) | Nullable ID; current by-PUUID responses may omit it     |
-| `queue_type`    | varchar(32) | Riot queue type                                         |
-| `tier`          | varchar(16) | IRON, BRONZE, ... CHALLENGER                            |
-| `rank`          | varchar(4)  | I, II, III, IV                                          |
-| `league_points` | int         | LP (0-100)                                              |
-| `wins`          | int         | Ranked wins at snapshot time                            |
-| `losses`        | int         | Ranked losses at snapshot time                          |
-| `created_at`    | timestamp   | Snapshot time                                           |
-
-**Note**: No primary key - uses composite index on `(puuid, created_at DESC)` for current rank queries.
-
-### `core.riot_api_keys`
-
-Storage for Riot API keys.
-
-| Column       | Type        | Description      |
-| ------------ | ----------- | ---------------- |
-| `id`           | int         | Primary key                                  |
-| `key_value`    | varchar(42) | RGAPI-xxx format                             |
-| `is_active`    | boolean     | Currently in use                             |
-| `added_at`     | timestamptz | Insertion time and development-key age basis |
-| `last_used_at` | timestamptz | Last successful Settings validation/save time |
-| `times_used`   | bigint      | Usage counter                                |
-
-**Constraint**: Key must match `RGAPI-%` pattern with length 42.
-
-### `core.riot_credential_health`
-
-Singleton, secret-free health for the effective database-first Riot credential.
-Revision `20260811_0007` creates this record; it stores no key value or
-key-derived fingerprint.
-
-| Column                   | Type        | Description                                                |
-| ------------------------ | ----------- | ---------------------------------------------------------- |
-| `id`                     | int         | Singleton primary key, constrained to `1`                  |
-| `generation`             | varchar(32) | Random generation for stale-evidence rejection             |
-| `source`                 | varchar(8)  | `none`, `db`, or `env`                                     |
-| `db_key_id`              | int         | Optional FK to the effective database key                  |
-| `environment_generation` | varchar(72) | Optional non-secret deployment/runtime generation          |
-| `status`                 | varchar(16) | `missing`, `unknown`, `valid`, or `invalid`                 |
-| `evidence`               | varchar(32) | Safe evidence category, never a provider payload           |
-| `evidence_at`            | timestamptz | Provider request start or configuration change time        |
-| `revision`               | bigint      | Positive incident/state revision for client refreshes      |
-| `recovered_at`           | timestamptz | Latest observed recovery time                               |
-| `recovery_revision`      | bigint      | Revision identifying that recovery notice                  |
-
-Provider evidence is accepted only for the current generation and in timestamp
-order. This makes key replacement and concurrent request completion race-safe.
-
-### `jobs.job_configurations`
-
-Background job definitions.
-
-| Column        | Type          | Description                                                   |
-| ------------- | ------------- | ------------------------------------------------------------- |
-| `id`          | int           | Primary key                                                   |
-| `job_type`    | job_type_enum | Job implementation                                            |
-| `schedule`    | varchar(256)  | Interval in seconds                                           |
-| `is_active`   | boolean       | Scheduled for execution                                       |
-| `is_paused`   | boolean       | Runtime pause flag for active execution                       |
-| `config_json` | jsonb         | Job-specific config (`interval_seconds`, maintenance interlock, etc.) |
-
-Match Fetcher queue selection is not configurable. It always uses the
-canonical product-supported set (420, 440, 480, 400, 450, 2400). Historical
-`enabled_queue_ids` values are ignored and removed by ordinary configuration
-updates, so stale stored values cannot restrict future runs.
-
-### `jobs.job_executions`
-
-Individual job run tracking.
-
-| Column              | Type                | Description                   |
-| ------------------- | ------------------- | ----------------------------- |
-| `id`                | int                 | Primary key                   |
-| `job_config_id`     | int                 | References job_configurations |
-| `status`            | job_status_enum     | Execution result              |
-| `api_requests_made` | int                 | Riot API calls                |
-| `detailed_logs`     | jsonb               | Captured log entries          |
-| `execution_type`    | execution_type_enum | `REGULAR` (default) or `TEST` |
-
-### `jobs.player_sync_runs`
-
-Persisted application-user request lifecycle for an explicit Player Card
-update. It references the shared canonical PUUID and the two administrator job
-executions that performed the targeted work. Active `pending`/`running` rows
-are unique per PUUID; terminal states are retained for exact polling and audit
-without storing provider payloads or credentials.
-
-`core.matchmaking_analyses` carries the same one-active-row-per-PUUID
-constraint. The background orchestrator locks a run row and writes only while it
-is still active, so a run that an operator stop or startup recovery already
-closed is never reopened.
-
----
-
-## Source of Truth
-
-Reviewed Alembic revisions under **`backend/alembic/versions/`** are the
-single source of truth for the database schema. The initial revision contains a
-SQL payload because it must preserve PostgreSQL schemas, enums, sequences,
-generated columns, JSONB defaults, functions, triggers, constraints, indexes,
-and APScheduler's table exactly. SQLAlchemy metadata supports future revision
-generation but never creates application tables at runtime.
-
-### Migration Workflow
-
-1. Update the applicable SQLAlchemy models and authoritative documentation.
-2. Generate a draft with `uv run alembic revision --autogenerate -m "scope"`
-   when it is useful, then review and complete the revision manually. Explicitly
-   include PostgreSQL-only objects that autogeneration cannot represent.
-3. Apply the reviewed revision with `uv run python scripts/migrate.py upgrade head`.
-   The command holds a session-scoped PostgreSQL advisory lock so two
-   application containers cannot race migrations. The supported local
-   `../run.sh` launcher runs this command after stopping the selected listeners
-   and before starting backend writers; it cancels startup on failure. The
-   production Compose contract runs the same command in a one-shot `migrate`
-   service after PostgreSQL health and requires successful completion before
-   the backend can start. Deploying a stale feature-branch image is forbidden;
-   the pi5ram16 workflow deploys the exact current `master` revision so every
-   referenced migration is present.
-4. Run `../test.sh -b` during implementation and the complete `../test.sh`
-   before publication. The backend gate validates the baseline on a clean
-   isolated database and checks async application access.
-5. For a populated database with no Alembic marker, first run `uv run python
-   scripts/adopt_migrations.py --database <verified_local_database>`. Only after
-   its schema-only comparison passes may you repeat it with `--apply`; the
-   command compares the initial baseline revision, stamps that baseline, then
-   upgrades through the reviewed current head while proving existing application
-   row counts did not change.
-
-The initial baseline revision intentionally has no downgrade because dropping
-the application schemas is unsafe. Restore a verified backup when reversal is
-required. Never use `Base.metadata.create_all()`, direct schema-reset scripts,
-or an unverified `alembic stamp` against a populated database.
-
-### Initial local-to-Pi data migration
-
-The LGA-79 authority transfer used a complete PostgreSQL 18 custom-format dump
-of `league_analysis_local_dev`, not per-table copying. It restored into a new Pi
-staging database with source ownership/ACL replay disabled, applied every
-archived schema object, table row, constraint, and sequence state, and swapped
-database names only after restore validation. The production backend was not
-allowed to write until a deterministic source/restored snapshot matched.
-
-The pre-existing Pi database was first retained as a private custom-format
-safety backup and remained available as a rollback database through health and
-authentication validation. The full procedure, exact container boundary,
-authority marker, and rollback commands are maintained in
+The LGA-79 authority transfer moved `league_analysis_local_dev` to pi5ram16
+via a complete PostgreSQL custom-format dump restored into a staging database
+and swapped in only after a deterministic source/restored snapshot matched.
+The pre-existing Pi database was retained as a private safety backup and
+rollback database. Procedure, authority marker, and rollback commands:
 [`deployment.md`](deployment.md#postgresql-data-authority-and-initial-migration).
-If that already-authoritative database is moved intact to a different Pi or SSH
-operating-system account without its operations state, use the documented
-relocated-authority adoption gate. It validates the live database and services,
-creates a new private safety backup, and records the backup digest without
-replacing or otherwise writing to the database.
 
-### Pi backup authority
+Since then the data flow is strictly one-way:
+`pi5ram16 league_analysis -> local league_analysis_local_dev`, refreshed every
+five minutes. The local database is **disposable** — the mirror may overwrite
+any local rows — and there is no local-to-Pi write path. Details:
+[`deployment.md`](deployment.md#recurring-pi-to-local-mirror).
 
-Once the Pi authority marker exists, repository-owned operations create one
-private PostgreSQL custom-format backup at `00:00 Europe/Prague` and retain the
-seven newest successful daily archives. Retention is deliberately narrower than
-the backup directory: incomplete files, migration safety archives, and unrelated
-files are excluded. Restore verification always uses a generated temporary
-database and validates the migration head, constraints, application-table
-presence, administrator flags, and deterministic schema/count/sequence snapshot
-before removing that database. The schedule, exact archive contract, diagnostic
-commands, and operator restore command are in
+### Pi backups: intended, not verified as installed
+
+The documented intent is one private custom-format backup at
+`00:00 Europe/Prague` retaining the seven newest successful daily archives,
+installed via `deploy/install-pi-postgres-backup-timer.sh` with isolated
+restore verification. **The timer is not currently installed on pi5ram16** —
+verify installation before relying on automatic backups. Contract and
+diagnostics:
 [`deployment.md`](deployment.md#postgresql-daily-backups-and-restore-tests).
-
-### Disposable local mirror
-
-After LGA-79 established and validated Pi authority, the data authority is
-strictly one-way:
-
-```text
-pi5ram16 league_analysis -> local league_analysis_local_dev
-```
-
-The local database is disposable development data. The recurring refresh can
-overwrite intentional local rows, updates, identifiers, and sequence advances;
-there is no automatic local-to-Pi path. Each refresh downloads a complete
-PostgreSQL custom-format archive through the SSH/Docker boundary before creating
-a local staging database. Only a fully restored and validated stage replaces the
-local target through database renames. Durable private state recovers the old
-local database after interruption, and a non-blocking lock prevents overlap.
-Schedule configuration, on-demand use, failure diagnostics, and validation are
-documented in [`deployment.md`](deployment.md#recurring-pi-to-local-mirror).

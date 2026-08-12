@@ -1,147 +1,73 @@
 # Frontend (`frontend/`)
 
-> **Scope:** Frontend-wide architecture and conventions under `frontend/`.
+> **Scope:** Frontend-wide constraints, design-system contract, and commands
+> under `frontend/`.
 >
-> **Maintenance:** Update when the frontend stack, shared patterns, feature
-> layout, global styling system, or frontend commands change.
+> **Maintenance:** Update when a frontend-wide rule, the design-system
+> contract, or a command boundary changes. Directory structure and code
+> patterns live in the code; do not mirror them here.
 
 Repository identity, delivery workflow, and safety rules are inherited from
 [`../AGENTS.md`](../AGENTS.md). This guide may add frontend constraints but may
 not weaken repository-wide rules.
 
-## Tech Stack
+Stack: Node (pinned by `.nvmrc`) with npm (pinned by `packageManager`),
+Next.js App Router, React 19, TypeScript strict, Tailwind CSS 4, shadcn/ui
+(New York), TanStack Query v5, Zod v4, Axios, sonner, lucide-react, Vitest
+with Testing Library and jsdom. Domain UI lives under `features/<name>/`,
+shared components under `components/`, utilities under `lib/core/`.
 
-Node 26.7.0, npm 12.0.2, Next.js 16.3 (App Router), React 19, TypeScript 7
-native compiler with a TypeScript 6 API compatibility alias for ESLint,
-Tailwind CSS 4, shadcn/ui (New York), TanStack Query v5, Zod v4, Axios, sonner,
-lucide-react, Vitest 4 with Testing Library (React and user-event) and jsdom
-for DOM component tests
-
-Next's TypeScript API mode remains explicitly enabled because the compatibility
-alias exposes the TypeScript 6 compiler API but not Next 16.3's expected
-`typescript/bin/tsc` CLI path.
-
-## Structure
-
-```
-frontend/
-├── app/                 # Next.js pages (see app/AGENTS.md)
-├── components/          # Shared components (see components/AGENTS.md)
-│   └── ui/              # shadcn/ui primitives (DO NOT EDIT)
-├── features/            # Domain UI (see features/AGENTS.md)
-│   ├── auth/
-│   ├── cookie-consent/
-│   ├── jobs/
-│   ├── matches/
-│   ├── matchmaking/
-│   ├── players/
-│   ├── playstyle-analysis/
-│   └── profile/
-└── lib/core/            # Utilities (api, schemas, utils)
-```
-
-## Code Patterns
-
-### Imports
-
-```typescript
-// Features (public API)
-import { PlayerSearch, PlayerCard } from "@/features/players";
-import { MatchHistory } from "@/features/matches";
-
-// Core utilities
-import { api, validatedGet } from "@/lib/core/api";
-import { PlayerSchema } from "@/lib/core/schemas";
-import { cn } from "@/lib/core/utils";
-
-// Shared components
-import { Button } from "@/components/ui/button";
-```
-
-### Data Fetching
-
-```typescript
-const { data, isLoading, error } = useQuery({
-  queryKey: ["player", puuid],
-  queryFn: () => validatedGet(PlayerSchema, `/players/${puuid}`),
-});
-```
-
-### Component Pattern
-
-```typescript
-"use client";
-
-interface MyComponentProps {
-  puuid: string;
-}
-
-export function MyComponent({ puuid }: MyComponentProps) {
-  // Loading state
-  if (isLoading) return <Skeleton />;
-
-  // Error state
-  if (error) return <Alert variant="destructive">...</Alert>;
-
-  // Success state
-  return <div>...</div>;
-}
-```
-
-### Dialog Template Pattern
-
-Use this shared structure for user-action dialogs across frontend features.
-
-- Overlay and behavior:
-  - Use shadcn `Dialog` + `DialogContent` (darkened background handled by overlay)
-  - Always add `dialog-white-border` class to `DialogContent` for visibility
-  - Keep default close interactions enabled: top-right `X`, outside click, and explicit cancel button
-  - Keep the global vertical position from `globals.css`: remaining viewport
-    space must use a 1:2 top-to-bottom ratio (`X` above, `2X` below). Do not
-    center or override an individual dialog's `top`/vertical translation.
-- Layout:
-  - Header with **gold icon** + title — every dialog title must include a relevant lucide icon with classes `h-5 w-5 text-[#cfa93a]`
-  - Optional short description via `DialogDescription`
-  - Body contains feature-specific fields and inline validation messages
-  - Footer uses `flex items-center justify-between gap-2` layout (cancel left, actions right)
-- Actions:
-  - **All dialog buttons** must use `py-2 px-4` for consistent sizing
-  - Left action = `Cancel` with `className="red-gradient"` and `<StopCircle className="h-4 w-4" />` icon — this is mandatory for all cancel buttons across the app
-  - Right action = submit CTA with `className="button-medium no-rotation"` or `className="gold-gradient"` and a relevant icon
-  - Card-level action buttons outside dialogs should use `className="button-full"` and icon
-- Validation UX:
-  - Show errors directly under the related field
-  - Keep field-specific messages concise and deterministic
+The `typescript` package is an npm alias to the TypeScript 6 compatibility
+API while the native TypeScript 7 compiler supplies `tsc`; Next's TypeScript
+API mode remains explicitly enabled because the alias exposes the compiler API
+but not the `typescript/bin/tsc` CLI path ESLint tooling expects. See
+[`../docs/dependency-upgrade-2026-08-03.md`](../docs/dependency-upgrade-2026-08-03.md)
+for the recorded rationale.
 
 ## Rules
 
-- TypeScript strict mode (no `any`)
-- `"use client"` for hooks/events/browser APIs
-- TanStack Query for all data fetching
-- Handle loading/error/success states
+- TypeScript strict mode (no `any`); TypeScript interfaces for props;
+  kebab-case files, PascalCase components.
+- `"use client"` for hooks/events/browser APIs.
+- TanStack Query for all data fetching (`validatedGet` + Zod schemas from
+  `lib/core`); always handle loading/error/success states.
 - Resolve the current Data Dragon version server-side through the cached
   manifest helper and consume it through `useDDragonVersion()` for versioned
   assets. Keep the reviewed fallback and null behavior for unknown IDs.
-- Features expose public APIs via `index.ts`
-- Use Next.js `proxy.ts` file convention (not `middleware.ts`)
-- **Every interactive element** (`button`, `a`, `[role="button"]`, etc.) must have `cursor: pointer` — enforced globally via `globals.css`, no per-element override needed
-- **Use custom CSS classes from `globals.css`** — the app defines reusable gradient and utility classes:
-  - `.gold-gradient` — primary CTA (confirm, start, submit) — gold gradient
-  - `.red-gradient` — destructive actions (cancel, delete, stop) — red gradient
-  - `.blue-gradient` — neutral/secondary actions (decline, dismiss) — blue gradient
-  - `.button-small` / `.button-medium` / `.button-full` — gold button size variants with hover effects
-  - `.icon-circle` — 24×24px gold circle icon button (card headers)
-  - `.dialog-white-border` — white border for dialog visibility against dark backgrounds
-  - `.vertical-gradient` — vertical gold gradient background
-  - Always prefer these over inline Tailwind for branded styling
-- **Toast notifications** — use sonner with `richColors` (configured in `layout.tsx`). Use the correct variant for every toast:
-  - `variant: "success"` (green) — confirmed actions: saved, updated, deleted, connected
-  - `variant: "error"` (red) — failures, validation errors, rate limits
-  - `variant: "info"` (blue) — informational: triggered, started, stopped, paused, resumed
-  - `variant: "warning"` (amber) — warnings, cancellations
-  - **Never** use the default variant (white/unstyled) — always pick one of the above
-  - Use `useToast()` hook from `@/lib/core/hooks` (wraps sonner with `{ title, description, variant, duration }`)
-  - Default duration is 4000ms; use `duration: 1000` only for quick inline confirmations (e.g. "Settings saved")
+- Features expose public APIs via `index.ts`.
+- Use Next.js `proxy.ts` file convention (not `middleware.ts`).
+
+## Design-System Contract
+
+These are product design decisions, not suggestions:
+
+- **Every interactive element** (`button`, `a`, `[role="button"]`, etc.) has
+  `cursor: pointer` — enforced globally via `globals.css`, no per-element
+  override needed.
+- **Use the custom classes from `globals.css`** for branded styling instead of
+  inline Tailwind: `.gold-gradient` (primary CTA), `.red-gradient`
+  (destructive/cancel), `.blue-gradient` (neutral/secondary),
+  `.button-small`/`.button-medium`/`.button-full` (gold button sizes),
+  `.icon-circle` (24×24px gold circle icon button), `.dialog-white-border`
+  (dialog visibility), `.vertical-gradient`.
+- **Dialogs** use shadcn `Dialog` + `DialogContent` with
+  `dialog-white-border`, keep default close interactions (top-right `X`,
+  outside click, explicit cancel), and keep the global vertical position from
+  `globals.css` (remaining viewport space in a 1:2 top-to-bottom ratio — do
+  not center or override an individual dialog's `top`/translation). Every
+  dialog title includes a relevant lucide icon with `h-5 w-5 text-[#cfa93a]`.
+  All dialog buttons use `py-2 px-4`; the footer is
+  `flex items-center justify-between gap-2` with Cancel on the left
+  (`red-gradient` + `StopCircle` icon — mandatory for all cancel buttons
+  across the app) and the submit CTA on the right (`button-medium
+  no-rotation` or `gold-gradient` plus a relevant icon). Card-level action
+  buttons outside dialogs use `button-full` and an icon. Show validation
+  errors directly under the related field.
+- **Toasts** use sonner with `richColors` through the `useToast()` hook from
+  `@/lib/core/hooks`. Always pick an explicit variant — `success` (green,
+  confirmed actions), `error` (red, failures), `info` (blue, informational),
+  `warning` (amber) — never the default unstyled variant. Default duration is
+  4000ms; use `duration: 1000` only for quick inline confirmations.
 
 ## Commands
 
@@ -158,13 +84,8 @@ rm -rf .next     # Clear cache
 
 The authoritative gate selects the Node version from `../.nvmrc`, installs with
 `npm ci`, rejects ESLint warnings, and preserves tracked `next-env.d.ts` content
-across the production build.
-
-Install the matching browser before running the separate Playwright suite:
-
-```bash
-npx playwright install chromium
-```
+across the production build. Install the matching browser once before the
+separate Playwright suite: `npx playwright install chromium`.
 
 The production image is defined by `Dockerfile`, installs with `npm ci`, builds
 the Next standalone output, and runs `server.js` as non-root UID/GID 10001.
@@ -175,6 +96,6 @@ the private Compose backend service. Normal `npm run dev` and repository
 
 ## Related Docs
 
-- [app/AGENTS.md](app/AGENTS.md) - Page patterns
-- [components/AGENTS.md](components/AGENTS.md) - Shared components
-- [features/AGENTS.md](features/AGENTS.md) - Feature components
+- [app/AGENTS.md](app/AGENTS.md) - Page-level rules
+- [components/AGENTS.md](components/AGENTS.md) - Shared component rules
+- [features/AGENTS.md](features/AGENTS.md) - Feature invariants

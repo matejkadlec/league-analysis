@@ -1,7 +1,14 @@
 # Runtime and Dependency Upgrade Review (2026-08-03)
 
-> **Authority:** Dated LGA-9 inventory and target-selection record. The live
-> manifests and lockfiles remain authoritative after this review.
+> **Frozen historical snapshot — do not update to reflect current state.**
+> Superseded by
+> [`dependency-upgrade-2026-08-11.md`](dependency-upgrade-2026-08-11.md) and by
+> the live manifests and lockfiles, which are the current version authority.
+> The version tables below describe 2026-08-03 only; the selection rationale
+> (TypeScript alias, `@eslint/compat`, install-script allowlist) remains the
+> clearest record of those decisions.
+>
+> **Scope:** Dated LGA-9 inventory and target-selection record.
 
 ## Method and selection rules
 

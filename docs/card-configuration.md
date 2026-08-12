@@ -32,7 +32,7 @@ secret.
 
 | Surface | Current behavior and dependency | First-release decision | Rationale |
 | --- | --- | --- | --- |
-| **Top Champions** | Both profile routes request `GET /matches/player/{puuid}/champion-stats?queue=420`. The service returns the complete matching champion aggregate in deterministic games-played order; the UI displays five rows per local page. | **Configurable** | The landing page explicitly calls out win-rate, KDA, and role filtering. Minimum games is an owner-approved aggregate threshold, not a claim about that landing-page copy. |
+| **Top Champions** | The profile page requests `GET /matches/player/{puuid}/champion-stats?queue=420` (no limit parameter). The service returns the complete matching champion aggregate ordered by games played with the champion name as the deterministic tie-breaker; the UI displays five rows per local page. | **Configurable** | The landing page explicitly calls out win-rate, KDA, and role filtering. Minimum games is an owner-approved aggregate threshold, not a claim about that landing-page copy. |
 | **Recent Performance** | The card requests the latest 10 ranked-solo/duo matches and an overall ranked-solo/duo request without a limit; the service currently caps that overall fetch at 10,000 matches. A win-rate change must exceed 5 percentage points; every other metric must differ by more than 5% of its overall value. | **Configurable** | The threshold is hard-coded and the landing page identifies performance trends as the primary configurable-card use case. |
 | **Role Performance** | `GET /matches/player/{puuid}/lane-stats?queue=420` groups recognized positions and orders them by games played. Win-rate and KDA color bands are display-only. | Not configurable in v1 | A role selector on this card would hide the comparison it is meant to show. The Top Champions role filter gives a useful, non-duplicated role choice. |
 | **Player summary** | A `PlayerCard` combines identity, rank, refresh/tracking controls, and unfiltered summary statistics. | Not configurable in v1 | It is a profile summary and action surface, not a filtered analytical result. |
@@ -40,9 +40,10 @@ secret.
 | **Matchmaking Analysis result** | The result explains one explicitly requested matchmaking analysis and its inputs. | Not configurable in v1 | Its inputs belong to the analysis invocation and require a separate methodology decision. |
 | **Match History** | This is a chronological exploration component rather than a configured result card. | Deferred to LGA-29 | Expanding/filtering match history has its own data-contract and UX decision. |
 
-The current profile routes intentionally use the same three profile-stat cards
-for the owner's profile and a tracked player. The configurable cards therefore
-need one viewer-scoped contract, not route-specific or player-specific copies.
+The shared profile page (`/my-profile`, driven by the current-player context
+and `?puuid=`) intentionally uses the same three profile-stat cards for the
+owner's profile and a tracked player. The configurable cards therefore need
+one viewer-scoped contract, not route-specific or player-specific copies.
 
 ## Proposed catalog
 
@@ -134,8 +135,8 @@ LGA-46 owns pagination through that result and is not part of this ticket.
    eligible, as does a one-game aggregate at the default minimum-games value.
 4. Order eligible champions by games played descending. For equal game counts,
    use the canonical champion name in ascending lexicographic order as the
-   secondary key. This intentionally resolves the current backend's previously
-   unspecified tie ordering.
+   secondary key. The backend already implements exactly this ordering for the
+   unfiltered aggregate; the filtered calculation must keep it.
 5. Order the complete eligible result and return up to five eligible rows for
    the LGA-23 card. The normalized `displayLimit: 5` is a fixed maximum and
    not configurable; the card never pads or fabricates rows when fewer
@@ -144,13 +145,13 @@ LGA-46 owns pagination through that result and is not part of this ticket.
    when data exists but no aggregate meets the selected filters.
 
 Default equivalence covers the current filters, metrics, sample populations,
-and row capacity. Because the old tie sequence was unspecified, this contract
-intentionally permits only tied-row ordering to change while making it stable.
+row capacity, and the already-implemented deterministic tie ordering.
 
-These settings affect server-side calculation. Applying the filters only after
-the current `limit=20` response would incorrectly hide a qualifying champion
-that is outside the unfiltered top 20 and would make a role filter semantically
-wrong.
+These settings affect server-side calculation. Applying the filters only to a
+truncated client-side page of the aggregate would incorrectly hide a
+qualifying champion outside that page and would make a role filter
+semantically wrong; filters must be applied to the complete aggregate
+population before ordering and display.
 
 ### Recent Performance
 
@@ -189,10 +190,9 @@ not the returned aggregate values.
 ## Defaults and lifecycle behavior
 
 A viewer with no saved preference receives the normalized defaults above. They
-reproduce the current filters, metrics, sample populations, and row capacity.
-The contract intentionally defines deterministic ordering for ties that the
-current implementation leaves unspecified. The only documented follow-up
-display differences are the order of tied champion rows and, for a sparse
+reproduce the current filters, metrics, sample populations, row capacity, and
+the deterministic tie ordering the backend already implements. The only
+documented follow-up display difference is, for a sparse
 recent population, an actual-sample-size label instead of `Recent 10 games`:
 
 | Card | Current behavior preserved by default |

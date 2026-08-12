@@ -1,82 +1,26 @@
 # Features (`features/`)
 
-> **Scope:** Frontend domain-feature organization and conventions under
+> **Scope:** Frontend feature invariants and conventions under
 > `frontend/features/`.
 >
-> **Maintenance:** Update when feature boundaries, public export patterns,
-> component conventions, or the feature inventory changes.
+> **Maintenance:** Update when a feature invariant or convention changes. The
+> feature inventory and per-feature structure live in the code
+> (`features/<name>/`: `components/`, `index.ts`, optional `types.ts` and
+> `utils/`).
 
 Inherits repository-wide rules from [`../../AGENTS.md`](../../AGENTS.md) and
 frontend rules from [`../AGENTS.md`](../AGENTS.md).
 
-Domain-specific UI components. Each feature is self-contained with its own components and exports.
-
-## Features
-
-| Feature               | Description                        |
-| --------------------- | ---------------------------------- |
-| `auth/`               | Authentication context, rotating refresh tokens, adaptive Turnstile CAPTCHA, safe sign-in error mapping, accessible password visibility, signed-in redirect away from `/sign-in`, auth-hinted public routes (`/join-us`, `/license`, `/privacy-policy`, `/cookie-policy`) |
-| `cookie-consent/`     | EU-style consent banner, browser consent persistence, optional-storage gating, authenticated consent sync to backend |
-| `jobs/`               | Job monitoring components          |
-| `matches/`            | Match history display              |
-| `matchmaking/`        | Match fairness analysis with persisted run rehydration |
-| `players/`            | Per-user current-player context, sidebar search/switching, cards, explicit sync, tracking, tracked-list controls |
-| `playstyle-analysis/` | Playstyle analysis results         |
-| `profile/`            | Signed-in user's champion, role, and recent-performance summaries |
-
-## Structure
-
-```
-features/<name>/
-├── components/           # Feature components
-├── index.ts              # Public exports
-├── types.ts              # Feature-specific types (optional)
-└── utils/                # Feature utilities (optional)
-```
-
-## Public API Pattern
-
-```typescript
-// features/players/index.ts
-export { PlayerSearch } from "./components/player-search";
-export { PlayerCard } from "./components/player-card";
-export { PlayerContextProvider, usePlayerContext } from "./context/player-context";
-```
-
-## Component Pattern
-
-```typescript
-"use client";
-
-import { useQuery } from "@tanstack/react-query";
-import { Card } from "@/components/ui/card";
-import { validatedGet } from "@/lib/core/api";
-
-interface MyComponentProps {
-  id: string;
-}
-
-export function MyComponent({ id }: MyComponentProps) {
-  const { data, isLoading, error } = useQuery({
-    queryKey: ["my-data", id],
-    queryFn: () => validatedGet(Schema, `/endpoint/${id}`),
-  });
-
-  if (isLoading) return <div>Loading...</div>;
-  if (error) return <div>Error</div>;
-  return <Card>{data}</Card>;
-}
-```
+Domain-specific UI components. Each feature is self-contained and exports its
+public API via `index.ts`.
 
 ## Rules
 
-- `"use client"` for interactivity
-- TypeScript interfaces for props
-- Handle loading/error/success states
+- `"use client"` for interactivity; TypeScript interfaces for props; handle
+  loading/error/success states; use shadcn/ui from `@/components/ui/`;
+  kebab-case files, PascalCase components.
 - Service reachability errors may suggest checking the League Analysis backend,
   but must not claim that the user's internet connection is unavailable.
-- Use shadcn/ui from `@/components/ui/`
-- Export via `index.ts`
 - Ordinary player-centric pages consume `usePlayerContext()` and keep the
   explicit URL PUUID authoritative for the current tab. Matchmaking Analysis
   remains a deliberate local-target exception.
@@ -99,7 +43,6 @@ export function MyComponent({ id }: MyComponentProps) {
 - Use `profile_synced_at`, `league_synced_at`, or `match_synced_at` according to
   the card's actual source. Multi-source identity cards use the oldest complete
   required timestamp; never use generic `updated_at` as data freshness.
-- kebab-case files, PascalCase components
 - Matchmaking Analysis must seed its active UI from the fast start response,
   rehydrate and poll the exact persisted run, treat rate-limit waits as active,
   cancel by `created_at`, and invalidate result/history data on completion. Keep
