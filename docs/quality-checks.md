@@ -26,18 +26,6 @@ publication. Every step is named and fail-fast. The script resolves its own
 worktree root, so it is safe to call from the main checkout, another directory,
 or a Git worktree.
 
-Every invocation enters `scripts/guard-git-worktree-test.sh` exactly once before
-running a check. The guard verifies before and after the child process that the
-repository is still a non-bare worktree, its worktree/common Git directory
-identity is unchanged, and protected local/worktree configuration is unchanged.
-Protected keys include `core.bare`, `core.worktree`, `core.gitdir`,
-`core.hooksPath`, `extensions.worktreeConfig`, and the
-`league-analysis.trustedhookspath` ownership marker. Signals terminate the
-guarded process group, integrity failures fail closed with before/after
-diagnostics, and an ordinary test failure keeps its original status. The
-`LGA_GIT_WORKTREE_GUARD_ACTIVE` variable is an internal recursion marker; do not
-set it to bypass the guard.
-
 Frontend runs preserve the pre-existing tracked state of
 `frontend/next-env.d.ts`; ignored build/cache outputs stay outside the diff.
 

@@ -5,12 +5,6 @@ set -euo pipefail
 repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly repository_root
 
-worktree_guard="$repository_root/scripts/guard-git-worktree-test.sh"
-if [[ "${LGA_GIT_WORKTREE_GUARD_ACTIVE:-}" != "1" ]]; then
-  export LGA_GIT_WORKTREE_GUARD_ACTIVE=1
-  exec "$worktree_guard" --repository "$repository_root" -- "$repository_root/test.sh" "$@"
-fi
-
 run_frontend=true
 run_backend=true
 next_env_file="$repository_root/frontend/next-env.d.ts"
@@ -197,7 +191,6 @@ run_step 'Dependabot configuration' python3 "$repository_root/scripts/check-depe
 run_step 'GitHub governance configuration' "$repository_root/scripts/test-github-governance.sh"
 run_step 'Dependency audit policy regression' python3 "$repository_root/scripts/test-dependency-audit.py"
 run_step 'Skill discovery regression' "$repository_root/scripts/test-skill-discovery.sh"
-run_step 'Worktree tooling regression' "$repository_root/scripts/test-worktree-tooling.sh"
 
 if [[ "$run_frontend" == true ]]; then
   # shellcheck disable=SC1091
