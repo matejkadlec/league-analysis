@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   isPlayerCentricPath,
+  playerNavigationRoute,
   playerOverviewRoute,
   playerRoute,
 } from "../features/players/player-routes";
@@ -27,5 +28,18 @@ describe("player routes", () => {
       "/player-overview?puuid=player%2F1",
     );
     expect(playerOverviewRoute()).toBe("/player-overview");
+  });
+
+  it("keeps the URL-selected PUUID in both player navigation targets", () => {
+    expect(playerNavigationRoute("/player-overview", "player/1")).toBe(
+      "/player-overview?puuid=player%2F1",
+    );
+    expect(playerNavigationRoute("/match-history", "player/1")).toBe(
+      "/match-history?puuid=player%2F1",
+    );
+    expect(playerNavigationRoute("/matchmaking-analysis", "player/1")).toBe(
+      "/matchmaking-analysis",
+    );
+    expect(playerNavigationRoute("/match-history")).toBe("/match-history");
   });
 });

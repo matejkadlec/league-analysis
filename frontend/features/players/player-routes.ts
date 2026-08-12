@@ -28,3 +28,12 @@ export function playerOverviewRoute(puuid?: string | null): string {
     ? `${PLAYER_OVERVIEW_PATH}?puuid=${encodeURIComponent(puuid)}`
     : PLAYER_OVERVIEW_PATH;
 }
+
+export function playerNavigationRoute(
+  pathname: string,
+  puuid?: string | null,
+): string {
+  return isPlayerCentricPath(pathname) && puuid
+    ? `${pathname}?puuid=${encodeURIComponent(puuid)}`
+    : pathname;
+}

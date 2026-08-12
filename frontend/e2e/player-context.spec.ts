@@ -409,7 +409,12 @@ test("keeps player routes, sidebar switching, and dialog scroll lock determinist
   await expect(untrackedTag).toHaveText(/Track/);
   expect(await untrackedTag.boundingBox()).toEqual(untrackedTagBeforeHover);
 
-  await page.getByRole("link", { name: "Match History" }).click();
+  const matchHistoryNav = page.getByRole("link", { name: "Match History" });
+  await expect(matchHistoryNav).toHaveAttribute(
+    "href",
+    `/match-history?puuid=${RECENT_PUUID}`,
+  );
+  await matchHistoryNav.click();
   await expect(page).toHaveURL(
     new RegExp(`/match-history\\?puuid=${RECENT_PUUID}`),
   );
@@ -446,7 +451,14 @@ test("keeps player routes, sidebar switching, and dialog scroll lock determinist
     Math.abs((matchCardAfterFilter?.x ?? 0) - (matchCardBeforeFilter?.x ?? 0)),
   ).toBeLessThanOrEqual(0.5);
 
-  await page.getByRole("link", { name: "Player Overview" }).click();
+  const playerOverviewLink = page.getByRole("link", {
+    name: "Player Overview",
+  });
+  await expect(playerOverviewLink).toHaveAttribute(
+    "href",
+    `/player-overview?puuid=${RECENT_PUUID}`,
+  );
+  await playerOverviewLink.click();
   await expect(page).toHaveURL(
     new RegExp(`/player-overview\\?puuid=${RECENT_PUUID}`),
   );

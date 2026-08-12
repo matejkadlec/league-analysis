@@ -2,12 +2,15 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import { Menu, X, User, LogOut, Settings, Users, Wrench } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/features/auth";
-import { SidebarPlayerSwitcher } from "@/features/players";
+import {
+  playerNavigationRoute,
+  SidebarPlayerSwitcher,
+} from "@/features/players";
 
 interface NavItem {
   name: string;
@@ -25,6 +28,8 @@ export function SidebarNav() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [managePlayersOpen, setManagePlayersOpen] = useState(false);
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const urlPuuid = searchParams.get("puuid");
   const { user, logout, isAuthenticated, isLoading } = useAuth();
 
   // Hide sidebar on public auth pages or when not authenticated
@@ -101,11 +106,12 @@ export function SidebarNav() {
             <ul className="min-h-0 flex-1 space-y-2 overflow-y-auto">
               {navItems.map((item) => {
                 const active = isActive(item.path);
+                const href = playerNavigationRoute(item.path, urlPuuid);
 
                 return (
                   <li key={item.name}>
                     <Link
-                      href={item.path}
+                      href={href}
                       onClick={() => setMenuOpen(false)}
                       data-active={active}
                       className={`block border-l-4 px-6 py-3 text-white transition-colors duration-300 hover:bg-white/10 ${

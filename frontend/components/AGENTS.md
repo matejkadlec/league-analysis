@@ -32,3 +32,6 @@ go in `features/`.
   View Tracked Players action at the bottom of the ordinary navigation group
   so it can be restored without recreating the trigger; the dialog remains the
   complete switching and management surface.
+- Player Overview and Match History navigation links preserve the current
+  URL's explicit `?puuid=`. Never rebuild those links from only the persisted
+  account context because the URL is authoritative for the current tab.

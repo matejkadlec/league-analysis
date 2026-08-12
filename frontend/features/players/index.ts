@@ -13,6 +13,7 @@ export {
   MATCH_HISTORY_PATH,
   PLAYER_OVERVIEW_PATH,
   isPlayerCentricPath,
+  playerNavigationRoute,
   playerOverviewRoute,
   playerRoute,
 } from "./player-routes";
