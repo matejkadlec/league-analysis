@@ -100,6 +100,11 @@ compose_up_line="$(grep -n -F 'compose up --detach --remove-orphans --wait --wai
   || fail 'the pre-deployment PostgreSQL backup must finish before migration/startup.'
 grep -Fq 'install-pi-postgres-backup-timer.sh' "$deploy_script" \
   || fail 'a successful deployment must refresh the reviewed operations and backup timer.'
+backup_timer_installer="$repository_root/deploy/install-pi-postgres-backup-timer.sh"
+grep -Fq 'sudo -n systemctl enable --now' "$backup_timer_installer" \
+  || fail 'the backup timer must be installed as a system unit.'
+grep -q '^systemctl --user\|[^-]systemctl --user enable' "$backup_timer_installer" \
+  && fail 'the backup timer must not be enabled through the user systemd manager, which has no session bus under CI.'
 grep -Fq 'label=com.docker.compose.volume=postgres_data' "$deploy_script" \
   || fail 'a missing PostgreSQL container must not hide an existing production volume.'
 grep -Fq 'refusing to skip the pre-deployment backup' "$deploy_script" \
