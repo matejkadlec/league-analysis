@@ -4,12 +4,21 @@ set -euo pipefail
 
 repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 readonly repository_root shellcheck_version='0.11.0'
-shellcheck_binary="${SHELLCHECK_BINARY:-shellcheck}"
+shellcheck_binary="${SHELLCHECK_BINARY:-}"
 
-if ! command -v "$shellcheck_binary" >/dev/null 2>&1; then
-  printf 'ERROR: ShellCheck is required; run ./scripts/install-shellcheck.sh.\n' >&2
-  exit 1
+if [[ -z "$shellcheck_binary" ]]; then
+  shellcheck_binary="$(command -v shellcheck || true)"
 fi
+if [[ -z "$shellcheck_binary" ]]; then
+  cache_directory="${XDG_CACHE_HOME:-$HOME/.cache}/league-analysis/shellcheck-${shellcheck_version}"
+  shellcheck_binary="$cache_directory/shellcheck"
+  "$repository_root/scripts/install-shellcheck.sh" "$cache_directory" >/dev/null
+fi
+
+[[ -x "$shellcheck_binary" ]] || {
+  printf 'ERROR: ShellCheck is not executable: %s\n' "$shellcheck_binary" >&2
+  exit 1
+}
 version_output="$("$shellcheck_binary" --version)"
 grep -Fqx "version: $shellcheck_version" <<< "$version_output" || {
   printf 'ERROR: ShellCheck %s is required.\n' "$shellcheck_version" >&2

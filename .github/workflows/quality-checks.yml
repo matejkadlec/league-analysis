@@ -21,20 +21,6 @@ jobs:
     name: Deterministic full-project gate
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    services:
-      postgres:
-        image: postgres:18.4
-        env:
-          POSTGRES_DB: league_analysis_ci
-          POSTGRES_USER: league_analysis_ci
-          POSTGRES_PASSWORD: league-analysis-ci-password
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U league_analysis_ci -d league_analysis_ci"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
 
     steps:
       - name: Checkout repository
@@ -42,49 +28,12 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Set up Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-
-      - name: Install pinned npm
-        run: npm install --global npm@12.0.2 --ignore-scripts
-
-      - name: Set up uv
-        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
-        with:
-          version: "0.12.3"
-
-      - name: Install pinned Python
-        run: uv python install "$(cat .python-version)"
-
-      - name: Install pinned shell tooling
-        env:
-          SHELLCHECK_BIN_DIR: ${{ runner.temp }}/shellcheck/bin
-          ACTIONLINT_BIN_DIR: ${{ runner.temp }}/actionlint/bin
+      # compose.gate.yml carries the toolchain, the disposable PostgreSQL 18 and
+      # every connection setting, so this is the same command a contributor runs.
+      - name: Run the gate in its pinned container
         run: |
-          ./scripts/install-shellcheck.sh "$SHELLCHECK_BIN_DIR"
-          ./scripts/install-actionlint.sh "$ACTIONLINT_BIN_DIR"
-          echo "$SHELLCHECK_BIN_DIR" >> "$GITHUB_PATH"
-          echo "$ACTIONLINT_BIN_DIR" >> "$GITHUB_PATH"
-
-      - name: Run the gate and apply migrations to a clean database
-        env:
-          POSTGRES_DB: league_analysis_ci
-          POSTGRES_USER: league_analysis_ci
-          POSTGRES_PASSWORD: league-analysis-ci-password
-          POSTGRES_HOST: 127.0.0.1
-          POSTGRES_PORT: "5432"
-          DEBUG: "false"
-          JWT_SECRET_KEY: league-analysis-ci-jwt-secret-32-characters
-          ENVIRONMENT: test
-          LGA_POSTGRES_CLIENT_CONTAINER: ${{ job.services.postgres.id }}
-        run: |
-          ./test.sh
-          cd backend
-          uv run python scripts/migrate.py upgrade head
+          LGA_GATE_UID="$(id -u)" LGA_GATE_GID="$(id -g)" \
+            docker compose --file compose.gate.yml run --rm --build --no-TTY gate
 
       - name: Build and verify isolated production containers
         run: ./deploy/container-qa.sh
