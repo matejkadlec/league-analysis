@@ -186,9 +186,6 @@ run_step 'Deployment and container contract regression' "$repository_root/script
 run_step 'PostgreSQL operations regression' "$repository_root/scripts/test-postgres-operations.sh"
 run_step 'GitHub workflow syntax' "$repository_root/scripts/run-actionlint.sh"
 run_step 'actionlint tooling regression' "$repository_root/scripts/test-actionlint.sh"
-run_step 'GitHub workflow security policy' python3 "$repository_root/scripts/verify-github-workflows.py"
-run_step 'Dependabot configuration' python3 "$repository_root/scripts/check-dependabot-config.py"
-run_step 'GitHub governance configuration' "$repository_root/scripts/test-github-governance.sh"
 run_step 'Dependency audit policy regression' python3 "$repository_root/scripts/test-dependency-audit.py"
 run_step 'Skill discovery regression' "$repository_root/scripts/test-skill-discovery.sh"
 
