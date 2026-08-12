@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   type ApiError,
+  apiErrorMessage,
   api,
   validatedGet,
   validatedPatch,
@@ -43,7 +44,7 @@ import {
 } from "@/components/ui/select";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { cn } from "@/lib/core/utils";
-import { toast } from "sonner";
+import { useToast } from "@/lib/core/hooks";
 import { notifyRiotCredentialHealthUpdated } from "@/lib/core/riot-credential-health-events";
 import {
   Check,
@@ -182,6 +183,7 @@ export default function SettingsPage() {
 }
 
 function SettingsPageContent() {
+  const toast = useToast();
   const { user } = useAuth();
   const isAdmin = !!user?.is_admin;
   const [apiKey, setApiKey] = useState("");
@@ -221,8 +223,8 @@ function SettingsPageContent() {
       validatedPut(SettingSchema, "/settings/riot_api_key", { value }),
     onSuccess: (result) => {
       if (result.success) {
-        toast.success("API key updated successfully!", {
-          description: "Changes take effect immediately - no restart needed!",
+        toast.success("Riot API key updated", {
+          description: "The new key is active; no server restart is required.",
         });
         queryClient.invalidateQueries({
           queryKey: ["settings", "riot_api_key"],
@@ -237,14 +239,17 @@ function SettingsPageContent() {
         setApiKey("");
         setTestResult(null);
       } else {
-        toast.error("Failed to update API key", {
-          description: result.error.message,
+        toast.error("Riot API key was not updated", {
+          description: apiErrorMessage(
+            result.error,
+            "The key could not be saved. Please try again later.",
+          ),
         });
       }
     },
-    onError: (error: Error) => {
-      toast.error("Failed to update API key", {
-        description: error.message || "An unexpected error occurred",
+    onError: () => {
+      toast.error("Riot API key was not updated", {
+        description: "The key could not be saved. Please try again later.",
       });
     },
   });
@@ -262,30 +267,37 @@ function SettingsPageContent() {
           message: result.data.message,
         });
         if (result.data.status === "valid") {
-          toast.success("API key is valid!", {
-            description: result.data.message,
+          toast.success("Riot API key is valid", {
+            description: "Riot accepted the key.",
           });
         } else if (result.data.status === "unavailable") {
-          toast.warning("API key could not be verified", {
-            description: result.data.message,
+          toast.warning("Riot API key could not be verified", {
+            description: "Riot could not be reached. Try again later.",
           });
         } else {
-          toast.error("API key is invalid", {
-            description: result.data.message,
+          toast.error("Riot API key is invalid", {
+            description: "Check the key and try again.",
           });
         }
+      } else {
+        toast.error("Riot API key could not be tested", {
+          description: apiErrorMessage(
+            result.error,
+            "The key could not be tested. Please try again later.",
+          ),
+        });
       }
     },
-    onError: (error: Error) => {
-      toast.error("Failed to test API key", {
-        description: error.message || "An unexpected error occurred",
+    onError: () => {
+      toast.error("Riot API key could not be tested", {
+        description: "The key could not be tested. Please try again later.",
       });
     },
   });
 
   const handleTestKey = () => {
     if (!apiKey.trim()) {
-      toast.error("Please enter an API key");
+      toast.error("Enter a Riot API key");
       return;
     }
     setTestingKey(true);
@@ -296,13 +308,13 @@ function SettingsPageContent() {
 
   const handleSaveKey = () => {
     if (!apiKey.trim()) {
-      toast.error("Please enter an API key");
+      toast.error("Enter a Riot API key");
       return;
     }
 
     if (!apiKey.startsWith("RGAPI-")) {
-      toast.error("Invalid API key format", {
-        description: "Riot API keys must start with 'RGAPI-'",
+      toast.error("Check the Riot API key format", {
+        description: "Riot API keys must start with 'RGAPI-'.",
       });
       return;
     }
@@ -498,6 +510,7 @@ interface UserSettingsCardProps {
 function UserSettingsCard({
   className = "lg:col-span-1",
 }: UserSettingsCardProps) {
+  const toast = useToast();
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const userId = user?.id;
@@ -526,13 +539,13 @@ function UserSettingsCard({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["user-settings", userId] });
-      toast.success("Settings saved", {
+      toast.success("Application settings saved", {
         duration: 1000,
       });
     },
-    onError: (error: Error) => {
-      toast.error("Failed to save settings", {
-        description: error.message,
+    onError: () => {
+      toast.error("Application settings were not saved", {
+        description: "Please try again later.",
       });
     },
   });
@@ -628,6 +641,7 @@ interface AccountSettingsCardProps {
 function AccountSettingsCard({
   className = "lg:col-span-1",
 }: AccountSettingsCardProps) {
+  const toast = useToast();
   const queryClient = useQueryClient();
   const { user, checkAuth } = useAuth();
 
@@ -740,9 +754,9 @@ function AccountSettingsCard({
         duration: 1000,
       });
     },
-    onError: (error: Error) => {
-      toast.error("Failed to update display name", {
-        description: error.message,
+    onError: () => {
+      toast.error("Display name was not updated", {
+        description: "Please try again later.",
       });
     },
   });
@@ -764,7 +778,7 @@ function AccountSettingsCard({
       setEmailCodeError(null);
       setEmailCodeDigits(emptyCodeDigits());
       setEmailDialogStep("code");
-      toast.success("Verification code sent", {
+      toast.success("Email verification code sent", {
         description: "Check your new email inbox for the 6-digit code.",
       });
     },
@@ -798,8 +812,8 @@ function AccountSettingsCard({
         return;
       }
 
-      toast.error("Failed to send verification code", {
-        description: mutationError.message,
+      toast.error("Email verification code was not sent", {
+        description: "Please try again later.",
       });
     },
   });
@@ -821,7 +835,7 @@ function AccountSettingsCard({
     onSuccess: () => {
       setEmailChangeLockedUntil(null);
       handleEmailDialogOpenChange(false);
-      toast.success("Email updated successfully.");
+      toast.success("Email address updated");
       void checkAuth();
     },
     onError: (error: Error) => {
@@ -859,8 +873,8 @@ function AccountSettingsCard({
         return;
       }
 
-      toast.error("Failed to verify code", {
-        description: mutationError.message,
+      toast.error("Email verification failed", {
+        description: "Request a new code and try again.",
       });
     },
   });
@@ -890,7 +904,7 @@ function AccountSettingsCard({
       setShowCurrentPassword(false);
       setShowNewPassword(false);
       setCurrentPasswordError(null);
-      toast.success("Password changed successfully.");
+      toast.success("Password changed");
     },
     onError: (error: Error) => {
       const mutationError = error as MutationError;
@@ -899,8 +913,8 @@ function AccountSettingsCard({
         return;
       }
 
-      toast.error("Failed to change password", {
-        description: error.message,
+      toast.error("Password was not changed", {
+        description: "Please try again later.",
       });
     },
   });
@@ -918,20 +932,20 @@ function AccountSettingsCard({
     const trimmed = displayName.trim();
 
     if (!trimmed) {
-      toast.error("Display name cannot be empty");
+      toast.error("Enter a display name");
       return;
     }
 
     if (trimmed.length < 3) {
       toast.error("Display name too short", {
-        description: "Must be at least 3 characters",
+        description: "Use at least 3 characters.",
       });
       return;
     }
 
     const validPattern = /^[\p{L}](?:[\p{L}\p{M}_ ]*[\p{L}])?$/u;
     if (!validPattern.test(trimmed)) {
-      toast.error("Invalid display name", {
+      toast.error("Check the display name", {
         description:
           "Must only contain letters, underscores, and spaces. Cannot start or end with space or underscore.",
       });
@@ -939,9 +953,9 @@ function AccountSettingsCard({
     }
 
     if (!/^[\p{L}\p{M}_ ]+$/u.test(trimmed)) {
-      toast.error("Invalid characters", {
+      toast.error("Check the display name characters", {
         description:
-          "Only letters, underscores, and spaces are allowed in display name",
+          "Only letters, underscores, and spaces are allowed in the display name.",
       });
       return;
     }

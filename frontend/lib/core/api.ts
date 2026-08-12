@@ -4,6 +4,14 @@ import axios, {
   InternalAxiosRequestConfig,
 } from "axios";
 import { z } from "zod";
+import { normalizeApiError } from "./api-error";
+export {
+  apiErrorMessage,
+  normalizeApiError,
+  type ApiError,
+  type ApiErrorKind,
+} from "./api-error";
+import type { ApiError } from "./api-error";
 import {
   Player,
   PlayerSchema,
@@ -38,13 +46,6 @@ api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   return config;
 });
 
-export interface ApiError {
-  message: string;
-  code?: string;
-  status?: number;
-  details?: unknown;
-}
-
 export type ApiResponse<T> =
   { success: true; data: T } | { success: false; error: ApiError };
 
@@ -64,7 +65,12 @@ export function getRiotApiKeySignal(responseData: unknown): RiotApiKeySignal {
 function isApiKeyError(response: AxiosResponse | undefined): boolean {
   if (!response) return false;
   const detail = response.data?.detail;
-  return detail === RIOT_API_KEY_INVALID_CODE;
+  return (
+    detail === RIOT_API_KEY_INVALID_CODE ||
+    (typeof detail === "object" &&
+      detail !== null &&
+      detail.code === RIOT_API_KEY_INVALID_CODE)
+  );
 }
 
 api.interceptors.response.use(
@@ -115,56 +121,15 @@ api.interceptors.response.use(
     return api(originalRequest);
   },
 );
-function formatError(error: unknown): ApiError {
-  if (axios.isAxiosError(error)) {
-    const status = error.response?.status;
-    const data = error.response?.data;
-    const detail = data?.detail;
-
-    if (status === 404 && typeof detail === "string") {
-      return {
-        message: detail,
-        code: "PLAYER_NOT_FOUND",
-        status: 404,
-        details: data,
-      };
-    }
-
-    const message =
-      typeof detail === "string"
-        ? detail
-        : data?.message
-          ? data.message
-          : error.message || "An unknown API error occurred";
-
-    return {
-      message,
-      code: error.code,
-      status: status,
-      details: data,
-    };
-  }
-
-  if (error instanceof z.ZodError) {
-    return {
-      message: "Data validation failed",
-      code: "VALIDATION_ERROR",
-      details: error.issues,
-    };
-  }
-
-  if (error instanceof Error) {
-    return { message: error.message, code: "UNKNOWN_ERROR" };
-  }
-
-  return { message: "An unknown error occurred", code: "UNKNOWN_ERROR" };
-}
-
 function logValidationError(url: string, data: unknown, error: z.ZodError) {
-  console.error("🔴 ZOD VALIDATION FAILED 🔴");
-  console.error("URL:", url);
-  console.error("Response:", data);
-  console.error("Errors:", JSON.stringify(error.format(), null, 2));
+  void data;
+  console.error("API response validation failed", {
+    url,
+    issues: error.issues.map((issue) => ({
+      code: issue.code,
+      path: issue.path.join("."),
+    })),
+  });
 }
 
 async function validateResponse<T>(
@@ -176,7 +141,7 @@ async function validateResponse<T>(
 
   if (!parsed.success) {
     logValidationError(url, responseData, parsed.error);
-    return { success: false, error: formatError(parsed.error) };
+    return { success: false, error: normalizeApiError(parsed.error) };
   }
 
   return { success: true, data: parsed.data };
@@ -191,7 +156,7 @@ export async function validatedGet<T>(
     const response = await api.get(url, { params });
     return validateResponse(schema, url, response.data);
   } catch (error) {
-    return { success: false, error: formatError(error) };
+    return { success: false, error: normalizeApiError(error) };
   }
 }
 
@@ -204,7 +169,7 @@ export async function validatedPost<T>(
     const response = await api.post(url, data);
     return validateResponse(schema, url, response.data);
   } catch (error) {
-    return { success: false, error: formatError(error) };
+    return { success: false, error: normalizeApiError(error) };
   }
 }
 
@@ -217,7 +182,7 @@ export async function validatedPut<T>(
     const response = await api.put(url, data);
     return validateResponse(schema, url, response.data);
   } catch (error) {
-    return { success: false, error: formatError(error) };
+    return { success: false, error: normalizeApiError(error) };
   }
 }
 
@@ -229,7 +194,7 @@ export async function validatedDelete<T>(
     const response = await api.delete(url);
     return validateResponse(schema, url, response.data);
   } catch (error) {
-    return { success: false, error: formatError(error) };
+    return { success: false, error: normalizeApiError(error) };
   }
 }
 
@@ -242,7 +207,7 @@ export async function validatedPatch<T>(
     const response = await api.patch(url, data);
     return validateResponse(schema, url, response.data);
   } catch (error) {
-    return { success: false, error: formatError(error) };
+    return { success: false, error: normalizeApiError(error) };
   }
 }
 
@@ -265,7 +230,7 @@ export async function trackPlayer(puuid: string): Promise<ApiResponse<Player>> {
   } catch (error) {
     return {
       success: false,
-      error: formatError(error),
+      error: normalizeApiError(error),
     };
   }
 }
@@ -282,7 +247,7 @@ export async function untrackPlayer(
   } catch (error) {
     return {
       success: false,
-      error: formatError(error),
+      error: normalizeApiError(error),
     };
   }
 }
@@ -299,7 +264,7 @@ export async function getTrackingStatus(
   } catch (error) {
     return {
       success: false,
-      error: formatError(error),
+      error: normalizeApiError(error),
     };
   }
 }
@@ -316,7 +281,7 @@ export async function getTrackedPlayers(): Promise<
   } catch (error) {
     return {
       success: false,
-      error: formatError(error),
+      error: normalizeApiError(error),
     };
   }
 }
@@ -339,7 +304,7 @@ export async function addTrackedPlayer(
   } catch (error) {
     return {
       success: false,
-      error: formatError(error),
+      error: normalizeApiError(error),
     };
   }
 }
@@ -381,7 +346,7 @@ export async function checkPlayerMatches(
   } catch (error) {
     return {
       success: false,
-      error: formatError(error),
+      error: normalizeApiError(error),
     };
   }
 }
@@ -454,7 +419,7 @@ export async function cancelMatchmakingAnalysis(
   } catch (error) {
     return {
       success: false,
-      error: formatError(error),
+      error: normalizeApiError(error),
     };
   }
 }
@@ -475,7 +440,7 @@ export async function deleteMatchmakingAnalysisRecord(
   } catch (error) {
     return {
       success: false,
-      error: formatError(error),
+      error: normalizeApiError(error),
     };
   }
 }
@@ -498,7 +463,7 @@ export async function connectRiotAccount(
   } catch (error) {
     return {
       success: false,
-      error: formatError(error),
+      error: normalizeApiError(error),
     };
   }
 }

@@ -7,7 +7,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { SidebarNav } from "@/components/sidebar-nav";
 import { HeaderMessages } from "@/components/header-messages";
 import { CookieConsentManager } from "@/features/cookie-consent";
-import { Toaster } from "sonner";
+import { ToastHost } from "@/components/toast-host";
 import { resolveDDragonVersion } from "@/lib/core/data-dragon-version";
 
 const montserrat = Montserrat({
@@ -82,7 +82,7 @@ export default async function RootLayout({
               </main>
             </div>
             <CookieConsentManager />
-            <Toaster position="top-right" richColors />
+            <ToastHost />
           </Providers>
         </ThemeProvider>
       </body>

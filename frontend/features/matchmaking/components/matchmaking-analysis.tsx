@@ -23,7 +23,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { toast } from "sonner";
+import { useToast } from "@/lib/core/hooks";
+import type { MatchmakingAnalysisResponse } from "@/lib/core/schemas";
 
 interface MatchmakingAnalysisProps {
   puuid: string;
@@ -136,7 +137,28 @@ function isSameAnalysisInstance(
   return firstTimestamp === secondTimestamp;
 }
 
+function analysisFailureMessage(
+  analysis: MatchmakingAnalysisResponse | null | undefined,
+): string {
+  switch (analysis?.error_code) {
+    case "RIOT_API_KEY_INVALID":
+      return "The Riot API key is invalid or expired. Please contact an administrator.";
+    case "riot_service_error":
+      return "Riot data could not be loaded for this analysis. Please try again.";
+    case "not_enough_matches":
+      return (
+        analysis.error_message ??
+        "This player does not have enough ranked matches for an analysis."
+      );
+    case "player_not_in_match":
+      return "The selected player could not be verified in the latest matches.";
+    default:
+      return "The analysis did not finish. Please try again.";
+  }
+}
+
 export function MatchmakingAnalysis({ puuid }: MatchmakingAnalysisProps) {
+  const toast = useToast();
   const queryClient = useQueryClient();
   const [phase, setPhase] = useState<UIPhase>("idle");
   const [animProgress, setAnimProgress] = useState<number | null>(null);
@@ -295,7 +317,9 @@ export function MatchmakingAnalysis({ puuid }: MatchmakingAnalysisProps) {
           setPhase("completing-fast");
           setAnimProgress(0); // Start at 0%
         } else {
-          toast.success("Analysis finished successfully");
+          toast.success("Matchmaking analysis finished", {
+            description: "The latest results and history are ready.",
+          });
           setPhase("completing-slow");
           setAnimProgress(100);
         }
@@ -325,9 +349,7 @@ export function MatchmakingAnalysis({ puuid }: MatchmakingAnalysisProps) {
       (phase === "running" || phase === "starting")
     ) {
       const terminalUpdate = validStatusUpdate ?? latestForCurrent;
-      const message =
-        terminalUpdate?.error_message ??
-        "The analysis did not finish. Please try again.";
+      const message = analysisFailureMessage(terminalUpdate);
       queryClient.setQueryData(
         ["matchmaking-analysis", puuid],
         terminalUpdate,
@@ -362,6 +384,7 @@ export function MatchmakingAnalysis({ puuid }: MatchmakingAnalysisProps) {
     puuid,
     validStatusUpdate,
     latestForCurrent,
+    toast,
   ]);
 
   // Animation state machine for completion
@@ -382,7 +405,9 @@ export function MatchmakingAnalysis({ puuid }: MatchmakingAnalysisProps) {
       } else if (animProgress === 100) {
         // Show toast and finish
         timer = setTimeout(() => {
-          toast.success("Analysis finished successfully");
+          toast.success("Matchmaking analysis finished", {
+            description: "The latest results and history are ready.",
+          });
           finalizeCompletion();
         }, 750);
       }
@@ -394,7 +419,7 @@ export function MatchmakingAnalysis({ puuid }: MatchmakingAnalysisProps) {
     }
 
     return () => clearTimeout(timer);
-  }, [phase, animProgress, finalizeCompletion]);
+  }, [phase, animProgress, finalizeCompletion, toast]);
 
   // Initialize phase from existing data on mount
   useEffect(() => {
@@ -426,11 +451,6 @@ export function MatchmakingAnalysis({ puuid }: MatchmakingAnalysisProps) {
         anchorTimestamp: Date.now(),
       });
       setPhase("starting");
-    } else if (latestAnalysis?.status === "failed") {
-      setAnalysisFailure(
-        latestAnalysis.error_message ??
-          "The analysis did not finish. Please try again.",
-      );
     }
   }, [
     isLoading,
@@ -469,7 +489,9 @@ export function MatchmakingAnalysis({ puuid }: MatchmakingAnalysisProps) {
       });
     },
     onSuccess: (data) => {
-      toast.info("Matchmaking analysis started");
+      toast.info("Matchmaking analysis started", {
+        description: "Progress will update here while the analysis runs.",
+      });
       queryClient.setQueryData(["matchmaking-analysis", puuid], data);
       // Track the created_at of this new analysis
       setCurrentAnalysisCreatedAt(data.created_at);
@@ -526,7 +548,9 @@ export function MatchmakingAnalysis({ puuid }: MatchmakingAnalysisProps) {
       setCurrentAnalysisCreatedAt(null);
       setAnimProgress(null);
       setPhase("idle");
-      toast.warning("Analysis cancelled");
+      toast.info("Matchmaking analysis cancelled", {
+        description: "The selected analysis run is no longer active.",
+      });
     },
     onError: () => {
       toast.error("The analysis could not be cancelled. Please try again.");

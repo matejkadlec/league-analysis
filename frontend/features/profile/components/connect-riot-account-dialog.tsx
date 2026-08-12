@@ -34,7 +34,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Link2, AlertCircle, StopCircle } from "lucide-react";
-import { toast } from "sonner";
+import { useToast } from "@/lib/core/hooks";
 
 // Server to flag mapping
 const SERVER_FLAGS: Record<string, string> = {
@@ -111,6 +111,7 @@ export function ConnectRiotAccountDialog({
   trigger,
   onSuccess,
 }: ConnectRiotAccountDialogProps) {
+  const toast = useToast();
   const [open, setOpen] = useState(false);
   const { checkAuth } = useAuth();
   const gameNameInputRef = useRef<HTMLInputElement>(null);
@@ -164,7 +165,7 @@ export function ConnectRiotAccountDialog({
         }
         // Handle API key errors with user-friendly message
         if (
-          result.error.message === "RIOT_API_KEY_INVALID" ||
+          result.error.code === "RIOT_API_KEY_INVALID" ||
           result.error.status === 503
         ) {
           throw new Error(
@@ -177,7 +178,9 @@ export function ConnectRiotAccountDialog({
       return result.data;
     },
     onSuccess: () => {
-      toast.success("Successfully connected your Riot account!");
+      toast.success("Riot account connected", {
+        description: "The selected Riot account is now linked.",
+      });
       form.reset();
       reset();
       setOpen(false);

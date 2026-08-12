@@ -62,10 +62,18 @@ These are product design decisions, not suggestions:
   buttons outside dialogs use `button-full` and an icon. Show validation
   errors directly under the related field.
 - **Toasts** use sonner with `richColors` through the `useToast()` hook from
-  `@/lib/core/hooks`. Always pick an explicit variant — `success` (green,
-  confirmed actions), `error` (red, failures), `info` (blue, informational),
-  `warning` (amber) — never the default unstyled variant. Default duration is
-  4000ms; use `duration: 1000` only for quick inline confirmations.
+  `@/lib/core/hooks`; only that adapter and the shared `ToastHost` may import
+  sonner directly. Always pick an explicit variant — `success` (dark green,
+  completed actions), `error` (dark red, failures), `info` (dark blue,
+  informational, queued, started, or running states), `warning` (dark amber)
+  — never the default unstyled variant. The shared host supplies
+  `CircleCheckBig`, `CircleX`, `Info`, and `TriangleAlert` before the toast
+  title. Default duration is 4000ms; use `duration: 1000` only for quick inline
+  confirmations.
+- Normalize API failures through `lib/core/api-error.ts`. UI may present safe
+  typed validation and business messages, but must replace unexpected,
+  provider, transport, and infrastructure details with a contextual product
+  message. Never render raw response bodies or unclassified exception text.
 
 ## Commands
 

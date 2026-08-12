@@ -9,9 +9,8 @@ import {
   UserMinus,
   Users,
 } from "lucide-react";
-import { toast } from "sonner";
-
-import { api, validatedGet } from "@/lib/core/api";
+import { untrackPlayer, validatedGet } from "@/lib/core/api";
+import { useToast } from "@/lib/core/hooks";
 import {
   PlayerLeagueSchema,
   PlayerSchema,
@@ -155,11 +154,12 @@ export function TrackedPlayersList({
   selectedPlayerPuuid = null,
   onViewPlayerChange,
 }: TrackedPlayersListProps) {
+  const toast = useToast();
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const userId = user?.id;
 
-  const { data, isLoading, error, refetch } = useQuery({
+  const { data, isLoading, isFetching, error, refetch } = useQuery({
     queryKey: ["tracked-players", userId],
     queryFn: async () => {
       const result = await validatedGet(
@@ -179,7 +179,10 @@ export function TrackedPlayersList({
 
   const untrackMutation = useMutation({
     mutationFn: async (puuid: string) => {
-      const response = await api.delete(`/players/${puuid}/track`);
+      const response = await untrackPlayer(puuid);
+      if (!response.success) {
+        throw new Error(response.error.message);
+      }
       return response.data;
     },
     onSuccess: (_, puuid) => {
@@ -193,18 +196,18 @@ export function TrackedPlayersList({
       const player = data?.find(
         (trackedPlayer) => trackedPlayer.puuid === puuid,
       );
-      toast.success(
-        `Successfully removed ${
-          player?.game_name || "player"
-        } from tracked players`,
-      );
+      toast.success("Player removed from tracking", {
+        description: `${player?.game_name || "The player"} is no longer tracked.`,
+      });
 
       if (selectedPlayerPuuid === puuid) {
         onViewPlayerChange?.(null);
       }
     },
-    onError: (mutationError: Error) => {
-      toast.error(`Failed to untrack player: ${mutationError.message}`);
+    onError: () => {
+      toast.error("Player could not be removed from tracking", {
+        description: "Please try again later.",
+      });
     },
   });
 
@@ -229,7 +232,7 @@ export function TrackedPlayersList({
     onViewPlayerChange?.(player);
   };
 
-  if (isLoading) {
+  if (isLoading || (isFetching && !data)) {
     return (
       <Card
         id="tracked-players"
@@ -242,7 +245,7 @@ export function TrackedPlayersList({
     );
   }
 
-  if (error) {
+  if (error && !isFetching) {
     return (
       <Card
         id="tracked-players"

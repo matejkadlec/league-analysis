@@ -175,6 +175,26 @@
     translate: none !important;
   }
 
+  [data-sonner-toaster][data-sonner-theme="dark"] {
+    --success-bg: #052e1a;
+    --success-border: #166534;
+    --success-text: #86efac;
+    --info-bg: #071b3a;
+    --info-border: #1d4ed8;
+    --info-text: #93c5fd;
+    --warning-bg: #2b2105;
+    --warning-border: #a16207;
+    --warning-text: #fde68a;
+    --error-bg: #321014;
+    --error-border: #b91c1c;
+    --error-text: #fecaca;
+  }
+
+  [data-sonner-toast][data-styled="true"] [data-icon] {
+    align-self: flex-start;
+    margin-top: 1px;
+  }
+
   /* Left sidebar gradient (both light and dark themes) */
   aside > div {
     border-right: 1.5px solid #00091a;

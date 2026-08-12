@@ -309,6 +309,7 @@ export function HeaderMessages() {
             <span>
               Using Riot API Key from environment variables. Consider adding it
               to database for better management. Also note that local server
+              {" "}
               <b>needs a restart</b> after environment variable change.
             </span>
           </div>

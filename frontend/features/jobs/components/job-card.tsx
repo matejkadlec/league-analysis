@@ -220,8 +220,8 @@ export function JobCard({ job, onExecutionClick }: JobCardProps) {
     onSuccess: (result) => {
       if (result.success) {
         toast({
-          title: `${job.name} Triggered`,
-          description: result.data.message,
+          title: `${job.name} run started`,
+          description: "The job is running in the background.",
           variant: "info",
         });
         // Wait for job execution to be created in DB (background task)
@@ -236,16 +236,16 @@ export function JobCard({ job, onExecutionClick }: JobCardProps) {
         }, 5000);
       } else {
         toast({
-          title: "Failed to Trigger Job",
-          description: result.error.message,
+          title: `${job.name} run could not start`,
+          description: "Please try again later.",
           variant: "error",
         });
       }
     },
     onError: () => {
       toast({
-        title: "Error",
-        description: "Failed to trigger job",
+        title: `${job.name} run could not start`,
+        description: "Please try again later.",
         variant: "error",
       });
     },
@@ -257,23 +257,23 @@ export function JobCard({ job, onExecutionClick }: JobCardProps) {
     onSuccess: (result) => {
       if (result.success) {
         toast({
-          title: `${job.name} Paused`,
-          description: result.data.message,
-          variant: "info",
+          title: `${job.name} paused`,
+          description: "Scheduled runs will wait until the job is resumed.",
+          variant: "success",
         });
         refreshJobsData();
       } else {
         toast({
-          title: "Pause Failed",
-          description: result.error.message,
+          title: `${job.name} could not be paused`,
+          description: "Please try again later.",
           variant: "error",
         });
       }
     },
-    onError: (error: Error) => {
+    onError: () => {
       toast({
-        title: "Pause Failed",
-        description: error.message || "Failed to pause job",
+        title: `${job.name} could not be paused`,
+        description: "Please try again later.",
         variant: "error",
       });
     },
@@ -285,23 +285,23 @@ export function JobCard({ job, onExecutionClick }: JobCardProps) {
     onSuccess: (result) => {
       if (result.success) {
         toast({
-          title: `${job.name} Resumed`,
-          description: result.data.message,
-          variant: "info",
+          title: `${job.name} resumed`,
+          description: "Scheduled runs are active again.",
+          variant: "success",
         });
         refreshJobsData();
       } else {
         toast({
-          title: "Resume Failed",
-          description: result.error.message,
+          title: `${job.name} could not be resumed`,
+          description: "Please try again later.",
           variant: "error",
         });
       }
     },
-    onError: (error: Error) => {
+    onError: () => {
       toast({
-        title: "Resume Failed",
-        description: error.message || "Failed to resume job",
+        title: `${job.name} could not be resumed`,
+        description: "Please try again later.",
         variant: "error",
       });
     },
@@ -316,23 +316,23 @@ export function JobCard({ job, onExecutionClick }: JobCardProps) {
     onSuccess: (result) => {
       if (result.success) {
         toast({
-          title: `${job.name} Stop Requested`,
-          description: result.data.message,
+          title: `${job.name} stop requested`,
+          description: "The current run is stopping in the background.",
           variant: "info",
         });
         refreshJobsData();
       } else {
         toast({
-          title: "Stop Failed",
-          description: result.error.message,
+          title: `${job.name} could not be stopped`,
+          description: "Please try again later.",
           variant: "error",
         });
       }
     },
-    onError: (error: Error) => {
+    onError: () => {
       toast({
-        title: "Stop Failed",
-        description: error.message || "Failed to stop job",
+        title: `${job.name} could not be stopped`,
+        description: "Please try again later.",
         variant: "error",
       });
     },
@@ -347,8 +347,8 @@ export function JobCard({ job, onExecutionClick }: JobCardProps) {
     onSuccess: (result) => {
       if (result.success) {
         toast({
-          title: `${job.name} Test Started`,
-          description: result.data.message,
+          title: `${job.name} test started`,
+          description: "The test run is running in the background.",
           variant: "info",
         });
         setOptimisticTestRunning(true);
@@ -356,16 +356,16 @@ export function JobCard({ job, onExecutionClick }: JobCardProps) {
         setTimeout(() => refreshJobsData(), 1500);
       } else {
         toast({
-          title: "Test Failed",
-          description: result.error.message,
+          title: `${job.name} test could not start`,
+          description: "Please try again later.",
           variant: "error",
         });
       }
     },
     onError: () => {
       toast({
-        title: "Error",
-        description: "Failed to start test run",
+        title: `${job.name} test could not start`,
+        description: "Please try again later.",
         variant: "error",
       });
     },
@@ -380,24 +380,24 @@ export function JobCard({ job, onExecutionClick }: JobCardProps) {
     onSuccess: (result) => {
       if (result.success) {
         toast({
-          title: `${job.name} Test Stopped`,
-          description: result.data.message,
-          variant: "info",
+          title: `${job.name} test stopped`,
+          description: "The test run is no longer active.",
+          variant: "success",
         });
         setOptimisticTestRunning(false);
         refreshJobsData();
       } else {
         toast({
-          title: "Stop Failed",
-          description: result.error.message,
+          title: `${job.name} test could not be stopped`,
+          description: "Please try again later.",
           variant: "error",
         });
       }
     },
-    onError: (error: Error) => {
+    onError: () => {
       toast({
-        title: "Stop Failed",
-        description: error.message || "Failed to stop test run",
+        title: `${job.name} test could not be stopped`,
+        description: "Please try again later.",
         variant: "error",
       });
     },
@@ -412,23 +412,23 @@ export function JobCard({ job, onExecutionClick }: JobCardProps) {
     onSuccess: (result) => {
       if (result.success) {
         toast({
-          title: `${job.name} Test Paused`,
-          description: result.data.message,
-          variant: "info",
+          title: `${job.name} test paused`,
+          description: "The test run will wait until it is resumed.",
+          variant: "success",
         });
         refreshJobsData();
       } else {
         toast({
-          title: "Pause Failed",
-          description: result.error.message,
+          title: `${job.name} test could not be paused`,
+          description: "Please try again later.",
           variant: "error",
         });
       }
     },
-    onError: (error: Error) => {
+    onError: () => {
       toast({
-        title: "Pause Failed",
-        description: error.message || "Failed to pause test run",
+        title: `${job.name} test could not be paused`,
+        description: "Please try again later.",
         variant: "error",
       });
     },
@@ -443,23 +443,23 @@ export function JobCard({ job, onExecutionClick }: JobCardProps) {
     onSuccess: (result) => {
       if (result.success) {
         toast({
-          title: `${job.name} Test Resumed`,
-          description: result.data.message,
-          variant: "info",
+          title: `${job.name} test resumed`,
+          description: "The test run is active again.",
+          variant: "success",
         });
         refreshJobsData();
       } else {
         toast({
-          title: "Resume Failed",
-          description: result.error.message,
+          title: `${job.name} test could not be resumed`,
+          description: "Please try again later.",
           variant: "error",
         });
       }
     },
-    onError: (error: Error) => {
+    onError: () => {
       toast({
-        title: "Resume Failed",
-        description: error.message || "Failed to resume test run",
+        title: `${job.name} test could not be resumed`,
+        description: "Please try again later.",
         variant: "error",
       });
     },

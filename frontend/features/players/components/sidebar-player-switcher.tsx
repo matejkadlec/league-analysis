@@ -124,10 +124,10 @@ export function SidebarPlayerSwitcher({
       setPendingRiotId(null);
       await choosePlayer(player);
     },
-    onError: (error: Error) => {
+    onError: () => {
       toast({
-        title: "Player search failed",
-        description: error.message,
+        title: "Player search could not finish",
+        description: "Check the Riot ID and server, then try again.",
         variant: "error",
       });
     },
