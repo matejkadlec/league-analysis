@@ -68,9 +68,12 @@ All modes run:
 - `git diff --check`;
 - tracked JSON parsing, merge-marker detection, and sensitive-filename hygiene;
 - ShellCheck over every tracked shell script;
-- regression checks for the ShellCheck installer/runner, CI entry-point
-  coupling, and the LGA-23 card-configuration contract (the Node-selector
-  regression runs only when the frontend gate is selected);
+- regression checks for the ShellCheck and actionlint installers/runners,
+  including their rejection of the invalid tracked fixtures, and the LGA-23
+  card-configuration contract (the Node-selector regression runs only when the
+  frontend gate is selected);
+- network-free dependency-audit policy regressions covering inherited, new, and
+  resolved findings and the npm/pip advisory parsers;
 - Flow 1 policy regressions for expected batch scale, undersized-batch reasons,
   bounded independent PRs, worktree defaults, and final handoff behavior;
 - trusted-hook, local `.env` provisioning, primary/linked worktree identity,
