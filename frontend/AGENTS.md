@@ -20,9 +20,7 @@ shared components under `components/`, utilities under `lib/core/`.
 The `typescript` package is an npm alias to the TypeScript 6 compatibility
 API while the native TypeScript 7 compiler supplies `tsc`; Next's TypeScript
 API mode remains explicitly enabled because the alias exposes the compiler API
-but not the `typescript/bin/tsc` CLI path ESLint tooling expects. See
-[`../docs/dependency-upgrade-2026-08-03.md`](../docs/dependency-upgrade-2026-08-03.md)
-for the recorded rationale.
+but not the `typescript/bin/tsc` CLI path ESLint tooling expects.
 
 ## Rules
 
