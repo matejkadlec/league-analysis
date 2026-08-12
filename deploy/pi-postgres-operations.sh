@@ -10,22 +10,16 @@ deployment_root="${LGA_DEPLOY_ROOT:-$HOME/.local/share/league-analysis}"
 backup_root="${LGA_POSTGRES_BACKUP_ROOT:-$deployment_root/backups/postgres}"
 state_directory="$deployment_root/state/postgres-operations"
 replacement_state="$state_directory/replacement.state"
-authority_marker="$state_directory/pi-authoritative.state"
 operation_lock="$deployment_root/.postgres-operations.lock"
+# This script always runs from a deployed release tree, reached through the
+# $deployment_root/current symlink, so its peers resolve directly.
 script_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 snapshot_sql="$script_directory/postgres-snapshot.sql"
-expected_head_file="$script_directory/expected-alembic-head.txt"
-if [[ ! -e "$expected_head_file" && ! -L "$expected_head_file" ]]; then
-  expected_head_file="$script_directory/../backend/alembic/expected-head.txt"
-fi
-retention_tool="$script_directory/prune-postgres-daily-backups"
-if [[ ! -e "$retention_tool" && ! -L "$retention_tool" ]]; then
-  retention_tool="$script_directory/prune-postgres-daily-backups.sh"
-fi
+expected_head_file="$script_directory/../backend/alembic/expected-head.txt"
+retention_tool="$script_directory/prune-postgres-daily-backups.sh"
 deployed_commit_file="$deployment_root/state/deployed-commit"
 expected_alembic_head=""
 
-incoming_archive=""
 replacement_started=0
 replacement_healthy=0
 replacement_target=""
@@ -41,15 +35,11 @@ usage() {
     '  snapshot --confirm-target DATABASE' \
     '  dump --confirm-target DATABASE' \
     '  safety-backup --label LABEL --confirm-target DATABASE' \
-    '  adopt-relocated-authority --confirm-target DATABASE' \
     '  daily-backup --confirm-target DATABASE' \
     '  pre-deploy-backup --confirm-target DATABASE --commit FULL_SHA' \
     '  restore-test --confirm-target DATABASE --archive ARCHIVE' \
     '  restore-production --confirm-target DATABASE --archive ARCHIVE --expected-sha256 SHA256 --confirm-replace DATABASE' \
     '  mirror-dump --confirm-target DATABASE' \
-    '  replace-from-stdin --confirm-target DATABASE --expected-sha256 SHA256' \
-    '  activate-replacement --confirm-target DATABASE --expected-sha256 SHA256' \
-    '  confirm-authority --confirm-target DATABASE --expected-sha256 SHA256' \
     '  finalize-replacement --confirm-target DATABASE --expected-sha256 SHA256' \
     '  rollback-replacement --confirm-target DATABASE --expected-sha256 SHA256'
 }
@@ -264,7 +254,6 @@ daily_backup() {
   local archive_sha256
   local archive_size
   confirm_target "$target"
-  confirmed_authority || die 'daily backups require confirmed Pi database authority'
   [[ -x "$retention_tool" && ! -L "$retention_tool" ]] \
     || die 'the installed daily-backup retention tool is missing or is a symlink'
 
@@ -287,19 +276,14 @@ pre_deploy_backup() {
   local current_head
   confirm_target "$target"
   require_commit "$target_commit"
-  confirmed_authority || die 'pre-deployment backups require confirmed Pi database authority'
   [[ ! -e "$replacement_state" && ! -L "$replacement_state" ]] \
     || die 'database replacement still has unresolved rollback state'
-  [[ -f "$deployed_commit_file" && ! -L "$deployed_commit_file" ]] \
-    || die 'the current deployed-commit record is missing or is a symlink'
-  current_commit="$(<"$deployed_commit_file")"
-  require_commit "$current_commit"
-  [[ "$(docker inspect --format '{{.Config.Image}}' "$backend_container")" == \
-    "league-analysis-backend:$current_commit" ]] \
-    || die 'the backend image does not match the current deployed-commit record'
-  [[ "$(docker inspect --format '{{.Config.Image}}' "$frontend_container")" == \
-    "league-analysis-frontend:$current_commit" ]] \
-    || die 'the frontend image does not match the current deployed-commit record'
+  # Deployment bookkeeping is reported, never required: a safety backup must
+  # stay possible precisely when deployment state has drifted.
+  current_commit='unrecorded'
+  if [[ -f "$deployed_commit_file" && ! -L "$deployed_commit_file" ]]; then
+    current_commit="$(<"$deployed_commit_file")"
+  fi
   validate_database_baseline "$target"
   current_head="$(database_alembic_head "$target")"
   [[ -x "$retention_tool" && ! -L "$retention_tool" ]] \
@@ -347,7 +331,6 @@ restore_test() {
   local restored_snapshot_sha256
   local admin_count
   confirm_target "$target"
-  confirmed_authority || die 'restore tests require confirmed Pi database authority'
   archive="$(validate_managed_archive_path "$requested_archive")"
   list_archive "$archive" || die 'the selected daily backup is not a readable PostgreSQL archive'
 
@@ -385,7 +368,6 @@ restore_production() {
     || die 'the destructive replacement confirmation must exactly match the target database'
   confirm_target "$target"
   require_sha256 "$expected_sha"
-  confirmed_authority || die 'production restore requires confirmed Pi database authority'
   [[ ! -e "$replacement_state" && ! -L "$replacement_state" ]] \
     || die 'a previous database replacement still awaits finalize or rollback'
   archive="$(validate_managed_archive_path "$requested_archive")"
@@ -516,28 +498,6 @@ write_replacement_state() {
   chmod 600 -- "$replacement_state"
 }
 
-write_authority_marker() {
-  local digest="$1"
-  local temporary
-  require_sha256 "$digest"
-  temporary="$(mktemp "$state_directory/.pi-authoritative.XXXXXX")"
-  chmod 600 -- "$temporary"
-  {
-    printf 'authority=pi\n'
-    printf 'source_sha256=%s\n' "$digest"
-    printf 'confirmed_at=%s\n' "$(TZ=Europe/Prague date --iso-8601=seconds)"
-  } > "$temporary"
-  sync -f "$temporary"
-  mv -f -- "$temporary" "$authority_marker"
-  chmod 600 -- "$authority_marker"
-}
-
-confirmed_authority() {
-  [[ -f "$authority_marker" && ! -L "$authority_marker" ]] || return 1
-  [[ "$(stat -c '%a' "$authority_marker")" == "600" ]] || return 1
-  [[ "$(state_value_from_file authority "$authority_marker")" == "pi" ]]
-}
-
 state_value_from_file() {
   local key="$1"
   local file="$2"
@@ -570,9 +530,6 @@ recover_interrupted_replacement() {
   local status=$?
   trap - EXIT ERR INT TERM HUP
   set +e
-  if [[ -n "$incoming_archive" && "$incoming_archive" == "$state_directory/.incoming-"* ]]; then
-    rm -f -- "$incoming_archive"
-  fi
   if ((status != 0 && replacement_started == 1 && replacement_healthy == 0)); then
     printf 'Replacement failed; attempting automatic restoration of the pre-migration database.\n' >&2
     docker stop --time 20 "$frontend_container" "$backend_container" >/dev/null 2>&1
@@ -605,137 +562,6 @@ recover_interrupted_replacement() {
   exit "$status"
 }
 
-replace_from_stdin() {
-  local target="$1"
-  local expected_sha="$2"
-  local timestamp
-  local actual_sha
-  local safety_backup
-  confirm_target "$target"
-  require_sha256 "$expected_sha"
-  [[ ! -e "$replacement_state" && ! -L "$replacement_state" ]] \
-    || die 'a previous database replacement still awaits finalize or rollback'
-  confirmed_authority \
-    && die 'the Pi database is already authoritative; initial local-to-Pi replacement is disabled'
-
-  incoming_archive="$(mktemp "$state_directory/.incoming-lga79.XXXXXX.dump")"
-  chmod 600 -- "$incoming_archive"
-  cat > "$incoming_archive"
-  sync -f "$incoming_archive"
-  [[ -s "$incoming_archive" ]] || die 'received database archive is empty'
-  actual_sha="$(sha256sum "$incoming_archive" | awk '{print $1}')"
-  [[ "$actual_sha" == "$expected_sha" ]] || die 'received archive SHA-256 does not match the source'
-  list_archive "$incoming_archive" || die 'received archive is not readable by PostgreSQL 18 pg_restore'
-
-  safety_backup="$(create_backup "$target" pre-lga79)"
-  timestamp="$(TZ=Europe/Prague date '+%Y%m%dt%H%M%S')"
-  replacement_target="$target"
-  replacement_stage="${target}_lga79_stage_${timestamp}"
-  replacement_rollback="${target}_lga79_rollback_${timestamp}"
-  require_database_name "$replacement_stage"
-  require_database_name "$replacement_rollback"
-  database_exists "$replacement_stage" && die 'generated staging database already exists'
-  database_exists "$replacement_rollback" && die 'generated rollback database already exists'
-
-  create_database "$replacement_stage"
-  restore_archive "$replacement_stage" "$incoming_archive"
-  validate_database "$replacement_stage"
-  write_replacement_state prepared "$target" "$replacement_stage" \
-    "$replacement_rollback" "$expected_sha" "$safety_backup"
-
-  replacement_started=1
-  stop_application
-  set_connections_allowed "$target" false
-  terminate_database_connections "$target"
-  rename_database "$target" "$replacement_rollback"
-  rename_database "$replacement_stage" "$target"
-  write_replacement_state swapped "$target" "$replacement_stage" \
-    "$replacement_rollback" "$expected_sha" "$safety_backup"
-  validate_database "$target"
-  write_replacement_state awaiting_snapshot "$target" "$replacement_stage" \
-    "$replacement_rollback" "$expected_sha" "$safety_backup"
-  replacement_healthy=1
-  rm -f -- "$incoming_archive"
-  incoming_archive=""
-  printf 'Staged replacement succeeded with application writers stopped.\n'
-  printf 'Compare the source and Pi snapshots, then activate or roll back.\n'
-  printf 'Source archive SHA-256: %s\n' "$expected_sha"
-  printf 'Pre-migration safety backup: %s\n' "$safety_backup"
-}
-
-activate_replacement() {
-  local target="$1"
-  local expected_sha="$2"
-  confirm_target "$target"
-  require_sha256 "$expected_sha"
-  load_replacement_state
-  [[ "$state_phase" == "awaiting_snapshot" ]] \
-    || die 'replacement state is not awaiting snapshot validation'
-  [[ "$state_target" == "$target" && "$state_sha256" == "$expected_sha" ]] \
-    || die 'activation confirmation does not match the pending replacement'
-  database_exists "$state_rollback" || die 'pending rollback database is missing'
-
-  replacement_target="$state_target"
-  replacement_stage="$state_stage"
-  replacement_rollback="$state_rollback"
-  replacement_started=1
-  replacement_healthy=0
-  if ! start_application; then
-    die 'migrated application containers did not become healthy'
-  fi
-  validate_database "$target"
-  write_replacement_state awaiting_validation "$target" "$state_stage" \
-    "$state_rollback" "$expected_sha" "$state_safety_backup"
-  replacement_healthy=1
-  printf 'Migrated application containers are healthy; replacement awaits final validation.\n'
-}
-
-confirm_authority() {
-  local target="$1"
-  local expected_sha="$2"
-  local admin_count
-  local safety_count
-  confirm_target "$target"
-  require_sha256 "$expected_sha"
-  [[ ! -e "$replacement_state" && ! -L "$replacement_state" ]] \
-    || die 'database replacement still has unresolved rollback state'
-  validate_database "$target"
-  wait_healthy "$backend_container" || die 'backend is not healthy'
-  wait_healthy "$frontend_container" || die 'frontend is not healthy'
-  admin_count="$(container_psql "$target" \
-    "SELECT count(*) FROM auth.users WHERE lower(email) IN ('mat.kadlec@email.cz','marek.hovadik@seznam.cz') AND is_active AND is_admin AND email_verified;")"
-  [[ "$admin_count" == "2" ]] || die 'both validated full administrators are required'
-  safety_count="$(find "$backup_root" -maxdepth 1 -type f -name 'league-analysis-postgres-pre-lga79-*.dump' -perm 0600 -printf '.' | wc -c)"
-  [[ "$safety_count" -ge 1 ]] || die 'a private pre-LGA-79 safety backup is required'
-  write_authority_marker "$expected_sha"
-  printf 'Pi PostgreSQL authority recorded after migration validation.\n'
-}
-
-adopt_relocated_authority() {
-  local target="$1"
-  local admin_count
-  local safety_backup
-  local safety_sha256
-  confirm_target "$target"
-  confirmed_authority \
-    && die 'Pi database authority is already confirmed'
-  [[ ! -e "$replacement_state" && ! -L "$replacement_state" ]] \
-    || die 'database replacement still has unresolved rollback state'
-  validate_database "$target"
-  wait_healthy "$backend_container" || die 'backend is not healthy'
-  wait_healthy "$frontend_container" || die 'frontend is not healthy'
-  admin_count="$(container_psql "$target" \
-    "SELECT count(*) FROM auth.users WHERE lower(email) IN ('mat.kadlec@email.cz','marek.hovadik@seznam.cz') AND is_active AND is_admin AND email_verified;")"
-  [[ "$admin_count" == "2" ]] || die 'both validated full administrators are required'
-
-  safety_backup="$(create_backup "$target" pre-authority-adoption)"
-  safety_sha256="$(sha256sum "$safety_backup" | awk '{print $1}')"
-  write_authority_marker "$safety_sha256"
-  printf 'Relocated Pi PostgreSQL authority recorded after live validation.\n'
-  printf 'Pre-adoption safety backup: %s\n' "$safety_backup"
-  printf 'Safety backup SHA-256: %s\n' "$safety_sha256"
-}
-
 finalize_replacement() {
   local target="$1"
   local expected_sha="$2"
@@ -749,7 +575,6 @@ finalize_replacement() {
   database_exists "$state_rollback" || die 'pending rollback database is missing'
   drop_database "$state_rollback"
   rm -f -- "$replacement_state"
-  write_authority_marker "$expected_sha"
   printf 'Database replacement finalized; the safety backup remains retained.\n'
 }
 
@@ -790,6 +615,17 @@ parse_target_option() {
   printf '%s' "$2"
 }
 
+# Reject an unusable invocation before touching Docker or the host, so a typo
+# reports the usage text instead of a container error.
+command_name="${1:-}"
+# The usage text is the single source of truth for the command list.
+if ! usage | sed -n 's/^  \([a-z-][a-z-]*\).*/\1/p' \
+  | grep -qxF -- "$command_name"; then
+  usage >&2
+  exit 2
+fi
+shift
+
 for required_command in awk basename date dirname docker find flock id install mktemp realpath sha256sum stat sync wc; do
   command -v "$required_command" >/dev/null 2>&1 \
     || die "$required_command is required on the Raspberry Pi"
@@ -801,13 +637,6 @@ chmod 600 -- "$operation_lock"
 flock -n 9 || die 'another League Analysis PostgreSQL operation is running'
 trap recover_interrupted_replacement EXIT ERR INT TERM HUP
 
-command_name="${1:-}"
-[[ -n "$command_name" ]] || {
-  usage >&2
-  exit 2
-}
-shift
-
 case "$command_name" in
   identity)
     [[ $# -eq 0 ]] || die 'identity accepts no options'
@@ -815,10 +644,8 @@ case "$command_name" in
     confirm_target "$target"
     postgres_version="$(container_psql "$target" "SELECT current_setting('server_version');")"
     alembic_head="$(container_psql "$target" 'SELECT version_num FROM public.alembic_version;')"
-    authority="unconfirmed"
-    confirmed_authority && authority="pi"
-    printf 'container=%s compose_project=%s compose_service=postgres database=%s postgres=%s alembic=%s host_ports=none authority=%s\n' \
-      "$postgres_container" "$compose_project" "$target" "$postgres_version" "$alembic_head" "$authority"
+    printf 'container=%s compose_project=%s compose_service=postgres database=%s postgres=%s alembic=%s host_ports=none\n' \
+      "$postgres_container" "$compose_project" "$target" "$postgres_version" "$alembic_head"
     ;;
   snapshot)
     target="$(parse_target_option "$@")"
@@ -840,10 +667,6 @@ case "$command_name" in
     target="$4"
     confirm_target "$target"
     create_backup "$target" "$label"
-    ;;
-  adopt-relocated-authority)
-    target="$(parse_target_option "$@")"
-    adopt_relocated_authority "$target"
     ;;
   daily-backup)
     target="$(parse_target_option "$@")"
@@ -878,32 +701,7 @@ case "$command_name" in
   mirror-dump)
     target="$(parse_target_option "$@")"
     confirm_target "$target"
-    confirmed_authority || die 'mirror exports require confirmed Pi database authority'
     dump_mirror_database "$target"
-    ;;
-  replace-from-stdin)
-    [[ "${1:-}" == "--confirm-target" && -n "${2:-}" && \
-      "${3:-}" == "--expected-sha256" && -n "${4:-}" && $# -eq 4 ]] || {
-      usage >&2
-      exit 2
-    }
-    replace_from_stdin "$2" "$4"
-    ;;
-  activate-replacement)
-    [[ "${1:-}" == "--confirm-target" && -n "${2:-}" && \
-      "${3:-}" == "--expected-sha256" && -n "${4:-}" && $# -eq 4 ]] || {
-      usage >&2
-      exit 2
-    }
-    activate_replacement "$2" "$4"
-    ;;
-  confirm-authority)
-    [[ "${1:-}" == "--confirm-target" && -n "${2:-}" && \
-      "${3:-}" == "--expected-sha256" && -n "${4:-}" && $# -eq 4 ]] || {
-      usage >&2
-      exit 2
-    }
-    confirm_authority "$2" "$4"
     ;;
   finalize-replacement)
     [[ "${1:-}" == "--confirm-target" && -n "${2:-}" && \

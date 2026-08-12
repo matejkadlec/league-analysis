@@ -28,7 +28,9 @@ except ModuleNotFoundError:  # Loaded as scripts.* by the focused module tests.
 LOCAL_DATABASE = "league_analysis_local_dev"
 REMOTE_DATABASE = "league_analysis"
 REMOTE_HOST = "pi5ram16"
-REMOTE_SCRIPT = "$HOME/.local/share/league-analysis/operations/pi-postgres-operations"
+REMOTE_SCRIPT = (
+    "$HOME/.local/share/league-analysis/current/deploy/pi-postgres-operations.sh"
+)
 DEFAULT_CONFIG = Path.home() / "projects" / "league-analysis" / ".env"
 DEFAULT_OPERATION_ROOT = Path.home() / ".local" / "share" / "league-analysis"
 DATABASE_NAME_PATTERN = re.compile(r"^[a-z][a-z0-9_]{0,62}$")
