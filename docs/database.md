@@ -112,11 +112,33 @@ development).
 Safety contract (read-only by default; all checked before a session opens):
 explicit `ENVIRONMENT=dev`; `POSTGRES_HOST`, every PostgreSQL
 `listen_addresses` bind, and the active listener loopback-only; `--database`
-exactly matching `POSTGRES_DB`. `--apply` additionally requires a canonical
-backup path outside the repository with owner-only `0600` permissions and
-non-group/other-writable ancestors; the command blocks writers to every table
-it will change before taking the custom-format `pg_dump` and keeps those locks
-through the cleanup transaction.
+exactly matching `POSTGRES_DB`; the reviewed application tables present.
+`--apply` additionally requires a canonical backup path outside the repository
+whose parent and non-sticky directory ancestors are not group/other-writable.
+The command blocks writers to every table it will change before taking the
+custom-format `pg_dump`, keeps those locks through the cleanup transaction,
+and creates a new owner-only `0600` archive with no-follow semantics before
+`pg_dump` receives any database data. It re-verifies the archive's descriptor
+identity and permissions before `pg_restore --list`; if the filesystem cannot
+honor them, it securely removes only that verified file and refuses before any
+database mutation. It also clears all saved Riot PUUID URL preferences while
+preserving settings rows and revoked access-token blacklist entries.
+
+```bash
+cd backend
+uv run python scripts/cleanse_local_riot_data.py \
+  --database league_analysis_local_dev
+
+install -d -m 700 "$HOME/.local/state/league-analysis/backups"
+uv run python scripts/cleanse_local_riot_data.py \
+  --database league_analysis_local_dev \
+  --apply \
+  --backup-path "$HOME/.local/state/league-analysis/backups/pre-lga-11.dump"
+
+uv run python scripts/cleanse_local_riot_data.py \
+  --database league_analysis_local_dev \
+  --resume-writers
+```
 
 Before an apply it locks the two writer job tables, refuses if a regular Match
 Fetcher or Player Updater execution is `RUNNING`/`PAUSED`, requires exactly

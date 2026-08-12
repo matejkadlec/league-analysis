@@ -183,9 +183,13 @@ credential evidence.
 
 ## 3. Rate Limiting
 
-Two coordinated layers exist. Never bypass either one: every Riot call must go
-through the DB limiter's `acquire()`/`record_request()` pair, keep the burst
-spacing lock, and honor `Retry-After` on 429.
+Two coordinated layers exist. Every client keeps the per-client adaptive
+tracking, the burst spacing lock, and `Retry-After` handling on 429. The
+registered bulk components (Player Updater, Match Fetcher, Matchmaking
+Analysis) additionally wrap every Riot call in the DB limiter's
+`acquire()`/`record_request()` pair; user-driven single-shot calls (for
+example player discovery) use the tracked client without the DB queue. Never
+bypass a layer where a component uses it.
 
 **Per-client adaptive tracking**
 (`backend/app/core/riot_api/rate_limiter.py`): tracks every app and method

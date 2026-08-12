@@ -31,10 +31,13 @@ Mechanical facts (schema columns, endpoint lists, module inventories, route
 tables, code flow narration) live in the code and its authoritative sources;
 do not add them to a topic document, and do not reintroduce deleted mirrors.
 
-- Update the matching topic document in the same task **only when** the change
-  alters a durable invariant, a decision's rationale, an externally observed
-  provider/production fact, or an operational procedure the document records.
-  A code change that leaves those unchanged requires no documentation edit.
+- The root guide's rule that runtime behavior changes update the matching
+  authoritative document and scoped guide in the same task is satisfied as
+  follows: when the change alters a durable invariant, a decision's rationale,
+  an externally observed provider/production fact, or an operational procedure
+  the document records, update the document with it; a change that leaves all
+  of those unchanged satisfies the rule with no documentation edit, because
+  the documents no longer mirror mechanical detail.
 - Schema or SQLAlchemy model changes always add a reviewed Alembic revision
   under `../backend/alembic/versions/` (the schema authority) and apply it
   through `../backend/scripts/migrate.py`; never bypass the advisory-lock
