@@ -1,16 +1,21 @@
 #!/usr/bin/env python3
-"""Run deterministic repository hygiene checks without modifying files."""
+"""Refuse to track a file whose name implies a secret.
+
+Scans every tracked and untracked-but-not-ignored file, so a credential
+committed before the hooks were installed is still caught. JSON validity and
+merge-conflict markers are covered by the check-json and check-merge-conflict
+pre-commit hooks.
+"""
 
 from __future__ import annotations
 
-import json
 import subprocess
 import sys
 from pathlib import Path
 
 REPOSITORY_ROOT = Path(__file__).resolve().parent.parent
-CONFLICT_MARKERS = ("<<<<<<< ", "=======", ">>>>>>> ")
 FORBIDDEN_TRACKED_NAMES = {".env", "id_rsa", "id_ed25519"}
+FORBIDDEN_SUFFIXES = {".pem", ".key"}
 
 
 def tracked_files() -> list[Path]:
@@ -28,31 +33,17 @@ def tracked_files() -> list[Path]:
 def main() -> int:
     errors: list[str] = []
     for path in tracked_files():
-        relative = path.relative_to(REPOSITORY_ROOT)
-        if path.name in FORBIDDEN_TRACKED_NAMES or path.suffix in {".pem", ".key"}:
-            errors.append(f"sensitive-looking file is tracked: {relative}")
-            continue
-        if not path.is_file():
-            continue
-        if path.suffix == ".json":
-            try:
-                json.loads(path.read_text(encoding="utf-8"))
-            except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
-                errors.append(f"invalid JSON in {relative}: {error}")
-        try:
-            text = path.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError):
-            continue
-        for line_number, line in enumerate(text.splitlines(), start=1):
-            if any(line.startswith(marker) for marker in CONFLICT_MARKERS):
-                errors.append(f"merge-conflict marker in {relative}:{line_number}")
+        if path.name in FORBIDDEN_TRACKED_NAMES or path.suffix in FORBIDDEN_SUFFIXES:
+            errors.append(
+                f"sensitive-looking file is tracked: {path.relative_to(REPOSITORY_ROOT)}"
+            )
 
     if errors:
         print("Repository hygiene failed:", file=sys.stderr)
         for error in errors:
             print(f"- {error}", file=sys.stderr)
         return 1
-    print("Tracked JSON, conflict markers, and sensitive filenames are clean.")
+    print("No sensitive-looking filenames are tracked.")
     return 0
 
 

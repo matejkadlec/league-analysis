@@ -54,20 +54,22 @@ Frontend runs preserve the pre-existing tracked state of
 All modes run:
 
 - `git diff --check`;
-- tracked JSON parsing, merge-marker detection, and sensitive-filename hygiene;
+- refusal to track a file whose name implies a secret, over every tracked and
+  non-ignored file, so a credential committed before the hooks were installed
+  is still caught;
 - ShellCheck over every tracked shell script;
-- regression checks for the ShellCheck and actionlint installers/runners,
-  including their rejection of the invalid tracked fixtures (the Node-selector
-  regression runs only when the frontend gate is selected);
-- network-free dependency-audit policy regressions covering inherited, new, and
-  resolved findings and the npm/pip advisory parsers;
-- workflow-skill discovery from both the `.claude/skills/` and `.agents/skills/`
-  roots, so Codex and Claude resolve the same `SKILL.md` files;
 - actionlint syntax and expression validation;
-- production Dockerfile/Compose/deploy-workflow invariants: lockfile installs,
-  non-root production commands, internal PostgreSQL, migration/readiness
-  ordering, fixed pi5ram16 identities/ports, deployment serialization, and the
-  permanent non-Docker `run.sh` boundary.
+- `run.sh` port-cleanup and migration-before-startup ordering, exercised
+  against stub `lsof`, `ss`, `psql` and `uv` executables (the Node-selector
+  regression runs only when the frontend gate is selected);
+- PostgreSQL backup retention, exercised against real archive files, because
+  that code deletes backups;
+- network-free dependency-audit policy regressions covering inherited, new, and
+  resolved findings and the npm/pip advisory parsers.
+
+Production packaging is verified by building it: `deploy/container-qa.sh` builds
+both production images, runs the Compose migration service, health-checks the
+stack, and performs a real dump and restore.
 
 The complete/backend gate also validates `.pre-commit-config.yaml` with the
 locked pre-commit installation.
