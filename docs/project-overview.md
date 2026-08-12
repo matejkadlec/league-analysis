@@ -177,20 +177,14 @@ container QA, host bootstrap, diagnostics, and LGA-16 rollback boundary.
 
 ## Git hooks and worktrees
 
-After clone, and whenever `.githooks/` or the local-file provisioner changes,
-install the reviewed hook generation:
+Once per clone, point Git at the tracked hook directory:
 
 ```bash
-./scripts/install-git-hooks.sh
+git config core.hooksPath .githooks
 ```
 
-The installer snapshots the pre-commit and post-checkout hooks plus the
-provisioner beneath the shared Git directory, sets restrictive permissions, and
-atomically selects the complete generation through `core.hooksPath`. It records
-ownership in `league-analysis.trustedhookspath` and preserves an unrelated
-custom hooks manager instead of overwriting it. The pre-commit snapshot runs the
-configured pre-commit checks; the post-checkout snapshot never executes hook
-code from the branch being checked out.
+`.githooks/pre-commit` runs the configured pre-commit checks through the
+backend's `uv` project. There is no other repository-managed hook.
 
 New `flow1` work normally starts after fetch/conflict inspection with a focused
 branch and sibling linked worktree:
@@ -199,20 +193,19 @@ branch and sibling linked worktree:
 git fetch --prune origin
 git worktree add -b flow1/lga-43-batch-worktrees \
   ../league-analysis-lga-43 origin/master
+cp .env ../league-analysis-lga-43/.env   # Only when the source checkout has one
 ```
 
 Use the actual selected Jira keys and short scope in place of the example.
 Separate planned pull requests use separate branches and worktrees. Never reuse,
 reset, or delete an owner-created worktree without explicit authorization.
 
-When the primary worktree has a regular root `.env`, the trusted post-checkout
-hook may copy that single allowlisted ignored file into a newly created linked
-worktree. The copy uses mode `600`, never overwrites a path or symlink, never
-prints content, requires shared trusted ignore rules for the target and
-temporary-file pattern, and records private provenance so only its own copy can
-be removed later. Missing source files, custom hook managers, or failed safety
-checks leave checkout successful and unprovisioned. Do not manually broaden the
-allowlist to directories or deployment credentials.
+Git materializes only tracked files into a new worktree, and root `.env` is
+ignored, so a new worktree starts without local configuration. Copy it
+explicitly at creation time, as above. Copy that one file only — never a
+directory, deployment credential, or provider bundle. A worktree created without
+the copy is not broken: the backend fails at startup with a configuration error
+until the file is present.
 
 Keep worktrees needed for User QA or remediation. Cleanup is appropriate only
 after the branch is safely published, ownership is clear, and the worktree is no
