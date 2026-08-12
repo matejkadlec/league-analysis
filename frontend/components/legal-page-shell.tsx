@@ -22,7 +22,7 @@ export function LegalPageShell({
 
   const content = (
     <div className={`container mx-auto max-w-4xl px-4 ${contentSpacingClass}`}>
-      <Card id="header-card" className="py-2">
+      <Card id="header-card" className="py-2 text-white">
         <div className="flex flex-col">
           <div className="flex items-start justify-between px-8 pb-2 pt-4">
             <h1 className="text-3xl font-[family-name:var(--font-league)]">

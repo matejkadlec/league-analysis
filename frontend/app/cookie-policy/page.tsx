@@ -29,8 +29,10 @@ export default async function CookiePolicyPage() {
           <strong>Accept all</strong> in the cookie dialog.
         </li>
         <li>
-          You can reopen cookie settings at any time using the floating{" "}
-          <strong>Cookie settings</strong> button.
+          You can reopen the cookie dialog at any time using the{" "}
+          <strong>Cookie settings</strong> link in the page footer. Signed-in
+          users can also open it from the <strong>Cookie settings</strong>{" "}
+          section on the Settings page.
         </li>
       </ul>
 
