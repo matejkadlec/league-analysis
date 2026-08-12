@@ -288,7 +288,9 @@ incremental migration can safely classify legacy rows.
 - `waiting_rate_limit` - still active, waiting until `rate_limit_reset_at`
 - `completed` - terminal success with immutable result data
 - `failed` - terminal failure with a stable safe error code/message
-- `cancelled` - terminal user or process interruption
+- `cancelled` - terminal, and only from an explicit user cancellation. A worker
+  cancelled by process shutdown deliberately leaves its row active so the next
+  explicit start resumes it.
 
 The partial unique index `uq_matchmaking_analyses_active_puuid` covers the
 three active states and prevents concurrent analyses for the same PUUID.

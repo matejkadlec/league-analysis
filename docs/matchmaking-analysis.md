@@ -367,7 +367,10 @@ The analysis **continues running even if the user closes the browser tab**:
 
 - The `asyncio.Task` lives in the server's event loop, independent of HTTP connections
 - When the user returns, the frontend polls the status endpoint and picks up where it left off
-- If the server itself restarts, the analysis record remains in DB with `started_at != NULL` and `completed_at = NULL`
+- If the server itself restarts, the analysis record remains in DB in an active
+  state with `completed_at = NULL`. Shutdown can cancel the worker before
+  `_run_analysis` sets `started_at`, so a resumable row may still be `pending`
+  with `started_at = NULL`
 - On the next explicit start request, `start_analysis()` detects this, preserves
   already-completed progress keys, and resumes the same persisted run
 
