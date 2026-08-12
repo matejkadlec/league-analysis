@@ -284,20 +284,21 @@ authority unconfirmed and mirror exports disabled.
 
 ## PostgreSQL daily backups and restore tests
 
-> **Installation status (2026-08-12): the backup timer is NOT installed on
-> `pi5ram16` — no automatic backups run.** This section documents the reviewed
-> installer and its intended contract. Verify the timer with the inspection
-> commands below before relying on automatic backups, and treat a missing
-> timer as an open operational risk until the installer has been run.
+The reviewed design is a **system** systemd timer named
+`league-analysis-postgres-backup.timer`, whose service body runs as the
+deploying account. It runs at exactly `00:00` in the `Europe/Prague` timezone,
+including daylight-saving changes, regardless of the Pi host timezone.
+`Persistent=true` catches up once after downtime; the shared non-blocking
+operations lock prevents overlap with migration, restore, or mirror exports.
 
-The reviewed design is a user-systemd timer named
-`league-analysis-postgres-backup.timer`. It runs at exactly `00:00` in the
-`Europe/Prague` timezone, including daylight-saving changes, regardless of the
-Pi host timezone. `Persistent=true` catches up once after downtime; the shared
-non-blocking operations lock prevents overlap with migration, restore, or mirror
-exports.
+It must not be a `--user` timer. `systemctl --user` needs a session bus, which
+the GitHub Actions runner account does not have, so the installer failed on
+every deployment and left the timer unmanaged. A system unit needs neither a
+login session nor an enabled linger. The installer retires a leftover
+per-user timer if it finds one, so both cannot fire on the same night.
 
-Install the reviewed operations snapshot and enable the timer on `pi5ram16`:
+Install and enable the timer on `pi5ram16`. The deployment workflow does
+this on every release; run it by hand with:
 
 ```bash
 ./deploy/install-pi-postgres-backup-timer.sh
@@ -317,16 +318,16 @@ league-analysis-postgres-daily-YYYYMMDDTHHMMSS+ZZZZ.dump
 Only after that success does retention remove daily archives older than the
 newest seven. It matches only exact successful daily filenames. Partial files,
 the pre-LGA-79 archive, and unrelated artifacts neither count toward retention
-nor get deleted. Failures are nonzero in the user journal and do not remove a
+nor get deleted. Failures are nonzero in the system journal and do not remove a
 previous successful backup.
 
 Inspect scheduling and the most recent service result without exposing runtime
 configuration:
 
 ```bash
-systemctl --user list-timers league-analysis-postgres-backup.timer
-systemctl --user status league-analysis-postgres-backup.service --no-pager
-journalctl --user -u league-analysis-postgres-backup.service -n 50 --no-pager
+systemctl list-timers league-analysis-postgres-backup.timer
+systemctl status league-analysis-postgres-backup.service --no-pager
+journalctl -u league-analysis-postgres-backup.service -n 50 --no-pager
 ```
 
 Run an on-demand backup and test a selected daily archive as follows:
