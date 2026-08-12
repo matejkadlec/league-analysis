@@ -1,0 +1,52 @@
+# Runs ./test.sh against a disposable PostgreSQL 18, with one pinned toolchain.
+#
+#   docker compose -f compose.gate.yml run --rm gate        # complete gate
+#   docker compose -f compose.gate.yml run --rm gate -b     # backend only
+#   docker compose -f compose.gate.yml down -v              # tear down
+#
+# CI runs the same command, so a green run here means the same thing there.
+# Production packaging is not built by this file; that is deploy/container-qa.sh.
+name: lga-gate
+
+services:
+  postgres:
+    image: postgres:18.4
+    environment:
+      POSTGRES_DB: league_analysis_gate
+      POSTGRES_USER: league_analysis_gate
+      # Throwaway: this database is created and destroyed by the gate and is
+      # never reachable from outside the Compose network.
+      POSTGRES_PASSWORD: league-analysis-gate-password
+      PGDATA: /var/lib/postgresql/data
+    tmpfs:
+      # The gate never needs this data to survive the run, and tmpfs removes
+      # disk I/O from the migration and restore validation.
+      - /var/lib/postgresql/data
+    healthcheck:
+      test:
+        ["CMD-SHELL", "pg_isready -U league_analysis_gate -d league_analysis_gate"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  gate:
+    build:
+      context: .
+      dockerfile: gate.Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: league_analysis_gate
+      POSTGRES_USER: league_analysis_gate
+      POSTGRES_PASSWORD: league-analysis-gate-password
+      JWT_SECRET_KEY: league-analysis-gate-jwt-secret-32-characters
+      ENVIRONMENT: test
+      DEBUG: "false"
+    # Run as the invoking user so npm, uv and Next.js write build output the
+    # host can still read and delete. CI exports these from `id`.
+    user: "${LGA_GATE_UID:-1000}:${LGA_GATE_GID:-1000}"
+    volumes:
+      - .:/workspace
