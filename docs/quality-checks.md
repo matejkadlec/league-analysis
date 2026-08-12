@@ -63,21 +63,7 @@ All modes run:
   resolved findings and the npm/pip advisory parsers;
 - workflow-skill discovery from both the `.claude/skills/` and `.agents/skills/`
   roots, so Codex and Claude resolve the same `SKILL.md` files;
-- trusted-hook, local `.env` provisioning, primary/linked worktree identity,
-  signal handling, and worktree-integrity guard regressions;
 - actionlint syntax and expression validation;
-- repository workflow policy checks for immutable action pins, version
-  comments, `contents: read`, credential-safe checkout, concurrency
-  cancellation, required triggers, and job timeouts.
-- tracked `master` branch-ruleset desired state, including its exact stable
-  required-check contexts, GitHub Actions integration binding, and zero-review
-  workflow policy. The deterministic
-  configuration regression is local; the separate live audit remains read-only
-  and requires authenticated GitHub API access.
-- Dependabot v2 configuration coverage for every current package ecosystem,
-  manifest directory, update limit, local weekly schedule, labels, and the
-  minor/patch-only version-update group. The validator intentionally detects
-  Dockerfiles, including the backend and frontend production image contexts.
 - production Dockerfile/Compose/deploy-workflow invariants: lockfile installs,
   non-root production commands, internal PostgreSQL, migration/readiness
   ordering, fixed pi5ram16 identities/ports, deployment serialization, and the
@@ -206,6 +192,6 @@ settings.
 
 A passing local gate proves only local validation. After publication, report
 GitHub checks as passed only from current remote workflow evidence. The `master`
-ruleset requires the two stable check contexts; run
-`python3 scripts/verify-github-ruleset.py` after an authorized GitHub
-administration change to verify that live configuration remains aligned.
+ruleset requires the two stable check contexts; see
+[`github-governance.md`](github-governance.md) for the live ruleset and how to
+inspect it.

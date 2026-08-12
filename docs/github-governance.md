@@ -1,20 +1,17 @@
 # GitHub Branch Governance
 
-> **Authority:** Repository ruleset configuration for `master`, stable required
-> checks, and the read-only drift-audit procedure.
+> **Authority:** Repository ruleset configuration for `master` and the stable
+> required checks.
 >
-> **Maintenance:** Update this document and
-> [`.github/master-branch-ruleset.json`](../.github/master-branch-ruleset.json)
-> together whenever the default branch, required checks, or review policy
-> changes. Apply and then audit the corresponding GitHub configuration.
+> **Maintenance:** Update this document whenever the default branch, required
+> checks, or review policy changes, and apply the corresponding GitHub
+> configuration.
 
 ## Scope and source of truth
 
 The canonical repository is `matejkadlec/league-analysis`; its default branch is
-`master`. GitHub hosts the active repository ruleset, while the tracked
-[`master-branch-ruleset.json`](../.github/master-branch-ruleset.json) is the
-reviewable desired state. The desired state contains no credentials or bypass
-actors.
+`master`. GitHub hosts the active repository ruleset and is the source of truth
+for it; this document records what that ruleset must say.
 
 The active ruleset is named **Protect master with verified PR delivery** and
 targets only `refs/heads/master`. It requires:
@@ -69,42 +66,24 @@ alter the reviewed desired state.
 
 ## Audit and change procedure
 
-After authenticating `gh` to the canonical repository, run the read-only audit:
+GitHub owns this configuration. Read the live ruleset directly:
 
 ```bash
-python3 scripts/verify-github-ruleset.py
+gh api repos/matejkadlec/league-analysis/rulesets
+gh api repos/matejkadlec/league-analysis/rulesets/<id>
 ```
 
-The command verifies that `master` remains the default branch, compares GitHub's
-active ruleset with the checked-in desired state, and rejects any additional
-active branch ruleset that also applies to `master`. It fails on
-missing/duplicate rulesets, target/enforcement/bypass drift, changed review
-settings, check-context drift, or an incorrect check integration. It needs
-GitHub API read access but never changes repository configuration.
+For an intentional policy change, update this document in the same pull request
+as the change, then have the owner apply the GitHub administration update and
+re-read the live ruleset to confirm it.
 
-For an intentional policy change:
+Renaming a required check needs care, because a ruleset requiring a context no
+workflow emits blocks every pull request permanently. Emit the new job name
+first and let it merge, then have the owner add the new context and remove the
+old one, and only then remove the old job.
 
-1. Update the JSON desired state, this document, and the relevant quality-check
-   documentation in one pull request.
-2. Validate the tracked configuration without contacting GitHub:
-
-   ```bash
-   python3 scripts/verify-github-ruleset.py --config-only
-   ```
-
-3. Replace a required context in four releases: first merge a workflow change
-   that emits both old and new contexts while the ruleset still requires the
-   old one. Next, merge the desired-state change requiring both contexts, then
-   make the owner-approved live ruleset change and audit it. Third, merge the
-   desired-state removal of the old context while keeping both workflow jobs.
-   Only after that merge may the owner remove the old live requirement; a final
-   release may then remove the old workflow job. This order prevents a
-   required-check deadlock.
-4. For any other policy change, after the pull request is merged, make the
-   owner-approved GitHub administration update (including the GitHub Actions
-   integration binding) and rerun the read-only audit.
-5. Record the verified ruleset URL/ID and required contexts in the associated
-   LGA issue. Never put access tokens or configuration secrets in the issue.
+Record the verified ruleset ID and required contexts in the associated LGA
+issue. Never put access tokens or configuration secrets in the issue.
 
 The GitHub REST ruleset API requires repository administration permission for a
 write, so an unavailable or insufficiently authorized administrator is an owner
