@@ -8,8 +8,6 @@ frontend_container="${LGA_FRONTEND_CONTAINER_NAME:-league-analysis-frontend}"
 compose_project="${LGA_COMPOSE_PROJECT_NAME:-league-analysis}"
 deployment_root="${LGA_DEPLOY_ROOT:-$HOME/.local/share/league-analysis}"
 backup_root="${LGA_POSTGRES_BACKUP_ROOT:-$deployment_root/backups/postgres}"
-state_directory="$deployment_root/state/postgres-operations"
-replacement_state="$state_directory/replacement.state"
 operation_lock="$deployment_root/.postgres-operations.lock"
 # This script always runs from a deployed release tree, reached through the
 # $deployment_root/current symlink, so its peers resolve directly.
@@ -20,11 +18,8 @@ retention_tool="$script_directory/prune-postgres-daily-backups.sh"
 deployed_commit_file="$deployment_root/state/deployed-commit"
 expected_alembic_head=""
 
-replacement_started=0
-replacement_healthy=0
-replacement_target=""
-replacement_stage=""
-replacement_rollback=""
+# Set while a generated staging database exists, so a failure drops it.
+staging_database=""
 
 usage() {
   printf '%s\n' \
@@ -38,10 +33,7 @@ usage() {
     '  daily-backup --confirm-target DATABASE' \
     '  pre-deploy-backup --confirm-target DATABASE --commit FULL_SHA' \
     '  restore-test --confirm-target DATABASE --archive ARCHIVE' \
-    '  restore-production --confirm-target DATABASE --archive ARCHIVE --expected-sha256 SHA256 --confirm-replace DATABASE' \
-    '  mirror-dump --confirm-target DATABASE' \
-    '  finalize-replacement --confirm-target DATABASE --expected-sha256 SHA256' \
-    '  rollback-replacement --confirm-target DATABASE --expected-sha256 SHA256'
+    '  mirror-dump --confirm-target DATABASE'
 }
 
 die() {
@@ -52,10 +44,6 @@ die() {
 require_database_name() {
   [[ "$1" =~ ^[a-z][a-z0-9_]{0,62}$ ]] \
     || die 'database names must use lowercase letters, digits, and underscores'
-}
-
-require_sha256() {
-  [[ "$1" =~ ^[0-9a-f]{64}$ ]] || die 'a lowercase SHA-256 digest is required'
 }
 
 require_commit() {
@@ -76,7 +64,7 @@ require_host_paths() {
     "$backup_root" == "$HOME" ]]; then
     die 'LGA_POSTGRES_BACKUP_ROOT must be a dedicated absolute subdirectory'
   fi
-  for directory in "$deployment_root" "$backup_root" "$state_directory"; do
+  for directory in "$deployment_root" "$backup_root"; do
     [[ ! -L "$directory" ]] || die "managed directory must not be a symlink: $directory"
     install -d -m 700 -- "$directory"
     chmod 700 -- "$directory"
@@ -276,8 +264,6 @@ pre_deploy_backup() {
   local current_head
   confirm_target "$target"
   require_commit "$target_commit"
-  [[ ! -e "$replacement_state" && ! -L "$replacement_state" ]] \
-    || die 'database replacement still has unresolved rollback state'
   # Deployment bookkeeping is reported, never required: a safety backup must
   # stay possible precisely when deployment state has drifted.
   current_commit='unrecorded'
@@ -335,89 +321,22 @@ restore_test() {
   list_archive "$archive" || die 'the selected daily backup is not a readable PostgreSQL archive'
 
   timestamp="$(TZ=Europe/Prague date '+%Y%m%dt%H%M%S')"
-  replacement_stage="${target}_restore_test_${timestamp}"
-  require_database_name "$replacement_stage"
-  database_exists "$replacement_stage" && die 'generated restore-test database already exists'
-  create_database "$replacement_stage"
-  restore_archive "$replacement_stage" "$archive"
-  validate_database "$replacement_stage"
-  admin_count="$(container_psql "$replacement_stage" \
+  staging_database="${target}_restore_test_${timestamp}"
+  require_database_name "$staging_database"
+  database_exists "$staging_database" && die 'generated restore-test database already exists'
+  create_database "$staging_database"
+  restore_archive "$staging_database" "$archive"
+  validate_database "$staging_database"
+  admin_count="$(container_psql "$staging_database" \
     "SELECT count(*) FROM auth.users WHERE lower(email) IN ('mat.kadlec@email.cz','marek.hovadik@seznam.cz') AND is_active AND is_admin AND email_verified;")"
   [[ "$admin_count" == "2" ]] || die 'the restored backup does not contain both validated administrators'
-  restored_snapshot="$(snapshot_database "$replacement_stage")"
+  restored_snapshot="$(snapshot_database "$staging_database")"
   restored_snapshot_sha256="$(printf '%s\n' "$restored_snapshot" | sha256sum | awk '{print $1}')"
-  drop_database "$replacement_stage"
-  replacement_stage=""
+  drop_database "$staging_database"
+  staging_database=""
   printf 'Restore test completed in an isolated temporary database and removed it.\n'
   printf 'Archive SHA-256: %s\n' "$(sha256sum "$archive" | awk '{print $1}')"
   printf 'Restored snapshot SHA-256: %s\n' "$restored_snapshot_sha256"
-}
-
-restore_production() {
-  local target="$1"
-  local requested_archive="$2"
-  local expected_sha="$3"
-  local replacement_confirmation="$4"
-  local archive
-  local actual_sha
-  local timestamp
-  local safety_backup
-  local admin_count
-  local restored_snapshot_sha256
-  [[ "$replacement_confirmation" == "$target" ]] \
-    || die 'the destructive replacement confirmation must exactly match the target database'
-  confirm_target "$target"
-  require_sha256 "$expected_sha"
-  [[ ! -e "$replacement_state" && ! -L "$replacement_state" ]] \
-    || die 'a previous database replacement still awaits finalize or rollback'
-  archive="$(validate_managed_archive_path "$requested_archive")"
-  actual_sha="$(sha256sum "$archive" | awk '{print $1}')"
-  [[ "$actual_sha" == "$expected_sha" ]] \
-    || die 'backup archive SHA-256 does not match the explicit confirmation'
-  list_archive "$archive" || die 'the selected production backup is not readable by PostgreSQL 18'
-
-  safety_backup="$(create_backup "$target" pre-restore)"
-  timestamp="$(TZ=Europe/Prague date '+%Y%m%dt%H%M%S')"
-  replacement_target="$target"
-  replacement_stage="${target}_restore_stage_${timestamp}"
-  replacement_rollback="${target}_restore_rollback_${timestamp}"
-  require_database_name "$replacement_stage"
-  require_database_name "$replacement_rollback"
-  database_exists "$replacement_stage" && die 'generated restore staging database already exists'
-  database_exists "$replacement_rollback" && die 'generated restore rollback database already exists'
-
-  create_database "$replacement_stage"
-  restore_archive "$replacement_stage" "$archive"
-  validate_database "$replacement_stage"
-  admin_count="$(container_psql "$replacement_stage" \
-    "SELECT count(*) FROM auth.users WHERE lower(email) IN ('mat.kadlec@email.cz','marek.hovadik@seznam.cz') AND is_active AND is_admin AND email_verified;")"
-  [[ "$admin_count" == "2" ]] \
-    || die 'the restored production backup does not contain both validated administrators'
-  restored_snapshot_sha256="$(snapshot_database "$replacement_stage" | sha256sum | awk '{print $1}')"
-  write_replacement_state restore_prepared "$target" "$replacement_stage" \
-    "$replacement_rollback" "$expected_sha" "$safety_backup"
-
-  replacement_started=1
-  stop_application
-  set_connections_allowed "$target" false
-  terminate_database_connections "$target"
-  rename_database "$target" "$replacement_rollback"
-  rename_database "$replacement_stage" "$target"
-  write_replacement_state swapped "$target" "$replacement_stage" \
-    "$replacement_rollback" "$expected_sha" "$safety_backup"
-  replacement_healthy=0
-  if ! start_application; then
-    die 'restored application containers did not become healthy'
-  fi
-  validate_database "$target"
-  write_replacement_state awaiting_validation "$target" "$replacement_stage" \
-    "$replacement_rollback" "$expected_sha" "$safety_backup"
-  replacement_healthy=1
-  printf 'Production restore is healthy and awaits external validation.\n'
-  printf 'Archive SHA-256: %s\n' "$expected_sha"
-  printf 'Restored snapshot SHA-256: %s\n' "$restored_snapshot_sha256"
-  printf 'Pre-restore safety backup: %s\n' "$safety_backup"
-  printf 'Use finalize-replacement or rollback-replacement with the archive SHA-256.\n'
 }
 
 snapshot_database() {
@@ -427,184 +346,13 @@ snapshot_database() {
     -- "$database" < "$snapshot_sql"
 }
 
-wait_healthy() {
-  local container="$1"
-  local attempts=0
-  local status
-  while ((attempts < 150)); do
-    status="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$container" 2>/dev/null || true)"
-    if [[ "$status" == "healthy" ]]; then
-      return 0
-    fi
-    if [[ "$status" == "unhealthy" || "$status" == "exited" || "$status" == "dead" ]]; then
-      return 1
-    fi
-    sleep 2
-    attempts=$((attempts + 1))
-  done
-  return 1
-}
-
-stop_application() {
-  docker stop --time 20 "$frontend_container" "$backend_container" >/dev/null
-}
-
-start_application() {
-  docker start "$backend_container" >/dev/null
-  wait_healthy "$backend_container" || return 1
-  docker start "$frontend_container" >/dev/null
-  wait_healthy "$frontend_container"
-}
-
-terminate_database_connections() {
-  local database="$1"
-  container_psql postgres \
-    "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '$database' AND pid <> pg_backend_pid();" \
-    >/dev/null
-}
-
-rename_database() {
-  local old_name="$1"
-  local new_name="$2"
-  container_psql postgres "ALTER DATABASE \"$old_name\" RENAME TO \"$new_name\";" >/dev/null
-}
-
-set_connections_allowed() {
-  local database="$1"
-  local allowed="$2"
-  container_psql postgres "ALTER DATABASE \"$database\" WITH ALLOW_CONNECTIONS $allowed;" >/dev/null
-}
-
-write_replacement_state() {
-  local phase="$1"
-  local target="$2"
-  local stage="$3"
-  local rollback="$4"
-  local digest="$5"
-  local safety_backup="$6"
-  local temporary
-  temporary="$(mktemp "$state_directory/.replacement-state.XXXXXX")"
-  chmod 600 -- "$temporary"
-  {
-    printf 'phase=%s\n' "$phase"
-    printf 'target=%s\n' "$target"
-    printf 'stage=%s\n' "$stage"
-    printf 'rollback=%s\n' "$rollback"
-    printf 'sha256=%s\n' "$digest"
-    printf 'safety_backup=%s\n' "$safety_backup"
-  } > "$temporary"
-  sync -f "$temporary"
-  mv -f -- "$temporary" "$replacement_state"
-  chmod 600 -- "$replacement_state"
-}
-
-state_value_from_file() {
-  local key="$1"
-  local file="$2"
-  awk -F= -v key="$key" '$1 == key {sub(/^[^=]*=/, ""); print; found=1} END {if (!found) exit 1}' "$file"
-}
-
-state_value() {
-  local key="$1"
-  state_value_from_file "$key" "$replacement_state"
-}
-
-load_replacement_state() {
-  [[ -f "$replacement_state" && ! -L "$replacement_state" ]] \
-    || die 'no regular pending replacement state exists'
-  state_phase="$(state_value phase)"
-  state_target="$(state_value target)"
-  state_stage="$(state_value stage)"
-  state_rollback="$(state_value rollback)"
-  state_sha256="$(state_value sha256)"
-  state_safety_backup="$(state_value safety_backup)"
-  require_database_name "$state_target"
-  require_database_name "$state_stage"
-  require_database_name "$state_rollback"
-  require_sha256 "$state_sha256"
-  [[ "$state_safety_backup" == "$backup_root/"* ]] \
-    || die 'replacement state references a backup outside the managed root'
-}
-
-recover_interrupted_replacement() {
+drop_staging_database_on_failure() {
   local status=$?
   trap - EXIT ERR INT TERM HUP
-  set +e
-  if ((status != 0 && replacement_started == 1 && replacement_healthy == 0)); then
-    printf 'Replacement failed; attempting automatic restoration of the pre-migration database.\n' >&2
-    docker stop --time 20 "$frontend_container" "$backend_container" >/dev/null 2>&1
-    if database_exists "$replacement_rollback"; then
-      if database_exists "$replacement_target"; then
-        failed_database="${replacement_target}_failed_$(date '+%Y%m%d%H%M%S')"
-        set_connections_allowed "$replacement_target" false
-        terminate_database_connections "$replacement_target"
-        rename_database "$replacement_target" "$failed_database"
-      else
-        failed_database=""
-      fi
-      set_connections_allowed "$replacement_rollback" true
-      rename_database "$replacement_rollback" "$replacement_target"
-      if start_application; then
-        [[ -z "$failed_database" ]] || drop_database "$failed_database"
-        rm -f -- "$replacement_state"
-        printf 'Automatic database rollback completed.\n' >&2
-      else
-        printf 'Automatic rollback could not restore application health; preserve the safety backup and inspect immediately.\n' >&2
-      fi
-    elif database_exists "$replacement_stage"; then
-      drop_database "$replacement_stage"
-      rm -f -- "$replacement_state"
-    fi
-  elif ((status != 0)) && [[ -n "$replacement_stage" ]] \
-    && database_exists "$replacement_stage"; then
-    drop_database "$replacement_stage"
+  if ((status != 0)) && [[ -n "$staging_database" ]]; then
+    drop_database "$staging_database" || true
   fi
   exit "$status"
-}
-
-finalize_replacement() {
-  local target="$1"
-  local expected_sha="$2"
-  confirm_target "$target"
-  require_sha256 "$expected_sha"
-  load_replacement_state
-  [[ "$state_phase" == "awaiting_validation" ]] \
-    || die 'replacement state is not ready for finalization'
-  [[ "$state_target" == "$target" && "$state_sha256" == "$expected_sha" ]] \
-    || die 'finalize confirmation does not match the pending replacement'
-  database_exists "$state_rollback" || die 'pending rollback database is missing'
-  drop_database "$state_rollback"
-  rm -f -- "$replacement_state"
-  printf 'Database replacement finalized; the safety backup remains retained.\n'
-}
-
-rollback_replacement() {
-  local target="$1"
-  local expected_sha="$2"
-  local failed_database
-  confirm_target "$target"
-  require_sha256 "$expected_sha"
-  load_replacement_state
-  [[ "$state_phase" == "awaiting_snapshot" || "$state_phase" == "awaiting_validation" ]] \
-    || die 'replacement state is not ready for operator rollback'
-  [[ "$state_target" == "$target" && "$state_sha256" == "$expected_sha" ]] \
-    || die 'rollback confirmation does not match the pending replacement'
-  database_exists "$state_rollback" || die 'pending rollback database is missing'
-
-  failed_database="${target}_rejected_$(TZ=Europe/Prague date '+%Y%m%dt%H%M%S')"
-  require_database_name "$failed_database"
-  stop_application
-  set_connections_allowed "$target" false
-  terminate_database_connections "$target"
-  rename_database "$target" "$failed_database"
-  set_connections_allowed "$state_rollback" true
-  rename_database "$state_rollback" "$target"
-  if ! start_application; then
-    die 'operator rollback restored the database name but application health failed'
-  fi
-  drop_database "$failed_database"
-  rm -f -- "$replacement_state"
-  printf 'Operator rollback restored the pre-migration database.\n'
 }
 
 parse_target_option() {
@@ -635,7 +383,7 @@ validate_runtime_identity
 exec 9>"$operation_lock"
 chmod 600 -- "$operation_lock"
 flock -n 9 || die 'another League Analysis PostgreSQL operation is running'
-trap recover_interrupted_replacement EXIT ERR INT TERM HUP
+trap drop_staging_database_on_failure EXIT ERR INT TERM HUP
 
 case "$command_name" in
   identity)
@@ -688,36 +436,10 @@ case "$command_name" in
     }
     restore_test "$2" "$4"
     ;;
-  restore-production)
-    [[ "${1:-}" == "--confirm-target" && -n "${2:-}" && \
-      "${3:-}" == "--archive" && -n "${4:-}" && \
-      "${5:-}" == "--expected-sha256" && -n "${6:-}" && \
-      "${7:-}" == "--confirm-replace" && -n "${8:-}" && $# -eq 8 ]] || {
-      usage >&2
-      exit 2
-    }
-    restore_production "$2" "$4" "$6" "$8"
-    ;;
   mirror-dump)
     target="$(parse_target_option "$@")"
     confirm_target "$target"
     dump_mirror_database "$target"
-    ;;
-  finalize-replacement)
-    [[ "${1:-}" == "--confirm-target" && -n "${2:-}" && \
-      "${3:-}" == "--expected-sha256" && -n "${4:-}" && $# -eq 4 ]] || {
-      usage >&2
-      exit 2
-    }
-    finalize_replacement "$2" "$4"
-    ;;
-  rollback-replacement)
-    [[ "${1:-}" == "--confirm-target" && -n "${2:-}" && \
-      "${3:-}" == "--expected-sha256" && -n "${4:-}" && $# -eq 4 ]] || {
-      usage >&2
-      exit 2
-    }
-    rollback_replacement "$2" "$4"
     ;;
   *)
     usage >&2
@@ -725,5 +447,5 @@ case "$command_name" in
     ;;
 esac
 
-replacement_healthy=1
+staging_database=""
 trap - EXIT ERR INT TERM HUP
