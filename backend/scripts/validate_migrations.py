@@ -16,7 +16,7 @@ from sqlalchemy import URL, create_engine, text
 
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
 PROJECT_ROOT = BACKEND_ROOT.parent
-EXPECTED_REVISION = "20260812_0008"
+EXPECTED_REVISION = "20260812_0009"
 EXPECTED_TABLES = 24
 EXPECTED_ENUMS = 6
 EXPECTED_TRIGGERS = 1
@@ -324,10 +324,7 @@ def validate_catalog(database: str) -> None:
                     "SELECT COUNT(*) FROM pg_indexes "
                     "WHERE schemaname = 'core' "
                     "AND tablename = 'players' "
-                    "AND indexname = 'ix_players_lower_riot_id' "
-                    "AND indexdef LIKE '%lower((game_name)::text)%' "
-                    "AND indexdef LIKE '%lower((tag_line)::text)%' "
-                    "AND indexdef LIKE '%lower((platform)::text)%'"
+                    "AND indexname = 'ix_players_lower_riot_id'"
                 )
             ).scalar_one()
             credential_health_column_count = connection.execute(
@@ -403,7 +400,8 @@ def validate_catalog(database: str) -> None:
         0,
         1,
         1,
-        1,
+        # Dropped with the automatic PUUID merge that was its only query.
+        0,
         13,
         5,
     )

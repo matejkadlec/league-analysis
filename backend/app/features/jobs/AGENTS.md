@@ -99,9 +99,9 @@ details. Keep it synchronized with job changes.
   `skipped_as_already_running`, which `player_sync` maps to `SYNC_BUSY`. A run
   whose start failed also has no execution id and must stay a real failure.
 - `_finish_sync` never reopens a terminal `PlayerSyncRun`. It locks the row and
-  writes only while the run is still active, because PUUID migration may close
-  it while this orchestrator is mid-flight; reviving it would also risk a
-  collision with a replacement run on the freshly issued PUUID.
+  writes only while the run is still active, because an operator stop or startup
+  recovery may cancel it while this orchestrator is mid-flight; reviving it
+  would also risk a collision with a replacement run on the same PUUID.
 - Regular Match Fetcher and Player Updater runs finish `SUCCESS` with warning
   diagnostics after isolated player, match, timeline, or provider-shape errors.
   Missing/rejected Riot credentials remain `FAILED`; rate exhaustion is

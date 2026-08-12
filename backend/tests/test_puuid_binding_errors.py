@@ -15,11 +15,8 @@ from app.features.jobs.models import (
     JobConfiguration,
     JobExecution,
     JobStatus,
-    PlayerSyncRun,
 )
 from app.features.jobs.player_sync import _failure_from_job, _finish_sync
-from app.features.matchmaking_analysis.models import MatchmakingAnalysis
-from app.features.players.service import ACTIVE_RUN_TABLES, PUUID_REFERENCING_TABLES
 
 
 class _Job(BaseJob):
@@ -285,72 +282,6 @@ async def test_a_failed_completion_write_does_not_publish_its_status() -> None:
     assert job.job_execution_status is not JobStatus.CANCELLED
 
 
-def _indexed_active_statuses(model, index_name: str) -> set[str]:
-    """Read the statuses a table's partial unique index actually covers."""
-    for index in model.__table__.indexes:
-        if index.name != index_name:
-            continue
-        predicate = str(index.dialect_options["postgresql"]["where"])
-        listed = predicate.split("(")[1].split(")")[0]
-        return {entry.strip().strip("'") for entry in listed.split(",")}
-    raise AssertionError(f"{index_name} is missing")
-
-
-@pytest.mark.parametrize(
-    ("table", "model", "index_name"),
-    [
-        (
-            "core.matchmaking_analyses",
-            MatchmakingAnalysis,
-            "uq_matchmaking_analyses_active_puuid",
-        ),
-        ("jobs.player_sync_runs", PlayerSyncRun, "uq_player_sync_runs_active_puuid"),
-    ],
-)
-def test_migration_closes_exactly_the_indexed_active_statuses(
-    table: str, model: object, index_name: str
-) -> None:
-    """Migration must close every status the partial unique index covers.
-
-    A status left open would move a second active row onto the fresh PUUID and
-    violate that index, aborting the whole migration.
-    """
-    configured = [
-        statuses for name, _, statuses, _ in ACTIVE_RUN_TABLES if name == table
-    ]
-    assert configured, f"{table} is never closed before repointing"
-
-    assert set(configured[0]) == _indexed_active_statuses(model, index_name)
-
-
-def test_every_closed_table_is_also_repointed() -> None:
-    """Closing a run without moving it would strand it on the deleted PUUID."""
-    repointed = {name for name, _, _ in PUUID_REFERENCING_TABLES}
-
-    for table, _, _, _ in ACTIVE_RUN_TABLES:
-        assert table in repointed
-
-
-def test_closing_a_run_clears_its_pending_deadlines() -> None:
-    """A terminal row must not keep a wait deadline it can never reach.
-
-    Every other terminal transition on `core.matchmaking_analyses` clears
-    `rate_limit_reset_at`, so migration has to clear it too.
-    """
-    cleared = {name: columns for name, _, _, columns in ACTIVE_RUN_TABLES}
-
-    assert "rate_limit_reset_at" in cleared["core.matchmaking_analyses"]
-
-    for table, columns in cleared.items():
-        model = (
-            MatchmakingAnalysis
-            if table == "core.matchmaking_analyses"
-            else PlayerSyncRun
-        )
-        for column in columns:
-            assert column in model.__table__.c, f"{table}.{column} does not exist"
-
-
 class _RecordingSession:
     """Session that hands back one row and records whether a write happened."""
 
@@ -375,11 +306,11 @@ class _RecordingSession:
 
 @pytest.mark.asyncio
 async def test_a_cancelled_sync_run_is_never_reopened(monkeypatch) -> None:
-    """Migration closes the runs of a superseded PUUID.
+    """An operator stop or startup recovery may cancel a run mid-flight.
 
-    The orchestrator may still be mid-flight, and an unguarded write would set
-    that row back to `running` and could then collide with a replacement run on
-    the freshly issued PUUID.
+    The orchestrator may still be running, and an unguarded write would set that
+    terminal row back to `running` and could then collide with a replacement run
+    on the same PUUID.
     """
     run = SimpleNamespace(status="cancelled", started_at=None, completed_at=None)
     session = _RecordingSession(run)
@@ -389,7 +320,7 @@ async def test_a_cancelled_sync_run_is_never_reopened(monkeypatch) -> None:
 
     assert run.status == "cancelled"
     assert session.committed is False
-    assert session.locked is True, "the row must be locked against a live migration"
+    assert session.locked is True, "the row must be locked against a concurrent write"
 
 
 @pytest.mark.asyncio

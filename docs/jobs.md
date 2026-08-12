@@ -173,7 +173,9 @@ Client-visible failure codes are `RIOT_API_KEY_INVALID`, `RIOT_RATE_LIMITED`,
 `SYNC_CANCELLED`, `SYNC_BUSY`, `SYNC_CONFIGURATION_MISSING`, `PLAYER_ID_STALE`,
 and `SYNC_FAILED` as the unclassified fallback. `PLAYER_ID_STALE` means Riot
 rejected the stored PUUID because it was issued to a different developer
-account; searching for that player again re-resolves and migrates it. See
+account; searching for that player again resolves the current PUUID into a
+separate row, which an operator then reconciles. Discovery never merges the two
+rows automatically. See
 [`riot-api.md`](riot-api.md#puuids-are-bound-to-the-developer-account).
 
 A job that ends without recording completion — an exception raised while

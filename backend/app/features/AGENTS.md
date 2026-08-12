@@ -80,23 +80,18 @@ async def get_player_service(
   Current selection, tracked mappings, and recent ordering are always scoped by
   authenticated application user ID. Never infer one from the other.
 - Keep routes thin, logic in services
-- `discover_player` migrates every stale player row for a Riot ID onto its
-  freshly issued PUUID instead of inserting a duplicate. It runs before the
-  fresh row is looked up, because a stale row can coexist with a fresh one
-  created by match-participant discovery. Extend `PUUID_REFERENCING_TABLES`
-  whenever a new table references `core.players(puuid)`; those foreign keys
-  cascade on delete, so a missed table would destroy data.
-- Migration closes every run listed in `ACTIVE_RUN_TABLES` before repointing
-  it. Those tables allow one active row per PUUID through a partial unique
-  index, so moving a second active row onto the fresh PUUID would abort the
-  migration. Add a table there whenever it gains such an index; the run is
-  already doomed, because Riot rejects the superseded PUUID. Closing clears the
-  listed pending-deadline columns too, so a terminal row never keeps a wait it
-  can never reach. A background orchestrator that is still mid-flight must not
-  reopen a row migration closed.
-- Keep `ix_players_lower_riot_id` aligned with the case-normalized Riot ID
-  lookup that migration runs on every discovery while holding the shared
-  Riot-writer locks.
+- `discover_player` never merges two player rows. A row carrying the same Riot
+  ID under a different PUUID is left alone, and a duplicate row is the accepted
+  outcome. Discovery cannot distinguish a PUUID re-encrypted under a new
+  developer account from a Riot ID renamed away and reclaimed by someone else,
+  and every table referencing `core.players(puuid)` cascades on delete, so a
+  wrong merge would move one player's history onto another and delete the
+  original. Do not reintroduce an automatic repoint-and-delete path, and do not
+  treat a `PuuidDecryptionError` on the superseded PUUID as authorization: it
+  proves the stored PUUID belongs to another account namespace, not that the
+  name-resolved PUUID is the same Riot account. Repair a stale population
+  through an explicit operator-run pass with a reviewed mapping instead; see
+  [`../../../docs/riot-api.md`](../../../docs/riot-api.md).
 - Matchmaking Analysis start routes must return the persisted active run before
   Riot preflight/work begins. Preserve its explicit lifecycle states, one-active-
   run-per-PUUID database constraint, exact-run cancellation, and shared
