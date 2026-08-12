@@ -63,9 +63,15 @@ resources from another Pi project.
 The frontend and backend run as UID/GID `10001`, with a read-only root
 filesystem, `no-new-privileges`, all Linux capabilities dropped, bounded PIDs,
 bounded local-driver logs, and writable tmpfs only where required. PostgreSQL
-retains the official entrypoint's required privilege boundary, stores data in
-the named `league-analysis-postgres-data` volume, and is attached only to the
-internal database network. The frontend has no database-network access.
+retains the official entrypoint's required privilege boundary and is attached
+only to the internal database network. The frontend has no database-network
+access.
+
+The data volume is deliberately unnamed in `compose.production.yml`, so Compose
+derives it from the project name. Never reintroduce an explicit name or a
+`LGA_POSTGRES_VOLUME_NAME` override: on 2026-08-12 a hard-coded name in the
+deploy script disagreed with the running stack's volume, and the deploy started
+on an empty database.
 
 The backend readiness endpoint is `/health/ready`. It returns success only
 after a database round trip. The one-shot migration must finish successfully
