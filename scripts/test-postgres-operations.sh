@@ -18,6 +18,8 @@ mirror_timer="$repository_root/deploy/systemd/league-analysis-local-postgres-mir
 snapshot_sql="$repository_root/deploy/postgres-snapshot.sql"
 admin_reconciler="$repository_root/backend/scripts/reconcile_admin_account.py"
 initial_migration="$repository_root/backend/scripts/migrate_local_postgres_to_pi.py"
+expected_head="$repository_root/backend/alembic/expected-head.txt"
+migration_contract="$repository_root/backend/scripts/migration_contract.py"
 
 fail() {
   printf 'PostgreSQL operations regression failed: %s\n' "$1" >&2
@@ -38,7 +40,9 @@ for required_file in \
   "$mirror_timer" \
   "$snapshot_sql" \
   "$admin_reconciler" \
-  "$initial_migration"; do
+  "$initial_migration" \
+  "$expected_head" \
+  "$migration_contract"; do
   [[ -f "$required_file" ]] || fail "missing ${required_file#"$repository_root/"}"
 done
 bash -n "$pi_operations"
@@ -72,6 +76,10 @@ grep -Fq 'finalize-replacement' "$pi_operations" \
   || fail 'the explicit finalize path is missing.'
 grep -Fq 'pi-authoritative.state' "$pi_operations" \
   || fail 'the durable Pi authority gate is missing.'
+grep -Fq 'expected-alembic-head.txt' "$pi_operations" \
+  || fail 'Pi operations must consume the installed migration-head contract.'
+grep -Fq 'expected-alembic-head.txt' "$pi_installer" \
+  || fail 'the Pi installer must publish the migration-head contract.'
 grep -Fq 'adopt-relocated-authority --confirm-target DATABASE' "$pi_operations" \
   || fail 'the explicit relocated-authority adoption path is missing.'
 adoption_function="$(sed -n '/^adopt_relocated_authority()/,/^}/p' "$pi_operations")"
@@ -92,10 +100,32 @@ grep -Fq 'daily backups require confirmed Pi database authority' "$pi_operations
   || fail 'daily backups must require confirmed Pi authority.'
 grep -Fq 'archive="$(create_backup "$target" daily)"' "$pi_operations" \
   || fail 'the daily path must finish a validated archive before retention.'
-retention_line="$(grep -n -F '"$retention_tool" "$backup_root"' "$pi_operations" | cut -d: -f1)"
-backup_line="$(grep -n -F 'archive="$(create_backup "$target" daily)"' "$pi_operations" | cut -d: -f1)"
+daily_function="$(sed -n '/^daily_backup()/,/^}/p' "$pi_operations")"
+retention_line="$(grep -n -F '"$retention_tool" "$backup_root"' <<< "$daily_function" | cut -d: -f1)"
+backup_line="$(grep -n -F 'archive="$(create_backup "$target" daily)"' <<< "$daily_function" | cut -d: -f1)"
 ((retention_line > backup_line)) \
   || fail 'daily retention must run only after a successful backup.'
+pre_deploy_function="$(sed -n '/^pre_deploy_backup()/,/^}/p' "$pi_operations")"
+grep -Fq 'confirmed Pi database authority' <<< "$pre_deploy_function" \
+  || fail 'pre-deployment backups must require confirmed Pi authority.'
+grep -Fq 'validate_database_baseline "$target"' <<< "$pre_deploy_function" \
+  || fail 'pre-deployment backups must validate the current database baseline.'
+grep -Fq 'pre-deploy "-${target_commit:0:12}"' <<< "$pre_deploy_function" \
+  || fail 'pre-deployment backups must bind their names to the target commit.'
+grep -Fq 'restore-production --confirm-target DATABASE' "$pi_operations" \
+  || fail 'the explicitly confirmed production restore path is missing.'
+restore_function="$(sed -n '/^restore_production()/,/^}/p' "$pi_operations")"
+for restore_gate in \
+  'replacement_confirmation' \
+  'confirmed_authority' \
+  'validate_managed_archive_path' \
+  'backup archive SHA-256 does not match' \
+  'create_backup "$target" pre-restore' \
+  'validate_database "$replacement_stage"' \
+  'write_replacement_state awaiting_validation'; do
+  grep -Fq "$restore_gate" <<< "$restore_function" \
+    || fail "production restore is missing: $restore_gate"
+done
 grep -Fq 'OnCalendar=*-*-* 00:00:00 Europe/Prague' "$backup_timer" \
   || fail 'the daily timer must explicitly use Prague midnight.'
 grep -Fq 'Persistent=true' "$backup_timer" \
@@ -104,8 +134,8 @@ grep -Fq 'UMask=0077' "$backup_service" \
   || fail 'the backup service must default to private files.'
 grep -Fq 'daily-backup --confirm-target league_analysis' "$backup_service" \
   || fail 'the backup service must confirm the exact League Analysis database.'
-grep -Fq 'restore-test accepts only an exact daily-backup filename' "$pi_operations" \
-  || fail 'restore tests must reject archives outside the daily backup contract.'
+grep -Fq 'the backup archive name is outside the managed restore contract' "$pi_operations" \
+  || fail 'restore tests must reject archives outside the managed backup contract.'
 grep -Fq 'mirror exports require confirmed Pi database authority' "$pi_operations" \
   || fail 'mirror exports must require confirmed Pi authority.'
 grep -Fq 'mirror-dump)' "$pi_operations" \
@@ -120,6 +150,10 @@ grep -Fq 'mirror-dump --confirm-target' "$mirror_script" \
   || fail 'the local mirror must use the read-only Pi export.'
 grep -Fq 'snapshot --confirm-target' "$mirror_script" \
   || fail 'the local mirror must compare the read-only Pi snapshot first.'
+grep -Fq 'migration_contract.py' "$mirror_installer" \
+  || fail 'the local mirror installer must publish the migration-head loader.'
+grep -Fq 'expected-alembic-head.txt' "$mirror_installer" \
+  || fail 'the local mirror installer must publish the reviewed head value.'
 grep -Fq -- '--compress=zstd:3' "$pi_operations" \
   || fail 'frequent mirror exports must use the reviewed fast compression level.'
 grep -Fq -- '--compress=gzip:9' "$pi_operations" \
@@ -161,6 +195,11 @@ grep -Fq 'rollback_remote(host, remote_database, digest)' "$initial_migration" \
   || fail 'a snapshot mismatch must trigger rollback.'
 if grep -Eiq 'password_hash|key_value' "$snapshot_sql"; then
   fail 'database snapshots must not expose password hashes or Riot keys.'
+fi
+[[ "$(<"$expected_head")" =~ ^[0-9]{8}_[0-9]{4}$ ]] \
+  || fail 'the reviewed Alembic head file has an invalid shape.'
+if grep -Fq 'EXPECTED_ALEMBIC_HEAD = "' "$initial_migration" "$mirror_script"; then
+  fail 'operational Python scripts must not hard-code independent Alembic heads.'
 fi
 
 printf 'PostgreSQL migration and operations contract regression passed.\n'

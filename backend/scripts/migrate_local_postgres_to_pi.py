@@ -20,6 +20,7 @@ import tempfile
 from pathlib import Path
 
 from dotenv import load_dotenv
+from migration_contract import EXPECTED_ALEMBIC_HEAD
 from sqlalchemy import create_engine, text
 
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
@@ -29,7 +30,6 @@ LOCAL_DATABASE = "league_analysis_local_dev"
 REMOTE_DATABASE = "league_analysis"
 REMOTE_HOST = "pi5ram16"
 REMOTE_SCRIPT = "$HOME/.local/share/league-analysis/operations/pi-postgres-operations"
-EXPECTED_ALEMBIC_HEAD = "20260809_0006"
 
 if os.getenv("ENVIRONMENT", "").lower() != "test":
     for configuration_name in (

@@ -8,6 +8,7 @@ if [[ $# -ne 0 ]]; then
 fi
 
 source_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+repository_root="$(cd "$source_directory/.." && pwd)"
 deployment_root="${LGA_DEPLOY_ROOT:-$HOME/.local/share/league-analysis}"
 operations_directory="$deployment_root/operations"
 lock_path="$deployment_root/.postgres-operations-install.lock"
@@ -20,7 +21,8 @@ fi
 for source_file in \
   "$source_directory/pi-postgres-operations.sh" \
   "$source_directory/prune-postgres-daily-backups.sh" \
-  "$source_directory/postgres-snapshot.sql"; do
+  "$source_directory/postgres-snapshot.sql" \
+  "$repository_root/backend/alembic/expected-head.txt"; do
   if [[ ! -f "$source_file" || -L "$source_file" ]]; then
     printf 'Required source is missing or is a symlink: %s\n' "$source_file" >&2
     exit 1
@@ -50,6 +52,8 @@ install -m 700 -- "$source_directory/prune-postgres-daily-backups.sh" \
   "$temporary_directory/prune-postgres-daily-backups"
 install -m 600 -- "$source_directory/postgres-snapshot.sql" \
   "$temporary_directory/postgres-snapshot.sql"
+install -m 600 -- "$repository_root/backend/alembic/expected-head.txt" \
+  "$temporary_directory/expected-alembic-head.txt"
 bash -n "$temporary_directory/pi-postgres-operations"
 bash -n "$temporary_directory/prune-postgres-daily-backups"
 
@@ -59,6 +63,8 @@ install -m 700 -- "$temporary_directory/prune-postgres-daily-backups" \
   "$operations_directory/prune-postgres-daily-backups"
 install -m 600 -- "$temporary_directory/postgres-snapshot.sql" \
   "$operations_directory/postgres-snapshot.sql"
+install -m 600 -- "$temporary_directory/expected-alembic-head.txt" \
+  "$operations_directory/expected-alembic-head.txt"
 
 "$operations_directory/pi-postgres-operations" identity
 printf 'Installed League Analysis Pi PostgreSQL operations tooling.\n'

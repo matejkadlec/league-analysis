@@ -20,10 +20,14 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import NoReturn
 
+try:
+    from migration_contract import EXPECTED_ALEMBIC_HEAD
+except ModuleNotFoundError:  # Loaded as scripts.* by the focused module tests.
+    from scripts.migration_contract import EXPECTED_ALEMBIC_HEAD
+
 LOCAL_DATABASE = "league_analysis_local_dev"
 REMOTE_DATABASE = "league_analysis"
 REMOTE_HOST = "pi5ram16"
-EXPECTED_ALEMBIC_HEAD = "20260809_0006"
 REMOTE_SCRIPT = "$HOME/.local/share/league-analysis/operations/pi-postgres-operations"
 DEFAULT_CONFIG = Path.home() / "projects" / "league-analysis" / ".env"
 DEFAULT_OPERATION_ROOT = Path.home() / ".local" / "share" / "league-analysis"

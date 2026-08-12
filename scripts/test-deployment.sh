@@ -78,12 +78,37 @@ grep -Fq 'driver: local' "$compose_file" \
 
 grep -Fq 'flock -n 9' "$deploy_script" \
   || fail 'deployments must hold a non-blocking host lock.'
+for production_identity in \
+  'LGA_COMPOSE_PROJECT_NAME=league-analysis' \
+  'LGA_POSTGRES_CONTAINER_NAME=league-analysis-postgres' \
+  'LGA_BACKEND_CONTAINER_NAME=league-analysis-backend' \
+  'LGA_FRONTEND_CONTAINER_NAME=league-analysis-frontend' \
+  'LGA_POSTGRES_VOLUME_NAME=league-analysis-postgres-data' \
+  'LGA_FRONTEND_PORT=8097' \
+  'LGA_BACKEND_PORT=8098'; do
+  grep -Fq "$production_identity" "$deploy_script" \
+    || fail "the production deployment is missing exact identity: $production_identity"
+done
 grep -Fq 'compose up --detach --remove-orphans --wait --wait-timeout 300' "$deploy_script" \
   || fail 'deployment must wait only for bounded container readiness.'
+pre_deploy_backup_line="$(grep -n -F 'pre-deploy-backup' "$deploy_script" | cut -d: -f1)"
+compose_up_line="$(grep -n -F 'compose up --detach --remove-orphans --wait --wait-timeout 300' "$deploy_script" | cut -d: -f1)"
+((pre_deploy_backup_line < compose_up_line)) \
+  || fail 'the pre-deployment PostgreSQL backup must finish before migration/startup.'
+grep -Fq 'install-pi-postgres-backup-timer.sh' "$deploy_script" \
+  || fail 'a successful deployment must refresh the reviewed operations and backup timer.'
+grep -Fq 'label=com.docker.compose.volume=postgres_data' "$deploy_script" \
+  || fail 'a missing PostgreSQL container must not hide an existing production volume.'
+grep -Fq 'refusing to skip the pre-deployment backup' "$deploy_script" \
+  || fail 'an orphaned production volume must fail the deployment safely.'
 grep -Fq '"league-analysis-backend:$qa_identity"' "$container_qa" \
   || fail 'container QA must remove its uniquely tagged backend image.'
 grep -Fq '"league-analysis-frontend:$qa_identity"' "$container_qa" \
   || fail 'container QA must remove its uniquely tagged frontend image.'
+grep -Fq 'Disposable PostgreSQL 18 backup and restore rehearsal passed.' "$container_qa" \
+  || fail 'container QA must rehearse a full disposable PostgreSQL restore.'
+grep -Fq 'pg_restore --username "$POSTGRES_USER" --dbname "$1" --no-owner --no-privileges --exit-on-error' "$container_qa" \
+  || fail 'container QA must fail closed while restoring the disposable archive.'
 if grep -Eiq '/api/[^[:space:]]*jobs|running-status|job_executions' "$deploy_script"; then
   fail 'deployment must not inspect or drain application jobs.'
 fi
