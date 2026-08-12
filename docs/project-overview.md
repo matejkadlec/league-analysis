@@ -19,46 +19,14 @@ application, analysis, scheduler, and authentication state.
 
 ## Architecture and Feature Boundaries
 
-```text
-league-analysis/
-├── backend/
-│   ├── Dockerfile
-│   ├── app/
-│   │   ├── main.py
-│   │   ├── core/
-│   │   │   └── riot_api/
-│   │   └── features/
-│   │       ├── auth/
-│   │       ├── jobs/
-│   │       ├── matches/
-│   │       ├── matchmaking_analysis/
-│   │       ├── players/
-│   │       ├── playstyle_analysis/
-│   │       └── settings/
-│   ├── alembic/
-│   ├── alembic.ini
-│   ├── scripts/
-│   ├── pyproject.toml
-│   └── uv.lock
-├── frontend/
-│   ├── Dockerfile
-│   ├── app/
-│   ├── components/
-│   ├── features/
-│   ├── lib/core/
-│   ├── package.json
-│   └── package-lock.json
-├── .githooks/
-│   ├── pre-commit
-│   └── post-checkout
-├── docs/
-├── deploy/              # container-qa.sh, production-deploy.sh, ... (elided)
-├── compose.production.yml
-├── logs/
-├── scripts/             # tooling + regression scripts (elided)
-├── run.sh
-└── test.sh              # Mandatory pre-publication quality gate
-```
+Two applications live at the repository root: `backend/` (FastAPI; domain
+features under `app/features/<name>/`, shared infrastructure under
+`app/core/`, reviewed schema revisions under `alembic/versions/`) and
+`frontend/` (Next.js App Router; `app/`, `components/`, `features/`, and
+`lib/core/`). Repository tooling is `scripts/`, `.githooks/`, `deploy/`,
+`run.sh`, and `test.sh` (the mandatory pre-publication gate). The current
+file inventory is the tree itself; this document records only the boundaries
+that constrain changes.
 
 ### Backend
 
