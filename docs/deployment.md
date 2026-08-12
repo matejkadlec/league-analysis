@@ -278,11 +278,11 @@ authority unconfirmed and mirror exports disabled.
 
 ## PostgreSQL daily backups and restore tests
 
-> **Installation status (2026-08-12): the backup timer is NOT installed on
-> `pi5ram16` — no automatic backups run.** This section documents the reviewed
-> installer and its intended contract. Verify the timer with the inspection
-> commands below before relying on automatic backups, and treat a missing
-> timer as an open operational risk until the installer has been run.
+> **Installation status (2026-08-12): the backup timer IS installed and
+> enabled on `pi5ram16`** through the reviewed installer, with lingering
+> enabled for the `pi` user so the user timer runs without an open session.
+> The deploy workflow re-runs the installer on every release; verify with the
+> inspection commands below when in doubt.
 
 The reviewed design is a user-systemd timer named
 `league-analysis-postgres-backup.timer`. It runs at exactly `00:00` in the

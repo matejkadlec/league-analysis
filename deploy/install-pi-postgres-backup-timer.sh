@@ -30,6 +30,10 @@ done
 install -d -m 700 -- "$unit_directory"
 install -m 600 -- "$unit_source/$service_name" "$unit_directory/$service_name"
 install -m 600 -- "$unit_source/$timer_name" "$unit_directory/$timer_name"
+# The GitHub runner service has no login-session environment; point
+# systemctl --user at the lingering user manager explicitly.
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=$XDG_RUNTIME_DIR/bus}"
 systemctl --user daemon-reload
 systemctl --user enable --now "$timer_name"
 systemctl --user is-enabled --quiet "$timer_name"
