@@ -21,6 +21,7 @@ card_configuration_regression="$repository_root/scripts/test-card-configuration.
 github_governance_regression="$repository_root/scripts/test-github-governance.sh"
 deployment_regression="$repository_root/scripts/test-deployment.sh"
 postgres_operations_regression="$repository_root/scripts/test-postgres-operations.sh"
+migration_validator="$repository_root/backend/scripts/validate_migrations.py"
 
 fail() {
   printf 'Quality tooling regression failed: %s\n' "$1" >&2
@@ -79,6 +80,10 @@ grep -Fqx '        run: ./scripts/dependency-audit.sh "$CHANGE_BASE_SHA"' "$work
 [[ "$(grep -Fxc '        run: npm install --global npm@12.0.2 --ignore-scripts' "$workflow")" -eq 2 ]] || fail 'both workflow jobs must install the pinned npm release.'
 [[ "$(grep -Fxc '          version: "0.12.3"' "$workflow")" -eq 2 ]] || fail 'both workflow jobs must install the pinned uv release.'
 grep -Fqx '        image: postgres:18.4' "$workflow" || fail 'the CI database image must use the reviewed PostgreSQL minor.'
+grep -Fqx '          LGA_POSTGRES_CLIENT_CONTAINER: ${{ job.services.postgres.id }}' "$workflow" \
+  || fail 'migration restore validation must use the PostgreSQL 18 service client in CI.'
+grep -Fq 'POSTGRES_CLIENT_CONTAINER_ENV = "LGA_POSTGRES_CLIENT_CONTAINER"' "$migration_validator" \
+  || fail 'migration restore validation must retain the pinned CI client boundary.'
 grep -Fqx '    uv run python scripts/migrate.py upgrade head' "$ci_gate" || fail 'CI must use the locked Alembic migration command.'
 grep -Fq '"packageManager": "npm@12.0.2"' "$frontend_package" || fail 'the frontend package-manager pin changed.'
 grep -Fq 'npm run lint -- --max-warnings 0' "$gate" || fail 'frontend lint must reject warnings.'

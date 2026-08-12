@@ -103,6 +103,7 @@ jobs:
           JWT_SECRET_KEY: league-analysis-ci-jwt-secret-32-characters
           ENVIRONMENT: test
           LGA_VALIDATE_MIGRATIONS: "1"
+          LGA_POSTGRES_CLIENT_CONTAINER: ${{ job.services.postgres.id }}
         run: ./scripts/ci.sh
 
       - name: Build and verify isolated production containers
