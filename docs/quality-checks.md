@@ -69,13 +69,12 @@ All modes run:
 - tracked JSON parsing, merge-marker detection, and sensitive-filename hygiene;
 - ShellCheck over every tracked shell script;
 - regression checks for the ShellCheck and actionlint installers/runners,
-  including their rejection of the invalid tracked fixtures, and the LGA-23
-  card-configuration contract (the Node-selector regression runs only when the
-  frontend gate is selected);
+  including their rejection of the invalid tracked fixtures (the Node-selector
+  regression runs only when the frontend gate is selected);
 - network-free dependency-audit policy regressions covering inherited, new, and
   resolved findings and the npm/pip advisory parsers;
-- Flow 1 policy regressions for expected batch scale, undersized-batch reasons,
-  bounded independent PRs, worktree defaults, and final handoff behavior;
+- workflow-skill discovery from both the `.claude/skills/` and `.agents/skills/`
+  roots, so Codex and Claude resolve the same `SKILL.md` files;
 - trusted-hook, local `.env` provisioning, primary/linked worktree identity,
   signal handling, and worktree-integrity guard regressions;
 - actionlint syntax and expression validation;
@@ -193,8 +192,8 @@ The deterministic job first classifies the change with
 fast `./test.sh --repo` repository gate and skips the heavy stages; any other
 change runs the full path. On the full path the job provisions PostgreSQL 18.4
 and passes only safe CI values. Because the workflow calls `scripts/ci.sh`,
-which calls the guarded `./test.sh`, the Flow 1 and worktree suites run in
-GitHub Actions without a second workflow entry point. The full backend gate
+which calls the guarded `./test.sh`, the repository suites run in GitHub
+Actions without a second workflow entry point. The full backend gate
 validates the initial Alembic baseline in a fresh isolated database. CI
 additionally sets `LGA_VALIDATE_MIGRATIONS=1` and applies
 `backend/scripts/migrate.py upgrade head` to its clean PostgreSQL 18.4 service
