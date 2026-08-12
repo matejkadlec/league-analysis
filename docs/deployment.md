@@ -127,15 +127,15 @@ SHA without persisted credentials and calls the repository-owned script:
   --commit "$GITHUB_SHA"
 ```
 
-The script verifies the exact checkout, target repository/ref when GitHub
-supplies them, private-file type/mode, and required tools. It then:
+The script verifies the exact checkout, private-file type/mode, and required
+tools. It then:
 
 1. acquires `$HOME/.local/share/league-analysis/.deploy.lock` without waiting;
 2. stages a clean `git archive` of the exact commit under `releases/`;
 3. validates Compose without printing interpolated secrets;
 4. builds commit-tagged backend/frontend images from the repository Dockerfiles;
 5. starts the stack with a five-minute migration and health deadline;
-6. proves PostgreSQL has no host port and rechecks both services internally;
+6. proves PostgreSQL publishes no host port;
 7. atomically records the successful release as `current`.
 
 Workflow concurrency queues deployments instead of cancelling an active host

@@ -97,6 +97,26 @@ cleanup() {
 trap cleanup EXIT
 
 compose config --quiet
+
+# On 2026-08-12 the deploy script exported a hard-coded PostgreSQL volume name.
+# Compose interpolation prefers the process environment over --env-file, so the
+# override won and production started on an empty volume. The volume carries no
+# name now, which forces it to follow the project. Resolve the production file
+# under a hostile environment variable and prove the name still derives.
+production_volumes="$(
+  env COMPOSE_DISABLE_ENV_FILE=1 \
+    LGA_POSTGRES_VOLUME_NAME=an-environment-variable-must-not-win \
+    docker compose \
+      --project-name league-analysis \
+      --env-file "$repository_root/deploy/production.env.example" \
+      --file "$repository_root/compose.production.yml" \
+      config
+)"
+if ! grep -Fq 'name: league-analysis_postgres_data' <<< "$production_volumes"; then
+  printf 'The production PostgreSQL volume no longer derives from the project.\n' >&2
+  exit 1
+fi
+
 compose build --pull
 if ! compose up --detach --remove-orphans --wait --wait-timeout 300; then
   compose ps --all >&2 || true
