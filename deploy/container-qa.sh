@@ -57,7 +57,6 @@ LGA_COMPOSE_PROJECT_NAME=$qa_identity
 LGA_POSTGRES_CONTAINER_NAME=$qa_identity-postgres
 LGA_BACKEND_CONTAINER_NAME=$qa_identity-backend
 LGA_FRONTEND_CONTAINER_NAME=$qa_identity-frontend
-LGA_POSTGRES_VOLUME_NAME=$qa_identity-postgres-data
 LGA_APPLICATION_NETWORK_NAME=$qa_identity-application
 LGA_DATABASE_NETWORK_NAME=$qa_identity-database
 LGA_BIND_ADDRESS=127.0.0.1

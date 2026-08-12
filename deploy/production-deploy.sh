@@ -135,7 +135,6 @@ compose() {
     LGA_POSTGRES_CONTAINER_NAME=league-analysis-postgres \
     LGA_BACKEND_CONTAINER_NAME=league-analysis-backend \
     LGA_FRONTEND_CONTAINER_NAME=league-analysis-frontend \
-    LGA_POSTGRES_VOLUME_NAME=league-analysis-postgres-data \
     LGA_APPLICATION_NETWORK_NAME=league-analysis-application \
     LGA_DATABASE_NETWORK_NAME=league-analysis-database \
     LGA_FRONTEND_PORT=8097 \

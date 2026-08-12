@@ -63,9 +63,15 @@ resources from another Pi project.
 The frontend and backend run as UID/GID `10001`, with a read-only root
 filesystem, `no-new-privileges`, all Linux capabilities dropped, bounded PIDs,
 bounded local-driver logs, and writable tmpfs only where required. PostgreSQL
-retains the official entrypoint's required privilege boundary, stores data in
-the named `league-analysis-postgres-data` volume, and is attached only to the
-internal database network. The frontend has no database-network access.
+retains the official entrypoint's required privilege boundary and is attached
+only to the internal database network. The frontend has no database-network
+access.
+
+The data volume is deliberately unnamed in `compose.production.yml`, so Compose
+derives it from the project name. Never reintroduce an explicit name or a
+`LGA_POSTGRES_VOLUME_NAME` override: on 2026-08-12 a hard-coded name in the
+deploy script disagreed with the running stack's volume, and the deploy started
+on an empty database.
 
 The backend readiness endpoint is `/health/ready`. It returns success only
 after a database round trip. The one-shot migration must finish successfully
@@ -278,20 +284,21 @@ authority unconfirmed and mirror exports disabled.
 
 ## PostgreSQL daily backups and restore tests
 
-> **Installation status (2026-08-12): the backup timer is NOT installed on
-> `pi5ram16` — no automatic backups run.** This section documents the reviewed
-> installer and its intended contract. Verify the timer with the inspection
-> commands below before relying on automatic backups, and treat a missing
-> timer as an open operational risk until the installer has been run.
+The reviewed design is a **system** systemd timer named
+`league-analysis-postgres-backup.timer`, whose service body runs as the
+deploying account. It runs at exactly `00:00` in the `Europe/Prague` timezone,
+including daylight-saving changes, regardless of the Pi host timezone.
+`Persistent=true` catches up once after downtime; the shared non-blocking
+operations lock prevents overlap with migration, restore, or mirror exports.
 
-The reviewed design is a user-systemd timer named
-`league-analysis-postgres-backup.timer`. It runs at exactly `00:00` in the
-`Europe/Prague` timezone, including daylight-saving changes, regardless of the
-Pi host timezone. `Persistent=true` catches up once after downtime; the shared
-non-blocking operations lock prevents overlap with migration, restore, or mirror
-exports.
+It must not be a `--user` timer. `systemctl --user` needs a session bus, which
+the GitHub Actions runner account does not have, so the installer failed on
+every deployment and left the timer unmanaged. A system unit needs neither a
+login session nor an enabled linger. The installer retires a leftover
+per-user timer if it finds one, so both cannot fire on the same night.
 
-Install the reviewed operations snapshot and enable the timer on `pi5ram16`:
+Install and enable the timer on `pi5ram16`. The deployment workflow does
+this on every release; run it by hand with:
 
 ```bash
 ./deploy/install-pi-postgres-backup-timer.sh
@@ -311,16 +318,16 @@ league-analysis-postgres-daily-YYYYMMDDTHHMMSS+ZZZZ.dump
 Only after that success does retention remove daily archives older than the
 newest seven. It matches only exact successful daily filenames. Partial files,
 the pre-LGA-79 archive, and unrelated artifacts neither count toward retention
-nor get deleted. Failures are nonzero in the user journal and do not remove a
+nor get deleted. Failures are nonzero in the system journal and do not remove a
 previous successful backup.
 
 Inspect scheduling and the most recent service result without exposing runtime
 configuration:
 
 ```bash
-systemctl --user list-timers league-analysis-postgres-backup.timer
-systemctl --user status league-analysis-postgres-backup.service --no-pager
-journalctl --user -u league-analysis-postgres-backup.service -n 50 --no-pager
+systemctl list-timers league-analysis-postgres-backup.timer
+systemctl status league-analysis-postgres-backup.service --no-pager
+journalctl -u league-analysis-postgres-backup.service -n 50 --no-pager
 ```
 
 Run an on-demand backup and test a selected daily archive as follows:

@@ -78,12 +78,15 @@ grep -Fq 'driver: local' "$compose_file" \
 
 grep -Fq 'flock -n 9' "$deploy_script" \
   || fail 'deployments must hold a non-blocking host lock.'
+grep -q 'LGA_POSTGRES_VOLUME_NAME' "$deploy_script" \
+  && fail 'the deployment must not override the derived PostgreSQL volume name.'
+grep -q 'name: .*postgres-data' "$compose_file" \
+  && fail 'the PostgreSQL volume must stay unnamed so Compose derives it from the project.'
 for production_identity in \
   'LGA_COMPOSE_PROJECT_NAME=league-analysis' \
   'LGA_POSTGRES_CONTAINER_NAME=league-analysis-postgres' \
   'LGA_BACKEND_CONTAINER_NAME=league-analysis-backend' \
   'LGA_FRONTEND_CONTAINER_NAME=league-analysis-frontend' \
-  'LGA_POSTGRES_VOLUME_NAME=league-analysis-postgres-data' \
   'LGA_FRONTEND_PORT=8097' \
   'LGA_BACKEND_PORT=8098'; do
   grep -Fq "$production_identity" "$deploy_script" \
@@ -97,6 +100,11 @@ compose_up_line="$(grep -n -F 'compose up --detach --remove-orphans --wait --wai
   || fail 'the pre-deployment PostgreSQL backup must finish before migration/startup.'
 grep -Fq 'install-pi-postgres-backup-timer.sh' "$deploy_script" \
   || fail 'a successful deployment must refresh the reviewed operations and backup timer.'
+backup_timer_installer="$repository_root/deploy/install-pi-postgres-backup-timer.sh"
+grep -Fq 'sudo -n systemctl enable --now' "$backup_timer_installer" \
+  || fail 'the backup timer must be installed as a system unit.'
+grep -q '^systemctl --user\|[^-]systemctl --user enable' "$backup_timer_installer" \
+  && fail 'the backup timer must not be enabled through the user systemd manager, which has no session bus under CI.'
 grep -Fq 'label=com.docker.compose.volume=postgres_data' "$deploy_script" \
   || fail 'a missing PostgreSQL container must not hide an existing production volume.'
 grep -Fq 'refusing to skip the pre-deployment backup' "$deploy_script" \
