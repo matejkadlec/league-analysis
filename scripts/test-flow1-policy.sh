@@ -3,7 +3,7 @@
 set -euo pipefail
 
 repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
-flow="$repository_root/docs/ai-development-flow.md"
+flow="$repository_root/.claude/skills/flow1/SKILL.md"
 agent_guide="$repository_root/AGENTS.md"
 
 fail() {
@@ -36,15 +36,25 @@ require_text "$flow" 'Refusing to overwrite the existing QA .env file.'
 require_text "$flow" 'cd <primary-worktree>` followed by'
 require_text "$flow" 'Final handoff maps every selected ticket to its pull request'
 require_text "$flow" 'Stop the remaining invocation immediately'
+require_text "$flow" 'largest safe coherent batch'
 
-require_text "$agent_guide" 'largest safe coherent batch'
-require_text "$agent_guide" 'Planning scale is approximately 3'
-require_text "$agent_guide" 'large, 5 medium, or 10 small tickets'
-require_text "$agent_guide" 'dedicated linked worktree by default'
-require_text "$agent_guide" 'One preselected invocation may publish up to two'
-require_text "$agent_guide" 'independent ready pull requests'
-require_text "$agent_guide" 'At most two independently selected batches'
-require_text "$agent_guide" 'counting both `PENDING CR` and `PENDING'
+# The root guide must gate every lifecycle entry point on the skills and keep
+# the non-negotiable delivery boundaries always loaded.
+require_text "$agent_guide" 'invoke the matching'
+require_text "$agent_guide" 'repository skill (flow1, flow2, qa1, or qa2) and follow its stop boundary.'
+require_text "$agent_guide" 'ready for review, never a draft'
+require_text "$agent_guide" 'owner-managed immediately'
+require_text "$agent_guide" 'Do not push task work directly to `master`'
+
+# Every workflow skill must exist for both discovery roots.
+for skill in flow1 flow2 qa1 qa2; do
+  [[ -f "$repository_root/.claude/skills/$skill/SKILL.md" ]] \
+    || fail ".claude/skills/$skill/SKILL.md is missing."
+  [[ -L "$repository_root/.agents/skills/$skill" ]] \
+    || fail ".agents/skills/$skill must be a symlink."
+  [[ -f "$repository_root/.agents/skills/$skill/SKILL.md" ]] \
+    || fail ".agents/skills/$skill symlink does not resolve to a SKILL.md."
+done
 
 printf '%s\n' \
   'Flow 1 representative dry run:' \
