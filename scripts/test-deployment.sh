@@ -78,12 +78,15 @@ grep -Fq 'driver: local' "$compose_file" \
 
 grep -Fq 'flock -n 9' "$deploy_script" \
   || fail 'deployments must hold a non-blocking host lock.'
+grep -q 'LGA_POSTGRES_VOLUME_NAME' "$deploy_script" \
+  && fail 'the deployment must not override the derived PostgreSQL volume name.'
+grep -q 'name: .*postgres-data' "$compose_file" \
+  && fail 'the PostgreSQL volume must stay unnamed so Compose derives it from the project.'
 for production_identity in \
   'LGA_COMPOSE_PROJECT_NAME=league-analysis' \
   'LGA_POSTGRES_CONTAINER_NAME=league-analysis-postgres' \
   'LGA_BACKEND_CONTAINER_NAME=league-analysis-backend' \
   'LGA_FRONTEND_CONTAINER_NAME=league-analysis-frontend' \
-  'LGA_POSTGRES_VOLUME_NAME=league-analysis-postgres-data' \
   'LGA_FRONTEND_PORT=8097' \
   'LGA_BACKEND_PORT=8098'; do
   grep -Fq "$production_identity" "$deploy_script" \

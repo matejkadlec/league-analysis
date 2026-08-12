@@ -165,5 +165,8 @@ networks:
     internal: true
 
 volumes:
+  # Deliberately unnamed. Compose derives <project>_postgres_data, which ties
+  # the data volume to the project name and cannot disagree with it. An
+  # explicit name here previously pointed at a different volume from the one
+  # the running stack used, and a deploy silently started on an empty database.
   postgres_data:
-    name: ${LGA_POSTGRES_VOLUME_NAME:-league-analysis-postgres-data}
