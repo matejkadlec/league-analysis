@@ -1,10 +1,14 @@
 # Riot API Compatibility Audit - 2026-08-03
 
+> **Frozen historical snapshot — do not update to reflect current state.**
+> This report records the 2026-08-03 evidence exactly as captured. Current
+> authority: the code under `backend/app/core/riot_api/` and
+> [`riot-api.md`](riot-api.md). Statements below about "current" support
+> (for example the queue set) describe 2026-08-03 and have been superseded —
+> queues 480 and 2400 were added on 2026-08-11.
+>
 > **Scope:** Read-only compatibility analysis for `LGA-7`. No endpoint, DTO,
 > schema, job, or UI behavior was changed by this audit.
->
-> **Authority:** This report records the dated evidence and implementation delta.
-> [`riot-api.md`](riot-api.md) remains the maintained integration reference.
 
 Implementation is tracked by
 [LGA-42](https://envelopment.atlassian.net/browse/LGA-42), **Update Riot API

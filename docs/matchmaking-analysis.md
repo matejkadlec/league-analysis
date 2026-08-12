@@ -1,533 +1,231 @@
 # Matchmaking Analysis
 
-> **Authority:** Matchmaking analysis algorithm, data flow, persistence, API,
-> and frontend behavior.
+> **Authority:** Matchmaking analysis algorithm, lifecycle invariants,
+> persistence contract, and credential/rate-limit failure behavior.
 >
-> **Maintenance:** Update when scoring, Riot data acquisition, progress/rate
-> limiting, persistence, routes, or presentation behavior changes.
+> **Maintenance:** Update when the product algorithm (spine size, anchoring,
+> caching, averaging, call accounting), a lifecycle or persistence invariant, a
+> failure-classification rule, or an operational caveat recorded here changes.
+> Route signatures, schemas, and component internals live in
+> `backend/app/features/matchmaking_analysis/` and
+> `frontend/features/matchmaking/` and are not mirrored here.
 
-> Analyzes matchmaking fairness by comparing the average win rates of a player's allies vs enemies across their last 10 ranked matches.
+> Analyzes matchmaking fairness by comparing the average win rates of a
+> player's allies vs enemies across their last 10 ranked matches.
 
-## Overview
+## Product Question and Fairness Threshold
 
-The matchmaking analysis answers the question: **"Is matchmaking fair for this player?"** by computing:
+The analysis answers **"Is matchmaking fair for this player?"** by computing:
 
-- **Average Ally Team Win Rate** — the average of per-match team win rates across 10 matches
+- **Average Ally Team Win Rate** — the average of per-match ally-team win
+  rates across 10 matches
 - **Average Enemy Team Win Rate** — the same for the opposing teams
 
-If both numbers are close (~50%), matchmaking is fair. A large gap (>=3%) suggests the player is consistently placed with stronger/weaker teammates or opponents.
-
-### Key Concept: Per-Match Anchors
-
-Each player's win rate is calculated from their **last 10 ranked matches at the time of the specific match they played with the current player**, not their current overall win rate. Each spine match has its own **anchor timestamp** — that match's effective `game_start_timestamp`. Its `game_start_timestamp_source` distinguishes an actual Riot start from a preserved legacy creation-time fallback.
-
-This means:
-
-- Match 1's participants → anchored to Match 1's timestamp
-- Match 2's participants → anchored to Match 2's timestamp
-- etc.
-
-**Note**: If a player appears in multiple spine matches, their winrate is cached from the first encounter (most recent match) for efficiency.
+If both numbers are close, matchmaking is fair. The product threshold is a
+**3-percentage-point gap** (`winrateDiff >= 0.03` favorable,
+`<= -0.03` unfavorable, otherwise "relatively fair").
 
 ---
 
-## Architecture
+## The Analysis Contract (Intentional Product Algorithm)
 
-### Components
+This algorithm is a deliberate product decision, not an implementation detail.
+Changing any element below is a product change.
 
-| Component          | Technology           | Responsibility                                  |
-| ------------------ | -------------------- | ----------------------------------------------- |
-| Backend Service    | Python/FastAPI       | Analysis logic, DB queries, Riot API calls      |
-| Background Task    | `asyncio.Task`       | Runs analysis independently of HTTP request     |
-| DB Rate Limiter    | PostgreSQL           | Coordinates API usage with other components     |
-| Frontend Component | React/TanStack Query | Polling, authoritative count, projected ETA/progress |
+### Spine and anchors
 
-### Data Flow
+1. Fetch the current player's **last 10 ranked Solo/Duo (queue 420) match
+   IDs** with no `endTime` — the actual latest matches. This is always 1 API
+   call that cannot be skipped. These 10 matches are the **spine**; all
+   subsequent work is relative to them.
+2. **Each spine match has its own anchor timestamp** — that match's effective
+   `game_start_timestamp` (its `game_start_timestamp_source` distinguishes an
+   actual Riot start from a preserved legacy creation-time fallback). A spine
+   match whose timestamp cannot be resolved is skipped.
+3. A participant's win rate is their record over their **last 10 ranked
+   matches at the anchor time** (`endTime = anchor_ms // 1000 + 1`), so it
+   reflects their strength when they played with the current player, not
+   today. Fewer than 10 available matches at the anchor is tolerated: all
+   available matches are used.
 
-```
-User clicks "Start Analysis"
-    │
-    ▼
-POST /matchmaking-analysis/start
-    │
-    ├── Creates or attaches to one DB record (status: pending/active)
-    ├── Spawns asyncio background task
-    └── Returns immediately with puuid + created_at run identity
-         │
-         ▼
-    Background Task runs independently
-         │
-         ├── Step 1: Fetch current player's last 10 match IDs (no endTime)
-         ├── Step 2: For each match (per-match processing):
-         │       a. Use THIS match's timestamp as anchor
-         │       b. Calculate all 10 participants' winrates with this anchor
-         │       c. Average team vs enemy for this match
-         ├── Step 3: Average the 10 per-match results
-         └── Saves results to DB
-              │
-              ▼
-    Frontend polls GET /status?created_at=... every 3 seconds
-         │
-         ├── Shows progress bar (X/100 players)
-         ├── Keeps one continuous total ETA while waiting
-         └── Shows results when completed
-```
+### Win-rate caching rule
 
----
+Participant win rates are **cached by PUUID** (`_winrate_cache`). A player who
+appears in several spine matches has their win rate computed **once**, at the
+anchor of the first spine match in which they are encountered (spine matches
+are processed most-recent first), and that value is reused for their later
+appearances. Win rates are **not** recomputed per spine match.
 
-## Calculation Logic
+### Averaging
 
-### Step-by-Step
+Average of averages of averages:
 
-#### 1. Get Current Player's Last 10 Matches (Spine Matches)
+1. Per player: wins / matches over their ≤10 anchored matches.
+2. Per spine match: mean of the 5 ally win rates and mean of the 5 enemy win
+   rates (the current player counts on the ally side of every spine match).
+3. Final: mean of the 10 per-match ally averages and of the 10 per-match enemy
+   averages → `{ team_avg_winrate, enemy_avg_winrate }`.
 
-```
-API call: GET /lol/match/v5/matches/by-puuid/{puuid}/ids
-    ?queue=420
-    &count=10
-```
+### Call and count accounting
 
-No `endTime` — we want the actual latest 10 ranked matches for the current player. This is always 1 API call that cannot be skipped.
+With 10 spine matches:
 
-These 10 matches are the "spine" of the analysis. All subsequent calculations are relative to these matches.
-
-#### 2. Per-Match Processing with Per-Match Anchors
-
-**Key Concept: Each spine match has its own anchor timestamp!**
-
-For each of the 10 spine matches:
-
-```
-anchor = game_start_timestamp of THIS spine match (not just the first one)
-
-For each of the 10 participants in this match:
-    API call: GET /lol/match/v5/matches/by-puuid/{puuid}/ids
-        ?queue=420
-        &count=10
-        &endTime={anchor / 1000 + 1}
-
-    For each returned match ID:
-        Get win/loss from DB or API → calculate wins / total
-
-Calculate average team winrate and average enemy winrate for THIS match
-```
-
-This ensures each player's winrate is calculated relative to the time they played with the current player in THAT specific match, not relative to some global timestamp.
-
-#### 3. Collect All Participants
-
-For each of the 10 spine matches, get all 10 participants (puuid + team_id). This yields up to 100 participant slots, but typically ~91 unique players since the current player appears in all 10 matches and there's some overlap between matches.
-
-#### 4. Calculate Win Rates
-
-For **each unique player**:
-
-```
-For each spine match this player appears in:
-    anchor = that match's game_start_timestamp
-
-    API call: GET /lol/match/v5/matches/by-puuid/{puuid}/ids
-        ?queue=420
-        &count=10
-        &endTime={anchor / 1000 + 1}
-
-    For each returned match ID:
-        Get win/loss from DB or API → calculate wins / total
-```
-
-Note: `endTime` is used here because we want each player's win rate **at the time of each match they played in**, not their current win rate. A player appearing in multiple spine matches will have their winrate calculated multiple times (once per match, with different anchors).
-
-#### 5. Per-Match Team Averages
-
-For each spine match:
-
-```
-Match 1:
-    Ally Team:    [51.4%, 49.9%, 51.7%, 48.8%, 36.0%]  → avg = 47.56%
-    Enemy Team:   [50.5%, 49.7%, 51.2%, 49.8%, 52.4%]  → avg = 50.72%
-
-Match 2:
-    Ally Team:    [51.7%, 42.0%, 55.3%, 50.1%, 48.9%]  → avg = 49.60%
-    Enemy Team:   [47.2%, 51.8%, 49.0%, 53.1%, 50.9%]  → avg = 50.40%
-
-... (8 more matches)
-```
-
-Note: The current player's win rate (51.7% in this example) appears in the ally team of every match.
-
-#### 6. Final Averages
-
-```
-Average Ally Team WR   = mean([47.56%, 49.60%, ...])  → e.g., 49.2%
-Average Enemy Team WR  = mean([50.72%, 50.40%, ...])  → e.g., 50.1%
-```
-
-**This is the final result** — average of averages of averages:
-
-1. Average player win rate (from their 10 matches)
-2. Average team win rate (from 5 players per team per match)
-3. Average across 10 matches
-
-### Flowchart
-
-```
-┌─────────────────────────────────────────────────────┐
-│              MATCHMAKING ANALYSIS                    │
-│                                                      │
-│  Current Player: "PlayerA"                           │
-│  Anchor: game_start_timestamp of latest match         │
-└──────────────────────┬──────────────────────────────┘
-                       │
-                       ▼
-┌──────────────────────────────────────────────────────┐
-│  Step 1: Get PlayerA's last 10 ranked match IDs      │
-│          (no endTime — actual latest matches)          │
-│                                                      │
-│  [Match1, Match2, Match3, ... Match10]               │
-└──────────────────────┬──────────────────────────────┘
-                       │
-                       ▼
-┌──────────────────────────────────────────────────────┐
-│  Step 2: FOR EACH spine match (per-match anchors)    │
-│                                                      │
-│  Example: Processing Match1                          │
-│    anchor1 = Match1's game_start_timestamp           │
-│                                                      │
-│  Get 10 participants in Match1                       │
-│                                                      │
-│  For each participant, calculate their winrate       │
-│  using anchor1 (their last 10 matches before Match1) │
-└──────────────────────┬──────────────────────────────┘
-                       │
-                       ▼
-┌──────────────────────────────────────────────────────┐
-│  Step 3: For each spine match (1 through 10)         │
-│                                                      │
-│  ┌────────────────────────────────────────────────┐  │
-│  │  Match N:                                      │  │
-│  │                                                │  │
-│  │  Ally Team:                                    │  │
-│  │    PlayerA  → 60% (cached)                     │  │
-│  │    Ally1    → calc from their last 10 matches  │  │
-│  │    Ally2    → calc from their last 10 matches  │  │
-│  │    Ally3    → calc from their last 10 matches  │  │
-│  │    Ally4    → calc from their last 10 matches  │  │
-│  │                                                │  │
-│  │  Enemy Team:                                   │  │
-│  │    Enemy1   → calc from their last 10 matches  │  │
-│  │    Enemy2   → calc from their last 10 matches  │  │
-│  │    Enemy3   → calc from their last 10 matches  │  │
-│  │    Enemy4   → calc from their last 10 matches  │  │
-│  │    Enemy5   → calc from their last 10 matches  │  │
-│  │                                                │  │
-│  │  Ally Avg  = mean(5 ally win rates)            │  │
-│  │  Enemy Avg = mean(5 enemy win rates)           │  │
-│  └────────────────────────────────────────────────┘  │
-│                                                      │
-│  Repeat for all 10 matches                           │
-└──────────────────────┬──────────────────────────────┘
-                       │
-                       ▼
-┌──────────────────────────────────────────────────────┐
-│  Step 4: Final Result                                │
-│                                                      │
-│  Avg Ally Team WR  = mean(10 per-match ally avgs)    │
-│  Avg Enemy Team WR = mean(10 per-match enemy avgs)   │
-│                                                      │
-│  Result: { team_avg_winrate, enemy_avg_winrate }     │
-│                                                      │
-│  Interpretation:                                     │
-│    Gap < ±3%  → Fair matchmaking                     │
-│    Gap >= +3%  → Allies stronger (favorable)          │
-│    Gap <= -3%  → Enemies stronger (unfavorable)       │
-└──────────────────────────────────────────────────────┘
-```
+- `players_analyzed` = **91** (current player + 9 others per spine match).
+- `matches_analyzed` = **910** (10 + 90 × 10): the basis size shown in the UI;
+  every player's win-rate model uses 10 matches.
+- The internal additional-match-detail workload is **820** (10 spine details +
+  90 participants × 9 non-spine details — one of each participant's 10 matches
+  is the already-known spine match).
+- Theoretical maximum without any DB cache: **911** calls
+  (1 + 90 match-list calls, plus 820 match-detail calls). `requests_saved` is
+  this maximum minus actual API calls made.
 
 ---
 
-## DB-First Strategy
+## DB-First Data Access
 
-The analysis minimizes API calls by checking the database before calling Riot API:
+The analysis checks the database before every Riot call:
 
-### Match Lookup Priority
+- **Match lookup**: use any `core.matches` row if present; otherwise fetch from
+  the API and **persist the match** for future runs.
+- **Win-rate shortcut**: if `core.match_participants` joined with
+  `core.matches` yields ≥10 rows for the player with `queue_id = 420`,
+  `game_start_timestamp <= anchor`, `fully_analyzed = true`, the win rate is
+  computed entirely from the DB — saving up to **10 API calls** for that player
+  (1 match-list call + 9 additional match details, per the accounting above).
+- With <10 DB rows, the match-ID list comes from the API and each match is
+  still checked in the DB before a detail fetch.
 
-1. **Check DB** — If `core.matches` has the match (any match, not just `fully_analyzed`), use it
-2. **Fetch from API** — If not in DB, call Riot API and **store the match in DB** for future use
+A fully warm cache therefore completes a run with 1 API call (the spine list),
+saving up to 910 of the theoretical 911.
 
-### Win Rate DB Shortcut
+---
 
-When calculating a player's win rate:
+## Lifecycle Invariants
 
-1. **Check DB** — Query `core.match_participants` joined with `core.matches` where:
-   - `puuid = player_puuid`
-   - `queue_id = 420`
-   - `game_start_timestamp <= anchor_timestamp`
-   - `fully_analyzed = true`
-   - Order by `game_start_timestamp DESC`, limit 10
-2. If **≥10 matches found in DB** → skip API entirely (saves 11 API calls: 1 match list + 10 match details)
-3. If **<10 matches** → fall back to API to get match IDs, then check DB for each match before fetching
+### DB-first start
 
-### Savings Example
+`POST /matchmaking-analysis/start` returns the **persisted active run before
+any Riot preflight**. `start_analysis` attaches to an existing active row when
+one exists; otherwise it inserts a `pending` row and relies on the partial
+unique index `uq_matchmaking_analyses_active_puuid` (at most one `pending`,
+`in_progress`, or `waiting_rate_limit` row per PUUID) to resolve concurrent
+starts — the loser of the race attaches to the winner's row. The start
+response carries the exact run identity `(puuid, created_at)`; the frontend
+seeds its state from it and polls that exact identity.
 
-For a player who has been analyzed before and whose matches are in DB:
+The minimum-match Riot preflight happens inside the background run, so the
+start request stays bounded; an insufficient history becomes a retryable
+`failed` run (`not_enough_matches`), not a start error. The optional
+`check-matches` route is diagnostic only.
 
-| Scenario                                        | Without DB | With DB | Savings |
-| ----------------------------------------------- | ---------- | ------- | ------- |
-| Spine match IDs (always needed)                 | 1 call     | 1 call  | 0       |
-| Spine match details (10 matches)                | 10 calls   | 0 calls | 10      |
-| Other players' match IDs                        | 90 calls   | 0 calls | 90      |
-| Other players' additional match details         | 810 calls  | 0 calls | 810     |
-| **Total (91 expected players)**                 | **911**    | **1**   | **910** |
+### Restart-resume (deliberate, and deliberately not startup recovery)
 
-Formula: `theoretical_max = 1 + 10 + 90 + 810`
+If the server restarts mid-run, the analysis row remains active with
+`completed_at = NULL`. Shutdown can cancel the worker **before**
+`_run_analysis` sets `started_at`, so a resumable row may still be `pending`
+with `started_at = NULL` — treat that state as resumable, not stranded. On the
+next explicit start, `start_analysis` attaches to the row, relaunches its
+worker, and preserves already-completed `puuid_progress` keys
+(`started_at` is set with `coalesce`, so the original start survives).
 
-Explanation:
-- The winrate model still uses 10 matches per player.
-- For each non-current participant, one of those 10 is the already-known spine match, so only 9 additional match details are needed.
-- This keeps the theoretical maximum at 911 calls and the all-DB maximum saved calls at 910.
+Startup recovery (`_cancel_orphaned_player_syncs` in the jobs scheduler)
+**deliberately excludes** `core.matchmaking_analyses`: this table has the
+opposite contract from `jobs.player_sync_runs`, and cancelling active rows at
+boot would discard resumable progress.
+
+### Progress format
+
+`puuid_progress` (JSONB) maps `"{puuid}:{match_id}"` keys to booleans — one
+key per participant slot per spine match, pre-populated after the spine is
+known and flipped true per player as win rates complete. The model column
+comment (`{puuid: true/false}`) is stale; this composite-key description is
+authoritative. Progress counts shown to the client are
+`sum(values) / len(keys)`.
+
+### Cancellation
+
+Cancellation targets the exact `(puuid, created_at)` run, persists a terminal
+`cancelled` record (retained for diagnostics), then stops that worker. Matches
+fetched so far stay persisted; a new start remains retryable.
+
+---
+
+## Failure Classification
+
+Failures persist a stable client-safe `error_code`/`error_message`; raw
+provider or internal text is never returned to the browser. The rate limiter is
+released and the in-process task deregistered on any crash.
+
+**Credential failures are never optional data.** Any `AuthenticationError` or
+`ForbiddenError` re-raises even on optional cache-filling fetches
+(service.py `_api_fetch_match_ids` / `_api_fetch_match`: auth errors bypass
+the `required` check) and terminates the run with
+`error_code=RIOT_API_KEY_INVALID`. A `404` may be skipped **only** on optional
+fetches; required fetches propagate it.
+
+Because analysis status travels inside successful HTTP-200 polling bodies, the
+original Riot 401/403 can never reach the browser as an HTTP status. The
+frontend must read the persisted `error_code`; the shared Axios interceptor
+recognizes `RIOT_API_KEY_INVALID` in lifecycle payloads and refreshes the
+backend-owned credential-health state. Accepting, polling, or completing an
+analysis never marks the key valid — only a direct Riot response is credential
+evidence (see [riot-api.md](riot-api.md)).
 
 ---
 
 ## Rate Limiting
 
-### Riot API Limits (Development Key)
+The analysis uses `DBRateLimiter` with **priority 3 (lowest)** and a **30
+minute max wait**, yielding to Player Updater (1) and Match Fetcher (2). Every
+call goes through `acquire()`/`record_request()`; a Riot 429 waits
+`Retry-After` and retries up to 10 times per call before the run fails with a
+rate-limit error code.
 
-| Limit     | Window           | Requests |
-| --------- | ---------------- | -------- |
-| Burst     | 1 second         | 20       |
-| Sustained | 2 minutes (120s) | 100      |
+While waiting, the run stays active as `waiting_rate_limit` with
+`rate_limit_reset_at` set (via the acquire wait callback or the 429 wait
+helper); a later successful provider request returns it to `in_progress` and
+clears the timestamp.
 
-### DB Rate Limiter
-
-The analysis uses `DBRateLimiter` with **priority 3 (lowest)** to coordinate with other components:
-
-| Component                | Priority       | Max Wait       |
-| ------------------------ | -------------- | -------------- |
-| Player Updater           | 1 (highest)    | 30 seconds     |
-| Match Fetcher            | 2              | 2 minutes      |
-| **Matchmaking Analysis** | **3 (lowest)** | **30 minutes** |
-
-**Behavior:**
-
-- Before each API call, calls `rate_limiter.acquire()` which checks:
-  - Is the 2-minute window exhausted? → Wait for window reset
-  - Is a higher-priority component active? → Yield (wait 1s and retry)
-  - Otherwise → proceed with 50ms minimum spacing between requests
-- After each API call, calls `rate_limiter.record_request()` to increment counter
-
-### Rate Limit Countdown (Frontend)
-
-When the analysis hits a rate limit (either via `DBRateLimiter.acquire()` window exhaustion or Riot 429):
-
-1. Backend sets `rate_limit_reset_at` (absolute UTC timestamp) on the analysis DB record via:
-   - `acquire_with_wait_callback` → `_rate_limit_wait_callback` (receives `window_end` datetime, sets once at start, clears when done)
-   - `_wait_for_rate_limit` (for 429 errors, sets once then sleeps)
-2. Backend keeps the run active as `waiting_rate_limit`; a successful later
-   provider request returns it to `in_progress`.
-3. Frontend polls the exact run every 3 seconds but does not expose provider
-   terminology or a separate reset countdown. The database-limiter reset can
-   precede a remaining adaptive-client wait, so it is not presented as the
-   analysis completion clock.
-4. The active card always shows one total analysis ETA. Its bar and percentage
-   interpolate once per second using the 100-request/120-second long window and
-   a representative warm-cache workload, then reconcile forward whenever the
-   backend reports a higher authoritative completed-player count.
-5. The display projection stops at 99%; only authoritative completion reaches
-   100% and triggers result/history refresh.
-
-### 429 Error Handling
-
-When Riot API returns HTTP 429:
-
-1. The `RiotAPIClient` raises `RateLimitError` with `retry_after` seconds
-2. The service catches it and calls `_wait_for_rate_limit(retry_after)`
-3. This persists the internal wait timestamp, sleeps, then clears it; the
-   frontend continues presenting the whole-run ETA
-4. The API call is retried (up to 10 retries per call)
+**Clock caveat:** the DB-limiter window reset can precede the adaptive
+per-client limiter's remaining wait, so `rate_limit_reset_at` must **never be
+presented as an analysis completion clock**. The UI shows one continuous
+whole-run ETA that interpolates between backend-authoritative player
+milestones (using the 100-request/120-second long window and a representative
+warm-cache workload) and caps the projection at 99%; only authoritative
+completion reaches 100% and triggers result/history refresh.
 
 ---
 
-## Background Processing
+## Frontend Contract Essentials
 
-### How It Works
-
-When the user clicks "Start Analysis":
-
-1. HTTP POST handler creates or attaches to the one active DB record and spawns
-   an `asyncio.Task` only when this process does not already own it
-2. The response returns immediately, before the minimum-match Riot preflight;
-   the frontend seeds the progress UI and exact run identity from this response
-3. The background task runs with its **own DB session** and **own RiotAPIClient**
-4. Progress is written to DB (`puuid_progress` JSONB column) after each player
-5. Frontend polls the status endpoint every 3 seconds to show progress
-
-### Page Close Resilience
-
-The analysis **continues running even if the user closes the browser tab**:
-
-- The `asyncio.Task` lives in the server's event loop, independent of HTTP connections
-- When the user returns, the frontend polls the status endpoint and picks up where it left off
-- If the server itself restarts, the analysis record remains in DB in an active
-  state with `completed_at = NULL`. Shutdown can cancel the worker before
-  `_run_analysis` sets `started_at`, so a resumable row may still be `pending`
-  with `started_at = NULL`
-- On the next explicit start request, `start_analysis()` detects this, preserves
-  already-completed progress keys, and resumes the same persisted run
-
-### Failure Handling
-
-If the background task crashes:
-
-1. The exception is caught in `_run_analysis_background`
-2. The analysis is marked `failed` with a stable client-safe `error_code` and
-   `error_message`; raw provider/internal text is not returned to the browser
-3. The rate limiter is released
-4. The task is removed from `_running_analyses`
-
-Riot `401` and `403` failures are never treated as optional missing match data.
-They terminate the run with `error_code=RIOT_API_KEY_INVALID`. Matchmaking
-Analysis status is transported through successful HTTP polling responses, so
-the shared frontend interceptor reads this persisted code and refreshes the
-backend-owned credential-health state. Accepting, polling, or completing an
-analysis does not itself mark the key valid; only a direct Riot response does.
-
-Cancellation targets the exact `(puuid, created_at)` run, persists `cancelled`,
-then stops that worker. The lifecycle record is retained for diagnostics and a
-new start remains retryable.
+- The component polls the exact `created_at` run every 3 seconds, rehydrates an
+  active run on reload, and keeps the `X / 100` count backend-authoritative.
+- **DB-only fast flow** detection: a run that completes without ever being
+  observed `in_progress`/`waiting_rate_limit`, or with backend progress still
+  < 10, plays the artificial fast animation
+  (`const isFast = !sawInProgressRef.current || lastBackendProgressRef.current < 10`,
+  `matchmaking-analysis.tsx` ~lines 288–289). There is no status-string check
+  against a previous `pending` value.
+- `failed` runs stay visibly retryable; provider rate-limit terminology is not
+  exposed.
 
 ---
 
-## API Endpoints
+## Edge Cases
 
-### POST `/matchmaking-analysis/check-matches`
-
-Diagnostic check for whether a player has ≥10 ranked matches. The frontend does
-not put this provider call in front of `start`; the background run performs the
-authoritative preflight so the start request stays bounded.
-
-**Request:** `{ "puuid": "..." }`
-**Response:** `{ "success": true, "matches_found": 15 }` or `NotEnoughMatchesResponse`
-
-### POST `/matchmaking-analysis/start`
-
-Create or attach to the one active analysis. Returns immediately with pending or
-active status and never waits for the long Riot work.
-
-**Request:** `{ "puuid": "..." }`
-**Response:** `MatchmakingAnalysisResponse`
-
-### GET `/matchmaking-analysis/player/{puuid}`
-
-Get the latest analysis (any status).
-
-**Response:** `MatchmakingAnalysisResponse` (includes `status`, `progress`, `results`, `rate_limit_reset_at`)
-
-### GET `/matchmaking-analysis/player/{puuid}/latest-completed`
-
-Get the latest **completed** analysis (ignores in-progress or errored runs).
-
-**Response:** `MatchmakingAnalysisResponse`
-
-### GET `/matchmaking-analysis/player/{puuid}/status?created_at={timestamp}`
-
-Lightweight poll for the exact persisted run (used every 3 seconds by frontend).
-
-**Response:** `MatchmakingAnalysisStatusResponse`
-
-### DELETE `/matchmaking-analysis/player/{puuid}/cancel?created_at={timestamp}`
-
-Cancel the exact active run and retain its `cancelled` terminal record.
-
-### GET `/matchmaking-analysis/player/{puuid}/history`
-
-Get completed analysis history.
-
-**Response:** `{ "items": [{ "created_at", "team_avg_winrate", "enemy_avg_winrate", "gap" }] }`
-
----
-
-## Frontend Components
-
-### `MatchmakingAnalysis` (main component)
-
-- Shows start button when no analysis is active
-- Seeds the active state from the fast start response and prevents a duplicate
-  start interaction
-- Rehydrates an active run on reload and polls its exact `created_at` identity
-  every 3 seconds
-- Displays progress bar (X/100 players)
-- Shows one continuous whole-run ETA without exposing provider rate-limit waits
-- Smoothly projects the percentage/bar between authoritative player milestones;
-  the top-right and status-text `X / 100` count remains backend-authoritative
-- Shows inline results table when completed
-- "Run New Analysis" button to start a fresh analysis
-- **Completion animation**: Shows green "Analysis finished successfully" text and toast for 1 second before transitioning to results
-- **DB-only fast flow**: When all data is in DB (detected by `prevStatus === "pending"` or `progress < 10`), shows artificial progress animation: 0% → 50% ("Fetching from database...") → 100% ("Finished") → results
-- **Smooth transitions**: Card uses `transition-all duration-300` for height changes between states
-- **Cancel toast**: Uses yellow warning style (`toast.warning`)
-- Invalidates/refetches Last Analysis Result and Analysis History after the
-  authoritative run reaches `completed`; `failed` stays visibly retryable
-
-### `MatchmakingResults`
-
-- Separate card showing the latest completed results
-- Team vs Enemy win rate comparison
-- ±3% fairness assessment color coding
-
-### `MatchmakingHistory`
-
-- Table of past analyses with date, team WR, enemy WR, gap
-- Color-coded green/red based on gap direction
-- Shows up to 10 rows in view; older records are accessible via vertical scroll
-
-### `MatchmakingExplanation`
-
-- Expandable card with flowchart image
-
----
-
-## Database Schema
-
-### `core.matchmaking_analyses`
-
-| Column                | Type        | Description                                                                   |
-| --------------------- | ----------- | ----------------------------------------------------------------------------- |
-| `puuid`               | VARCHAR(78) | Player PUUID (PK part 1)                                                      |
-| `created_at`          | TIMESTAMPTZ | Analysis creation time (PK part 2)                                            |
-| `started_at`          | TIMESTAMPTZ | When background task started                                                  |
-| `completed_at`        | TIMESTAMPTZ | When analysis finished                                                        |
-| `status`              | VARCHAR(32) | `pending`, `in_progress`, `waiting_rate_limit`, `completed`, `failed`, or `cancelled` |
-| `error_code`          | VARCHAR(64) | Stable client-safe failure classification                                     |
-| `error_message`       | VARCHAR(500)| Reviewed retry guidance for a failed run                                      |
-| `results`             | JSONB       | `{ team_avg_winrate, enemy_avg_winrate, matches_analyzed, players_analyzed }` |
-| `puuid_progress`      | JSONB       | `{ "puuid:match_id": true/false }` for tracking progress                      |
-| `requests_saved`      | INTEGER     | Count of API calls saved by DB cache                                          |
-| `rate_limit_reset_at` | TIMESTAMPTZ | When rate limit resets (NULL = not waiting)                                   |
-
-Notes:
-- A partial unique index permits only one `pending`, `in_progress`, or
-  `waiting_rate_limit` row per PUUID.
-- With 10 spine matches, `players_analyzed` is recorded as 91 (current player + 9 others per match).
-- `matches_analyzed` is recorded as 910 (10 + 90*10) to represent the basis size shown in the UI.
-- The internal additional-match workload remains 820 (10 spine matches + 90 participants * 9 additional non-spine matches).
-
----
-
-## Edge Cases & Error Handling
-
-| Scenario                                      | Handling                                                       |
-| --------------------------------------------- | -------------------------------------------------------------- |
-| Player has <10 ranked matches                 | Fast start succeeds; background run becomes retryable `failed` |
-| Player not found in first match               | Analysis becomes `failed` with a safe classification           |
-| Riot API 429 (rate limited)                   | Wait internally with continuous total ETA, retry up to 10 times |
-| Riot API 5xx (server error)                   | Retry with exponential backoff (handled by RiotAPIClient)      |
-| Riot API 403/404                              | Skip that match/player, use available data                     |
-| DB connection error                           | Exception propagates, analysis marked as failed                |
-| Browser reload/reconnect during analysis      | Exact persisted run is rehydrated and polling continues        |
-| Server restart during analysis                | Active record remains; next explicit start resumes it          |
-| Same player appears in multiple spine matches | Win rate calculated once, cached and reused                    |
-| Player has <10 ranked matches at anchor time  | Uses all available matches (even if <10)                       |
-| Analysis already running for player           | Unique active row is returned; no duplicate task is created    |
-| Exact run cancelled                           | Terminal `cancelled` record retained; fetched matches kept     |
-| Riot key rejected during any provider call    | Run fails with shared key code; global warning header appears  |
-| Background task crash                         | Analysis marked `failed` safely; rate limiter released         |
+| Scenario                                      | Handling                                                        |
+| --------------------------------------------- | --------------------------------------------------------------- |
+| Player has <10 ranked matches                 | Fast start succeeds; background run becomes retryable `failed`  |
+| Player not found in first spine match         | `failed` with safe classification (`player_not_in_match`)       |
+| Riot 429                                      | Wait internally with continuous total ETA; retry up to 10 times |
+| Riot 401/403 during **any** provider call     | Run terminates with `RIOT_API_KEY_INVALID`; global warning header appears |
+| Riot 404 on an **optional** fetch             | That match/player is skipped; available data is used            |
+| Riot 404/failure on a **required** fetch      | Error propagates; run becomes `failed`                          |
+| DB connection error                           | Exception propagates; run marked `failed`                       |
+| Browser reload during analysis                | Exact persisted run rehydrated; polling continues               |
+| Server restart during analysis                | Active record remains; next explicit start resumes it           |
+| Same player in multiple spine matches         | Win rate computed once at first-encounter anchor, cached by PUUID |
+| Analysis already running for player           | Unique active row is returned; no duplicate task is created     |
+| Exact run cancelled                           | Terminal `cancelled` record retained; fetched matches kept      |
+| Background task crash                         | Marked `failed` safely; rate limiter released                   |

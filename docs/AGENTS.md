@@ -25,18 +25,37 @@ document.
 
 ## Required Co-Updates
 
-- Runtime behavior changes update the matching topic document in the same task.
-- Schema or SQLAlchemy model changes add a reviewed Alembic revision under
-  `../backend/alembic/versions/` and update [`database.md`](database.md)
-  together. Apply it through `../backend/scripts/migrate.py`; never bypass the
-  advisory-lock migration path or reset a populated schema.
-- Riot API endpoint, routing, credential, or throttling changes update
-  [`riot-api.md`](riot-api.md).
-- Job configuration, scheduler, lifecycle, API, or control changes update
-  [`jobs.md`](jobs.md).
+Topic documents record durable invariants, rationale, external-system and
+production facts, and operational procedures — they do not mirror code.
+Mechanical facts (schema columns, endpoint lists, module inventories, route
+tables, code flow narration) live in the code and its authoritative sources;
+do not add them to a topic document, and do not reintroduce deleted mirrors.
+
+- The root guide's rule that runtime behavior changes update the matching
+  authoritative document and scoped guide in the same task is satisfied as
+  follows: when the change alters a durable invariant, a decision's rationale,
+  an externally observed provider/production fact, or an operational procedure
+  the document records, update the document with it; a change that leaves all
+  of those unchanged satisfies the rule with no documentation edit, because
+  the documents no longer mirror mechanical detail.
+- Schema or SQLAlchemy model changes always add a reviewed Alembic revision
+  under `../backend/alembic/versions/` (the schema authority) and apply it
+  through `../backend/scripts/migrate.py`; never bypass the advisory-lock
+  migration path or reset a populated schema. Update
+  [`database.md`](database.md) only when a durable data invariant or procedure
+  changes with it.
+- Riot integration changes update [`riot-api.md`](riot-api.md) when they touch
+  routing rules, credential precedence/health, rate-limit behavior, or an
+  externally observed provider contract fact.
+- Job-system changes update [`jobs.md`](jobs.md) when they touch a lifecycle
+  invariant, recovery contract, interlock, or failure-classification rule.
 - Cookie/storage behavior changes update
   [`cookie-consent-compliance.md`](cookie-consent-compliance.md), the applicable
   policy UI, and [`../backend/COOKIE_CONSENT_AGENTS.md`](../backend/COOKIE_CONSENT_AGENTS.md).
+- Documents frozen as historical snapshots (dated reviews and audits) are never
+  updated to reflect current state; add a supersession note at most.
+- Date externally observed facts and cite their source so a reader knows when
+  re-verification is due.
 - Add a new topic file only when it has a distinct maintained scope. Add it to
   [`README.md`](README.md) in the same change.
 

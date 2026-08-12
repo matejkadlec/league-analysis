@@ -15,6 +15,7 @@ Run commands from the repository root:
 ./test.sh             # Complete repository + frontend + backend gate
 ./test.sh -f          # Repository + frontend feedback gate
 ./test.sh -b          # Repository + backend feedback gate
+./test.sh -r          # Repository checks only (documentation-only changes)
 ./scripts/ci.sh       # Portable CI wrapper used by GitHub Actions
 ./deploy/container-qa.sh # Explicit disposable Docker build/runtime validation
 ```
@@ -67,8 +68,9 @@ All modes run:
 - `git diff --check`;
 - tracked JSON parsing, merge-marker detection, and sensitive-filename hygiene;
 - ShellCheck over every tracked shell script;
-- regression checks for the ShellCheck installer/runner, Node selector, CI
-  entry-point coupling, and the LGA-23 card-configuration contract;
+- regression checks for the ShellCheck installer/runner, CI entry-point
+  coupling, and the LGA-23 card-configuration contract (the Node-selector
+  regression runs only when the frontend gate is selected);
 - Flow 1 policy regressions for expected batch scale, undersized-batch reasons,
   bounded independent PRs, worktree defaults, and final handoff behavior;
 - trusted-hook, local `.env` provisioning, primary/linked worktree identity,
@@ -183,13 +185,17 @@ workflow pull request can validate itself before the definition exists on
 `master`. Superseded runs are cancelled. Workflow permissions are limited to
 `contents: read`.
 
-The deterministic job provisions PostgreSQL 18.4 and passes only safe CI values.
-Because the workflow calls `scripts/ci.sh`, which calls the guarded `./test.sh`,
-the Flow 1 and worktree suites run in GitHub Actions without a second workflow
-entry point. The full backend gate validates the initial Alembic baseline in a
-fresh isolated database. CI additionally sets `LGA_VALIDATE_MIGRATIONS=1` and
-applies `backend/scripts/migrate.py upgrade head` to its clean PostgreSQL 18.4
-service database through the same advisory-lock path. It then runs the explicit
+The deterministic job first classifies the change with
+`scripts/detect-docs-only-change.sh`. A documentation-only change runs the
+fast `./test.sh --repo` repository gate and skips the heavy stages; any other
+change runs the full path. On the full path the job provisions PostgreSQL 18.4
+and passes only safe CI values. Because the workflow calls `scripts/ci.sh`,
+which calls the guarded `./test.sh`, the Flow 1 and worktree suites run in
+GitHub Actions without a second workflow entry point. The full backend gate
+validates the initial Alembic baseline in a fresh isolated database. CI
+additionally sets `LGA_VALIDATE_MIGRATIONS=1` and applies
+`backend/scripts/migrate.py upgrade head` to its clean PostgreSQL 18.4 service
+database through the same advisory-lock path. It then runs the explicit
 container QA script, which builds both production images and starts a second,
 uniquely named/ported/volumed stack to prove migrations, database readiness,
 frontend health, and PostgreSQL isolation before tearing it down.

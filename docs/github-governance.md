@@ -36,9 +36,10 @@ decision only after a compatible signing and recovery process is documented.
 The two required check contexts are the stable job names in
 [`quality-checks.yml`](../.github/workflows/quality-checks.yml). They cover the
 deterministic quality, security, migration, workflow, and repository-tooling
-checks plus the live production dependency comparison. Docker-specific checks
-will become part of the deterministic full-project gate when LGA-10 adds Docker
-artifacts; do not create a guessed separate required context before then.
+checks plus the live production dependency comparison. Since LGA-10 landed the
+production Docker artifacts, the deterministic full-project gate also builds
+and health-checks the isolated production containers; Docker checks are part
+of that stable context, not a separate required context.
 
 ## Current verified state
 

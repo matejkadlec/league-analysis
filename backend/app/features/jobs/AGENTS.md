@@ -3,34 +3,18 @@
 > **Scope:** Backend job scheduling, execution, runtime controls, and
 > administrator API implementation under `backend/app/features/jobs/`.
 >
-> **Maintenance:** Update when job types, lifecycle states, scheduler behavior,
-> runtime control, API endpoints, persistence, or implementation conventions
-> change.
+> **Maintenance:** Update when a job invariant, lifecycle contract, recovery
+> rule, or implementation boundary changes. File inventories and endpoint
+> lists live in the code.
 
 Inherits repository-wide rules from
 [`../../../../AGENTS.md`](../../../../AGENTS.md), backend rules from
 [`../../../AGENTS.md`](../../../AGENTS.md), and feature conventions from
 [`../AGENTS.md`](../AGENTS.md).
 
-[`../../../../docs/jobs.md`](../../../../docs/jobs.md) is authoritative for
-runtime behavior, scheduler lifecycle, API surface, and operator-facing
-details. Keep it synchronized with job changes.
-
-## Structure
-
-| File | Responsibility |
-| --- | --- |
-| `base.py` | `BaseJob`, execution lifecycle, metrics, logging, and control checkpoints |
-| `control.py` | In-memory running-task registry and pause/stop signals |
-| `scheduler.py` | APScheduler startup, persistence, overdue runs, and schedule synchronization |
-| `service.py` | Configuration/execution queries, updates, and orphan cleanup |
-| `router.py` | Admin-only `/api/v1/jobs` endpoints |
-| `queue_config.py` | Canonical Match Fetcher queue access and legacy-config cleanup |
-| `error_handling.py` | Riot error to job-signal translation |
-| `log_capture.py` | Structured execution-log capture |
-| `maintenance.py` | Persistent local Riot-writer maintenance interlock |
-| `player_sync.py` | Persisted explicit per-PUUID Match Fetcher + Player Updater orchestration |
-| `implementations/` | Match Fetcher, Player Updater, and non-writing test runners |
+[`../../../../docs/jobs.md`](../../../../docs/jobs.md) records the durable job
+invariants and operational contracts; update it only when one of those
+changes. Module responsibilities live in the code under this directory.
 
 ## Job and Execution Model
 

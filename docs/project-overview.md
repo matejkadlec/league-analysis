@@ -52,17 +52,12 @@ league-analysis/
 │   ├── pre-commit
 │   └── post-checkout
 ├── docs/
-├── deploy/
-│   ├── container-qa.sh
-│   ├── production-deploy.sh
-│   └── production.env.example
+├── deploy/              # container-qa.sh, production-deploy.sh, ... (elided)
 ├── compose.production.yml
 ├── logs/
-├── scripts/
-│   ├── guard-git-worktree-test.sh
-│   ├── install-git-hooks.sh
-│   └── provision-worktree-local-files.sh
-└── run.sh
+├── scripts/             # tooling + regression scripts (elided)
+├── run.sh
+└── test.sh              # Mandatory pre-publication quality gate
 ```
 
 ### Backend
