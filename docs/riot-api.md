@@ -8,8 +8,6 @@
 > here changes. Endpoint signatures, DTO shapes, and caller inventories live in
 > `backend/app/core/riot_api/` and are not mirrored here.
 
-The dated [2026-08-03 compatibility audit](riot-api-compatibility-2026-08-03.md)
-records the evidence basis and remediation scope implemented by LGA-42.
 Sanitized protected fixtures captured on 2026-08-08 cover the used Account,
 Summoner, Match, and Timeline shapes for queues 400, 420, 440, and 450.
 Transparent synthetic variants derived from those fixtures verify queue

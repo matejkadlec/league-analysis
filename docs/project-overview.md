@@ -93,11 +93,8 @@ Versions are pinned or constrained by `backend/pyproject.toml`,
 | External data | Riot Games API |
 
 Use `uv` for backend dependencies and commands. Use npm for frontend
-dependencies and commands; do not introduce a second package manager.
-The dated selection and security rationale is recorded in
-[`dependency-upgrade-2026-08-03.md`](dependency-upgrade-2026-08-03.md) and the
-later maintenance refresh
-[`dependency-upgrade-2026-08-11.md`](dependency-upgrade-2026-08-11.md).
+dependencies and commands; do not introduce a second package manager. The
+manifests and lockfiles are the version authority.
 
 ## Local Environment
 
