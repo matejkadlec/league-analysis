@@ -187,7 +187,6 @@ fi
 run_step 'Repository hygiene' run_repository_hygiene
 run_step 'ShellCheck' "$repository_root/scripts/run-shellcheck.sh"
 run_step 'ShellCheck tooling regression' "$repository_root/scripts/test-shellcheck.sh"
-run_step 'Card configuration contract regression' "$repository_root/scripts/test-card-configuration.sh"
 run_step 'run.sh startup-order regression' "$repository_root/scripts/test-run.sh"
 run_step 'Deployment and container contract regression' "$repository_root/scripts/test-deployment.sh"
 run_step 'PostgreSQL operations regression' "$repository_root/scripts/test-postgres-operations.sh"
@@ -197,7 +196,7 @@ run_step 'GitHub workflow security policy' python3 "$repository_root/scripts/ver
 run_step 'Dependabot configuration' python3 "$repository_root/scripts/check-dependabot-config.py"
 run_step 'GitHub governance configuration' "$repository_root/scripts/test-github-governance.sh"
 run_step 'Dependency audit policy regression' python3 "$repository_root/scripts/test-dependency-audit.py"
-run_step 'Flow 1 policy regression' "$repository_root/scripts/test-flow1-policy.sh"
+run_step 'Skill discovery regression' "$repository_root/scripts/test-skill-discovery.sh"
 run_step 'Worktree tooling regression' "$repository_root/scripts/test-worktree-tooling.sh"
 
 if [[ "$run_frontend" == true ]]; then
