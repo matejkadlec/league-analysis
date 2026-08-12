@@ -149,16 +149,12 @@ Never point this command at production, a shared environment, a remote host,
 or a database whose identity cannot be proven. Restore the verified backup
 instead of attempting an ad-hoc reversal.
 
-## Data Authority: Pi Is Authoritative (LGA-79)
+## Data Authority: Pi Is Authoritative
 
-The LGA-79 authority transfer moved `league_analysis_local_dev` to pi5ram16
-via a complete PostgreSQL custom-format dump restored into a staging database
-and swapped in only after a deterministic source/restored snapshot matched.
-The pre-existing Pi database was retained as a private safety backup and
-rollback database. Procedure, authority marker, and rollback commands:
-[`deployment.md`](deployment.md#postgresql-data-authority-and-initial-migration).
+The Pi database `league_analysis` on pi5ram16 is authoritative; LGA-79 moved it
+there from `league_analysis_local_dev` and that transfer is complete.
 
-Since then the data flow is strictly one-way:
+The data flow is strictly one-way:
 `pi5ram16 league_analysis -> local league_analysis_local_dev`, refreshed every
 five minutes. The local database is **disposable** — the mirror may overwrite
 any local rows — and there is no local-to-Pi write path. Details:
