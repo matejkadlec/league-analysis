@@ -147,5 +147,7 @@ inspect both logs before changing code.
 - Keep explicit imports, avoid wildcard imports, and do not add stream-of-
   consciousness comments to code.
 - Runtime behavior changes must update the matching authoritative document and
-  the applicable scoped `AGENTS.md` in the same task.
+  the applicable scoped `AGENTS.md` in the same task whenever they alter
+  durable content those documents record; see
+  [`docs/AGENTS.md`](docs/AGENTS.md) for the trigger.
 - End implementation handoffs with a concise summary of changes and validation.
