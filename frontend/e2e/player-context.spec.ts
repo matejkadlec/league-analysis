@@ -302,6 +302,11 @@ test("keeps player routes, sidebar switching, and dialog scroll lock determinist
   await expect(page.locator("#role-performance")).toBeVisible();
   await expect(page.locator("#match-history")).toHaveCount(0);
   await expect(page.getByText(/^Updated /)).toHaveCount(4);
+  await expect(
+    page.getByText(
+      "Review player's rank, recent performance, champion statistics, and role performance in one dashboard.",
+    ),
+  ).toBeVisible();
 
   const trackingTag = page.locator(".tracking-status-toggle");
   await expect(trackingTag).toBeVisible();
@@ -345,6 +350,9 @@ test("keeps player routes, sidebar switching, and dialog scroll lock determinist
   const dialog = page.getByRole("dialog");
   await expect(
     dialog.getByRole("heading", { name: "Tracked Players" }),
+  ).toBeVisible();
+  await expect(
+    dialog.getByText("View, add or remove tracked players."),
   ).toBeVisible();
   const activeRowDuringDialog = await currentPlayerButton.boundingBox();
   expect(
@@ -407,6 +415,11 @@ test("keeps player routes, sidebar switching, and dialog scroll lock determinist
   );
   await expect(page.locator("#match-history")).toBeVisible();
   await expect(page.locator("#player-summary")).toHaveCount(0);
+  await expect(
+    page.getByText(
+      "Explore player's matches, queue results, team objectives, builds, runes, and performance details.",
+    ),
+  ).toBeVisible();
 
   const activePlayerFromMatchHistory = page.getByTestId(
     "current-player-button",
@@ -472,6 +485,11 @@ test("keeps player routes, sidebar switching, and dialog scroll lock determinist
   await expect(page).toHaveURL("/");
   const homeNav = page.getByRole("link", { name: "Home", exact: true });
   await expect(homeNav).toHaveAttribute("data-active", "true");
+  await expect(
+    page.getByText(
+      "Welcome to League Analysis - your all in one tool for comprehensive analysis of League of Legends players, matches and matchmaking fairness as well as a great multiple player tracking tool.",
+    ),
+  ).toBeVisible();
   await expect
     .poll(() =>
       homeNav.evaluate((element) => getComputedStyle(element).borderLeftColor),
@@ -495,6 +513,13 @@ test("keeps player routes, sidebar switching, and dialog scroll lock determinist
   expect(Math.abs((homeTextX ?? 0) - (overviewTextX ?? 0))).toBeLessThanOrEqual(
     0.5,
   );
+
+  await page.getByRole("link", { name: "Matchmaking Analysis" }).click();
+  await expect(
+    page.getByText(
+      "Analyze matchmaking fairness by comparing average winrates of teammates vs enemies in recent ranked matches.",
+    ),
+  ).toBeVisible();
 
   await page.goto(`/my-profile?puuid=${CURRENT_PUUID}`);
   await expect(page).toHaveURL(

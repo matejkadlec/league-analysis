@@ -259,7 +259,7 @@ export function SidebarPlayerSwitcher({
               <Users className="h-5 w-5 text-[#cfa93a]" /> Tracked Players
             </DialogTitle>
             <DialogDescription>
-              Select a current player or remove players from your tracked list.
+              View, add or remove tracked players.
             </DialogDescription>
           </DialogHeader>
           <TrackedPlayersList

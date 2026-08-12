@@ -64,7 +64,7 @@ describe("Match History objective icons", () => {
       turret: "h-[31px]",
       inhibitor: "h-[22px]",
       dragon: "h-[22px]",
-      voidgrub: "h-5",
+      voidgrub: "h-[22px]",
       herald: "h-[22px]",
       baron: "h-[21px]",
     };
@@ -76,11 +76,14 @@ describe("Match History objective icons", () => {
       ).toContain(sizeClass);
     }
 
+    const dragon = container.querySelector(
+      '[data-objective="dragon"] [data-icon-source]',
+    ) as HTMLElement;
     const voidgrub = container.querySelector(
       '[data-objective="voidgrub"] [data-icon-source]',
     ) as HTMLElement;
-    expect(voidgrub.style.backgroundPosition).toBe("center bottom");
-    expect(voidgrub.style.backgroundSize).toBe("100% 700%");
+    expect(voidgrub.className).toBe(dragon.className);
+    expect(voidgrub.style.filter).toBe(dragon.style.filter);
   });
 
   it("preserves unknown timeline counts", () => {

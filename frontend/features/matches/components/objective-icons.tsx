@@ -20,18 +20,12 @@ const OBJECTIVE_SIZE_CLASSES: Record<ObjectiveId, string> = {
   turret: "h-[31px] w-[31px]",
   inhibitor: "h-[22px] w-[22px]",
   dragon: "h-[22px] w-[22px]",
-  voidgrub: "h-5 w-5",
+  voidgrub: "h-[22px] w-[22px]",
   herald: "h-[22px] w-[22px]",
   baron: "h-[21px] w-[21px]",
 };
 
-function objectiveFilter(objective: ObjectiveId, team: "blue" | "red") {
-  if (objective === "voidgrub") {
-    return team === "blue"
-      ? "sepia(1) saturate(6) hue-rotate(135deg) brightness(1.05)"
-      : "sepia(1) saturate(6) hue-rotate(285deg) brightness(1.05)";
-  }
-
+function objectiveFilter(team: "blue" | "red") {
   return team === "blue"
     ? "saturate(1.7) brightness(1.25)"
     : "hue-rotate(150deg) saturate(2.2) brightness(1.15)";
@@ -39,8 +33,6 @@ function objectiveFilter(objective: ObjectiveId, team: "blue" | "red") {
 
 function objectiveSource(objective: ObjectiveId) {
   if (objective === "turret") return RIOT_OBJECTIVE_ICON_SOURCES.tower;
-  if (objective === "voidgrub")
-    return RIOT_OBJECTIVE_ICON_SOURCES.voidgrubSprite;
   return RIOT_OBJECTIVE_ICON_SOURCES[objective];
 }
 
@@ -56,10 +48,7 @@ function ObjectiveGlyph({
       className={`${className} block bg-contain bg-center bg-no-repeat`}
       style={{
         backgroundImage: `url(${objectiveSource(objective)})`,
-        backgroundPosition:
-          objective === "voidgrub" ? "center bottom" : undefined,
-        backgroundSize: objective === "voidgrub" ? "100% 700%" : undefined,
-        filter: objectiveFilter(objective, team),
+        filter: objectiveFilter(team),
       }}
     />
   );

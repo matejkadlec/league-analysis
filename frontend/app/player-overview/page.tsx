@@ -172,8 +172,8 @@ export default function PlayerOverviewPage() {
           <Card id="header-card" className="p-6 text-white">
             <h1 className="text-2xl font-semibold">Player Overview</h1>
             <p className="mt-4 text-sm leading-relaxed">
-              Review the selected player&apos;s rank, recent performance,
-              champion statistics, and role performance in one dashboard.
+              Review player&apos;s rank, recent performance, champion statistics,
+              and role performance in one dashboard.
             </p>
           </Card>
 

@@ -33,7 +33,7 @@ export default function Home() {
               Welcome to League Analysis - your all in one tool for
               comprehensive analysis of League of Legends players, matches and
               matchmaking fairness as well as a great multiple player tracking
-              toool.
+              tool.
             </p>
           </CardContent>
         </Card>

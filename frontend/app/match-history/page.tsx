@@ -19,8 +19,8 @@ export default function MatchHistoryPage() {
           <Card id="header-card" className="p-6 text-white">
             <h1 className="text-2xl font-semibold">Match History</h1>
             <p className="mt-4 text-sm leading-relaxed">
-              Explore the selected player&apos;s matches, queue results, team
-              objectives, builds, runes, and performance details.
+              Explore player&apos;s matches, queue results, team objectives,
+              builds, runes, and performance details.
             </p>
           </Card>
 

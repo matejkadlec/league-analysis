@@ -41,8 +41,8 @@ public API via `index.ts`.
   Inhibitor, Dragon, Voidgrub, Rift Herald, and Baron lives in
   `matches/components/objective-icon-assets.ts`; do not replace those
   silhouettes with generic icon-library approximations. The Voidgrub uses the
-  bottom cell of Riot's `right_icons_grub.png` sprite, including its dark edge
-  and internal shading.
+  bottom cell of Riot's `right_icons_grub.png` sprite, normalized to the same
+  source palette, team-color filter, and perceived size as the other icons.
 - The Match Fetcher Jobs card has no per-queue checkboxes. Backend product
   support determines its complete queue set; the UI retains only job-level
   status, schedule, triggering, testing, pause/stop, and history controls.

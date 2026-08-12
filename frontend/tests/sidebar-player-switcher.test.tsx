@@ -112,6 +112,7 @@ describe("SidebarPlayerSwitcher", () => {
     expect(
       screen.getByRole("heading", { name: "Tracked Players" }),
     ).not.toBeNull();
+    expect(screen.getByText("View, add or remove tracked players.")).not.toBeNull();
     expect(screen.queryByText("Manage Tracked Players")).toBeNull();
   });
 
