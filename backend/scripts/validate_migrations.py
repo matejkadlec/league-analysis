@@ -24,7 +24,6 @@ EXPECTED_TABLES = 24
 EXPECTED_ENUMS = 6
 EXPECTED_TRIGGERS = 1
 EXPECTED_POSTGRES_MAJOR = 18
-POSTGRES_CLIENT_CONTAINER_ENV = "LGA_POSTGRES_CLIENT_CONTAINER"
 POSTGRES_CLIENT_PROGRAMS = ("pg_dump", "pg_restore", "psql")
 
 load_dotenv(PROJECT_ROOT / ".env", override=False)
@@ -109,29 +108,11 @@ def postgres_client_environment() -> dict[str, str]:
     return environment
 
 
-def postgres_client_command(program: str, *, interactive: bool = False) -> list[str]:
-    """Resolve a PostgreSQL 18 client locally or in the pinned CI service."""
-    if program not in POSTGRES_CLIENT_PROGRAMS:
-        raise ValueError(f"Unsupported PostgreSQL client program: {program}")
-
-    container = os.environ.get(POSTGRES_CLIENT_CONTAINER_ENV)
-    if container is None:
-        return [program]
-    if re.fullmatch(r"[0-9a-f]{12,64}", container) is None:
-        raise ValueError("Invalid PostgreSQL client container identifier")
-
-    command = ["docker", "exec"]
-    if interactive:
-        command.append("--interactive")
-    command.extend(["--env", "PGPASSWORD", container, program])
-    return command
-
-
 def validate_postgres_client_versions() -> None:
     """Fail before backup work unless every selected client is PostgreSQL 18."""
     for program in POSTGRES_CLIENT_PROGRAMS:
         result = subprocess.run(
-            [*postgres_client_command(program), "--version"],
+            [program, "--version"],
             env=postgres_client_environment(),
             capture_output=True,
             text=True,
@@ -167,7 +148,7 @@ def create_restore_archive(database: str, archive: Path) -> None:
         with os.fdopen(descriptor, "wb") as archive_output:
             subprocess.run(
                 [
-                    *postgres_client_command("pg_dump"),
+                    "pg_dump",
                     *postgres_connection_arguments(database),
                     "--format=custom",
                     "--compress=gzip:9",
@@ -184,7 +165,7 @@ def create_restore_archive(database: str, archive: Path) -> None:
         raise
     with archive.open("rb") as archive_input:
         subprocess.run(
-            [*postgres_client_command("pg_restore", interactive=True), "--list"],
+            ["pg_restore", "--list"],
             env=postgres_client_environment(),
             stdin=archive_input,
             stdout=subprocess.DEVNULL,
@@ -197,7 +178,7 @@ def restore_validation_archive(database: str, archive: Path) -> None:
     with archive.open("rb") as archive_input:
         subprocess.run(
             [
-                *postgres_client_command("pg_restore", interactive=True),
+                "pg_restore",
                 *postgres_connection_arguments(database),
                 "--no-owner",
                 "--no-privileges",
@@ -214,7 +195,7 @@ def deterministic_snapshot(database: str) -> str:
     with SNAPSHOT_SQL.open("r", encoding="utf-8") as snapshot_input:
         result = subprocess.run(
             [
-                *postgres_client_command("psql", interactive=True),
+                "psql",
                 *postgres_connection_arguments(database),
                 "--no-psqlrc",
                 "--set",

@@ -56,3 +56,11 @@ services:
     user: "${LGA_GATE_UID:-1000}:${LGA_GATE_GID:-1000}"
     volumes:
       - .:/workspace
+      # Every ignored build directory stays inside the container. Sharing them
+      # with the host runs the gate against whatever a dev server last wrote —
+      # stale Next.js route types from `run.sh` have already failed a run — and
+      # leaves behind a virtualenv and node_modules built for container paths,
+      # which then break the host's own tooling.
+      - /workspace/frontend/.next
+      - /workspace/frontend/node_modules
+      - /workspace/backend/.venv
