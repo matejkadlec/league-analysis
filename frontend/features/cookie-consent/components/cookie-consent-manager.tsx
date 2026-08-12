@@ -178,7 +178,8 @@ export function CookieConsentManager() {
                 </p>
 
                 <p className="mt-2 leading-relaxed">
-                  Choose your preference below. You can change it anytime from
+                  Choose your preference below. You can change it anytime
+                  using the Cookie settings link in the page footer or from
                   Settings in your account.
                 </p>
 

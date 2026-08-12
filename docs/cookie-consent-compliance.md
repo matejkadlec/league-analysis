@@ -58,7 +58,10 @@ Implementation:
 - GDPR/EDPB: withdrawing consent must be as easy as giving it.
 
 Implementation:
-- Persistent global `Cookie settings` button reopens preferences at any time.
+- A `Cookie settings` footer link on public pages (legal pages, sign-in,
+  join-us) reopens preferences via `requestCookieConsentPreferences`.
+- Signed-in users can also reopen preferences through the `Cookie settings`
+  section on the Settings page. `/cookie-policy` documents both paths.
 
 ### 6) Clear information including duration and third-party access
 

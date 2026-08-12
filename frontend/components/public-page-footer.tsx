@@ -1,6 +1,8 @@
 import Image from "next/image";
 import Link from "next/link";
 
+import { CookieSettingsTrigger } from "@/components/cookie-settings-trigger";
+
 export function PublicPageFooter() {
   return (
     <footer className="h-[68px] border-t border-white/10 bg-[#0d1a2b] px-6">
@@ -38,6 +40,8 @@ export function PublicPageFooter() {
           >
             Cookie Policy
           </Link>
+          {" | "}
+          <CookieSettingsTrigger className="underline transition-colors duration-300 hover:text-[#cfa93a]" />
         </p>
 
         <div aria-hidden />
