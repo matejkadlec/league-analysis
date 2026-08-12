@@ -83,23 +83,23 @@ See [`database.md`](database.md) before changing models or SQL.
 
 ## Technology
 
-Versions are pinned or constrained by `backend/pyproject.toml`,
-`backend/uv.lock`, `frontend/package.json`, and `frontend/package-lock.json`.
+FastAPI and SQLAlchemy on the backend, Next.js and React on the frontend,
+PostgreSQL underneath. `backend/pyproject.toml`, `backend/uv.lock`,
+`frontend/package.json` and `frontend/package-lock.json` are the version
+authority; read them for versions.
 
-| Layer | Current basis |
-| --- | --- |
-| Backend runtime | Python `>=3.14.7,<3.15`, FastAPI 0.141.1 on Starlette 1.6.0, SQLAlchemy 2.0.51, Pydantic 2.13, Alembic 1.19.1, structlog 26.1, APScheduler 3.11, httpx 0.28 |
-| Backend tooling | uv 0.12.3 in CI, Pyright 1.1.411, Ruff 0.16.2 |
-| Frontend runtime | Next.js 16.3.0, React 19.2.8, TypeScript 7.0.2 native compiler with TypeScript 6.0.2 API compatibility for ESLint, Tailwind CSS 4.3.3, shadcn/ui |
-| Frontend data/forms | TanStack Query 5, Zod 4, Axios, React Hook Form |
-| Frontend tooling | Node 26.7.0, npm 12.0.2 with `package-lock.json`, ESLint 10.8.1 with `@eslint/compat` for Next's legacy plugins, TypeScript 7.0.2 compiler, Vitest 4.1.10 with Testing Library and jsdom, Playwright 1.62.1 |
-| Database | PostgreSQL 18.4, asyncpg for application I/O, psycopg2 for APScheduler |
-| Production packaging | Docker Compose v2, Python/Node production images, PostgreSQL 18.4 |
-| External data | Riot Games API |
+Use `uv` for backend dependencies and commands, npm for frontend dependencies
+and commands, and do not introduce a second package manager.
 
-Use `uv` for backend dependencies and commands. Use npm for frontend
-dependencies and commands; do not introduce a second package manager. The
-manifests and lockfiles are the version authority.
+Three choices are not obvious from the manifests:
+
+- The database driver is split. `asyncpg` serves application I/O; APScheduler
+  needs `psycopg2` because its job store is synchronous.
+- The frontend installs two TypeScript packages. `@typescript/native` is the
+  compiler; the aliased TypeScript 6 package exists only because ESLint still
+  consumes the older compiler API.
+- ESLint loads Next.js plugins through `@eslint/compat`, which adapts their
+  legacy rule API without suppressing any configured rule.
 
 ## Local Environment
 
@@ -112,17 +112,10 @@ breaking startup. For a deliberate one-off process-level override only, use
 `LGA_RUN_USE_PROCESS_ENV=1` with `./run.sh`. Never print, paste, commit, or
 copy `.env` secret values into documentation or Jira.
 
-Install/select the exact frontend tools before the first npm command:
-
-```bash
-nvm install 26.7.0
-nvm use 26.7.0
-npm install --global npm@12.0.2 --ignore-scripts
-```
-
-CI pins uv 0.12.3. Local uv 0.12.3 can be installed through the official
-installer or selected package manager; `uv lock --check` must accept the
-committed lock before development continues.
+Select the pinned Node and npm before the first npm command. `.nvmrc` and the
+`packageManager` field hold those versions, and the gate rejects any other
+runtime. Backend tooling needs a `uv` matching the version CI installs;
+`uv lock --check` must accept the committed lock before development continues.
 
 ```bash
 ./run.sh
@@ -262,14 +255,10 @@ step names.
 
 ### Commits and GitHub
 
-`.pre-commit-config.yaml` keeps fast whitespace/format checks, Ruff, frontend
-ESLint, and frontend TypeScript checks at commit time. The trusted hook keeps
-pre-commit at the Git worktree root while selecting the backend tool project;
-the frontend checks then resolve that root and select the pinned Node runtime
-before changing into `frontend`. This keeps commits reliable from linked
-worktrees. Never skip configured hooks. GitHub's `Quality Checks` workflow runs
-the same deterministic gate with PostgreSQL 18.4, plus a separate live
-production dependency audit. Local results are not GitHub check results.
+`.pre-commit-config.yaml` runs the fast checks at commit time. Never skip
+configured hooks. Each local hook resolves the Git worktree root before doing
+anything, so commits behave the same from a linked worktree as from the main
+checkout. See [`quality-checks.md`](quality-checks.md) for the GitHub side.
 
 ## Debugging and Operational Boundaries
 
