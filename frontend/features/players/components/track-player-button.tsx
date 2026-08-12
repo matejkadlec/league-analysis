@@ -122,7 +122,7 @@ export function TrackPlayerButton({
       variant={variant}
       size={size}
       className={cn(
-        "tracking-status-toggle group min-w-[6.5rem] px-2 text-xs",
+        "tracking-status-toggle group h-6 w-[72px] shrink-0 px-0 text-[10px]",
         className,
       )}
       onClick={handleToggleTracking}
@@ -137,22 +137,22 @@ export function TrackPlayerButton({
       data-tracking-state={isTracked ? "tracked" : "untracked"}
     >
       {isLoading ? (
-        <Loader2 className="h-4 w-4 animate-spin" />
+        <Loader2 className="h-3.5 w-3.5 animate-spin" />
       ) : (
         <>
-          <span className="flex items-center gap-0.5 group-hover:hidden group-focus-visible:hidden">
+          <span className="flex items-center gap-1 group-hover:hidden group-focus-visible:hidden">
             {isTracked ? (
-              <Star className="h-4 w-4 fill-current" />
+              <Star className="h-3.5 w-3.5 fill-current" />
             ) : (
-              <StarOff className="h-4 w-4" />
+              <StarOff className="h-3.5 w-3.5" />
             )}
             {isTracked ? "Tracked" : "Untracked"}
           </span>
-          <span className="hidden items-center gap-0.5 group-hover:flex group-focus-visible:flex">
+          <span className="hidden items-center gap-1 group-hover:flex group-focus-visible:flex">
             {isTracked ? (
-              <StarOff className="h-4 w-4" />
+              <StarOff className="h-3.5 w-3.5" />
             ) : (
-              <Star className="h-4 w-4 fill-current" />
+              <Star className="h-3.5 w-3.5 fill-current" />
             )}
             {isTracked ? "Untrack" : "Track"}
           </span>

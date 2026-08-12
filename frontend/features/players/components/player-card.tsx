@@ -343,7 +343,6 @@ export function PlayerCard({ player, onRefreshAll }: PlayerCardProps) {
                 playerName={player.game_name ?? undefined}
                 variant="ghost"
                 size="sm"
-                className="h-7 px-2 text-xs"
               />
             </div>
             <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">

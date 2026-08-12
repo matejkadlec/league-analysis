@@ -35,19 +35,24 @@ public API via `index.ts`.
   pagination on a filter change, and preserve unknown IDs as `Queue N` instead
   of mapping them to a supported mode.
 - Match History objective order, accessible labels, counts, and dedicated
-  silhouettes live in `matches/components/objective-icons.tsx`. Preserve the
-  custom Voidgrub glyph and the shared semantic mapping for every consumer.
-  Riot-derived match-history art for Turret, Inhibitor, Dragon, Rift Herald,
-  and Baron lives in `matches/components/objective-icon-assets.ts`; do not
-  replace those silhouettes with generic icon-library approximations. The
-  Rift Herald asset retains the exposed eye and horns used by the in-game
-  match-history representation.
+  silhouettes and tuned visual sizes live in
+  `matches/components/objective-icons.tsx`. Preserve the shared semantic
+  mapping for every consumer. Riot-derived match-history art for Turret,
+  Inhibitor, Dragon, Voidgrub, Rift Herald, and Baron lives in
+  `matches/components/objective-icon-assets.ts`; do not replace those
+  silhouettes with generic icon-library approximations. The Voidgrub uses the
+  bottom cell of Riot's `right_icons_grub.png` sprite, including its dark edge
+  and internal shading.
 - The Match Fetcher Jobs card has no per-queue checkboxes. Backend product
   support determines its complete queue set; the UI retains only job-level
   status, schedule, triggering, testing, pause/stop, and history controls.
 - The Tracked Players dialog presents the player rows directly without
   a second title, count, search field, or expand/collapse control. Show up to
   five rows before enabling vertical scrolling.
+- The Player Card tracking-status toggle keeps a fixed 72x24 border box in
+  Tracked, Untrack, Untracked, and Track states. Keep its 14px icon, 10px label,
+  and 4px icon/label gap so the longest state remains unclipped without layout
+  movement.
 - Use `profile_synced_at`, `league_synced_at`, or `match_synced_at` according to
   the card's actual source. Multi-source identity cards use the oldest complete
   required timestamp; never use generic `updated_at` as data freshness.

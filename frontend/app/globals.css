@@ -319,6 +319,11 @@
     color: #0a1428 !important;
   }
 
+  .tracking-status-toggle svg {
+    width: 0.875rem !important;
+    height: 0.875rem !important;
+  }
+
   .tracking-status-toggle:hover {
     background: #dfbd55 !important;
   }

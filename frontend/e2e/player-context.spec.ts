@@ -255,6 +255,14 @@ test("keeps player routes, sidebar switching, and dialog scroll lock determinist
       return;
     }
 
+    if (path.endsWith("/tracking-status")) {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({ is_tracked: !path.includes(RECENT_PUUID) }),
+      });
+      return;
+    }
+
     const player = Object.values(players).find((candidate) =>
       path.endsWith(`/players/${candidate.puuid}`),
     );
@@ -294,6 +302,22 @@ test("keeps player routes, sidebar switching, and dialog scroll lock determinist
   await expect(page.locator("#role-performance")).toBeVisible();
   await expect(page.locator("#match-history")).toHaveCount(0);
   await expect(page.getByText(/^Updated /)).toHaveCount(4);
+
+  const trackingTag = page.locator(".tracking-status-toggle");
+  await expect(trackingTag).toBeVisible();
+  await expect(trackingTag).toHaveText(/Tracked/);
+  const trackingTagBeforeHover = await trackingTag.boundingBox();
+  expect(trackingTagBeforeHover?.width).toBe(72);
+  expect(trackingTagBeforeHover?.height).toBe(24);
+  expect(
+    await trackingTag.evaluate(
+      (element) => element.scrollWidth <= element.clientWidth,
+    ),
+  ).toBe(true);
+  await trackingTag.hover();
+  await expect(trackingTag).toHaveText(/Untrack/);
+  const trackingTagDuringHover = await trackingTag.boundingBox();
+  expect(trackingTagDuringHover).toEqual(trackingTagBeforeHover);
 
   const quickNavigation = page.getByRole("button", {
     name: "Open page navigation",
@@ -360,6 +384,22 @@ test("keeps player routes, sidebar switching, and dialog scroll lock determinist
   );
   await expect(page.getByRole("button", { name: "Recent#TWO" })).toBeVisible();
   expect(syncStarts).toBe(0);
+
+  const untrackedTag = page.locator(".tracking-status-toggle");
+  await expect(untrackedTag).toHaveText(/Untracked/);
+  const untrackedTagBeforeHover = await untrackedTag.boundingBox();
+  expect(untrackedTagBeforeHover?.width).toBe(72);
+  expect(untrackedTagBeforeHover?.height).toBe(24);
+  const untrackedTagMetrics = await untrackedTag.evaluate((element) => ({
+    clientWidth: element.clientWidth,
+    scrollWidth: element.scrollWidth,
+  }));
+  expect(untrackedTagMetrics.scrollWidth).toBeLessThanOrEqual(
+    untrackedTagMetrics.clientWidth,
+  );
+  await untrackedTag.hover();
+  await expect(untrackedTag).toHaveText(/Track/);
+  expect(await untrackedTag.boundingBox()).toEqual(untrackedTagBeforeHover);
 
   await page.getByRole("link", { name: "Match History" }).click();
   await expect(page).toHaveURL(

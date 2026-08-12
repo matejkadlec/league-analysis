@@ -58,10 +58,29 @@ describe("Match History objective icons", () => {
     expect(screen.getByRole("img", { name: "Barons: 2" })).not.toBeNull();
     expect(
       container.querySelectorAll('[data-icon-source="riot-match-history"]'),
-    ).toHaveLength(5);
-    expect(
-      container.querySelector('[data-objective="voidgrub"] svg'),
-    ).not.toBeNull();
+    ).toHaveLength(6);
+
+    const expectedSizes = {
+      turret: "h-[31px]",
+      inhibitor: "h-[22px]",
+      dragon: "h-[22px]",
+      voidgrub: "h-5",
+      herald: "h-[22px]",
+      baron: "h-[21px]",
+    };
+    for (const [objective, sizeClass] of Object.entries(expectedSizes)) {
+      expect(
+        container.querySelector(
+          `[data-objective="${objective}"] [data-icon-source]`,
+        )?.className,
+      ).toContain(sizeClass);
+    }
+
+    const voidgrub = container.querySelector(
+      '[data-objective="voidgrub"] [data-icon-source]',
+    ) as HTMLElement;
+    expect(voidgrub.style.backgroundPosition).toBe("center bottom");
+    expect(voidgrub.style.backgroundSize).toBe("100% 700%");
   });
 
   it("preserves unknown timeline counts", () => {
