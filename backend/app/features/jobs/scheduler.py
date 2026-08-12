@@ -126,6 +126,18 @@ def _parse_interval_from_schedule(schedule: str) -> Optional[int]:
     return None
 
 
+async def _run_startup_recovery() -> None:
+    """Reclassify persisted state left behind by a previous process.
+
+    Each step gets its own session, so a failure recovering job executions
+    cannot skip the application-run recovery that follows it.
+    """
+    async with db_manager.get_session() as db:
+        await _mark_stale_jobs_as_failed(db)
+    async with db_manager.get_session() as db:
+        await _cancel_orphaned_application_runs(db)
+
+
 async def _cancel_orphaned_application_runs(db: AsyncSession) -> None:
     """Close application-run rows whose in-process worker did not survive.
 
@@ -138,6 +150,10 @@ async def _cancel_orphaned_application_runs(db: AsyncSession) -> None:
     Startup is the only safe place to do this. A live process cannot tell an
     abandoned row apart from one a running worker still owns, and no Riot
     identity is involved here, so nothing has to be matched by Riot ID.
+
+    Runs on its own session so a failure recovering job executions cannot skip
+    it. Its own failure is logged and swallowed, matching execution recovery:
+    startup must not be blocked, and the next restart retries.
 
     Args:
         db: Database session for updating the application-run records.
@@ -152,35 +168,45 @@ async def _cancel_orphaned_application_runs(db: AsyncSession) -> None:
     from .models import PlayerSyncRun
     from .player_sync import ACTIVE_SYNC_STATUSES
 
-    now = datetime.now(timezone.utc)
+    try:
+        now = datetime.now(timezone.utc)
 
-    sync_result = await db.execute(
-        update(PlayerSyncRun)
-        .where(PlayerSyncRun.status.in_(ACTIVE_SYNC_STATUSES))
-        .values(
-            status="cancelled",
-            completed_at=now,
-            # Textual/Core updates bypass the model's application-side onupdate.
-            updated_at=now,
-            error_code="SYNC_CANCELLED",
-            error_message="The player update was cancelled before it finished.",
+        sync_result = await db.execute(
+            update(PlayerSyncRun)
+            .where(PlayerSyncRun.status.in_(ACTIVE_SYNC_STATUSES))
+            .values(
+                status="cancelled",
+                completed_at=now,
+                # A Core update bypasses the model's application-side onupdate.
+                # Only this table has the column; MatchmakingAnalysis has none.
+                updated_at=now,
+                error_code="SYNC_CANCELLED",
+                error_message="The player update was cancelled before it finished.",
+            )
         )
-    )
-    analysis_result = await db.execute(
-        update(MatchmakingAnalysis)
-        .where(MatchmakingAnalysis.status.in_(ACTIVE_ANALYSIS_STATUSES))
-        .values(
-            # Matches the explicit cancellation path, which records no error.
-            status="cancelled",
-            completed_at=now,
-            error_code=None,
-            error_message=None,
-            # Every other terminal transition clears this, so a closed row must
-            # not keep a wait deadline it can never reach.
-            rate_limit_reset_at=None,
+        analysis_result = await db.execute(
+            update(MatchmakingAnalysis)
+            .where(MatchmakingAnalysis.status.in_(ACTIVE_ANALYSIS_STATUSES))
+            .values(
+                # Matches the explicit cancellation path, which records no error.
+                status="cancelled",
+                completed_at=now,
+                error_code=None,
+                error_message=None,
+                # Every other terminal transition clears this, so a closed row
+                # must not keep a wait deadline it can never reach.
+                rate_limit_reset_at=None,
+            )
         )
-    )
-    await db.commit()
+        await db.commit()
+    except Exception as error:
+        logger.error(
+            "Failed to cancel application runs orphaned by a restart",
+            error=str(error),
+            error_type=type(error).__name__,
+        )
+        await db.rollback()
+        return
 
     cancelled_syncs = sync_result.rowcount or 0  # type: ignore[union-attr]
     cancelled_analyses = analysis_result.rowcount or 0  # type: ignore[union-attr]
@@ -258,8 +284,6 @@ async def _mark_stale_jobs_as_failed(db: AsyncSession) -> None:
             await db.commit()
             logger.info("No stale jobs found on startup")
 
-        await _cancel_orphaned_application_runs(db)
-
     except Exception as e:
         logger.error(
             "Failed to mark stale jobs as failed",
@@ -328,9 +352,7 @@ async def start_scheduler() -> AsyncIOScheduler:
             timezone="UTC",
         )
 
-        # Mark stale jobs as failed before starting
-        async with db_manager.get_session() as db:
-            await _mark_stale_jobs_as_failed(db)
+        await _run_startup_recovery()
 
         # Start the scheduler
         _scheduler.start()

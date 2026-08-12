@@ -132,8 +132,14 @@ details. Keep it synchronized with job changes.
   PUUID while their routes hand back an existing active row instead of
   scheduling work — an orphan would block that player permanently. Startup is
   the only safe place: a live process cannot tell an abandoned row from one a
-  running worker owns. Set `updated_at` explicitly, because a Core update
-  bypasses the model's application-side `onupdate`.
+  running worker owns. `PlayerSyncRun` must set `updated_at` explicitly, because
+  a Core update bypasses the model's application-side `onupdate`;
+  `MatchmakingAnalysis` has no such column and instead clears
+  `rate_limit_reset_at`, matching its explicit cancellation path.
+- Each recovery step runs on its own session through `_run_startup_recovery()`,
+  so a failure reclassifying job executions cannot skip the application-run
+  recovery after it. A failure in either is logged and swallowed; startup must
+  not be blocked and the next restart retries.
 - Stop APScheduler with `wait=False` during process shutdown. Deployment must
   never drain or wait for long-running Riot executions; startup recovery owns
   the interrupted persisted state.

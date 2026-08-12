@@ -440,6 +440,30 @@ async def test_discovery_never_merges_a_row_sharing_the_riot_id(monkeypatch) -> 
     assert [player.puuid for player in session.added] == [FRESH_PUUID]
 
 
+class _CapturingSession:
+    """Session that records the statements startup recovery issues."""
+
+    def __init__(self) -> None:
+        self.executed: list[Any] = []
+        self.committed = False
+
+    async def execute(self, statement):
+        self.executed.append(statement)
+        return SimpleNamespace(rowcount=1)
+
+    async def commit(self) -> None:
+        self.committed = True
+
+    async def rollback(self) -> None:  # pragma: no cover - failure path only
+        return None
+
+
+def _compiled(statement) -> tuple[str, dict[str, Any]]:
+    """Return one UPDATE's target table and its bound parameter values."""
+    compiled = statement.compile()
+    return statement.table.fullname, dict(compiled.params)
+
+
 @pytest.mark.asyncio
 async def test_startup_cancels_orphaned_application_runs() -> None:
     """A restart must terminalize runs whose in-process worker is gone.
@@ -450,26 +474,80 @@ async def test_startup_cancels_orphaned_application_runs() -> None:
     """
     from app.features.jobs.scheduler import _cancel_orphaned_application_runs
 
-    executed: list[Any] = []
+    session = _CapturingSession()
+
+    await _cancel_orphaned_application_runs(cast(AsyncSession, session))
+
+    assert session.committed is True
+    written = dict(_compiled(statement) for statement in session.executed)
+    assert set(written) == {"jobs.player_sync_runs", "core.matchmaking_analyses"}
+
+    sync = written["jobs.player_sync_runs"]
+    assert sync["status"] == "cancelled"
+    assert sync["completed_at"] is not None
+    assert sync["error_code"] == "SYNC_CANCELLED"
+    # A Core update bypasses the model's application-side onupdate.
+    assert sync["updated_at"] is not None
+
+    analysis = written["core.matchmaking_analyses"]
+    assert analysis["status"] == "cancelled"
+    assert analysis["completed_at"] is not None
+    # Every other terminal transition clears the wait deadline.
+    assert analysis["rate_limit_reset_at"] is None
+    assert "updated_at" not in analysis, "MatchmakingAnalysis has no updated_at column"
+
+
+@pytest.mark.asyncio
+async def test_startup_recovery_covers_every_indexed_active_status() -> None:
+    """Leaving a status out would strand exactly the rows this must release."""
+    from app.features.jobs.scheduler import _cancel_orphaned_application_runs
+
+    session = _CapturingSession()
+
+    await _cancel_orphaned_application_runs(cast(AsyncSession, session))
+
+    predicates = {
+        statement.table.fullname: str(
+            statement.whereclause.compile(compile_kwargs={"literal_binds": True})
+        )
+        for statement in session.executed
+    }
+    for status in ("pending", "running"):
+        assert status in predicates["jobs.player_sync_runs"]
+    for status in ("pending", "in_progress", "waiting_rate_limit"):
+        assert status in predicates["core.matchmaking_analyses"]
+
+
+@pytest.mark.asyncio
+async def test_scheduler_startup_runs_application_run_recovery(monkeypatch) -> None:
+    """The helper is only useful if startup actually calls it.
+
+    Asserted separately from its behavior, because a test that calls the helper
+    directly would still pass if the production call site were deleted.
+    """
+    from app.features.jobs import scheduler as scheduler_module
+
+    calls: list[str] = []
 
     class _Session:
-        async def execute(self, statement):
-            executed.append(statement)
-            return SimpleNamespace(rowcount=1)
+        async def __aenter__(self):
+            return self
 
-        async def commit(self) -> None:
+        async def __aexit__(self, *_exc) -> None:
             return None
 
-    await _cancel_orphaned_application_runs(cast(AsyncSession, _Session()))
+    monkeypatch.setattr(scheduler_module.db_manager, "get_session", lambda: _Session())
+    monkeypatch.setattr(
+        scheduler_module,
+        "_mark_stale_jobs_as_failed",
+        AsyncMock(side_effect=lambda _db: calls.append("executions")),
+    )
+    monkeypatch.setattr(
+        scheduler_module,
+        "_cancel_orphaned_application_runs",
+        AsyncMock(side_effect=lambda _db: calls.append("application_runs")),
+    )
 
-    assert len(executed) == 2
-    assert {statement.table.fullname for statement in executed} == {
-        "jobs.player_sync_runs",
-        "core.matchmaking_analyses",
-    }
-    for statement in executed:
-        values = {
-            column.name: bound.value for column, bound in statement._values.items()
-        }
-        assert values["status"] == "cancelled"
-        assert values["completed_at"] is not None
+    await scheduler_module._run_startup_recovery()
+
+    assert calls == ["executions", "application_runs"]
