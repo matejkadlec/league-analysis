@@ -700,7 +700,7 @@ export function MatchHistory({ puuid, lastUpdated }: MatchHistoryProps) {
 
       if (!response.data.success) {
         // Job is already running
-        toast.info("Player update is already running", {
+        toast.warning("Player update is already running", {
           description: "Wait for the current player-data refresh to finish.",
         });
         setIsUpdating(false);

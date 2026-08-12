@@ -3,6 +3,8 @@ import { toast as sonnerToast } from "sonner";
 
 export type ToastVariant = "success" | "error" | "warning" | "info";
 
+export const TOAST_DEFAULT_DURATION_MS = 4_000;
+
 export interface ToastOptions {
   title: ReactNode;
   description?: ReactNode;
@@ -67,7 +69,7 @@ function method(
   return showToast({ title, variant, ...options });
 }
 
-const toastApi = {
+export const appToast = {
   toast: showToast,
   success: (title: ReactNode, options?: ToastMethodArgument) =>
     method("success", title, options),
@@ -81,5 +83,5 @@ const toastApi = {
 };
 
 export function useToast() {
-  return toastApi;
+  return appToast;
 }

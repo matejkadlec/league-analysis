@@ -175,24 +175,64 @@
     translate: none !important;
   }
 
+  [data-sonner-toaster][data-sonner-theme="light"],
   [data-sonner-toaster][data-sonner-theme="dark"] {
-    --success-bg: #052e1a;
-    --success-border: #166534;
-    --success-text: #86efac;
-    --info-bg: #071b3a;
-    --info-border: #1d4ed8;
-    --info-text: #93c5fd;
-    --warning-bg: #2b2105;
-    --warning-border: #a16207;
-    --warning-text: #fde68a;
-    --error-bg: #321014;
-    --error-border: #b91c1c;
-    --error-text: #fecaca;
+    --normal-bg: #ffffff;
+    --normal-border: #cbd5e1;
+    --normal-text: #00091a;
+    --success-bg: #ffffff;
+    --success-border: #cbd5e1;
+    --success-text: #00091a;
+    --info-bg: #ffffff;
+    --info-border: #cbd5e1;
+    --info-text: #00091a;
+    --warning-bg: #ffffff;
+    --warning-border: #cbd5e1;
+    --warning-text: #00091a;
+    --error-bg: #ffffff;
+    --error-border: #cbd5e1;
+    --error-text: #00091a;
+  }
+
+  [data-sonner-toast][data-styled="true"] {
+    gap: 4px !important;
+  }
+
+  [data-sonner-toast][data-styled="true"][data-rich-colors="true"] {
+    background: #ffffff !important;
+    border-color: #cbd5e1 !important;
+    color: #00091a !important;
+  }
+
+  [data-sonner-toast][data-styled="true"] [data-close-button] {
+    background: #ffffff !important;
+    border-color: #cbd5e1 !important;
+    color: #00091a !important;
+  }
+
+  [data-sonner-toast][data-styled="true"] [data-title] {
+    color: #00091a !important;
+    font-size: 15px !important;
+    line-height: 20px !important;
+  }
+
+  [data-sonner-toast][data-styled="true"] [data-description] {
+    color: #00091a !important;
+  }
+
+  [data-sonner-toast][data-styled="true"] [data-content] {
+    margin-top: 0 !important;
   }
 
   [data-sonner-toast][data-styled="true"] [data-icon] {
-    align-self: flex-start;
-    margin-top: 1px;
+    align-self: flex-start !important;
+    width: 18px !important;
+    height: 20px !important;
+    margin: 0 0 0 -3px !important;
+  }
+
+  [data-sonner-toast][data-styled="true"] [data-icon] svg {
+    margin: 0 !important;
   }
 
   /* Left sidebar gradient (both light and dark themes) */

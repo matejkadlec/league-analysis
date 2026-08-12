@@ -141,7 +141,7 @@ export function SidebarPlayerSwitcher({
         title: "Check the Riot ID",
         description:
           error instanceof Error ? error.message : "Use the Name#Tag format.",
-        variant: "error",
+        variant: "warning",
       });
     }
   };

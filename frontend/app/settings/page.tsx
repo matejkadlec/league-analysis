@@ -297,7 +297,7 @@ function SettingsPageContent() {
 
   const handleTestKey = () => {
     if (!apiKey.trim()) {
-      toast.error("Enter a Riot API key");
+      toast.warning("Enter a Riot API key");
       return;
     }
     setTestingKey(true);
@@ -308,12 +308,12 @@ function SettingsPageContent() {
 
   const handleSaveKey = () => {
     if (!apiKey.trim()) {
-      toast.error("Enter a Riot API key");
+      toast.warning("Enter a Riot API key");
       return;
     }
 
     if (!apiKey.startsWith("RGAPI-")) {
-      toast.error("Check the Riot API key format", {
+      toast.warning("Check the Riot API key format", {
         description: "Riot API keys must start with 'RGAPI-'.",
       });
       return;
@@ -685,6 +685,10 @@ function AccountSettingsCard({
     isPasswordStrongEnough &&
     passwordsMatch &&
     repeatPassword.length > 0;
+  const canAttemptPasswordChange =
+    currentPassword.length > 0 &&
+    newPassword.length > 0 &&
+    repeatPassword.length > 0;
 
   const isEmailChangeLocked =
     emailChangeLockedUntil !== null &&
@@ -932,12 +936,12 @@ function AccountSettingsCard({
     const trimmed = displayName.trim();
 
     if (!trimmed) {
-      toast.error("Enter a display name");
+      toast.warning("Enter a display name");
       return;
     }
 
     if (trimmed.length < 3) {
-      toast.error("Display name too short", {
+      toast.warning("Display name too short", {
         description: "Use at least 3 characters.",
       });
       return;
@@ -945,7 +949,7 @@ function AccountSettingsCard({
 
     const validPattern = /^[\p{L}](?:[\p{L}\p{M}_ ]*[\p{L}])?$/u;
     if (!validPattern.test(trimmed)) {
-      toast.error("Check the display name", {
+      toast.warning("Check the display name", {
         description:
           "Must only contain letters, underscores, and spaces. Cannot start or end with space or underscore.",
       });
@@ -953,7 +957,7 @@ function AccountSettingsCard({
     }
 
     if (!/^[\p{L}\p{M}_ ]+$/u.test(trimmed)) {
-      toast.error("Check the display name characters", {
+      toast.warning("Check the display name characters", {
         description:
           "Only letters, underscores, and spaces are allowed in the display name.",
       });
@@ -1119,7 +1123,21 @@ function AccountSettingsCard({
   };
 
   const handleChangePassword = () => {
-    if (!canChangePassword || changePasswordMutation.isPending) {
+    if (!canAttemptPasswordChange || changePasswordMutation.isPending) {
+      return;
+    }
+
+    if (!passwordsMatch) {
+      toast.warning("Passwords do not match", {
+        description: "Enter the same new password in both fields.",
+      });
+      return;
+    }
+
+    if (!isPasswordStrongEnough) {
+      toast.warning("Password requirements not met", {
+        description: PASSWORD_REQUIREMENTS_TEXT,
+      });
       return;
     }
 
@@ -1331,7 +1349,8 @@ function AccountSettingsCard({
                     className={ACCOUNT_ACTION_BUTTON_CLASS}
                     onClick={handleChangePassword}
                     disabled={
-                      !canChangePassword || changePasswordMutation.isPending
+                      !canAttemptPasswordChange ||
+                      changePasswordMutation.isPending
                     }
                   >
                     {changePasswordMutation.isPending ? (

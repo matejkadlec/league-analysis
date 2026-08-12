@@ -234,7 +234,7 @@ export function PlayerCard({ player, onRefreshAll }: PlayerCardProps) {
         toast({
           title: "Update finished",
           description: "All cards were successfully updated.",
-          variant: "info",
+          variant: "success",
         });
       } catch {
         toast({

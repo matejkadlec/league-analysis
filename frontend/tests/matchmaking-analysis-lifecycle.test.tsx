@@ -224,7 +224,7 @@ describe("MatchmakingAnalysis lifecycle", () => {
     expect(
       await screen.findByRole("button", { name: "Run New Analysis" }),
     ).not.toBeNull();
-    expect(toast.info).toHaveBeenCalledWith(
+    expect(toast.success).toHaveBeenCalledWith(
       "Matchmaking analysis cancelled",
       { description: "The selected analysis run is no longer active." },
     );

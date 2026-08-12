@@ -548,7 +548,7 @@ export function MatchmakingAnalysis({ puuid }: MatchmakingAnalysisProps) {
       setCurrentAnalysisCreatedAt(null);
       setAnimProgress(null);
       setPhase("idle");
-      toast.info("Matchmaking analysis cancelled", {
+      toast.success("Matchmaking analysis cancelled", {
         description: "The selected analysis run is no longer active.",
       });
     },
