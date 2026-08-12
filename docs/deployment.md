@@ -256,38 +256,10 @@ snapshot, then drops the temporary database. It never replaces or exposes the
 production database. A nonzero restore test preserves the archive and removes
 the generated test database through the failure trap.
 
-### Restoring production from a backup
-
-The operations script has no production-restore command. A restore is rare,
-destructive, and better done by hand with the restore test as its safety gate.
-The database is under 10 MB, so the whole sequence takes about two minutes.
-
-```bash
-PI_OPERATIONS="$HOME/.local/share/league-analysis/current/deploy/pi-postgres-operations.sh"
-ARCHIVE="$HOME/.local/share/league-analysis/backups/postgres/league-analysis-postgres-daily-YYYYMMDDTHHMMSS+ZZZZ.dump"
-
-# 1. Prove the archive restores cleanly before touching production.
-"$PI_OPERATIONS" restore-test --confirm-target league_analysis --archive "$ARCHIVE"
-
-# 2. Back up the database you are about to replace.
-"$PI_OPERATIONS" safety-backup --label pre-restore --confirm-target league_analysis
-
-# 3. Replace it.
-docker stop league-analysis-frontend league-analysis-backend
-docker exec --user postgres league-analysis-postgres dropdb --force league_analysis
-docker exec --user postgres league-analysis-postgres createdb --template template0 league_analysis
-docker exec --interactive --user postgres league-analysis-postgres \
-  pg_restore --dbname league_analysis --no-owner --no-privileges --exit-on-error < "$ARCHIVE"
-docker start league-analysis-backend league-analysis-frontend
-```
-
-Step 1 is the check that matters: it restores the same archive into a throwaway
-database and verifies the Alembic head, constraints, application tables, both
-administrators, and a deterministic snapshot. If it passes, step 3 will too.
-
-To undo a completed restore, repeat the sequence with the `pre-restore` archive
-written in step 2. Retention never prunes `pre-restore` archives, so that file
-stays on disk indefinitely.
+Restoring production is deliberately not a command. Run `restore-test` on the
+chosen archive, take a `pre-restore` safety backup, then restore by hand; the
+database is under 10 MB. Retention never prunes `pre-restore` archives, so that
+backup remains available to undo the restore.
 
 ## Recurring Pi-to-local mirror
 
