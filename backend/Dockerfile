@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.26
 FROM ghcr.io/astral-sh/uv:0.12.3 AS uv
 
-FROM python:3.14.7-slim-bookworm AS builder
+FROM python:3.15.0rc1-slim-bookworm AS builder
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -24,7 +24,7 @@ COPY app ./app
 COPY scripts/migrate.py ./scripts/migrate.py
 RUN uv sync --frozen --no-dev
 
-FROM python:3.14.7-slim-bookworm AS runtime
+FROM python:3.15.0rc1-slim-bookworm AS runtime
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
