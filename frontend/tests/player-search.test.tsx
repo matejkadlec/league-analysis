@@ -53,7 +53,7 @@ describe("PlayerSearch tracking feedback", () => {
 
   afterEach(() => cleanup());
 
-  it("replaces the old internal tracking error with the server-specific not-found message", async () => {
+  it("does not render an unexpected technical tracking error", async () => {
     addTrackedPlayer.mockResolvedValue({
       success: false,
       error: {
@@ -69,9 +69,7 @@ describe("PlayerSearch tracking feedback", () => {
     await user.click(await screen.findByRole("button", { name: "Track Player" }));
 
     expect(
-      await screen.findByText(
-        "Player SomeName#1234 wasn't found on server EUNE.",
-      ),
+      await screen.findByText("Failed to track player. Please try again."),
     ).not.toBeNull();
     expect(
       screen.queryByText("Internal server error adding tracked player"),
@@ -97,7 +95,7 @@ describe("PlayerSearch tracking feedback", () => {
       expect(toast).toHaveBeenCalledWith({
         title: "Unable to add player for tracking",
         description:
-          "We weren't able to get this players info. Please try again in a few minutes.",
+          "We couldn't load this player's information. Please try again in a few minutes.",
         variant: "warning",
       });
     });

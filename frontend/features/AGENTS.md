@@ -21,6 +21,10 @@ public API via `index.ts`.
   kebab-case files, PascalCase components.
 - Service reachability errors may suggest checking the League Analysis backend,
   but must not claim that the user's internet connection is unavailable.
+- Transient operation failures belong to the interaction that produced them:
+  clear them when the component unmounts, when a replacement attempt starts,
+  and after success. Persisted history remains available separately and must
+  not rehydrate an old failure into a current-session alert.
 - Ordinary player-centric pages consume `usePlayerContext()` and keep the
   explicit URL PUUID authoritative for the current tab. Matchmaking Analysis
   remains a deliberate local-target exception.

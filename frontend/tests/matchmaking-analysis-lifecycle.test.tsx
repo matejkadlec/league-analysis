@@ -72,13 +72,15 @@ function analysis(
   };
 }
 
-function renderComponent() {
-  const queryClient = new QueryClient({
+function renderComponent(existingQueryClient?: QueryClient) {
+  const queryClient =
+    existingQueryClient ??
+    new QueryClient({
     defaultOptions: {
       queries: { retry: false },
       mutations: { retry: false },
     },
-  });
+    });
   render(
     <QueryClientProvider client={queryClient}>
       <MatchmakingAnalysis puuid="test-puuid" />
@@ -132,7 +134,9 @@ describe("MatchmakingAnalysis lifecycle", () => {
       await screen.findByRole("button", { name: "Cancel Analysis" }),
     ).not.toBeNull();
     expect(screen.getByText("0 / 100 players")).not.toBeNull();
-    expect(toast.info).toHaveBeenCalledWith("Matchmaking analysis started");
+    expect(toast.info).toHaveBeenCalledWith("Matchmaking analysis started", {
+      description: "Progress will update here while the analysis runs.",
+    });
   });
 
   it("keeps a rate-limit wait user-facing as an active analysis", async () => {
@@ -220,10 +224,13 @@ describe("MatchmakingAnalysis lifecycle", () => {
     expect(
       await screen.findByRole("button", { name: "Run New Analysis" }),
     ).not.toBeNull();
-    expect(toast.warning).toHaveBeenCalledWith("Analysis cancelled");
+    expect(toast.success).toHaveBeenCalledWith(
+      "Matchmaking analysis cancelled",
+      { description: "The selected analysis run is no longer active." },
+    );
   });
 
-  it("shows a safe persisted failure and allows a retry", async () => {
+  it("shows a safe current-session failure and clears it for a new run", async () => {
     const active = analysis("in_progress");
     const failed = analysis("failed", {
       error_code: "analysis_failed",
@@ -248,6 +255,54 @@ describe("MatchmakingAnalysis lifecycle", () => {
     expect(toast.error).toHaveBeenCalledWith(
       "The analysis did not finish. Please try again.",
     );
+
+    startMatchmakingAnalysis.mockReturnValue(new Promise(() => undefined));
+    await userEvent
+      .setup()
+      .click(screen.getByRole("button", { name: "Run New Analysis" }));
+    expect(
+      screen.queryByText("The analysis did not finish. Please try again."),
+    ).toBeNull();
+  });
+
+  it("does not resurrect a prior failure after navigation or a fresh mount", async () => {
+    const active = analysis("in_progress");
+    const failed = analysis("failed", {
+      error_code: "riot_service_error",
+      error_message:
+        "Riot data could not be loaded for this analysis. Please try again.",
+    });
+    getLatestMatchmakingAnalysis.mockResolvedValue({
+      success: true,
+      data: active,
+    });
+    getMatchmakingAnalysisStatus.mockResolvedValue({
+      success: true,
+      data: failed,
+    });
+    const queryClient = renderComponent();
+
+    expect(
+      await screen.findByText(
+        "Riot data could not be loaded for this analysis. Please try again.",
+      ),
+    ).not.toBeNull();
+
+    cleanup();
+    getLatestMatchmakingAnalysis.mockResolvedValue({
+      success: true,
+      data: failed,
+    });
+    renderComponent(queryClient);
+
+    expect(
+      await screen.findByRole("button", { name: "Run New Analysis" }),
+    ).not.toBeNull();
+    expect(
+      screen.queryByText(
+        "Riot data could not be loaded for this analysis. Please try again.",
+      ),
+    ).toBeNull();
   });
 
   it("refreshes the latest result and history after authoritative completion", async () => {
@@ -285,7 +340,8 @@ describe("MatchmakingAnalysis lifecycle", () => {
       await screen.findByRole("button", { name: "Run New Analysis" }),
     ).not.toBeNull();
     expect(toast.success).toHaveBeenCalledWith(
-      "Analysis finished successfully",
+      "Matchmaking analysis finished",
+      { description: "The latest results and history are ready." },
     );
   });
 });

@@ -8,7 +8,7 @@ import {
   AlertCircle,
   Loader2,
 } from "lucide-react";
-import { toast } from "sonner";
+import { useToast } from "@/lib/core/hooks";
 
 import {
   PlaystyleAnalysisResponseSchema,
@@ -77,6 +77,7 @@ export function PlaystyleAnalysis({
   matchCount,
   analyzedMatchCount, // Destructure new prop
 }: PlaystyleAnalysisProps) {
+  const toast = useToast();
   const queryClient = useQueryClient();
   const analyzedMatches = analyzedMatchCount ?? 0;
   const analysisAvailabilityText =
@@ -103,8 +104,8 @@ export function PlaystyleAnalysis({
 
   const { mutate, isPending, error } = useMutation({
     mutationFn: async () => {
-      // Show start toast immediately
-      toast.loading("Playstyle analysis started", {
+      toast.info("Playstyle analysis started", {
+        description: "The selected matches are being analyzed.",
         id: "analysis-started",
       });
 
@@ -137,14 +138,18 @@ export function PlaystyleAnalysis({
     },
     onSuccess: () => {
       toast.dismiss("analysis-started");
-      toast.success("Playstyle analysis completed");
+      toast.success("Playstyle analysis finished", {
+        description: "The latest playstyle results are ready.",
+      });
       queryClient.invalidateQueries({
         queryKey: ["playstyle-analysis", puuid],
       });
     },
-    onError: (error: Error) => {
+    onError: () => {
       toast.dismiss("analysis-started");
-      toast.error(error.message || "Failed to run analysis");
+      toast.error("Playstyle analysis did not finish", {
+        description: "Please try again later.",
+      });
     },
   });
 

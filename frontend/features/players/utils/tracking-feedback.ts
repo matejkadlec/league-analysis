@@ -54,13 +54,7 @@ export function toPlayerTrackingError(
   platform: string,
 ): PlayerTrackingError {
   const message = error.message.trim();
-  const normalizedMessage = message.toLowerCase();
-
-  if (
-    error.status === 404 ||
-    error.code === "PLAYER_NOT_FOUND" ||
-    normalizedMessage === "internal server error adding tracked player"
-  ) {
+  if (error.status === 404 || error.code === "PLAYER_NOT_FOUND") {
     return new PlayerTrackingError(
       "not-found",
       playerNotFoundMessage(riotId, platform),
@@ -73,8 +67,8 @@ export function toPlayerTrackingError(
 
   if (
     error.code === "RIOT_API_KEY_INVALID" ||
-    normalizedMessage.includes("api key") ||
-    normalizedMessage.includes("unauthorized")
+    message.toLowerCase().includes("api key") ||
+    message.toLowerCase().includes("unauthorized")
   ) {
     return new PlayerTrackingError("api-key", message);
   }

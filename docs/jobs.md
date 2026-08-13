@@ -59,6 +59,13 @@ Shutdown stops APScheduler with `wait=False` — it stops future dispatches but
 never drains long-running Riot work, so a deployment has a bounded shutdown
 instead of waiting through provider rate-limit windows.
 
+APScheduler opens its persistent store paused, discards stale triggers, and
+rebuilds regular schedules from active `jobs.job_configurations` before it can
+dispatch. Each never-run or overdue configuration is then queued exactly once
+as scheduler-owned catch-up work. The scheduler resumes only after that queue
+is complete, while FastAPI readiness never waits for the catch-up execution or
+a Riot rate-limit window.
+
 During a live process (not startup), an execution that claims to be running
 but has no in-memory control is marked `FAILED` instead. A run that ends
 without recording completion is closed `FAILED` in the run's `finally` block;

@@ -1,6 +1,7 @@
 """Background-job configuration and error-boundary tests."""
 
 from contextlib import asynccontextmanager
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -56,6 +57,86 @@ async def test_scheduler_shutdown_does_not_drain_running_jobs(monkeypatch) -> No
 
     assert scheduler.wait_values == [False]
     assert scheduler_module.get_scheduler() is None
+
+
+@pytest.mark.asyncio
+async def test_overdue_startup_job_is_queued_without_awaiting_execution(
+    monkeypatch,
+) -> None:
+    """A Riot catch-up must not hold FastAPI startup or duplicate dispatch."""
+
+    job_config = SimpleNamespace(
+        id=7,
+        name="Match Fetcher",
+        job_type=JobType.MATCH_FETCHER,
+        config_json={"interval_seconds": 900},
+        schedule="interval:900",
+    )
+    last_execution = SimpleNamespace(
+        started_at=datetime.now(timezone.utc) - timedelta(minutes=16)
+    )
+
+    class ResultDouble:
+        def __init__(self, value) -> None:
+            self.value = value
+
+        def scalars(self):
+            return self
+
+        def all(self):
+            return self.value
+
+        def scalar_one_or_none(self):
+            return self.value
+
+    class SessionDouble:
+        def __init__(self, result) -> None:
+            self.result = result
+
+        async def execute(self, _statement):
+            return ResultDouble(self.result)
+
+    sessions = iter([SessionDouble([job_config]), SessionDouble(last_execution)])
+
+    @asynccontextmanager
+    async def get_session():
+        yield next(sessions)
+
+    constructed: list[tuple[int, str]] = []
+
+    class JobDouble:
+        def __init__(self, job_config_id: int, triggered_by: str) -> None:
+            constructed.append((job_config_id, triggered_by))
+
+        async def run(self) -> None:  # pragma: no cover - must not run here
+            raise AssertionError("startup awaited provider work")
+
+    scheduled: list[dict[str, object]] = []
+
+    class SchedulerDouble:
+        def add_job(self, func, **kwargs) -> None:
+            scheduled.append({"func": func, **kwargs})
+
+    monkeypatch.setattr(scheduler_module.db_manager, "get_session", get_session)
+    monkeypatch.setattr(
+        scheduler_module,
+        "_get_job_registry",
+        lambda: {JobType.MATCH_FETCHER: JobDouble},
+    )
+    monkeypatch.setattr(scheduler_module, "_scheduler", SchedulerDouble())
+
+    await scheduler_module._check_and_run_overdue_jobs()
+
+    assert constructed == [(7, "system")]
+    assert len(scheduled) == 1
+    assert scheduled[0] == {
+        "func": scheduled[0]["func"],
+        "trigger": "date",
+        "run_date": scheduled[0]["run_date"],
+        "id": "startup_overdue_job_7",
+        "name": "Match Fetcher startup catch-up",
+        "replace_existing": True,
+    }
 
 
 def test_match_fetcher_uses_every_canonical_queue_and_strips_legacy_config() -> None:

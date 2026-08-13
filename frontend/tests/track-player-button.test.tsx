@@ -126,7 +126,7 @@ describe("TrackPlayerButton", () => {
     expect(screen.getByText("Tracked")).not.toBeNull();
     expect(toast).toHaveBeenCalledWith(
       expect.objectContaining({
-        title: "Failed to untrack player",
+        title: "Player could not be removed from tracking",
         variant: "error",
       }),
     );

@@ -11,7 +11,7 @@ import {
   ListRestart,
   Swords,
 } from "lucide-react";
-import { toast } from "sonner";
+import { useToast } from "@/lib/core/hooks";
 import Image from "next/image";
 
 import {
@@ -616,6 +616,7 @@ function MatchRow({
 }
 
 export function MatchHistory({ puuid, lastUpdated }: MatchHistoryProps) {
+  const toast = useToast();
   const loadMoreRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
   const router = useRouter();
@@ -649,23 +650,16 @@ export function MatchHistory({ puuid, lastUpdated }: MatchHistoryProps) {
     refetch,
   } = useQuery({
     queryKey: ["matchHistoryDetailed", puuid, activeQueueFilter, displayCount],
-    queryFn: async () => {
-      try {
-        const result = await validatedGet(
-          MatchListWithPlayerDataResponseSchema,
-          `/matches/player/${puuid}/detailed`,
-          {
-            queue: queueQueryParam,
-            start: 0,
-            count: displayCount,
-          },
-        );
-        return result;
-      } catch (err) {
-        console.debug("Match history fetch error:", err);
-        throw err;
-      }
-    },
+    queryFn: () =>
+      validatedGet(
+        MatchListWithPlayerDataResponseSchema,
+        `/matches/player/${puuid}/detailed`,
+        {
+          queue: queueQueryParam,
+          start: 0,
+          count: displayCount,
+        },
+      ),
     enabled: !!puuid,
     retry: (failureCount, error) => {
       if (
@@ -706,14 +700,15 @@ export function MatchHistory({ puuid, lastUpdated }: MatchHistoryProps) {
 
       if (!response.data.success) {
         // Job is already running
-        toast.info(response.data.message);
+        toast.warning("Player update is already running", {
+          description: "Wait for the current player-data refresh to finish.",
+        });
         setIsUpdating(false);
         return;
       }
 
-      // Show success message
-      toast.success("Update started", {
-        description: "Fetching new matches from Riot API...",
+      toast.info("Player profile update started", {
+        description: "Match and rank data are refreshing in the background.",
       });
 
       // Wait a bit then refetch data
@@ -728,7 +723,9 @@ export function MatchHistory({ puuid, lastUpdated }: MatchHistoryProps) {
         setIsUpdating(false);
       }, 5000);
     } catch {
-      toast.error("Failed to start update");
+      toast.error("Player profile update could not start", {
+        description: "Please try again later.",
+      });
       setIsUpdating(false);
     }
   };
@@ -820,7 +817,7 @@ export function MatchHistory({ puuid, lastUpdated }: MatchHistoryProps) {
     );
   }
 
-  if (error || (response && !response.success)) {
+  if ((!isFetching && error) || (response && !response.success)) {
     const errorMessage = getMatchHistoryErrorMessage(
       error,
       response && !response.success ? response.error : null,

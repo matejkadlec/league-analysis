@@ -67,10 +67,10 @@ export function TrackPlayerButton({
         variant: "success",
       });
     },
-    onError: (error: Error) => {
+    onError: () => {
       toast({
-        title: "Failed to track player",
-        description: error.message,
+        title: "Player could not be added for tracking",
+        description: "Please try again later.",
         variant: "error",
       });
     },
@@ -92,15 +92,15 @@ export function TrackPlayerButton({
       queryClient.invalidateQueries({ queryKey: ["player-context", userId] });
       queryClient.invalidateQueries({ queryKey: ["player", puuid] });
       toast({
-        title: "Player untracked",
+        title: "Player removed from tracking",
         description: `${playerName || "Player"} is no longer being tracked.`,
-        variant: "info",
+        variant: "success",
       });
     },
-    onError: (error: Error) => {
+    onError: () => {
       toast({
-        title: "Failed to untrack player",
-        description: error.message,
+        title: "Player could not be removed from tracking",
+        description: "Please try again later.",
         variant: "error",
       });
     },

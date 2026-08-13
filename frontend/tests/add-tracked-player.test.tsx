@@ -166,7 +166,7 @@ describe("AddTrackedPlayer", () => {
       expect(toast).toHaveBeenCalledWith({
         title: "Unable to add player for tracking",
         description:
-          "We weren't able to get this players info. Please try again in a few minutes.",
+          "We couldn't load this player's information. Please try again in a few minutes.",
         variant: "warning",
       });
     });
@@ -188,7 +188,8 @@ describe("AddTrackedPlayer", () => {
 
     await waitFor(() => {
       expect(toast).toHaveBeenCalledWith({
-        title:
+        title: "Player tracking is temporarily unavailable",
+        description:
           "The Riot API key is invalid or expired. Please contact an administrator.",
         variant: "error",
       });
