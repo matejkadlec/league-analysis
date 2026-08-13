@@ -63,6 +63,50 @@ updates:
           - "minor"
           - "patch"
 
+  # Watches the postgres pins in compose.gate.yml and compose.production.yml.
+  - package-ecosystem: "docker-compose"
+    directory: "/"
+    target-branch: "master"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:40"
+      timezone: "Europe/Prague"
+    open-pull-requests-limit: 2
+    labels:
+      - "dependencies"
+      - "docker"
+    groups:
+      minor-and-patch:
+        applies-to: "version-updates"
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # Watches gate.Dockerfile, the quality gate's toolchain container.
+  - package-ecosystem: "docker"
+    directory: "/"
+    target-branch: "master"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:45"
+      timezone: "Europe/Prague"
+    open-pull-requests-limit: 2
+    labels:
+      - "dependencies"
+      - "docker"
+    groups:
+      minor-and-patch:
+        applies-to: "version-updates"
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
   - package-ecosystem: "docker"
     directory: "/backend"
     target-branch: "master"

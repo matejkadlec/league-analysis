@@ -203,13 +203,16 @@ independent worktrees, and remain below the default two-PR ceiling.
   longer needed for User QA or remediation; do not infer that from elapsed time.
 - Keep commits coherent and reviewable. Do not bypass pre-commit hooks.
 
-Run `./scripts/install-git-hooks.sh` after clone and after hook-source changes.
-The installed post-checkout snapshot may provision only the allowlisted
-ignored root `.env` from the verified primary worktree into a new linked
-worktree, privately with mode `600`, never overwriting any target; see
-`docs/project-overview.md` for the full safety contract. The allowlist
-contains root `.env` only — never add directories, deployment credentials, or
-provider bundles.
+Git materializes only tracked files into a new worktree, and root `.env` is
+ignored, so copy it explicitly when creating one:
+
+```bash
+git worktree add -b <branch> <path> origin/master
+cp .env <path>/.env   # Only when the source checkout has one
+```
+
+Copy that one file only — never a directory, deployment credential, or provider
+bundle. Never overwrite an existing target.
 
 Before any GitHub write, re-verify the current `origin` remote and exact target
 repository.
@@ -244,7 +247,7 @@ failures before attempting a safe fix.
   workflow steps, including the narrowly scoped private `.env` fallback below
   when it is needed to validate or launch an exact linked worktree.
 - Never inspect, print, stage, commit, or otherwise expose `.env` contents.
-  The trusted post-checkout provisioning above remains the preferred path.
+  Copying it at worktree creation, as above, remains the preferred path.
 
 When a batch requires User QA, give the owner complete copy-pasteable
 command(s) to start the app from the exact worktree containing that batch. If

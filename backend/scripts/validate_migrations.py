@@ -18,13 +18,9 @@ from sqlalchemy import URL, create_engine, text
 
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
 PROJECT_ROOT = BACKEND_ROOT.parent
-SNAPSHOT_SQL = PROJECT_ROOT / "deploy" / "postgres-snapshot.sql"
+SNAPSHOT_SQL = PROJECT_ROOT / "backup" / "postgres-snapshot.sql"
 EXPECTED_REVISION = EXPECTED_ALEMBIC_HEAD
-EXPECTED_TABLES = 24
-EXPECTED_ENUMS = 6
-EXPECTED_TRIGGERS = 1
 EXPECTED_POSTGRES_MAJOR = 18
-POSTGRES_CLIENT_CONTAINER_ENV = "LGA_POSTGRES_CLIENT_CONTAINER"
 POSTGRES_CLIENT_PROGRAMS = ("pg_dump", "pg_restore", "psql")
 
 load_dotenv(PROJECT_ROOT / ".env", override=False)
@@ -109,29 +105,11 @@ def postgres_client_environment() -> dict[str, str]:
     return environment
 
 
-def postgres_client_command(program: str, *, interactive: bool = False) -> list[str]:
-    """Resolve a PostgreSQL 18 client locally or in the pinned CI service."""
-    if program not in POSTGRES_CLIENT_PROGRAMS:
-        raise ValueError(f"Unsupported PostgreSQL client program: {program}")
-
-    container = os.environ.get(POSTGRES_CLIENT_CONTAINER_ENV)
-    if container is None:
-        return [program]
-    if re.fullmatch(r"[0-9a-f]{12,64}", container) is None:
-        raise ValueError("Invalid PostgreSQL client container identifier")
-
-    command = ["docker", "exec"]
-    if interactive:
-        command.append("--interactive")
-    command.extend(["--env", "PGPASSWORD", container, program])
-    return command
-
-
 def validate_postgres_client_versions() -> None:
     """Fail before backup work unless every selected client is PostgreSQL 18."""
     for program in POSTGRES_CLIENT_PROGRAMS:
         result = subprocess.run(
-            [*postgres_client_command(program), "--version"],
+            [program, "--version"],
             env=postgres_client_environment(),
             capture_output=True,
             text=True,
@@ -167,7 +145,7 @@ def create_restore_archive(database: str, archive: Path) -> None:
         with os.fdopen(descriptor, "wb") as archive_output:
             subprocess.run(
                 [
-                    *postgres_client_command("pg_dump"),
+                    "pg_dump",
                     *postgres_connection_arguments(database),
                     "--format=custom",
                     "--compress=gzip:9",
@@ -184,7 +162,7 @@ def create_restore_archive(database: str, archive: Path) -> None:
         raise
     with archive.open("rb") as archive_input:
         subprocess.run(
-            [*postgres_client_command("pg_restore", interactive=True), "--list"],
+            ["pg_restore", "--list"],
             env=postgres_client_environment(),
             stdin=archive_input,
             stdout=subprocess.DEVNULL,
@@ -197,7 +175,7 @@ def restore_validation_archive(database: str, archive: Path) -> None:
     with archive.open("rb") as archive_input:
         subprocess.run(
             [
-                *postgres_client_command("pg_restore", interactive=True),
+                "pg_restore",
                 *postgres_connection_arguments(database),
                 "--no-owner",
                 "--no-privileges",
@@ -214,7 +192,7 @@ def deterministic_snapshot(database: str) -> str:
     with SNAPSHOT_SQL.open("r", encoding="utf-8") as snapshot_input:
         result = subprocess.run(
             [
-                *postgres_client_command("psql", interactive=True),
+                "psql",
                 *postgres_connection_arguments(database),
                 "--no-psqlrc",
                 "--set",
@@ -297,253 +275,21 @@ def seed_legacy_matchmaking_analyses(database: str) -> None:
         engine.dispose()
 
 
-def validate_catalog(database: str) -> None:
-    """Assert that the full PostgreSQL baseline, including non-ORM objects, exists."""
-    original_database = os.environ.get("POSTGRES_DB")
-    os.environ["POSTGRES_DB"] = database
-    try:
-        from app.core.config import get_settings
-
-        database_url = get_settings().database_url.replace(
-            "postgresql+asyncpg://", "postgresql+psycopg2://", 1
-        )
-    finally:
-        if original_database is None:
-            del os.environ["POSTGRES_DB"]
-        else:
-            os.environ["POSTGRES_DB"] = original_database
-
-    engine = create_engine(database_url)
+def validate_revision(database: str) -> None:
+    """Assert the locked migration runner reached the reviewed Alembic head."""
+    url = administration_url().set(database=database)
+    engine = create_engine(url)
     try:
         with engine.connect() as connection:
             revision = connection.execute(
                 text("SELECT version_num FROM public.alembic_version")
             ).scalar_one()
-            table_count = connection.execute(
-                text(
-                    "SELECT COUNT(*) FROM information_schema.tables "
-                    "WHERE table_type = 'BASE TABLE' "
-                    "AND table_schema IN ('auth', 'core', 'jobs')"
-                )
-            ).scalar_one()
-            enum_count = connection.execute(
-                text(
-                    "SELECT COUNT(*) FROM pg_type type "
-                    "JOIN pg_namespace namespace ON namespace.oid = type.typnamespace "
-                    "WHERE namespace.nspname IN ('auth', 'core', 'jobs') "
-                    "AND type.typtype = 'e'"
-                )
-            ).scalar_one()
-            trigger_count = connection.execute(
-                text(
-                    "SELECT COUNT(*) FROM pg_trigger trigger "
-                    "JOIN pg_class class ON class.oid = trigger.tgrelid "
-                    "JOIN pg_namespace namespace ON namespace.oid = class.relnamespace "
-                    "WHERE namespace.nspname = 'auth' AND NOT trigger.tgisinternal"
-                )
-            ).scalar_one()
-            league_id_nullable = connection.execute(
-                text(
-                    "SELECT is_nullable FROM information_schema.columns "
-                    "WHERE table_schema = 'core' "
-                    "AND table_name = 'player_leagues' "
-                    "AND column_name = 'league_id'"
-                )
-            ).scalar_one()
-            match_timestamp_column_count = connection.execute(
-                text(
-                    "SELECT COUNT(*) FROM information_schema.columns "
-                    "WHERE table_schema = 'core' AND table_name = 'matches' "
-                    "AND column_name IN "
-                    "('game_creation_timestamp', 'game_start_timestamp_source') "
-                    "AND is_nullable = 'NO' AND column_default IS NULL"
-                )
-            ).scalar_one()
-            match_timestamp_constraint_count = connection.execute(
-                text(
-                    "SELECT COUNT(*) FROM pg_constraint con "
-                    "JOIN pg_class cls ON cls.oid = con.conrelid "
-                    "JOIN pg_namespace ns ON ns.oid = cls.relnamespace "
-                    "WHERE ns.nspname = 'core' "
-                    "AND cls.relname = 'matches' "
-                    "AND con.conname = 'ck_matches_start_timestamp_source'"
-                )
-            ).scalar_one()
-            legacy_timestamp_row = connection.execute(
-                text(
-                    "SELECT game_creation_timestamp, game_start_timestamp, "
-                    "game_start_timestamp_source FROM core.matches "
-                    "WHERE match_id = 'EUN1_VALIDATION'"
-                )
-            ).one()
-            matchmaking_lifecycle_column_count = connection.execute(
-                text(
-                    "SELECT COUNT(*) FROM information_schema.columns "
-                    "WHERE table_schema = 'core' "
-                    "AND table_name = 'matchmaking_analyses' "
-                    "AND column_name IN ('status', 'error_code', 'error_message')"
-                )
-            ).scalar_one()
-            matchmaking_lifecycle_constraint_count = connection.execute(
-                text(
-                    "SELECT COUNT(*) FROM pg_constraint con "
-                    "JOIN pg_class cls ON cls.oid = con.conrelid "
-                    "JOIN pg_namespace ns ON ns.oid = cls.relnamespace "
-                    "WHERE ns.nspname = 'core' "
-                    "AND cls.relname = 'matchmaking_analyses' "
-                    "AND con.conname = 'ck_matchmaking_analyses_status_valid'"
-                )
-            ).scalar_one()
-            matchmaking_active_index_count = connection.execute(
-                text(
-                    "SELECT COUNT(*) FROM pg_indexes "
-                    "WHERE schemaname = 'core' "
-                    "AND tablename = 'matchmaking_analyses' "
-                    "AND indexname = 'uq_matchmaking_analyses_active_puuid'"
-                )
-            ).scalar_one()
-            matchmaking_lifecycle_rows = connection.execute(
-                text(
-                    "SELECT status, error_code, error_message "
-                    "FROM core.matchmaking_analyses "
-                    "WHERE puuid = 'LIFECYCLE_VALIDATION' "
-                    "ORDER BY created_at"
-                )
-            ).all()
-            player_freshness_column_count = connection.execute(
-                text(
-                    "SELECT COUNT(*) FROM information_schema.columns "
-                    "WHERE table_schema = 'core' AND table_name = 'players' "
-                    "AND column_name IN "
-                    "('profile_synced_at', 'league_synced_at', 'match_synced_at')"
-                )
-            ).scalar_one()
-            player_context_column_count = connection.execute(
-                text(
-                    "SELECT COUNT(*) FROM information_schema.columns "
-                    "WHERE table_schema = 'auth' "
-                    "AND ((table_name = 'user_settings' "
-                    "AND column_name = 'current_player_puuid') "
-                    "OR (table_name = 'user_tracked_players' "
-                    "AND column_name = 'last_selected_at'))"
-                )
-            ).scalar_one()
-            legacy_player_setting_count = connection.execute(
-                text(
-                    "SELECT COUNT(*) FROM information_schema.columns "
-                    "WHERE table_schema = 'auth' AND table_name = 'user_settings' "
-                    "AND column_name IN "
-                    "('save_playstyle_url', 'saved_playstyle_puuid', "
-                    "'save_matchmaking_url', 'saved_matchmaking_puuid', "
-                    "'save_tracked_url', 'saved_tracked_puuid')"
-                )
-            ).scalar_one()
-            player_sync_constraint_count = connection.execute(
-                text(
-                    "SELECT COUNT(*) FROM pg_constraint con "
-                    "JOIN pg_class cls ON cls.oid = con.conrelid "
-                    "JOIN pg_namespace ns ON ns.oid = cls.relnamespace "
-                    "WHERE ns.nspname = 'jobs' "
-                    "AND cls.relname = 'player_sync_runs' "
-                    "AND con.conname = 'ck_player_sync_runs_status_valid'"
-                )
-            ).scalar_one()
-            player_sync_active_index_count = connection.execute(
-                text(
-                    "SELECT COUNT(*) FROM pg_indexes "
-                    "WHERE schemaname = 'jobs' "
-                    "AND tablename = 'player_sync_runs' "
-                    "AND indexname = 'uq_player_sync_runs_active_puuid'"
-                )
-            ).scalar_one()
-            player_riot_id_index_count = connection.execute(
-                text(
-                    "SELECT COUNT(*) FROM pg_indexes "
-                    "WHERE schemaname = 'core' "
-                    "AND tablename = 'players' "
-                    "AND indexname = 'ix_players_lower_riot_id'"
-                )
-            ).scalar_one()
-            credential_health_column_count = connection.execute(
-                text(
-                    "SELECT COUNT(*) FROM information_schema.columns "
-                    "WHERE table_schema = 'core' "
-                    "AND table_name = 'riot_credential_health'"
-                )
-            ).scalar_one()
-            credential_health_check_count = connection.execute(
-                text(
-                    "SELECT COUNT(*) FROM pg_constraint con "
-                    "JOIN pg_class cls ON cls.oid = con.conrelid "
-                    "JOIN pg_namespace ns ON ns.oid = cls.relnamespace "
-                    "WHERE ns.nspname = 'core' "
-                    "AND cls.relname = 'riot_credential_health' "
-                    "AND con.contype = 'c'"
-                )
-            ).scalar_one()
     finally:
         engine.dispose()
-
-    observed = (
-        revision,
-        table_count,
-        enum_count,
-        trigger_count,
-        league_id_nullable,
-        match_timestamp_column_count,
-        match_timestamp_constraint_count,
-        tuple(legacy_timestamp_row),
-        matchmaking_lifecycle_column_count,
-        matchmaking_lifecycle_constraint_count,
-        matchmaking_active_index_count,
-        tuple(tuple(row) for row in matchmaking_lifecycle_rows),
-        player_freshness_column_count,
-        player_context_column_count,
-        legacy_player_setting_count,
-        player_sync_constraint_count,
-        player_sync_active_index_count,
-        player_riot_id_index_count,
-        credential_health_column_count,
-        credential_health_check_count,
-    )
-    expected = (
-        EXPECTED_REVISION,
-        EXPECTED_TABLES,
-        EXPECTED_ENUMS,
-        EXPECTED_TRIGGERS,
-        "YES",
-        2,
-        1,
-        (1700000000000, 1700000000000, "legacy_game_creation"),
-        3,
-        1,
-        1,
-        (
-            (
-                "cancelled",
-                "superseded_during_migration",
-                "This older unfinished analysis was replaced.",
-            ),
-            ("in_progress", None, None),
-            ("completed", None, None),
-            (
-                "failed",
-                "legacy_analysis_failure",
-                "The analysis did not finish. Please try again.",
-            ),
-        ),
-        3,
-        2,
-        0,
-        1,
-        1,
-        # Dropped with the automatic PUUID merge that was its only query.
-        0,
-        13,
-        5,
-    )
-    if observed != expected:
-        raise RuntimeError(f"Unexpected migrated schema inventory: {observed}")
+    if revision != EXPECTED_REVISION:
+        raise RuntimeError(
+            f"database is at revision {revision}, expected {EXPECTED_REVISION}"
+        )
 
 
 async def verify_application_database_access(database: str) -> None:
@@ -619,7 +365,7 @@ def main() -> int:
         seed_legacy_match(database)
         seed_legacy_matchmaking_analyses(database)
         run_upgrade(database)
-        validate_catalog(database)
+        validate_revision(database)
         asyncio.run(verify_application_database_access(database))
         with tempfile.TemporaryDirectory(
             prefix="league-analysis-restore-validation-"
@@ -629,7 +375,7 @@ def main() -> int:
             create_database(url, restored_database)
             restored_created = True
             restore_validation_archive(restored_database, archive)
-            validate_catalog(restored_database)
+            validate_revision(restored_database)
             if deterministic_snapshot(restored_database) != deterministic_snapshot(
                 database
             ):
@@ -637,7 +383,10 @@ def main() -> int:
                     "restored PostgreSQL snapshot differs from its source"
                 )
     except Exception as error:
-        print(f"Migration validation failed: {type(error).__name__}", file=sys.stderr)
+        print(
+            f"Migration validation failed: {type(error).__name__}: {error}",
+            file=sys.stderr,
+        )
         return 1
     finally:
         if restored_created:

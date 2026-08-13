@@ -47,9 +47,7 @@ objects explicitly, and apply it through the locked `scripts/migrate.py`
 command. The baseline revision is intentionally non-reversible; restore a
 verified backup rather than dropping a populated application schema.
 The repository-root `run.sh` applies `upgrade head` before starting application
-writers and aborts startup if migration fails. Populated unmarked databases
-must first pass the explicit `scripts/adopt_migrations.py` verification and
-`--apply` flow documented in `docs/database.md`.
+writers and aborts startup if migration fails.
 
 The local Riot-data cleanup command also owns its persistent regular-job
 maintenance interlock. Do not bypass `config_json.riot_maintenance_mode` in a
@@ -62,15 +60,7 @@ re-verifies the local target and inactive writers first.
 deliberate administrator reconciliation. It accepts passwords only through a
 hidden prompt or standard input, uses `AuthService`'s normal Argon2id and
 authentication path, and refuses any database other than the exact loopback
-`league_analysis_local_dev` target. The one-time LGA-79 migration wrapper is
-`scripts/migrate_local_postgres_to_pi.py`; it is disabled after the Pi records
-its durable authority marker. Follow the ordered procedure and rollback gate in
-[`../docs/deployment.md`](../docs/deployment.md#postgresql-data-authority-and-initial-migration).
-When an already-authoritative deployment moves to a new Pi or SSH operating
-system account without that filesystem marker, the explicit
-`adopt-relocated-authority` operation re-establishes it only after exact live
-identity, schema, service health, administrator, and new private safety-backup
-validation; it never replaces the database.
+`league_analysis_local_dev` target.
 The post-authority `scripts/mirror_pi_postgres_to_local.py` path accepts only a
 read-only Pi export, restores into a local staging database, and keeps durable
 rollback state through the atomic local name swap.

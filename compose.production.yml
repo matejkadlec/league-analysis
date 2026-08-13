@@ -39,7 +39,15 @@ services:
     image: postgres:18.4-bookworm
     container_name: ${LGA_POSTGRES_CONTAINER_NAME:-league-analysis-postgres}
     restart: unless-stopped
-    cap_drop: []
+    # The official image starts as root to fix data-directory ownership, then
+    # drops to the postgres user; these five capabilities are exactly that
+    # dance, verified against the real stack by deploy/container-qa.sh.
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
     environment:
       POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB in the private deployment environment}
       POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in the private deployment environment}

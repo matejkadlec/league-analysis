@@ -52,12 +52,12 @@ npm install --global npm@12.0.2 --ignore-scripts
 
 (cd frontend && npm ci)
 (cd backend && uv sync --frozen --all-groups)
-./scripts/install-git-hooks.sh
+git config core.hooksPath .githooks
 ```
 
-The hook installer maintains trusted hook snapshots and can safely provision an
-already-authorized ignored root `.env` into a linked worktree. It never prints
-or stages local configuration; see [project overview](docs/project-overview.md#git-hooks-and-worktrees).
+The last command points Git at the tracked `.githooks/pre-commit` wrapper, which
+runs the configured pre-commit checks; see
+[project overview](docs/project-overview.md#git-hooks-and-worktrees).
 
 ## Database and local application
 
@@ -110,8 +110,7 @@ Run these commands from the repository root:
 The complete gate runs deterministic installs, linting, type checks, frontend
 and backend regression tests, the production frontend build, static security
 analysis, ShellCheck, workflow checks, migration validation, and repository
-tooling regressions. GitHub Actions also runs the maintained live dependency
-comparison; local success is not GitHub check success. See
+tooling regressions. Local success is not GitHub check success. See
 [`docs/quality-checks.md`](docs/quality-checks.md) for the current boundary.
 
 When Docker Compose v2 is intentionally available, the separate

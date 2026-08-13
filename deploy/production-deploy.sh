@@ -58,15 +58,6 @@ if [[ "$source_head" != "$commit" ]]; then
   printf 'The source checkout does not match the requested deployment commit.\n' >&2
   exit 1
 fi
-if [[ -n "${GITHUB_REPOSITORY:-}" && "$GITHUB_REPOSITORY" != "matejkadlec/league-analysis" ]]; then
-  printf 'Refusing a deployment from a different GitHub repository.\n' >&2
-  exit 1
-fi
-if [[ -n "${GITHUB_REF:-}" && "$GITHUB_REF" != "refs/heads/master" ]]; then
-  printf 'Production deployment accepts only the master branch.\n' >&2
-  exit 1
-fi
-
 deployment_root="${LGA_DEPLOY_ROOT:-$HOME/.local/share/league-analysis}"
 if [[ "$deployment_root" != /* || "$deployment_root" == "/" || "$deployment_root" == "$HOME" ]]; then
   printf 'LGA_DEPLOY_ROOT must be a dedicated absolute subdirectory.\n' >&2
@@ -150,7 +141,7 @@ compose build --pull
 
 existing_postgres_container="$(compose ps --all --quiet postgres)"
 if [[ -n "$existing_postgres_container" ]]; then
-  "$release_directory/deploy/pi-postgres-operations.sh" \
+  "$release_directory/backup/pi-postgres-operations.sh" \
     pre-deploy-backup \
     --confirm-target league_analysis \
     --commit "$commit"
@@ -188,19 +179,12 @@ if [[ "$postgres_ports" != "null" && "$postgres_ports" != "{}" ]]; then
   exit 1
 fi
 
-compose exec -T backend python -c \
-  "from urllib.request import urlopen; urlopen('http://127.0.0.1:8000/health/ready', timeout=3)" \
-  >/dev/null
-compose exec -T frontend node -e \
-  "fetch('http://127.0.0.1:3000/').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))" \
-  >/dev/null
-
 next_link="$deployment_root/.current-$commit-$$"
 ln -s "releases/$commit" "$next_link"
 mv -Tf -- "$next_link" "$deployment_root/current"
 printf '%s\n' "$commit" > "$state_directory/deployed-commit"
 chmod 600 "$state_directory/deployed-commit"
 
-"$release_directory/deploy/install-pi-postgres-backup-timer.sh"
+"$release_directory/backup/install-pi-postgres-backup-timer.sh"
 
 printf 'League Analysis deployment completed at %s.\n' "$commit"

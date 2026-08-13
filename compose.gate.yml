@@ -1,0 +1,77 @@
+# Runs ./test.sh against a disposable PostgreSQL 18, with one pinned toolchain.
+#
+#   docker compose -f compose.gate.yml run --rm gate        # complete gate
+#   docker compose -f compose.gate.yml run --rm gate -b     # backend only
+#   docker compose -f compose.gate.yml down -v              # tear down
+#
+# CI runs the same command, so a green run here means the same thing there.
+# Production packaging is not built by this file; that is deploy/container-qa.sh.
+#
+# From a linked git worktree, .git is a file pointing at the main repository, so
+# the gate's `git ls-files` calls need that directory at its own absolute path:
+#
+#   docker compose -f compose.gate.yml run --rm --build \
+#     -v /path/to/main-repo/.git:/path/to/main-repo/.git gate
+name: lga-gate
+
+services:
+  postgres:
+    image: postgres:18.4
+    environment:
+      POSTGRES_DB: league_analysis_gate
+      POSTGRES_USER: league_analysis_gate
+      # Throwaway: this database is created and destroyed by the gate and is
+      # never reachable from outside the Compose network.
+      POSTGRES_PASSWORD: league-analysis-gate-password
+      PGDATA: /var/lib/postgresql/data
+    tmpfs:
+      # The gate never needs this data to survive the run, and tmpfs removes
+      # disk I/O from the migration and restore validation.
+      - /var/lib/postgresql/data
+    healthcheck:
+      test:
+        ["CMD-SHELL", "pg_isready -U league_analysis_gate -d league_analysis_gate"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  gate:
+    build:
+      context: .
+      dockerfile: gate.Dockerfile
+    # Explicit so CI can pre-build this exact tag with a layer cache and run
+    # the gate without --build.
+    image: lga-gate-gate
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: league_analysis_gate
+      POSTGRES_USER: league_analysis_gate
+      POSTGRES_PASSWORD: league-analysis-gate-password
+      JWT_SECRET_KEY: league-analysis-gate-jwt-secret-32-characters
+      ENVIRONMENT: test
+      DEBUG: "false"
+    # Run as the invoking user so npm, uv and Next.js write build output the
+    # host can still read and delete. CI exports these from `id`.
+    user: "${LGA_GATE_UID:-1000}:${LGA_GATE_GID:-1000}"
+    volumes:
+      - .:/workspace
+      # Every ignored build directory stays inside the container. Sharing them
+      # with the host runs the gate against whatever a dev server last wrote —
+      # stale Next.js route types from `run.sh` have already failed a run — and
+      # leaves behind a virtualenv and node_modules built for container paths,
+      # which then break the host's own tooling.
+      - /workspace/frontend/.next
+      - /workspace/frontend/node_modules
+      - /workspace/backend/.venv
+      # Package caches survive between runs; downloads happen once per version
+      # bump. CI points these at directories kept by actions/cache.
+      - ${LGA_GATE_NPM_CACHE:-gate_npm_cache}:/tmp/npm-cache
+      - ${LGA_GATE_UV_CACHE:-gate_uv_cache}:/tmp/uv-cache
+
+volumes:
+  gate_npm_cache:
+  gate_uv_cache:

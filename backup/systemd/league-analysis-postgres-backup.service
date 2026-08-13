@@ -8,7 +8,7 @@ Type=oneshot
 User=__LGA_USER__
 Group=__LGA_USER__
 UMask=0077
-ExecStart=__LGA_DEPLOY_ROOT__/current/deploy/pi-postgres-operations.sh daily-backup --confirm-target league_analysis
+ExecStart=__LGA_DEPLOY_ROOT__/current/backup/pi-postgres-operations.sh daily-backup --confirm-target league_analysis
 
 [Install]
 WantedBy=multi-user.target

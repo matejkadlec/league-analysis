@@ -12,7 +12,16 @@ repos:
       - id: check-json
       - id: check-added-large-files
       - id: check-merge-conflict
+      - id: detect-private-key
       - id: debug-statements
+
+  - repo: local
+    hooks:
+      - id: forbid-credential-filenames
+        name: Forbid credential-looking filenames
+        entry: 'A staged filename looks like a credential:'
+        language: fail
+        files: '(^|/)(\.env|id_rsa|id_ed25519)$|\.(pem|key)$'
 
   # Ruff - Fast Python linter and formatter (replaces black, isort, flake8)
   - repo: https://github.com/astral-sh/ruff-pre-commit
@@ -63,6 +72,23 @@ repos:
         language: system
         files: ^frontend/.*\.(ts|tsx)$
         exclude: ^frontend/node_modules/
+        pass_filenames: false
+
+  # Shell and workflow linting, using the same pinned binaries as the gate
+  - repo: local
+    hooks:
+      - id: shellcheck
+        name: ShellCheck
+        entry: bash -c 'exec "$(git rev-parse --show-toplevel)/scripts/run-shellcheck.sh"'
+        language: system
+        files: \.sh$|^\.githooks/
+        pass_filenames: false
+
+      - id: actionlint
+        name: actionlint
+        entry: bash -c 'exec "$(git rev-parse --show-toplevel)/scripts/run-actionlint.sh"'
+        language: system
+        files: ^\.github/workflows/.*\.(yml|yaml)$
         pass_filenames: false
 
 # Configuration for pre-commit

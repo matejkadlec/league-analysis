@@ -23,8 +23,10 @@ Two applications live at the repository root: `backend/` (FastAPI; domain
 features under `app/features/<name>/`, shared infrastructure under
 `app/core/`, reviewed schema revisions under `alembic/versions/`) and
 `frontend/` (Next.js App Router; `app/`, `components/`, `features/`, and
-`lib/core/`). Repository tooling is `scripts/`, `.githooks/`, `deploy/`,
-`run.sh`, and `test.sh` (the mandatory pre-publication gate). The current
+`lib/core/`). Repository tooling is `scripts/`, `.githooks/`, `deploy/`
+(release shipping), `backup/` (database backup, restore, and mirror
+operations), `run.sh`, and `test.sh` (the mandatory pre-publication gate). The
+current
 file inventory is the tree itself; this document records only the boundaries
 that constrain changes.
 
@@ -83,26 +85,23 @@ See [`database.md`](database.md) before changing models or SQL.
 
 ## Technology
 
-Versions are pinned or constrained by `backend/pyproject.toml`,
-`backend/uv.lock`, `frontend/package.json`, and `frontend/package-lock.json`.
+FastAPI and SQLAlchemy on the backend, Next.js and React on the frontend,
+PostgreSQL underneath. `backend/pyproject.toml`, `backend/uv.lock`,
+`frontend/package.json` and `frontend/package-lock.json` are the version
+authority; read them for versions.
 
-| Layer | Current basis |
-| --- | --- |
-| Backend runtime | Python `>=3.14.7,<3.15`, FastAPI 0.141.1 on Starlette 1.6.0, SQLAlchemy 2.0.51, Pydantic 2.13, Alembic 1.19.1, structlog 26.1, APScheduler 3.11, httpx 0.28 |
-| Backend tooling | uv 0.12.3 in CI, Pyright 1.1.411, Ruff 0.16.2 |
-| Frontend runtime | Next.js 16.3.0, React 19.2.8, TypeScript 7.0.2 native compiler with TypeScript 6.0.2 API compatibility for ESLint, Tailwind CSS 4.3.3, shadcn/ui |
-| Frontend data/forms | TanStack Query 5, Zod 4, Axios, React Hook Form |
-| Frontend tooling | Node 26.7.0, npm 12.0.2 with `package-lock.json`, ESLint 10.8.1 with `@eslint/compat` for Next's legacy plugins, TypeScript 7.0.2 compiler, Vitest 4.1.10 with Testing Library and jsdom, Playwright 1.62.1 |
-| Database | PostgreSQL 18.4, asyncpg for application I/O, psycopg2 for APScheduler |
-| Production packaging | Docker Compose v2, Python/Node production images, PostgreSQL 18.4 |
-| External data | Riot Games API |
+Use `uv` for backend dependencies and commands, npm for frontend dependencies
+and commands, and do not introduce a second package manager.
 
-Use `uv` for backend dependencies and commands. Use npm for frontend
-dependencies and commands; do not introduce a second package manager.
-The dated selection and security rationale is recorded in
-[`dependency-upgrade-2026-08-03.md`](dependency-upgrade-2026-08-03.md) and the
-later maintenance refresh
-[`dependency-upgrade-2026-08-11.md`](dependency-upgrade-2026-08-11.md).
+Three choices are not obvious from the manifests:
+
+- The database driver is split. `asyncpg` serves application I/O; APScheduler
+  needs `psycopg2` because its job store is synchronous.
+- The frontend installs two TypeScript packages. `@typescript/native` is the
+  compiler; the aliased TypeScript 6 package exists only because ESLint still
+  consumes the older compiler API.
+- ESLint loads Next.js plugins through `@eslint/compat`, which adapts their
+  legacy rule API without suppressing any configured rule.
 
 ## Local Environment
 
@@ -115,17 +114,10 @@ breaking startup. For a deliberate one-off process-level override only, use
 `LGA_RUN_USE_PROCESS_ENV=1` with `./run.sh`. Never print, paste, commit, or
 copy `.env` secret values into documentation or Jira.
 
-Install/select the exact frontend tools before the first npm command:
-
-```bash
-nvm install 26.7.0
-nvm use 26.7.0
-npm install --global npm@12.0.2 --ignore-scripts
-```
-
-CI pins uv 0.12.3. Local uv 0.12.3 can be installed through the official
-installer or selected package manager; `uv lock --check` must accept the
-committed lock before development continues.
+Select the pinned Node and npm before the first npm command. `.nvmrc` and the
+`packageManager` field hold those versions, and the gate rejects any other
+runtime. Backend tooling needs a `uv` matching the version CI installs;
+`uv lock --check` must accept the committed lock before development continues.
 
 ```bash
 ./run.sh
@@ -177,20 +169,14 @@ container QA, host bootstrap, diagnostics, and LGA-16 rollback boundary.
 
 ## Git hooks and worktrees
 
-After clone, and whenever `.githooks/` or the local-file provisioner changes,
-install the reviewed hook generation:
+Once per clone, point Git at the tracked hook directory:
 
 ```bash
-./scripts/install-git-hooks.sh
+git config core.hooksPath .githooks
 ```
 
-The installer snapshots the pre-commit and post-checkout hooks plus the
-provisioner beneath the shared Git directory, sets restrictive permissions, and
-atomically selects the complete generation through `core.hooksPath`. It records
-ownership in `league-analysis.trustedhookspath` and preserves an unrelated
-custom hooks manager instead of overwriting it. The pre-commit snapshot runs the
-configured pre-commit checks; the post-checkout snapshot never executes hook
-code from the branch being checked out.
+`.githooks/pre-commit` runs the configured pre-commit checks through the
+backend's `uv` project. There is no other repository-managed hook.
 
 New `flow1` work normally starts after fetch/conflict inspection with a focused
 branch and sibling linked worktree:
@@ -199,20 +185,19 @@ branch and sibling linked worktree:
 git fetch --prune origin
 git worktree add -b flow1/lga-43-batch-worktrees \
   ../league-analysis-lga-43 origin/master
+cp .env ../league-analysis-lga-43/.env   # Only when the source checkout has one
 ```
 
 Use the actual selected Jira keys and short scope in place of the example.
 Separate planned pull requests use separate branches and worktrees. Never reuse,
 reset, or delete an owner-created worktree without explicit authorization.
 
-When the primary worktree has a regular root `.env`, the trusted post-checkout
-hook may copy that single allowlisted ignored file into a newly created linked
-worktree. The copy uses mode `600`, never overwrites a path or symlink, never
-prints content, requires shared trusted ignore rules for the target and
-temporary-file pattern, and records private provenance so only its own copy can
-be removed later. Missing source files, custom hook managers, or failed safety
-checks leave checkout successful and unprovisioned. Do not manually broaden the
-allowlist to directories or deployment credentials.
+Git materializes only tracked files into a new worktree, and root `.env` is
+ignored, so a new worktree starts without local configuration. Copy it
+explicitly at creation time, as above. Copy that one file only — never a
+directory, deployment credential, or provider bundle. A worktree created without
+the copy is not broken: the backend fails at startup with a configuration error
+until the file is present.
 
 Keep worktrees needed for User QA or remediation. Cleanup is appropriate only
 after the branch is safely published, ownership is clear, and the worktree is no
@@ -266,20 +251,16 @@ available.
 ./test.sh
 ```
 
-This is the authoritative developer gate and the core of `scripts/ci.sh` used
-by GitHub Actions. It runs repository, frontend, and backend checks with clear,
-fail-fast step names.
+This is the authoritative developer gate, and GitHub Actions runs the same
+script. It runs repository, frontend, and backend checks with clear, fail-fast
+step names.
 
 ### Commits and GitHub
 
-`.pre-commit-config.yaml` keeps fast whitespace/format checks, Ruff, frontend
-ESLint, and frontend TypeScript checks at commit time. The trusted hook keeps
-pre-commit at the Git worktree root while selecting the backend tool project;
-the frontend checks then resolve that root and select the pinned Node runtime
-before changing into `frontend`. This keeps commits reliable from linked
-worktrees. Never skip configured hooks. GitHub's `Quality Checks` workflow runs
-the same deterministic gate with PostgreSQL 18.4, plus a separate live
-production dependency audit. Local results are not GitHub check results.
+`.pre-commit-config.yaml` runs the fast checks at commit time. Never skip
+configured hooks. Each local hook resolves the Git worktree root before doing
+anything, so commits behave the same from a linked worktree as from the main
+checkout. See [`quality-checks.md`](quality-checks.md) for the GitHub side.
 
 ## Debugging and Operational Boundaries
 

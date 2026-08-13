@@ -31,14 +31,10 @@
   the backend starts. Deploying a stale feature-branch image is forbidden —
   the pi5ram16 workflow deploys the exact current `master` revision so every
   referenced migration is present.
-- A populated database with no Alembic marker is adopted with
-  `backend/scripts/adopt_migrations.py --database <verified_local_database>`:
-  first the read-only schema comparison must pass, only then repeat with
-  `--apply`. It compares against the baseline, stamps it, and upgrades to head
-  while proving existing application row counts did not change.
-- A new revision also requires updating `EXPECTED_REVISION` **and** the
-  expected snapshot tuple in `backend/scripts/validate_migrations.py`; the
-  backend test gate validates the baseline on a clean isolated database.
+- A new revision also updates `backend/alembic/expected-head.txt`, the
+  reviewed head pin that the Pi restore tooling reads without a Python
+  environment. The backend test gate replays the full chain on a clean
+  isolated database and fails if the migrated database is not at that pin.
 
 ## Durable Data Invariants
 
@@ -56,12 +52,10 @@ used.
 
 ### Product queue set
 
-The only product-supported queues are **420, 440, 480, 400, 450, 2400**
-(Ranked Solo/Duo, Ranked Flex, Swiftplay, Normal Draft, ARAM, ARAM: Mayhem),
-defined once as `PRODUCT_SUPPORTED_QUEUE_IDS` in
-`backend/app/core/riot_api/constants.py`. Match Fetcher queue selection is not
-configurable; historical `enabled_queue_ids` config values are ignored and
-stripped (see [`jobs.md`](jobs.md)).
+`PRODUCT_SUPPORTED_QUEUE_IDS` in `backend/app/core/riot_api/constants.py` is
+the single definition of the supported queue set. Match Fetcher queue selection
+is not configurable: historical `enabled_queue_ids` config values are ignored
+and stripped (see [`jobs.md`](jobs.md)).
 
 ### Versioned user card preferences coexist
 
@@ -113,15 +107,12 @@ Safety contract (read-only by default; all checked before a session opens):
 explicit `ENVIRONMENT=dev`; `POSTGRES_HOST`, every PostgreSQL
 `listen_addresses` bind, and the active listener loopback-only; `--database`
 exactly matching `POSTGRES_DB`; the reviewed application tables present.
-`--apply` additionally requires a canonical backup path outside the repository
-whose parent and non-sticky directory ancestors are not group/other-writable.
-The command blocks writers to every table it will change before taking the
-custom-format `pg_dump`, keeps those locks through the cleanup transaction,
-and creates a new owner-only `0600` archive with no-follow semantics before
-`pg_dump` receives any database data. It re-verifies the archive's descriptor
-identity and permissions before `pg_restore --list`; if the filesystem cannot
-honor them, it securely removes only that verified file and refuses before any
-database mutation. It also clears all saved Riot PUUID URL preferences while
+`--apply` additionally requires a new canonical backup path outside the
+repository. The command blocks writers to every table it will change before
+taking the custom-format `pg_dump` into a new owner-only `0600` archive, keeps
+those locks through the cleanup transaction, and verifies the archive with
+`pg_restore --list` — deleting it and refusing before any database mutation if
+either step fails. It also clears all saved Riot PUUID URL preferences while
 preserving settings rows and revoked access-token blacklist entries.
 
 ```bash
@@ -154,18 +145,14 @@ Never point this command at production, a shared environment, a remote host,
 or a database whose identity cannot be proven. Restore the verified backup
 instead of attempting an ad-hoc reversal.
 
-## Data Authority: Pi Is Authoritative (LGA-79)
+## Data Authority: Pi Is Authoritative
 
-The LGA-79 authority transfer moved `league_analysis_local_dev` to pi5ram16
-via a complete PostgreSQL custom-format dump restored into a staging database
-and swapped in only after a deterministic source/restored snapshot matched.
-The pre-existing Pi database was retained as a private safety backup and
-rollback database. Procedure, authority marker, and rollback commands:
-[`deployment.md`](deployment.md#postgresql-data-authority-and-initial-migration).
+The Pi database `league_analysis` on pi5ram16 is authoritative; LGA-79 moved it
+there from `league_analysis_local_dev` and that transfer is complete.
 
-Since then the data flow is strictly one-way:
-`pi5ram16 league_analysis -> local league_analysis_local_dev`, refreshed every
-five minutes. The local database is **disposable** — the mirror may overwrite
+The data flow is strictly one-way:
+`pi5ram16 league_analysis -> local league_analysis_local_dev`, refreshed
+daily. The local database is **disposable** — the mirror may overwrite
 any local rows — and there is no local-to-Pi write path. Details:
 [`deployment.md`](deployment.md#recurring-pi-to-local-mirror).
 
@@ -173,7 +160,7 @@ any local rows — and there is no local-to-Pi write path. Details:
 
 The documented intent is one private custom-format backup at
 `00:00 Europe/Prague` retaining the seven newest successful daily archives,
-installed via `deploy/install-pi-postgres-backup-timer.sh` with isolated
+installed via `backup/install-pi-postgres-backup-timer.sh` with isolated
 restore verification. **The timer is not currently installed on pi5ram16** —
 verify installation before relying on automatic backups. Contract and
 diagnostics:

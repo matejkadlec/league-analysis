@@ -8,8 +8,6 @@
 > here changes. Endpoint signatures, DTO shapes, and caller inventories live in
 > `backend/app/core/riot_api/` and are not mirrored here.
 
-The dated [2026-08-03 compatibility audit](riot-api-compatibility-2026-08-03.md)
-records the evidence basis and remediation scope implemented by LGA-42.
 Sanitized protected fixtures captured on 2026-08-08 cover the used Account,
 Summoner, Match, and Timeline shapes for queues 400, 420, 440, and 450.
 Transparent synthetic variants derived from those fixtures verify queue
@@ -115,22 +113,14 @@ evidence stay untouched.
 
 ### Routing
 
-Riot APIs use two routing schemas. Mixing them causes 403/404 errors.
+Riot APIs use two routing schemas, and mixing them causes 403/404 errors.
+Regional hosts serve global identity and match history (ACCOUNT-V1, MATCH-V5);
+platform hosts serve LoL-specific data (SUMMONER-V4, LEAGUE-V4).
 
-| Type         | Use Case                       | Host Examples              | APIs                   |
-| ------------ | ------------------------------ | -------------------------- | ---------------------- |
-| **Regional** | Global identity, Match history | `europe.api.riotgames.com` | ACCOUNT-V1, MATCH-V5   |
-| **Platform** | LoL-specific (Rank, Summoner)  | `eun1.api.riotgames.com`   | SUMMONER-V4, LEAGUE-V4 |
-
-**Platform → Region Mappings:**
-
-- `EUN1`, `EUW1`, `TR1`, `RU` → `EUROPE`
-- `NA1`, `BR1`, `LA1`, `LA2` → `AMERICAS`
-- `KR`, `JP1` → `ASIA`
-- `OC1`, `PH2`, `SG2`, `TH2`, `TW2`, `VN2` → `SEA`
-
-`get_region_by_platform()` rejects unknown platforms rather than defaulting to
-Europe.
+`get_region_by_platform()` in `backend/app/core/riot_api/constants.py` holds
+the mapping and rejects an unknown platform rather than defaulting to Europe.
+A wrong default would send a player's requests to another continent's host and
+return an empty history that looks like a legitimate answer.
 
 ---
 
@@ -202,15 +192,17 @@ original observed local start**; a lower count starts a new window.
 (`backend/app/core/riot_api/db_rate_limiter.py`): `DBRateLimiter` coordinates
 all Riot-calling components through the `core.rate_limit_state` table.
 
-| Priority | Component            | Max Wait | Rationale                    |
-| -------- | -------------------- | -------- | ---------------------------- |
-| 1        | PLAYER_UPDATER       | 30 s     | Only 2 requests per run      |
-| 2        | MATCH_FETCHER        | 2 min    | Few requests per player      |
-| 3        | MATCHMAKING_ANALYSIS | 30 min   | ~1100 requests per analysis  |
+Priority runs Player Updater, then Match Fetcher, then Matchmaking Analysis,
+and each component's maximum wait grows in the same order. That ordering is
+deliberate and follows how much work one run costs: a player update is two
+requests, a match fetch is a few per player, and one matchmaking analysis is
+roughly 1100. The shortest job goes first so it is not starved behind an
+analysis. `COMPONENT_PRIORITY` and `COMPONENT_MAX_WAIT` in that module hold the
+values.
 
-Higher-priority components bump lower ones (which yield and retry). A
-class-level lock enforces 50 ms minimum spacing, i.e. at most 20 requests per
-second process-wide.
+Higher-priority components bump lower ones, which yield and retry. A
+class-level lock enforces a minimum spacing between requests, capping the
+whole process well below Riot's per-second application limit.
 
 Do not modify Riot API rate-limiting behavior unless a task explicitly scopes
 that work (repository-wide rule).
@@ -271,13 +263,11 @@ matches, timelines, and league snapshots.
 
 ## 5. Queues, Validation, and the Season Boundary
 
-- `QueueType` in `backend/app/core/riot_api/constants.py` follows Riot's
-  maintained queue dataset as a **reference catalog**. The narrower **product
-  allowlist** is 420 (Solo/Duo), 440 (Flex), 480 (Swiftplay), 400 (Normal
-  Draft), 450 (ARAM), and 2400 (ARAM: Mayhem). Match Fetcher always uses the
-  complete allowlist; other documented modes are not enabled automatically.
-  Keep the catalog and the allowlist separate: cataloging a queue must never
-  silently enable it.
+- Two separate lists live in `backend/app/core/riot_api/constants.py`, and the
+  separation is the point. `QueueType` is a **reference catalog** mirroring
+  Riot's maintained queue dataset. `PRODUCT_SUPPORTED_QUEUE_IDS` is the much
+  narrower **product allowlist** that Match Fetcher actually uses. Cataloging a
+  queue must never silently enable it.
 - The client validates match-list inputs **before I/O**: it rejects negative
   `start`, `count` outside 0–100, unsupported queue or type values, invalid
   epoch values, and reversed time ranges. Unknown stored queue IDs stay visible
@@ -293,8 +283,8 @@ matches, timelines, and league snapshots.
 ## 6. Data Dragon
 
 The root layout resolves the first valid version from Riot's public
-`versions.json` manifest with a six-hour Next.js revalidation interval and
-provides it to client components. A reviewed `16.15.1` fallback keeps existing
-assets available if the manifest is unavailable or malformed; unknown spell and
-rune IDs remain non-renderable (`null`) instead of constructing speculative
-URLs.
+`versions.json` manifest and provides it to client components, revalidating on
+a fixed interval. A reviewed hard-coded fallback version keeps existing assets
+available when the manifest is unavailable or malformed. Unknown spell and rune
+IDs stay non-renderable (`null`) rather than producing a speculative URL,
+because a guessed asset path yields a broken image instead of a clean absence.

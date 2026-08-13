@@ -79,7 +79,7 @@ the repository-root `.env`; keep its values secret. After changing `.env`, a
 restart is required.
 
 ```bash
-./scripts/install-git-hooks.sh   # After clone and after hook changes
+git config core.hooksPath .githooks   # Once, after clone
 ./run.sh                         # Backend 8000 + frontend 3000
 ./run.sh 3001 8001               # Custom frontend/backend ports
 tail -50 logs/backend.log

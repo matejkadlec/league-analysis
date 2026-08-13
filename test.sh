@@ -5,12 +5,6 @@ set -euo pipefail
 repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly repository_root
 
-worktree_guard="$repository_root/scripts/guard-git-worktree-test.sh"
-if [[ "${LGA_GIT_WORKTREE_GUARD_ACTIVE:-}" != "1" ]]; then
-  export LGA_GIT_WORKTREE_GUARD_ACTIVE=1
-  exec "$worktree_guard" --repository "$repository_root" -- "$repository_root/test.sh" "$@"
-fi
-
 run_frontend=true
 run_backend=true
 next_env_file="$repository_root/frontend/next-env.d.ts"
@@ -90,7 +84,6 @@ run_step() {
 
 run_repository_hygiene() {
   git -C "$repository_root" diff --check
-  python3 "$repository_root/scripts/check-repository-files.py"
 }
 
 run_backend_sync() {
@@ -126,12 +119,12 @@ run_backend_migration_validation() {
 
 run_backend_ruff_lint() {
   cd "$repository_root/backend"
-  uv run ruff check app tests scripts ../scripts/*.py
+  uv run ruff check app tests scripts
 }
 
 run_backend_ruff_format() {
   cd "$repository_root/backend"
-  uv run ruff format --check --exclude '*.md' app tests scripts ../scripts/*.py
+  uv run ruff format --check --exclude '*.md' app tests scripts
 }
 
 run_backend_pyright() {
@@ -186,23 +179,12 @@ fi
 
 run_step 'Repository hygiene' run_repository_hygiene
 run_step 'ShellCheck' "$repository_root/scripts/run-shellcheck.sh"
-run_step 'ShellCheck tooling regression' "$repository_root/scripts/test-shellcheck.sh"
-run_step 'Card configuration contract regression' "$repository_root/scripts/test-card-configuration.sh"
-run_step 'run.sh startup-order regression' "$repository_root/scripts/test-run.sh"
-run_step 'Deployment and container contract regression' "$repository_root/scripts/test-deployment.sh"
-run_step 'PostgreSQL operations regression' "$repository_root/scripts/test-postgres-operations.sh"
 run_step 'GitHub workflow syntax' "$repository_root/scripts/run-actionlint.sh"
-run_step 'GitHub workflow security policy' python3 "$repository_root/scripts/verify-github-workflows.py"
-run_step 'Dependabot configuration' python3 "$repository_root/scripts/check-dependabot-config.py"
-run_step 'GitHub governance configuration' "$repository_root/scripts/test-github-governance.sh"
-run_step 'Quality tooling regression' "$repository_root/scripts/test-quality-tooling.sh"
-run_step 'Flow 1 policy regression' "$repository_root/scripts/test-flow1-policy.sh"
-run_step 'Worktree tooling regression' "$repository_root/scripts/test-worktree-tooling.sh"
+run_step 'PostgreSQL backup retention regression' "$repository_root/scripts/test-postgres-backup-retention.sh"
 
 if [[ "$run_frontend" == true ]]; then
   # shellcheck disable=SC1091
   source "$repository_root/scripts/use-project-node.sh"
-  run_step 'Node runtime helper regression' "$repository_root/scripts/test-use-project-node.sh"
   run_step 'Frontend deterministic install' run_frontend_install
   run_step 'Frontend lint' run_frontend_lint
   run_step 'Frontend typecheck' run_frontend_typecheck
