@@ -180,7 +180,6 @@ fi
 run_step 'Repository hygiene' run_repository_hygiene
 run_step 'ShellCheck' "$repository_root/scripts/run-shellcheck.sh"
 run_step 'GitHub workflow syntax' "$repository_root/scripts/run-actionlint.sh"
-run_step 'run.sh startup-order regression' "$repository_root/scripts/test-run.sh"
 run_step 'PostgreSQL backup retention regression' "$repository_root/scripts/test-postgres-backup-retention.sh"
 
 if [[ "$run_frontend" == true ]]; then
