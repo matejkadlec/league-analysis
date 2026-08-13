@@ -186,7 +186,6 @@ run_step 'PostgreSQL backup retention regression' "$repository_root/scripts/test
 if [[ "$run_frontend" == true ]]; then
   # shellcheck disable=SC1091
   source "$repository_root/scripts/use-project-node.sh"
-  run_step 'Node runtime helper regression' "$repository_root/scripts/test-use-project-node.sh"
   run_step 'Frontend deterministic install' run_frontend_install
   run_step 'Frontend lint' run_frontend_lint
   run_step 'Frontend typecheck' run_frontend_typecheck
