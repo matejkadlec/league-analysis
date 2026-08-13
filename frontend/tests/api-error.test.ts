@@ -6,6 +6,7 @@ import {
   apiErrorMessage,
   normalizeApiError,
 } from "../lib/core/api-error";
+import { toPlayerTrackingError } from "../features/players/utils/tracking-feedback";
 
 function axiosError(
   status: number | undefined,
@@ -71,6 +72,33 @@ describe("API error presentation", () => {
     ).toMatchObject({
       kind: "service",
       code: "RIOT_API_KEY_INVALID",
+      message:
+        "Riot data is temporarily unavailable. Please contact an administrator.",
+    });
+  });
+
+  it("classifies the legacy credential message without exposing it", () => {
+    const legacyDetail =
+      "Riot API Key is invalid or expired. Please update it in Settings.";
+    const normalized = normalizeApiError(
+      axiosError(503, { detail: legacyDetail }),
+    );
+
+    expect(normalized).toMatchObject({
+      kind: "service",
+      code: "RIOT_API_KEY_INVALID",
+      message:
+        "Riot data is temporarily unavailable. Please contact an administrator.",
+    });
+    expect(normalized.message).not.toBe(legacyDetail);
+    expect(
+      toPlayerTrackingError(
+        normalized,
+        { gameName: "SomeName", tagLine: "1234" },
+        "eun1",
+      ),
+    ).toMatchObject({
+      kind: "api-key",
       message:
         "Riot data is temporarily unavailable. Please contact an administrator.",
     });
