@@ -14,17 +14,28 @@ describe("match-history error messaging", () => {
     },
   );
 
-  it("preserves a specific backend error", () => {
+  it("does not render an untyped backend error", () => {
     expect(
       getMatchHistoryErrorMessage(null, {
         message: "The match-history service returned an internal error.",
       }),
-    ).toBe("The match-history service returned an internal error.");
+    ).toBe("Match history could not be loaded. Please try again later.");
   });
 
   it("uses a deterministic fallback for an unknown error shape", () => {
     expect(getMatchHistoryErrorMessage(null, { detail: "unavailable" })).toBe(
-      "Failed to load matches",
+      "Match history could not be loaded. Please try again later.",
     );
+  });
+
+  it("preserves a normalized safe not-found message", () => {
+    expect(
+      getMatchHistoryErrorMessage(null, {
+        kind: "not-found",
+        code: "NOT_FOUND",
+        status: 404,
+        message: "No matches were found for this player.",
+      }),
+    ).toBe("No matches were found for this player.");
   });
 });

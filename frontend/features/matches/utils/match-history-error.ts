@@ -1,4 +1,7 @@
-const DEFAULT_MATCH_HISTORY_ERROR = "Failed to load matches";
+import { apiErrorMessage, type ApiError } from "@/lib/core/api";
+
+const DEFAULT_MATCH_HISTORY_ERROR =
+  "Match history could not be loaded. Please try again later.";
 const SERVICE_CONNECTION_ERROR =
   "Unable to reach the League Analysis service. Please retry. If the problem continues, check that the backend is running.";
 
@@ -32,5 +35,16 @@ export function getMatchHistoryErrorMessage(
     return SERVICE_CONNECTION_ERROR;
   }
 
-  return message;
+  if (
+    typeof responseError === "object" &&
+    responseError !== null &&
+    "kind" in responseError
+  ) {
+    return apiErrorMessage(
+      responseError as ApiError,
+      DEFAULT_MATCH_HISTORY_ERROR,
+    );
+  }
+
+  return DEFAULT_MATCH_HISTORY_ERROR;
 }

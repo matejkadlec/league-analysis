@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { validatedPost, validatedGet } from "@/lib/core/api";
 import {
@@ -143,6 +143,9 @@ export function JobCard({ job, onExecutionClick }: JobCardProps) {
   const [optimisticTestRunning, setOptimisticTestRunning] = useState<
     boolean | null
   >(null);
+  const awaitingManualRunRef = useRef(false);
+  const manualRunBaselineIdRef = useRef<number | null>(null);
+  const manualRunRequestedAtRef = useRef<number | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -199,9 +202,10 @@ export function JobCard({ job, onExecutionClick }: JobCardProps) {
     refetchInterval: 15000, // Auto-refresh every 15 seconds to update relative time
   });
 
-  const recentExecutions = executionsResult?.success
-    ? executionsResult.data.executions
-    : [];
+  const recentExecutions = useMemo(
+    () => (executionsResult?.success ? executionsResult.data.executions : []),
+    [executionsResult],
+  );
   const lastExecution =
     recentExecutions.length > 0 ? recentExecutions[0] : null;
 
@@ -213,15 +217,83 @@ export function JobCard({ job, onExecutionClick }: JobCardProps) {
         1000
       : null;
 
+  useEffect(() => {
+    if (!awaitingManualRunRef.current) {
+      return;
+    }
+
+    const baselineId = manualRunBaselineIdRef.current;
+    const requestedAt = manualRunRequestedAtRef.current;
+    const manualExecution = recentExecutions.find((execution) => {
+      if (execution.triggered_by !== "user") {
+        return false;
+      }
+      if (baselineId !== null) {
+        return execution.id > baselineId;
+      }
+      return (
+        requestedAt !== null &&
+        Date.parse(execution.started_at) >= requestedAt - 2_000
+      );
+    });
+
+    if (
+      !manualExecution ||
+      manualExecution.status === "PENDING" ||
+      manualExecution.status === "RUNNING" ||
+      manualExecution.status === "PAUSED"
+    ) {
+      return;
+    }
+
+    awaitingManualRunRef.current = false;
+
+    if (manualExecution.status === "SUCCESS") {
+      toast({
+        title: `${job.name} run finished`,
+        description: "The manually triggered job completed successfully.",
+        variant: "success",
+      });
+      return;
+    }
+
+    if (manualExecution.status === "RATE_LIMITED") {
+      toast({
+        title: `${job.name} run was rate limited`,
+        description: "Riot temporarily limited requests. Try again later.",
+        variant: "warning",
+      });
+      return;
+    }
+
+    if (manualExecution.status === "CANCELLED") {
+      toast({
+        title: `${job.name} run stopped`,
+        description: "The manually triggered job is no longer active.",
+        variant: "success",
+      });
+      return;
+    }
+
+    toast({
+      title: `${job.name} run failed`,
+      description: "Open the execution history for details, then try again.",
+      variant: "error",
+    });
+  }, [job.name, recentExecutions, toast]);
+
   // Trigger job mutation
   const triggerMutation = useMutation({
     mutationFn: () =>
       validatedPost(JobTriggerResponseSchema, `/jobs/${job.id}/trigger`),
     onSuccess: (result) => {
-      if (result.success) {
+      if (result.success && result.data.success) {
+        awaitingManualRunRef.current = true;
+        manualRunBaselineIdRef.current = lastExecution?.id ?? null;
+        manualRunRequestedAtRef.current = Date.now();
         toast({
-          title: `${job.name} Triggered`,
-          description: result.data.message,
+          title: `${job.name} run started`,
+          description: "The job is running in the background.",
           variant: "info",
         });
         // Wait for job execution to be created in DB (background task)
@@ -234,18 +306,25 @@ export function JobCard({ job, onExecutionClick }: JobCardProps) {
         setTimeout(() => {
           refreshJobsData();
         }, 5000);
+      } else if (result.success) {
+        toast({
+          title: `${job.name} is already running`,
+          description:
+            "Wait for the current run to finish before trying again.",
+          variant: "warning",
+        });
       } else {
         toast({
-          title: "Failed to Trigger Job",
-          description: result.error.message,
+          title: `${job.name} run could not start`,
+          description: "Please try again later.",
           variant: "error",
         });
       }
     },
     onError: () => {
       toast({
-        title: "Error",
-        description: "Failed to trigger job",
+        title: `${job.name} run could not start`,
+        description: "Please try again later.",
         variant: "error",
       });
     },
@@ -255,25 +334,25 @@ export function JobCard({ job, onExecutionClick }: JobCardProps) {
     mutationFn: () =>
       validatedPost(JobControlActionResponseSchema, `/jobs/${job.id}/pause`),
     onSuccess: (result) => {
-      if (result.success) {
+      if (result.success && result.data.success) {
         toast({
-          title: `${job.name} Paused`,
-          description: result.data.message,
-          variant: "info",
+          title: `${job.name} paused`,
+          description: "Scheduled runs will wait until the job is resumed.",
+          variant: "success",
         });
         refreshJobsData();
       } else {
         toast({
-          title: "Pause Failed",
-          description: result.error.message,
+          title: `${job.name} could not be paused`,
+          description: "Please try again later.",
           variant: "error",
         });
       }
     },
-    onError: (error: Error) => {
+    onError: () => {
       toast({
-        title: "Pause Failed",
-        description: error.message || "Failed to pause job",
+        title: `${job.name} could not be paused`,
+        description: "Please try again later.",
         variant: "error",
       });
     },
@@ -283,25 +362,25 @@ export function JobCard({ job, onExecutionClick }: JobCardProps) {
     mutationFn: () =>
       validatedPost(JobControlActionResponseSchema, `/jobs/${job.id}/resume`),
     onSuccess: (result) => {
-      if (result.success) {
+      if (result.success && result.data.success) {
         toast({
-          title: `${job.name} Resumed`,
-          description: result.data.message,
-          variant: "info",
+          title: `${job.name} resumed`,
+          description: "Scheduled runs are active again.",
+          variant: "success",
         });
         refreshJobsData();
       } else {
         toast({
-          title: "Resume Failed",
-          description: result.error.message,
+          title: `${job.name} could not be resumed`,
+          description: "Please try again later.",
           variant: "error",
         });
       }
     },
-    onError: (error: Error) => {
+    onError: () => {
       toast({
-        title: "Resume Failed",
-        description: error.message || "Failed to resume job",
+        title: `${job.name} could not be resumed`,
+        description: "Please try again later.",
         variant: "error",
       });
     },
@@ -314,25 +393,25 @@ export function JobCard({ job, onExecutionClick }: JobCardProps) {
         `/jobs/${job.id}/stop${force ? "?force=true" : ""}`,
       ),
     onSuccess: (result) => {
-      if (result.success) {
+      if (result.success && result.data.success) {
         toast({
-          title: `${job.name} Stop Requested`,
-          description: result.data.message,
+          title: `${job.name} stop requested`,
+          description: "The current run is stopping in the background.",
           variant: "info",
         });
         refreshJobsData();
       } else {
         toast({
-          title: "Stop Failed",
-          description: result.error.message,
+          title: `${job.name} could not be stopped`,
+          description: "Please try again later.",
           variant: "error",
         });
       }
     },
-    onError: (error: Error) => {
+    onError: () => {
       toast({
-        title: "Stop Failed",
-        description: error.message || "Failed to stop job",
+        title: `${job.name} could not be stopped`,
+        description: "Please try again later.",
         variant: "error",
       });
     },
@@ -345,27 +424,34 @@ export function JobCard({ job, onExecutionClick }: JobCardProps) {
         `/jobs/${job.id}/test${suspendRegular ? "?suspend_regular=true" : ""}`,
       ),
     onSuccess: (result) => {
-      if (result.success) {
+      if (result.success && result.data.success) {
         toast({
-          title: `${job.name} Test Started`,
-          description: result.data.message,
+          title: `${job.name} test started`,
+          description: "The test run is running in the background.",
           variant: "info",
         });
         setOptimisticTestRunning(true);
         // Delay initial refresh — backend creates execution asynchronously
         setTimeout(() => refreshJobsData(), 1500);
+      } else if (result.success) {
+        toast({
+          title: `${job.name} test is already running`,
+          description:
+            "Wait for the current test to finish before trying again.",
+          variant: "warning",
+        });
       } else {
         toast({
-          title: "Test Failed",
-          description: result.error.message,
+          title: `${job.name} test could not start`,
+          description: "Please try again later.",
           variant: "error",
         });
       }
     },
     onError: () => {
       toast({
-        title: "Error",
-        description: "Failed to start test run",
+        title: `${job.name} test could not start`,
+        description: "Please try again later.",
         variant: "error",
       });
     },
@@ -378,26 +464,26 @@ export function JobCard({ job, onExecutionClick }: JobCardProps) {
         `/jobs/${job.id}/test/stop`,
       ),
     onSuccess: (result) => {
-      if (result.success) {
+      if (result.success && result.data.success) {
         toast({
-          title: `${job.name} Test Stopped`,
-          description: result.data.message,
-          variant: "info",
+          title: `${job.name} test stopped`,
+          description: "The test run is no longer active.",
+          variant: "success",
         });
         setOptimisticTestRunning(false);
         refreshJobsData();
       } else {
         toast({
-          title: "Stop Failed",
-          description: result.error.message,
+          title: `${job.name} test could not be stopped`,
+          description: "Please try again later.",
           variant: "error",
         });
       }
     },
-    onError: (error: Error) => {
+    onError: () => {
       toast({
-        title: "Stop Failed",
-        description: error.message || "Failed to stop test run",
+        title: `${job.name} test could not be stopped`,
+        description: "Please try again later.",
         variant: "error",
       });
     },
@@ -410,25 +496,25 @@ export function JobCard({ job, onExecutionClick }: JobCardProps) {
         `/jobs/${job.id}/test/pause`,
       ),
     onSuccess: (result) => {
-      if (result.success) {
+      if (result.success && result.data.success) {
         toast({
-          title: `${job.name} Test Paused`,
-          description: result.data.message,
-          variant: "info",
+          title: `${job.name} test paused`,
+          description: "The test run will wait until it is resumed.",
+          variant: "success",
         });
         refreshJobsData();
       } else {
         toast({
-          title: "Pause Failed",
-          description: result.error.message,
+          title: `${job.name} test could not be paused`,
+          description: "Please try again later.",
           variant: "error",
         });
       }
     },
-    onError: (error: Error) => {
+    onError: () => {
       toast({
-        title: "Pause Failed",
-        description: error.message || "Failed to pause test run",
+        title: `${job.name} test could not be paused`,
+        description: "Please try again later.",
         variant: "error",
       });
     },
@@ -441,25 +527,25 @@ export function JobCard({ job, onExecutionClick }: JobCardProps) {
         `/jobs/${job.id}/test/resume`,
       ),
     onSuccess: (result) => {
-      if (result.success) {
+      if (result.success && result.data.success) {
         toast({
-          title: `${job.name} Test Resumed`,
-          description: result.data.message,
-          variant: "info",
+          title: `${job.name} test resumed`,
+          description: "The test run is active again.",
+          variant: "success",
         });
         refreshJobsData();
       } else {
         toast({
-          title: "Resume Failed",
-          description: result.error.message,
+          title: `${job.name} test could not be resumed`,
+          description: "Please try again later.",
           variant: "error",
         });
       }
     },
-    onError: (error: Error) => {
+    onError: () => {
       toast({
-        title: "Resume Failed",
-        description: error.message || "Failed to resume test run",
+        title: `${job.name} test could not be resumed`,
+        description: "Please try again later.",
         variant: "error",
       });
     },

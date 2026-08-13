@@ -184,10 +184,10 @@ export function PlayerCard({ player, onRefreshAll }: PlayerCardProps) {
         variant: "info",
       });
     },
-    onError: (error: Error) => {
+    onError: () => {
       toast({
-        title: "Failed to start player update",
-        description: error.message,
+        title: "Player profile update could not start",
+        description: "Please try again later.",
         variant: "error",
       });
     },
@@ -210,7 +210,9 @@ export function PlayerCard({ player, onRefreshAll }: PlayerCardProps) {
         toast({
           title: "Player update did not finish",
           description:
-            syncRun.error_message ?? "Please try the update again later.",
+            syncRun.status === "rate_limited"
+              ? "Riot temporarily limited requests. Please try the update again later."
+              : "Please try the update again later.",
           variant: syncRun.status === "rate_limited" ? "warning" : "error",
         });
         await activeSyncQuery.refetch();
@@ -232,7 +234,7 @@ export function PlayerCard({ player, onRefreshAll }: PlayerCardProps) {
         toast({
           title: "Update finished",
           description: "All cards were successfully updated.",
-          variant: "info",
+          variant: "success",
         });
       } catch {
         toast({

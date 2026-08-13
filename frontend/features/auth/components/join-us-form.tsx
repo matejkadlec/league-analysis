@@ -1,12 +1,11 @@
 "use client";
 
 import { useRef, useState, type FormEvent } from "react";
-import axios from "axios";
 import { Turnstile, type TurnstileInstance } from "@marsidev/react-turnstile";
 import { Code2, Puzzle, UserCheck, Users } from "lucide-react";
-import { toast } from "sonner";
 
-import { api } from "@/lib/core/api";
+import { api, apiErrorMessage, normalizeApiError } from "@/lib/core/api";
+import { useToast } from "@/lib/core/hooks";
 import { cn } from "@/lib/core/utils";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -23,15 +22,6 @@ import { PublicPageFooter } from "@/components/public-page-footer";
 import { useAuth } from "../context/auth-context";
 
 type JoinUsSubject = "beta_tester" | "full_stack_developer" | "other";
-
-interface JoinUsApiDetail {
-  code?: string;
-  message?: string;
-}
-
-interface JoinUsApiErrorData {
-  detail?: string | JoinUsApiDetail;
-}
 
 const MESSAGE_MIN_LENGTH = 300;
 const NO_LIMIT_TEST_SUFFIX = "#nl";
@@ -86,23 +76,9 @@ const DEVELOPER_BENEFITS = [
 ];
 
 function resolveApiErrorMessage(error: unknown): string {
-  if (!axios.isAxiosError(error)) {
-    return "Unable to submit the form right now. Please try again.";
-  }
-
-  const payload = error.response?.data as JoinUsApiErrorData | undefined;
-  const detail = payload?.detail;
-
-  if (typeof detail === "string") {
-    return detail;
-  }
-
-  if (detail && typeof detail.message === "string") {
-    return detail.message;
-  }
-
-  return (
-    error.message || "Unable to submit the form right now. Please try again."
+  return apiErrorMessage(
+    normalizeApiError(error),
+    "Your application could not be sent. Please try again later.",
   );
 }
 
@@ -111,6 +87,7 @@ interface JoinUsFormProps {
 }
 
 export function JoinUsForm({ isAuthenticatedHint = false }: JoinUsFormProps) {
+  const toast = useToast();
   const { isAuthenticated, isLoading } = useAuth();
   const [subject, setSubject] = useState<JoinUsSubject | "">("");
   const [body, setBody] = useState("");

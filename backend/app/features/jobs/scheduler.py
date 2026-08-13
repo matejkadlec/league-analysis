@@ -1,6 +1,6 @@
 """Scheduler module for managing automated background jobs."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional, Type
 
 import structlog
@@ -330,8 +330,9 @@ async def start_scheduler() -> AsyncIOScheduler:
     1. Checks if scheduler should be enabled via configuration
     2. Creates scheduler with SQLAlchemy job store
     3. Marks stale running jobs as failed
-    4. Starts the scheduler
-    5. Loads job configurations from database and schedules them
+    4. Starts the scheduler paused and replaces persisted scheduler entries
+       from authoritative job configurations
+    5. Queues each overdue job once, then resumes the scheduler
 
     Returns:
         The initialized and started scheduler instance.
@@ -384,18 +385,24 @@ async def start_scheduler() -> AsyncIOScheduler:
 
         await _run_startup_recovery()
 
-        # Start the scheduler
-        _scheduler.start()
+        # Open the persistent job store without allowing an overdue entry from
+        # the previous process to dispatch. Rebuild every regular schedule from
+        # the authoritative configurations before work is allowed to run.
+        _scheduler.start(paused=True)
+        _scheduler.remove_all_jobs()
+
+        # Load and schedule job configurations from database
+        await _load_and_schedule_jobs()
+
+        # Queue each overdue configuration once. These are scheduler-owned
+        # one-shot jobs, so application readiness never waits on Riot work.
+        await _check_and_run_overdue_jobs()
+
+        _scheduler.resume()
 
         logger.info(
             "Job scheduler started successfully",
         )
-
-        # Check for and run any overdue jobs
-        await _check_and_run_overdue_jobs()
-
-        # Load and schedule job configurations from database
-        await _load_and_schedule_jobs()
 
         return _scheduler
 
@@ -540,19 +547,19 @@ async def sync_job_configuration(job_config_id: int) -> None:
 
 
 async def _check_and_run_overdue_jobs() -> None:
-    """Check for overdue jobs and run them immediately at startup.
+    """Check for overdue jobs and queue them once for immediate execution.
 
     This handles the case where the server was offline longer than the job interval.
     Jobs are considered overdue if:
     - They have never run before (no executions), OR
     - Their last execution was longer ago than their interval
 
-    Both jobs can run in parallel since they are async.
+    The scheduler is still paused while this function runs. One-shot entries
+    are dispatched only after startup resumes the scheduler, so readiness does
+    not wait on provider traffic or a rate-limit window.
     """
     try:
         logger.info("Checking for overdue jobs at startup")
-        from datetime import timezone
-
         from sqlalchemy import select
 
         async with db_manager.get_session() as db:
@@ -624,21 +631,27 @@ async def _check_and_run_overdue_jobs() -> None:
                 )
                 continue
 
-        # Run all overdue jobs in parallel
+        # Queue all overdue jobs for scheduler-owned execution. The ordinary
+        # interval entries were rebuilt before this step, so a persisted stale
+        # trigger cannot dispatch the same configuration a second time.
         if overdue_jobs:
-            logger.info("Running overdue jobs at startup", count=len(overdue_jobs))
+            if _scheduler is None:
+                raise RuntimeError("Scheduler is not initialized")
 
-            import asyncio
+            logger.info("Queuing overdue jobs at startup", count=len(overdue_jobs))
 
-            tasks = []
             for job_config, job_class in overdue_jobs:
                 job_instance = job_class(job_config.id, triggered_by="system")
-                tasks.append(asyncio.create_task(job_instance.run()))
+                _scheduler.add_job(
+                    job_instance.run,
+                    trigger="date",
+                    run_date=now,
+                    id=f"startup_overdue_job_{job_config.id}",
+                    name=f"{job_config.name} startup catch-up",
+                    replace_existing=True,
+                )
 
-            # Wait for all jobs to complete
-            await asyncio.gather(*tasks, return_exceptions=True)
-
-            logger.info("Completed running overdue jobs at startup")
+            logger.info("Queued overdue jobs at startup")
         else:
             logger.info("No overdue jobs found at startup")
 

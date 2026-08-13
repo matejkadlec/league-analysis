@@ -139,8 +139,11 @@ changes. Module responsibilities live in the code under this directory.
 - Stop APScheduler with `wait=False` during process shutdown. Deployment must
   never drain or wait for long-running Riot executions; startup recovery owns
   the interrupted persisted state.
-- Detect never-run or overdue active jobs, run them at startup, and then keep
-  their configured schedules.
+- Start APScheduler paused, discard its stale persisted triggers, and rebuild
+  regular schedules from authoritative active job configurations before
+  dispatch. Queue each never-run or overdue configuration exactly once as
+  scheduler-owned catch-up work, then resume; application readiness must not
+  wait for that provider work or a rate-limit window.
 - Service/base orphan cleanup may mark a database execution `FAILED` when no
   matching in-memory runtime control exists during a live process.
 

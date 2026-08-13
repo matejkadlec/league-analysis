@@ -297,7 +297,7 @@ export function PlayerSearch({
         toast({
           title: "Unable to add player for tracking",
           description:
-            "We weren't able to get this players info. Please try again in a few minutes.",
+            "We couldn't load this player's information. Please try again in a few minutes.",
           variant: "warning",
         });
         return;
@@ -305,14 +305,19 @@ export function PlayerSearch({
 
       if (error.kind === "api-key") {
         toast({
-          title:
+          title: "Player tracking is temporarily unavailable",
+          description:
             "The Riot API key is invalid or expired. Please contact an administrator.",
           variant: "error",
         });
         return;
       }
 
-      setTrackingErrorMessage(error.message);
+      setTrackingErrorMessage(
+        error.kind === "not-found"
+          ? error.message
+          : "Failed to track player. Please try again.",
+      );
     },
   });
 

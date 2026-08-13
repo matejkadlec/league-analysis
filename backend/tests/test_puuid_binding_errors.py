@@ -724,22 +724,47 @@ async def test_scheduler_startup_runs_recovery(monkeypatch) -> None:
     """
     from app.features.jobs import scheduler as scheduler_module
 
-    ran: list[str] = []
+    events: list[str] = []
+
+    class SchedulerDouble:
+        def start(self, *, paused: bool) -> None:
+            assert paused is True
+            events.append("start-paused")
+
+        def remove_all_jobs(self) -> None:
+            events.append("remove-stale-schedules")
+
+        def resume(self) -> None:
+            events.append("resume")
+
     monkeypatch.setattr(
         scheduler_module,
         "_run_startup_recovery",
-        AsyncMock(side_effect=lambda: ran.append("recovery")),
+        AsyncMock(side_effect=lambda: events.append("recovery")),
     )
     monkeypatch.setattr(
-        scheduler_module, "_check_and_run_overdue_jobs", AsyncMock(return_value=None)
+        scheduler_module,
+        "_check_and_run_overdue_jobs",
+        AsyncMock(side_effect=lambda: events.append("queue-overdue")),
     )
     monkeypatch.setattr(
-        scheduler_module, "_load_and_schedule_jobs", AsyncMock(return_value=None)
+        scheduler_module,
+        "_load_and_schedule_jobs",
+        AsyncMock(side_effect=lambda: events.append("load-schedules")),
     )
-    monkeypatch.setattr(scheduler_module, "AsyncIOScheduler", Mock())
+    monkeypatch.setattr(
+        scheduler_module, "AsyncIOScheduler", Mock(return_value=SchedulerDouble())
+    )
     monkeypatch.setattr(scheduler_module, "SQLAlchemyJobStore", Mock())
     monkeypatch.setattr(scheduler_module, "_scheduler", None)
 
     await scheduler_module.start_scheduler()
 
-    assert ran == ["recovery"]
+    assert events == [
+        "recovery",
+        "start-paused",
+        "remove-stale-schedules",
+        "load-schedules",
+        "queue-overdue",
+        "resume",
+    ]

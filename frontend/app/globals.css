@@ -175,6 +175,111 @@
     translate: none !important;
   }
 
+  [data-sonner-toaster][data-sonner-theme="light"],
+  [data-sonner-toaster][data-sonner-theme="dark"] {
+    --normal-bg: #f8fafc;
+    --normal-border: #475569;
+    --normal-text: #00091a;
+    --success-bg: #f0fdf4;
+    --success-border: #166534;
+    --success-text: #00091a;
+    --info-bg: #eff6ff;
+    --info-border: #1e3a8a;
+    --info-text: #00091a;
+    --warning-bg: #fffbeb;
+    --warning-border: #854d0e;
+    --warning-text: #00091a;
+    --error-bg: #fef2f2;
+    --error-border: #991b1b;
+    --error-text: #00091a;
+  }
+
+  [data-sonner-toast][data-styled="true"] {
+    gap: 6px !important;
+    padding: 12px !important;
+  }
+
+  [data-sonner-toast][data-styled="true"][data-rich-colors="true"][data-type="success"] {
+    background: #f0fdf4 !important;
+    border: 1px solid #166534 !important;
+    color: #00091a !important;
+  }
+
+  [data-sonner-toast][data-styled="true"][data-rich-colors="true"][data-type="warning"] {
+    background: #fffbeb !important;
+    border: 1px solid #854d0e !important;
+    color: #00091a !important;
+  }
+
+  [data-sonner-toast][data-styled="true"][data-rich-colors="true"][data-type="error"] {
+    background: #fef2f2 !important;
+    border: 1px solid #991b1b !important;
+    color: #00091a !important;
+  }
+
+  [data-sonner-toast][data-styled="true"][data-rich-colors="true"][data-type="info"] {
+    background: #eff6ff !important;
+    border: 1px solid #1e3a8a !important;
+    color: #00091a !important;
+  }
+
+  [data-sonner-toast][data-styled="true"] [data-title] {
+    color: #00091a !important;
+    font-size: 15px !important;
+    line-height: 20px !important;
+  }
+
+  [data-sonner-toast][data-styled="true"] [data-description] {
+    color: #00091a !important;
+  }
+
+  [data-sonner-toast][data-styled="true"] [data-content] {
+    margin-top: 0 !important;
+    padding-right: 16px;
+  }
+
+  [data-sonner-toast][data-styled="true"] [data-icon] {
+    align-self: flex-start !important;
+    width: 18px !important;
+    height: 20px !important;
+    margin: 0 0 0 -3px !important;
+  }
+
+  [data-sonner-toast][data-styled="true"] [data-icon] svg {
+    margin: 0 !important;
+  }
+
+  [data-sonner-toast][data-styled="true"] [data-close-button] {
+    top: 5px !important;
+    right: 5px !important;
+    left: auto !important;
+    width: 18px !important;
+    height: 18px !important;
+    padding: 0 !important;
+    transform: none !important;
+    background: transparent !important;
+    border: 0 !important;
+    color: #00091a !important;
+    cursor: pointer !important;
+  }
+
+  [data-sonner-toast][data-styled="true"] [data-close-button] svg {
+    width: 18px !important;
+    height: 18px !important;
+    transition:
+      color 150ms ease,
+      transform 150ms ease;
+  }
+
+  [data-sonner-toast][data-styled="true"] [data-close-button]:hover {
+    background: transparent !important;
+    color: #475569 !important;
+  }
+
+  [data-sonner-toast][data-styled="true"] [data-close-button]:hover svg {
+    transform: scale(1.15);
+  }
+
   /* Left sidebar gradient (both light and dark themes) */
   aside > div {
     border-right: 1.5px solid #00091a;

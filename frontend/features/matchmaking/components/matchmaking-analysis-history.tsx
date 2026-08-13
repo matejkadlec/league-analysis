@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { History, X } from "lucide-react";
-import { toast } from "sonner";
+import { useToast } from "@/lib/core/hooks";
 
 import {
   getMatchmakingAnalysisHistory,
@@ -49,6 +49,7 @@ function formatDateTime(dateString: string): string {
 export function MatchmakingAnalysisHistory({
   puuid,
 }: MatchmakingAnalysisHistoryProps) {
+  const toast = useToast();
   const queryClient = useQueryClient();
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
 
@@ -80,7 +81,9 @@ export function MatchmakingAnalysisHistory({
       return createdAt;
     },
     onSuccess: () => {
-      toast.success("Analysis record deleted");
+      toast.success("Matchmaking analysis removed", {
+        description: "The selected history record was deleted.",
+      });
       queryClient.invalidateQueries({
         queryKey: ["matchmaking-analysis-history", puuid],
       });
@@ -88,8 +91,10 @@ export function MatchmakingAnalysisHistory({
         queryKey: ["matchmaking-analysis-results", puuid],
       });
     },
-    onError: (error: Error) => {
-      toast.error(`Failed to delete: ${error.message}`);
+    onError: () => {
+      toast.error("Matchmaking analysis was not removed", {
+        description: "Please try again later.",
+      });
     },
   });
 

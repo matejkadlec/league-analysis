@@ -62,10 +62,24 @@ These are product design decisions, not suggestions:
   buttons outside dialogs use `button-full` and an icon. Show validation
   errors directly under the related field.
 - **Toasts** use sonner with `richColors` through the `useToast()` hook from
-  `@/lib/core/hooks`. Always pick an explicit variant — `success` (green,
-  confirmed actions), `error` (red, failures), `info` (blue, informational),
-  `warning` (amber) — never the default unstyled variant. Default duration is
-  4000ms; use `duration: 1000` only for quick inline confirmations.
+  `@/lib/core/hooks`; only that adapter and the shared `ToastHost` may import
+  sonner directly. Every variant uses `#00091A` title/body text, a pale semantic
+  surface, and a 1px border matching its leading dark green success, dark red
+  error, dark blue info, or dark yellow warning icon. Every toast exposes the
+  shared top-right close control, and stacks show up to four visible toasts.
+  Always pick an explicit
+  variant — `success` when an operation that can fail completes successfully,
+  `error` when such an operation fails, `warning` for non-blocking degradation,
+  cautious guidance, or invalid user input, and `info` for remaining neutral,
+  queued, started, or running states — never the default unstyled variant. The
+  shared host supplies `CircleCheckBig`, `CircleX`, `Info`, and `TriangleAlert`
+  before a 15px title aligned to the icon. Toast padding is 12px and the
+  icon-to-content gap is 6px. Default duration is 4000ms; use `duration: 1000`
+  only for quick inline confirmations.
+- Normalize API failures through `lib/core/api-error.ts`. UI may present safe
+  typed validation and business messages, but must replace unexpected,
+  provider, transport, and infrastructure details with a contextual product
+  message. Never render raw response bodies or unclassified exception text.
 
 ## Commands
 
@@ -97,3 +111,13 @@ the private Compose backend service. Normal `npm run dev` and repository
 - [app/AGENTS.md](app/AGENTS.md) - Page-level rules
 - [components/AGENTS.md](components/AGENTS.md) - Shared component rules
 - [features/AGENTS.md](features/AGENTS.md) - Feature invariants
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->
