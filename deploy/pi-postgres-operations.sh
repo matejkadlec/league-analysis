@@ -374,7 +374,8 @@ if ! usage | sed -n 's/^  \([a-z-][a-z-]*\).*/\1/p' \
 fi
 shift
 
-for required_command in awk basename date dirname docker find flock id install mktemp realpath sha256sum stat sync wc; do
+# The list covers this script and the retention tool it invokes.
+for required_command in awk basename date dirname docker find flock id install mktemp realpath sha256sum sort stat sync; do
   command -v "$required_command" >/dev/null 2>&1 \
     || die "$required_command is required on the Raspberry Pi"
 done
