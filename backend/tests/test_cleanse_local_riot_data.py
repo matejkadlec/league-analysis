@@ -10,6 +10,8 @@ from types import SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
+
+from scripts import cleanse_local_riot_data as cleanup
 from scripts.cleanse_local_riot_data import (
     PRESERVED_TABLES,
     RIOT_DATA_TABLES,
@@ -32,8 +34,6 @@ from scripts.cleanse_local_riot_data import (
     validated_backup_path,
     validated_database_name,
 )
-
-from scripts import cleanse_local_riot_data as cleanup
 
 
 @pytest.mark.parametrize("value", ["league_analysis_local_dev", "a1", "local_2"])

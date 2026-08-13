@@ -63,7 +63,11 @@ target-version = "py314"
 select = ["E4", "E7", "E9", "F", "I"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["app"]
+# scripts is listed explicitly because implicit first-party detection depends
+# on the working directory: the gate runs Ruff from backend/ and the pre-commit
+# hook from the repository root, and they disagreed on where
+# `from scripts import ...` belongs until the classification was pinned.
+known-first-party = ["app", "scripts"]
 
 [dependency-groups]
 dev = [
