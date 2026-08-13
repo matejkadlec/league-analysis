@@ -68,6 +68,8 @@ export function ToastHost() {
     <Toaster
       position="top-right"
       richColors
+      closeButton
+      visibleToasts={4}
       duration={TOAST_DEFAULT_DURATION_MS}
       theme={theme as "light" | "dark" | "system"}
       icons={{

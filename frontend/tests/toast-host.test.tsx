@@ -26,10 +26,12 @@ vi.mock("sonner", () => {
   return {
     toast,
     Toaster: (props: {
+      closeButton: boolean;
       duration: number;
       icons: Record<string, ReactNode>;
       richColors: boolean;
       theme: string;
+      visibleToasts: number;
     }) => {
       sonner.toaster(props);
       return (
@@ -60,8 +62,10 @@ describe("ToastHost", () => {
       expect.objectContaining({
         duration: 4000,
         richColors: true,
+        closeButton: true,
         position: "top-right",
         theme: "system",
+        visibleToasts: 4,
       }),
     );
     expect(screen.getByTestId("success-icon").innerHTML).toContain(

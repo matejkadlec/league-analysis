@@ -63,16 +63,19 @@ These are product design decisions, not suggestions:
   errors directly under the related field.
 - **Toasts** use sonner with `richColors` through the `useToast()` hook from
   `@/lib/core/hooks`; only that adapter and the shared `ToastHost` may import
-  sonner directly. Every variant uses a white surface and `#00091A` title/body
-  text; only the leading icon changes color: dark green success, dark red
-  error, dark blue info, or dark yellow warning. Always pick an explicit
+  sonner directly. Every variant uses `#00091A` title/body text, a pale semantic
+  surface, and a 1px border matching its leading dark green success, dark red
+  error, dark blue info, or dark yellow warning icon. Every toast exposes the
+  shared top-right close control, and stacks show up to four visible toasts.
+  Always pick an explicit
   variant — `success` when an operation that can fail completes successfully,
   `error` when such an operation fails, `warning` for non-blocking degradation,
   cautious guidance, or invalid user input, and `info` for remaining neutral,
   queued, started, or running states — never the default unstyled variant. The
   shared host supplies `CircleCheckBig`, `CircleX`, `Info`, and `TriangleAlert`
-  before a 15px title aligned to the icon. Default duration is 4000ms; use
-  `duration: 1000` only for quick inline confirmations.
+  before a 15px title aligned to the icon. Toast padding is 12px and the
+  icon-to-content gap is 6px. Default duration is 4000ms; use `duration: 1000`
+  only for quick inline confirmations.
 - Normalize API failures through `lib/core/api-error.ts`. UI may present safe
   typed validation and business messages, but must replace unexpected,
   provider, transport, and infrastructure details with a contextual product
