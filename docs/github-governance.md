@@ -22,7 +22,8 @@ targets only `refs/heads/master`. It requires:
 - no required approving-review count or last-push approval, preserving the
   workflow without inventing a second reviewer;
 - all supported merge methods (`merge`, `squash`, and `rebase`);
-- the required checks **Deterministic full-project gate** and **Live production dependency audit**, each bound to the GitHub Actions integration;
+- the required check **Deterministic full-project gate**, bound to the GitHub
+  Actions integration;
 - strict required checks, so a pull request must be current with `master`;
 - no bypass actors, no force pushes, and no branch deletion.
 
@@ -30,13 +31,15 @@ Signed commits are deliberately not required: the repository has no shared
 verified-signature workflow for Codex or dependency automation. Revisit that
 decision only after a compatible signing and recovery process is documented.
 
-The two required check contexts are the stable job names in
-[`quality-checks.yml`](../.github/workflows/quality-checks.yml). They cover the
+The required check context is the stable job name in
+[`quality-checks.yml`](../.github/workflows/quality-checks.yml). It covers the
 deterministic quality, security, migration, workflow, and repository-tooling
-checks plus the live production dependency comparison. Since LGA-10 landed the
-production Docker artifacts, the deterministic full-project gate also builds
-and health-checks the isolated production containers; Docker checks are part
-of that stable context, not a separate required context.
+checks. Since LGA-10 landed the production Docker artifacts, the gate also
+builds and health-checks the isolated production containers; Docker checks are
+part of that stable context, not a separate required context. Dependency
+advisories are watched by GitHub's native Dependabot alerts and security
+updates instead of a CI job (decision recorded in
+[`quality-checks.md`](quality-checks.md)).
 
 ## Current verified state
 

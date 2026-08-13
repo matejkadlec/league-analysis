@@ -28,7 +28,6 @@ usage() {
     'Commands:' \
     '  identity' \
     '  snapshot --confirm-target DATABASE' \
-    '  dump --confirm-target DATABASE' \
     '  safety-backup --label LABEL --confirm-target DATABASE' \
     '  daily-backup --confirm-target DATABASE' \
     '  pre-deploy-backup --confirm-target DATABASE --commit FULL_SHA' \
@@ -400,11 +399,6 @@ case "$command_name" in
     target="$(parse_target_option "$@")"
     confirm_target "$target"
     snapshot_database "$target"
-    ;;
-  dump)
-    target="$(parse_target_option "$@")"
-    confirm_target "$target"
-    dump_database "$target"
     ;;
   safety-backup)
     [[ "${1:-}" == "--label" && -n "${2:-}" && \

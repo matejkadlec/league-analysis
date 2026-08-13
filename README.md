@@ -110,8 +110,7 @@ Run these commands from the repository root:
 The complete gate runs deterministic installs, linting, type checks, frontend
 and backend regression tests, the production frontend build, static security
 analysis, ShellCheck, workflow checks, migration validation, and repository
-tooling regressions. GitHub Actions also runs the maintained live dependency
-comparison; local success is not GitHub check success. See
+tooling regressions. Local success is not GitHub check success. See
 [`docs/quality-checks.md`](docs/quality-checks.md) for the current boundary.
 
 When Docker Compose v2 is intentionally available, the separate

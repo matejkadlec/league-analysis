@@ -32,14 +32,12 @@ so it is safe to call from the main checkout or any worktree.
   needs `npx playwright install chromium` once per pinned browser version. It
   stays separate until that provisioning is part of the deterministic CI
   environment. It uses intercepted fixtures and never calls Riot or a database.
-- **The live dependency audit is GitHub-only.** Advisory databases change
-  independently of a commit, so its result is not reproducible locally and
-  cannot gate a local run.
-- **The audit blocks new findings always, and inherited findings only when
-  production dependency declarations change.** An advisory published against an
-  existing dependency must not turn unrelated pull requests permanently red.
-  `scripts/dependency-audit.sh <base-revision>` audits base and candidate locks
-  against one advisory snapshot. `test.sh` regression-tests this policy offline.
+- **Dependency advisories are GitHub's job, not a CI job.** Advisory databases
+  change independently of a commit, so an advisory check is not reproducible
+  and cannot gate anything deterministically. Dependabot alerts and security
+  updates (free on private repositories) watch the same lockfiles
+  asynchronously and open fix pull requests; the bespoke differential CI audit
+  they replaced was removed in 2026-08.
 - **Bandit excludes B104 and nothing else.** The direct local entry point binds
   WSL and LAN interfaces on purpose. Production process and network hardening
   is LGA-10.
@@ -61,14 +59,13 @@ so it is safe to call from the main checkout or any worktree.
 
 ## Stable check names
 
-The `master` ruleset requires two check contexts by exact name:
+The `master` ruleset requires one check context by exact name:
 
 ```text
 Deterministic full-project gate
-Live production dependency audit
 ```
 
-Renaming either job breaks the ruleset and needs an administrator to update it.
+Renaming the job breaks the ruleset and needs an administrator to update it.
 See [`github-governance.md`](github-governance.md).
 
 ## Result reporting

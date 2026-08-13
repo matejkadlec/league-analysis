@@ -258,8 +258,8 @@ the generated test database through the failure trap.
 
 Restoring production is deliberately not a command. Run `restore-test` on the
 chosen archive, take a `pre-restore` safety backup, then restore by hand; the
-database is under 10 MB. Retention never prunes `pre-restore` archives, so that
-backup remains available to undo the restore.
+database is around 164 MB as of 2026-08-12. Retention never prunes
+`pre-restore` archives, so that backup remains available to undo the restore.
 
 ## Recurring Pi-to-local mirror
 
