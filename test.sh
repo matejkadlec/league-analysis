@@ -140,6 +140,20 @@ run_backend_bandit() {
     --skip B104
 }
 
+run_backend_vulture() {
+  cd "$repository_root/backend"
+  uv run vulture
+}
+
+run_backend_deptry() {
+  cd "$repository_root/backend"
+  uv run deptry .
+}
+
+run_backend_xenon() {
+  "$repository_root/scripts/run-xenon.sh"
+}
+
 run_frontend_install() {
   cd "$repository_root/frontend"
   npm ci
@@ -205,6 +219,9 @@ if [[ "$run_backend" == true ]]; then
   run_step 'Backend Ruff format' run_backend_ruff_format
   run_step 'Backend Pyright' run_backend_pyright
   run_step 'Backend Bandit medium-confidence scan' run_backend_bandit
+  run_step 'Backend vulture dead-code scan' run_backend_vulture
+  run_step 'Backend deptry dependency scan' run_backend_deptry
+  run_step 'Backend xenon complexity' run_backend_xenon
 fi
 
 printf '\nAll selected quality checks passed.\n'

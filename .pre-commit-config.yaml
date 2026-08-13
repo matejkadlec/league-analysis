@@ -9,6 +9,7 @@ repos:
       - id: trailing-whitespace
       - id: end-of-file-fixer
       - id: check-yaml
+      - id: check-toml
       - id: check-json
       - id: check-added-large-files
       - id: check-merge-conflict
@@ -33,6 +34,60 @@ repos:
       # Run the formatter
       - id: ruff-format
         args: ["--config=backend/pyproject.toml"]
+
+  # Backend static analysis via the locked uv project. These stay
+  # corpus-wide (`pass_filenames: false`) so a staged subset cannot
+  # hide a project-level finding. Pytest and live CVE scans stay out:
+  # the former needs the test database, the latter is not deterministic.
+  - repo: local
+    hooks:
+      - id: backend-bandit
+        name: Bandit (medium/medium, skip B104)
+        entry: >
+          bash -c 'repository_root="$(git rev-parse --show-toplevel)" &&
+          cd "$repository_root/backend" &&
+          uv run bandit --quiet --recursive app
+          --severity-level medium --confidence-level medium --skip B104'
+        language: system
+        files: ^backend/app/.*\.py$
+        pass_filenames: false
+
+      - id: backend-pyright
+        name: Pyright
+        entry: >
+          bash -c 'repository_root="$(git rev-parse --show-toplevel)" &&
+          cd "$repository_root/backend" &&
+          uv run pyright'
+        language: system
+        files: ^backend/(app/.*\.py|pyproject\.toml)$
+        pass_filenames: false
+
+      - id: backend-vulture
+        name: vulture (dead code, min-confidence 80)
+        entry: >
+          bash -c 'repository_root="$(git rev-parse --show-toplevel)" &&
+          cd "$repository_root/backend" &&
+          uv run vulture'
+        language: system
+        files: ^backend/(app/.*\.py|pyproject\.toml)$
+        pass_filenames: false
+
+      - id: backend-deptry
+        name: deptry (unused/missing deps)
+        entry: >
+          bash -c 'repository_root="$(git rev-parse --show-toplevel)" &&
+          cd "$repository_root/backend" &&
+          uv run deptry .'
+        language: system
+        files: ^backend/(app/.*\.py|pyproject\.toml|uv\.lock)$
+        pass_filenames: false
+
+      - id: backend-xenon
+        name: xenon (cyclomatic complexity <= B)
+        entry: bash -c 'exec "$(git rev-parse --show-toplevel)/scripts/run-xenon.sh"'
+        language: system
+        files: ^backend/app/.*\.py$
+        pass_filenames: false
 
   # Frontend linting with Next.js (local hook for better compatibility)
   - repo: local

@@ -39,6 +39,45 @@ OBJECTIVE_KINDS = {
     "atakhan",
 }
 
+_BUILDING_SPECS: Dict[str, tuple[str, str, str, bool]] = {
+    "TOWER_BUILDING": (
+        "turret",
+        "team_turrets_destroyed",
+        "turret_takedowns_by_lane",
+        True,
+    ),
+    "INHIBITOR_BUILDING": (
+        "inhibitor",
+        "team_inhibitors_destroyed",
+        "inhibitor_takedowns_by_lane",
+        False,
+    ),
+}
+
+_MONSTER_SPECS: Dict[str, tuple[str, str]] = {
+    "DRAGON": ("dragon", "team_dragons_slain"),
+    "RIFTHERALD": ("rift_herald", "team_rift_heralds_slain"),
+    "BARON_NASHOR": ("baron", "team_barons_slain"),
+    "HORDE": ("voidgrub", "team_voidgrubs_slain"),
+}
+
+_TEAM_TOTAL_COPY_FIELDS = (
+    "team_turrets_destroyed",
+    "team_inhibitors_destroyed",
+    "team_dragons_slain",
+    "team_rift_heralds_slain",
+    "team_barons_slain",
+    "team_voidgrubs_slain",
+    "team_atakhan_slain",
+)
+
+_COUNTER_COPY_FIELDS = (
+    "turret_takedowns_by_lane",
+    "inhibitor_takedowns_by_lane",
+    "dragon_takedowns_by_subtype",
+    "other_epic_monster_takedowns",
+)
+
 
 class MatchTimeline(Base):
     """Objective-focused timeline aggregates per participant."""
@@ -280,323 +319,512 @@ def _append_compact_objective_event(
     row["objective_events"].append(entry)
 
 
-def build_match_timeline_rows(
-    match_dto: Any,
-    timeline_payload: Optional[Dict[str, Any]],
-) -> list[Dict[str, Any]]:
-    """Build participant timeline aggregates for objective-focused analytics."""
-    if not timeline_payload or not isinstance(timeline_payload, dict):
-        return []
+def _new_team_total_bucket() -> Dict[str, Any]:
+    """Create an empty team-level objective totals bucket."""
+    return {
+        "team_turrets_destroyed": 0,
+        "team_inhibitors_destroyed": 0,
+        "team_dragons_slain": 0,
+        "team_rift_heralds_slain": 0,
+        "team_barons_slain": 0,
+        "team_voidgrubs_slain": 0,
+        "team_atakhan_slain": 0,
+        "team_other_epic_monsters_slain": {},
+    }
 
+
+def _new_team_totals() -> Dict[int, Dict[str, Any]]:
+    """Create empty team totals for both sides."""
+    return {100: _new_team_total_bucket(), 200: _new_team_total_bucket()}
+
+
+def _new_participant_row(
+    match_id: str,
+    puuid: str,
+    participant_id: int,
+    team_id: int,
+    frame_interval_ms: Optional[int],
+    frame_count: int,
+) -> Dict[str, Any]:
+    """Create an empty participant timeline aggregate row."""
+    return {
+        "match_id": match_id,
+        "puuid": puuid,
+        "participant_id": participant_id,
+        "team_id": team_id,
+        "frame_interval_ms": frame_interval_ms,
+        "frame_count": frame_count,
+        "objective_takedowns_total": 0,
+        "objective_last_hits_total": 0,
+        "turret_takedowns": 0,
+        "turret_last_hits": 0,
+        "inhibitor_takedowns": 0,
+        "inhibitor_last_hits": 0,
+        "dragon_takedowns": 0,
+        "dragon_last_hits": 0,
+        "rift_herald_takedowns": 0,
+        "rift_herald_last_hits": 0,
+        "baron_takedowns": 0,
+        "baron_last_hits": 0,
+        "voidgrub_takedowns": 0,
+        "voidgrub_last_hits": 0,
+        "atakhan_takedowns": 0,
+        "atakhan_last_hits": 0,
+        "turret_takedowns_by_lane": {},
+        "inhibitor_takedowns_by_lane": {},
+        "dragon_takedowns_by_subtype": {},
+        "other_epic_monster_takedowns": {},
+        "team_turrets_destroyed": 0,
+        "team_inhibitors_destroyed": 0,
+        "team_dragons_slain": 0,
+        "team_rift_heralds_slain": 0,
+        "team_barons_slain": 0,
+        "team_voidgrubs_slain": 0,
+        "team_atakhan_slain": 0,
+        "team_other_epic_monsters_slain": {},
+        "objective_events": [],
+    }
+
+
+def _extract_timeline_frames(
+    timeline_payload: Optional[Dict[str, Any]],
+) -> Optional[tuple[Dict[str, Any], list[Any]]]:
+    """Return `(info, frames)` when the timeline payload has a usable shape."""
+    if not timeline_payload or not isinstance(timeline_payload, dict):
+        return None
     info = timeline_payload.get("info")
     if not isinstance(info, dict):
-        return []
-
+        return None
     frames = info.get("frames")
     if not isinstance(frames, list):
-        return []
+        return None
+    return info, frames
 
-    match_id = match_dto.metadata.match_id
-    historical_atakhan = _uses_historical_atakhan_contract(match_dto.info.game_version)
-    frame_interval_ms = _normalize_int(info.get("frameInterval"))
-    frame_count = len(frames)
 
+def _collect_participant_rows(
+    match_dto: Any,
+    frame_interval_ms: Optional[int],
+    frame_count: int,
+) -> tuple[Dict[int, int], Dict[int, Dict[str, Any]]]:
+    """Index valid participants and their empty timeline rows."""
     participant_team_by_id: Dict[int, int] = {}
     rows_by_participant_id: Dict[int, Dict[str, Any]] = {}
+    match_id = match_dto.metadata.match_id
 
     for participant in match_dto.info.participants:
         participant_id = _normalize_int(getattr(participant, "participant_id", None))
         team_id = _normalize_int(getattr(participant, "team_id", None))
-
         if participant_id is None or team_id not in VALID_TEAM_IDS:
             continue
-
         participant_team_by_id[participant_id] = team_id
-        rows_by_participant_id[participant_id] = {
-            "match_id": match_id,
-            "puuid": participant.puuid,
-            "participant_id": participant_id,
-            "team_id": team_id,
-            "frame_interval_ms": frame_interval_ms,
-            "frame_count": frame_count,
-            "objective_takedowns_total": 0,
-            "objective_last_hits_total": 0,
-            "turret_takedowns": 0,
-            "turret_last_hits": 0,
-            "inhibitor_takedowns": 0,
-            "inhibitor_last_hits": 0,
-            "dragon_takedowns": 0,
-            "dragon_last_hits": 0,
-            "rift_herald_takedowns": 0,
-            "rift_herald_last_hits": 0,
-            "baron_takedowns": 0,
-            "baron_last_hits": 0,
-            "voidgrub_takedowns": 0,
-            "voidgrub_last_hits": 0,
-            "atakhan_takedowns": 0,
-            "atakhan_last_hits": 0,
-            "turret_takedowns_by_lane": {},
-            "inhibitor_takedowns_by_lane": {},
-            "dragon_takedowns_by_subtype": {},
-            "other_epic_monster_takedowns": {},
-            "team_turrets_destroyed": 0,
-            "team_inhibitors_destroyed": 0,
-            "team_dragons_slain": 0,
-            "team_rift_heralds_slain": 0,
-            "team_barons_slain": 0,
-            "team_voidgrubs_slain": 0,
-            "team_atakhan_slain": 0,
-            "team_other_epic_monsters_slain": {},
-            "objective_events": [],
-        }
+        rows_by_participant_id[participant_id] = _new_participant_row(
+            match_id=match_id,
+            puuid=participant.puuid,
+            participant_id=participant_id,
+            team_id=team_id,
+            frame_interval_ms=frame_interval_ms,
+            frame_count=frame_count,
+        )
 
-    if not rows_by_participant_id:
-        return []
+    return participant_team_by_id, rows_by_participant_id
 
-    team_totals: Dict[int, Dict[str, Any]] = {
-        100: {
-            "team_turrets_destroyed": 0,
-            "team_inhibitors_destroyed": 0,
-            "team_dragons_slain": 0,
-            "team_rift_heralds_slain": 0,
-            "team_barons_slain": 0,
-            "team_voidgrubs_slain": 0,
-            "team_atakhan_slain": 0,
-            "team_other_epic_monsters_slain": {},
-        },
-        200: {
-            "team_turrets_destroyed": 0,
-            "team_inhibitors_destroyed": 0,
-            "team_dragons_slain": 0,
-            "team_rift_heralds_slain": 0,
-            "team_barons_slain": 0,
-            "team_voidgrubs_slain": 0,
-            "team_atakhan_slain": 0,
-            "team_other_epic_monsters_slain": {},
-        },
-    }
 
+def _event_role(killer_id: Optional[int], participant_id: int) -> str:
+    """Return compact killer/assist role for an involved participant."""
+    if killer_id is not None and participant_id == killer_id:
+        return "K"
+    return "A"
+
+
+def _iter_involved_rows(
+    involved: list[int],
+    rows_by_participant_id: Dict[int, Dict[str, Any]],
+) -> list[tuple[int, Dict[str, Any]]]:
+    """Return involved participant IDs that have an aggregate row."""
+    rows: list[tuple[int, Dict[str, Any]]] = []
+    for participant_id in involved:
+        row = rows_by_participant_id.get(participant_id)
+        if row is None:
+            continue
+        rows.append((participant_id, row))
+    return rows
+
+
+def _resolve_building_objective(
+    building_type: Optional[str],
+    tower_type: Optional[str],
+) -> tuple[Optional[str], Optional[str], Optional[str], Optional[str]]:
+    """Map a building kill to objective, team-total, lane, and subtype fields."""
+    spec = _BUILDING_SPECS.get(building_type) if building_type is not None else None
+    if spec is None:
+        return None, None, None, None
+    objective, team_field, lane_field, use_tower_subtype = spec
+    if use_tower_subtype:
+        return objective, team_field, lane_field, tower_type
+    return objective, team_field, lane_field, None
+
+
+def _resolve_monster_objective(
+    monster_type: str,
+    historical_atakhan: bool,
+) -> tuple[Optional[str], Optional[str]]:
+    """Map an elite monster kill to objective and team-total fields."""
+    spec = _MONSTER_SPECS.get(monster_type)
+    if spec is not None:
+        return spec
+    if monster_type == "ATAKHAN" and historical_atakhan:
+        return "atakhan", "team_atakhan_slain"
+    return None, None
+
+
+def _increment_known_team_total(
+    team_totals: Dict[int, Dict[str, Any]],
+    killer_team_id: Optional[int],
+    team_total_field: Optional[str],
+) -> None:
+    """Increment a known team objective counter when the killer team is valid."""
+    if team_total_field is None or killer_team_id not in VALID_TEAM_IDS:
+        return
+    team_totals[killer_team_id][team_total_field] += 1
+
+
+def _credit_team_monster(
+    team_totals: Dict[int, Dict[str, Any]],
+    killer_team_id: Optional[int],
+    objective: Optional[str],
+    team_total_field: Optional[str],
+    monster_type: str,
+) -> None:
+    """Credit a team-level epic-monster kill or retain an unknown type."""
+    if killer_team_id not in VALID_TEAM_IDS:
+        return
+    if objective is not None and team_total_field is not None:
+        team_totals[killer_team_id][team_total_field] += 1
+        return
+    _increment_counter(
+        team_totals[killer_team_id]["team_other_epic_monsters_slain"],
+        monster_type,
+    )
+
+
+def _credit_known_objective(
+    row: Dict[str, Any],
+    objective: str,
+    role: str,
+    timestamp: Optional[int],
+    *,
+    lane: Optional[str] = None,
+    lane_field: Optional[str] = None,
+    subtype: Optional[str] = None,
+) -> None:
+    """Increment known-objective takedown counters and append a compact event."""
+    row[f"{objective}_takedowns"] += 1
+    row["objective_takedowns_total"] += 1
+    if role == "K":
+        row[f"{objective}_last_hits"] += 1
+        row["objective_last_hits_total"] += 1
+    if lane and lane_field is not None:
+        _increment_counter(row[lane_field], lane)
+    _append_compact_objective_event(
+        row=row,
+        timestamp=timestamp,
+        objective=objective,
+        role=role,
+        lane=lane,
+        subtype=subtype,
+    )
+
+
+def _credit_monster_takedown(
+    row: Dict[str, Any],
+    objective: Optional[str],
+    role: str,
+    timestamp: Optional[int],
+    monster_type: str,
+    monster_subtype: Optional[str],
+) -> None:
+    """Credit a participant monster takedown or retain an unknown type."""
+    if objective in OBJECTIVE_KINDS:
+        _credit_known_objective(
+            row,
+            objective,
+            role,
+            timestamp,
+            subtype=monster_subtype,
+        )
+        if objective == "dragon" and monster_subtype is not None:
+            _increment_counter(row["dragon_takedowns_by_subtype"], monster_subtype)
+        return
+    _increment_counter(row["other_epic_monster_takedowns"], monster_type)
+    _append_compact_objective_event(
+        row=row,
+        timestamp=timestamp,
+        objective="other_epic_monster",
+        role=role,
+        subtype=monster_subtype,
+        monster_type=monster_type,
+    )
+
+
+def _record_unknown_building(
+    match_id: str,
+    building_type: Optional[str],
+    tower_type: Optional[str],
+    lane_type: Optional[str],
+    timestamp: Optional[int],
+    killer_id: Optional[int],
+    involved: list[int],
+    rows_by_participant_id: Dict[int, Dict[str, Any]],
+) -> None:
+    """Log and retain an unrecognized building objective for involved players."""
+    logger.warning(
+        "Unknown Riot timeline building objective",
+        match_id=match_id,
+        building_type=building_type,
+        tower_type=tower_type,
+        lane_type=lane_type,
+        timestamp=timestamp,
+    )
+    for participant_id, row in _iter_involved_rows(involved, rows_by_participant_id):
+        _append_compact_objective_event(
+            row=row,
+            timestamp=timestamp,
+            objective="other_building",
+            role=_event_role(killer_id, participant_id),
+            lane=lane_type,
+            subtype=building_type,
+            monster_type=tower_type,
+        )
+
+
+def _apply_building_kill(
+    event: Dict[str, Any],
+    match_id: str,
+    killer_id: Optional[int],
+    involved: list[int],
+    killer_team_id: Optional[int],
+    rows_by_participant_id: Dict[int, Dict[str, Any]],
+    team_totals: Dict[int, Dict[str, Any]],
+) -> None:
+    """Apply a BUILDING_KILL event to team totals and participant rows."""
+    building_type = _normalize_text(event.get("buildingType"))
+    lane_type = _normalize_text(event.get("laneType"))
+    tower_type = _normalize_text(event.get("towerType"))
+    timestamp = _normalize_int(event.get("timestamp"))
+    objective, team_total_field, lane_field, subtype = _resolve_building_objective(
+        building_type, tower_type
+    )
+
+    if objective is None:
+        _record_unknown_building(
+            match_id,
+            building_type,
+            tower_type,
+            lane_type,
+            timestamp,
+            killer_id,
+            involved,
+            rows_by_participant_id,
+        )
+        return
+
+    _increment_known_team_total(team_totals, killer_team_id, team_total_field)
+    for participant_id, row in _iter_involved_rows(involved, rows_by_participant_id):
+        _credit_known_objective(
+            row,
+            objective,
+            _event_role(killer_id, participant_id),
+            timestamp,
+            lane=lane_type,
+            lane_field=lane_field,
+            subtype=subtype,
+        )
+
+
+def _apply_elite_monster_kill(
+    event: Dict[str, Any],
+    match_id: str,
+    game_version: str,
+    historical_atakhan: bool,
+    killer_id: Optional[int],
+    involved: list[int],
+    killer_team_id: Optional[int],
+    rows_by_participant_id: Dict[int, Dict[str, Any]],
+    team_totals: Dict[int, Dict[str, Any]],
+) -> None:
+    """Apply an ELITE_MONSTER_KILL event to team totals and participant rows."""
+    monster_type = _normalize_text(event.get("monsterType"))
+    monster_subtype = _normalize_text(event.get("monsterSubType"))
+    timestamp = _normalize_int(event.get("timestamp"))
+    if monster_type is None:
+        return
+
+    objective, team_total_field = _resolve_monster_objective(
+        monster_type, historical_atakhan
+    )
+    if objective is None:
+        logger.warning(
+            "Unknown Riot timeline epic monster objective",
+            match_id=match_id,
+            game_version=game_version,
+            monster_type=monster_type,
+            monster_subtype=monster_subtype,
+            timestamp=timestamp,
+        )
+
+    _credit_team_monster(
+        team_totals,
+        killer_team_id,
+        objective,
+        team_total_field,
+        monster_type,
+    )
+    for participant_id, row in _iter_involved_rows(involved, rows_by_participant_id):
+        _credit_monster_takedown(
+            row,
+            objective,
+            _event_role(killer_id, participant_id),
+            timestamp,
+            monster_type,
+            monster_subtype,
+        )
+
+
+def _process_timeline_event(
+    event: Any,
+    match_id: str,
+    game_version: str,
+    historical_atakhan: bool,
+    valid_participant_ids: set[int],
+    participant_team_by_id: Dict[int, int],
+    rows_by_participant_id: Dict[int, Dict[str, Any]],
+    team_totals: Dict[int, Dict[str, Any]],
+) -> None:
+    """Dispatch one timeline event when it is an objective kill."""
+    if not isinstance(event, dict):
+        return
+    event_type = event.get("type")
+    if event_type not in {"BUILDING_KILL", "ELITE_MONSTER_KILL"}:
+        return
+
+    killer_id, involved = _collect_involved_participants(event, valid_participant_ids)
+    killer_team_id = _determine_killer_team_id(event, killer_id, participant_team_by_id)
+    if event_type == "BUILDING_KILL":
+        _apply_building_kill(
+            event,
+            match_id,
+            killer_id,
+            involved,
+            killer_team_id,
+            rows_by_participant_id,
+            team_totals,
+        )
+        return
+    _apply_elite_monster_kill(
+        event,
+        match_id,
+        game_version,
+        historical_atakhan,
+        killer_id,
+        involved,
+        killer_team_id,
+        rows_by_participant_id,
+        team_totals,
+    )
+
+
+def _process_timeline_frames(
+    frames: list[Any],
+    match_id: str,
+    game_version: str,
+    historical_atakhan: bool,
+    participant_team_by_id: Dict[int, int],
+    rows_by_participant_id: Dict[int, Dict[str, Any]],
+    team_totals: Dict[int, Dict[str, Any]],
+) -> None:
+    """Walk timeline frames and apply recognized objective events."""
     valid_participant_ids = set(rows_by_participant_id.keys())
-
     for frame in frames:
         if not isinstance(frame, dict):
             continue
         events = frame.get("events")
         if not isinstance(events, list):
             continue
-
         for event in events:
-            if not isinstance(event, dict):
-                continue
-
-            event_type = event.get("type")
-            if event_type not in {"BUILDING_KILL", "ELITE_MONSTER_KILL"}:
-                continue
-
-            killer_id, involved = _collect_involved_participants(
-                event, valid_participant_ids
+            _process_timeline_event(
+                event,
+                match_id,
+                game_version,
+                historical_atakhan,
+                valid_participant_ids,
+                participant_team_by_id,
+                rows_by_participant_id,
+                team_totals,
             )
 
-            killer_team_id = _determine_killer_team_id(
-                event, killer_id, participant_team_by_id
-            )
-            timestamp = _normalize_int(event.get("timestamp"))
 
-            if event_type == "BUILDING_KILL":
-                building_type = _normalize_text(event.get("buildingType"))
-                lane_type = _normalize_text(event.get("laneType"))
-                tower_type = _normalize_text(event.get("towerType"))
+def _apply_team_totals_to_row(
+    row: Dict[str, Any], totals: Optional[Dict[str, Any]]
+) -> None:
+    """Copy team totals onto a participant row when the team is known."""
+    if totals is None:
+        return
+    for field in _TEAM_TOTAL_COPY_FIELDS:
+        row[field] = totals[field]
+    row["team_other_epic_monsters_slain"] = dict(
+        totals["team_other_epic_monsters_slain"]
+    )
 
-                objective: Optional[str] = None
-                team_total_field: Optional[str] = None
-                lane_field: Optional[str] = None
-                subtype: Optional[str] = None
 
-                if building_type == "TOWER_BUILDING":
-                    objective = "turret"
-                    team_total_field = "team_turrets_destroyed"
-                    lane_field = "turret_takedowns_by_lane"
-                    subtype = tower_type
-                elif building_type == "INHIBITOR_BUILDING":
-                    objective = "inhibitor"
-                    team_total_field = "team_inhibitors_destroyed"
-                    lane_field = "inhibitor_takedowns_by_lane"
+def _freeze_row_counters(row: Dict[str, Any]) -> None:
+    """Snapshot mutable counter dicts so later mutations cannot leak."""
+    for field in _COUNTER_COPY_FIELDS:
+        row[field] = dict(row[field])
 
-                if objective is None:
-                    logger.warning(
-                        "Unknown Riot timeline building objective",
-                        match_id=match_id,
-                        building_type=building_type,
-                        tower_type=tower_type,
-                        lane_type=lane_type,
-                        timestamp=timestamp,
-                    )
-                    for participant_id in involved:
-                        row = rows_by_participant_id.get(participant_id)
-                        if row is None:
-                            continue
-                        _append_compact_objective_event(
-                            row=row,
-                            timestamp=timestamp,
-                            objective="other_building",
-                            role=(
-                                "K"
-                                if killer_id is not None and participant_id == killer_id
-                                else "A"
-                            ),
-                            lane=lane_type,
-                            subtype=building_type,
-                            monster_type=tower_type,
-                        )
-                    continue
 
-                if (
-                    objective is not None
-                    and team_total_field is not None
-                    and killer_team_id in VALID_TEAM_IDS
-                ):
-                    team_totals[killer_team_id][team_total_field] += 1
-
-                for participant_id in involved:
-                    row = rows_by_participant_id.get(participant_id)
-                    if row is None:
-                        continue
-
-                    row[f"{objective}_takedowns"] += 1
-                    row["objective_takedowns_total"] += 1
-
-                    role = "A"
-                    if killer_id is not None and participant_id == killer_id:
-                        row[f"{objective}_last_hits"] += 1
-                        row["objective_last_hits_total"] += 1
-                        role = "K"
-
-                    if lane_type and lane_field is not None:
-                        _increment_counter(row[lane_field], lane_type)
-
-                    _append_compact_objective_event(
-                        row=row,
-                        timestamp=timestamp,
-                        objective=objective,
-                        role=role,
-                        lane=lane_type,
-                        subtype=subtype,
-                    )
-
-                continue
-
-            monster_type = _normalize_text(event.get("monsterType"))
-            monster_subtype = _normalize_text(event.get("monsterSubType"))
-            if monster_type is None:
-                continue
-
-            objective = None
-            team_total_field = None
-
-            if monster_type == "DRAGON":
-                objective = "dragon"
-                team_total_field = "team_dragons_slain"
-            elif monster_type == "RIFTHERALD":
-                objective = "rift_herald"
-                team_total_field = "team_rift_heralds_slain"
-            elif monster_type == "BARON_NASHOR":
-                objective = "baron"
-                team_total_field = "team_barons_slain"
-            elif monster_type == "HORDE":
-                objective = "voidgrub"
-                team_total_field = "team_voidgrubs_slain"
-            elif monster_type == "ATAKHAN" and historical_atakhan:
-                objective = "atakhan"
-                team_total_field = "team_atakhan_slain"
-
-            if objective is None:
-                logger.warning(
-                    "Unknown Riot timeline epic monster objective",
-                    match_id=match_id,
-                    game_version=match_dto.info.game_version,
-                    monster_type=monster_type,
-                    monster_subtype=monster_subtype,
-                    timestamp=timestamp,
-                )
-
-            if (
-                objective is not None
-                and team_total_field is not None
-                and killer_team_id in VALID_TEAM_IDS
-            ):
-                team_totals[killer_team_id][team_total_field] += 1
-            elif killer_team_id in VALID_TEAM_IDS:
-                _increment_counter(
-                    team_totals[killer_team_id]["team_other_epic_monsters_slain"],
-                    monster_type,
-                )
-
-            for participant_id in involved:
-                row = rows_by_participant_id.get(participant_id)
-                if row is None:
-                    continue
-
-                role = "A"
-                if killer_id is not None and participant_id == killer_id:
-                    role = "K"
-
-                if objective in OBJECTIVE_KINDS:
-                    row[f"{objective}_takedowns"] += 1
-                    row["objective_takedowns_total"] += 1
-
-                    if role == "K":
-                        row[f"{objective}_last_hits"] += 1
-                        row["objective_last_hits_total"] += 1
-
-                    if objective == "dragon" and monster_subtype is not None:
-                        _increment_counter(
-                            row["dragon_takedowns_by_subtype"], monster_subtype
-                        )
-
-                    _append_compact_objective_event(
-                        row=row,
-                        timestamp=timestamp,
-                        objective=objective,
-                        role=role,
-                        subtype=monster_subtype,
-                    )
-                else:
-                    _increment_counter(
-                        row["other_epic_monster_takedowns"], monster_type
-                    )
-                    _append_compact_objective_event(
-                        row=row,
-                        timestamp=timestamp,
-                        objective="other_epic_monster",
-                        role=role,
-                        subtype=monster_subtype,
-                        monster_type=monster_type,
-                    )
-
+def _finalize_timeline_rows(
+    rows_by_participant_id: Dict[int, Dict[str, Any]],
+    team_totals: Dict[int, Dict[str, Any]],
+) -> list[Dict[str, Any]]:
+    """Attach team totals and return rows ordered by participant ID."""
     rows: list[Dict[str, Any]] = []
     for participant_id in sorted(rows_by_participant_id.keys()):
         row = rows_by_participant_id[participant_id]
-        totals = team_totals.get(row["team_id"])
-
-        if totals is not None:
-            row["team_turrets_destroyed"] = totals["team_turrets_destroyed"]
-            row["team_inhibitors_destroyed"] = totals["team_inhibitors_destroyed"]
-            row["team_dragons_slain"] = totals["team_dragons_slain"]
-            row["team_rift_heralds_slain"] = totals["team_rift_heralds_slain"]
-            row["team_barons_slain"] = totals["team_barons_slain"]
-            row["team_voidgrubs_slain"] = totals["team_voidgrubs_slain"]
-            row["team_atakhan_slain"] = totals["team_atakhan_slain"]
-            row["team_other_epic_monsters_slain"] = dict(
-                totals["team_other_epic_monsters_slain"]
-            )
-
-        row["turret_takedowns_by_lane"] = dict(row["turret_takedowns_by_lane"])
-        row["inhibitor_takedowns_by_lane"] = dict(row["inhibitor_takedowns_by_lane"])
-        row["dragon_takedowns_by_subtype"] = dict(row["dragon_takedowns_by_subtype"])
-        row["other_epic_monster_takedowns"] = dict(row["other_epic_monster_takedowns"])
+        _apply_team_totals_to_row(row, team_totals.get(row["team_id"]))
+        _freeze_row_counters(row)
         rows.append(row)
-
     return rows
+
+
+def build_match_timeline_rows(
+    match_dto: Any,
+    timeline_payload: Optional[Dict[str, Any]],
+) -> list[Dict[str, Any]]:
+    """Build participant timeline aggregates for objective-focused analytics."""
+    extracted = _extract_timeline_frames(timeline_payload)
+    if extracted is None:
+        return []
+
+    info, frames = extracted
+    participant_team_by_id, rows_by_participant_id = _collect_participant_rows(
+        match_dto,
+        _normalize_int(info.get("frameInterval")),
+        len(frames),
+    )
+    if not rows_by_participant_id:
+        return []
+
+    team_totals = _new_team_totals()
+    _process_timeline_frames(
+        frames,
+        match_dto.metadata.match_id,
+        match_dto.info.game_version,
+        _uses_historical_atakhan_contract(match_dto.info.game_version),
+        participant_team_by_id,
+        rows_by_participant_id,
+        team_totals,
+    )
+    return _finalize_timeline_rows(rows_by_participant_id, team_totals)
 
 
 async def replace_match_timeline_rows(

@@ -8,6 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import db_manager
+from app.features.jobs.base import BaseJob
 from app.features.jobs.implementations.match_fetcher import MatchFetcherJob
 from app.features.jobs.implementations.player_updater import PlayerUpdaterJob
 from app.features.jobs.models import (
@@ -162,12 +163,14 @@ async def _finish_sync(
         await db.commit()
 
 
-async def run_player_sync(sync_id: int) -> None:
-    """Run Match Fetcher then Player Updater for one exact PUUID."""
+async def _load_player_sync(
+    sync_id: int,
+) -> tuple[str, JobConfiguration | None, JobConfiguration | None] | None:
+    """Load an active run and the two writer configurations it needs."""
     async with db_manager.get_session() as db:
         sync_run = await db.get(PlayerSyncRun, sync_id)
         if sync_run is None or sync_run.status not in ACTIVE_SYNC_STATUSES:
-            return
+            return None
         puuid = sync_run.puuid
         configs = (
             (
@@ -183,9 +186,62 @@ async def run_player_sync(sync_id: int) -> None:
             .all()
         )
         by_type = {config.job_type: config for config in configs}
+    return (
+        puuid,
+        by_type.get(JobType.MATCH_FETCHER),
+        by_type.get(JobType.PLAYER_UPDATER),
+    )
 
-    match_config = by_type.get(JobType.MATCH_FETCHER)
-    profile_config = by_type.get(JobType.PLAYER_UPDATER)
+
+def _writer_is_unsuccessful(job: BaseJob) -> bool:
+    """True when a writer did not finish as a clean SUCCESS without warnings."""
+    return (
+        job.job_execution_id is None
+        or job.job_execution_status != JobStatus.SUCCESS
+        or job.has_errors()
+    )
+
+
+async def _run_sync_writer(
+    job_cls: type[MatchFetcherJob] | type[PlayerUpdaterJob],
+    config_id: int,
+    puuid: str,
+) -> MatchFetcherJob | PlayerUpdaterJob:
+    """Run one writer against a single PUUID allowlist."""
+    job = job_cls(
+        config_id,
+        triggered_by="player_sync",
+        target_puuids={puuid},
+    )
+    await job.run()
+    return job
+
+
+async def _finish_failed_writer(
+    sync_id: int,
+    job: BaseJob,
+    *,
+    match_execution_id: int | None,
+    profile_execution_id: int | None = None,
+) -> None:
+    """Map a writer outcome onto the player-sync lifecycle."""
+    status, code, message = _failure_from_job(job)
+    await _finish_sync(
+        sync_id,
+        status=status,
+        error_code=code,
+        error_message=message,
+        match_execution_id=match_execution_id,
+        profile_execution_id=profile_execution_id,
+    )
+
+
+async def run_player_sync(sync_id: int) -> None:
+    """Run Match Fetcher then Player Updater for one exact PUUID."""
+    loaded = await _load_player_sync(sync_id)
+    if loaded is None:
+        return
+    puuid, match_config, profile_config = loaded
     if match_config is None or profile_config is None:
         await _finish_sync(
             sync_id,
@@ -197,24 +253,12 @@ async def run_player_sync(sync_id: int) -> None:
 
     await _finish_sync(sync_id, status="running")
     try:
-        match_job = MatchFetcherJob(
-            match_config.id,
-            triggered_by="player_sync",
-            target_puuids={puuid},
-        )
-        await match_job.run()
+        match_job = await _run_sync_writer(MatchFetcherJob, match_config.id, puuid)
         match_execution_id = match_job.job_execution_id
-        if (
-            match_execution_id is None
-            or match_job.job_execution_status != JobStatus.SUCCESS
-            or match_job.has_errors()
-        ):
-            status, code, message = _failure_from_job(match_job)
-            await _finish_sync(
+        if _writer_is_unsuccessful(match_job):
+            await _finish_failed_writer(
                 sync_id,
-                status=status,
-                error_code=code,
-                error_message=message,
+                match_job,
                 match_execution_id=match_execution_id,
             )
             return
@@ -225,24 +269,12 @@ async def run_player_sync(sync_id: int) -> None:
             match_execution_id=match_execution_id,
         )
 
-        profile_job = PlayerUpdaterJob(
-            profile_config.id,
-            triggered_by="player_sync",
-            target_puuids={puuid},
-        )
-        await profile_job.run()
+        profile_job = await _run_sync_writer(PlayerUpdaterJob, profile_config.id, puuid)
         profile_execution_id = profile_job.job_execution_id
-        if (
-            profile_execution_id is None
-            or profile_job.job_execution_status != JobStatus.SUCCESS
-            or profile_job.has_errors()
-        ):
-            status, code, message = _failure_from_job(profile_job)
-            await _finish_sync(
+        if _writer_is_unsuccessful(profile_job):
+            await _finish_failed_writer(
                 sync_id,
-                status=status,
-                error_code=code,
-                error_message=message,
+                profile_job,
                 match_execution_id=match_execution_id,
                 profile_execution_id=profile_execution_id,
             )

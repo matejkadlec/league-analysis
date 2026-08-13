@@ -103,9 +103,9 @@ class RiotAPIClient:
 
     async def __aexit__(
         self,
-        exc_type: type[BaseException] | None,
-        exc_val: BaseException | None,
-        exc_tb: object | None,
+        _exc_type: type[BaseException] | None,
+        _exc_val: BaseException | None,
+        _exc_tb: object | None,
     ) -> None:
         """Async context manager exit."""
         await self.close()
@@ -606,6 +606,26 @@ class RiotAPIClient:
             raise ValueError(f"Unsupported Riot match type: {match_type}") from error
 
     @staticmethod
+    def _is_non_negative_int(value: object) -> bool:
+        """Return True for a real int >= 0. Rejects bool, which subclasses int."""
+        return not isinstance(value, bool) and isinstance(value, int) and value >= 0
+
+    @staticmethod
+    def _is_match_list_count(value: object) -> bool:
+        """Return True for a real int in the MATCH-V5 count range."""
+        return (
+            not isinstance(value, bool) and isinstance(value, int) and 0 <= value <= 100
+        )
+
+    @staticmethod
+    def _require_optional_epoch_seconds(name: str, value: int | None) -> None:
+        """Reject a present time filter that is not a non-negative epoch second."""
+        if value is None:
+            return
+        if not RiotAPIClient._is_non_negative_int(value):
+            raise ValueError(f"{name} must be a non-negative epoch-second integer")
+
+    @staticmethod
     def _validate_match_list_bounds(
         start: int,
         count: int,
@@ -613,20 +633,12 @@ class RiotAPIClient:
         end_time: int | None,
     ) -> None:
         """Validate MATCH-V5 pagination and epoch-second time filters."""
-        if isinstance(start, bool) or not isinstance(start, int) or start < 0:
+        if not RiotAPIClient._is_non_negative_int(start):
             raise ValueError("start must be a non-negative integer")
-        if (
-            isinstance(count, bool)
-            or not isinstance(count, int)
-            or not 0 <= count <= 100
-        ):
+        if not RiotAPIClient._is_match_list_count(count):
             raise ValueError("count must be an integer between 0 and 100")
 
-        for name, value in (("start_time", start_time), ("end_time", end_time)):
-            if value is None:
-                continue
-            if isinstance(value, bool) or not isinstance(value, int) or value < 0:
-                raise ValueError(f"{name} must be a non-negative epoch-second integer")
-
+        RiotAPIClient._require_optional_epoch_seconds("start_time", start_time)
+        RiotAPIClient._require_optional_epoch_seconds("end_time", end_time)
         if start_time is not None and end_time is not None and start_time > end_time:
             raise ValueError("start_time must not be greater than end_time")

@@ -6,7 +6,7 @@ import secrets
 import smtplib
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
-from typing import Optional
+from typing import Any, Optional
 from uuid import uuid4
 
 import httpx
@@ -938,73 +938,86 @@ class AuthService:
 
         return expires_at
 
-    async def verify_email_change_code(
-        self,
-        *,
-        current_user: User,
-        code: str,
-    ) -> User:
-        """Validate the code and update current user's email on success."""
-        now = datetime.now(timezone.utc)
-        email_change_request = await self._get_or_create_email_change_request(
-            current_user.id
-        )
-
+    @staticmethod
+    def _raise_if_email_change_locked(
+        email_change_request: EmailChangeRequest, now: datetime
+    ) -> None:
+        """Reject email-change actions while the user is locked out."""
         if (
             email_change_request.locked_until is not None
             and email_change_request.locked_until > now
         ):
             raise EmailChangeLockedError(email_change_request.locked_until)
 
+    @staticmethod
+    def _require_pending_email_change(
+        email_change_request: EmailChangeRequest,
+    ) -> tuple[str, str, datetime]:
+        """Return the pending request fields or raise if none is active."""
+        pending_email = email_change_request.pending_email
+        verification_code_hash = email_change_request.verification_code_hash
+        code_expires_at = email_change_request.code_expires_at
         if (
-            email_change_request.pending_email is None
-            or email_change_request.verification_code_hash is None
-            or email_change_request.code_expires_at is None
+            pending_email is None
+            or verification_code_hash is None
+            or code_expires_at is None
         ):
             raise EmailVerificationRequestNotFoundError
+        return pending_email, verification_code_hash, code_expires_at
 
-        if email_change_request.code_expires_at <= now:
+    async def _expire_email_change_code_if_needed(
+        self,
+        email_change_request: EmailChangeRequest,
+        code_expires_at: datetime,
+        now: datetime,
+    ) -> None:
+        """Clear an expired code and raise so the user can request a new one."""
+        if code_expires_at > now:
+            return
+        email_change_request.verification_code_hash = None
+        email_change_request.code_expires_at = None
+        email_change_request.failed_attempts = 0
+        email_change_request.updated_at = now
+        await self.db.commit()
+        raise EmailVerificationCodeExpiredError
+
+    async def _record_failed_email_verification(
+        self, email_change_request: EmailChangeRequest, now: datetime
+    ) -> None:
+        """Count a wrong code and lock email-change after too many failures."""
+        email_change_request.failed_attempts += 1
+        attempts_remaining = max(
+            0,
+            EMAIL_CHANGE_MAX_FAILED_ATTEMPTS - email_change_request.failed_attempts,
+        )
+        email_change_request.updated_at = now
+
+        if email_change_request.failed_attempts >= EMAIL_CHANGE_MAX_FAILED_ATTEMPTS:
+            locked_until = now + timedelta(minutes=EMAIL_CHANGE_LOCK_MINUTES)
+            email_change_request.pending_email = None
             email_change_request.verification_code_hash = None
             email_change_request.code_expires_at = None
             email_change_request.failed_attempts = 0
-            email_change_request.updated_at = now
+            email_change_request.locked_until = locked_until
             await self.db.commit()
-            raise EmailVerificationCodeExpiredError
+            raise EmailChangeLockedError(locked_until)
 
-        submitted_hash = self._hash_email_verification_code(code)
-        is_match = secrets.compare_digest(
-            email_change_request.verification_code_hash,
-            submitted_hash,
-        )
+        await self.db.commit()
+        raise InvalidEmailVerificationCodeError(attempts_remaining)
 
-        if not is_match:
-            email_change_request.failed_attempts += 1
-            attempts_remaining = max(
-                0,
-                EMAIL_CHANGE_MAX_FAILED_ATTEMPTS - email_change_request.failed_attempts,
-            )
-            email_change_request.updated_at = now
-
-            if email_change_request.failed_attempts >= EMAIL_CHANGE_MAX_FAILED_ATTEMPTS:
-                locked_until = now + timedelta(minutes=EMAIL_CHANGE_LOCK_MINUTES)
-                email_change_request.pending_email = None
-                email_change_request.verification_code_hash = None
-                email_change_request.code_expires_at = None
-                email_change_request.failed_attempts = 0
-                email_change_request.locked_until = locked_until
-                await self.db.commit()
-                raise EmailChangeLockedError(locked_until)
-
-            await self.db.commit()
-            raise InvalidEmailVerificationCodeError(attempts_remaining)
-
-        existing_user = await self.get_user_by_email_case_insensitive(
-            email_change_request.pending_email
-        )
+    async def _apply_verified_email_change(
+        self,
+        current_user: User,
+        email_change_request: EmailChangeRequest,
+        pending_email: str,
+        now: datetime,
+    ) -> User:
+        """Persist the verified email and clear the pending request."""
+        existing_user = await self.get_user_by_email_case_insensitive(pending_email)
         if existing_user is not None and existing_user.id != current_user.id:
             raise EmailAlreadyRegisteredError
 
-        current_user.email = email_change_request.pending_email
+        current_user.email = pending_email
         current_user.email_verified = True
         current_user.email_verified_at = now
         current_user.updated_at = now
@@ -1021,6 +1034,34 @@ class AuthService:
 
         logger.info("email_changed", user_id=current_user.id)
         return current_user
+
+    async def verify_email_change_code(
+        self,
+        *,
+        current_user: User,
+        code: str,
+    ) -> User:
+        """Validate the code and update current user's email on success."""
+        now = datetime.now(timezone.utc)
+        email_change_request = await self._get_or_create_email_change_request(
+            current_user.id
+        )
+        self._raise_if_email_change_locked(email_change_request, now)
+        pending_email, verification_code_hash, code_expires_at = (
+            self._require_pending_email_change(email_change_request)
+        )
+        await self._expire_email_change_code_if_needed(
+            email_change_request, code_expires_at, now
+        )
+
+        submitted_hash = self._hash_email_verification_code(code)
+        is_match = secrets.compare_digest(verification_code_hash, submitted_hash)
+        if not is_match:
+            await self._record_failed_email_verification(email_change_request, now)
+
+        return await self._apply_verified_email_change(
+            current_user, email_change_request, pending_email, now
+        )
 
     async def change_password(
         self,
@@ -1051,13 +1092,44 @@ class AuthService:
             user.updated_at = now
             await self.db.commit()
 
-    async def get_current_user(self, token: str = Depends(oauth2_scheme)) -> User:
-        """Get the current authenticated user from JWT token."""
-        credentials_exception = HTTPException(
+    @staticmethod
+    def _unauthenticated_credentials_error() -> HTTPException:
+        """Build the standard 401 used for invalid or incomplete access tokens."""
+        return HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate credentials",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+    @staticmethod
+    def _access_token_data_from_payload(payload: Any) -> TokenData | None:
+        """Return access-token claims when the payload has the required types."""
+        email = payload.get("sub")
+        user_id = payload.get("user_id")
+        token_id = payload.get("jti")
+        token_type = payload.get("typ")
+        exp = payload.get("exp")
+
+        if (
+            not isinstance(email, str)
+            or not isinstance(user_id, int)
+            or not isinstance(token_id, str)
+            or token_type != "access"
+            or not isinstance(exp, int)
+        ):
+            return None
+
+        return TokenData(
+            email=email,
+            user_id=user_id,
+            token_id=token_id,
+            token_type=token_type,
+            exp=exp,
+        )
+
+    async def get_current_user(self, token: str = Depends(oauth2_scheme)) -> User:
+        """Get the current authenticated user from JWT token."""
+        credentials_exception = self._unauthenticated_credentials_error()
 
         try:
             payload = jwt.decode(
@@ -1065,33 +1137,15 @@ class AuthService:
                 self.settings.jwt_secret_key,
                 algorithms=[self.settings.jwt_algorithm],
             )
-            email = payload.get("sub")
-            user_id = payload.get("user_id")
-            token_id = payload.get("jti")
-            token_type = payload.get("typ")
-            exp = payload.get("exp")
-
-            if (
-                not isinstance(email, str)
-                or not isinstance(user_id, int)
-                or not isinstance(token_id, str)
-                or token_type != "access"
-                or not isinstance(exp, int)
-            ):
-                raise credentials_exception
-
-            token_data = TokenData(
-                email=email,
-                user_id=user_id,
-                token_id=token_id,
-                token_type=token_type,
-                exp=exp,
-            )
-
+            token_data = self._access_token_data_from_payload(payload)
         except InvalidTokenError:
             raise credentials_exception
 
-        if token_data.user_id is None or token_data.token_id is None:
+        if (
+            token_data is None
+            or token_data.user_id is None
+            or token_data.token_id is None
+        ):
             raise credentials_exception
 
         is_revoked = await self.is_access_token_revoked(token_data.token_id)
@@ -1099,7 +1153,6 @@ class AuthService:
             raise credentials_exception
 
         user = await self.get_user_by_id(token_data.user_id)
-
         if user is None:
             raise credentials_exception
 

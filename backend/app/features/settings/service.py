@@ -212,7 +212,11 @@ class SettingsService:
         )
 
     async def create_or_update_setting(
-        self, key: str, value: str, category: str, is_sensitive: bool = False
+        self,
+        key: str,
+        value: str,
+        _category: str,
+        _is_sensitive: bool = False,
     ) -> SettingResponse:
         """Create or update a setting.
 

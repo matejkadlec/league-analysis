@@ -546,6 +546,101 @@ async def sync_job_configuration(job_config_id: int) -> None:
         )
 
 
+def _overdue_reason(
+    last_execution: Optional[JobExecution],
+    now: datetime,
+    interval_seconds: int,
+) -> Optional[str]:
+    """Return the overdue reason, or None when the job is still on schedule."""
+    if last_execution is None:
+        return "never run before"
+    time_since_last_run = (now - last_execution.started_at).total_seconds()
+    if time_since_last_run > interval_seconds:
+        return (
+            f"last run {int(time_since_last_run / 60)} minutes ago "
+            f"(interval: {int(interval_seconds / 60)} minutes)"
+        )
+    return None
+
+
+async def _last_job_execution(job_config_id: int) -> Optional[JobExecution]:
+    """Return the most recent execution for one configuration, if any."""
+    from sqlalchemy import select
+
+    async with db_manager.get_session() as db:
+        stmt = (
+            select(JobExecution)
+            .where(JobExecution.job_config_id == job_config_id)
+            .order_by(JobExecution.started_at.desc())
+            .limit(1)
+        )
+        result = await db.execute(stmt)
+        return result.scalar_one_or_none()
+
+
+async def _collect_overdue_jobs(
+    job_configs: list[JobConfiguration],
+    registry: Dict[JobType, Type[BaseJob]],
+    now: datetime,
+) -> list[tuple[JobConfiguration, Type[BaseJob]]]:
+    """Inspect active configurations and return those that need catch-up."""
+    overdue_jobs: list[tuple[JobConfiguration, Type[BaseJob]]] = []
+    for job_config in job_configs:
+        try:
+            job_type = _convert_job_type(job_config)
+            if not job_type:
+                continue
+
+            job_class = _get_job_class(job_type, job_config, registry)
+            if not job_class:
+                continue
+
+            interval_seconds = _resolve_interval_seconds(job_config)
+            last_execution = await _last_job_execution(job_config.id)
+            reason = _overdue_reason(last_execution, now, interval_seconds)
+            if reason is None:
+                continue
+
+            logger.info(
+                "Job is overdue, will run at startup",
+                job_name=job_config.name,
+                reason=reason,
+            )
+            overdue_jobs.append((job_config, job_class))
+        except Exception as e:
+            logger.error(
+                "Error checking if job is overdue",
+                job_name=job_config.name,
+                error=str(e),
+            )
+            continue
+    return overdue_jobs
+
+
+def _queue_overdue_jobs(
+    overdue_jobs: list[tuple[JobConfiguration, Type[BaseJob]]],
+    now: datetime,
+) -> None:
+    """Queue one-shot catch-up entries without awaiting provider work."""
+    if _scheduler is None:
+        raise RuntimeError("Scheduler is not initialized")
+
+    logger.info("Queuing overdue jobs at startup", count=len(overdue_jobs))
+
+    for job_config, job_class in overdue_jobs:
+        job_instance = job_class(job_config.id, triggered_by="system")
+        _scheduler.add_job(
+            job_instance.run,
+            trigger="date",
+            run_date=now,
+            id=f"startup_overdue_job_{job_config.id}",
+            name=f"{job_config.name} startup catch-up",
+            replace_existing=True,
+        )
+
+    logger.info("Queued overdue jobs at startup")
+
+
 async def _check_and_run_overdue_jobs() -> None:
     """Check for overdue jobs and queue them once for immediate execution.
 
@@ -571,87 +666,13 @@ async def _check_and_run_overdue_jobs() -> None:
             logger.info("No active jobs to check")
             return
 
-        registry = _get_job_registry()
-        overdue_jobs = []
-
-        # Get current time with UTC timezone
         now = datetime.now(timezone.utc)
+        overdue_jobs = await _collect_overdue_jobs(
+            list(job_configs), _get_job_registry(), now
+        )
 
-        for job_config in job_configs:
-            try:
-                job_type = _convert_job_type(job_config)
-                if not job_type:
-                    continue
-
-                job_class = _get_job_class(job_type, job_config, registry)
-                if not job_class:
-                    continue
-
-                interval_seconds = _resolve_interval_seconds(job_config)
-
-                # Check last execution
-                async with db_manager.get_session() as db:
-                    stmt = (
-                        select(JobExecution)
-                        .where(JobExecution.job_config_id == job_config.id)
-                        .order_by(JobExecution.started_at.desc())
-                        .limit(1)
-                    )
-                    result = await db.execute(stmt)
-                    last_execution = result.scalar_one_or_none()
-
-                # Determine if job is overdue
-                is_overdue = False
-                reason = ""
-
-                if last_execution is None:
-                    is_overdue = True
-                    reason = "never run before"
-                else:
-                    time_since_last_run = (
-                        now - last_execution.started_at
-                    ).total_seconds()
-                    if time_since_last_run > interval_seconds:
-                        is_overdue = True
-                        reason = f"last run {int(time_since_last_run / 60)} minutes ago (interval: {int(interval_seconds / 60)} minutes)"
-
-                if is_overdue:
-                    logger.info(
-                        "Job is overdue, will run at startup",
-                        job_name=job_config.name,
-                        reason=reason,
-                    )
-                    overdue_jobs.append((job_config, job_class))
-
-            except Exception as e:
-                logger.error(
-                    "Error checking if job is overdue",
-                    job_name=job_config.name,
-                    error=str(e),
-                )
-                continue
-
-        # Queue all overdue jobs for scheduler-owned execution. The ordinary
-        # interval entries were rebuilt before this step, so a persisted stale
-        # trigger cannot dispatch the same configuration a second time.
         if overdue_jobs:
-            if _scheduler is None:
-                raise RuntimeError("Scheduler is not initialized")
-
-            logger.info("Queuing overdue jobs at startup", count=len(overdue_jobs))
-
-            for job_config, job_class in overdue_jobs:
-                job_instance = job_class(job_config.id, triggered_by="system")
-                _scheduler.add_job(
-                    job_instance.run,
-                    trigger="date",
-                    run_date=now,
-                    id=f"startup_overdue_job_{job_config.id}",
-                    name=f"{job_config.name} startup catch-up",
-                    replace_existing=True,
-                )
-
-            logger.info("Queued overdue jobs at startup")
+            _queue_overdue_jobs(overdue_jobs, now)
         else:
             logger.info("No overdue jobs found at startup")
 

@@ -33,6 +33,9 @@ uv run ruff check app tests scripts ../scripts/*.py
 uv run ruff format --check --exclude '*.md' app tests scripts ../scripts/*.py
 uv run pyright
 uv run bandit --quiet --recursive app --severity-level medium --confidence-level medium --skip B104
+uv run vulture
+uv run deptry .
+../scripts/run-xenon.sh    # Rank B (CC <= 10) over app/
 ```
 
 The authoritative gate runs dependency sync from `uv.lock` before these checks.
