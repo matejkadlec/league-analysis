@@ -84,7 +84,6 @@ run_step() {
 
 run_repository_hygiene() {
   git -C "$repository_root" diff --check
-  python3 "$repository_root/scripts/check-repository-files.py"
 }
 
 run_backend_sync() {
@@ -120,12 +119,12 @@ run_backend_migration_validation() {
 
 run_backend_ruff_lint() {
   cd "$repository_root/backend"
-  uv run ruff check app tests scripts ../scripts/*.py
+  uv run ruff check app tests scripts
 }
 
 run_backend_ruff_format() {
   cd "$repository_root/backend"
-  uv run ruff format --check --exclude '*.md' app tests scripts ../scripts/*.py
+  uv run ruff format --check --exclude '*.md' app tests scripts
 }
 
 run_backend_pyright() {

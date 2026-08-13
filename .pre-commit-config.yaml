@@ -15,6 +15,14 @@ repos:
       - id: detect-private-key
       - id: debug-statements
 
+  - repo: local
+    hooks:
+      - id: forbid-credential-filenames
+        name: Forbid credential-looking filenames
+        entry: 'A staged filename looks like a credential:'
+        language: fail
+        files: '(^|/)(\.env|id_rsa|id_ed25519)$|\.(pem|key)$'
+
   # Ruff - Fast Python linter and formatter (replaces black, isort, flake8)
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.16.2
