@@ -13,7 +13,6 @@ import argparse
 import ipaddress
 import os
 import re
-import stat
 import subprocess
 import sys
 from collections.abc import Mapping
@@ -92,23 +91,6 @@ class Preflight:
     client_id: int | None
     server_address: str
     listen_addresses: str
-
-
-@dataclass(frozen=True)
-class BackupFileIdentity:
-    """Stable identity for the one private archive created by this command."""
-
-    device: int
-    inode: int
-
-    @classmethod
-    def from_stat(cls, file_stat: os.stat_result) -> BackupFileIdentity:
-        """Capture the device/inode pair needed to reject path replacement."""
-        return cls(device=file_stat.st_dev, inode=file_stat.st_ino)
-
-    def matches(self, file_stat: os.stat_result) -> bool:
-        """Return whether a later descriptor still identifies the created file."""
-        return (file_stat.st_dev, file_stat.st_ino) == (self.device, self.inode)
 
 
 def validated_database_name(value: str) -> str:
@@ -220,52 +202,11 @@ def validated_backup_path(value: Path) -> Path:
         resolved_project_root = PROJECT_ROOT.resolve()
     except (OSError, RuntimeError) as error:
         raise LocalCleanupRefusal("backup path cannot be resolved safely") from error
-    validate_backup_directory_chain(resolved_value.parent)
     try:
         resolved_value.relative_to(resolved_project_root)
     except ValueError:
         return resolved_value
     raise LocalCleanupRefusal("backup path must stay outside the repository")
-
-
-def validate_backup_directory_chain(backup_parent: Path) -> None:
-    """Require private output parentage through the filesystem root.
-
-    A non-sticky group- or other-writable ancestor lets another account replace
-    an otherwise private child directory before the backup is created.
-    """
-    directory = backup_parent
-    is_direct_parent = True
-    while True:
-        try:
-            directory_stat = directory.stat()
-        except OSError as error:
-            raise LocalCleanupRefusal(
-                "backup directory permissions cannot be verified"
-            ) from error
-        if not stat.S_ISDIR(directory_stat.st_mode):
-            raise LocalCleanupRefusal(
-                "backup parent must be an existing regular directory"
-            )
-
-        mode = stat.S_IMODE(directory_stat.st_mode)
-        writable_by_others = mode & 0o022
-        if writable_by_others and (is_direct_parent or not mode & stat.S_ISVTX):
-            if is_direct_parent:
-                message = (
-                    "backup parent must not be writable by group or other accounts"
-                )
-            else:
-                message = (
-                    "backup directory ancestor must not be writable by group or "
-                    "other accounts unless it is sticky"
-                )
-            raise LocalCleanupRefusal(message)
-
-        if directory.parent == directory:
-            return
-        directory = directory.parent
-        is_direct_parent = False
 
 
 def table_counts(
@@ -364,182 +305,6 @@ def preflight(connection: Connection, settings: Settings, database: str) -> Pref
     )
 
 
-def _open_backup_file_no_follow(
-    backup_path: Path,
-    flags: int,
-    expected_identity: BackupFileIdentity | None = None,
-) -> int:
-    """Open a regular backup file without following a replaced path component."""
-    no_follow_flag = getattr(os, "O_NOFOLLOW", None)
-    if no_follow_flag is None:
-        raise LocalCleanupRefusal("platform does not support no-follow backup access")
-    try:
-        descriptor = os.open(backup_path, flags | no_follow_flag, 0o600)
-    except FileNotFoundError:
-        raise
-    except OSError as error:
-        raise LocalCleanupRefusal(
-            "could not open backup file without following it"
-        ) from error
-
-    try:
-        file_stat = os.fstat(descriptor)
-        if not stat.S_ISREG(file_stat.st_mode):
-            raise LocalCleanupRefusal("backup path is not a regular file")
-        if expected_identity is not None and not expected_identity.matches(file_stat):
-            raise LocalCleanupRefusal("backup path changed after secure creation")
-        return descriptor
-    except Exception:
-        os.close(descriptor)
-        raise
-
-
-def _assert_private_backup_descriptor(
-    descriptor: int,
-    expected_identity: BackupFileIdentity,
-    *,
-    require_content: bool,
-) -> None:
-    """Verify mode, identity, and optionally content through an open descriptor."""
-    file_stat = os.fstat(descriptor)
-    if not stat.S_ISREG(file_stat.st_mode) or not expected_identity.matches(file_stat):
-        raise LocalCleanupRefusal("backup file identity could not be verified")
-    if require_content and file_stat.st_size == 0:
-        raise LocalCleanupRefusal("verified backup file is missing or empty")
-    if stat.S_IMODE(file_stat.st_mode) != 0o600:
-        raise LocalCleanupRefusal(
-            "verified backup file must have private 0600 permissions"
-        )
-
-
-def create_private_backup_output(backup_path: Path) -> tuple[int, BackupFileIdentity]:
-    """Create a private, no-follow archive before pg_dump writes any data."""
-    descriptor: int | None = None
-    identity: BackupFileIdentity | None = None
-    try:
-        descriptor = _open_backup_file_no_follow(
-            backup_path,
-            os.O_WRONLY | os.O_CREAT | os.O_EXCL,
-        )
-        identity = BackupFileIdentity.from_stat(os.fstat(descriptor))
-        os.fchmod(descriptor, 0o600)
-        _assert_private_backup_descriptor(
-            descriptor,
-            identity,
-            require_content=False,
-        )
-        return descriptor, identity
-    except (LocalCleanupRefusal, OSError) as error:
-        if descriptor is not None:
-            os.close(descriptor)
-        if identity is not None:
-            try:
-                discard_unverified_backup(backup_path, identity)
-            except LocalCleanupRefusal as removal_error:
-                raise LocalCleanupRefusal(
-                    "private backup creation failed and its path could not be removed"
-                ) from removal_error
-        raise LocalCleanupRefusal("could not create a private backup output") from error
-
-
-def assert_private_backup_file(
-    backup_path: Path,
-    expected_identity: BackupFileIdentity,
-) -> None:
-    """Require the completed dump to retain its private identity and mode."""
-    descriptor = _open_backup_file_no_follow(
-        backup_path,
-        os.O_RDONLY,
-        expected_identity,
-    )
-    try:
-        _assert_private_backup_descriptor(
-            descriptor,
-            expected_identity,
-            require_content=True,
-        )
-    finally:
-        os.close(descriptor)
-
-
-def discard_unverified_backup(
-    backup_path: Path,
-    expected_identity: BackupFileIdentity,
-) -> None:
-    """Wipe and remove only the archive whose no-follow identity was verified."""
-    try:
-        descriptor = _open_backup_file_no_follow(
-            backup_path,
-            os.O_WRONLY,
-            expected_identity,
-        )
-    except FileNotFoundError:
-        return
-
-    try:
-        remaining = os.fstat(descriptor).st_size
-        while remaining:
-            chunk_size = min(remaining, 1024 * 1024)
-            os.write(descriptor, b"\0" * chunk_size)
-            remaining -= chunk_size
-        os.fsync(descriptor)
-    except OSError as error:
-        raise LocalCleanupRefusal(
-            "could not securely overwrite an unverified backup file"
-        ) from error
-    finally:
-        os.close(descriptor)
-
-    try:
-        path_stat = backup_path.lstat()
-    except FileNotFoundError:
-        return
-    if not stat.S_ISREG(path_stat.st_mode) or not expected_identity.matches(path_stat):
-        raise LocalCleanupRefusal("backup path changed before secure removal")
-    try:
-        backup_path.unlink()
-    except OSError as error:
-        raise LocalCleanupRefusal(
-            "could not securely remove an unverified backup file"
-        ) from error
-
-    if os.path.lexists(backup_path):
-        raise LocalCleanupRefusal("unverified backup file remains after removal")
-
-
-def secure_backup_permissions(
-    backup_path: Path,
-    expected_identity: BackupFileIdentity,
-) -> None:
-    """Re-verify the private file through a no-follow descriptor after pg_dump."""
-    try:
-        descriptor = _open_backup_file_no_follow(
-            backup_path,
-            os.O_WRONLY,
-            expected_identity,
-        )
-        try:
-            os.fchmod(descriptor, 0o600)
-            _assert_private_backup_descriptor(
-                descriptor,
-                expected_identity,
-                require_content=True,
-            )
-        finally:
-            os.close(descriptor)
-        assert_private_backup_file(backup_path, expected_identity)
-    except (LocalCleanupRefusal, OSError) as permission_error:
-        try:
-            discard_unverified_backup(backup_path, expected_identity)
-        except LocalCleanupRefusal as removal_error:
-            raise LocalCleanupRefusal(
-                "backup permissions could not be secured and removal could not be verified"
-            ) from removal_error
-        raise LocalCleanupRefusal(
-            "backup permissions could not be secured; unverified backup was discarded"
-        ) from permission_error
-
-
 def create_verified_backup(
     settings: Settings, database: str, backup_path: Path
 ) -> None:
@@ -556,9 +321,9 @@ def create_verified_backup(
         f"--username={settings.postgres_user}",
         f"--dbname={database}",
     ]
-    backup_descriptor, backup_identity = create_private_backup_output(backup_path)
+    descriptor = os.open(backup_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     try:
-        with os.fdopen(backup_descriptor, "wb") as backup_output:
+        with os.fdopen(descriptor, "wb") as backup_output:
             subprocess.run(
                 dump_command,
                 check=True,
@@ -568,7 +333,6 @@ def create_verified_backup(
             )
             backup_output.flush()
             os.fsync(backup_output.fileno())
-        secure_backup_permissions(backup_path, backup_identity)
         subprocess.run(
             ["pg_restore", "--list", str(backup_path)],
             check=True,
@@ -577,7 +341,7 @@ def create_verified_backup(
             env=environment,
         )
     except (FileNotFoundError, subprocess.CalledProcessError, OSError) as error:
-        discard_unverified_backup(backup_path, backup_identity)
+        backup_path.unlink(missing_ok=True)
         raise LocalCleanupRefusal("backup creation or verification failed") from error
 
 

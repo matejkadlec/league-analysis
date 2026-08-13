@@ -10,8 +10,6 @@ from types import SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
-
-from scripts import cleanse_local_riot_data as cleanup
 from scripts.cleanse_local_riot_data import (
     PRESERVED_TABLES,
     RIOT_DATA_TABLES,
@@ -34,6 +32,8 @@ from scripts.cleanse_local_riot_data import (
     validated_backup_path,
     validated_database_name,
 )
+
+from scripts import cleanse_local_riot_data as cleanup
 
 
 @pytest.mark.parametrize("value", ["league_analysis_local_dev", "a1", "local_2"])
@@ -139,30 +139,6 @@ def test_validated_backup_path_rejects_a_symlink_into_the_repository(tmp_path) -
 
     with pytest.raises(LocalCleanupRefusal, match="outside the repository"):
         validated_backup_path(repository_alias / "backend" / "before.dump")
-
-
-def test_validated_backup_path_refuses_a_group_or_other_writable_parent(
-    tmp_path,
-) -> None:
-    """A renameable backup path cannot be trusted through cleanup mutation."""
-    backup_directory = tmp_path / "shared-backups"
-    backup_directory.mkdir()
-    backup_directory.chmod(0o733)
-
-    with pytest.raises(LocalCleanupRefusal, match="writable by group or other"):
-        validated_backup_path(backup_directory / "before.dump")
-
-
-def test_validated_backup_path_refuses_a_nonsticky_writable_ancestor(tmp_path) -> None:
-    """A private parent is unsafe below a replaceable directory ancestor."""
-    shared_directory = tmp_path / "shared-backups"
-    shared_directory.mkdir()
-    shared_directory.chmod(0o733)
-    private_directory = shared_directory / "private"
-    private_directory.mkdir(mode=0o700)
-
-    with pytest.raises(LocalCleanupRefusal, match="ancestor"):
-        validated_backup_path(private_directory / "before.dump")
 
 
 @pytest.mark.parametrize(
@@ -272,94 +248,6 @@ def test_create_verified_backup_uses_private_permissions(tmp_path, monkeypatch) 
         os.umask(original_umask)
 
     assert stat.S_IMODE(backup_path.stat().st_mode) == 0o600
-
-
-def test_create_verified_backup_corrects_a_non_private_dump(
-    tmp_path, monkeypatch
-) -> None:
-    """An unexpectedly relaxed dump mode is corrected and re-verified."""
-    backup_path = tmp_path / "before.dump"
-    settings = SimpleNamespace(
-        postgres_password="test-password",
-        postgres_host="localhost",
-        postgres_port=5432,
-        postgres_user="postgres",
-    )
-
-    def fake_run(command, **_kwargs):
-        if command[0] == "pg_dump":
-            backup_output = _kwargs["stdout"]
-            backup_output.write(b"backup")
-            os.fchmod(backup_output.fileno(), 0o644)
-        return subprocess.CompletedProcess(command, 0)
-
-    monkeypatch.setattr(cleanup.subprocess, "run", fake_run)
-
-    create_verified_backup(settings, "league_analysis_local_dev", backup_path)
-
-    assert stat.S_IMODE(backup_path.stat().st_mode) == 0o600
-
-
-def test_create_verified_backup_refuses_an_unsecured_output_before_dump(
-    tmp_path, monkeypatch
-) -> None:
-    """Cleanup does not start pg_dump when private output setup cannot be verified."""
-    backup_path = tmp_path / "before.dump"
-    settings = SimpleNamespace(
-        postgres_password="test-password",
-        postgres_host="localhost",
-        postgres_port=5432,
-        postgres_user="postgres",
-    )
-    invoked_commands: list[str] = []
-
-    def fake_run(command, **_kwargs):
-        invoked_commands.append(command[0])
-        return subprocess.CompletedProcess(command, 0)
-
-    monkeypatch.setattr(cleanup.subprocess, "run", fake_run)
-    monkeypatch.setattr(
-        cleanup.os,
-        "fchmod",
-        lambda *_args: (_ for _ in ()).throw(PermissionError("read-only mode")),
-    )
-
-    with pytest.raises(LocalCleanupRefusal, match="private backup output"):
-        create_verified_backup(settings, "league_analysis_local_dev", backup_path)
-
-    assert invoked_commands == []
-    assert not os.path.lexists(backup_path)
-
-
-def test_create_verified_backup_refuses_a_replaced_path_without_touching_target(
-    tmp_path, monkeypatch
-) -> None:
-    """No-follow discard never overwrites a path swapped for an attacker symlink."""
-    backup_path = tmp_path / "before.dump"
-    victim_path = tmp_path / "victim.txt"
-    victim_path.write_bytes(b"do-not-touch")
-    settings = SimpleNamespace(
-        postgres_password="test-password",
-        postgres_host="localhost",
-        postgres_port=5432,
-        postgres_user="postgres",
-    )
-
-    def fake_run(command, **_kwargs):
-        if command[0] == "pg_dump":
-            backup_output = _kwargs["stdout"]
-            backup_output.write(b"backup")
-            backup_path.unlink()
-            backup_path.symlink_to(victim_path)
-        return subprocess.CompletedProcess(command, 0)
-
-    monkeypatch.setattr(cleanup.subprocess, "run", fake_run)
-
-    with pytest.raises(LocalCleanupRefusal, match="removal could not be verified"):
-        create_verified_backup(settings, "league_analysis_local_dev", backup_path)
-
-    assert victim_path.read_bytes() == b"do-not-touch"
-    assert backup_path.is_symlink()
 
 
 def test_delete_riot_data_clears_current_player_context() -> None:

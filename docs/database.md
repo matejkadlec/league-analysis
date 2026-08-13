@@ -107,15 +107,12 @@ Safety contract (read-only by default; all checked before a session opens):
 explicit `ENVIRONMENT=dev`; `POSTGRES_HOST`, every PostgreSQL
 `listen_addresses` bind, and the active listener loopback-only; `--database`
 exactly matching `POSTGRES_DB`; the reviewed application tables present.
-`--apply` additionally requires a canonical backup path outside the repository
-whose parent and non-sticky directory ancestors are not group/other-writable.
-The command blocks writers to every table it will change before taking the
-custom-format `pg_dump`, keeps those locks through the cleanup transaction,
-and creates a new owner-only `0600` archive with no-follow semantics before
-`pg_dump` receives any database data. It re-verifies the archive's descriptor
-identity and permissions before `pg_restore --list`; if the filesystem cannot
-honor them, it securely removes only that verified file and refuses before any
-database mutation. It also clears all saved Riot PUUID URL preferences while
+`--apply` additionally requires a new canonical backup path outside the
+repository. The command blocks writers to every table it will change before
+taking the custom-format `pg_dump` into a new owner-only `0600` archive, keeps
+those locks through the cleanup transaction, and verifies the archive with
+`pg_restore --list` — deleting it and refusing before any database mutation if
+either step fails. It also clears all saved Riot PUUID URL preferences while
 preserving settings rows and revoked access-token blacklist entries.
 
 ```bash
