@@ -102,8 +102,10 @@ HTML clients get a branded auto-refreshing maintenance page, other clients get
 a JSON 503 with `Retry-After`. Ordinary application errors, including 404 and
 500 from the backend itself, pass through untouched.
 [`deploy/cloudflare-maintenance-worker.js`](../deploy/cloudflare-maintenance-worker.js)
-is the authoritative source; after changing it, redeploy the Worker from that
-file — the dashboard copy is a deployment target, not a second source. The
+is the authoritative source; after changing it, redeploy with
+`npx wrangler deploy --config deploy/cloudflare-maintenance-wrangler.jsonc`
+(authenticate once with `npx wrangler login`) — the dashboard copy is a
+deployment target, not a second source. The
 account is on the Workers free tier, whose route uses the fail-open request
 limit, so exhausting the daily quota bypasses the Worker instead of blocking
 traffic.
