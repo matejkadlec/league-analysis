@@ -31,9 +31,10 @@
   the backend starts. Deploying a stale feature-branch image is forbidden —
   the pi5ram16 workflow deploys the exact current `master` revision so every
   referenced migration is present.
-- A new revision also requires updating the expected snapshot tuple in
-  `backend/scripts/validate_migrations.py`; the backend test gate validates the
-  baseline on a clean isolated database.
+- A new revision also updates `backend/alembic/expected-head.txt`, the
+  reviewed head pin that the Pi restore tooling reads without a Python
+  environment. The backend test gate replays the full chain on a clean
+  isolated database and fails if the migrated database is not at that pin.
 
 ## Durable Data Invariants
 
