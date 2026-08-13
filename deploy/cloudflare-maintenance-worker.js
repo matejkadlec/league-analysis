@@ -22,19 +22,19 @@ const PAGE = `<!DOCTYPE html>
 <style>
 :root { --navy-base: #0a1428; --navy-darkest: #00091a; --navy-light: #2c3e6f; --gold-base: #cfa93a; --gold-light: #fcb305; --foreground: #fafafa; --muted: #9aa4b2; }
 * { margin: 0; padding: 0; box-sizing: border-box; }
-body { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: var(--navy-darkest); color: var(--foreground); font-family: "Montserrat", system-ui, sans-serif; padding: 1.5rem; }
-.card { background: var(--navy-base); border: 1px solid var(--navy-light); border-radius: 0.5rem; padding: 3rem 2.5rem; max-width: 28rem; text-align: center; }
-.badge { display: inline-block; border: 1px solid var(--gold-base); border-radius: 9999px; color: var(--gold-base); font-size: 0.75rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; padding: 0.35rem 0.9rem; margin-bottom: 1.5rem; }
-h1 { font-size: 1.5rem; font-weight: 700; margin-bottom: 0.75rem; }
+body { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: radial-gradient(ellipse at center, var(--navy-base) 0%, var(--navy-darkest) 70%); color: var(--foreground); font-family: "Montserrat", system-ui, sans-serif; padding: 1.5rem; }
+main { max-width: 40rem; text-align: center; }
+.badge { display: inline-block; border: 1px solid var(--gold-base); border-radius: 9999px; color: var(--gold-base); font-size: 0.85rem; font-weight: 600; letter-spacing: 0.15em; text-transform: uppercase; padding: 0.5rem 1.25rem; margin-bottom: 2rem; }
+h1 { font-size: clamp(2rem, 6vw, 3.5rem); font-weight: 700; margin-bottom: 1.25rem; }
 h1 span { color: var(--gold-base); }
-p { color: var(--muted); font-size: 0.95rem; line-height: 1.6; }
-.spinner { margin: 1.75rem auto 0; width: 2rem; height: 2rem; border: 3px solid var(--navy-light); border-top-color: var(--gold-light); border-radius: 50%; animation: spin 1s linear infinite; }
+p { color: var(--muted); font-size: clamp(1rem, 2vw, 1.2rem); line-height: 1.6; }
+.spinner { margin: 2.5rem auto 0; width: 2.75rem; height: 2.75rem; border: 3px solid var(--navy-light); border-top-color: var(--gold-light); border-radius: 50%; animation: spin 1s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 </style>
 <meta http-equiv="refresh" content="30" />
 </head>
 <body>
-<main class="card">
+<main>
 <div class="badge">Maintenance</div>
 <h1><span>League</span> Analysis</h1>
 <p>We are deploying an update. The site will be back in a moment &mdash; this page refreshes automatically.</p>
