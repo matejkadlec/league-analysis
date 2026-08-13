@@ -151,8 +151,8 @@ The Pi database `league_analysis` on pi5ram16 is authoritative; LGA-79 moved it
 there from `league_analysis_local_dev` and that transfer is complete.
 
 The data flow is strictly one-way:
-`pi5ram16 league_analysis -> local league_analysis_local_dev`, refreshed every
-five minutes. The local database is **disposable** — the mirror may overwrite
+`pi5ram16 league_analysis -> local league_analysis_local_dev`, refreshed
+daily. The local database is **disposable** — the mirror may overwrite
 any local rows — and there is no local-to-Pi write path. Details:
 [`deployment.md`](deployment.md#recurring-pi-to-local-mirror).
 

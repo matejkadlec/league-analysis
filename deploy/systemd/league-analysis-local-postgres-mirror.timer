@@ -1,8 +1,11 @@
 [Unit]
-Description=Refresh the disposable League Analysis local PostgreSQL mirror every five minutes
+Description=Refresh the disposable League Analysis local PostgreSQL mirror daily
 
 [Timer]
-OnCalendar=*-*-* *:0/5:00 Europe/Prague
+# Daily, after the Pi's 00:00 backup. Production ingests Riot data around the
+# clock, so the snapshot comparison rarely matches and most runs move the full
+# database; a shorter cadence turns into a standing pg_dump load on the Pi.
+OnCalendar=*-*-* 06:00:00 Europe/Prague
 AccuracySec=15s
 RandomizedDelaySec=0
 Persistent=true

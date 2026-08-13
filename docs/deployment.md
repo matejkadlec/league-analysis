@@ -311,7 +311,7 @@ during the short rename window, and atomically swaps database names. A private
 durable state file restores the previous local database after termination or
 validation failure. The old local database is dropped only after the new target
 validates. A Pi write immediately after a matching fingerprint can be delayed
-until the next five-minute check; it can never cause a partial local snapshot.
+until the next daily check; it can never cause a partial local snapshot.
 Active local backend connections are terminated only for a changed snapshot and
 reconnect to the new target; restart a development session if its connection
 pool does not recover cleanly.
@@ -322,11 +322,12 @@ Install a worktree-independent snapshot and the local user-systemd timer:
 ./deploy/install-local-postgres-mirror.sh
 ```
 
-The default recurrence is every five minutes on an explicit
-`Europe/Prague` calendar. `Persistent=true` runs one missed refresh when the
-local machine next becomes available, and the non-blocking lock rejects overlap.
-The cheap snapshot comparison normally avoids the approximately 20 MB archive
-transfer and full local restore when nothing changed. The manual and automatic
+The default recurrence is daily at `06:00 Europe/Prague`, after the Pi's
+midnight backup. Production ingests Riot data around the clock, so the cheap
+snapshot comparison rarely matches and most refreshes move the full archive; a
+short cadence would put a standing `pg_dump` load on the production Pi.
+`Persistent=true` runs one missed refresh when the local machine next becomes
+available, and the non-blocking lock rejects overlap. The manual and automatic
 paths execute the same installed implementation. Inspect them without printing
 configuration values:
 

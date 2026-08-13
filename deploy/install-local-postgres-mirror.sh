@@ -71,8 +71,13 @@ PYTHONDONTWRITEBYTECODE=1 /usr/bin/python3 -m py_compile \
 
 install -m 600 -- "$unit_source/$service_name" "$unit_directory/$service_name"
 install -m 600 -- "$unit_source/$timer_name" "$unit_directory/$timer_name"
+# `systemctl --user` needs the user manager's bus address, which service and
+# CI contexts do not export. The manager itself may still be running (login
+# elsewhere, or linger), so supply the well-known runtime path instead of
+# failing like the backup-timer installer once did.
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 systemctl --user daemon-reload
 systemctl --user enable --now "$timer_name"
 systemctl --user is-enabled --quiet "$timer_name"
 systemctl --user is-active --quiet "$timer_name"
-printf 'Installed and enabled the five-minute League Analysis Pi-to-local mirror timer.\n'
+printf 'Installed and enabled the daily League Analysis Pi-to-local mirror timer.\n'
