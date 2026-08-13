@@ -55,12 +55,15 @@ ENV NPM_CONFIG_CACHE=/tmp/npm-cache \
     HOME=/tmp
 
 # compose.gate.yml mounts an anonymous volume over each of these so no build
-# output crosses the bind mount. Docker seeds such a volume from the image, so
-# the mode has to be set here; the container runs as whatever uid invoked it.
+# output crosses the bind mount, and named volumes at the two cache paths.
+# Docker seeds such a volume from the image, so the mode has to be set here;
+# the container runs as whatever uid invoked it.
 RUN install -d -m 777 \
       /workspace/frontend/.next \
       /workspace/frontend/node_modules \
-      /workspace/backend/.venv
+      /workspace/backend/.venv \
+      /tmp/npm-cache \
+      /tmp/uv-cache
 
 WORKDIR /workspace
 ENTRYPOINT ["./test.sh"]
