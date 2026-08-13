@@ -47,8 +47,11 @@ RUN set -eux; \
     rm /tmp/.python-version; \
     chmod -R a+rX /opt/uv-python
 
-# npm writes here when the container runs as the invoking user rather than root.
+# npm and uv write here when the container runs as the invoking user rather
+# than root. compose.gate.yml mounts persistent volumes at both cache paths so
+# repeated runs do not re-download every package.
 ENV NPM_CONFIG_CACHE=/tmp/npm-cache \
+    UV_CACHE_DIR=/tmp/uv-cache \
     HOME=/tmp
 
 # compose.gate.yml mounts an anonymous volume over each of these so no build

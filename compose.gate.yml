@@ -39,6 +39,9 @@ services:
     build:
       context: .
       dockerfile: gate.Dockerfile
+    # Explicit so CI can pre-build this exact tag with a layer cache and run
+    # the gate without --build.
+    image: lga-gate-gate
     depends_on:
       postgres:
         condition: service_healthy
@@ -64,3 +67,11 @@ services:
       - /workspace/frontend/.next
       - /workspace/frontend/node_modules
       - /workspace/backend/.venv
+      # Package caches survive between runs; downloads happen once per version
+      # bump. CI points these at directories kept by actions/cache.
+      - ${LGA_GATE_NPM_CACHE:-gate_npm_cache}:/tmp/npm-cache
+      - ${LGA_GATE_UV_CACHE:-gate_uv_cache}:/tmp/uv-cache
+
+volumes:
+  gate_npm_cache:
+  gate_uv_cache:
