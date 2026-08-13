@@ -23,8 +23,10 @@ Two applications live at the repository root: `backend/` (FastAPI; domain
 features under `app/features/<name>/`, shared infrastructure under
 `app/core/`, reviewed schema revisions under `alembic/versions/`) and
 `frontend/` (Next.js App Router; `app/`, `components/`, `features/`, and
-`lib/core/`). Repository tooling is `scripts/`, `.githooks/`, `deploy/`,
-`run.sh`, and `test.sh` (the mandatory pre-publication gate). The current
+`lib/core/`). Repository tooling is `scripts/`, `.githooks/`, `deploy/`
+(release shipping), `backup/` (database backup, restore, and mirror
+operations), `run.sh`, and `test.sh` (the mandatory pre-publication gate). The
+current
 file inventory is the tree itself; this document records only the boundaries
 that constrain changes.
 

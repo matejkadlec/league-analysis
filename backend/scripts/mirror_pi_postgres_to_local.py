@@ -29,7 +29,7 @@ LOCAL_DATABASE = "league_analysis_local_dev"
 REMOTE_DATABASE = "league_analysis"
 REMOTE_HOST = "pi5ram16"
 REMOTE_SCRIPT = (
-    "$HOME/.local/share/league-analysis/current/deploy/pi-postgres-operations.sh"
+    "$HOME/.local/share/league-analysis/current/backup/pi-postgres-operations.sh"
 )
 DEFAULT_CONFIG = Path.home() / "projects" / "league-analysis" / ".env"
 DEFAULT_OPERATION_ROOT = Path.home() / ".local" / "share" / "league-analysis"
@@ -172,7 +172,7 @@ def resolve_snapshot_sql() -> Path:
     """Resolve the repository or installed snapshot SQL without configuration."""
     script_path = Path(__file__).resolve()
     installed_candidate = script_path.parent / "postgres-snapshot.sql"
-    repository_candidate = script_path.parents[2] / "deploy" / "postgres-snapshot.sql"
+    repository_candidate = script_path.parents[2] / "backup" / "postgres-snapshot.sql"
     for candidate in (installed_candidate, repository_candidate):
         if candidate.is_file() and not candidate.is_symlink():
             return candidate

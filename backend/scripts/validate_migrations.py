@@ -18,7 +18,7 @@ from sqlalchemy import URL, create_engine, text
 
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
 PROJECT_ROOT = BACKEND_ROOT.parent
-SNAPSHOT_SQL = PROJECT_ROOT / "deploy" / "postgres-snapshot.sql"
+SNAPSHOT_SQL = PROJECT_ROOT / "backup" / "postgres-snapshot.sql"
 EXPECTED_REVISION = EXPECTED_ALEMBIC_HEAD
 EXPECTED_POSTGRES_MAJOR = 18
 POSTGRES_CLIENT_PROGRAMS = ("pg_dump", "pg_restore", "psql")

@@ -3,7 +3,7 @@
 set -Eeuo pipefail
 
 repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-retention_tool="$repository_root/deploy/prune-postgres-daily-backups.sh"
+retention_tool="$repository_root/backup/prune-postgres-daily-backups.sh"
 test_directory="$(mktemp -d "${TMPDIR:-/tmp}/league-analysis-backup-retention.XXXXXX")"
 
 cleanup() {

@@ -160,12 +160,12 @@ docker exec --interactive --user postgres "$postgres_container" sh -ceu \
 source_snapshot="$(
   docker exec --interactive --user postgres "$postgres_container" sh -ceu \
     'exec psql --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" --no-psqlrc --set ON_ERROR_STOP=1 --tuples-only --no-align' \
-    < "$repository_root/deploy/postgres-snapshot.sql"
+    < "$repository_root/backup/postgres-snapshot.sql"
 )"
 restored_snapshot="$(
   docker exec --interactive --user postgres "$postgres_container" sh -ceu \
     'exec psql --username "$POSTGRES_USER" --dbname "$1" --no-psqlrc --set ON_ERROR_STOP=1 --tuples-only --no-align' \
-    -- "$restore_database" < "$repository_root/deploy/postgres-snapshot.sql"
+    -- "$restore_database" < "$repository_root/backup/postgres-snapshot.sql"
 )"
 if [[ "$restored_snapshot" != "$source_snapshot" ]]; then
   printf 'The disposable PostgreSQL restore snapshot does not match its source.\n' >&2

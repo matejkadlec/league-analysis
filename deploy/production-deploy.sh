@@ -141,7 +141,7 @@ compose build --pull
 
 existing_postgres_container="$(compose ps --all --quiet postgres)"
 if [[ -n "$existing_postgres_container" ]]; then
-  "$release_directory/deploy/pi-postgres-operations.sh" \
+  "$release_directory/backup/pi-postgres-operations.sh" \
     pre-deploy-backup \
     --confirm-target league_analysis \
     --commit "$commit"
@@ -185,6 +185,6 @@ mv -Tf -- "$next_link" "$deployment_root/current"
 printf '%s\n' "$commit" > "$state_directory/deployed-commit"
 chmod 600 "$state_directory/deployed-commit"
 
-"$release_directory/deploy/install-pi-postgres-backup-timer.sh"
+"$release_directory/backup/install-pi-postgres-backup-timer.sh"
 
 printf 'League Analysis deployment completed at %s.\n' "$commit"

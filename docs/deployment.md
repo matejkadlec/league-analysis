@@ -207,7 +207,7 @@ The deployment workflow installs and enables it on every release; install it by
 hand with:
 
 ```bash
-./deploy/install-pi-postgres-backup-timer.sh
+./backup/install-pi-postgres-backup-timer.sh
 ```
 
 The installer needs passwordless `sudo` to write `/etc/systemd/system`.
@@ -241,7 +241,7 @@ journalctl -u league-analysis-postgres-backup.service -n 50 --no-pager
 Run an on-demand backup and test a selected daily archive as follows:
 
 ```bash
-PI_OPERATIONS="$HOME/.local/share/league-analysis/current/deploy/pi-postgres-operations.sh"
+PI_OPERATIONS="$HOME/.local/share/league-analysis/current/backup/pi-postgres-operations.sh"
 "$PI_OPERATIONS" daily-backup --confirm-target league_analysis
 "$PI_OPERATIONS" restore-test \
   --confirm-target league_analysis \
@@ -319,7 +319,7 @@ pool does not recover cleanly.
 Install a worktree-independent snapshot and the local user-systemd timer:
 
 ```bash
-./deploy/install-local-postgres-mirror.sh
+./backup/install-local-postgres-mirror.sh
 ```
 
 The default recurrence is daily at `06:00 Europe/Prague`, after the Pi's

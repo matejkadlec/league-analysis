@@ -160,7 +160,7 @@ any local rows — and there is no local-to-Pi write path. Details:
 
 The documented intent is one private custom-format backup at
 `00:00 Europe/Prague` retaining the seven newest successful daily archives,
-installed via `deploy/install-pi-postgres-backup-timer.sh` with isolated
+installed via `backup/install-pi-postgres-backup-timer.sh` with isolated
 restore verification. **The timer is not currently installed on pi5ram16** —
 verify installation before relying on automatic backups. Contract and
 diagnostics:
