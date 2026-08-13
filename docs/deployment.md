@@ -84,6 +84,30 @@ The frontend image bakes the public browser API origin from
 `http://backend:8000` Compose route, so internal traffic does not loop through
 the Pi host port.
 
+## Edge maintenance fallback (Cloudflare)
+
+Public traffic reaches the Pi through a remotely managed Cloudflare Tunnel in
+the owner's Cloudflare account (zone `leagueanalysis.gg`, Cloudflare
+nameservers). As of 2026-08-13 the zone's only public hostnames are the
+proxied tunnel records `dev.leagueanalysis.gg` (frontend) and
+`api-dev.leagueanalysis.gg` (backend); the apex and `www` have no records yet.
+The tunnel connector on the Pi runs token-based, so its ingress mapping lives
+in the Cloudflare dashboard, not in a file on the host.
+
+The Worker `league-analysis-maintenance` runs on the routes
+`dev.leagueanalysis.gg/*` and `api-dev.leagueanalysis.gg/*`. It forwards every
+request to the origin unchanged and replaces the response only when the fetch
+fails or returns a gateway error (502, 504, or the Cloudflare 52x/530 family):
+HTML clients get a branded auto-refreshing maintenance page, other clients get
+a JSON 503 with `Retry-After`. Ordinary application errors, including 404 and
+500 from the backend itself, pass through untouched.
+[`deploy/cloudflare-maintenance-worker.js`](../deploy/cloudflare-maintenance-worker.js)
+is the authoritative source; after changing it, redeploy the Worker from that
+file — the dashboard copy is a deployment target, not a second source. The
+account is on the Workers free tier, whose route uses the fail-open request
+limit, so exhausting the daily quota bypasses the Worker instead of blocking
+traffic.
+
 ## Private host configuration
 
 The production target is the ARM64 host identified by the SSH alias and runner
