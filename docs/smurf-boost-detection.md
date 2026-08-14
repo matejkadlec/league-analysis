@@ -31,8 +31,10 @@ following hard boundaries:
   earlier games, never to a population baseline. See
   [Why self-referential](#why-self-referential).
 - **Two families, never collapsed.** Rapid-improvement evidence and
-  account-change evidence are reported separately, each with its own band,
-  confidence, and signal list.
+  account-change evidence are reported separately, each with its own band and
+  signal list. Confidence is one figure for the whole comparison, because every
+  input to it — window coverage, patch spread, timestamp quality, rank span —
+  describes the data both families were read from.
 - **Not a moderation surface.** The feature produces no report button, no export,
   no ranking of "most suspicious" players, and no cross-user aggregation.
 - **Every threshold in this document is measured, not assumed.** See
@@ -283,8 +285,11 @@ makes `mean(C_R)` literally readable as "how many baseline standard deviations
 above their own baseline this player has been playing". This has been verified
 empirically on all three accounts with sufficient history.
 
-When `sd_C <= EPSILON` the baseline is **degenerate** — every baseline game is
-effectively identical on every composite metric — and `C` is not defined at all.
+When `sd_C <= EPSILON` the baseline is **degenerate**: every baseline game has
+effectively the same weighted composite, so there is no spread to standardize
+against and `C` is not defined at all. This does not require the individual
+metrics to be identical — different metric vectors can cancel to the same
+weighted sum — only that the composite does not vary.
 Every signal that reads `C` (A1, A3, A4, B1, B2, and B3) is then reported as
 **unavailable** with the note `degenerate_baseline`. Only A2 and B4, which read
 win rate alone, remain computable. The division is never performed against a
@@ -367,7 +372,8 @@ g        = J * (mean(C_R) - mean(C_B)) / s_pooled
 
 Raw value `g`. Conservative threshold **1.20**, saturation **3.00**, weight
 **0.30**. Unavailable with the note `undefined_statistic` when `s_pooled` is
-zero.
+zero. Every "is zero" test in this document is `<= EPSILON`, never an exact
+floating-point comparison.
 
 #### A2 — Win-rate surge
 
@@ -506,12 +512,27 @@ triggered when BC > bimodality_threshold                  (Conservative 0.65)
 raw_value = BC
 ```
 
+`BC` is a shape statistic built from skewness and kurtosis. It does not locate
+modes and it does not test for them: a sufficiently skewed unimodal window can
+exceed the same value. That is why the trigger is a conjunction — the two tail
+fractions are what require games to be present at both ends, and neither the
+statistic nor the threshold on its own is evidence of two modes. The signal is
+named for the pattern it looks for, not for a property it establishes.
+
 The trigger reads the **configured** threshold, so the preset value is live
 rather than decorative. `n_R >= 12` is required as a stability floor — the `g2`
 denominator is merely defined for `n > 3`, but the estimate is unusable below 12.
 Below that, or when `m2` is zero, the signal reports
 `insufficient_shape_sample` and is unavailable. Saturation **0.90**, weight
 **0.20**.
+
+This floor has a consequence a reader configuring the window should know: the
+recent-window range allows 10 and 11, and at those two values B3 can never be
+available. Family B is then left with at most two evidence groups — B1 and B4
+share one — so **Family B cannot reach Strong indicators at a recent window of
+10 or 11**, and its highest reachable score is 0.55. Family A is unaffected. A
+configuration that cannot produce the strongest reading is a safe failure, so it
+is documented rather than rejected.
 
 Measured with these exact estimators over the calibration set, `BC` has a median
 of 0.381 and a maximum of 0.630 on observed history, so the Conservative pair
@@ -571,9 +592,13 @@ distinct_evidence(family) =
     count of evidence groups in that family with at least one triggered signal
 ```
 
-Both families can therefore reach a maximum of three. A1 and A4 read literally
-the same number — the mean of `C_R` — so a result carried by those two alone
-counts once, not twice.
+Both families can therefore reach a maximum of three. A1 and A4 are grouped
+because they read the same shift in the same direction of the same quantity:
+A4 is `mean(C_R)` outright, and A1 is that same shift expressed as a
+standardized effect size, so a result carried by those two alone counts once,
+not twice. They are not the identical number — Hedges' `g` also depends on both
+windows' variances and sizes, and it is in **pooled** standard deviations, so
+A1's `1.20` and A4's `1.20` are not the same distance.
 
 These groups are **not statistically independent** and the specification does not
 claim they are. They are computed over the same matches, and the moments of one
@@ -646,8 +671,12 @@ never needed it.
 
 ## Threshold derivation
 
-No threshold in this document was chosen by intuition. Each was selected by
-measuring how often the rule fires across the **observed stored history**.
+No **signal** threshold in this document was chosen by intuition. Each was
+selected by measuring how often its rule fires across the **observed stored
+history**. The signal weights, the saturation points and the two band cut points
+are not measured — there is nothing to measure them against without labelled
+cases — so they are stated as the deliberate defaults they are, and every one of
+them is a versioned constant an owner can revise.
 
 ### Calibration set
 
@@ -679,6 +708,20 @@ figures below are **observed trigger rates on stored history**, not false-positi
 rates. A rule that fires on 0% of them is not proven correct; it is only shown
 not to fire on the history this application actually holds. That is the weakest
 claim consistent with the data, and it is the claim being made.
+
+The 185 pairs are also nowhere near 185 independent observations, and the
+denominator must be read with that in mind:
+
+- **They overlap heavily.** The offset advances by three games, so consecutive
+  pairs share 17 of 20 recent games and 57 of 60 baseline games.
+- **They are one account.** 183 of the 185 come from a single history; the other
+  two accounts contribute one pair each.
+
+So "3/185" means "this rule fired on three overlapping windows of one player's
+history", not "this rule fired on three players in a hundred and eighty-five".
+The measurement is enough to reject a threshold that fires constantly on
+ordinary play, which is what it was used for. It is not enough to estimate a
+rate, and no rate is claimed.
 
 | Signal rule at its Conservative value | Observed trigger rate |
 | --- | --- |
@@ -903,6 +946,15 @@ cases exist; the word is reserved for that meaning.
   "No unusual pattern" — exists to raise the cost of triggering. The measured
   per-signal trigger rate over the calibration set at Conservative values is
   between 0.0% and 1.6%.
+- **The guards are not evenly distributed, and B1 is the exposed one.** A2
+  compares a Wilson lower bound against the baseline rate, so a short lucky run
+  is discounted before it is compared. B1 compares two plain win rates with no
+  such discount: a baseline of 24/60 and a recent 20-game window at 14/20, with
+  the composite unchanged, meets the Conservative rule exactly. Ordinary
+  variance, teammates and premades can produce that history, and duo detection
+  is out of scope. Giving B1 the same uncertainty treatment as A2 would change
+  what the signal measures and needs its own calibration, so it is a candidate
+  for the next model version rather than a silent edit to this one.
 - **False negatives are the accepted error.** The tool is expected to say "No
   unusual pattern" or "Not enough data" for the overwhelming majority of players
   in this database, and that is the correct behavior at 24,349 players with fewer
