@@ -215,16 +215,9 @@ class SettingsService:
         self,
         key: str,
         value: str,
-        _category: str,
-        _is_sensitive: bool = False,
     ) -> SettingResponse:
-        """Create or update a setting.
-
-        Wrapper around update_setting for compatibility with older interface.
-        """
-        # Create a SettingUpdate object
-        update_obj = SettingUpdate(value=value)
-        return await self.update_setting(key, update_obj)
+        """Create or update a setting."""
+        return await self.update_setting(key, SettingUpdate(value=value))
 
     def _check_api_key_format(self, api_key: str) -> SettingValidationResponse | None:
         """Check API key format. Returns error response if invalid, None if valid."""

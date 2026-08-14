@@ -39,6 +39,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import db_manager
+from app.core.db_session import rollback_quietly
 from app.core.riot_api.client import RiotAPIClient
 from app.core.riot_api.credential_health import create_tracked_riot_api_client
 from app.core.riot_api.db_rate_limiter import DBRateLimiter, RateLimitComponent
@@ -1221,7 +1222,7 @@ class MatchmakingAnalysisService:
                 "Failed to set rate_limit_reset_at",
                 error_type=type(e).__name__,
             )
-            await self._rollback_quietly()
+            await rollback_quietly(self.db)
 
     def _has_current_analysis(self) -> bool:
         return bool(self._current_analysis_puuid and self._current_analysis_created_at)
@@ -1250,12 +1251,6 @@ class MatchmakingAnalysisService:
         if next_reset is not None:
             return "waiting_rate_limit"
         return "in_progress"
-
-    async def _rollback_quietly(self) -> None:
-        try:
-            await self.db.rollback()
-        except Exception:
-            pass
 
     # ================================================================
     # Analysis Record Helpers

@@ -1098,28 +1098,6 @@ class PlayerService:
 
         return players
 
-    async def get_players_for_ban_check(
-        self, _days: int, _limit: int = 10
-    ) -> List[Player]:
-        """
-        Get detected smurfs that need ban status checking.
-
-        Note: Method deprecated/disabled due to schema changes (removal of last_ban_check).
-        """
-        # Feature disabled temporarily until schema is updated to support ban checks again
-        return []
-
-    async def check_ban_status(
-        self, player: Player, riot_api_client: "RiotAPIClient"
-    ) -> bool:
-        """
-        Check if a player is banned by attempting to fetch their summoner data.
-
-        Note: Feature temporarily disabled.
-        """
-        # Feature disabled
-        return False
-
     # ============================================
     # Helper Methods for Jobs
     # ============================================

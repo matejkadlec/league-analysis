@@ -15,6 +15,8 @@ import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.db_session import rollback_quietly
+from app.core.player_identity import resolve_player_display_fields
 from app.features.matches.models import Match
 from app.features.matches.participants import MatchParticipant
 from app.features.matches.timeline import replace_match_timeline_rows
@@ -74,76 +76,17 @@ async def ensure_match_fully_analyzed(
     return True
 
 
-def _coalesce(*values: Any) -> Any:
-    """Return the first truthy value, or the last argument when all are falsy."""
-    for value in values[:-1]:
-        if value:
-            return value
-    return values[-1]
-
-
-def _existing_player_attr(existing_player: Player | None, attr: str) -> Any:
-    """Read one stored player field, or None when the row is missing."""
-    return getattr(existing_player, attr) if existing_player else None
-
-
-def _participant_display_fields(
-    participant: Any, existing_player: Player | None, platform_id: str
-) -> tuple[str, str, int, int, bool]:
-    """Resolve display fields for a skeletal player upsert."""
-    game_name = _coalesce(
-        participant.game_name,
-        _existing_player_attr(existing_player, "game_name"),
-        participant.summoner_name,
-        "Unknown",
-    )
-    platform_tag = platform_id.replace("1", "") if platform_id else "RIOT"
-    tag_line = _coalesce(
-        participant.tag_line,
-        _existing_player_attr(existing_player, "tag_line"),
-        platform_tag,
-    )
-    profile_icon_id = _coalesce(
-        participant.profile_icon,
-        _existing_player_attr(existing_player, "profile_icon_id"),
-        29,
-    )
-    summoner_level = _coalesce(
-        participant.summoner_level,
-        _existing_player_attr(existing_player, "summoner_level"),
-        0,
-    )
-    is_tracked = existing_player.is_tracked if existing_player else False
-    return game_name, tag_line, profile_icon_id, summoner_level, is_tracked
-
-
 def _build_fully_analyzed_match(match_dto: Any) -> Match:
     """Build a fully-analyzed match row from a Riot match DTO."""
+    from app.features.matches.service_helpers import build_match_record, match_end_flags
+
     platform_id = match_dto.info.platform or "EUN1"
-    early_surrender = any(
-        participant.game_ended_in_early_surrender
-        for participant in match_dto.info.participants
-    )
-    surrender = any(
-        participant.game_ended_in_surrender
-        for participant in match_dto.info.participants
-    )
-    return Match(
-        match_id=match_dto.metadata.match_id,
-        platform=platform_id.upper(),
-        game_creation_timestamp=match_dto.info.game_creation_timestamp,
-        game_start_timestamp=match_dto.info.game_start_timestamp,
-        game_start_timestamp_source="riot_game_start",
-        game_end_timestamp=match_dto.info.game_end_timestamp,
-        game_duration=match_dto.info.game_duration,
-        game_mode=match_dto.info.game_mode,
-        game_type=match_dto.info.game_type,
-        game_version=match_dto.info.game_version,
-        map_id=match_dto.info.map_id,
-        queue_id=match_dto.info.queue_id,
-        early_surrender=early_surrender,
-        surrender=surrender,
-        game_result=match_dto.info.game_result,
+    early_surrender, surrender = match_end_flags(match_dto.info.participants)
+    return build_match_record(
+        match_dto,
+        platform_id,
+        early_surrender,
+        surrender,
         fully_analyzed=True,
     )
 
@@ -161,30 +104,20 @@ async def _upsert_match_participant(
         select(Player).where(Player.puuid == participant.puuid)
     )
     existing_player = existing_player_result.scalar_one_or_none()
-    game_name, tag_line, profile_icon_id, summoner_level, is_tracked = (
-        _participant_display_fields(participant, existing_player, platform_id)
-    )
+    fields = resolve_player_display_fields(participant, existing_player, platform_id)
     await db.merge(
         Player(
             puuid=participant.puuid,
-            game_name=game_name,
-            tag_line=tag_line,
+            game_name=fields["game_name"],
+            tag_line=fields["tag_line"],
             platform=platform_id.lower(),
-            profile_icon_id=profile_icon_id,
-            summoner_level=summoner_level,
-            is_tracked=is_tracked,
+            profile_icon_id=fields["profile_icon_id"],
+            summoner_level=fields["summoner_level"],
+            is_tracked=fields["is_tracked"],
         )
     )
     participant_data = MatchDTOTransformer.extract_participant_data(participant)
     await db.merge(MatchParticipant(match_id=match_id, **participant_data))
-
-
-async def _rollback_quietly(db: AsyncSession) -> None:
-    """Roll back the current transaction, ignoring rollback failures."""
-    try:
-        await db.rollback()
-    except Exception:
-        pass
 
 
 async def _upsert_match(
@@ -213,5 +146,5 @@ async def _upsert_match(
             match_id=match_id,
             error=str(e),
         )
-        await _rollback_quietly(db)
+        await rollback_quietly(db)
         raise

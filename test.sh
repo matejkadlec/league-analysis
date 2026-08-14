@@ -134,7 +134,7 @@ run_backend_pyright() {
 
 run_backend_bandit() {
   cd "$repository_root/backend"
-  uv run bandit --quiet --recursive app \
+  uv run bandit --quiet --recursive app scripts \
     --severity-level medium \
     --confidence-level medium \
     --skip B104

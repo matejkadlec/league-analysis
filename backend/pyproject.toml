@@ -85,9 +85,6 @@ min_confidence = 80
 paths = ["app"]
 ignore_decorators = ["@router.*", "@app.*"]
 ignore_names = [
-    "*Response",
-    "*Request",
-    "*Dep",
     "model_config",
 ]
 

@@ -112,8 +112,6 @@ async def update_riot_api_key(
             setting = await settings_service.create_or_update_setting(
                 key="riot_api_key",
                 value=update.value,
-                _category="riot_api",
-                _is_sensitive=True,
             )
         else:
             # Update existing setting

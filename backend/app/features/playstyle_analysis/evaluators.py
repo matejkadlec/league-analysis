@@ -2,7 +2,7 @@
 
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from app.features.matches.models import Match
+from app.features.matches.lane import opposing_lane_participant
 from app.features.matches.participants import MatchParticipant
 from app.features.playstyle_analysis.aggregates import calculate_aggregate_value
 from app.features.playstyle_analysis.tag_checks import MatchesById, lookup_match
@@ -426,24 +426,14 @@ def _sum_lane_gold_diffs(
         match = lookup_match(matches, p.match_id)
         if not match:
             continue
-        opponent = _find_lane_opponent(match, p)
+        opponent = opposing_lane_participant(
+            p, match.participants or [], skip_unknown=True
+        )
         if opponent:
             games_with_opponent += 1
             diff = (p.gold_earned or 0) - (opponent.gold_earned or 0)
             total_gold_diff += diff
     return total_gold_diff, games_with_opponent
-
-
-def _find_lane_opponent(
-    match: Match, p: MatchParticipant
-) -> Optional[MatchParticipant]:
-    opponent = None
-    if match.participants and p.team_position and p.team_position != "UNKNOWN":
-        for other in match.participants:
-            if other.team_id != p.team_id and other.team_position == p.team_position:
-                opponent = other
-                break
-    return opponent
 
 
 def _accumulate_damage(

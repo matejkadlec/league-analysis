@@ -11,11 +11,13 @@ import structlog
 from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.player_identity import resolve_player_display_fields
 from app.core.riot_api.db_rate_limiter import DBRateLimiter
 from app.core.riot_api.errors import AuthenticationError, ForbiddenError, RateLimitError
 from app.features.players.leagues import PlayerLeague
 from app.features.players.models import Player
 
+from .lane import opposing_lane_participant
 from .models import Match
 from .participants import MatchParticipant
 from .schemas import (
@@ -98,14 +100,6 @@ def or_zero(value: Any) -> int:
     return value or 0
 
 
-def first_present(*values: Any, default: Any) -> Any:
-    """Return the first truthy value, otherwise ``default``."""
-    for value in values:
-        if value:
-            return value
-    return default
-
-
 def advanced_int(advanced_stats: Any, key: str) -> int:
     """Safely read integer-like advanced_stats values."""
     if not isinstance(advanced_stats, dict):
@@ -124,13 +118,6 @@ def page_window(start: int, count: int, total_count: int) -> tuple[int, int]:
     if count > 0:
         return start // count, (total_count + count - 1) // count
     return 0, 0
-
-
-def existing_player_attr(existing_player: Optional[Player], attr: str) -> Any:
-    """Read one stored player field without treating a missing row as an error."""
-    if existing_player is None:
-        return None
-    return getattr(existing_player, attr)
 
 
 def group_participants_by_match(
@@ -237,16 +224,12 @@ def find_lane_opponent(
     match_participants: List[MatchParticipant],
 ) -> Optional[EnemyLaneOpponent]:
     """Return the opposing player in the same assigned lane, if any."""
-    if not player_participant or not player_participant.team_position:
+    if not player_participant:
         return None
-    for participant in match_participants:
-        if (
-            participant.puuid != puuid
-            and participant.team_id != player_participant.team_id
-            and participant.team_position == player_participant.team_position
-        ):
-            return _enemy_lane_opponent(participant)
-    return None
+    opponent = opposing_lane_participant(player_participant, match_participants)
+    if opponent is None:
+        return None
+    return _enemy_lane_opponent(opponent)
 
 
 def _enemy_lane_opponent(participant: MatchParticipant) -> EnemyLaneOpponent:
@@ -818,31 +801,7 @@ def resolve_reprocess_player_fields(
     platform_id: str,
 ) -> dict[str, Any]:
     """Preserve known identity fields when a Riot participant payload is incomplete."""
-    fallback_tag = platform_id.replace("1", "") if platform_id else "RIOT"
-    return {
-        "game_name": first_present(
-            participant.game_name,
-            existing_player_attr(existing_player, "game_name"),
-            participant.summoner_name,
-            default="Unknown",
-        ),
-        "tag_line": first_present(
-            participant.tag_line,
-            existing_player_attr(existing_player, "tag_line"),
-            default=fallback_tag,
-        ),
-        "profile_icon_id": first_present(
-            participant.profile_icon,
-            existing_player_attr(existing_player, "profile_icon_id"),
-            default=29,
-        ),
-        "summoner_level": first_present(
-            participant.summoner_level,
-            existing_player_attr(existing_player, "summoner_level"),
-            default=0,
-        ),
-        "is_tracked": existing_player.is_tracked if existing_player else False,
-    }
+    return resolve_player_display_fields(participant, existing_player, platform_id)
 
 
 async def merge_reprocess_player(
@@ -1250,11 +1209,13 @@ def classify_queue_match_ids(
 def build_synthetic_match_dto(
     match_id: str,
     participants: List[MatchParticipant],
+    game_version: str = "",
 ) -> SimpleNamespace:
     """Build the minimal DTO shape timeline replacement needs for a stored match."""
     return SimpleNamespace(
         metadata=SimpleNamespace(match_id=match_id),
         info=SimpleNamespace(
+            game_version=game_version,
             participants=[
                 SimpleNamespace(
                     participant_id=participant.participant_id,
@@ -1262,7 +1223,7 @@ def build_synthetic_match_dto(
                     puuid=participant.puuid,
                 )
                 for participant in participants
-            ]
+            ],
         ),
     )
 
@@ -1353,10 +1314,14 @@ async def backfill_timeline_only_match(
             participants_found=len(participants),
         )
         return 0
+    version_result = await session.execute(
+        select(Match.game_version).where(Match.match_id == match_id)
+    )
+    game_version = version_result.scalar_one_or_none() or ""
     await ensure_maintenance(session)
     timeline_rows = await replace_match_timeline_rows(
         session,
-        build_synthetic_match_dto(match_id, participants),
+        build_synthetic_match_dto(match_id, participants, game_version),
         timeline_payload,
     )
     if timeline_rows > 0:

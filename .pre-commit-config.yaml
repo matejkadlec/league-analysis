@@ -36,9 +36,11 @@ repos:
         args: ["--config=backend/pyproject.toml"]
 
   # Backend static analysis via the locked uv project. These stay
-  # corpus-wide (`pass_filenames: false`) so a staged subset cannot
-  # hide a project-level finding. Pytest and live CVE scans stay out:
-  # the former needs the test database, the latter is not deterministic.
+  # corpus-wide (`pass_filenames: false` + `always_run`) so a staged
+  # subset or a deletion-only commit cannot hide a project-level
+  # finding. `--locked` refuses to rewrite uv.lock mid-commit.
+  # Pytest and live CVE scans stay out: the former needs the test
+  # database, the latter is not deterministic.
   - repo: local
     hooks:
       - id: backend-bandit
@@ -46,48 +48,48 @@ repos:
         entry: >
           bash -c 'repository_root="$(git rev-parse --show-toplevel)" &&
           cd "$repository_root/backend" &&
-          uv run bandit --quiet --recursive app
+          uv run --locked bandit --quiet --recursive app scripts
           --severity-level medium --confidence-level medium --skip B104'
         language: system
-        files: ^backend/app/.*\.py$
         pass_filenames: false
+        always_run: true
 
       - id: backend-pyright
         name: Pyright
         entry: >
           bash -c 'repository_root="$(git rev-parse --show-toplevel)" &&
           cd "$repository_root/backend" &&
-          uv run pyright'
+          uv run --locked pyright'
         language: system
-        files: ^backend/(app/.*\.py|pyproject\.toml)$
         pass_filenames: false
+        always_run: true
 
       - id: backend-vulture
         name: vulture (dead code, min-confidence 80)
         entry: >
           bash -c 'repository_root="$(git rev-parse --show-toplevel)" &&
           cd "$repository_root/backend" &&
-          uv run vulture'
+          uv run --locked vulture'
         language: system
-        files: ^backend/(app/.*\.py|pyproject\.toml)$
         pass_filenames: false
+        always_run: true
 
       - id: backend-deptry
         name: deptry (unused/missing deps)
         entry: >
           bash -c 'repository_root="$(git rev-parse --show-toplevel)" &&
           cd "$repository_root/backend" &&
-          uv run deptry .'
+          uv run --locked deptry .'
         language: system
-        files: ^backend/(app/.*\.py|pyproject\.toml|uv\.lock)$
         pass_filenames: false
+        always_run: true
 
       - id: backend-xenon
         name: xenon (cyclomatic complexity <= B)
         entry: bash -c 'exec "$(git rev-parse --show-toplevel)/scripts/run-xenon.sh"'
         language: system
-        files: ^backend/app/.*\.py$
         pass_filenames: false
+        always_run: true
 
   # Frontend linting with Next.js (local hook for better compatibility)
   - repo: local

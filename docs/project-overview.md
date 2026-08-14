@@ -258,12 +258,10 @@ step names.
 
 ### Commits and GitHub
 
-`.pre-commit-config.yaml` runs hygiene, Ruff, Bandit, Pyright, vulture, deptry,
-xenon (CC <= 10), frontend ESLint/TypeScript, ShellCheck, and
-actionlint at commit time. Never
-skip configured hooks. Each local hook resolves the Git worktree root before
-doing anything, so commits behave the same from a linked worktree as from the
-main checkout. See [`quality-checks.md`](quality-checks.md) for the GitHub side.
+`.pre-commit-config.yaml` runs the configured commit-time checks. Never skip
+them. Each local hook resolves the Git worktree root before doing anything, so
+commits behave the same from a linked worktree as from the main checkout. See
+[`quality-checks.md`](quality-checks.md) for the GitHub side.
 
 ## Debugging and Operational Boundaries
 

@@ -6,7 +6,7 @@ import secrets
 import smtplib
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
-from typing import Any, Optional
+from typing import Any, NoReturn, Optional
 from uuid import uuid4
 
 import httpx
@@ -983,7 +983,7 @@ class AuthService:
 
     async def _record_failed_email_verification(
         self, email_change_request: EmailChangeRequest, now: datetime
-    ) -> None:
+    ) -> NoReturn:
         """Count a wrong code and lock email-change after too many failures."""
         email_change_request.failed_attempts += 1
         attempts_remaining = max(

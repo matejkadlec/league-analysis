@@ -815,11 +815,12 @@ def build_match_timeline_rows(
         return []
 
     team_totals = _new_team_totals()
+    game_version = getattr(match_dto.info, "game_version", "") or ""
     _process_timeline_frames(
         frames,
         match_dto.metadata.match_id,
-        match_dto.info.game_version,
-        _uses_historical_atakhan_contract(match_dto.info.game_version),
+        game_version,
+        _uses_historical_atakhan_contract(game_version),
         participant_team_by_id,
         rows_by_participant_id,
         team_totals,
