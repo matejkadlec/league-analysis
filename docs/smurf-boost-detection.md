@@ -985,8 +985,11 @@ Results persist to `core.smurf_boost_analyses` (revision `20260814_0010`), one
 row per `(puuid, created_at)`, storing the `model_version` and the exact
 `thresholds` used. A one-active-row partial unique index plus an
 IntegrityError-to-attach path makes a repeated request attach to the run already
-in flight rather than start a second one; this is verified against a real
-PostgreSQL instance, where five concurrent analyses produce exactly one row.
+in flight rather than start a second one. If the run it lost the race to has
+already finished, the identical request is answered with that completed result
+rather than with the database error. The index is PostgreSQL-only and the test
+suite is database-free, so the concurrent behavior was exercised by hand against
+a real instance during LGA-20 review and is not covered by a standing test.
 
 A request only attaches to an in-flight run when that run's `model_version` and
 every threshold value match its own. A run configured differently is a
@@ -1004,7 +1007,7 @@ run computed over an empty history goes stale as soon as a first game arrives.
 
 ### Two boundaries the load cap must not cross
 
-The service loads at most 250 matches, which is all the largest configurable
+The load query is limited to 250 rows, which is all the largest configurable
 windows can consume. Two values are nevertheless read from the player's whole
 eligible history, because truncating them changes what the model means:
 
@@ -1012,7 +1015,10 @@ eligible history, because truncating them changes what the model means:
   slice would understate a long history and make the staleness comparison
   meaningless.
 - The prior-champion counts behind A3, read with the same eligibility
-  predicate offset past the recent window and with no limit. On the deepest
+  predicate, excluding the recent window by match identifier, and with no
+  limit. Excluding by identifier rather than by a repeated offset means a match
+  ingested between the two queries cannot shift what counts as recent. On the
+  deepest
   stored account the capped counting saw 230 games across 68 champions against
   609 games across 99 champions for the full history, and **35 champions with
   real stored history would have been treated as newly picked**.
@@ -1021,9 +1027,13 @@ eligible history, because truncating them changes what the model means:
 
 The stored document and the HTTP response are the same validated
 `SmurfBoostResults` shape, built in one place. Each signal is emitted as `id`
-plus `family`; the fixed disclaimer is always present; and the internal
-weighted sum that produced a band is retained only in memory, so no per-family
-number is ever persisted or sent to a client.
+plus `family`; the fixed disclaimer is always present; and the per-family
+weighted sum that produced a band is never itself emitted, stored, or
+displayed. Each triggered signal does carry its own `magnitude`, `weight` and
+`contribution`, because a result no one can check is worse than a number no one
+should read as a probability; a client holding the payload can therefore add
+the contributions back up. What the boundary buys is that no single number is
+ever presented as the answer.
 
 `GET /api/v1/smurf-boost-detection/presets` emits each preset in the card
 settings write contract's own field names and numeric types, so a client can
