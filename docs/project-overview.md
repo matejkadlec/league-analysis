@@ -241,7 +241,8 @@ is available; it complements ESLint and TypeScript rather than replacing them.
 ```
 
 This syncs the frozen `uv.lock`, validates pre-commit configuration, and runs
-pytest, Ruff lint/format, Pyright, and Bandit at medium severity and confidence.
+pytest, Ruff lint/format, Pyright, Bandit at medium severity and confidence,
+vulture, deptry, and xenon at rank B (CC <= 10).
 Use the workspace `get_errors` diagnostic on changed Python files when it is
 available.
 
@@ -257,10 +258,10 @@ step names.
 
 ### Commits and GitHub
 
-`.pre-commit-config.yaml` runs the fast checks at commit time. Never skip
-configured hooks. Each local hook resolves the Git worktree root before doing
-anything, so commits behave the same from a linked worktree as from the main
-checkout. See [`quality-checks.md`](quality-checks.md) for the GitHub side.
+`.pre-commit-config.yaml` runs the configured commit-time checks. Never skip
+them. Each local hook resolves the Git worktree root before doing anything, so
+commits behave the same from a linked worktree as from the main checkout. See
+[`quality-checks.md`](quality-checks.md) for the GitHub side.
 
 ## Debugging and Operational Boundaries
 

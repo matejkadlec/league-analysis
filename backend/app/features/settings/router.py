@@ -112,8 +112,6 @@ async def update_riot_api_key(
             setting = await settings_service.create_or_update_setting(
                 key="riot_api_key",
                 value=update.value,
-                category="riot_api",
-                is_sensitive=True,
             )
         else:
             # Update existing setting
@@ -269,6 +267,7 @@ async def reset_all_card_preferences(
     except Exception as error:
         logger.error(
             "failed_to_reset_all_card_preferences",
+            confirmed_card_count=len(confirmation.card_ids),
             error_type=type(error).__name__,
             exc_info=True,
         )

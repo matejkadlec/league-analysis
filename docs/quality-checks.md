@@ -41,6 +41,14 @@ so it is safe to call from the main checkout or any worktree.
 - **Bandit excludes B104 and nothing else.** The direct local entry point binds
   WSL and LAN interfaces on purpose. Production process and network hardening
   is LGA-10.
+- **Pre-commit stays static and lockfile-backed.** Local backend hooks use
+  `uv run --locked` and `always_run`, so they cannot rewrite `uv.lock` mid-
+  commit or skip a deletion-only change. They do not run pytest (needs the
+  test database) or live CVE scans (advisory databases are not deterministic;
+  Dependabot owns that).
+- **Xenon is a blocking B-rank gate.** Every block under `backend/app` must
+  stay at rank B or better (CC <= 10). It runs at commit time and in
+  `./test.sh -b`.
 - **Tests never need a real Riot API key, network access, or a real database
   password.** CI and local runs pass explicit safe test-only values.
 - **CI always runs the complete gate.** `./test.sh -r` exists for local

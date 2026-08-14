@@ -9,15 +9,17 @@ instead of implementing its own storage logic. This handles:
 - Timeline objective aggregates are fetched and stored when available
 """
 
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.db_session import rollback_quietly
 from app.features.matches.models import Match
 from app.features.matches.participants import MatchParticipant
 from app.features.matches.timeline import replace_match_timeline_rows
+from app.features.players.identity import resolve_player_display_fields
 from app.features.players.models import Player
 
 if TYPE_CHECKING:
@@ -74,9 +76,56 @@ async def ensure_match_fully_analyzed(
     return True
 
 
+def _build_fully_analyzed_match(match_dto: Any) -> Match:
+    """Build a fully-analyzed match row from a Riot match DTO."""
+    from app.features.matches.match_persistence import (
+        build_match_record,
+        match_end_flags,
+    )
+
+    platform_id = match_dto.info.platform or "EUN1"
+    early_surrender, surrender = match_end_flags(match_dto.info.participants)
+    return build_match_record(
+        match_dto,
+        platform_id,
+        early_surrender,
+        surrender,
+        fully_analyzed=True,
+    )
+
+
+async def _upsert_match_participant(
+    db: AsyncSession,
+    match_id: str,
+    participant: Any,
+    platform_id: str,
+) -> None:
+    """Merge the participant's skeletal player row and match participant row."""
+    from app.features.matches.transformers import MatchDTOTransformer
+
+    existing_player_result = await db.execute(
+        select(Player).where(Player.puuid == participant.puuid)
+    )
+    existing_player = existing_player_result.scalar_one_or_none()
+    fields = resolve_player_display_fields(participant, existing_player, platform_id)
+    await db.merge(
+        Player(
+            puuid=participant.puuid,
+            game_name=fields["game_name"],
+            tag_line=fields["tag_line"],
+            platform=platform_id.lower(),
+            profile_icon_id=fields["profile_icon_id"],
+            summoner_level=fields["summoner_level"],
+            is_tracked=fields["is_tracked"],
+        )
+    )
+    participant_data = MatchDTOTransformer.extract_participant_data(participant)
+    await db.merge(MatchParticipant(match_id=match_id, **participant_data))
+
+
 async def _upsert_match(
     db: AsyncSession,
-    match_dto,
+    match_dto: Any,
     timeline_payload: Optional[dict] = None,
 ) -> None:
     """Upsert a match and its participants with fully_analyzed=True.
@@ -85,88 +134,20 @@ async def _upsert_match(
     Creates skeletal Player records for FK satisfaction if missing and stores
     objective timeline aggregates when timeline payload is available.
     """
-    from app.features.matches.transformers import MatchDTOTransformer
-
     platform_id = match_dto.info.platform or "EUN1"
     match_id = match_dto.metadata.match_id
 
-    early_surrender = any(
-        p.game_ended_in_early_surrender for p in match_dto.info.participants
-    )
-    surrender = any(p.game_ended_in_surrender for p in match_dto.info.participants)
-
     try:
-        match = Match(
-            match_id=match_id,
-            platform=platform_id.upper(),
-            game_creation_timestamp=match_dto.info.game_creation_timestamp,
-            game_start_timestamp=match_dto.info.game_start_timestamp,
-            game_start_timestamp_source="riot_game_start",
-            game_end_timestamp=match_dto.info.game_end_timestamp,
-            game_duration=match_dto.info.game_duration,
-            game_mode=match_dto.info.game_mode,
-            game_type=match_dto.info.game_type,
-            game_version=match_dto.info.game_version,
-            map_id=match_dto.info.map_id,
-            queue_id=match_dto.info.queue_id,
-            early_surrender=early_surrender,
-            surrender=surrender,
-            game_result=match_dto.info.game_result,
-            fully_analyzed=True,
-        )
-        await db.merge(match)
-
+        await db.merge(_build_fully_analyzed_match(match_dto))
         for participant in match_dto.info.participants:
-            existing_player_result = await db.execute(
-                select(Player).where(Player.puuid == participant.puuid)
-            )
-            existing_player = existing_player_result.scalar_one_or_none()
-
-            p_game_name = participant.game_name or (
-                existing_player.game_name if existing_player else None
-            )
-            p_tag_line = participant.tag_line or (
-                existing_player.tag_line if existing_player else None
-            )
-            p_game_name = p_game_name or participant.summoner_name or "Unknown"
-            p_tag_line = p_tag_line or (
-                platform_id.replace("1", "") if platform_id else "RIOT"
-            )
-
-            player_record = Player(
-                puuid=participant.puuid,
-                game_name=p_game_name,
-                tag_line=p_tag_line,
-                platform=platform_id.lower(),
-                profile_icon_id=participant.profile_icon
-                or (existing_player.profile_icon_id if existing_player else None)
-                or 29,
-                summoner_level=participant.summoner_level
-                or (existing_player.summoner_level if existing_player else None)
-                or 0,
-                is_tracked=existing_player.is_tracked if existing_player else False,
-            )
-            await db.merge(player_record)
-
-            participant_data = MatchDTOTransformer.extract_participant_data(participant)
-            match_participant = MatchParticipant(
-                match_id=match_id,
-                **participant_data,
-            )
-            await db.merge(match_participant)
-
+            await _upsert_match_participant(db, match_id, participant, platform_id)
         await replace_match_timeline_rows(db, match_dto, timeline_payload)
-
         await db.commit()
-
     except Exception as e:
         logger.error(
             "Failed to upsert match",
             match_id=match_id,
             error=str(e),
         )
-        try:
-            await db.rollback()
-        except Exception:
-            pass
+        await rollback_quietly(db)
         raise

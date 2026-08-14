@@ -69,10 +69,38 @@ known-first-party = ["app", "scripts"]
 [dependency-groups]
 dev = [
     "bandit>=1.9.4",
+    "deptry>=0.23.1",
     "pip-audit>=2.10.1",
     "pre-commit>=4.6.2",
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
     "pyright>=1.1.411",
     "ruff==0.16.2",
+    "vulture>=2.16",
+    "xenon>=0.9.3",
+]
+
+[tool.vulture]
+min_confidence = 80
+paths = ["app"]
+ignore_decorators = ["@router.*", "@app.*"]
+ignore_names = [
+    "model_config",
+]
+
+[tool.deptry]
+extend_exclude = ["tests", "scripts", "alembic"]
+
+[tool.deptry.package_module_name_map]
+python-Levenshtein = "Levenshtein"
+
+[tool.deptry.per_rule_ignores]
+# Drivers and plugin extras are required at runtime but imported by
+# SQLAlchemy, Pydantic, or FastAPI rather than application code.
+DEP002 = [
+    "alembic",
+    "asyncpg",
+    "email-validator",
+    "psycopg2-binary",
+    "python-multipart",
 ]

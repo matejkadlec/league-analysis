@@ -104,6 +104,65 @@ def _format_api_calls_for_storage(api_calls: List[Any]) -> List[Dict[str, Any]]:
     return result
 
 
+def _validation_field_locations(source_error: Exception | None) -> list[str]:
+    """Return reviewed Pydantic location paths from a diagnostic exception."""
+    validation_errors = getattr(source_error, "errors", None)
+    if not callable(validation_errors):
+        return []
+    try:
+        reported_errors = validation_errors()
+    except Exception:
+        return []
+    if not isinstance(reported_errors, list):
+        return []
+    locations: list[str] = []
+    for item in reported_errors:
+        if not isinstance(item, dict):
+            continue
+        location = item.get("loc")
+        if isinstance(location, tuple):
+            locations.append(".".join(str(part) for part in location))
+    return locations[:5]
+
+
+def _safe_error_context(context: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """Keep only short scalar identifiers for persisted diagnostics."""
+    if not context:
+        return {}
+    return {
+        key: value
+        for key, value in context.items()
+        if isinstance(value, (str, int, float, bool)) and len(str(value)) <= 128
+    }
+
+
+def _build_error_diagnostic(
+    error: Exception | str,
+    operation: str,
+    context: Optional[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """Build a secret-safe diagnostic without raw exception text or payloads."""
+    source_error = diagnostic_error(error) if isinstance(error, Exception) else None
+    error_type = type(source_error).__name__ if source_error else "RecordedError"
+    diagnostic: Dict[str, Any] = {
+        "operation": operation,
+        "error_type": error_type,
+    }
+
+    status_code = getattr(source_error, "status_code", None)
+    if isinstance(status_code, int):
+        diagnostic["status_code"] = status_code
+
+    locations = _validation_field_locations(source_error)
+    if locations:
+        diagnostic["validation_fields"] = locations
+
+    safe_context = _safe_error_context(context)
+    if safe_context:
+        diagnostic["context"] = safe_context
+    return diagnostic
+
+
 class BaseJob(ABC):
     """Abstract base class for all automated jobs.
 
@@ -415,142 +474,160 @@ class BaseJob(ABC):
     async def run(self) -> None:
         """Execute the job with proper error handling and logging."""
         async with self._db_session() as db:
-            if await self.is_already_running(db):
-                logger.info(
-                    "Skipping job execution - already running",
-                    job_config_id=self.job_config_id,
-                )
-                self.skipped_as_already_running = True
+            if not await self._begin_run(db):
                 return
 
             try:
-                await self.log_start(db)
-            except Exception as error:
-                logger.error(
-                    "Failed to initialize job execution",
-                    job_config_id=self.job_config_id,
-                    error=str(error),
-                    error_type=type(error).__name__,
-                )
-                return
-
-            register_runtime_control(
-                self.runtime_key,
-                asyncio.current_task(),
-            )
-
-            try:
-                # Load fresh configuration before execution
-                await self._refresh_config(db)
-                if self.job_config is None:
-                    raise RuntimeError(
-                        f"Job configuration {self.job_config_id} was not loaded"
-                    )
-                job_config = self.job_config
-
-                if self.job_execution:
-                    structlog_contextvars.bind_contextvars(
-                        job_execution_id=self.job_execution_id,
-                        job_name=job_config.name,
-                        job_type=job_config.job_type.value,
-                    )
-
-                if is_riot_writer_maintenance_active(job_config, self.execution_type):
-                    logger.warning(
-                        "Regular Riot writer skipped during local maintenance",
-                        job_config_id=self.job_config_id,
-                        job_name=job_config.name,
-                        job_type=job_config.job_type.value,
-                    )
-                    self.add_log_entry("riot_maintenance_blocked", True)
-                    raise JobStopSignal(reason="riot_maintenance")
-
-                await self.check_control_state(db)
-                await self.execute(db)
-
+                await self._execute_prepared_job(db)
             except JobStopSignal as stop_signal:
-                self.add_log_entry("stopped_early", True)
-                self.add_log_entry(
-                    "stop_mode",
-                    "force" if stop_signal.force else "graceful",
-                )
-                self.add_log_entry("stop_reason", stop_signal.reason)
-                job_logs = self._get_job_logs()
-                await self.log_completion(
+                await self._complete_cancelled(
                     db,
-                    success=True,
-                    logs=job_logs,
-                    status=JobStatus.CANCELLED,
+                    force=stop_signal.force,
+                    reason=stop_signal.reason,
                 )
             except asyncio.CancelledError:
-                self.add_log_entry("stopped_early", True)
-                self.add_log_entry("stop_mode", "force")
-                job_logs = self._get_job_logs()
-                await self.log_completion(
-                    db,
-                    success=True,
-                    logs=job_logs,
-                    status=JobStatus.CANCELLED,
-                )
+                await self._complete_cancelled(db, force=True)
             except RateLimitSignal as rate_limit_signal:
-                # Rate limit hit - save progress and mark as rate limited
-                logger.warning(
-                    "Job stopped due to rate limit",
-                    job_config_id=self.job_config_id,
-                    job_name=self.job_config_name,
-                    retry_after=rate_limit_signal.retry_after,
-                )
-                job_logs = self._get_job_logs()
-                await self.log_completion(
-                    db,
-                    success=True,  # Not a failure - completed what we could
-                    logs=job_logs,
-                    status=JobStatus.RATE_LIMITED,
-                )
+                await self._complete_rate_limited(db, rate_limit_signal)
             except Exception as job_error:
-                error_message = await self.handle_error(db, job_error)
-                if self.has_api_key_error():
-                    error_message = self._get_error_summary()
-                job_logs = self._get_job_logs()
-                await self.log_completion(
-                    db,
-                    success=False,
-                    error_message=error_message,
-                    logs=job_logs,
-                )
+                await self._complete_failed_exception(db, job_error)
             else:
-                # API-key rejection is fatal. Regular writer jobs may classify
-                # isolated per-player/provider errors as successful warnings,
-                # while health-check jobs retain fail-on-any-error semantics.
-                job_logs = self._get_job_logs()
-                if self.has_api_key_error() or (
-                    self.has_errors() and self.recorded_errors_are_fatal
-                ):
-                    error_summary = self._get_error_summary()
-                    await self.log_completion(
-                        db,
-                        success=False,
-                        error_message=error_summary,
-                        logs=job_logs,
-                    )
-                else:
-                    if self.has_errors():
-                        self.add_log_entry("completed_with_warnings", True)
-                        self.add_log_entry(
-                            "warning_count", len(self._errors_encountered)
-                        )
-                        self.add_log_entry(
-                            "warning_summary", self._get_warning_summary()
-                        )
-                    await self.log_completion(
-                        db,
-                        success=True,
-                        logs=job_logs,
-                    )
+                await self._complete_execute_result(db)
             finally:
                 await self._fail_unfinished_execution(db)
                 unregister_runtime_control(self.runtime_key)
                 structlog_contextvars.clear_contextvars()
+
+    async def _begin_run(self, db: AsyncSession) -> bool:
+        """Start bookkeeping and register runtime control when the job may run."""
+        if await self.is_already_running(db):
+            logger.info(
+                "Skipping job execution - already running",
+                job_config_id=self.job_config_id,
+            )
+            self.skipped_as_already_running = True
+            return False
+
+        try:
+            await self.log_start(db)
+        except Exception as error:
+            logger.error(
+                "Failed to initialize job execution",
+                job_config_id=self.job_config_id,
+                error=str(error),
+                error_type=type(error).__name__,
+            )
+            return False
+
+        register_runtime_control(
+            self.runtime_key,
+            asyncio.current_task(),
+        )
+        return True
+
+    async def _execute_prepared_job(self, db: AsyncSession) -> None:
+        """Refresh configuration, honor maintenance, then run job logic."""
+        await self._refresh_config(db)
+        if self.job_config is None:
+            raise RuntimeError(f"Job configuration {self.job_config_id} was not loaded")
+        job_config = self.job_config
+
+        if self.job_execution:
+            structlog_contextvars.bind_contextvars(
+                job_execution_id=self.job_execution_id,
+                job_name=job_config.name,
+                job_type=job_config.job_type.value,
+            )
+
+        if is_riot_writer_maintenance_active(job_config, self.execution_type):
+            logger.warning(
+                "Regular Riot writer skipped during local maintenance",
+                job_config_id=self.job_config_id,
+                job_name=job_config.name,
+                job_type=job_config.job_type.value,
+            )
+            self.add_log_entry("riot_maintenance_blocked", True)
+            raise JobStopSignal(reason="riot_maintenance")
+
+        await self.check_control_state(db)
+        await self.execute(db)
+
+    async def _complete_cancelled(
+        self,
+        db: AsyncSession,
+        *,
+        force: bool,
+        reason: Optional[str] = None,
+    ) -> None:
+        """Persist a cancelled completion for stop or task-cancellation paths."""
+        self.add_log_entry("stopped_early", True)
+        self.add_log_entry("stop_mode", "force" if force else "graceful")
+        if reason is not None:
+            self.add_log_entry("stop_reason", reason)
+        await self.log_completion(
+            db,
+            success=True,
+            logs=self._get_job_logs(),
+            status=JobStatus.CANCELLED,
+        )
+
+    async def _complete_rate_limited(
+        self,
+        db: AsyncSession,
+        rate_limit_signal: RateLimitSignal,
+    ) -> None:
+        """Persist progress after the job stops for a rate-limit window."""
+        logger.warning(
+            "Job stopped due to rate limit",
+            job_config_id=self.job_config_id,
+            job_name=self.job_config_name,
+            retry_after=rate_limit_signal.retry_after,
+        )
+        await self.log_completion(
+            db,
+            success=True,
+            logs=self._get_job_logs(),
+            status=JobStatus.RATE_LIMITED,
+        )
+
+    async def _complete_failed_exception(
+        self,
+        db: AsyncSession,
+        job_error: Exception,
+    ) -> None:
+        """Persist a failed completion after an uncaught execution exception."""
+        error_message = await self.handle_error(db, job_error)
+        if self.has_api_key_error():
+            error_message = self._get_error_summary()
+        await self.log_completion(
+            db,
+            success=False,
+            error_message=error_message,
+            logs=self._get_job_logs(),
+        )
+
+    async def _complete_execute_result(self, db: AsyncSession) -> None:
+        """Classify a finished execute() as failure, warning, or success."""
+        job_logs = self._get_job_logs()
+        if self.has_api_key_error() or (
+            self.has_errors() and self.recorded_errors_are_fatal
+        ):
+            await self.log_completion(
+                db,
+                success=False,
+                error_message=self._get_error_summary(),
+                logs=job_logs,
+            )
+            return
+        if self.has_errors():
+            self.add_log_entry("completed_with_warnings", True)
+            self.add_log_entry("warning_count", len(self._errors_encountered))
+            self.add_log_entry("warning_summary", self._get_warning_summary())
+        await self.log_completion(
+            db,
+            success=True,
+            logs=job_logs,
+        )
 
     async def _fail_unfinished_execution(self, db: AsyncSession) -> None:
         """Close an execution whose completion logging never ran.
@@ -714,53 +791,20 @@ class BaseJob(ABC):
         safe HTTP status and explicitly supplied identifiers, but never arbitrary
         exception text or provider response bodies.
         """
-        source_error = diagnostic_error(error) if isinstance(error, Exception) else None
-        error_type = type(source_error).__name__ if source_error else "RecordedError"
-        diagnostic: Dict[str, Any] = {
-            "operation": operation,
-            "error_type": error_type,
-        }
-
-        status_code = getattr(source_error, "status_code", None)
-        if isinstance(status_code, int):
-            diagnostic["status_code"] = status_code
-
-        validation_errors = getattr(source_error, "errors", None)
-        if callable(validation_errors):
-            locations: list[str] = []
-            try:
-                reported_errors = validation_errors()
-                if isinstance(reported_errors, list):
-                    for item in reported_errors:
-                        if not isinstance(item, dict):
-                            continue
-                        location = item.get("loc")
-                        if isinstance(location, tuple):
-                            locations.append(".".join(str(part) for part in location))
-            except Exception:
-                locations = []
-            if locations:
-                diagnostic["validation_fields"] = locations[:5]
-
-        if context:
-            safe_context = {
-                key: value
-                for key, value in context.items()
-                if isinstance(value, (str, int, float, bool)) and len(str(value)) <= 128
-            }
-            if safe_context:
-                diagnostic["context"] = safe_context
-
-        self._errors_encountered.append(diagnostic)
-        persisted_errors = self.execution_log.setdefault("errors", [])
-        if len(persisted_errors) < 20:
-            persisted_errors.append(diagnostic)
-        else:
-            self.execution_log["errors_truncated"] = len(self._errors_encountered) - 20
+        self._store_recorded_error(_build_error_diagnostic(error, operation, context))
         if is_api_key_error:
             self._has_api_key_error = True
         if isinstance(error, Exception) and is_riot_puuid_binding_error(error):
             self._has_puuid_binding_error = True
+
+    def _store_recorded_error(self, diagnostic: Dict[str, Any]) -> None:
+        """Append a diagnostic and bound the persisted execution-log copy."""
+        self._errors_encountered.append(diagnostic)
+        persisted_errors = self.execution_log.setdefault("errors", [])
+        if len(persisted_errors) < 20:
+            persisted_errors.append(diagnostic)
+            return
+        self.execution_log["errors_truncated"] = len(self._errors_encountered) - 20
 
     def _get_error_summary(self) -> str:
         """Return an actionable, secret-safe completion summary."""

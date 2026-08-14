@@ -219,6 +219,41 @@ class DBRateLimiter:
         total = result.scalar_one_or_none()
         return total or 0
 
+    @staticmethod
+    def _active_request_windows(
+        rows: list[Any], now: datetime
+    ) -> list[tuple[datetime, int]]:
+        """Collect unfinished component windows that still hold request counts."""
+        windows: list[tuple[datetime, int]] = []
+        for requests_made, window_start, window_size_seconds in rows:
+            if not requests_made or not window_start:
+                continue
+
+            window_end = window_start + timedelta(seconds=window_size_seconds)
+            if window_end <= now:
+                continue
+
+            windows.append((window_end, int(requests_made)))
+        return windows
+
+    def _wait_seconds_until_capacity(
+        self, windows: list[tuple[datetime, int]], now: datetime
+    ) -> float:
+        """Return seconds until enough windows expire to free capacity."""
+        total_requests = sum(requests_made for _, requests_made in windows)
+        if total_requests < self.max_requests:
+            return 0.0
+
+        remaining_requests = total_requests
+        for window_end, requests_made in sorted(windows, key=lambda item: item[0]):
+            remaining_requests -= requests_made
+            if remaining_requests < self.max_requests:
+                wait_seconds = (window_end - now).total_seconds()
+                return max(wait_seconds, 0.0)
+
+        latest_window_end = max(window_end for window_end, _ in windows)
+        return max((latest_window_end - now).total_seconds(), 0.0)
+
     async def _calculate_wait_time_until_capacity(self, now: datetime) -> float:
         """Calculate how long to wait until aggregate requests drop below capacity.
 
@@ -236,33 +271,10 @@ class DBRateLimiter:
         if not rows:
             return 0.0
 
-        windows: list[tuple[datetime, int]] = []
-        for requests_made, window_start, window_size_seconds in rows:
-            if not requests_made or not window_start:
-                continue
-
-            window_end = window_start + timedelta(seconds=window_size_seconds)
-            if window_end <= now:
-                continue
-
-            windows.append((window_end, int(requests_made)))
-
+        windows = self._active_request_windows(list(rows), now)
         if not windows:
             return 0.0
-
-        total_requests = sum(requests_made for _, requests_made in windows)
-        if total_requests < self.max_requests:
-            return 0.0
-
-        remaining_requests = total_requests
-        for window_end, requests_made in sorted(windows, key=lambda item: item[0]):
-            remaining_requests -= requests_made
-            if remaining_requests < self.max_requests:
-                wait_seconds = (window_end - now).total_seconds()
-                return max(wait_seconds, 0.0)
-
-        latest_window_end = max(window_end for window_end, _ in windows)
-        return max((latest_window_end - now).total_seconds(), 0.0)
+        return self._wait_seconds_until_capacity(windows, now)
 
     async def _reset_window_if_expired(self, state: RateLimitState) -> RateLimitState:
         """Reset the window if it has expired."""
@@ -462,6 +474,59 @@ class DBRateLimiter:
         )
         await self.db.commit()
 
+    @staticmethod
+    async def _notify_wait_callback(
+        wait_callback: Optional[Callable[[datetime | None], Any]],
+        reset_at: datetime | None,
+    ) -> None:
+        """Invoke the optional wait observer, ignoring callback failures."""
+        if wait_callback is None:
+            return
+        try:
+            await wait_callback(reset_at)
+        except Exception:
+            pass
+
+    async def _try_acquire_when_capacity_available(
+        self,
+        total_requests: int,
+        waiting_for_rate_limit: bool,
+        wait_callback: Optional[Callable[[datetime | None], Any]],
+    ) -> bool | None:
+        """Acquire now, yield for one second, or report that capacity is full.
+
+        Returns True when the caller may proceed, False when it should retry after
+        yielding, and None when the shared window is still full.
+        """
+        if total_requests >= self.max_requests:
+            return None
+        if await self._check_higher_priority_active():
+            logger.debug(
+                "Yielding to higher priority component",
+                component=self.component.value,
+                priority=self.priority,
+            )
+            await asyncio.sleep(1)
+            return False
+
+        await self._wait_for_burst_limit()
+        if waiting_for_rate_limit:
+            await self._notify_wait_callback(wait_callback, None)
+        return True
+
+    async def _sleep_in_rate_limit_chunks(
+        self, wait_time: float, total_waited: float
+    ) -> float:
+        """Sleep until the window expires, in 3-second chunks for cancellation."""
+        chunk_size = 3
+        remaining = wait_time
+        while remaining > 0 and total_waited < self.max_wait:
+            sleep_time = min(chunk_size, remaining)
+            await asyncio.sleep(sleep_time)
+            total_waited += sleep_time
+            remaining -= sleep_time
+        return total_waited
+
     async def acquire_with_wait_callback(
         self,
         wait_callback: Optional[Callable[[datetime | None], Any]] = None,
@@ -476,42 +541,23 @@ class DBRateLimiter:
         Returns:
             True if the request can proceed, False if rate limited/timed out
         """
-        total_waited = 0
+        total_waited = 0.0
         waiting_for_rate_limit = False
 
         while total_waited < self.max_wait:
             state = await self._get_or_create_state()
             state = await self._reset_window_if_expired(state)
-
-            # Get total requests across all components
             total_requests = await self._get_total_requests_in_window()
 
-            # Check if we have capacity
-            if total_requests < self.max_requests:
-                # Check if higher priority component is active
-                if await self._check_higher_priority_active():
-                    logger.debug(
-                        "Yielding to higher priority component",
-                        component=self.component.value,
-                        priority=self.priority,
-                    )
-                    await asyncio.sleep(1)
-                    total_waited += 1
-                    continue
-
-                # Good to proceed
-                await self._wait_for_burst_limit()
-
-                # Notify callback that wait is over
-                if waiting_for_rate_limit and wait_callback:
-                    try:
-                        await wait_callback(None)
-                    except Exception:
-                        pass
-
+            acquired = await self._try_acquire_when_capacity_available(
+                total_requests, waiting_for_rate_limit, wait_callback
+            )
+            if acquired is True:
                 return True
+            if acquired is False:
+                total_waited += 1
+                continue
 
-            # Calculate wait time until window resets
             now = datetime.now(timezone.utc)
             wait_time = await self._calculate_wait_time_until_capacity(now)
 
@@ -527,12 +573,9 @@ class DBRateLimiter:
                 )
                 return False
 
-            # Notify callback with absolute window_end time (set once)
-            if wait_callback:
-                try:
-                    await wait_callback(now + timedelta(seconds=wait_time))
-                except Exception:
-                    pass
+            await self._notify_wait_callback(
+                wait_callback, now + timedelta(seconds=wait_time)
+            )
             waiting_for_rate_limit = True
 
             logger.info(
@@ -541,20 +584,12 @@ class DBRateLimiter:
                 wait_time=int(wait_time),
             )
 
-            # Sleep until window expires (in chunks to allow cancellation)
-            chunk_size = 3
-            remaining = wait_time
-            while remaining > 0 and total_waited < self.max_wait:
-                sleep_time = min(chunk_size, remaining)
-                await asyncio.sleep(sleep_time)
-                total_waited += sleep_time
-                remaining -= sleep_time
+            total_waited = await self._sleep_in_rate_limit_chunks(
+                wait_time, total_waited
+            )
 
-        if waiting_for_rate_limit and wait_callback:
-            try:
-                await wait_callback(None)
-            except Exception:
-                pass
+        if waiting_for_rate_limit:
+            await self._notify_wait_callback(wait_callback, None)
         return False
 
     async def get_status(self) -> dict:

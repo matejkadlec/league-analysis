@@ -2,7 +2,7 @@
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional
+from typing import Annotated, Optional
 
 from sqlalchemy import (
     BigInteger,
@@ -17,7 +17,6 @@ from sqlalchemy import (
     DateTime as SQLDateTime,
 )
 from sqlalchemy.orm import DeclarativeBase, mapped_column
-from typing_extensions import Annotated
 
 # Create a base class for declarative models using SQLAlchemy 2.0 style
 # Use a custom naming convention for constraints and indexes

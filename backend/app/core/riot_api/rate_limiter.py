@@ -56,11 +56,24 @@ class RateLimiter:
         parsed = urlsplit(endpoint)
         return parsed.hostname or "unspecified"
 
-    def _get_endpoint_key(self, endpoint: str, method: str) -> str:
-        """Return a method scope including routing host and service path."""
-        parsed = urlsplit(endpoint)
-        path = parsed.path or endpoint
-        segments = [segment for segment in path.split("/") if segment]
+    @staticmethod
+    def _redact_count_for_segment(segment: str, next_segment: str | None) -> int:
+        """Return how many following path segments are identifier values."""
+        if segment == "by-riot-id":
+            return 2
+        if segment in {"by-puuid", "by-summoner"}:
+            return 1
+        if (
+            segment == "matches"
+            and next_segment is not None
+            and next_segment != "by-puuid"
+        ):
+            return 1
+        return 0
+
+    @staticmethod
+    def _normalize_endpoint_segments(segments: list[str]) -> list[str]:
+        """Replace identifier path segments with a stable `{id}` token."""
         normalized_segments: list[str] = []
         redact_next = 0
         for index, segment in enumerate(segments):
@@ -70,17 +83,16 @@ class RateLimiter:
                 continue
 
             normalized_segments.append(segment)
-            if segment == "by-riot-id":
-                redact_next = 2
-            elif segment in {"by-puuid", "by-summoner"}:
-                redact_next = 1
-            elif (
-                segment == "matches"
-                and index + 1 < len(segments)
-                and segments[index + 1] != "by-puuid"
-            ):
-                redact_next = 1
+            next_segment = segments[index + 1] if index + 1 < len(segments) else None
+            redact_next = RateLimiter._redact_count_for_segment(segment, next_segment)
+        return normalized_segments
 
+    def _get_endpoint_key(self, endpoint: str, method: str) -> str:
+        """Return a method scope including routing host and service path."""
+        parsed = urlsplit(endpoint)
+        path = parsed.path or endpoint
+        segments = [segment for segment in path.split("/") if segment]
+        normalized_segments = self._normalize_endpoint_segments(segments)
         service_key = "/".join(normalized_segments) if normalized_segments else "root"
         return f"{method.upper()}:{self._get_routing_scope(endpoint)}:{service_key}"
 
@@ -93,6 +105,42 @@ class RateLimiter:
         for key in expired:
             del windows[key]
 
+    def _windows_for_scope(
+        self, windows: dict[tuple[str, int], _RateWindow], scope: str
+    ) -> list[_RateWindow]:
+        """Return windows whose stored scope matches the current request."""
+        return [
+            window
+            for (window_scope, _), window in windows.items()
+            if window_scope == scope
+        ]
+
+    async def _sleep_if_windows_saturated(
+        self,
+        relevant_windows: list[_RateWindow],
+        now: float,
+        routing_scope: str,
+        endpoint_key: str,
+    ) -> float:
+        """Sleep until the latest saturated window resets, then drop expired ones."""
+        saturated = [window for window in relevant_windows if window.remaining <= 0]
+        if not saturated:
+            return now
+        wait_time = max(window.reset_at - now for window in saturated)
+        if wait_time <= 0:
+            return now
+        logger.info(
+            "Riot rate limit reached, waiting",
+            routing_scope=routing_scope,
+            endpoint=endpoint_key,
+            wait_time=wait_time,
+        )
+        await asyncio.sleep(wait_time)
+        now = time.monotonic()
+        self._discard_expired(self._app_windows, now)
+        self._discard_expired(self._method_windows, now)
+        return now
+
     async def wait_if_needed(self, endpoint: str, method: str = "GET") -> None:
         """Wait for saturated app/method windows and enforce burst spacing."""
         async with self.lock:
@@ -102,31 +150,13 @@ class RateLimiter:
 
             routing_scope = self._get_routing_scope(endpoint)
             endpoint_key = self._get_endpoint_key(endpoint, method)
-            relevant_windows = [
-                window
-                for (scope, _), window in self._app_windows.items()
-                if scope == routing_scope
-            ]
+            relevant_windows = self._windows_for_scope(self._app_windows, routing_scope)
             relevant_windows.extend(
-                window
-                for (scope, _), window in self._method_windows.items()
-                if scope == endpoint_key
+                self._windows_for_scope(self._method_windows, endpoint_key)
             )
-
-            saturated = [window for window in relevant_windows if window.remaining <= 0]
-            if saturated:
-                wait_time = max(window.reset_at - now for window in saturated)
-                if wait_time > 0:
-                    logger.info(
-                        "Riot rate limit reached, waiting",
-                        routing_scope=routing_scope,
-                        endpoint=endpoint_key,
-                        wait_time=wait_time,
-                    )
-                    await asyncio.sleep(wait_time)
-                    now = time.monotonic()
-                    self._discard_expired(self._app_windows, now)
-                    self._discard_expired(self._method_windows, now)
+            now = await self._sleep_if_windows_saturated(
+                relevant_windows, now, routing_scope, endpoint_key
+            )
 
             time_since_last = now - self.last_request_time
             if time_since_last < self.request_spacing:

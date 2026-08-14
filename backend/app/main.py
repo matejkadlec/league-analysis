@@ -5,13 +5,12 @@ from contextlib import asynccontextmanager
 from typing import Any, Dict
 
 import structlog
-from fastapi import FastAPI, Response
+from fastapi import FastAPI, Response, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from sqlalchemy import text
-from starlette import status
-from starlette.responses import JSONResponse
 from structlog import contextvars as structlog_contextvars
 
 from app.core import get_global_settings, get_riot_api_key

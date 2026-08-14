@@ -57,84 +57,112 @@ class MatchFetcherJob(BaseJob):
 
         player_service = PlayerService(db)
         match_service = MatchService(db)
-
-        # Initialize DB rate limiter for coordinated rate limiting
         rate_limiter = DBRateLimiter(db, RateLimitComponent.MATCH_FETCHER)
 
         async with await self.get_job_riot_api_client(
             db,
             request_callback=self._track_api_request,
         ) as riot_client:
-            # Get tracked players
-            if self.target_puuids is None:
-                tracked_players = await player_service.get_globally_tracked_players()
-            else:
-                result = await db.execute(
-                    select(Player).where(Player.puuid.in_(self.target_puuids))
-                )
-                tracked_players = [
-                    PlayerResponse.model_validate(player)
-                    for player in result.scalars().all()
-                ]
-                self.add_log_entry("target_puuids", sorted(self.target_puuids))
+            tracked_players = await self._load_tracked_players(db, player_service)
             logger.info(
                 "Starting match fetcher job", tracked_count=len(tracked_players)
             )
-
             try:
-                for player in tracked_players:
-                    await self.check_control_state(db)
-                    try:
-                        await self._process_player(
-                            db,
-                            player,
-                            player_service,
-                            match_service,
-                            riot_client,
-                            rate_limiter,
-                        )
-                    except RateLimitSignal:
-                        raise
-                    except RateLimitError as error:
-                        raise RateLimitSignal(
-                            retry_after=error.retry_after,
-                            message="Rate limit reached while fetching matches",
-                        ) from error
-                    except RiotWriterMaintenanceActiveError as error:
-                        await db.rollback()
-                        raise JobStopSignal(reason="riot_maintenance") from error
-                    except Exception as e:
-                        is_api_key_err = is_riot_api_key_error(e)
-                        logger.error(
-                            "Error processing player",
-                            puuid=player.puuid,
-                            error_type=type(e).__name__,
-                        )
-                        if is_database_job_error(e):
-                            await db.rollback()
-                            raise
-                        if is_api_key_err and self.has_api_key_error():
-                            break
-                        self.record_error(
-                            e,
-                            operation="player synchronization",
-                            context={"puuid": player.puuid},
-                            is_api_key_error=is_api_key_err,
-                        )
-                        # If it's an API key error, stop processing more players
-                        if is_api_key_err:
-                            logger.error(
-                                "API key error detected, stopping job execution"
-                            )
-                            break
-                        await db.rollback()
-                        continue
+                await self._process_tracked_players(
+                    db,
+                    tracked_players,
+                    player_service,
+                    match_service,
+                    riot_client,
+                    rate_limiter,
+                )
             finally:
-                # Release rate limiter when done
                 await rate_limiter.release()
 
-            # Store API call records from the client
             self._store_api_calls(riot_client.get_api_calls())
+
+    async def _load_tracked_players(
+        self,
+        db: AsyncSession,
+        player_service: PlayerService,
+    ) -> list[PlayerResponse]:
+        """Load the global allowlist or an explicit per-player PUUID set."""
+        if self.target_puuids is None:
+            return await player_service.get_globally_tracked_players()
+
+        result = await db.execute(
+            select(Player).where(Player.puuid.in_(self.target_puuids))
+        )
+        tracked_players = [
+            PlayerResponse.model_validate(player) for player in result.scalars().all()
+        ]
+        self.add_log_entry("target_puuids", sorted(self.target_puuids))
+        return tracked_players
+
+    async def _handle_player_processing_error(
+        self,
+        db: AsyncSession,
+        player: PlayerResponse,
+        error: Exception,
+    ) -> bool:
+        """Record a recoverable player error. Return True to stop the job."""
+        is_api_key_err = is_riot_api_key_error(error)
+        logger.error(
+            "Error processing player",
+            puuid=player.puuid,
+            error_type=type(error).__name__,
+        )
+        if is_database_job_error(error):
+            await db.rollback()
+            raise
+        if is_api_key_err and self.has_api_key_error():
+            return True
+        self.record_error(
+            error,
+            operation="player synchronization",
+            context={"puuid": player.puuid},
+            is_api_key_error=is_api_key_err,
+        )
+        if is_api_key_err:
+            logger.error("API key error detected, stopping job execution")
+            return True
+        await db.rollback()
+        return False
+
+    async def _process_tracked_players(
+        self,
+        db: AsyncSession,
+        tracked_players: list[PlayerResponse],
+        player_service: PlayerService,
+        match_service: MatchService,
+        riot_client: RiotAPIClient,
+        rate_limiter: DBRateLimiter,
+    ) -> None:
+        """Process each tracked player, converting stop conditions to signals."""
+        for player in tracked_players:
+            await self.check_control_state(db)
+            try:
+                await self._process_player(
+                    db,
+                    player,
+                    player_service,
+                    match_service,
+                    riot_client,
+                    rate_limiter,
+                )
+            except RateLimitSignal:
+                raise
+            except RateLimitError as error:
+                raise RateLimitSignal(
+                    retry_after=error.retry_after,
+                    message="Rate limit reached while fetching matches",
+                ) from error
+            except RiotWriterMaintenanceActiveError as error:
+                await db.rollback()
+                raise JobStopSignal(reason="riot_maintenance") from error
+            except Exception as error:
+                if await self._handle_player_processing_error(db, player, error):
+                    break
 
     async def _process_player(
         self,
