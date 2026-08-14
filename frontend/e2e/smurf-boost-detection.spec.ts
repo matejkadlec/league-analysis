@@ -53,6 +53,56 @@ function signal(
   };
 }
 
+const CONSERVATIVE = {
+  recentWindowSize: 20,
+  baselineWindowSize: 60,
+  a1StepChangeThreshold: 1.2,
+  a2WinRateSurgeThreshold: 0.2,
+  a3NovelChampionThreshold: 1.2,
+  a3MinimumNovelGames: 8,
+  a4SummonerLevelGate: 45,
+  a4PerformanceThreshold: 1.2,
+  b1WinRateDeltaThreshold: 0.3,
+  b1CompositeFlatCeiling: 0.05,
+  b2ConsistencyShiftThreshold: 1.15,
+  b3BimodalityThreshold: 0.65,
+  b3TailFraction: 0.3,
+  b4HighRateFloor: 0.62,
+  b4DropThreshold: 0.2,
+};
+
+const SENSITIVE = {
+  ...CONSERVATIVE,
+  recentWindowSize: 15,
+  baselineWindowSize: 30,
+  a1StepChangeThreshold: 0.8,
+  a2WinRateSurgeThreshold: 0.12,
+  a3MinimumNovelGames: 5,
+};
+
+function cardPreferences(settings: Record<string, number>, isDefault: boolean) {
+  return [
+    // Top Champions carries a role list, so the shared settings shape is not
+    // numeric-only. Getting that wrong rejects the whole catalog.
+    {
+      cardId: "profile.top-champions",
+      version: 1,
+      settings: { queueId: 420, displayLimit: 5, includedRoles: [] },
+      isDefault: true,
+      requiresRecovery: false,
+      updatedAt: null,
+    },
+    {
+      cardId: "profile.smurf-boost-detection",
+      version: 1,
+      settings: { queueId: 420, ...settings },
+      isDefault,
+      requiresRecovery: false,
+      updatedAt: isDefault ? null : NOW,
+    },
+  ];
+}
+
 function analysis(overrides: Record<string, unknown> = {}) {
   return {
     puuid: PUUID,
@@ -128,6 +178,9 @@ test("runs a comparison and reports both families without accusing anyone", asyn
 
   let analyzeCalls = 0;
   let stored: Record<string, unknown> | null = null;
+  let thresholds: Record<string, number> = CONSERVATIVE;
+  let isDefaultSettings = true;
+  let written: Record<string, unknown> | null = null;
 
   await page.addInitScript(() => {
     localStorage.setItem("auth_access_token", "test-access-token");
@@ -178,6 +231,45 @@ test("runs a comparison and reports both families without accusing anyone", asyn
       await route.fulfill({
         contentType: "application/json",
         body: JSON.stringify(player),
+      });
+      return;
+    }
+
+    if (path.endsWith("/smurf-boost-detection/presets")) {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          default_preset: "conservative",
+          presets: [
+            { name: "conservative", thresholds: CONSERVATIVE },
+            { name: "sensitive", thresholds: SENSITIVE },
+          ],
+        }),
+      });
+      return;
+    }
+
+    if (path.endsWith("/settings/card-preferences")) {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify(cardPreferences(thresholds, isDefaultSettings)),
+      });
+      return;
+    }
+
+    if (path.endsWith("/settings/card-preferences/profile.smurf-boost-detection")) {
+      if (request.method() === "DELETE") {
+        thresholds = CONSERVATIVE;
+        isDefaultSettings = true;
+      } else {
+        written = request.postDataJSON() as Record<string, unknown>;
+        thresholds = (written.settings ?? {}) as Record<string, number>;
+        isDefaultSettings = false;
+      }
+      const catalog = cardPreferences(thresholds, isDefaultSettings);
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify(catalog[1]),
       });
       return;
     }
@@ -236,6 +328,44 @@ test("runs a comparison and reports both families without accusing anyone", asyn
   );
 
   await expect(page.locator("#smurf-boost-explanation")).toBeVisible();
+  await expect(page.locator("#smurf-boost-settings")).toBeVisible();
+
+  // The stored settings match the shipped preset, and every threshold is
+  // offered with the range the backend enforces.
+  const settingsCard = page.locator("#smurf-boost-settings");
+  await expect(settingsCard.getByText("Shipped defaults")).toBeVisible();
+  await expect(
+    page.getByTestId("smurf-boost-preset-conservative"),
+  ).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByLabel("Recent games compared")).toHaveValue("20");
+  await expect(page.getByText("Allowed: 10 to 50.")).toBeVisible();
+
+  // A value the backend would reject never reaches it.
+  await page.getByLabel("B3 share counted as a tail").fill("0.9");
+  await expect(
+    page.getByText("B3 share counted as a tail must be between 0.15 and 0.4."),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Save thresholds" }),
+  ).toBeDisabled();
+  await page.getByRole("button", { name: "Discard changes" }).click();
+
+  // Applying a preset sends only the fields the write contract accepts.
+  await page.getByTestId("smurf-boost-preset-sensitive").click();
+  await expect(settingsCard.getByText("Your settings")).toBeVisible();
+  await expect(page.getByLabel("Recent games compared")).toHaveValue("15");
+  // `written` is filled inside the route handler, which the checker cannot see.
+  const writtenBody = written as unknown as {
+    settings: Record<string, unknown>;
+  } | null;
+  expect(writtenBody).not.toBeNull();
+  expect(writtenBody?.settings.queueId).toBeUndefined();
+  expect(Object.keys(writtenBody?.settings ?? {}).length).toBe(15);
+
+  await page.getByRole("button", { name: "Reset to defaults" }).click();
+  await expect(settingsCard.getByText("Shipped defaults")).toBeVisible();
+  await expect(page.getByLabel("Recent games compared")).toHaveValue("20");
+
   await expect(page.locator("#smurf-boost-run")).toBeVisible();
   await expect(page.locator("#smurf-boost-result")).toHaveCount(0);
 

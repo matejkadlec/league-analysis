@@ -975,13 +975,21 @@ The page lives at `/smurf-boost-detection` and is player-centric in the ordinary
 sense: the URL PUUID is authoritative, and the sidebar entry carries the
 selected player like Player Overview and Match History do.
 
-Every user-facing string for this feature is declared in
+Every string this specification fixes — the band vocabulary, the family
+titles, the confidence labels, the readings of the data-quality notes, and the
+disclaimer — is declared in
 `frontend/features/smurf-boost/smurf-boost-vocabulary.ts` rather than written
-inline. The forbidden-output rule above is a property of the whole vocabulary,
+inline. The forbidden-output rule above is a property of that whole vocabulary,
 not of one screen, and a rule stated in prose drifts as soon as a second
-component writes its own label. Keeping the strings in one module makes the
-rule testable: a single test scans every exported band label, family title,
-confidence label and note reading for the forbidden words.
+component writes its own label. Keeping those strings in one module makes the
+rule testable: one test scans every exported label for the forbidden words, and
+a browser test scans the whole rendered page, which covers the ordinary screen
+copy around them.
+
+The disclaimer exists in two places — this frontend constant and the backend's
+`DISCLAIMER` — because the page must carry it before any run has produced a
+result. A test reads the backend source and fails if the two ever differ, so
+one screen can never show two different "fixed" statements.
 
 The result is presented as two independent readings, one per family, each with
 its own band word. There is no combined verdict, because a combined verdict
@@ -1002,6 +1010,35 @@ requirement is 35 games, while the two floors alone would suggest 25. That
 difference is the whole content of the message, so it is derived from the run's
 own stored `thresholds` rather than from a frontend constant that could drift
 away from a preset.
+
+### Threshold controls
+
+The page carries its own settings card rather than a settings-page section: the
+thresholds only mean anything next to the result they produced, and there is no
+other per-card settings surface in the application to join.
+
+Presets come from `GET /smurf-boost-detection/presets` and are applied by
+posting them back unchanged, which is what that endpoint's field names and
+numeric types were shaped for. The card's fixed `queueId` is stripped first:
+the write contract forbids unknown fields, so sending the effective settings
+back verbatim is a `422`.
+
+The allowed range of every threshold is duplicated in
+`frontend/features/smurf-boost/smurf-boost-settings.ts`, because the backend
+enforces the ranges but exposes none of them. That duplication is a drift
+surface, so `frontend/tests/smurf-boost-settings.test.ts` reads
+`backend/app/features/settings/schemas.py` and fails if any bound, kind, or
+field disappears or changes. The same test restates the one cross-field rule
+the server enforces. Client validation exists to explain a value in the reader's
+own words, never to decide it: the server still validates every write, and its
+rejection is reworded before display because the raw body is a Pydantic report
+naming a model class and a schema URL.
+
+Settings are per user. They are read through the shared card-preferences
+endpoint, which returns the whole catalog, so the response shape cannot be
+numeric-only — Top Champions carries a role list — and the smurf-boost values
+are narrowed from it. Sign-out clears the query cache, so one viewer's
+thresholds are never served to the next.
 
 ## Versioning
 

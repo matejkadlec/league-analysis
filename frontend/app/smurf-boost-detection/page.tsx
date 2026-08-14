@@ -11,10 +11,12 @@ import { SelectPlayerCard, usePlayerContext } from "@/features/players";
 import {
   SmurfBoostDetection,
   SmurfBoostExplanationCard,
+  SmurfBoostSettingsCard,
 } from "@/features/smurf-boost";
 
 const SMURF_BOOST_NAV_ITEMS: SectionQuickNavigationItem[] = [
   { label: "What This Does", anchor: "#smurf-boost-explanation" },
+  { label: "Settings", anchor: "#smurf-boost-settings" },
   { label: "Run Comparison", anchor: "#smurf-boost-run" },
   { label: "Result", anchor: "#smurf-boost-result" },
 ];
@@ -51,12 +53,15 @@ export default function SmurfBoostDetectionPage() {
           {isLoading ? (
             <SmurfBoostDetectionSkeleton />
           ) : currentPlayer ? (
-            // Keyed by player so a transient failure from one player never
-            // survives into another.
-            <SmurfBoostDetection
-              key={currentPlayer.puuid}
-              puuid={currentPlayer.puuid}
-            />
+            <>
+              <SmurfBoostSettingsCard />
+              {/* Keyed by player so a transient failure from one player never
+                  survives into another. */}
+              <SmurfBoostDetection
+                key={currentPlayer.puuid}
+                puuid={currentPlayer.puuid}
+              />
+            </>
           ) : (
             <SelectPlayerCard />
           )}

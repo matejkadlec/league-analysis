@@ -805,6 +805,40 @@ export type SmurfBoostAnalysisResponse = z.infer<
   typeof SmurfBoostAnalysisResponseSchema
 >;
 
+// The named threshold sets the backend ships. Each one is emitted in the card
+// settings write contract's own camelCase field names, so a client applies a
+// preset by posting its thresholds back unchanged.
+export const SmurfBoostPresetSchema = z.object({
+  name: z.string(),
+  thresholds: z.record(z.string(), z.number()),
+});
+
+export const SmurfBoostPresetsResponseSchema = z.object({
+  default_preset: z.string(),
+  presets: z.array(SmurfBoostPresetSchema),
+});
+
+export type SmurfBoostPreset = z.infer<typeof SmurfBoostPresetSchema>;
+export type SmurfBoostPresetsResponse = z.infer<
+  typeof SmurfBoostPresetsResponseSchema
+>;
+
+// One viewer's effective settings for one analytical card. `settings` carries
+// the card's fixed values alongside its mutable ones, so a write must send
+// back only the fields the write contract accepts. Values are not all numbers
+// — Top Champions carries a role list — and this response returns every card,
+// so a numeric-only shape here would reject the whole catalog.
+export const CardPreferenceSchema = z.object({
+  cardId: z.string(),
+  version: z.literal(1),
+  settings: z.record(z.string(), z.unknown()),
+  isDefault: z.boolean(),
+  requiresRecovery: z.boolean().default(false),
+  updatedAt: z.string().nullable().optional(),
+});
+
+export type CardPreference = z.infer<typeof CardPreferenceSchema>;
+
 export type SmurfBoostBand = z.infer<typeof SmurfBoostBandSchema>;
 export type SmurfBoostConfidenceBand = z.infer<
   typeof SmurfBoostConfidenceBandSchema

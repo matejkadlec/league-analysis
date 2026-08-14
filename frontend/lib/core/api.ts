@@ -23,6 +23,10 @@ import {
   MatchmakingAnalysisHistoryResponse,
   SmurfBoostAnalysisResponseSchema,
   SmurfBoostAnalysisResponse,
+  SmurfBoostPresetsResponseSchema,
+  SmurfBoostPresetsResponse,
+  CardPreferenceSchema,
+  CardPreference,
 } from "./schemas";
 import { notifyRiotCredentialHealthUpdated } from "./riot-credential-health-events";
 import {
@@ -486,6 +490,41 @@ export async function getLatestSmurfBoostDetection(
   return validatedGet(
     SmurfBoostAnalysisResponseSchema,
     `/smurf-boost-detection/player/${puuid}`,
+  );
+}
+
+export async function getSmurfBoostPresets(): Promise<
+  ApiResponse<SmurfBoostPresetsResponse>
+> {
+  return validatedGet(
+    SmurfBoostPresetsResponseSchema,
+    "/smurf-boost-detection/presets",
+  );
+}
+
+export async function getCardPreferences(): Promise<
+  ApiResponse<CardPreference[]>
+> {
+  return validatedGet(z.array(CardPreferenceSchema), "/settings/card-preferences");
+}
+
+export async function updateCardPreference(
+  cardId: string,
+  settings: Record<string, number>,
+): Promise<ApiResponse<CardPreference>> {
+  return validatedPut(
+    CardPreferenceSchema,
+    `/settings/card-preferences/${cardId}`,
+    { version: 1, settings },
+  );
+}
+
+export async function resetCardPreference(
+  cardId: string,
+): Promise<ApiResponse<CardPreference>> {
+  return validatedDelete(
+    CardPreferenceSchema,
+    `/settings/card-preferences/${cardId}`,
   );
 }
 
