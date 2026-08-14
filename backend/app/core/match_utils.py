@@ -16,10 +16,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db_session import rollback_quietly
-from app.core.player_identity import resolve_player_display_fields
 from app.features.matches.models import Match
 from app.features.matches.participants import MatchParticipant
 from app.features.matches.timeline import replace_match_timeline_rows
+from app.features.players.identity import resolve_player_display_fields
 from app.features.players.models import Player
 
 if TYPE_CHECKING:

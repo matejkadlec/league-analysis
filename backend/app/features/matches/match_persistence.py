@@ -7,7 +7,7 @@ from typing import Any, Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.player_identity import resolve_player_display_fields
+from app.features.players.identity import resolve_player_display_fields
 from app.features.players.models import Player
 
 from .models import Match
