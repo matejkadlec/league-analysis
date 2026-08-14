@@ -220,9 +220,11 @@ sigma[r][m] = population standard deviation (denominator n) of m
 
 When a role has fewer than five matches in `B` — including a role that appears
 only in `R` and therefore has none — that role falls back to the pooled `B`
-distribution and every affected match carries the data-quality note
-`role_baseline_pooled`. A role that appears only in `R` is never left without a
-baseline.
+distribution and the analysis carries the data-quality note
+`role_baseline_pooled`. Notes describe the run, not individual matches: the
+payload has no per-match note field, because a reader is being told how much to
+trust one reading, not which games produced it. A role that appears only in `R`
+is never left without a baseline.
 
 `sigma` is floored to keep the z-score defined for a degenerate distribution:
 
@@ -244,8 +246,13 @@ cs_per_minute  = (total_minions_killed + neutral_minions_killed) / minutes
 ```
 
 Eligibility guarantees `game_duration >= 300`, so `minutes` is always positive
-even when the stored `time_played` is zero. A match that falls back to
-`game_duration` carries the note `time_played_missing`.
+even when the stored `time_played` is zero. When any match in either window
+falls back to `game_duration`, the analysis carries the note
+`time_played_missing`.
+
+A metric that is not a real number cannot be standardized honestly, and a `NaN`
+would clamp to `+3` and read as maximum performance. Any match carrying a
+non-finite metric is dropped before the windows are cut.
 
 ```
 z[i][m]  = clamp( (x[i][m] - mu[r][m]) / sigma_effective[r][m], -3, +3 )
@@ -359,7 +366,8 @@ g        = J * (mean(C_R) - mean(C_B)) / s_pooled
 ```
 
 Raw value `g`. Conservative threshold **1.20**, saturation **3.00**, weight
-**0.30**. Unavailable when `s_pooled` is zero.
+**0.30**. Unavailable with the note `undefined_statistic` when `s_pooled` is
+zero.
 
 #### A2 — Win-rate surge
 
@@ -463,7 +471,8 @@ raw_value = abs( log2(ratio) )
 A raw value of 1.0 means the recent window is either half or double the baseline
 spread. Measured over the calibration set the median is **0.168** and the 95th percentile
 **0.541**. Conservative threshold **1.15**, saturation **2.00**, weight **0.25**.
-Unavailable when `sd(C_R)` is zero.
+Unavailable with the note `undefined_statistic` when `sd(C_R)` is zero, which
+is also the note B3 reports when its coefficient is undefined.
 
 #### B3 — Bimodal performance split
 
@@ -604,7 +613,8 @@ target_B      = the configured baseline window size
 coverage      = min(1, n_R / target_R) * min(1, n_B / target_B)
 patch_factor  = 1.00 if R and B share a major.minor patch prefix else 0.85
 time_factor   = 1.00 if every match in R and B has
-                game_start_timestamp_source = 'riot_game_start' else 0.90
+                game_start_timestamp_source = 'riot_game_start' else 0.90,
+                which attaches the note legacy_game_start_timestamps
 rank_span_days = (max(created_at) - min(created_at)) in days, over
                  core.player_leagues rows for this puuid with
                  queue_type = 'RANKED_SOLO_5x5'
@@ -826,9 +836,12 @@ ranked games exist and how many are needed — not an error and not a toast.
 ### Synthetic fixtures
 
 Following existing backend practice, the computation engine is pure and tested
-with constructed participant rows rather than a database. Each fixture asserts a
-band, the exact set of triggered signal identifiers, and the exact set of
-unavailable ones. Every fixture fixes all confidence inputs explicitly — patch
+with constructed participant rows rather than a database. Each fixture asserts
+whatever its row below names — a band, a set of triggered or unavailable signal
+identifiers, or a raw value against its threshold — and nothing weaker than
+that. Eligibility is not part of the engine: it lives entirely in the load
+query, so the fixtures that concern it assert the compiled SQL rather than a
+band. Every fixture fixes all confidence inputs explicitly — patch
 prefix, `game_start_timestamp_source`, and league-snapshot count — so the
 asserted confidence band is deterministic. Unless a fixture names a preset, it
 runs against **Conservative**.
@@ -837,8 +850,8 @@ runs against **Conservative**.
 | --- | --- | --- |
 | `flat_baseline` | 80 games, all `MIDDLE`, every metric drawn from one fixed distribution; recent 20 at 10/20 wins and baseline 60 at 30/60 wins | No signal triggered, both families No unusual pattern. Asserted against all three presets. |
 | `below_floor` | 9 eligible recent games | Both families: Not enough data, naming the shortfall |
-| `remakes_excluded` | 30 raw matches of which 15 are remakes and 5 under 300s | Windows contain only the 10 eligible matches; result is Not enough data |
-| `invalid_position_excluded` | Baseline containing `'Invalid'` rows | Those rows never reach `mu[r][m]` |
+| `eligibility_is_one_predicate` | The compiled load query | Remakes, non-`420` queues, games under 300s and unrecognized positions are all excluded, by one shared predicate every query in the feature reuses |
+| `unscorable_metric_dropped` | A loaded row whose `kda` is `NaN` and one whose `gold_per_minute` is infinite | Neither reaches the windows, because a non-finite metric clamps to `+3` and would read as maximum performance |
 | `degenerate_baseline` | Every baseline game identical on all six composite metrics, so `sd_C <= EPSILON` | A1, A3, A4, B1, B2, B3 all unavailable with `degenerate_baseline`; A2 and B4 still computed; no division performed |
 | `step_change` | Recent 20 with every `C[i]` at exactly +2.0, baseline 60 standard normal by construction | A1 `g` at least 1.20 — triggered; band at least Weak |
 | `winrate_surge_small` | Recent 10 at 9/10 wins, baseline 30/60 | A2 raw 0.0958 — **not** triggered at any preset; the Wilson guard holds |
