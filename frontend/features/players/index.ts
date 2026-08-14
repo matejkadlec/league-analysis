@@ -12,6 +12,7 @@ export { playerQueryKey, playerQueryOptions } from "./player-query";
 export {
   MATCH_HISTORY_PATH,
   PLAYER_OVERVIEW_PATH,
+  SMURF_BOOST_DETECTION_PATH,
   isPlayerCentricPath,
   playerNavigationRoute,
   playerOverviewRoute,

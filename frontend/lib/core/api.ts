@@ -21,6 +21,8 @@ import {
   MatchmakingAnalysisResponse,
   MatchmakingAnalysisStatusResponse,
   MatchmakingAnalysisHistoryResponse,
+  SmurfBoostAnalysisResponseSchema,
+  SmurfBoostAnalysisResponse,
 } from "./schemas";
 import { notifyRiotCredentialHealthUpdated } from "./riot-credential-health-events";
 import {
@@ -466,6 +468,25 @@ export async function connectRiotAccount(
       error: normalizeApiError(error),
     };
   }
+}
+
+export async function startSmurfBoostDetection(
+  puuid: string,
+): Promise<ApiResponse<SmurfBoostAnalysisResponse>> {
+  return validatedPost(
+    SmurfBoostAnalysisResponseSchema,
+    "/smurf-boost-detection/analyze",
+    { puuid },
+  );
+}
+
+export async function getLatestSmurfBoostDetection(
+  puuid: string,
+): Promise<ApiResponse<SmurfBoostAnalysisResponse>> {
+  return validatedGet(
+    SmurfBoostAnalysisResponseSchema,
+    `/smurf-boost-detection/player/${puuid}`,
+  );
 }
 
 export default api;

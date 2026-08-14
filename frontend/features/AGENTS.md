@@ -69,3 +69,10 @@ public API via `index.ts`.
   `error_code=RIOT_API_KEY_INVALID` must activate the shared API-key header
   refresh signal; accepting, polling, or completing a run must not mark the key
   valid. Only backend-observed direct Riot responses own that decision.
+- Smurf & Boost Detection takes every user-facing string from
+  `smurf-boost/smurf-boost-vocabulary.ts`; never write one of its labels inline.
+  Present one band per family and never a combined verdict, a percentage, a
+  0-100 score, or a probability. Keep unavailable signals visible with their
+  reason, render an unknown note identifier as itself, and keep the disclaimer
+  always expanded. The forbidden wording and the band vocabulary are fixed by
+  [`../../docs/smurf-boost-detection.md`](../../docs/smurf-boost-detection.md).

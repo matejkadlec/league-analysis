@@ -1,0 +1,301 @@
+"use client";
+
+import { CircleAlert, CircleHelp, Gauge, ShieldQuestion } from "lucide-react";
+
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import type {
+  SmurfBoostFamily,
+  SmurfBoostResults,
+  SmurfBoostSignal,
+} from "@/lib/core/schemas";
+
+import {
+  BAND_LABELS,
+  CONFIDENCE_LABELS,
+  familyDescription,
+  familyTitle,
+  noteLabel,
+} from "../smurf-boost-vocabulary";
+
+interface SmurfBoostResultCardProps {
+  results: SmurfBoostResults;
+  /** The exact threshold set the run was computed with. */
+  thresholds: Record<string, number>;
+  minimumBaselineGames: number;
+}
+
+/**
+ * Colour carries the same four steps as the band vocabulary. It never encodes
+ * a number, because the specification forbids showing a per-family score, and
+ * it never carries the reading alone — the band word is always present.
+ */
+function bandColor(band: SmurfBoostFamily["band"]): string {
+  switch (band) {
+    case "strong_indicators":
+      return "text-rose-500";
+    case "notable_indicators":
+      return "text-amber-500";
+    case "weak_indicators":
+      return "text-yellow-500";
+    case "no_unusual_pattern":
+      return "text-emerald-500";
+    default:
+      return "text-muted-foreground";
+  }
+}
+
+function formatValue(value: number | null | undefined): string {
+  return value === null || value === undefined ? "—" : value.toFixed(2);
+}
+
+/**
+ * The recent window is taken first, so the earlier games the comparison needs
+ * sit behind a full recent window. Reporting only the two sample floors would
+ * understate the requirement whenever the recent window is the larger of them.
+ */
+function requiredGames(
+  results: SmurfBoostResults,
+  thresholds: Record<string, number>,
+  minimumBaselineGames: number,
+): { recentWindow: number; required: number; missing: number } {
+  const stored = thresholds.recent_window_size;
+  // A run stored under an older threshold contract may not carry the window at
+  // all; its own recent count is then the only honest stand-in.
+  const recentWindow = Number.isFinite(stored) ? stored : results.recent_games;
+  const required = recentWindow + minimumBaselineGames;
+  return {
+    recentWindow,
+    required,
+    missing: Math.max(0, required - results.eligible_games),
+  };
+}
+
+function SignalRow({ signal }: { signal: SmurfBoostSignal }) {
+  return (
+    <TableRow>
+      <TableCell className="font-mono text-xs align-top">{signal.id}</TableCell>
+      <TableCell className="align-top">
+        <p className="text-sm">{signal.reason}</p>
+        {signal.notes.length > 0 && (
+          <ul className="mt-1 space-y-0.5">
+            {signal.notes.map((note) => (
+              <li key={note} className="text-xs text-muted-foreground">
+                {noteLabel(note)}
+              </li>
+            ))}
+          </ul>
+        )}
+      </TableCell>
+      <TableCell className="text-right font-mono align-top">
+        {formatValue(signal.raw_value)}
+      </TableCell>
+      <TableCell className="text-right font-mono align-top">
+        {formatValue(signal.threshold)}
+      </TableCell>
+      <TableCell className="text-right font-mono align-top">
+        {signal.sample_size}
+      </TableCell>
+      <TableCell className="text-right align-top">
+        {!signal.available ? (
+          <Badge variant="outline">Not available</Badge>
+        ) : signal.triggered ? (
+          <Badge variant="secondary">Above threshold</Badge>
+        ) : (
+          <span className="text-xs text-muted-foreground">Below threshold</span>
+        )}
+      </TableCell>
+    </TableRow>
+  );
+}
+
+function SignalTable({ family }: { family: SmurfBoostFamily }) {
+  return (
+    <div className="overflow-x-auto">
+      <Table aria-label={`${familyTitle(family.family)} measurements`}>
+        <TableHeader>
+          <TableRow className="h-11 border-b border-border/50">
+            <TableHead scope="col">Area</TableHead>
+            <TableHead scope="col">What was measured</TableHead>
+            <TableHead scope="col" className="text-right">
+              Value
+            </TableHead>
+            <TableHead scope="col" className="text-right">
+              Threshold
+            </TableHead>
+            <TableHead scope="col" className="text-right">
+              Games
+            </TableHead>
+            <TableHead scope="col" className="text-right">
+              Outcome
+            </TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {family.signals.map((signal) => (
+            <SignalRow key={signal.id} signal={signal} />
+          ))}
+        </TableBody>
+      </Table>
+      <p className="mt-1 text-xs text-muted-foreground">
+        Each value is in the unit named in its own description: standardized
+        units, a win rate, or doublings of spread.
+      </p>
+    </div>
+  );
+}
+
+function FamilySummary({ family }: { family: SmurfBoostFamily }) {
+  const triggered = family.signals.filter((signal) => signal.triggered);
+  const unavailable = family.signals.filter((signal) => !signal.available);
+
+  return (
+    <p className="text-sm">
+      {triggered.length === 0
+        ? "No area of this comparison moved past its threshold."
+        : `${triggered.length} of ${family.signals.length} areas moved past their threshold, covering ${family.distinct_evidence} distinct ${family.distinct_evidence === 1 ? "kind" : "kinds"} of measurement.`}
+      {unavailable.length > 0 &&
+        ` ${unavailable.length} ${unavailable.length === 1 ? "area" : "areas"} could not be measured; each states why below, so a missing area is never read as a pass.`}
+    </p>
+  );
+}
+
+function FamilySection({
+  family,
+  shortfall,
+}: {
+  family: SmurfBoostFamily;
+  shortfall: string;
+}) {
+  const insufficient = family.band === "not_enough_data";
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className="text-base font-semibold">
+          {familyTitle(family.family)}
+        </h2>
+        <span
+          data-testid={`smurf-boost-band-${family.family}`}
+          className={`text-lg font-bold ${bandColor(family.band)}`}
+        >
+          {BAND_LABELS[family.band]}
+        </span>
+      </div>
+      <p className="text-sm text-muted-foreground">
+        {familyDescription(family.family)}
+      </p>
+      {insufficient ? (
+        <p className="text-sm text-muted-foreground">{shortfall}</p>
+      ) : (
+        <>
+          <FamilySummary family={family} />
+          {family.signals.length > 0 && <SignalTable family={family} />}
+        </>
+      )}
+    </div>
+  );
+}
+
+export function SmurfBoostResultCard({
+  results,
+  thresholds,
+  minimumBaselineGames,
+}: SmurfBoostResultCardProps) {
+  const { recentWindow, required, missing } = requiredGames(
+    results,
+    thresholds,
+    minimumBaselineGames,
+  );
+  // An empty family list is a result that says nothing. Reporting a game
+  // shortfall for it would invent a reason the model never gave.
+  const insufficient =
+    results.families.length > 0 &&
+    results.families.some((family) => family.band === "not_enough_data");
+
+  const shortfall =
+    `This player has ${results.eligible_games} eligible ranked solo/duo ` +
+    `${results.eligible_games === 1 ? "game" : "games"} stored. The comparison ` +
+    `reads the most recent ${recentWindow} and needs at least ` +
+    `${minimumBaselineGames} earlier games behind them, so at least ` +
+    `${required} in total` +
+    (missing > 0 ? `, which is ${missing} more than are stored` : "") +
+    ".";
+
+  return (
+    <Card id="smurf-boost-result">
+      <CardHeader className="pb-3">
+        <CardTitle className="flex flex-wrap items-center gap-2">
+          <ShieldQuestion className="h-5 w-5 text-primary" />
+          Comparison result
+          <Badge variant="secondary" className="ml-auto">
+            Recent {results.recent_games} games against the previous{" "}
+            {results.baseline_games}
+          </Badge>
+        </CardTitle>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <Badge variant="outline" className="gap-1">
+            <Gauge className="h-3 w-3" />
+            {CONFIDENCE_LABELS[results.confidence_band]}
+          </Badge>
+          <span className="text-xs text-muted-foreground">
+            How much this comparison can be relied on, separate from what it
+            found.
+          </span>
+          <span className="ml-auto font-mono text-xs text-muted-foreground">
+            {results.model_version}
+          </span>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {results.families.map((family, index) => (
+          <div key={family.family} className="space-y-6">
+            {index > 0 && (
+              <Separator className="my-4 bg-gradient-to-r from-transparent via-gray-300 to-transparent" />
+            )}
+            <FamilySection family={family} shortfall={shortfall} />
+          </div>
+        ))}
+
+        {insufficient && (
+          <p className="text-sm text-muted-foreground">
+            A game counts only when it is ranked solo/duo, not a remake, at
+            least five minutes long, and played in a recognised position.
+          </p>
+        )}
+
+        {results.notes.length > 0 && (
+          <div className="space-y-2">
+            <h3 className="flex items-center gap-2 text-sm font-medium">
+              <CircleAlert className="h-4 w-4 text-muted-foreground" />
+              Limits of this data
+            </h3>
+            <ul className="space-y-1">
+              {results.notes.map((note) => (
+                <li key={note} className="text-xs text-muted-foreground">
+                  {noteLabel(note)}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        <div className="flex gap-2 rounded-md border border-border/60 bg-muted/40 p-3">
+          <CircleHelp className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            {results.disclaimer}
+          </p>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}

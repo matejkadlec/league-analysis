@@ -969,6 +969,40 @@ Viewer thresholds are resolved through the card catalog's
 cross-field rules. A stored row written under an older contract is recovered to
 a valid set rather than handed to the magnitude ramp.
 
+## Frontend presentation
+
+The page lives at `/smurf-boost-detection` and is player-centric in the ordinary
+sense: the URL PUUID is authoritative, and the sidebar entry carries the
+selected player like Player Overview and Match History do.
+
+Every user-facing string for this feature is declared in
+`frontend/features/smurf-boost/smurf-boost-vocabulary.ts` rather than written
+inline. The forbidden-output rule above is a property of the whole vocabulary,
+not of one screen, and a rule stated in prose drifts as soon as a second
+component writes its own label. Keeping the strings in one module makes the
+rule testable: a single test scans every exported band label, family title,
+confidence label and note reading for the forbidden words.
+
+The result is presented as two independent readings, one per family, each with
+its own band word. There is no combined verdict, because a combined verdict
+would be the per-family score the model deliberately never emits. Colour tracks
+the band but never carries it alone: the band word is always present, so the
+reading survives a monochrome or colour-blind viewer.
+
+An unavailable signal keeps its row, its reason, and its data-quality notes. A
+note identifier the frontend does not recognise renders as itself rather than
+disappearing, so a backend that adds a note before the frontend learns its
+wording still shows the user that a limit applied.
+
+"Not enough data" reports how many more eligible games are needed as
+`recent_window_size + 15`, not as the sum of the two sample floors. The recent
+window is taken first, so the baseline floor of fifteen games sits *behind* a
+full recent window; under the default 20-game recent window the true
+requirement is 35 games, while the two floors alone would suggest 25. That
+difference is the whole content of the message, so it is derived from the run's
+own stored `thresholds` rather than from a frontend constant that could drift
+away from a preset.
+
 ## Versioning
 
 The model identifier `smurf-boost/v1` is stored with every persisted result. A
