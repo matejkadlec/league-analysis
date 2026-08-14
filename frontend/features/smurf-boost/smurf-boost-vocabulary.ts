@@ -4,11 +4,15 @@ import type {
 } from "@/lib/core/schemas";
 
 /**
- * The fixed wording for this feature.
+ * The wording `docs/smurf-boost-detection.md` fixes.
  *
- * `docs/smurf-boost-detection.md` fixes the band vocabulary and forbids words
- * such as "smurf detected", "suspicious" or "confirmed", so every user-facing
- * string lives here rather than being written inline where it could drift.
+ * That document fixes the band vocabulary, the family titles, the confidence
+ * labels, the note readings and the disclaimer, and forbids words such as
+ * "smurf detected", "suspicious" or "confirmed". Those strings live here so a
+ * second copy cannot drift away from the specification. Ordinary page copy —
+ * button labels, table headers, the threshold explanations — is written where
+ * it is used, like every other feature here, and the browser test scans the
+ * rendered page for the forbidden wording.
  */
 
 export const FAMILY_TITLES: Record<string, string> = {
@@ -43,6 +47,26 @@ export const BAND_LABELS: Record<SmurfBoostBand, string> = {
   notable_indicators: "Notable indicators",
   strong_indicators: "Strong indicators",
 };
+
+/**
+ * What each band means, in the specification's own words.
+ *
+ * A band name alone is a finding word. "Weak indicators" without "likely
+ * ordinary variance" beside it reads as a small accusation rather than as the
+ * caution it is meant to be.
+ */
+export const BAND_MEANINGS: Record<SmurfBoostBand, string> = {
+  not_enough_data: "Fewer eligible ranked games than the model requires",
+  no_unusual_pattern: "Nothing in the stored history stands out",
+  weak_indicators: "One area moved; likely ordinary variance",
+  notable_indicators: "Two different areas moved together",
+  strong_indicators:
+    "Three different areas moved together and by a wide margin",
+};
+
+export function bandMeaning(band: SmurfBoostBand): string {
+  return BAND_MEANINGS[band] ?? "";
+}
 
 export const CONFIDENCE_LABELS: Record<SmurfBoostConfidenceBand, string> = {
   low: "Low confidence",

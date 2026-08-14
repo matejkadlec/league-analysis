@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 import { CardPreferenceSchema } from "../lib/core/schemas";
 import {
   crossFieldError,
+  MINIMUM_BASELINE_GAMES,
   fieldError,
   matchesPreset,
   numericSettings,
@@ -119,6 +120,22 @@ describe("smurf and boost threshold catalog", () => {
       expect(field.max, `${field.name} max`).toBe(backend?.max);
       expect(field.integer, `${field.name} kind`).toBe(backend?.integer);
     }
+  });
+
+  it("carries the backend's baseline floor, which is not on the wire", () => {
+    // "Not enough data" is the majority outcome on this database, so its
+    // arithmetic is the most-read sentence in the feature. The recent window
+    // comes from the run; this number does not, and nothing else would catch a
+    // change to it.
+    const here = dirname(fileURLToPath(import.meta.url));
+    const source = readFileSync(
+      join(here, "../../backend/app/features/smurf_boost_detection/config.py"),
+      "utf8",
+    );
+    const declared =
+      /^MINIMUM_BASELINE_GAMES: Final\[int\] = (\d+)$/m.exec(source);
+    expect(declared).not.toBeNull();
+    expect(Number(declared?.[1])).toBe(MINIMUM_BASELINE_GAMES);
   });
 
   it("gives every field a label and an explanation", () => {

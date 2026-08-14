@@ -1057,9 +1057,10 @@ disclaimer — is declared in
 inline. The forbidden-output rule above is a property of that whole vocabulary,
 not of one screen, and a rule stated in prose drifts as soon as a second
 component writes its own label. Keeping those strings in one module makes the
-rule testable: one test scans every exported label for the forbidden words, and
-a browser test scans the whole rendered page, which covers the ordinary screen
-copy around them.
+rule testable: one test scans every label exported by that module for the
+forbidden words, and a browser test scans the whole rendered page, which covers
+the ordinary screen copy around them — button labels, table headers, and the
+threshold explanations, which live where they are used.
 
 The disclaimer exists in two places — this frontend constant and the backend's
 `DISCLAIMER` — because the page must carry it before any run has produced a
@@ -1082,9 +1083,12 @@ wording still shows the user that a limit applied.
 window is taken first, so the baseline floor of fifteen games sits *behind* a
 full recent window; under the default 20-game recent window the true
 requirement is 35 games, while the two floors alone would suggest 25. That
-difference is the whole content of the message, so it is derived from the run's
-own stored `thresholds` rather than from a frontend constant that could drift
-away from a preset.
+difference is the whole content of the message. The recent window comes from
+the run's own stored `thresholds` rather than from a frontend constant that
+could drift away from a preset. The baseline floor is not configurable and is
+not on the wire, so the page carries its own copy of the number 15; a test
+reads `MINIMUM_BASELINE_GAMES` out of the backend's `config.py` and fails on
+any drift, the same guard the threshold ranges have.
 
 ### Threshold controls
 

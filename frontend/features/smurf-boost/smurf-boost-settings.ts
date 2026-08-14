@@ -54,7 +54,7 @@ export const THRESHOLD_FIELDS: ThresholdField[] = [
     name: "a2WinRateSurgeThreshold",
     label: "A2 win-rate rise",
     explanation:
-      "How much the recent win rate must exceed the baseline win rate, as a fraction.",
+      "How far the cautious estimate of the recent win rate must sit above the baseline win rate, as a fraction. The recent rate is discounted for the size of the window first, so a short lucky run counts for less than its face value.",
     min: 0.1,
     max: 0.35,
     integer: false,
@@ -81,7 +81,7 @@ export const THRESHOLD_FIELDS: ThresholdField[] = [
     name: "a4SummonerLevelGate",
     label: "A4 account level gate",
     explanation:
-      "Below this account level, strong recent play counts towards A4.",
+      "At or below this account level, strong recent play counts towards A4.",
     min: 30,
     max: 150,
     integer: true,
@@ -227,6 +227,16 @@ export function writableSettings(
   return payload;
 }
 
+/**
+ * The baseline floor the model treats as a correctness constraint.
+ *
+ * It is not configurable and the API never sends it, so this is a second copy
+ * of a backend constant. `tests/smurf-boost-settings.test.ts` reads the
+ * backend's own `config.py` and fails on any drift, because the number is what
+ * the "Not enough data" state counts with and nothing else would catch it.
+ */
+export const MINIMUM_BASELINE_GAMES = 15;
+
 /** Preset names as shown to a reader, rather than as stored identifiers. */
 export const PRESET_LABELS: Record<string, string> = {
   conservative: "Conservative",
@@ -239,7 +249,7 @@ export const PRESET_DESCRIPTIONS: Record<string, string> = {
     "The shipped default. The hardest to trigger, and the least likely to call ordinary improvement unusual.",
   balanced: "A middle setting: a shorter baseline and lower thresholds.",
   sensitive:
-    "The easiest to trigger. It will report weak indicators for players who have simply improved.",
+    "The easiest to trigger, and the most likely to report indicators on ordinary variation. Nothing here measures how often that happens: there are no labelled cases to measure against.",
 };
 
 export function presetLabel(name: string): string {

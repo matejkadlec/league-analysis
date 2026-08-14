@@ -78,7 +78,10 @@ public API via `index.ts`.
   always expanded. The forbidden wording and the band vocabulary are fixed by
   [`../../docs/smurf-boost-detection.md`](../../docs/smurf-boost-detection.md).
   Read the persisted run lifecycle before rendering: the backend answers a
-  failed run and a run already in flight with HTTP 200, so neither is a result.
+  failed run and a run already in flight with HTTP 200, so neither is a result,
+  while a run in flight under *different* thresholds is a `409`. Never report a
+  signal as below its threshold when its value is not: four of the eight
+  combine the threshold with a second condition that can fail on its own.
   Threshold ranges are duplicated in `smurf-boost/smurf-boost-settings.ts` and
   guarded against the backend by `tests/smurf-boost-settings.test.ts`; strip the
   card's fixed settings before a write, and leave a server rejection to the

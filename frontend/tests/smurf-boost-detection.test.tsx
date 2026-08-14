@@ -34,6 +34,7 @@ vi.mock("sonner", () => ({ toast }));
 import { SmurfBoostDetection } from "../features/smurf-boost/components/smurf-boost-detection";
 import {
   BAND_LABELS,
+  BAND_MEANINGS,
   CONFIDENCE_LABELS,
   DISCLAIMER,
   FAMILY_DESCRIPTIONS,
@@ -285,10 +286,11 @@ describe("SmurfBoostDetection", () => {
       ...Object.values(FAMILY_TITLES),
       ...Object.values(FAMILY_DESCRIPTIONS),
       ...Object.values(BAND_LABELS),
+      ...Object.values(BAND_MEANINGS),
       ...Object.values(CONFIDENCE_LABELS),
       ...Object.values(NOTE_LABELS),
     ];
-    expect(strings.length).toBe(25);
+    expect(strings.length).toBe(30);
     for (const value of strings) {
       for (const word of FORBIDDEN) {
         expect(value.toLowerCase()).not.toContain(word);
@@ -317,6 +319,57 @@ describe("SmurfBoostDetection", () => {
         /at least 35 in total, which is 8 more than are stored/,
       ).length,
     ).toBe(2);
+  });
+
+  it("never calls a value below a threshold it is above", async () => {
+    // A4, B1, B3 and B4 each combine their threshold with a second condition.
+    // A gate can fail while the measured value sits above the number printed
+    // beside it, and "Below threshold" on that row would simply be false.
+    getLatestSmurfBoostDetection.mockResolvedValue({
+      success: true,
+      data: analysis({
+        results: results({
+          families: [
+            {
+              family: "rapid_improvement",
+              band: "no_unusual_pattern",
+              distinct_evidence: 0,
+              signals: [
+                signal("A4", {
+                  triggered: false,
+                  raw_value: 1.5,
+                  threshold: 1.2,
+                  reason: "The account level gate was not met.",
+                }),
+                signal("A1", { triggered: false, raw_value: 0.4 }),
+              ],
+            },
+          ],
+        }),
+      }),
+    });
+    renderCard();
+
+    await waitFor(() =>
+      expect(screen.getByText("Other conditions not met")).toBeTruthy(),
+    );
+    expect(screen.getAllByText("Below threshold").length).toBe(1);
+  });
+
+  it("says what each band means, not only what it is called", async () => {
+    // A band name on its own is a finding word. The specification fixes the
+    // sentence that keeps "Weak indicators" readable as caution.
+    getLatestSmurfBoostDetection.mockResolvedValue({
+      success: true,
+      data: analysis(),
+    });
+    renderCard();
+
+    await waitFor(() =>
+      expect(screen.getAllByText(BAND_MEANINGS.notable_indicators).length).toBe(
+        1,
+      ),
+    );
   });
 
   it("falls back to the run's own recent count when the window is missing", async () => {

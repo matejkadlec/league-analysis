@@ -16,12 +16,8 @@ import { useRelativeTime } from "@/lib/core/use-relative-time";
 import type { SmurfBoostAnalysisResponse } from "@/lib/core/schemas";
 
 import { smurfBoostQueryKey, smurfBoostQueryOptions } from "../smurf-boost-query";
+import { MINIMUM_BASELINE_GAMES } from "../smurf-boost-settings";
 import { SmurfBoostResultCard } from "./smurf-boost-result-card";
-
-// Mirrors the baseline floor the model treats as a correctness constraint, so
-// the "Not enough data" state can say how many games are still needed. The
-// recent side comes from the run's own thresholds rather than a constant.
-const MINIMUM_BASELINE_GAMES = 15;
 
 // The two statuses the backend uses for a run that has not reached a terminal
 // state. A request that arrives while another viewer's identical run is still

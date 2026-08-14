@@ -21,6 +21,7 @@ import type {
 
 import {
   BAND_LABELS,
+  bandMeaning,
   CONFIDENCE_LABELS,
   familyDescription,
   familyTitle,
@@ -80,6 +81,27 @@ function requiredGames(
   };
 }
 
+/**
+ * Why an available signal did not trigger.
+ *
+ * Four of the eight signals combine their threshold with a separate condition —
+ * an account-level gate, a flat-composite ceiling, two tail fractions, a
+ * sustained drop. Any of those can fail while the measured value sits above the
+ * threshold printed beside it, and "Below threshold" on a row reading 1.50
+ * against 1.20 is simply not true.
+ */
+function signalOutcome(signal: SmurfBoostSignal): string {
+  const value = signal.raw_value;
+  const threshold = signal.threshold;
+  const met =
+    value !== null &&
+    value !== undefined &&
+    threshold !== null &&
+    threshold !== undefined &&
+    value >= threshold;
+  return met ? "Other conditions not met" : "Below threshold";
+}
+
 function SignalRow({ signal }: { signal: SmurfBoostSignal }) {
   return (
     <TableRow>
@@ -111,7 +133,9 @@ function SignalRow({ signal }: { signal: SmurfBoostSignal }) {
         ) : signal.triggered ? (
           <Badge variant="secondary">Above threshold</Badge>
         ) : (
-          <span className="text-xs text-muted-foreground">Below threshold</span>
+          <span className="text-xs text-muted-foreground">
+            {signalOutcome(signal)}
+          </span>
         )}
       </TableCell>
     </TableRow>
@@ -184,11 +208,16 @@ function FamilySection({
         <h2 className="text-base font-semibold">
           {familyTitle(family.family)}
         </h2>
-        <span
-          data-testid={`smurf-boost-band-${family.family}`}
-          className={`text-lg font-bold ${bandColor(family.band)}`}
-        >
-          {BAND_LABELS[family.band]}
+        <span className="text-right">
+          <span
+            data-testid={`smurf-boost-band-${family.family}`}
+            className={`block text-lg font-bold ${bandColor(family.band)}`}
+          >
+            {BAND_LABELS[family.band]}
+          </span>
+          <span className="block text-xs text-muted-foreground">
+            {bandMeaning(family.band)}
+          </span>
         </span>
       </div>
       <p className="text-sm text-muted-foreground">
