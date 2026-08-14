@@ -67,6 +67,15 @@ rejected — so a rollback to v1 code never discards a later compatible
 server's settings. A preference never contains a PUUID, Riot ID, match data,
 or another user's identifier.
 
+### Player context has one per-user authority
+
+`auth.user_settings.current_player_puuid` is the only persisted per-user
+current-player authority. Application accounts do not carry a second linked
+Riot-account PUUID, and selecting or discovering a Matchmaking Analysis target
+does not update current-player context or tracking. The retired theme and
+default-platform settings are not persisted; the bounded legacy settings API
+is compatibility-only and its values cannot affect runtime behavior.
+
 ### Freshness timestamps advance only on clean success
 
 `core.players.profile_synced_at`, `league_synced_at`, and `match_synced_at`
@@ -97,7 +106,7 @@ because these values drive staleness decisions.
 
 `backend/scripts/cleanse_local_riot_data.py` is the only reviewed maintenance
 command for the local Riot-data reset. It deletes Riot-derived tables in
-FK-safe order, clears Riot links from accounts, preserves application/job
+FK-safe order, clears per-user current-player context, preserves application/job
 configuration and execution history plus revoked access-token blacklist
 entries, and resets the documented local-only fixtures (admin
 `mat.kadlec@email.cz`, client `scipiocz@gmail.com` — never valid outside local

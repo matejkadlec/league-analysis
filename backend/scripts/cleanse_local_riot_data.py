@@ -433,7 +433,7 @@ def resume_riot_writers(connection: Connection) -> int:
 
 
 def delete_riot_data(connection: Connection) -> dict[str, int]:
-    """Delete every reviewed Riot-derived table and clear per-user Riot links."""
+    """Delete every reviewed Riot-derived table and clear player context."""
     deleted = {
         "auth.user_settings_current_player": connection.execute(
             text(
@@ -447,12 +447,6 @@ def delete_riot_data(connection: Connection) -> dict[str, int]:
         deleted[f"{schema}.{table}"] = connection.execute(
             text(f'DELETE FROM "{schema}"."{table}"')
         ).rowcount
-    deleted["auth.users_riot_links"] = connection.execute(
-        text(
-            "UPDATE auth.users SET riot_account_connected = FALSE, puuid = NULL "
-            "WHERE riot_account_connected IS TRUE OR puuid IS NOT NULL"
-        )
-    ).rowcount
     return deleted
 
 
@@ -485,10 +479,9 @@ def normalize_qa_accounts(connection: Connection, target: Preflight) -> bool:
             text(
                 "INSERT INTO auth.users "
                 "(email, password_hash, display_name, is_active, is_admin, "
-                "email_verified, email_verified_at, failed_login_attempts, "
-                "riot_account_connected, puuid) "
+                "email_verified, email_verified_at, failed_login_attempts) "
                 "VALUES (:email, :password_hash, :display_name, TRUE, FALSE, TRUE, "
-                "CURRENT_TIMESTAMP, 0, FALSE, NULL) RETURNING id"
+                "CURRENT_TIMESTAMP, 0) RETURNING id"
             ),
             {
                 "email": CLIENT_EMAIL,
@@ -505,7 +498,7 @@ def normalize_qa_accounts(connection: Connection, target: Preflight) -> bool:
                 "email_verified = TRUE, "
                 "email_verified_at = COALESCE(email_verified_at, CURRENT_TIMESTAMP), "
                 "failed_login_attempts = 0, last_failed_login = NULL, locked_until = NULL, "
-                "riot_account_connected = FALSE, puuid = NULL, updated_at = CURRENT_TIMESTAMP "
+                "updated_at = CURRENT_TIMESTAMP "
                 "WHERE id = :client_id"
             ),
             {

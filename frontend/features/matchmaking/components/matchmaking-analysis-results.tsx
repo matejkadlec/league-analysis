@@ -17,6 +17,20 @@ import {
 
 interface MatchmakingAnalysisResultsProps {
   puuid: string;
+  analyzedPlayerLabel: string;
+}
+
+function AnalyzedPlayerResultLabel({ playerLabel }: { playerLabel: string }) {
+  return (
+    <p className="text-sm">
+      <span style={{ color: "var(--color-muted-foreground)" }}>
+        Results for player{" "}
+      </span>
+      <span style={{ color: "var(--color-card-foreground)" }}>
+        {playerLabel}
+      </span>
+    </p>
+  );
 }
 
 /**
@@ -41,6 +55,7 @@ function formatDateTime(dateString: string): string {
 
 export function MatchmakingAnalysisResults({
   puuid,
+  analyzedPlayerLabel,
 }: MatchmakingAnalysisResultsProps) {
   const {
     data: latestAnalysis,
@@ -62,13 +77,31 @@ export function MatchmakingAnalysisResults({
     staleTime: 30000,
   });
 
-  if (isLoading || error || !latestAnalysis) {
-    return null;
-  }
-
-  // Only show if analysis is completed AND has results
-  if (latestAnalysis.status !== "completed" || !latestAnalysis.results) {
-    return null;
+  if (
+    isLoading ||
+    error ||
+    !latestAnalysis ||
+    latestAnalysis.status !== "completed" ||
+    !latestAnalysis.results
+  ) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <TrendingUp className="h-5 w-5 text-primary" />
+            Last Analysis Result
+          </CardTitle>
+          <AnalyzedPlayerResultLabel playerLabel={analyzedPlayerLabel} />
+        </CardHeader>
+        <CardContent className="text-sm text-muted-foreground">
+          {isLoading
+            ? "Loading the latest completed result..."
+            : error
+              ? "The latest result could not be loaded."
+              : "No completed analysis is available for this player yet."}
+        </CardContent>
+      </Card>
+    );
   }
 
   const { team_avg_winrate, enemy_avg_winrate, matches_analyzed } =
@@ -95,6 +128,7 @@ export function MatchmakingAnalysisResults({
             {formatDateTime(latestAnalysis.created_at)}
           </span>
         </div>
+        <AnalyzedPlayerResultLabel playerLabel={analyzedPlayerLabel} />
       </CardHeader>
       <CardContent className="space-y-4">
         <Table>
@@ -111,7 +145,7 @@ export function MatchmakingAnalysisResults({
               <TableCell className="font-medium">
                 <div className="flex items-center gap-2">
                   <Users className="h-4 w-4" />
-                  Your Team
+                  Analyzed Player&apos;s Team
                 </div>
               </TableCell>
               <TableCell className="text-right font-mono">
@@ -132,7 +166,7 @@ export function MatchmakingAnalysisResults({
               <TableCell className="font-medium">
                 <div className="flex items-center gap-2">
                   <Users className="h-4 w-4" />
-                  Enemy Team
+                  Opponent Team
                 </div>
               </TableCell>
               <TableCell className="text-right font-mono">
@@ -159,13 +193,15 @@ export function MatchmakingAnalysisResults({
 
           {isFavorable && (
             <p className="text-sm text-green-600 dark:text-green-400">
-              ✓ Your teammates had higher average win rates than enemies by{" "}
+              ✓ The analyzed player&apos;s teammates had higher average win
+              rates than opponents by{" "}
               <span className="font-bold">{winrateDiffPercent}%</span>
             </p>
           )}
           {isUnfavorable && (
             <p className="text-sm text-red-600 dark:text-red-400">
-              ✗ Your enemies had higher average win rates than teammates by{" "}
+              ✗ The analyzed player&apos;s opponents had higher average win
+              rates than teammates by{" "}
               <span className="font-bold">{winrateDiffPercent}%</span>
             </p>
           )}

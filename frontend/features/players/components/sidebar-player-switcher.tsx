@@ -1,53 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { Loader2, Search, Star, StopCircle, Users } from "lucide-react";
-import { z } from "zod";
+import { Loader2, Star, Users } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { PlayerSelector } from "@/features/players/components/player-selector";
 import { TrackedPlayersList } from "@/features/players/components/tracked-players-list";
 import { usePlayerContext } from "@/features/players/context/player-context";
-import {
-  parseRiotId,
-  type RiotIdParts,
-} from "@/features/players/utils/riot-id";
-import { api, validatedGet } from "@/lib/core/api";
-import { useToast } from "@/lib/core/hooks";
-import { getPlatformDisplayName } from "@/lib/core/platform-utils";
-import { PlayerSchema, type Player } from "@/lib/core/schemas";
-import { cn } from "@/lib/core/utils";
-
-const PlayerSuggestionsSchema = z.array(PlayerSchema);
-const PLATFORM_OPTIONS = [
-  ["eun1", "EUNE"],
-  ["euw1", "EUW"],
-  ["na1", "NA"],
-  ["kr", "KR"],
-  ["br1", "BR"],
-  ["jp1", "JP"],
-  ["la1", "LAN"],
-  ["la2", "LAS"],
-  ["oc1", "OCE"],
-  ["tr1", "TR"],
-] as const;
+import type { Player } from "@/lib/core/schemas";
 
 interface SidebarPlayerSwitcherProps {
   manageOpen: boolean;
@@ -64,105 +29,11 @@ export function SidebarPlayerSwitcher({
   onManageOpenChange,
   onNavigate,
 }: SidebarPlayerSwitcherProps) {
-  const { toast } = useToast();
   const { currentPlayer, selectPlayer, isLoading } = usePlayerContext();
-  const [searchValue, setSearchValue] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [activeSuggestion, setActiveSuggestion] = useState(0);
-  const [isSearchFocused, setIsSearchFocused] = useState(false);
-  const [pendingRiotId, setPendingRiotId] = useState<RiotIdParts | null>(null);
-  const [platform, setPlatform] = useState("eun1");
-
-  useEffect(() => {
-    const timeout = window.setTimeout(
-      () => setDebouncedSearch(searchValue.trim()),
-      250,
-    );
-    return () => window.clearTimeout(timeout);
-  }, [searchValue]);
-
-  const suggestionsQuery = useQuery({
-    queryKey: ["player-suggestions", debouncedSearch, "all-platforms"],
-    queryFn: async () => {
-      const result = await validatedGet(
-        PlayerSuggestionsSchema,
-        "/players/suggestions",
-        { q: debouncedSearch, limit: 5 },
-      );
-      if (!result.success) throw new Error(result.error.message);
-      return result.data;
-    },
-    enabled: debouncedSearch.length >= 2,
-    staleTime: 30_000,
-  });
-
-  const suggestions = suggestionsQuery.data ?? [];
 
   const choosePlayer = async (player: Player) => {
     await selectPlayer(player);
-    setSearchValue("");
-    setDebouncedSearch("");
     onNavigate?.();
-  };
-
-  const discoverMutation = useMutation({
-    mutationFn: async () => {
-      if (!pendingRiotId)
-        throw new Error("Enter a Riot ID in Name#Tag format.");
-      const response = await api.post("/players/discover", null, {
-        params: {
-          game_name: pendingRiotId.gameName,
-          tag_line: pendingRiotId.tagLine,
-          platform,
-        },
-      });
-      const parsed = PlayerSchema.safeParse(response.data);
-      if (!parsed.success) throw new Error("The player response was invalid.");
-      return parsed.data;
-    },
-    onSuccess: async (player) => {
-      setPendingRiotId(null);
-      await choosePlayer(player);
-    },
-    onError: () => {
-      toast({
-        title: "Player search could not finish",
-        description: "Check the Riot ID and server, then try again.",
-        variant: "error",
-      });
-    },
-  });
-
-  const submitUnknownPlayer = () => {
-    try {
-      setPendingRiotId(parseRiotId(searchValue));
-    } catch (error) {
-      toast({
-        title: "Check the Riot ID",
-        description:
-          error instanceof Error ? error.message : "Use the Name#Tag format.",
-        variant: "warning",
-      });
-    }
-  };
-
-  const onSearchKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === "ArrowDown" && suggestions.length > 0) {
-      event.preventDefault();
-      setActiveSuggestion((index) => (index + 1) % suggestions.length);
-    } else if (event.key === "ArrowUp" && suggestions.length > 0) {
-      event.preventDefault();
-      setActiveSuggestion(
-        (index) => (index - 1 + suggestions.length) % suggestions.length,
-      );
-    } else if (event.key === "Enter") {
-      event.preventDefault();
-      const suggestion = suggestions[activeSuggestion];
-      if (suggestion) void choosePlayer(suggestion);
-      else submitUnknownPlayer();
-    } else if (event.key === "Escape") {
-      setSearchValue("");
-    }
   };
 
   const handleCurrentPlayerClick = () => {
@@ -172,63 +43,12 @@ export function SidebarPlayerSwitcher({
 
   return (
     <div className="border-b border-white/10 px-3 pt-4 pb-3">
-      <div className="relative">
-        <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-white/50" />
-        <Input
-          value={searchValue}
-          onChange={(event) => {
-            setSearchValue(event.target.value);
-            setActiveSuggestion(0);
-          }}
-          onFocus={() => setIsSearchFocused(true)}
-          onBlur={() => setIsSearchFocused(false)}
-          onKeyDown={onSearchKeyDown}
-          placeholder="Search for player"
-          aria-label="Search for player"
-          aria-autocomplete="list"
-          aria-expanded={isSearchFocused && suggestions.length > 0}
-          className="h-9 border-white/15 bg-white/5 pl-9 text-sm text-white placeholder:text-white/45"
-        />
-        {suggestionsQuery.isFetching && (
-          <Loader2 className="absolute right-3 top-2.5 h-4 w-4 animate-spin text-white/60" />
-        )}
-        {isSearchFocused && searchValue.trim().length >= 2 && (
-          <div
-            role="listbox"
-            className="absolute z-50 mt-1 max-h-60 w-full overflow-y-auto rounded-md border border-white/15 bg-[#0a1428] p-1 shadow-xl"
-          >
-            {suggestions.map((player, index) => (
-              <button
-                key={player.puuid}
-                type="button"
-                role="option"
-                aria-selected={index === activeSuggestion}
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => void choosePlayer(player)}
-                className={cn(
-                  "w-full rounded px-2 py-2 text-left text-xs text-white transition-colors",
-                  index === activeSuggestion
-                    ? "bg-white/15 text-[#cfa93a]"
-                    : "hover:bg-white/10",
-                )}
-              >
-                {playerLabel(player)} ({getPlatformDisplayName(player.platform)}
-                )
-              </button>
-            ))}
-            {!suggestionsQuery.isFetching && suggestions.length === 0 && (
-              <button
-                type="button"
-                className="w-full rounded px-2 py-2 text-left text-xs text-white/75 hover:bg-white/10"
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={submitUnknownPlayer}
-              >
-                Search Riot for this Name#Tag
-              </button>
-            )}
-          </div>
-        )}
-      </div>
+      <PlayerSelector
+        id="sidebar-player-search"
+        ariaLabel="Search for player"
+        onPlayerSelected={choosePlayer}
+        inputClassName="h-9 border-white/15 bg-white/5 text-sm text-white placeholder:text-white/45"
+      />
 
       <div className="mt-3" aria-label="Current player">
         {isLoading ? (
@@ -269,59 +89,6 @@ export function SidebarPlayerSwitcher({
               onManageOpenChange(false);
             }}
           />
-        </DialogContent>
-      </Dialog>
-
-      <Dialog
-        open={pendingRiotId !== null}
-        onOpenChange={(open) => !open && setPendingRiotId(null)}
-      >
-        <DialogContent className="dialog-white-border">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Search className="h-5 w-5 text-[#cfa93a]" /> Select player server
-            </DialogTitle>
-            <DialogDescription>
-              Choose the server for {pendingRiotId?.gameName}#
-              {pendingRiotId?.tagLine}.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-2">
-            <Label htmlFor="sidebar-player-platform">Server</Label>
-            <Select value={platform} onValueChange={setPlatform}>
-              <SelectTrigger id="sidebar-player-platform">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {PLATFORM_OPTIONS.map(([value, label]) => (
-                  <SelectItem key={value} value={value}>
-                    {label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <DialogFooter className="flex items-center justify-between gap-2 sm:justify-between">
-            <Button
-              type="button"
-              className="red-gradient py-2 px-4"
-              onClick={() => setPendingRiotId(null)}
-            >
-              <StopCircle className="h-4 w-4" />
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              className="button-medium no-rotation py-2 px-4"
-              disabled={discoverMutation.isPending}
-              onClick={() => discoverMutation.mutate()}
-            >
-              {discoverMutation.isPending && (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              )}
-              Select player
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

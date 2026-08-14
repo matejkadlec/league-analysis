@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import type { ReactNode } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   PlayCircle,
@@ -23,11 +24,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Label } from "@/components/ui/label";
 import { useToast } from "@/lib/core/hooks";
 import type { MatchmakingAnalysisResponse } from "@/lib/core/schemas";
 
 interface MatchmakingAnalysisProps {
   puuid: string;
+  analyzedPlayerLabel: string;
+  playerSelector: ReactNode;
 }
 
 /**
@@ -82,8 +86,7 @@ export function projectMatchmakingProgress({
   const elapsedSeconds = Math.max(0, nowTimestamp - anchorTimestamp) / 1000;
   const projectedProgress =
     anchorProgress +
-    (elapsedSeconds * ESTIMATED_PLAYERS_PER_WINDOW) /
-      RIOT_LONG_WINDOW_SECONDS;
+    (elapsedSeconds * ESTIMATED_PLAYERS_PER_WINDOW) / RIOT_LONG_WINDOW_SECONDS;
   const activeRunCap = totalPlayers * 0.99;
 
   return Math.min(
@@ -157,7 +160,11 @@ function analysisFailureMessage(
   }
 }
 
-export function MatchmakingAnalysis({ puuid }: MatchmakingAnalysisProps) {
+export function MatchmakingAnalysis({
+  puuid,
+  analyzedPlayerLabel,
+  playerSelector,
+}: MatchmakingAnalysisProps) {
   const toast = useToast();
   const queryClient = useQueryClient();
   const [phase, setPhase] = useState<UIPhase>("idle");
@@ -211,11 +218,7 @@ export function MatchmakingAnalysis({ puuid }: MatchmakingAnalysisProps) {
   // Poll for status updates only when actively running
   const shouldPoll = phase === "running" || phase === "starting";
   const { data: statusUpdate } = useQuery({
-    queryKey: [
-      "matchmaking-analysis-status",
-      puuid,
-      currentAnalysisCreatedAt,
-    ],
+    queryKey: ["matchmaking-analysis-status", puuid, currentAnalysisCreatedAt],
     queryFn: async () => {
       if (!currentAnalysisCreatedAt) {
         return null;
@@ -350,10 +353,7 @@ export function MatchmakingAnalysis({ puuid }: MatchmakingAnalysisProps) {
     ) {
       const terminalUpdate = validStatusUpdate ?? latestForCurrent;
       const message = analysisFailureMessage(terminalUpdate);
-      queryClient.setQueryData(
-        ["matchmaking-analysis", puuid],
-        terminalUpdate,
-      );
+      queryClient.setQueryData(["matchmaking-analysis", puuid], terminalUpdate);
       setAnalysisFailure(message);
       setCurrentAnalysisCreatedAt(null);
       setPhase("idle");
@@ -602,11 +602,7 @@ export function MatchmakingAnalysis({ puuid }: MatchmakingAnalysisProps) {
         anchorTimestamp: Date.now(),
       };
     });
-  }, [
-    shouldPoll,
-    currentAnalysisCreatedAt,
-    displayData,
-  ]);
+  }, [shouldPoll, currentAnalysisCreatedAt, displayData]);
 
   const totalPlayers = displayData?.total_puuids || EXPECTED_PLAYERS;
   const authoritativeProgress = displayData?.progress || 0;
@@ -658,11 +654,10 @@ export function MatchmakingAnalysis({ puuid }: MatchmakingAnalysisProps) {
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            Analyze matchmaking fairness of this player based on average of sum
-            of average win rates of the last 10 matches{" "}
-            <b>at the time of the match with current player</b> of all players
-            in this player&apos;s last 10 matches. Visual representation of the
-            calculation is under the Calculation Flowchart card.
+            Analyze matchmaking fairness for the analyzed player by comparing
+            ally and enemy win rates across their last 10 ranked matches. Each
+            participant&apos;s rate is measured at the time of the shared match.
+            The Calculation Flowchart explains the full model.
           </p>
           {analysisFailure && (
             <Alert variant="destructive">
@@ -670,7 +665,12 @@ export function MatchmakingAnalysis({ puuid }: MatchmakingAnalysisProps) {
               <AlertDescription>{analysisFailure}</AlertDescription>
             </Alert>
           )}
-
+          <div className="space-y-1.5">
+            <Label htmlFor="matchmaking-player-search">
+              Choose player for analysis
+            </Label>
+            {playerSelector}
+          </div>
           <Button
             onClick={() => startMutation.mutate()}
             disabled={startMutation.isPending}
@@ -706,13 +706,17 @@ export function MatchmakingAnalysis({ puuid }: MatchmakingAnalysisProps) {
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            Analyze matchmaking fairness of this player based on average of sum
-            of average win rates of the last 10 matches{" "}
-            <b>at the time of the match with current player</b> of all players
-            in this player&apos;s last 10 matches. Visual representation of the
-            calculation is under the Calculation Flowchart card.
+            Analyze matchmaking fairness for the analyzed player by comparing
+            ally and enemy win rates across their last 10 ranked matches. Each
+            participant&apos;s rate is measured at the time of the shared match.
+            The Calculation Flowchart explains the full model.
           </p>
-
+          <div className="space-y-1.5">
+            <Label htmlFor="matchmaking-player-search">
+              Choose player for analysis
+            </Label>
+            {playerSelector}
+          </div>
           <Button
             onClick={() => startMutation.mutate()}
             disabled={startMutation.isPending}
@@ -756,8 +760,7 @@ export function MatchmakingAnalysis({ puuid }: MatchmakingAnalysisProps) {
       return "Analysis finished successfully";
     }
 
-    const minutesLabel =
-      estimatedMinutesRemaining === 1 ? "minute" : "minutes";
+    const minutesLabel = estimatedMinutesRemaining === 1 ? "minute" : "minutes";
     const remainingText = estimatedMinutesRemaining
       ? ` (~${estimatedMinutesRemaining} ${minutesLabel} remaining)`
       : "";
@@ -783,6 +786,9 @@ export function MatchmakingAnalysis({ puuid }: MatchmakingAnalysisProps) {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        <p className="text-sm text-muted-foreground">
+          Running matchmaking analysis for <b>{analyzedPlayerLabel}</b>.
+        </p>
         {/* Status Alert */}
         <Alert>
           {showAsFinished ? (
@@ -825,9 +831,7 @@ export function MatchmakingAnalysis({ puuid }: MatchmakingAnalysisProps) {
             )}
           </Button>
         )}
-        {(phase === "starting" ||
-          phase === "cancelling" ||
-          isCompleting) && (
+        {(phase === "starting" || phase === "cancelling" || isCompleting) && (
           <Button disabled className="w-full gold-gradient button-medium">
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             {phase === "cancelling" ? "Cancelling..." : "Analyzing..."}

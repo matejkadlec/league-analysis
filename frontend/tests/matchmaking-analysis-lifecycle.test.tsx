@@ -76,14 +76,18 @@ function renderComponent(existingQueryClient?: QueryClient) {
   const queryClient =
     existingQueryClient ??
     new QueryClient({
-    defaultOptions: {
-      queries: { retry: false },
-      mutations: { retry: false },
-    },
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
     });
   render(
     <QueryClientProvider client={queryClient}>
-      <MatchmakingAnalysis puuid="test-puuid" />
+      <MatchmakingAnalysis
+        puuid="test-puuid"
+        analyzedPlayerLabel="Analyzed#ONE"
+        playerSelector={<input aria-label="Choose player for analysis" />}
+      />
     </QueryClientProvider>,
   );
   return queryClient;
@@ -134,6 +138,14 @@ describe("MatchmakingAnalysis lifecycle", () => {
       await screen.findByRole("button", { name: "Cancel Analysis" }),
     ).not.toBeNull();
     expect(screen.getByText("0 / 100 players")).not.toBeNull();
+    expect(
+      screen.getByText(
+        (_, element) =>
+          element?.tagName === "P" &&
+          element.textContent ===
+            "Running matchmaking analysis for Analyzed#ONE.",
+      ),
+    ).not.toBeNull();
     expect(toast.info).toHaveBeenCalledWith("Matchmaking analysis started", {
       description: "Progress will update here while the analysis runs.",
     });
@@ -159,7 +171,9 @@ describe("MatchmakingAnalysis lifecycle", () => {
     ).not.toBeNull();
     expect(await screen.findByText("37 / 100 players")).not.toBeNull();
     expect(
-      screen.getByText(/Analyzing 37 of 100 players \(~\d+ minutes remaining\)/),
+      screen.getByText(
+        /Analyzing 37 of 100 players \(~\d+ minutes remaining\)/,
+      ),
     ).not.toBeNull();
     expect(screen.queryByText(/rate limit/i)).toBeNull();
   });

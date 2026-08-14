@@ -1,10 +1,9 @@
 """User settings model for per-user preferences."""
 
 from datetime import datetime
-from enum import Enum as PyEnum
 from typing import Optional
 
-from sqlalchemy import BigInteger, Enum, ForeignKey, String
+from sqlalchemy import BigInteger, ForeignKey, String
 from sqlalchemy import (
     DateTime as SQLDateTime,
 )
@@ -12,13 +11,6 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from app.core.models import Base
-
-
-class ThemeEnum(PyEnum):
-    """Theme preference enum."""
-
-    LIGHT = "LIGHT"
-    DARK = "DARK"
 
 
 class UserSettings(Base):
@@ -35,28 +27,12 @@ class UserSettings(Base):
         comment="Reference to the user",
     )
 
-    # Theme preference
-    theme: Mapped[ThemeEnum] = mapped_column(
-        Enum(ThemeEnum, schema="auth", name="theme_enum"),
-        nullable=False,
-        default=ThemeEnum.DARK,
-        comment="User's preferred theme (LIGHT or DARK)",
-    )
-
     current_player_puuid: Mapped[Optional[str]] = mapped_column(
         String(78),
         ForeignKey("core.players.puuid", ondelete="SET NULL"),
         nullable=True,
         index=True,
         comment="Last player selected by this application user",
-    )
-
-    # Default platform preference
-    default_platform: Mapped[Optional[str]] = mapped_column(
-        String(4),
-        nullable=True,
-        default="eun1",
-        comment="Default server/platform for player searches",
     )
 
     # Timestamps
@@ -80,4 +56,4 @@ class UserSettings(Base):
 
     def __repr__(self) -> str:
         """Return string representation of the user settings."""
-        return f"<UserSettings(user_id={self.user_id}, theme='{self.theme.value}')>"
+        return f"<UserSettings(user_id={self.user_id})>"

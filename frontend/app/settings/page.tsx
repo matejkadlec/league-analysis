@@ -17,12 +17,10 @@ import {
   SettingSchema,
   SettingTestResponseSchema,
   UserResponseSchema,
-  UserSettingsSchema,
 } from "@/lib/core/schemas";
-import type { UserProfileUpdate, UserSettingsUpdate } from "@/lib/core/schemas";
+import type { UserProfileUpdate } from "@/lib/core/schemas";
 import { ProtectedRoute, useAuth } from "@/features/auth";
 import { requestCookieConsentPreferences } from "@/features/cookie-consent";
-import { ConnectRiotAccountDialog } from "@/features/profile";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,13 +33,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { cn } from "@/lib/core/utils";
 import { useToast } from "@/lib/core/hooks";
@@ -54,35 +45,16 @@ import {
   EyeOff,
   FlaskConical,
   KeyRound,
-  Link2,
   Loader2,
   Mail,
   RefreshCcw,
   Save,
   Send,
-  Settings2,
   ShieldCheck,
   StopCircle,
   UserCog,
   X,
 } from "lucide-react";
-
-// Server to flag mapping (same as player-search.tsx)
-const SERVER_FLAGS: Record<string, string> = {
-  euw1: "🇪🇺",
-  eun1: "🇪🇺",
-  na1: "🇺🇸",
-  kr: "🇰🇷",
-  tr1: "🇹🇷",
-  br1: "🇧🇷",
-  la1: "🇲🇽",
-  la2: "🇦🇷",
-  oc1: "🇦🇺",
-  ru: "🇷🇺",
-  jp1: "🇯🇵",
-  tw2: "🇹🇼",
-  vn2: "🇻🇳",
-};
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const EMAIL_CODE_LENGTH = 6;
@@ -334,16 +306,18 @@ function SettingsPageContent() {
           </div>
           <p className="text-sm leading-relaxed">
             {isAdmin
-              ? "Configure application settings, account security, and global Riot API configuration"
-              : "Configure application settings and account security"}
+              ? "Manage account security and global Riot API configuration"
+              : "Manage your account profile and security"}
           </p>
         </Card>
 
-        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-3">
-          <UserSettingsCard className="lg:col-span-1" />
+        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-5">
+          <AccountSettingsCard
+            className={isAdmin ? "lg:col-span-2" : "lg:col-span-5"}
+          />
 
           {isAdmin && (
-            <Card className="h-full p-6 lg:col-span-2">
+            <Card className="h-full p-6 lg:col-span-3">
               <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-white">
                 <ShieldCheck className="h-5 w-5 text-[#cfa93a]" />
                 Riot API Configuration
@@ -495,142 +469,9 @@ function SettingsPageContent() {
               )}
             </Card>
           )}
-
-          <AccountSettingsCard className="lg:col-span-1" />
         </div>
       </div>
     </div>
-  );
-}
-
-interface UserSettingsCardProps {
-  className?: string;
-}
-
-function UserSettingsCard({
-  className = "lg:col-span-1",
-}: UserSettingsCardProps) {
-  const toast = useToast();
-  const queryClient = useQueryClient();
-  const { user } = useAuth();
-  const userId = user?.id;
-
-  const { data: userSettingsResult, isLoading } = useQuery({
-    queryKey: ["user-settings", userId],
-    queryFn: () => validatedGet(UserSettingsSchema, "/settings/user"),
-    enabled: !!userId,
-  });
-
-  const userSettings = userSettingsResult?.success
-    ? userSettingsResult.data
-    : null;
-
-  const updateMutation = useMutation({
-    mutationFn: async (update: UserSettingsUpdate) => {
-      const result = await validatedPut(
-        UserSettingsSchema,
-        "/settings/user",
-        update,
-      );
-      if (!result.success) {
-        throw new Error(result.error.message);
-      }
-      return result.data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["user-settings", userId] });
-      toast.success("Application settings saved", {
-        duration: 1000,
-      });
-    },
-    onError: () => {
-      toast.error("Application settings were not saved", {
-        description: "Please try again later.",
-      });
-    },
-  });
-
-  return (
-    <Card className={cn("h-full p-6 text-left", className)}>
-      <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-white">
-        <Settings2 className="h-5 w-5 text-[#cfa93a]" />
-        Application Settings
-      </h2>
-
-      {isLoading ? (
-        <div className="flex items-center justify-center py-8">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        </div>
-      ) : (
-        <div className="space-y-4">
-          <div className="space-y-1.5">
-            <Label>Theme</Label>
-            <p className="text-xs text-muted-foreground">
-              Theme selection coming soon
-            </p>
-            <Select
-              value={userSettings?.theme || "DARK"}
-              disabled
-              onValueChange={(value) =>
-                updateMutation.mutate({ theme: value as "LIGHT" | "DARK" })
-              }
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select theme" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="DARK">Dark</SelectItem>
-                <SelectItem value="LIGHT">Light</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label>Default Server</Label>
-            <p className="text-xs text-muted-foreground">
-              Default server coming soon
-            </p>
-            <Select
-              value={userSettings?.default_platform || "eun1"}
-              disabled
-              onValueChange={(value) =>
-                updateMutation.mutate({ default_platform: value })
-              }
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select server" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="euw1">
-                  <span className="flex items-center space-x-2">
-                    <span>{SERVER_FLAGS.euw1}</span>
-                    <span>EUW</span>
-                  </span>
-                </SelectItem>
-                <SelectItem value="eun1">
-                  <span className="flex items-center space-x-2">
-                    <span>{SERVER_FLAGS.eun1}</span>
-                    <span>EUNE</span>
-                  </span>
-                </SelectItem>
-                <SelectItem value="na1">
-                  <span className="flex items-center space-x-2">
-                    <span>{SERVER_FLAGS.na1}</span>
-                    <span>NA</span>
-                  </span>
-                </SelectItem>
-                <SelectItem value="kr">
-                  <span className="flex items-center space-x-2">
-                    <span>{SERVER_FLAGS.kr}</span>
-                    <span>KR</span>
-                  </span>
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-      )}
-    </Card>
   );
 }
 
@@ -642,7 +483,6 @@ function AccountSettingsCard({
   className = "lg:col-span-1",
 }: AccountSettingsCardProps) {
   const toast = useToast();
-  const queryClient = useQueryClient();
   const { user, checkAuth } = useAuth();
 
   const [draftDisplayName, setDraftDisplayName] = useState<string | null>(null);
@@ -967,13 +807,6 @@ function AccountSettingsCard({
     updateDisplayNameMutation.mutate({ display_name: trimmed });
   };
 
-  const handleRiotAccountUpdated = () => {
-    void checkAuth();
-    queryClient.invalidateQueries({ queryKey: ["player"] });
-    queryClient.invalidateQueries({ queryKey: ["champion-stats"] });
-    queryClient.invalidateQueries({ queryKey: ["lane-stats"] });
-  };
-
   const handleOpenEmailDialog = () => {
     if (isEmailChangeLocked) {
       toast.error("Too many failed attempts.", {
@@ -1191,28 +1024,6 @@ function AccountSettingsCard({
                     )}
                   </button>
                 </div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,1fr)] items-end gap-3">
-              <div className="space-y-1.5">
-                <Label>Connected Riot Account</Label>
-                <p className="text-xs text-muted-foreground">
-                  {user?.riot_account_connected
-                    ? "Update the Riot account linked to your application account"
-                    : "Connect a Riot account to your application account"}
-                </p>
-              </div>
-              <div className="flex items-center justify-end">
-                <ConnectRiotAccountDialog
-                  trigger={
-                    <Button className={ACCOUNT_ACTION_BUTTON_CLASS}>
-                      <Link2 className="h-4 w-4" />
-                      {user?.riot_account_connected ? "Update" : "Connect"}
-                    </Button>
-                  }
-                  onSuccess={handleRiotAccountUpdated}
-                />
               </div>
             </div>
 

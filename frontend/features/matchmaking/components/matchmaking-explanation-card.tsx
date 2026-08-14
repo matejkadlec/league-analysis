@@ -1,31 +1,16 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ChevronDown, GitBranch } from "lucide-react";
 import Image from "next/image";
 
 export function MatchmakingExplanationCard() {
-  const [isExpanded, setIsExpanded] = useState(false);
-  const cardRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (isExpanded && cardRef.current) {
-      // Wait for the expansion animation to progress, then scroll to card header
-      setTimeout(() => {
-        const cardTop =
-          cardRef.current!.getBoundingClientRect().top + window.scrollY;
-        window.scrollTo({
-          top: cardTop - 20, // 20px offset from top for better visibility
-          behavior: "smooth",
-        });
-      }, 300);
-    }
-  }, [isExpanded]);
+  const [isExpanded, setIsExpanded] = useState(true);
 
   return (
-    <Card ref={cardRef} className="overflow-hidden">
+    <Card className="overflow-hidden">
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center justify-between">
           <span className="flex items-center gap-2">
@@ -36,7 +21,7 @@ export function MatchmakingExplanationCard() {
             variant="ghost"
             size="sm"
             onClick={() => setIsExpanded(!isExpanded)}
-            className="button-medium no-rotation"
+            className="hidden button-medium no-rotation"
           >
             {isExpanded ? "Collapse" : "Expand"}
             <ChevronDown

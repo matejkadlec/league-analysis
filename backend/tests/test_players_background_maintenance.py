@@ -9,7 +9,6 @@ from fastapi import BackgroundTasks, HTTPException
 from starlette.requests import Request
 
 from app.core.riot_api.errors import NotFoundError, RateLimitError
-from app.features.auth import router as auth_router
 from app.features.jobs import models as job_models
 from app.features.jobs.maintenance import (
     RIOT_MAINTENANCE_MODE_KEY,
@@ -279,33 +278,6 @@ async def test_player_add_preserves_the_riot_rate_limit_status(monkeypatch) -> N
 
     assert error.value.status_code == 429
     assert error.value.detail == "Riot API rate limit reached"
-
-
-@pytest.mark.asyncio
-async def test_account_link_uses_the_shared_writer_guard(monkeypatch) -> None:
-    """Account linking cannot create tracked data after cleanup enables its lock."""
-    guard = AsyncMock(side_effect=RiotWriterMaintenanceActiveError())
-    monkeypatch.setattr(
-        players_service_module,
-        "_ensure_riot_writer_maintenance_is_inactive",
-        guard,
-    )
-    riot_client = SimpleNamespace(get_account_by_riot_id=AsyncMock())
-
-    with pytest.raises(HTTPException) as error:
-        await auth_router.connect_riot_account(
-            request=object(),
-            link_request=SimpleNamespace(
-                game_name="Player", tag_line="TAG", platform="eun1"
-            ),
-            riot_client=riot_client,
-            current_user=SimpleNamespace(id=7),
-            auth_service=SimpleNamespace(db=object()),
-        )
-
-    assert error.value.status_code == 503
-    guard.assert_awaited_once()
-    riot_client.get_account_by_riot_id.assert_not_awaited()
 
 
 @pytest.mark.asyncio

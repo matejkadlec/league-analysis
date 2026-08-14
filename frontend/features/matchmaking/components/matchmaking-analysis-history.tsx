@@ -22,6 +22,20 @@ import {
 
 interface MatchmakingAnalysisHistoryProps {
   puuid: string;
+  analyzedPlayerLabel: string;
+}
+
+function AnalyzedPlayerResultLabel({ playerLabel }: { playerLabel: string }) {
+  return (
+    <p className="text-sm">
+      <span style={{ color: "var(--color-muted-foreground)" }}>
+        Results for player{" "}
+      </span>
+      <span style={{ color: "var(--color-card-foreground)" }}>
+        {playerLabel}
+      </span>
+    </p>
+  );
 }
 
 const HISTORY_FETCH_LIMIT = 100;
@@ -48,6 +62,7 @@ function formatDateTime(dateString: string): string {
 
 export function MatchmakingAnalysisHistory({
   puuid,
+  analyzedPlayerLabel,
 }: MatchmakingAnalysisHistoryProps) {
   const toast = useToast();
   const queryClient = useQueryClient();
@@ -112,7 +127,24 @@ export function MatchmakingAnalysisHistory({
   };
 
   if (isLoading || error || !data || data.items.length === 0) {
-    return null;
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <History className="h-5 w-5 text-primary" />
+            Analysis History
+          </CardTitle>
+          <AnalyzedPlayerResultLabel playerLabel={analyzedPlayerLabel} />
+        </CardHeader>
+        <CardContent className="text-sm text-muted-foreground">
+          {isLoading
+            ? "Loading analysis history..."
+            : error
+              ? "Analysis history could not be loaded."
+              : "No completed analyses are available for this player yet."}
+        </CardContent>
+      </Card>
+    );
   }
 
   return (
@@ -122,6 +154,7 @@ export function MatchmakingAnalysisHistory({
           <History className="h-5 w-5 text-primary" />
           Analysis History
         </CardTitle>
+        <AnalyzedPlayerResultLabel playerLabel={analyzedPlayerLabel} />
       </CardHeader>
       <CardContent>
         <div className="overflow-x-auto overflow-y-auto max-h-[490px]">
@@ -132,7 +165,7 @@ export function MatchmakingAnalysisHistory({
                   Date & Time
                 </TableHead>
                 <TableHead className="w-[24%] text-right">
-                  Your Team WR
+                  Ally Team WR
                 </TableHead>
                 <TableHead className="w-[24%] text-right">
                   Enemy Team WR
