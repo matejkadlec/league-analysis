@@ -78,7 +78,10 @@ async def ensure_match_fully_analyzed(
 
 def _build_fully_analyzed_match(match_dto: Any) -> Match:
     """Build a fully-analyzed match row from a Riot match DTO."""
-    from app.features.matches.service_helpers import build_match_record, match_end_flags
+    from app.features.matches.match_persistence import (
+        build_match_record,
+        match_end_flags,
+    )
 
     platform_id = match_dto.info.platform or "EUN1"
     early_surrender, surrender = match_end_flags(match_dto.info.participants)

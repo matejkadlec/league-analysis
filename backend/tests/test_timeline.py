@@ -2,7 +2,7 @@
 
 from types import SimpleNamespace
 
-from app.features.matches.service_helpers import build_synthetic_match_dto
+from app.features.matches.match_sync import build_synthetic_match_dto
 from app.features.matches.timeline import build_match_timeline_rows
 
 

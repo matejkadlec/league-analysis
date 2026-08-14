@@ -21,6 +21,33 @@ from app.core.riot_api.errors import (
 from app.core.riot_api.transformers import MatchTransformer
 from app.features.players.models import Player
 
+from .match_analysis import (
+    collect_analysis_api_match_ids,
+    load_analysis_process_sets,
+    order_analysis_matches,
+    run_analysis_processing_loop,
+)
+from .match_history import (
+    build_match_responses,
+    load_match_player_data_context,
+)
+from .match_persistence import (
+    add_participants_from_dto,
+    build_match_record,
+    extract_store_participant_identity,
+    match_dto_id,
+    match_end_flags,
+    merge_reprocess_participants,
+)
+from .match_stats import (
+    accumulate_champion_stats,
+    accumulate_lane_stats,
+    build_champion_stat_items,
+    build_lane_stat_items,
+    calculate_kda,
+    page_window,
+)
+from .match_sync import must_abort_writer_sync, sync_single_queue_for_player
 from .models import Match
 from .participants import MatchParticipant
 from .schemas import (
@@ -30,28 +57,6 @@ from .schemas import (
     MatchListWithPlayerDataResponse,
     MatchResponse,
     MatchStatsResponse,
-)
-from .service_helpers import (
-    accumulate_champion_stats,
-    accumulate_lane_stats,
-    add_participants_from_dto,
-    build_champion_stat_items,
-    build_lane_stat_items,
-    build_match_record,
-    build_match_responses,
-    calculate_kda,
-    collect_analysis_api_match_ids,
-    extract_store_participant_identity,
-    load_analysis_process_sets,
-    load_match_player_data_context,
-    match_dto_id,
-    match_end_flags,
-    merge_reprocess_participants,
-    must_abort_writer_sync,
-    order_analysis_matches,
-    page_window,
-    run_analysis_processing_loop,
-    sync_single_queue_for_player,
 )
 from .timeline import replace_match_timeline_rows
 
