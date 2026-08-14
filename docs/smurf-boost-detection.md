@@ -842,7 +842,7 @@ runs against **Conservative**.
 | `degenerate_baseline` | Every baseline game identical on all six composite metrics, so `sd_C <= EPSILON` | A1, A3, A4, B1, B2, B3 all unavailable with `degenerate_baseline`; A2 and B4 still computed; no division performed |
 | `step_change` | Recent 20 with every `C[i]` at exactly +2.0, baseline 60 standard normal by construction | A1 `g` at least 1.20 — triggered; band at least Weak |
 | `winrate_surge_small` | Recent 10 at 9/10 wins, baseline 30/60 | A2 raw 0.0958 — **not** triggered at any preset; the Wilson guard holds |
-| `winrate_surge_large` | Recent 30 at 24/30 wins, baseline 30/60 | A2 raw 0.1269 — triggered under Sensitive and Balanced, **not** under Conservative (0.20). Asserted per preset. |
+| `winrate_surge_large` | Recent 30 at 24/30 wins, baseline 30/60 | A2 raw 0.1269 — triggered under Sensitive (0.12) only; Balanced (0.15) and Conservative (0.20) both hold. Asserted per preset. |
 | `winrate_surge_conservative` | Recent 30 at 27/30 wins, baseline 30/60 | A2 raw 0.2438 — triggered under all three presets |
 | `novel_champions` | 8 recent games on champions with zero prior games, +2.0 sd | A3 triggered with `novel_is_storage_scoped` |
 | `novel_below_minimum` | 6 novel games at +2.0 sd, Conservative minimum 8 | A3 unavailable with `insufficient_novel_sample` |
@@ -901,6 +901,73 @@ cases exist; the word is reserved for that meaning.
 - **Presets are validated as sets, not sliders.** Sensitive A1 plus Sensitive A2
   plus Sensitive B3 stack; each preset is asserted end to end against the fixture
   suite above, and no preset may move `flat_baseline` off "No unusual pattern".
+
+## Backend implementation
+
+The model is implemented in `backend/app/features/smurf_boost_detection/`, split
+so the computation stays pure and independently testable:
+
+| Module | Responsibility |
+| --- | --- |
+| `config.py` | Every fixed model constant: weights, saturations, band thresholds, evidence groups, presets |
+| `statistics.py` | Wilson bound, Hedges `g`, bimodality coefficient, log-ratio — each estimator spelled out rather than delegated |
+| `composite.py` | Eligible-match shape, per-role standardization, and the baseline-standardized composite |
+| `signals.py` | The eight signals, each a pure function returning one explainable record |
+| `engine.py` | Windows, sample floor, family scoring, bands, confidence — no database, no Riot call |
+| `models.py`, `service.py`, `router.py` | Persistence, lifecycle and the authenticated HTTP surface |
+
+Results persist to `core.smurf_boost_analyses` (revision `20260814_0010`), one
+row per `(puuid, created_at)`, storing the `model_version` and the exact
+`thresholds` used. A one-active-row partial unique index plus an
+IntegrityError-to-attach path makes a repeated request attach to the run already
+in flight rather than start a second one; this is verified against a real
+PostgreSQL instance, where five concurrent analyses produce exactly one row.
+
+A request only attaches to an in-flight run when that run's `model_version` and
+every threshold value match its own. A run configured differently is a
+retryable conflict (`409`, code `analysis_in_progress`), never a silent
+substitution of another viewer's settings. Because the computation completes
+inside its request, an active row older than ten minutes belongs to a process
+that died; it is marked failed before the next claim, so one interrupted
+request cannot wedge the feature for that player.
+
+Staleness is decided by comparing `latest_match_id` against the player's newest
+eligible match, not by comparing counts — the service caps how many matches it
+loads, so a count comparison would report every capped run as stale. A stored
+identifier of `None` takes part in that comparison like any other value, so a
+run computed over an empty history goes stale as soon as a first game arrives.
+
+### Two boundaries the load cap must not cross
+
+The service loads at most 250 matches, which is all the largest configurable
+windows can consume. Two values are nevertheless read from the player's whole
+eligible history, because truncating them changes what the model means:
+
+- `eligible_games`, counted with a separate aggregate. Reporting the loaded
+  slice would understate a long history and make the staleness comparison
+  meaningless.
+- The prior-champion counts behind A3, read with the same eligibility
+  predicate offset past the recent window and with no limit. On the deepest
+  stored account the capped counting saw 230 games across 68 champions against
+  609 games across 99 champions for the full history, and **35 champions with
+  real stored history would have been treated as newly picked**.
+
+### Result payload
+
+The stored document and the HTTP response are the same validated
+`SmurfBoostResults` shape, built in one place. Each signal is emitted as `id`
+plus `family`; the fixed disclaimer is always present; and the internal
+weighted sum that produced a band is retained only in memory, so no per-family
+number is ever persisted or sent to a client.
+
+`GET /api/v1/smurf-boost-detection/presets` emits each preset in the card
+settings write contract's own field names and numeric types, so a client can
+apply a preset by posting it back unchanged.
+
+Viewer thresholds are resolved through the card catalog's
+`normalize_stored_card_preference`, which keeps one authority for ranges and
+cross-field rules. A stored row written under an older contract is recovered to
+a valid set rather than handed to the magnitude ramp.
 
 ## Versioning
 

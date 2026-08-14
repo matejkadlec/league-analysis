@@ -4,7 +4,14 @@ from datetime import datetime
 from enum import Enum as PyEnum
 from typing import Any, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 
 
 class ThemeEnum(str, PyEnum):
@@ -25,6 +32,7 @@ class CardId(str, PyEnum):
 
     TOP_CHAMPIONS = "profile.top-champions"
     RECENT_PERFORMANCE = "profile.recent-performance"
+    SMURF_BOOST_DETECTION = "profile.smurf-boost-detection"
 
 
 class CardRole(str, PyEnum):
@@ -80,6 +88,52 @@ class RecentPerformanceMutableSettingsV1(_CardSettingsBase):
     recent_match_count: int = Field(default=10, ge=5, le=50)
     win_rate_trend_delta: float = Field(default=0.05, ge=0.01, le=0.25)
     relative_metric_trend_delta: float = Field(default=0.05, ge=0.01, le=0.25)
+
+
+def _validate_smurf_boost_cross_fields(
+    minimum_novel_games: int, recent_window_size: int
+) -> None:
+    """Reject a detection set whose novel-champion gate can never be met.
+
+    A minimum above the recent window size would make A3 permanently
+    unavailable rather than merely strict, which is a configuration error and
+    not a valid preference.
+    """
+    if minimum_novel_games > recent_window_size:
+        raise ValueError("a3MinimumNovelGames must not exceed recentWindowSize")
+
+
+class SmurfBoostDetectionMutableSettingsV1(_CardSettingsBase):
+    """Mutable smurf and boost detection thresholds in the version 1 contract.
+
+    Defaults are the Conservative preset. Every bound sits strictly below the
+    matching signal saturation constant, so the magnitude ramp in
+    `smurf-boost/v1` can never divide by zero or by a negative number.
+    """
+
+    recent_window_size: int = Field(default=20, ge=10, le=50)
+    baseline_window_size: int = Field(default=60, ge=15, le=200)
+    a1_step_change_threshold: float = Field(default=1.20, ge=0.60, le=2.00)
+    a2_win_rate_surge_threshold: float = Field(default=0.20, ge=0.10, le=0.35)
+    a3_novel_champion_threshold: float = Field(default=1.20, ge=0.60, le=2.00)
+    a3_minimum_novel_games: int = Field(default=8, ge=5, le=15)
+    a4_summoner_level_gate: int = Field(default=45, ge=30, le=150)
+    a4_performance_threshold: float = Field(default=1.20, ge=0.60, le=2.00)
+    b1_win_rate_delta_threshold: float = Field(default=0.30, ge=0.15, le=0.45)
+    b1_composite_flat_ceiling: float = Field(default=0.05, ge=0.00, le=0.40)
+    b2_consistency_shift_threshold: float = Field(default=1.15, ge=0.60, le=1.50)
+    b3_bimodality_threshold: float = Field(default=0.65, ge=0.555, le=0.80)
+    b3_tail_fraction: float = Field(default=0.30, ge=0.15, le=0.40)
+    b4_high_rate_floor: float = Field(default=0.62, ge=0.50, le=0.80)
+    b4_drop_threshold: float = Field(default=0.20, ge=0.10, le=0.45)
+
+    @model_validator(mode="after")
+    def cross_field_rules_must_hold(self) -> "SmurfBoostDetectionMutableSettingsV1":
+        """Reject a set whose signals could never be satisfiable together."""
+        _validate_smurf_boost_cross_fields(
+            self.a3_minimum_novel_games, self.recent_window_size
+        )
+        return self
 
 
 def _require_json_integer(value: Any) -> int:
@@ -147,6 +201,67 @@ class RecentPerformanceMutableSettingsWriteV1(_CardSettingsWriteBase):
         return _require_json_number(value)
 
 
+class SmurfBoostDetectionMutableSettingsWriteV1(_CardSettingsWriteBase):
+    """Strict write-only smurf and boost detection threshold contract."""
+
+    recent_window_size: int = Field(default=20, ge=10, le=50)
+    baseline_window_size: int = Field(default=60, ge=15, le=200)
+    a1_step_change_threshold: float = Field(default=1.20, ge=0.60, le=2.00)
+    a2_win_rate_surge_threshold: float = Field(default=0.20, ge=0.10, le=0.35)
+    a3_novel_champion_threshold: float = Field(default=1.20, ge=0.60, le=2.00)
+    a3_minimum_novel_games: int = Field(default=8, ge=5, le=15)
+    a4_summoner_level_gate: int = Field(default=45, ge=30, le=150)
+    a4_performance_threshold: float = Field(default=1.20, ge=0.60, le=2.00)
+    b1_win_rate_delta_threshold: float = Field(default=0.30, ge=0.15, le=0.45)
+    b1_composite_flat_ceiling: float = Field(default=0.05, ge=0.00, le=0.40)
+    b2_consistency_shift_threshold: float = Field(default=1.15, ge=0.60, le=1.50)
+    b3_bimodality_threshold: float = Field(default=0.65, ge=0.555, le=0.80)
+    b3_tail_fraction: float = Field(default=0.30, ge=0.15, le=0.40)
+    b4_high_rate_floor: float = Field(default=0.62, ge=0.50, le=0.80)
+    b4_drop_threshold: float = Field(default=0.20, ge=0.10, le=0.45)
+
+    @field_validator(
+        "recent_window_size",
+        "baseline_window_size",
+        "a3_minimum_novel_games",
+        "a4_summoner_level_gate",
+        mode="before",
+    )
+    @classmethod
+    def window_setting_must_be_an_integer(cls, value: Any) -> int:
+        """Reject strings, booleans, and decimal values before coercion."""
+        return _require_json_integer(value)
+
+    @field_validator(
+        "a1_step_change_threshold",
+        "a2_win_rate_surge_threshold",
+        "a3_novel_champion_threshold",
+        "a4_performance_threshold",
+        "b1_win_rate_delta_threshold",
+        "b1_composite_flat_ceiling",
+        "b2_consistency_shift_threshold",
+        "b3_bimodality_threshold",
+        "b3_tail_fraction",
+        "b4_high_rate_floor",
+        "b4_drop_threshold",
+        mode="before",
+    )
+    @classmethod
+    def detection_threshold_must_be_a_number(cls, value: Any) -> float | int:
+        """Reject strings and booleans before normal numeric validation."""
+        return _require_json_number(value)
+
+    @model_validator(mode="after")
+    def cross_field_rules_must_hold(
+        self,
+    ) -> "SmurfBoostDetectionMutableSettingsWriteV1":
+        """Reject a set whose signals could never be satisfiable together."""
+        _validate_smurf_boost_cross_fields(
+            self.a3_minimum_novel_games, self.recent_window_size
+        )
+        return self
+
+
 class CardPreferenceUpdate(_CardSettingsWriteBase):
     """Versioned request body for a complete card-specific preference update."""
 
@@ -174,7 +289,7 @@ class CardPreferenceResponse(_CardSettingsBase):
 class CardPreferencesResetRequest(_CardSettingsWriteBase):
     """Explicit catalog confirmation required before resetting every card."""
 
-    card_ids: list[CardId] = Field(min_length=2, max_length=2)
+    card_ids: list[CardId] = Field(min_length=3, max_length=3)
 
     @field_validator("card_ids")
     @classmethod
@@ -190,16 +305,19 @@ class CardPreferencesResetRequest(_CardSettingsWriteBase):
 _CARD_SETTINGS_MODELS: dict[CardId, type[_CardSettingsBase]] = {
     CardId.TOP_CHAMPIONS: TopChampionsMutableSettingsV1,
     CardId.RECENT_PERFORMANCE: RecentPerformanceMutableSettingsV1,
+    CardId.SMURF_BOOST_DETECTION: SmurfBoostDetectionMutableSettingsV1,
 }
 
 _CARD_SETTINGS_WRITE_MODELS: dict[CardId, type[_CardSettingsWriteBase]] = {
     CardId.TOP_CHAMPIONS: TopChampionsMutableSettingsWriteV1,
     CardId.RECENT_PERFORMANCE: RecentPerformanceMutableSettingsWriteV1,
+    CardId.SMURF_BOOST_DETECTION: SmurfBoostDetectionMutableSettingsWriteV1,
 }
 
 _CARD_FIXED_SETTINGS_V1: dict[CardId, dict[str, int]] = {
     CardId.TOP_CHAMPIONS: {"queue_id": 420, "display_limit": 5},
     CardId.RECENT_PERFORMANCE: {"queue_id": 420},
+    CardId.SMURF_BOOST_DETECTION: {"queue_id": 420},
 }
 
 # This map is intentionally explicit even while v1 has no renamed fields. A
@@ -208,15 +326,36 @@ _CARD_FIXED_SETTINGS_V1: dict[CardId, dict[str, int]] = {
 _LEGACY_SETTING_RENAMES: dict[CardId, dict[str, str]] = {
     CardId.TOP_CHAMPIONS: {},
     CardId.RECENT_PERFORMANCE: {},
+    CardId.SMURF_BOOST_DETECTION: {},
 }
 
-_LEGACY_INTEGER_SETTING_FIELDS = frozenset({"minimum_games", "recent_match_count"})
+_LEGACY_INTEGER_SETTING_FIELDS = frozenset(
+    {
+        "minimum_games",
+        "recent_match_count",
+        "recent_window_size",
+        "baseline_window_size",
+        "a3_minimum_novel_games",
+        "a4_summoner_level_gate",
+    }
+)
 _LEGACY_NUMBER_SETTING_FIELDS = frozenset(
     {
         "minimum_win_rate",
         "minimum_kda",
         "win_rate_trend_delta",
         "relative_metric_trend_delta",
+        "a1_step_change_threshold",
+        "a2_win_rate_surge_threshold",
+        "a3_novel_champion_threshold",
+        "a4_performance_threshold",
+        "b1_win_rate_delta_threshold",
+        "b1_composite_flat_ceiling",
+        "b2_consistency_shift_threshold",
+        "b3_bimodality_threshold",
+        "b3_tail_fraction",
+        "b4_high_rate_floor",
+        "b4_drop_threshold",
     }
 )
 

@@ -1,0 +1,502 @@
+"""Smurf and boost detection persistence and orchestration.
+
+The computation reads only rows the ingestion jobs already stored, so it makes
+no Riot API call, joins no rate limiter, and writes no Riot-owned table.
+"""
+
+from __future__ import annotations
+
+from dataclasses import asdict
+from datetime import datetime, timedelta, timezone
+from typing import Any, Optional, cast
+
+import structlog
+from sqlalchemy import and_, func, select, update
+from sqlalchemy.engine import CursorResult
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.features.matches.models import Match
+from app.features.matches.participants import MatchParticipant
+from app.features.players.leagues import PlayerLeague
+from app.features.players.models import Player
+from app.features.settings.schemas import CardId, normalize_stored_card_preference
+
+from .composite import EligibleMatch
+from .config import (
+    DEFAULT_PRESET,
+    ELIGIBLE_QUEUE_ID,
+    MINIMUM_GAME_DURATION_SECONDS,
+    MODEL_VERSION,
+    PRESETS,
+    RECOGNIZED_POSITIONS,
+)
+from .engine import AnalysisRequest, DetectionResult, analyze
+from .models import SmurfBoostAnalysis
+from .schemas import (
+    ConfidenceBand,
+    FamilyPayload,
+    SignalPayload,
+    SmurfBoostAnalysisResponse,
+    SmurfBoostBand,
+    SmurfBoostResults,
+)
+
+logger = structlog.get_logger(__name__)
+
+ACTIVE_STATUSES = ("pending", "in_progress")
+RANKED_SOLO_QUEUE = "RANKED_SOLO_5x5"
+
+# The engine never needs more than the largest configurable windows combined.
+MAX_WINDOW_MATCHES = 250
+
+# The computation runs inside its request, so an active row older than this
+# belongs to a worker that died. Without an expiry the partial unique index
+# would block every later run for that player forever.
+ABANDONED_RUN_SECONDS = 600
+
+
+def _to_float(value: Any) -> float:
+    """Coerce a nullable numeric column into a plain float."""
+    return float(value) if value is not None else 0.0
+
+
+class SmurfBoostDetectionError(Exception):
+    """Internal failure carrying only reviewed client-safe diagnostics."""
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(code)
+        self.code = code
+        self.client_message = message
+
+
+class SmurfBoostDetectionService:
+    """Loads stored history, runs the model, and persists explained results."""
+
+    def __init__(self, db: AsyncSession) -> None:
+        self.db = db
+
+    async def _load_eligible(self, puuid: str) -> list[EligibleMatch]:
+        """Newest-first eligible ranked games for one player."""
+        result = await self.db.execute(
+            select(MatchParticipant, Match)
+            .join(Match, Match.match_id == MatchParticipant.match_id)
+            .where(*self._eligibility_filter(puuid))
+            .order_by(Match.game_start_timestamp.desc(), Match.match_id.desc())
+        )
+        return [
+            EligibleMatch(
+                match_id=match.match_id,
+                game_start_timestamp=match.game_start_timestamp,
+                game_version=match.game_version,
+                timestamp_source=match.game_start_timestamp_source,
+                team_position=participant.team_position or "",
+                champion_id=participant.champion_id,
+                win=participant.win,
+                kda=_to_float(participant.kda),
+                gold_per_minute=_to_float(participant.gold_per_minute),
+                kill_participation=_to_float(participant.kill_participation),
+                team_damage_percentage=_to_float(participant.team_damage_percentage),
+                vision_score_per_minute=_to_float(participant.vision_score_per_minute),
+                total_minions_killed=participant.total_minions_killed or 0,
+                neutral_minions_killed=participant.neutral_minions_killed or 0,
+                time_played=participant.time_played or 0,
+                game_duration=match.game_duration,
+            )
+            for participant, match in result.all()
+        ]
+
+    def _eligibility_filter(self, puuid: str) -> list[Any]:
+        """The one eligibility predicate every query in this feature shares."""
+        return [
+            MatchParticipant.puuid == puuid,
+            MatchParticipant.remake.is_(False),
+            MatchParticipant.team_position.in_(sorted(RECOGNIZED_POSITIONS)),
+            Match.queue_id == ELIGIBLE_QUEUE_ID,
+            Match.game_duration >= MINIMUM_GAME_DURATION_SECONDS,
+        ]
+
+    async def _count_eligible(self, puuid: str) -> int:
+        """Every eligible ranked game the player has, ignoring the load cap."""
+        result = await self.db.execute(
+            select(func.count())
+            .select_from(MatchParticipant)
+            .join(Match, Match.match_id == MatchParticipant.match_id)
+            .where(*self._eligibility_filter(puuid))
+        )
+        return result.scalar_one() or 0
+
+    async def _newest_eligible_match_id(self, puuid: str) -> Optional[str]:
+        """Identifier of the player's newest eligible game."""
+        result = await self.db.execute(
+            select(Match.match_id)
+            .join(MatchParticipant, Match.match_id == MatchParticipant.match_id)
+            .where(*self._eligibility_filter(puuid))
+            .order_by(Match.game_start_timestamp.desc(), Match.match_id.desc())
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
+    async def _load_summoner_level(self, puuid: str) -> Optional[int]:
+        """Stored account level, which is only a weak account-age proxy."""
+        result = await self.db.execute(
+            select(Player.summoner_level).where(Player.puuid == puuid)
+        )
+        return result.scalar_one_or_none()
+
+    async def _load_rank_span_days(self, puuid: str) -> Optional[float]:
+        """Span of stored ranked solo snapshots, in days."""
+        result = await self.db.execute(
+            select(
+                func.count(PlayerLeague.created_at),
+                func.min(PlayerLeague.created_at),
+                func.max(PlayerLeague.created_at),
+            ).where(
+                PlayerLeague.puuid == puuid,
+                PlayerLeague.queue_type == RANKED_SOLO_QUEUE,
+            )
+        )
+        count, earliest, latest = result.one()
+        if count < 2 or earliest is None or latest is None:
+            return None
+        return (latest - earliest).total_seconds() / 86400.0
+
+    async def _prior_champion_games(
+        self, puuid: str, recent_size: int
+    ) -> dict[int, int]:
+        """Champion counts over every eligible game older than the recent window.
+
+        This deliberately reads the player's whole eligible history rather than
+        the capped window the engine scores. A champion is novel only when this
+        application has stored almost nothing of it, and truncating the history
+        first would make long-established champions look new.
+        """
+        older = (
+            select(MatchParticipant.champion_id.label("champion_id"))
+            .join(Match, Match.match_id == MatchParticipant.match_id)
+            .where(*self._eligibility_filter(puuid))
+            .order_by(Match.game_start_timestamp.desc(), Match.match_id.desc())
+            .offset(recent_size)
+            .subquery()
+        )
+        result = await self.db.execute(
+            select(older.c.champion_id, func.count()).group_by(older.c.champion_id)
+        )
+        return {champion_id: count for champion_id, count in result.all()}
+
+    async def _build_request(
+        self, puuid: str, thresholds: dict[str, float]
+    ) -> AnalysisRequest:
+        """Assemble every input the pure engine needs."""
+        eligible = (await self._load_eligible(puuid))[:MAX_WINDOW_MATCHES]
+        recent_size = int(thresholds["recent_window_size"])
+        return AnalysisRequest(
+            eligible=eligible,
+            summoner_level=await self._load_summoner_level(puuid),
+            rank_span_days=await self._load_rank_span_days(puuid),
+            thresholds=thresholds,
+            prior_champion_games=await self._prior_champion_games(puuid, recent_size),
+            total_eligible_games=await self._count_eligible(puuid),
+        )
+
+    async def _active_run(self, puuid: str) -> Optional[SmurfBoostAnalysis]:
+        """The one active run for a player, if any."""
+        result = await self.db.execute(
+            select(SmurfBoostAnalysis)
+            .where(
+                SmurfBoostAnalysis.puuid == puuid,
+                SmurfBoostAnalysis.status.in_(ACTIVE_STATUSES),
+            )
+            .order_by(SmurfBoostAnalysis.created_at.desc())
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
+    async def _expire_abandoned(self, puuid: str) -> None:
+        """Terminalize an active run whose worker is gone.
+
+        The run executes inside its request, so an active row older than the
+        lease cannot still be computing. Leaving it would let one interrupted
+        request block the feature for that player permanently.
+        """
+        cutoff = datetime.now(timezone.utc) - timedelta(seconds=ABANDONED_RUN_SECONDS)
+        result = await self.db.execute(
+            update(SmurfBoostAnalysis)
+            .where(
+                and_(
+                    SmurfBoostAnalysis.puuid == puuid,
+                    SmurfBoostAnalysis.status.in_(ACTIVE_STATUSES),
+                    SmurfBoostAnalysis.created_at < cutoff,
+                )
+            )
+            .values(
+                status="failed",
+                error_code="analysis_abandoned",
+                error_message="The analysis did not finish. Please try again.",
+                completed_at=datetime.now(timezone.utc),
+            )
+        )
+        expired = cast(CursorResult[Any], result).rowcount
+        if expired:
+            await self.db.commit()
+            logger.warning(
+                "smurf_boost_abandoned_run_expired", puuid=puuid, expired=expired
+            )
+
+    @staticmethod
+    def _matches_configuration(
+        run: SmurfBoostAnalysis, thresholds: dict[str, float]
+    ) -> bool:
+        """True when an existing run was computed the way this caller asked for.
+
+        Attaching to a run configured differently would hand the caller another
+        viewer's thresholds, so the comparison is exact on both the model
+        version and every threshold value.
+        """
+        if run.model_version != MODEL_VERSION:
+            return False
+        stored = run.thresholds or {}
+        if set(stored) != set(thresholds):
+            return False
+        return all(float(stored[key]) == value for key, value in thresholds.items())
+
+    async def _claim_run(
+        self, puuid: str, thresholds: dict[str, float]
+    ) -> tuple[Optional[datetime], Optional[SmurfBoostAnalysis]]:
+        """Insert an active run, or return the concurrent one already present."""
+        await self._expire_abandoned(puuid)
+        existing = await self._active_run(puuid)
+        if existing:
+            if not self._matches_configuration(existing, thresholds):
+                raise SmurfBoostDetectionError(
+                    "analysis_in_progress",
+                    "An analysis is already running for this player with "
+                    "different settings. Please try again shortly.",
+                )
+            return None, existing
+
+        now = datetime.now(timezone.utc)
+        run = SmurfBoostAnalysis(
+            puuid=puuid,
+            created_at=now,
+            status="in_progress",
+            model_version=MODEL_VERSION,
+            thresholds=dict(thresholds),
+        )
+        self.db.add(run)
+        try:
+            await self.db.commit()
+        except IntegrityError:
+            await self.db.rollback()
+            concurrent = await self._active_run(puuid)
+            if not concurrent:
+                raise
+            if not self._matches_configuration(concurrent, thresholds):
+                raise SmurfBoostDetectionError(
+                    "analysis_in_progress",
+                    "An analysis is already running for this player with "
+                    "different settings. Please try again shortly.",
+                ) from None
+            return None, concurrent
+        return now, None
+
+    async def _finalize(
+        self,
+        puuid: str,
+        created_at: datetime,
+        result: DetectionResult,
+        latest_match_id: Optional[str],
+    ) -> None:
+        """Write the completed run, guarded so a terminal row is never revived."""
+        await self.db.execute(
+            update(SmurfBoostAnalysis)
+            .where(
+                and_(
+                    SmurfBoostAnalysis.puuid == puuid,
+                    SmurfBoostAnalysis.created_at == created_at,
+                    SmurfBoostAnalysis.status.in_(ACTIVE_STATUSES),
+                )
+            )
+            .values(
+                status="completed",
+                results=_serialize(result),
+                eligible_games=result.eligible_games,
+                latest_match_id=latest_match_id,
+                completed_at=datetime.now(timezone.utc),
+                error_code=None,
+                error_message=None,
+            )
+        )
+        await self.db.commit()
+
+    async def _fail(
+        self, puuid: str, created_at: datetime, code: str, message: str
+    ) -> None:
+        """Record a terminal failure without leaking internal detail."""
+        await self.db.execute(
+            update(SmurfBoostAnalysis)
+            .where(
+                and_(
+                    SmurfBoostAnalysis.puuid == puuid,
+                    SmurfBoostAnalysis.created_at == created_at,
+                    SmurfBoostAnalysis.status.in_(ACTIVE_STATUSES),
+                )
+            )
+            .values(
+                status="failed",
+                error_code=code,
+                error_message=message,
+                completed_at=datetime.now(timezone.utc),
+            )
+        )
+        await self.db.commit()
+
+    async def _reload(
+        self, puuid: str, created_at: datetime
+    ) -> Optional[SmurfBoostAnalysis]:
+        """Re-read one run by its exact identity."""
+        result = await self.db.execute(
+            select(SmurfBoostAnalysis).where(
+                and_(
+                    SmurfBoostAnalysis.puuid == puuid,
+                    SmurfBoostAnalysis.created_at == created_at,
+                )
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def run_analysis(
+        self, puuid: str, thresholds: dict[str, float]
+    ) -> SmurfBoostAnalysisResponse:
+        """Create or attach to one run and return its persisted state."""
+        created_at, concurrent = await self._claim_run(puuid, thresholds)
+        if concurrent is not None:
+            logger.info("smurf_boost_attached_to_active_run", puuid=puuid)
+            return self._to_response(concurrent, is_stale=False)
+
+        assert created_at is not None
+        try:
+            request = await self._build_request(puuid, thresholds)
+            result = analyze(request)
+            latest = request.eligible[0].match_id if request.eligible else None
+            await self._finalize(puuid, created_at, result, latest)
+        except SmurfBoostDetectionError as error:
+            await self.db.rollback()
+            await self._fail(puuid, created_at, error.code, error.client_message)
+        except Exception as error:  # noqa: BLE001 - terminal state must be recorded
+            logger.error(
+                "smurf_boost_analysis_failed",
+                puuid=puuid,
+                error_type=type(error).__name__,
+                exc_info=True,
+            )
+            # The failure may have come from the session itself, which cannot
+            # accept the terminal write until the broken transaction is gone.
+            await self.db.rollback()
+            await self._fail(
+                puuid,
+                created_at,
+                "analysis_failed",
+                "The analysis did not finish. Please try again.",
+            )
+
+        run = await self._reload(puuid, created_at)
+        if run is None:
+            raise SmurfBoostDetectionError(
+                "analysis_missing",
+                "The analysis could not be read back. Please try again.",
+            )
+        return self._to_response(run, is_stale=False)
+
+    async def get_latest(self, puuid: str) -> Optional[SmurfBoostAnalysisResponse]:
+        """The newest run for a player, with a computed staleness flag."""
+        result = await self.db.execute(
+            select(SmurfBoostAnalysis)
+            .where(SmurfBoostAnalysis.puuid == puuid)
+            .order_by(SmurfBoostAnalysis.created_at.desc())
+            .limit(1)
+        )
+        run = result.scalar_one_or_none()
+        if run is None:
+            return None
+        return self._to_response(run, is_stale=await self._is_stale(run))
+
+    async def _is_stale(self, run: SmurfBoostAnalysis) -> bool:
+        """True when a newer eligible game exists than the run considered.
+
+        Comparing match identifiers rather than counts keeps the check correct
+        when the loaded history is capped, and when an older match is ingested
+        after the run without changing what "newest" means. A run computed with
+        no eligible history at all is stale as soon as one arrives, so a stored
+        identifier of `None` takes part in the comparison like any other value.
+        """
+        if run.status != "completed":
+            return False
+        return await self._newest_eligible_match_id(run.puuid) != run.latest_match_id
+
+    @staticmethod
+    def _to_response(
+        run: SmurfBoostAnalysis, is_stale: bool
+    ) -> SmurfBoostAnalysisResponse:
+        """Build the API response for one persisted run."""
+        response = SmurfBoostAnalysisResponse.model_validate(run)
+        return response.model_copy(update={"is_stale": is_stale})
+
+
+def _serialize(result: DetectionResult) -> dict[str, Any]:
+    """Convert the engine result into the stored JSON shape.
+
+    The conversion goes through `SmurfBoostResults` rather than `asdict`, so the
+    stored document and the HTTP response are the same validated shape, the
+    mandatory disclaimer is always present, and the internal family score is
+    dropped in exactly one place.
+    """
+    payload = SmurfBoostResults(
+        model_version=result.model_version,
+        families=[
+            FamilyPayload(
+                family=family.family,
+                # The engine assigns bands from the fixed vocabulary these
+                # literals enumerate, which the type system cannot see.
+                band=cast("SmurfBoostBand", family.band),
+                distinct_evidence=family.distinct_evidence,
+                signals=[
+                    SignalPayload(
+                        id=signal.signal_id,
+                        family=family.family,
+                        **{
+                            key: value
+                            for key, value in asdict(signal).items()
+                            if key != "signal_id"
+                        },
+                    )
+                    for signal in family.signals
+                ],
+            )
+            for family in result.families
+        ],
+        confidence=result.confidence,
+        confidence_band=cast("ConfidenceBand", result.confidence_band),
+        recent_games=result.recent_games,
+        baseline_games=result.baseline_games,
+        eligible_games=result.eligible_games,
+        notes=list(result.notes),
+    )
+    return payload.model_dump(mode="json")
+
+
+def resolve_thresholds(settings: Optional[dict[str, Any]]) -> dict[str, float]:
+    """Recover a valid threshold set from whatever the viewer has stored.
+
+    Delegating to the card catalog keeps one authority for ranges and
+    cross-field rules, so a stored row written under an older contract can never
+    hand the model a value its magnitude ramp cannot divide by.
+    """
+    normalized, _ignored = normalize_stored_card_preference(
+        CardId.SMURF_BOOST_DETECTION, settings if isinstance(settings, dict) else {}
+    )
+    return {
+        key: float(normalized[key])
+        for key in PRESETS[DEFAULT_PRESET]
+        if key in normalized
+    }
