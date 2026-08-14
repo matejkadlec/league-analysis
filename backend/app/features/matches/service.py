@@ -1,7 +1,6 @@
 """Match service for handling match data operations."""
 
-import asyncio
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, cast
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
 
 import structlog
 from sqlalchemy import desc, func, select
@@ -20,27 +19,46 @@ from app.core.riot_api.errors import (
     RiotAPIError,
 )
 from app.core.riot_api.transformers import MatchTransformer
-from app.features.players.leagues import PlayerLeague
 from app.features.players.models import Player
 
+from .match_analysis import (
+    collect_analysis_api_match_ids,
+    load_analysis_process_sets,
+    order_analysis_matches,
+    run_analysis_processing_loop,
+)
+from .match_history import (
+    build_match_responses,
+    load_match_player_data_context,
+)
+from .match_persistence import (
+    add_participants_from_dto,
+    build_match_record,
+    extract_store_participant_identity,
+    match_dto_id,
+    match_end_flags,
+    merge_reprocess_participants,
+)
+from .match_stats import (
+    accumulate_champion_stats,
+    accumulate_lane_stats,
+    build_champion_stat_items,
+    build_lane_stat_items,
+    calculate_kda,
+    page_window,
+)
+from .match_sync import must_abort_writer_sync, sync_single_queue_for_player
 from .models import Match
 from .participants import MatchParticipant
 from .schemas import (
     ChampionStatsResponse,
-    EnemyLaneOpponent,
     LaneStatsResponse,
     MatchListResponse,
     MatchListWithPlayerDataResponse,
     MatchResponse,
     MatchStatsResponse,
-    MatchWithPlayerData,
-    PlayerMatchParticipant,
-    TeamChampion,
-    TeamComposition,
-    TeamStats,
-    TeamStatsComposition,
 )
-from .timeline import MatchTimeline, replace_match_timeline_rows
+from .timeline import replace_match_timeline_rows
 
 if TYPE_CHECKING:
     from app.core.riot_api.client import RiotAPIClient
@@ -50,12 +68,7 @@ logger = structlog.get_logger(__name__)
 
 def _must_abort_writer_sync(error: Exception) -> bool:
     """Return whether a lower-level sync error must reach the owning job."""
-    from app.features.jobs.error_handling import is_database_job_error
-    from app.features.jobs.maintenance import RiotWriterMaintenanceActiveError
-
-    return is_database_job_error(error) or isinstance(
-        error, RiotWriterMaintenanceActiveError
-    )
+    return must_abort_writer_sync(error)
 
 
 async def _ensure_riot_writer_maintenance_is_inactive(session: AsyncSession) -> None:
@@ -183,7 +196,6 @@ class MatchService:
             MatchListWithPlayerDataResponse with detailed match data
         """
         try:
-            # Get matches from database
             db_matches = await self._get_matches_from_db(
                 puuid, start, count, queue, None, None, exclude_aram
             )
@@ -198,498 +210,31 @@ class MatchService:
                     pages=0,
                 )
 
-            # Get total counts
             total_count = await self._count_matches_from_db(
                 puuid, queue, None, None, exclude_aram
             )
             total_analyzed = await self._count_analyzed_matches_from_db(
                 puuid, queue, None, None, exclude_aram
             )
-
-            # Get all match IDs
-            match_ids = [m.match_id for m in db_matches]
-
-            # Get player's participants for all matches
-            player_participants_stmt = select(MatchParticipant).where(
-                MatchParticipant.match_id.in_(match_ids),
-                MatchParticipant.puuid == puuid,
+            (
+                player_participants_by_match,
+                participants_by_match,
+                timelines_by_match_team,
+                player_leagues,
+            ) = await load_match_player_data_context(
+                self.db,
+                puuid,
+                [match.match_id for match in db_matches],
             )
-            player_participants_result = await self.db.execute(player_participants_stmt)
-            player_participants_by_match = {
-                p.match_id: p for p in player_participants_result.scalars().all()
-            }
-
-            # Get all participants for these matches (for finding lane opponents)
-            all_participants_stmt = select(MatchParticipant).where(
-                MatchParticipant.match_id.in_(match_ids),
+            match_responses = build_match_responses(
+                db_matches,
+                player_participants_by_match,
+                participants_by_match,
+                timelines_by_match_team,
+                player_leagues,
+                puuid,
             )
-            all_participants_result = await self.db.execute(all_participants_stmt)
-            all_participants = list(all_participants_result.scalars().all())
-
-            # Group participants by match
-            participants_by_match: Dict[str, List[MatchParticipant]] = {}
-            for p in all_participants:
-                if p.match_id not in participants_by_match:
-                    participants_by_match[p.match_id] = []
-                participants_by_match[p.match_id].append(p)
-
-            # Load timeline objective aggregates (if available).
-            timeline_stmt = select(MatchTimeline).where(
-                MatchTimeline.match_id.in_(match_ids),
-            )
-            timeline_result = await self.db.execute(timeline_stmt)
-            timeline_rows = list(timeline_result.scalars().all())
-
-            timelines_by_match_team: Dict[str, Dict[int, MatchTimeline]] = {}
-            for timeline_row in timeline_rows:
-                match_teams = timelines_by_match_team.setdefault(
-                    timeline_row.match_id, {}
-                )
-                # Store one row per team (team totals are repeated on each participant row).
-                if timeline_row.team_id not in match_teams:
-                    match_teams[timeline_row.team_id] = timeline_row
-
-            def advanced_int(advanced_stats: Any, key: str) -> int:
-                """Safely read integer-like advanced_stats values."""
-                if not isinstance(advanced_stats, dict):
-                    return 0
-                raw_value = advanced_stats.get(key, 0)
-                if raw_value is None:
-                    return 0
-                try:
-                    return int(raw_value)
-                except TypeError, ValueError:
-                    return 0
-
-            # Get player leagues for LP change calculation (ordered by created_at DESC - newest first)
-            leagues_stmt = (
-                select(PlayerLeague)
-                .where(PlayerLeague.puuid == puuid)
-                .order_by(desc(PlayerLeague.created_at))
-            )
-            leagues_result = await self.db.execute(leagues_stmt)
-            player_leagues = list(leagues_result.scalars().all())
-
-            # Build a helper to calculate LP change for a match
-            # Logic: Find the league snapshot recorded AFTER the match ended,
-            # then compare it to the previous snapshot to get the LP change
-            def calculate_lp_change(match_end_timestamp: int) -> int | None:
-                """Calculate LP change for a match based on league snapshots.
-
-                Args:
-                    match_end_timestamp: The match end timestamp in milliseconds
-
-                Returns:
-                    LP change (positive for gain, negative for loss) or None if cannot determine
-                """
-                if len(player_leagues) < 2:
-                    return None
-
-                from datetime import datetime, timezone
-
-                # Convert match timestamp (ms) to datetime
-                match_end_dt = datetime.fromtimestamp(
-                    match_end_timestamp / 1000, tz=timezone.utc
-                )
-
-                # Find the CLOSEST league snapshot AFTER the match ended (this is the "after" snapshot)
-                # player_leagues is ordered DESC (newest first), so we iterate from newest to oldest
-                # We want the LAST snapshot that is still AFTER the match (closest to match time)
-                after_snapshot = None
-                before_snapshot = None
-
-                for i, league in enumerate(player_leagues):
-                    # Make league.created_at timezone-aware if it isn't
-                    league_dt = league.created_at
-                    if league_dt.tzinfo is None:
-                        league_dt = league_dt.replace(tzinfo=timezone.utc)
-
-                    if league_dt > match_end_dt:
-                        # This snapshot is after the match, keep track of it
-                        # Continue iterating to find the closest one
-                        after_snapshot = league
-                        # The next one (older) might be before the match or also after
-                        if i + 1 < len(player_leagues):
-                            before_snapshot = player_leagues[i + 1]
-                        # Don't break - continue to find the closest after_snapshot
-                    else:
-                        # This snapshot is BEFORE or at the match time
-                        # The previous after_snapshot (if any) is the closest one
-                        break
-
-                if after_snapshot is None or before_snapshot is None:
-                    return None
-
-                # Calculate LP change
-                # Need to account for tier/rank changes too
-                after_lp = after_snapshot.league_points
-                before_lp = before_snapshot.league_points
-
-                # Simple case: same tier and rank
-                if (
-                    after_snapshot.tier == before_snapshot.tier
-                    and after_snapshot.rank == before_snapshot.rank
-                ):
-                    return after_lp - before_lp
-
-                # If tier or rank changed, we need more complex calculation
-                # For now, return the LP difference with a rough estimate
-                # (this won't be perfect for promotions/demotions)
-                tier_order = [
-                    "IRON",
-                    "BRONZE",
-                    "SILVER",
-                    "GOLD",
-                    "PLATINUM",
-                    "EMERALD",
-                    "DIAMOND",
-                    "MASTER",
-                    "GRANDMASTER",
-                    "CHALLENGER",
-                ]
-                rank_order = ["IV", "III", "II", "I"]  # IV is lowest
-
-                try:
-                    after_tier_idx = tier_order.index(after_snapshot.tier.upper())
-                    before_tier_idx = tier_order.index(before_snapshot.tier.upper())
-
-                    if after_tier_idx != before_tier_idx:
-                        # Tier changed - assume ~100 LP per division
-                        tier_diff = after_tier_idx - before_tier_idx
-                        # Rough estimate: gained/lost multiple divisions worth of LP
-                        return tier_diff * 100 + (after_lp - before_lp)
-
-                    # Same tier, different rank
-                    after_rank_idx = (
-                        rank_order.index(after_snapshot.rank)
-                        if after_snapshot.rank
-                        else 0
-                    )
-                    before_rank_idx = (
-                        rank_order.index(before_snapshot.rank)
-                        if before_snapshot.rank
-                        else 0
-                    )
-                    rank_diff = after_rank_idx - before_rank_idx
-
-                    # Each rank is roughly 100 LP apart
-                    return rank_diff * 100 + (after_lp - before_lp)
-                except ValueError, AttributeError:
-                    # Tier not found or other error
-                    return after_lp - before_lp
-
-            # Build match responses with player data
-            match_responses = []
-            for match in db_matches:
-                player_participant = player_participants_by_match.get(match.match_id)
-                match_participants = participants_by_match.get(match.match_id, [])
-
-                # Find lane opponent
-                lane_opponent = None
-                if player_participant and player_participant.team_position:
-                    for p in match_participants:
-                        if (
-                            p.puuid != puuid
-                            and p.team_id != player_participant.team_id
-                            and p.team_position == player_participant.team_position
-                        ):
-                            opponent_cs = (
-                                getattr(p, "total_minions_killed", 0) or 0
-                            ) + (getattr(p, "neutral_minions_killed", 0) or 0)
-                            lane_opponent = EnemyLaneOpponent(
-                                champion_id=p.champion_id,
-                                champion_name=p.champion_name,
-                                champion_level=p.champion_level,
-                                kills=p.kills or 0,
-                                deaths=p.deaths or 0,
-                                assists=p.assists or 0,
-                                kda=float(p.kda) if p.kda else None,
-                                total_cs=opponent_cs,
-                                vision_score=p.vision_score or 0,
-                                total_damage_dealt_to_champions=p.total_damage_dealt_to_champions
-                                or 0,
-                                summoner1_id=p.summoner1_id,
-                                summoner2_id=p.summoner2_id,
-                                runes=cast(Any, p.runes),
-                            )
-                            break
-
-                # Build team compositions and calculate team stats
-                # Role order: TOP, JUNGLE, MIDDLE, BOTTOM, UTILITY
-                role_order = {
-                    "TOP": 0,
-                    "JUNGLE": 1,
-                    "MIDDLE": 2,
-                    "BOTTOM": 3,
-                    "UTILITY": 4,
-                }
-                blue_team = []
-                red_team = []
-
-                timeline_by_team = timelines_by_match_team.get(match.match_id, {})
-                blue_timeline = timeline_by_team.get(100)
-                red_timeline = timeline_by_team.get(200)
-                blue_has_timeline = blue_timeline is not None
-                red_has_timeline = red_timeline is not None
-
-                blue_stats = {
-                    "kills": 0,
-                    "deaths": 0,
-                    "assists": 0,
-                    "turrets": blue_timeline.team_turrets_destroyed
-                    if blue_timeline
-                    else None,
-                    "inhibitors": blue_timeline.team_inhibitors_destroyed
-                    if blue_timeline
-                    else None,
-                    "dragons": blue_timeline.team_dragons_slain
-                    if blue_timeline
-                    else None,
-                    "barons": blue_timeline.team_barons_slain if blue_timeline else 0,
-                    "rift_heralds": blue_timeline.team_rift_heralds_slain
-                    if blue_timeline
-                    else 0,
-                    "voidgrubs": blue_timeline.team_voidgrubs_slain
-                    if blue_timeline
-                    else None,
-                }
-                red_stats = {
-                    "kills": 0,
-                    "deaths": 0,
-                    "assists": 0,
-                    "turrets": red_timeline.team_turrets_destroyed
-                    if red_timeline
-                    else None,
-                    "inhibitors": red_timeline.team_inhibitors_destroyed
-                    if red_timeline
-                    else None,
-                    "dragons": red_timeline.team_dragons_slain
-                    if red_timeline
-                    else None,
-                    "barons": red_timeline.team_barons_slain if red_timeline else 0,
-                    "rift_heralds": red_timeline.team_rift_heralds_slain
-                    if red_timeline
-                    else 0,
-                    "voidgrubs": red_timeline.team_voidgrubs_slain
-                    if red_timeline
-                    else None,
-                }
-                blue_void_monster_max = 0
-                red_void_monster_max = 0
-
-                # First pass: aggregate kills/deaths/assists and team composition.
-                # Fallback to advanced_stats only when timeline data is not available.
-                for p in match_participants:
-                    team_champ = TeamChampion(
-                        champion_id=p.champion_id,
-                        champion_name=p.champion_name,
-                        team_position=p.team_position,
-                        puuid=p.puuid,
-                    )
-
-                    # Extract objective stats from advanced_stats
-                    advanced = p.advanced_stats or {}
-                    team_baron_kills = advanced_int(advanced, "teamBaronKills")
-                    team_rift_herald_kills = advanced_int(
-                        advanced,
-                        "teamRiftHeraldKills",
-                    )
-                    dragon_takedowns = advanced_int(advanced, "dragonTakedowns")
-                    void_monster_kills = advanced_int(advanced, "voidMonsterKill")
-
-                    if p.team_id == 100:  # Blue team
-                        blue_team.append(team_champ)
-                        blue_stats["kills"] += p.kills or 0
-                        blue_stats["deaths"] += p.deaths or 0
-                        blue_stats["assists"] += p.assists or 0
-                        if not blue_has_timeline:
-                            blue_stats["turrets"] = (blue_stats["turrets"] or 0) + (
-                                p.turret_kills or 0
-                            )
-                            blue_stats["inhibitors"] = (
-                                blue_stats["inhibitors"] or 0
-                            ) + (p.inhibitor_kills or 0)
-                            blue_stats["dragons"] = max(
-                                blue_stats["dragons"] or 0,
-                                dragon_takedowns,
-                            )
-                            blue_stats["barons"] = max(
-                                blue_stats["barons"], team_baron_kills
-                            )
-                            blue_stats["rift_heralds"] = max(
-                                blue_stats["rift_heralds"], team_rift_herald_kills
-                            )
-                            blue_void_monster_max = max(
-                                blue_void_monster_max,
-                                void_monster_kills,
-                            )
-                    else:  # Red team (200)
-                        red_team.append(team_champ)
-                        red_stats["kills"] += p.kills or 0
-                        red_stats["deaths"] += p.deaths or 0
-                        red_stats["assists"] += p.assists or 0
-                        if not red_has_timeline:
-                            red_stats["turrets"] = (red_stats["turrets"] or 0) + (
-                                p.turret_kills or 0
-                            )
-                            red_stats["inhibitors"] = (red_stats["inhibitors"] or 0) + (
-                                p.inhibitor_kills or 0
-                            )
-                            red_stats["dragons"] = max(
-                                red_stats["dragons"] or 0,
-                                dragon_takedowns,
-                            )
-                            red_stats["barons"] = max(
-                                red_stats["barons"], team_baron_kills
-                            )
-                            red_stats["rift_heralds"] = max(
-                                red_stats["rift_heralds"], team_rift_herald_kills
-                            )
-                            red_void_monster_max = max(
-                                red_void_monster_max,
-                                void_monster_kills,
-                            )
-
-                if not blue_has_timeline:
-                    # Riot exposes team baron/herald totals directly, while grubs are only
-                    # available via combined void-monster stats in match participants.
-                    blue_stats["voidgrubs"] = max(
-                        0,
-                        blue_void_monster_max
-                        - blue_stats["barons"]
-                        - blue_stats["rift_heralds"],
-                    )
-
-                if not red_has_timeline:
-                    red_stats["voidgrubs"] = max(
-                        0,
-                        red_void_monster_max
-                        - red_stats["barons"]
-                        - red_stats["rift_heralds"],
-                    )
-
-                # Sort by role
-                blue_team.sort(key=lambda x: role_order.get(x.team_position or "", 5))
-                red_team.sort(key=lambda x: role_order.get(x.team_position or "", 5))
-
-                team_compositions = TeamComposition(
-                    blue_team=blue_team,
-                    red_team=red_team,
-                )
-
-                # Calculate team KDA
-                def calc_kda(kills, deaths, assists):
-                    if deaths == 0:
-                        return float(kills + assists) if kills + assists > 0 else None
-                    return round((kills + assists) / deaths, 2)
-
-                team_stats = TeamStatsComposition(
-                    blue_team=TeamStats(
-                        kills=blue_stats["kills"],
-                        deaths=blue_stats["deaths"],
-                        assists=blue_stats["assists"],
-                        kda=calc_kda(
-                            blue_stats["kills"],
-                            blue_stats["deaths"],
-                            blue_stats["assists"],
-                        ),
-                        turrets=blue_stats["turrets"],
-                        inhibitors=blue_stats["inhibitors"],
-                        dragons=blue_stats["dragons"],
-                        barons=blue_stats["barons"],
-                        rift_heralds=blue_stats["rift_heralds"],
-                        voidgrubs=blue_stats["voidgrubs"],
-                    ),
-                    red_team=TeamStats(
-                        kills=red_stats["kills"],
-                        deaths=red_stats["deaths"],
-                        assists=red_stats["assists"],
-                        kda=calc_kda(
-                            red_stats["kills"],
-                            red_stats["deaths"],
-                            red_stats["assists"],
-                        ),
-                        turrets=red_stats["turrets"],
-                        inhibitors=red_stats["inhibitors"],
-                        dragons=red_stats["dragons"],
-                        barons=red_stats["barons"],
-                        rift_heralds=red_stats["rift_heralds"],
-                        voidgrubs=red_stats["voidgrubs"],
-                    ),
-                )
-
-                # Build player participant data
-                player_data = None
-                if player_participant:
-                    total_cs = (
-                        getattr(player_participant, "total_minions_killed", 0) or 0
-                    ) + (getattr(player_participant, "neutral_minions_killed", 0) or 0)
-                    # Also try cs column if available
-                    if hasattr(player_participant, "cs") and player_participant.cs:
-                        total_cs = player_participant.cs
-
-                    player_data = PlayerMatchParticipant(
-                        champion_id=player_participant.champion_id,
-                        champion_name=player_participant.champion_name,
-                        champion_level=player_participant.champion_level,
-                        team_position=player_participant.team_position,
-                        team_id=player_participant.team_id,
-                        win=player_participant.win,
-                        remake=player_participant.remake,
-                        kills=player_participant.kills,
-                        deaths=player_participant.deaths,
-                        assists=player_participant.assists,
-                        kda=(
-                            float(player_participant.kda)
-                            if player_participant.kda
-                            else None
-                        ),
-                        total_cs=total_cs,
-                        vision_score=player_participant.vision_score,
-                        total_damage_dealt_to_champions=player_participant.total_damage_dealt_to_champions
-                        or 0,
-                        summoner1_id=player_participant.summoner1_id,
-                        summoner2_id=player_participant.summoner2_id,
-                        runes=cast(Any, player_participant.runes),
-                    )
-
-                # Calculate LP change based on league snapshots
-                lp_change = None
-                if (
-                    match.game_end_timestamp and match.queue_id == 420
-                ):  # Only for ranked solo/duo
-                    lp_change = calculate_lp_change(match.game_end_timestamp)
-
-                match_response = MatchWithPlayerData(
-                    match_id=match.match_id,
-                    platform=match.platform,
-                    game_creation_timestamp=match.game_creation_timestamp,
-                    game_start_timestamp=match.game_start_timestamp,
-                    game_start_timestamp_source=match.game_start_timestamp_source,
-                    game_duration=match.game_duration,
-                    queue_id=match.queue_id,
-                    game_version=match.game_version,
-                    map_id=match.map_id,
-                    game_mode=match.game_mode,
-                    game_type=match.game_type,
-                    game_end_timestamp=match.game_end_timestamp,
-                    early_surrender=match.early_surrender,
-                    surrender=match.surrender,
-                    game_result=match.game_result,
-                    fully_analyzed=match.fully_analyzed,
-                    created_at=match.created_at,
-                    updated_at=match.updated_at,
-                    player_participant=player_data,
-                    lane_opponent=lane_opponent,
-                    lp_change=lp_change,
-                    team_compositions=team_compositions,
-                    team_stats=team_stats,
-                )
-                match_responses.append(match_response)
-
-            # Calculate pagination
-            page = (start // count) if count > 0 else 0
-            pages = ((total_count + count - 1) // count) if count > 0 else 0
+            page, pages = page_window(start, count, total_count)
 
             logger.debug(
                 "Retrieved matches with player data",
@@ -858,13 +403,8 @@ class MatchService:
         Returns:
             ChampionStatsResponse with every qualifying champion statistic
         """
-        from .schemas import ChampionStatsItem, ChampionStatsResponse
-
         try:
-            # Build query for participants
             query = select(MatchParticipant).where(MatchParticipant.puuid == puuid)
-
-            # If queue filter, join with matches
             if queue is not None:
                 query = query.join(
                     Match, MatchParticipant.match_id == Match.match_id
@@ -878,56 +418,8 @@ class MatchService:
                     puuid=puuid, total_champions=0, champions=[]
                 )
 
-            # Aggregate stats by champion
-            champion_data: dict = {}
-            for p in participants:
-                champ_name = p.champion_name
-                if champ_name not in champion_data:
-                    champion_data[champ_name] = {
-                        "champion_id": p.champion_id,
-                        "games": 0,
-                        "wins": 0,
-                        "kills": 0,
-                        "deaths": 0,
-                        "assists": 0,
-                    }
-                champion_data[champ_name]["games"] += 1
-                if p.win:
-                    champion_data[champ_name]["wins"] += 1
-                champion_data[champ_name]["kills"] += p.kills
-                champion_data[champ_name]["deaths"] += p.deaths
-                champion_data[champ_name]["assists"] += p.assists
-
-            # Build response items
-            champions = []
-            for champ_name, data in champion_data.items():
-                games = data["games"]
-                wins = data["wins"]
-                losses = games - wins
-                avg_kda = self._calculate_kda(
-                    data["kills"], data["deaths"], data["assists"]
-                )
-                champions.append(
-                    ChampionStatsItem(
-                        champion_name=champ_name,
-                        champion_id=data["champion_id"],
-                        games_played=games,
-                        wins=wins,
-                        losses=losses,
-                        win_rate=wins / games if games > 0 else 0.0,
-                        avg_kills=data["kills"] / games if games > 0 else 0.0,
-                        avg_deaths=data["deaths"] / games if games > 0 else 0.0,
-                        avg_assists=data["assists"] / games if games > 0 else 0.0,
-                        avg_kda=avg_kda,
-                    )
-                )
-
-            # Keep the complete aggregate population available for client pagination.
-            # The secondary key prevents tied champions from moving between pages.
-            champions.sort(
-                key=lambda champion: (-champion.games_played, champion.champion_name)
-            )
-
+            champion_data = accumulate_champion_stats(participants)
+            champions = build_champion_stat_items(champion_data)
             return ChampionStatsResponse(
                 puuid=puuid,
                 total_champions=len(champion_data),
@@ -954,27 +446,13 @@ class MatchService:
         Returns:
             LaneStatsResponse with per-lane statistics
         """
-        from .schemas import LaneStatsItem, LaneStatsResponse
-
-        # Lane display name mapping
-        lane_names = {
-            "TOP": "Top",
-            "JUNGLE": "Jungle",
-            "MIDDLE": "Mid",
-            "BOTTOM": "Bottom",
-            "UTILITY": "Support",
-        }
-
         try:
-            # Build query for participants
             query = select(MatchParticipant).where(
                 MatchParticipant.puuid == puuid,
                 MatchParticipant.team_position.isnot(None),
                 MatchParticipant.team_position != "",
                 MatchParticipant.team_position != "UNKNOWN",
             )
-
-            # If queue filter, join with matches
             if queue is not None:
                 query = query.join(
                     Match, MatchParticipant.match_id == Match.match_id
@@ -986,57 +464,11 @@ class MatchService:
             if not participants:
                 return LaneStatsResponse(puuid=puuid, total_lanes=0, lanes=[])
 
-            # Aggregate stats by lane
-            lane_data: dict[str, dict[str, int]] = {}
-            for p in participants:
-                lane = p.team_position
-                if not lane:
-                    continue
-                if lane not in lane_data:
-                    lane_data[lane] = {
-                        "games": 0,
-                        "wins": 0,
-                        "kills": 0,
-                        "deaths": 0,
-                        "assists": 0,
-                    }
-                lane_data[lane]["games"] += 1
-                if p.win:
-                    lane_data[lane]["wins"] += 1
-                lane_data[lane]["kills"] += p.kills
-                lane_data[lane]["deaths"] += p.deaths
-                lane_data[lane]["assists"] += p.assists
-
-            # Build response items
-            lanes = []
-            for lane, data in lane_data.items():
-                games = data["games"]
-                wins = data["wins"]
-                losses = games - wins
-                avg_kda = self._calculate_kda(
-                    data["kills"], data["deaths"], data["assists"]
-                )
-                lanes.append(
-                    LaneStatsItem(
-                        lane=lane_names.get(lane, lane),
-                        games_played=games,
-                        wins=wins,
-                        losses=losses,
-                        win_rate=wins / games if games > 0 else 0.0,
-                        avg_kills=data["kills"] / games if games > 0 else 0.0,
-                        avg_deaths=data["deaths"] / games if games > 0 else 0.0,
-                        avg_assists=data["assists"] / games if games > 0 else 0.0,
-                        avg_kda=avg_kda,
-                    )
-                )
-
-            # Sort by games played descending
-            lanes.sort(key=lambda x: x.games_played, reverse=True)
-
+            lane_data = accumulate_lane_stats(participants)
             return LaneStatsResponse(
                 puuid=puuid,
                 total_lanes=len(lane_data),
-                lanes=lanes,
+                lanes=build_lane_stat_items(lane_data),
             )
         except Exception as e:
             logger.error("Failed to get player lane stats", puuid=puuid, error=str(e))
@@ -1500,10 +932,7 @@ class MatchService:
 
     def _calculate_kda(self, kills: int, deaths: int, assists: int) -> float:
         """Calculate KDA ratio."""
-        # If no deaths, return perfect KDA (kills + assists)
-        if deaths == 0:
-            return float(kills + assists)
-        return (kills + assists) / deaths
+        return calculate_kda(kills, deaths, assists)
 
     # ============================================
     # Helper Methods for Jobs
@@ -1536,77 +965,23 @@ class MatchService:
         Note:
             Caller must commit the transaction.
         """
-        from .transformers import MatchDTOTransformer
-
         try:
             await _ensure_riot_writer_maintenance_is_inactive(self.db)
-            # Extract platform
             platform_id = match_dto.info.platform or default_platform
-
-            # Ensure all participant players exist
-            participants_info = []
-            for p in match_dto.info.participants:
-                # p is ParticipantDTO which has fields aliased from API response
-                # game_name -> riotIdGameName, tag_line -> riotIdTagline
-                game_name = p.game_name or p.summoner_name or "Unknown"
-                tag_line = p.tag_line
-
-                # If using summonerName and no tag, try to split if it contains #
-                if not tag_line and "#" in game_name:
-                    game_name, tag_line = game_name.split("#", 1)
-
-                participants_info.append(
-                    {
-                        "puuid": p.puuid,
-                        "game_name": game_name,
-                        "tag_line": tag_line or "RIOT",
-                        "summoner_level": p.summoner_level,
-                        "profile_icon_id": getattr(p, "profile_icon", 29),
-                    }
-                )
-
+            participants_info = [
+                extract_store_participant_identity(participant)
+                for participant in match_dto.info.participants
+            ]
             await self._ensure_players_exist(participants_info, platform_id)
-
-            # Calculate flags
-            early_surrender = any(
-                p.game_ended_in_early_surrender for p in match_dto.info.participants
+            early_surrender, surrender = match_end_flags(match_dto.info.participants)
+            match = build_match_record(
+                match_dto,
+                platform_id,
+                early_surrender,
+                surrender,
             )
-            surrender = any(
-                p.game_ended_in_surrender for p in match_dto.info.participants
-            )
-
-            # Create Match record
-            match = Match(
-                match_id=match_dto.metadata.match_id,
-                platform=platform_id.upper(),
-                game_creation_timestamp=match_dto.info.game_creation_timestamp,
-                game_start_timestamp=match_dto.info.game_start_timestamp,
-                game_start_timestamp_source="riot_game_start",
-                game_end_timestamp=match_dto.info.game_end_timestamp,
-                game_duration=match_dto.info.game_duration,
-                game_mode=match_dto.info.game_mode,
-                game_type=match_dto.info.game_type,
-                game_version=match_dto.info.game_version,
-                map_id=match_dto.info.map_id,
-                queue_id=match_dto.info.queue_id,
-                early_surrender=early_surrender,
-                surrender=surrender,
-                game_result=match_dto.info.game_result,
-            )
-
             self.db.add(match)
-
-            # Create MatchParticipant records
-            for participant in match_dto.info.participants:
-                participant_data = MatchDTOTransformer.extract_participant_data(
-                    participant
-                )
-                match_participant = MatchParticipant(
-                    match_id=match_dto.metadata.match_id,
-                    **participant_data,
-                )
-                self.db.add(match_participant)
-
+            add_participants_from_dto(self.db, match_dto)
             timeline_rows = await replace_match_timeline_rows(
                 self.db,
                 match_dto,
@@ -1625,11 +1000,7 @@ class MatchService:
         except Exception as e:
             logger.error(
                 "Failed to store match from DTO",
-                match_id=(
-                    match_dto.metadata.match_id
-                    if hasattr(match_dto, "metadata")
-                    else "unknown"
-                ),
+                match_id=match_dto_id(match_dto),
                 error=str(e),
             )
             raise
@@ -1730,7 +1101,6 @@ class MatchService:
         import sys
 
         try:
-            # Check cancel before starting
             if should_cancel and should_cancel():
                 logger.info("Analysis cancelled before fetching list", puuid=puuid)
                 return 0
@@ -1740,106 +1110,32 @@ class MatchService:
                 logger.info("No supported queues requested for analysis", puuid=puuid)
                 return 0
 
-            # 1. Get recent match IDs from Riot API for each target queue.
-            api_match_ids: list[str] = []
-            seen_match_ids: set[str] = set()
-            for queue_id in target_queue_ids:
-                if rate_limiter:
-                    can_proceed = await rate_limiter.acquire()
-                    if not can_proceed:
-                        logger.warning(
-                            "Rate limit reached before match-list fetch in analysis",
-                            puuid=puuid,
-                            queue_id=queue_id,
-                        )
-                        break
-
-                match_list_requested = False
-                match_list = await riot_api_client.get_match_list_by_puuid(
-                    puuid=puuid, count=100, queue=queue_id
-                )
-                match_list_requested = True
-                if rate_limiter and match_list_requested:
-                    await rate_limiter.record_request()
-
-                queue_match_ids: list[str] = []
-                if match_list:
-                    if hasattr(match_list, "match_ids"):
-                        queue_match_ids = list(match_list.match_ids)
-                    elif isinstance(match_list, list):
-                        queue_match_ids = match_list
-
-                for match_id in queue_match_ids:
-                    if match_id in seen_match_ids:
-                        continue
-                    seen_match_ids.add(match_id)
-                    api_match_ids.append(match_id)
-
+            api_match_ids = await collect_analysis_api_match_ids(
+                riot_api_client,
+                puuid,
+                target_queue_ids,
+                rate_limiter,
+            )
             print(
                 f"DEBUG: Riot API returned {len(api_match_ids)} matches for PUUID {puuid}",
                 file=sys.stderr,
             )
-
             if not api_match_ids:
                 logger.info("No matches found in Riot API", puuid=puuid)
                 return 0
 
-            # 2. Get existing fully analyzed match IDs from DB for this player
-            existing_analyzed_stmt = (
-                select(Match.match_id)
-                .join(MatchParticipant, Match.match_id == MatchParticipant.match_id)
-                .where(
-                    MatchParticipant.puuid == puuid,
-                    Match.fully_analyzed.is_(True),
-                )
+            (
+                new_match_ids,
+                existing_analyzed_ids,
+                needs_reanalysis_ids,
+                missing_timeline_ids,
+            ) = await load_analysis_process_sets(self.db, puuid, api_match_ids)
+            ordered_to_process = order_analysis_matches(
+                api_match_ids,
+                new_match_ids,
+                needs_reanalysis_ids,
+                missing_timeline_ids,
             )
-            result = await self.db.execute(existing_analyzed_stmt)
-            existing_analyzed_ids = set(result.scalars().all())
-
-            # 3. Get match IDs that need re-analysis (fully_analyzed=false)
-            needs_reanalysis_stmt = (
-                select(Match.match_id)
-                .join(MatchParticipant, Match.match_id == MatchParticipant.match_id)
-                .where(
-                    MatchParticipant.puuid == puuid,
-                    Match.fully_analyzed.is_(False),
-                )
-            )
-            result = await self.db.execute(needs_reanalysis_stmt)
-            needs_reanalysis_ids = set(result.scalars().all())
-
-            # 4. Calculate matches to fetch:
-            #    - New matches: in API list but NOT in our fully analyzed set
-            #    - Plus: any that need re-analysis
-            #    - Plus: analyzed matches without timeline aggregates
-            new_match_ids = [
-                mid for mid in api_match_ids if mid not in existing_analyzed_ids
-            ]
-
-            existing_timeline_stmt = select(MatchTimeline.match_id).where(
-                MatchTimeline.match_id.in_(api_match_ids),
-                MatchTimeline.puuid == puuid,
-            )
-            result = await self.db.execute(existing_timeline_stmt)
-            timeline_present_ids = set(result.scalars().all())
-            missing_timeline_ids = {
-                mid for mid in api_match_ids if mid not in timeline_present_ids
-            }
-
-            # Combine: new + needs_reanalysis + missing timeline (deduplicate)
-            matches_to_process = list(
-                set(new_match_ids) | needs_reanalysis_ids | missing_timeline_ids
-            )
-
-            # Preserve order from API (newer first) for new matches
-            ordered_to_process = [
-                mid for mid in api_match_ids if mid in matches_to_process
-            ]
-            # Add any needs_reanalysis that weren't in API list (unlikely but possible)
-            for mid in needs_reanalysis_ids:
-                if mid not in ordered_to_process:
-                    ordered_to_process.append(mid)
-
             logger.info(
                 "Smart match analysis starting",
                 puuid=puuid,
@@ -1851,119 +1147,34 @@ class MatchService:
                 missing_timeline=len(missing_timeline_ids),
                 to_process=len(ordered_to_process),
             )
-
             print(
                 f"DEBUG: Processing {len(ordered_to_process)} matches "
                 f"({len(new_match_ids)} new, {len(needs_reanalysis_ids)} re-analysis, "
                 f"{len(missing_timeline_ids)} missing timeline)",
                 file=sys.stderr,
             )
-
             if not ordered_to_process:
                 logger.info("No new or incomplete matches to process", puuid=puuid)
                 if progress_callback:
                     await progress_callback(0, 0)
                 return 0
 
-            processed = 0
-            skipped_season = 0
-            total = len(ordered_to_process)
-
-            for i, match_id in enumerate(ordered_to_process):
-                # Check for cancellation
-                if should_cancel and should_cancel():
-                    logger.info(
-                        "Analysis cancelled by user request",
-                        puuid=puuid,
-                        processed=processed,
-                    )
-                    break
-
-                # Report progress
-                if progress_callback:
-                    await progress_callback(i, total)
-
-                # STRICT THROTTLING: 1.2s delay to respect 100 req/2min Dev Key limit
-                await asyncio.sleep(1.2)
-
-                try:
-                    # Fetch match details
-                    if rate_limiter:
-                        can_proceed = await rate_limiter.acquire()
-                        if not can_proceed:
-                            logger.warning(
-                                "Rate limit reached during analysis match fetch",
-                                puuid=puuid,
-                                match_id=match_id,
-                            )
-                            break
-
-                    match_dto = await riot_api_client.get_match(match_id)
-                    if rate_limiter:
-                        await rate_limiter.record_request()
-                    if not match_dto:
-                        continue
-
-                    # Ignore historical matches outside the current release year.
-                    game_version = match_dto.info.game_version
-                    if not self.is_current_game_version(game_version):
-                        logger.debug(
-                            "Skipping historical match",
-                            match_id=match_id,
-                            game_version=game_version,
-                        )
-                        skipped_season += 1
-                        continue
-
-                    timeline_payload: Optional[Dict[str, Any]] = None
-                    try:
-                        timeline_requested = False
-                        if rate_limiter:
-                            can_proceed = await rate_limiter.acquire()
-                            if not can_proceed:
-                                logger.warning(
-                                    "Rate limit reached during analysis timeline fetch",
-                                    puuid=puuid,
-                                    match_id=match_id,
-                                )
-                                break
-
-                        timeline_payload = await riot_api_client.get_match_timeline(
-                            match_id
-                        )
-                        timeline_requested = True
-                        if rate_limiter and timeline_requested:
-                            await rate_limiter.record_request()
-                    except Exception as timeline_error:
-                        logger.warning(
-                            "Failed to fetch timeline during analysis, continuing without timeline",
-                            match_id=match_id,
-                            error=str(timeline_error),
-                        )
-
-                    # Reprocess (Upsert)
-                    await self._reprocess_match(
-                        match_dto,
-                        timeline_payload=timeline_payload,
-                    )
-                    processed += 1
-                except Exception as e:
-                    logger.error(
-                        "Failed to process match", match_id=match_id, error=str(e)
-                    )
-                    # Continue with next match
-
-            # Final progress update
-            if progress_callback:
-                await progress_callback(total, total)
-
+            processed, skipped_season = await run_analysis_processing_loop(
+                ordered_to_process,
+                puuid,
+                should_cancel,
+                progress_callback,
+                riot_api_client,
+                rate_limiter,
+                self.is_current_game_version,
+                self._reprocess_match,
+            )
             logger.info(
                 "Match analysis completed",
                 puuid=puuid,
                 processed=processed,
                 skipped_season=skipped_season,
             )
-
             return processed
         except Exception as e:
             logger.error("Match history analysis failed", puuid=puuid, error=str(e))
@@ -1975,101 +1186,34 @@ class MatchService:
         timeline_payload: Optional[Dict[str, Any]] = None,
     ) -> None:
         """Update existing match or insert new match using merge (upsert)."""
-        from .transformers import MatchDTOTransformer
-
         await _ensure_riot_writer_maintenance_is_inactive(self.db)
 
-        # Extract platform
         platform_id = match_dto.info.platform or "EUN1"
         match_id = match_dto.metadata.match_id
-
-        # Calculate flags
-        early_surrender = any(
-            p.game_ended_in_early_surrender for p in match_dto.info.participants
-        )
-        surrender = any(p.game_ended_in_surrender for p in match_dto.info.participants)
+        early_surrender, surrender = match_end_flags(match_dto.info.participants)
 
         try:
-            # 1. Update Match record
-            match = Match(
-                match_id=match_id,
-                platform=platform_id.upper(),
-                game_creation_timestamp=match_dto.info.game_creation_timestamp,
-                game_start_timestamp=match_dto.info.game_start_timestamp,
-                game_start_timestamp_source="riot_game_start",
-                game_end_timestamp=match_dto.info.game_end_timestamp,
-                game_duration=match_dto.info.game_duration,
-                game_mode=match_dto.info.game_mode,
-                game_type=match_dto.info.game_type,
-                game_version=match_dto.info.game_version,
-                map_id=match_dto.info.map_id,
-                queue_id=match_dto.info.queue_id,
-                early_surrender=early_surrender,
-                surrender=surrender,
-                game_result=match_dto.info.game_result,
-                fully_analyzed=True,  # Match fetched is considered analyzed for history
+            await self.db.merge(
+                build_match_record(
+                    match_dto,
+                    platform_id,
+                    early_surrender,
+                    surrender,
+                    fully_analyzed=True,
+                )
             )
-            # Use merge to upsert
-            await self.db.merge(match)
-
-            # 2. Update Participants
-            for participant in match_dto.info.participants:
-                # Ensure Player Exists (Foreign Key Requirement)
-                # Riot API matches include all participants, but not all are in our DB.
-                # We upsert a skeletal Player record if missing to satisfy the FK.
-
-                # Check before selecting fallbacks so missing Riot ID fields never
-                # overwrite a known account identity with a legacy summoner name.
-                existing_player_result = await self.db.execute(
-                    select(Player).where(Player.puuid == participant.puuid)
-                )
-                existing_player = existing_player_result.scalar_one_or_none()
-
-                p_game_name = participant.game_name or (
-                    existing_player.game_name if existing_player else None
-                )
-                p_tag_line = participant.tag_line or (
-                    existing_player.tag_line if existing_player else None
-                )
-                p_game_name = p_game_name or participant.summoner_name or "Unknown"
-                p_tag_line = p_tag_line or (
-                    platform_id.replace("1", "") if platform_id else "RIOT"
-                )
-
-                player_record = Player(
-                    puuid=participant.puuid,
-                    game_name=p_game_name,
-                    tag_line=p_tag_line,
-                    platform=platform_id.lower(),
-                    profile_icon_id=participant.profile_icon
-                    or (existing_player.profile_icon_id if existing_player else None)
-                    or 29,
-                    summoner_level=participant.summoner_level
-                    or (existing_player.summoner_level if existing_player else None)
-                    or 0,
-                    # Preserve is_tracked if player exists, otherwise default to False
-                    is_tracked=existing_player.is_tracked if existing_player else False,
-                )
-                await self.db.merge(player_record)
-
-                # Now process the match participant
-                participant_data = MatchDTOTransformer.extract_participant_data(
-                    participant
-                )
-                match_participant = MatchParticipant(
-                    match_id=match_id,
-                    **participant_data,
-                )
-                await self.db.merge(match_participant)
-
+            await merge_reprocess_participants(
+                self.db,
+                match_dto,
+                match_id,
+                platform_id,
+            )
             await replace_match_timeline_rows(
                 self.db,
                 match_dto,
                 timeline_payload,
             )
-
             await self.db.commit()
-
         except Exception:
             await self.db.rollback()
             raise
@@ -2175,266 +1319,15 @@ class MatchService:
         on_failure: Optional[Callable[[str, Exception, dict[str, Any]], None]],
     ) -> int:
         """Sync one queue for a single player."""
-        start = 0
-        count = 100
-        queue_stored = 0
-        keep_fetching = True
-
-        logger.info(
-            "Starting queue sync",
+        return await sync_single_queue_for_player(
+            session=self.db,
+            riot_client=riot_client,
             puuid=puuid,
+            region=region,
             queue_id=queue_id,
+            rate_limiter=rate_limiter,
+            on_failure=on_failure,
+            ensure_maintenance=_ensure_riot_writer_maintenance_is_inactive,
+            is_current_game_version=self.is_current_game_version,
+            reprocess_match=self._reprocess_match,
         )
-
-        while keep_fetching:
-            try:
-                if rate_limiter:
-                    can_proceed = await rate_limiter.acquire()
-                    if not can_proceed:
-                        raise RateLimitError(
-                            "Local rate limiter capacity unavailable",
-                            status_code=429,
-                        )
-
-                match_list_dto = await riot_client.get_match_list_by_puuid(
-                    puuid=puuid,
-                    region=region,
-                    start=start,
-                    count=count,
-                    queue=queue_id,
-                )
-
-                if rate_limiter:
-                    await rate_limiter.record_request()
-
-            except AuthenticationError, ForbiddenError, RateLimitError:
-                raise
-            except Exception as e:
-                logger.error(
-                    "Failed to fetch match IDs",
-                    puuid=puuid,
-                    queue_id=queue_id,
-                    error=str(e),
-                )
-                raise
-
-            if not match_list_dto or not match_list_dto.match_ids:
-                break
-
-            ids_list = match_list_dto.match_ids
-            stmt = select(Match.match_id).where(
-                Match.match_id.in_(ids_list), Match.fully_analyzed.is_(True)
-            )
-            result = await self.db.execute(stmt)
-            analyzed_ids = set(result.scalars().all())
-
-            timeline_counts_stmt = (
-                select(MatchTimeline.match_id, func.count(MatchTimeline.puuid))
-                .where(MatchTimeline.match_id.in_(ids_list))
-                .group_by(MatchTimeline.match_id)
-            )
-            timeline_counts_result = await self.db.execute(timeline_counts_stmt)
-            timeline_complete_ids = {
-                match_id
-                for match_id, participant_rows in timeline_counts_result.all()
-                if participant_rows >= 10
-            }
-
-            ids_to_process = [
-                mid
-                for mid in ids_list
-                if mid not in analyzed_ids or mid not in timeline_complete_ids
-            ]
-            timeline_only_ids = {
-                mid
-                for mid in ids_list
-                if mid in analyzed_ids and mid not in timeline_complete_ids
-            }
-
-            for match_id in ids_to_process:
-                try:
-                    if match_id in timeline_only_ids:
-                        timeline_payload: Optional[Dict[str, Any]] = None
-                        timeline_request_attempted = False
-
-                        try:
-                            if rate_limiter:
-                                can_proceed = await rate_limiter.acquire()
-                                if not can_proceed:
-                                    raise RateLimitError(
-                                        "Local rate limiter capacity unavailable",
-                                        status_code=429,
-                                    )
-
-                            timeline_request_attempted = True
-                            timeline_payload = await riot_client.get_match_timeline(
-                                match_id,
-                                region=region,
-                            )
-                        except AuthenticationError, ForbiddenError, RateLimitError:
-                            raise
-                        except Exception as timeline_error:
-                            if _must_abort_writer_sync(timeline_error):
-                                raise
-                            logger.warning(
-                                "Timeline-only fetch failed",
-                                puuid=puuid,
-                                queue_id=queue_id,
-                                match_id=match_id,
-                                error=str(timeline_error),
-                            )
-                            if on_failure:
-                                on_failure(
-                                    "timeline-only backfill",
-                                    timeline_error,
-                                    {"queue_id": queue_id, "match_id": match_id},
-                                )
-                            continue
-                        finally:
-                            if rate_limiter and timeline_request_attempted:
-                                await rate_limiter.record_request()
-
-                        if not timeline_payload:
-                            continue
-
-                        participants_stmt = select(MatchParticipant).where(
-                            MatchParticipant.match_id == match_id
-                        )
-                        participants_result = await self.db.execute(participants_stmt)
-                        participants = list(participants_result.scalars().all())
-
-                        if len(participants) < 10:
-                            logger.warning(
-                                "Skipping timeline-only backfill due to missing participants",
-                                puuid=puuid,
-                                queue_id=queue_id,
-                                match_id=match_id,
-                                participants_found=len(participants),
-                            )
-                            continue
-
-                        from types import SimpleNamespace
-
-                        synthetic_match_dto = SimpleNamespace(
-                            metadata=SimpleNamespace(match_id=match_id),
-                            info=SimpleNamespace(
-                                participants=[
-                                    SimpleNamespace(
-                                        participant_id=participant.participant_id,
-                                        team_id=participant.team_id,
-                                        puuid=participant.puuid,
-                                    )
-                                    for participant in participants
-                                ]
-                            ),
-                        )
-
-                        await _ensure_riot_writer_maintenance_is_inactive(self.db)
-                        timeline_rows = await replace_match_timeline_rows(
-                            self.db,
-                            synthetic_match_dto,
-                            timeline_payload,
-                        )
-                        if timeline_rows > 0:
-                            await self.db.commit()
-                            queue_stored += 1
-                        continue
-
-                    if rate_limiter:
-                        can_proceed = await rate_limiter.acquire()
-                        if not can_proceed:
-                            raise RateLimitError(
-                                "Local rate limiter capacity unavailable",
-                                status_code=429,
-                            )
-
-                    match_dto = await riot_client.get_match(match_id, region=region)
-
-                    if rate_limiter:
-                        await rate_limiter.record_request()
-
-                    if not match_dto:
-                        continue
-
-                    # Match IDs are sorted newest->oldest per queue, so we can stop at first older season.
-                    if not self.is_current_game_version(match_dto.info.game_version):
-                        keep_fetching = False
-                        break
-
-                    timeline_payload: Optional[Dict[str, Any]] = None
-                    timeline_request_attempted = False
-
-                    try:
-                        if rate_limiter:
-                            can_proceed = await rate_limiter.acquire()
-                            if not can_proceed:
-                                raise RateLimitError(
-                                    "Local rate limiter capacity unavailable",
-                                    status_code=429,
-                                )
-
-                        timeline_request_attempted = True
-                        timeline_payload = await riot_client.get_match_timeline(
-                            match_id,
-                            region=region,
-                        )
-                    except AuthenticationError, ForbiddenError, RateLimitError:
-                        raise
-                    except Exception as timeline_error:
-                        if _must_abort_writer_sync(timeline_error):
-                            raise
-                        logger.warning(
-                            "Timeline fetch failed, storing match without timeline",
-                            puuid=puuid,
-                            queue_id=queue_id,
-                            match_id=match_id,
-                            error=str(timeline_error),
-                        )
-                        if on_failure:
-                            on_failure(
-                                "match timeline fetch",
-                                timeline_error,
-                                {"queue_id": queue_id, "match_id": match_id},
-                            )
-                    finally:
-                        if rate_limiter and timeline_request_attempted:
-                            await rate_limiter.record_request()
-
-                    await self._reprocess_match(
-                        match_dto,
-                        timeline_payload=timeline_payload,
-                    )
-                    queue_stored += 1
-
-                except AuthenticationError, ForbiddenError, RateLimitError:
-                    raise
-                except Exception as e:
-                    if _must_abort_writer_sync(e):
-                        raise
-                    logger.warning(
-                        "Error syncing match",
-                        puuid=puuid,
-                        queue_id=queue_id,
-                        match_id=match_id,
-                        error=str(e),
-                    )
-                    if on_failure:
-                        on_failure(
-                            "match synchronization",
-                            e,
-                            {"queue_id": queue_id, "match_id": match_id},
-                        )
-                    continue
-
-            if not keep_fetching or len(ids_list) < count:
-                break
-
-            start += count
-
-        logger.info(
-            "Completed queue sync",
-            puuid=puuid,
-            queue_id=queue_id,
-            stored=queue_stored,
-        )
-        return queue_stored

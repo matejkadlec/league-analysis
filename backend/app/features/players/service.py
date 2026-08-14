@@ -1098,28 +1098,6 @@ class PlayerService:
 
         return players
 
-    async def get_players_for_ban_check(
-        self, days: int, limit: int = 10
-    ) -> List[Player]:
-        """
-        Get detected smurfs that need ban status checking.
-
-        Note: Method deprecated/disabled due to schema changes (removal of last_ban_check).
-        """
-        # Feature disabled temporarily until schema is updated to support ban checks again
-        return []
-
-    async def check_ban_status(
-        self, player: Player, riot_api_client: "RiotAPIClient"
-    ) -> bool:
-        """
-        Check if a player is banned by attempting to fetch their summoner data.
-
-        Note: Feature temporarily disabled.
-        """
-        # Feature disabled
-        return False
-
     # ============================================
     # Helper Methods for Jobs
     # ============================================
@@ -1276,6 +1254,49 @@ class PlayerService:
         logger.debug("Player profile unchanged", puuid=player.puuid)
         return False
 
+    @staticmethod
+    def _solo_duo_league_entry(league_entries: Sequence[Any]) -> Any | None:
+        """Return the Solo/Duo league entry from a LEAGUE-V4 payload."""
+        return next(
+            (
+                entry
+                for entry in league_entries
+                if entry.queue_type == "RANKED_SOLO_5x5"
+            ),
+            None,
+        )
+
+    @staticmethod
+    def _league_snapshot_matches(current_league: Any, solo_entry: Any) -> bool:
+        """Return True when the stored snapshot matches the live Solo/Duo entry."""
+        return (
+            current_league.tier == solo_entry.tier
+            and current_league.rank == solo_entry.rank
+            and current_league.league_points == solo_entry.league_points
+            and current_league.wins == solo_entry.wins
+            and current_league.losses == solo_entry.losses
+        )
+
+    @staticmethod
+    def _player_league_from_entry(puuid: str, solo_entry: Any) -> "PlayerLeague":
+        """Build an immutable league snapshot from a live Solo/Duo entry."""
+        from .leagues import PlayerLeague
+
+        return PlayerLeague(
+            puuid=puuid,
+            league_id=solo_entry.league_id,
+            queue_type=solo_entry.queue_type,
+            tier=solo_entry.tier,
+            rank=solo_entry.rank,
+            league_points=solo_entry.league_points,
+            wins=solo_entry.wins,
+            losses=solo_entry.losses,
+            veteran=solo_entry.veteran,
+            inactive=solo_entry.inactive,
+            fresh_blood=solo_entry.fresh_blood,
+            hot_streak=solo_entry.hot_streak,
+        )
+
     @service_error_handler("PlayerService")
     async def update_player_league(
         self, player: Player, riot_api_client: "RiotAPIClient"
@@ -1297,70 +1318,32 @@ class PlayerService:
         """
         from app.core.riot_api.constants import Platform
 
-        from .leagues import PlayerLeague
-
         await _ensure_riot_writer_maintenance_is_inactive(self.db)
         logger.debug("Updating player league", puuid=player.puuid)
 
-        # Convert platform string to Platform enum
         platform_enum = Platform(player.platform.lower())
-
-        # Fetch league data from Riot API using PUUID-based endpoint
         league_entries = await riot_api_client.get_league_entries_by_puuid(
             player.puuid, platform_enum
         )
-
         if not league_entries:
             logger.debug("No ranked data found for player", puuid=player.puuid)
             return False
 
-        # Find Solo/Duo ranked entry
-        solo_entry = next(
-            (e for e in league_entries if e.queue_type == "RANKED_SOLO_5x5"), None
-        )
-
+        solo_entry = self._solo_duo_league_entry(league_entries)
         if not solo_entry:
             logger.debug("No Solo/Duo league found for player", puuid=player.puuid)
             return False
 
-        # Get the most recent league to compare
         current_league = await self.get_player_league(player.puuid)
-
-        # Check if league has changed (tier, rank, LP, wins, losses)
-        if current_league:
-            is_same = (
-                current_league.tier == solo_entry.tier
-                and current_league.rank == solo_entry.rank
-                and current_league.league_points == solo_entry.league_points
-                and current_league.wins == solo_entry.wins
-                and current_league.losses == solo_entry.losses
+        if current_league and self._league_snapshot_matches(current_league, solo_entry):
+            logger.debug(
+                "Player league unchanged, skipping insert",
+                puuid=player.puuid,
+                tier=solo_entry.tier,
             )
-            if is_same:
-                logger.debug(
-                    "Player league unchanged, skipping insert",
-                    puuid=player.puuid,
-                    tier=solo_entry.tier,
-                )
-                return False
+            return False
 
-        # Create league record with all fields from Riot API
-        league_record = PlayerLeague(
-            puuid=player.puuid,
-            league_id=solo_entry.league_id,
-            queue_type=solo_entry.queue_type,
-            tier=solo_entry.tier,
-            rank=solo_entry.rank,
-            league_points=solo_entry.league_points,
-            wins=solo_entry.wins,
-            losses=solo_entry.losses,
-            veteran=solo_entry.veteran,
-            inactive=solo_entry.inactive,
-            fresh_blood=solo_entry.fresh_blood,
-            hot_streak=solo_entry.hot_streak,
-        )
-
-        self.db.add(league_record)
-
+        self.db.add(self._player_league_from_entry(player.puuid, solo_entry))
         logger.info(
             "Updated player league",
             puuid=player.puuid,
@@ -1370,7 +1353,6 @@ class PlayerService:
             hot_streak=solo_entry.hot_streak,
             fresh_blood=solo_entry.fresh_blood,
         )
-
         return True
 
     async def get_player_league(

@@ -9,6 +9,7 @@ repos:
       - id: trailing-whitespace
       - id: end-of-file-fixer
       - id: check-yaml
+      - id: check-toml
       - id: check-json
       - id: check-added-large-files
       - id: check-merge-conflict
@@ -33,6 +34,62 @@ repos:
       # Run the formatter
       - id: ruff-format
         args: ["--config=backend/pyproject.toml"]
+
+  # Backend static analysis via the locked uv project. These stay
+  # corpus-wide (`pass_filenames: false` + `always_run`) so a staged
+  # subset or a deletion-only commit cannot hide a project-level
+  # finding. `--locked` refuses to rewrite uv.lock mid-commit.
+  # Pytest and live CVE scans stay out: the former needs the test
+  # database, the latter is not deterministic.
+  - repo: local
+    hooks:
+      - id: backend-bandit
+        name: Bandit (medium/medium, skip B104)
+        entry: >
+          bash -c 'repository_root="$(git rev-parse --show-toplevel)" &&
+          cd "$repository_root/backend" &&
+          uv run --locked bandit --quiet --recursive app scripts
+          --severity-level medium --confidence-level medium --skip B104'
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      - id: backend-pyright
+        name: Pyright
+        entry: >
+          bash -c 'repository_root="$(git rev-parse --show-toplevel)" &&
+          cd "$repository_root/backend" &&
+          uv run --locked pyright'
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      - id: backend-vulture
+        name: vulture (dead code, min-confidence 80)
+        entry: >
+          bash -c 'repository_root="$(git rev-parse --show-toplevel)" &&
+          cd "$repository_root/backend" &&
+          uv run --locked vulture'
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      - id: backend-deptry
+        name: deptry (unused/missing deps)
+        entry: >
+          bash -c 'repository_root="$(git rev-parse --show-toplevel)" &&
+          cd "$repository_root/backend" &&
+          uv run --locked deptry .'
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      - id: backend-xenon
+        name: xenon (cyclomatic complexity <= B)
+        entry: bash -c 'exec "$(git rev-parse --show-toplevel)/scripts/run-xenon.sh"'
+        language: system
+        pass_filenames: false
+        always_run: true
 
   # Frontend linting with Next.js (local hook for better compatibility)
   - repo: local

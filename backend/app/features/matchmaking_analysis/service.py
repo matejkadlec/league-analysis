@@ -31,7 +31,7 @@ Rate Limiting:
 import asyncio
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Optional, Tuple, cast
+from typing import Any, Dict, List, Optional, Sequence, Tuple, cast
 
 import structlog
 from sqlalchemy import and_, func, select, update
@@ -39,6 +39,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import db_manager
+from app.core.db_session import rollback_quietly
 from app.core.riot_api.client import RiotAPIClient
 from app.core.riot_api.credential_health import create_tracked_riot_api_client
 from app.core.riot_api.db_rate_limiter import DBRateLimiter, RateLimitComponent
@@ -48,6 +49,7 @@ from app.core.riot_api.errors import (
     RateLimitError,
     RiotAPIError,
 )
+from app.core.riot_api.models import MatchDTO
 from app.features.matches.models import Match
 from app.features.matches.participants import MatchParticipant
 
@@ -488,14 +490,43 @@ class MatchmakingAnalysisService:
         5. Average the 10 per-match results
         """
         logger.info("Starting matchmaking analysis", puuid=puuid, created_at=created_at)
+        self._reset_run_state(puuid, created_at)
+        await self._mark_analysis_in_progress(puuid, created_at)
 
+        try:
+            spine_match_ids = await self._load_spine_match_ids(puuid, created_at)
+            if spine_match_ids is None:
+                return
+            if not await self._ensure_spine_matches_ready(
+                puuid, created_at, spine_match_ids
+            ):
+                return
+            await self._initialize_progress_keys(puuid, created_at, spine_match_ids)
+            team_avgs, enemy_avgs = await self._collect_match_averages(
+                puuid, created_at, spine_match_ids
+            )
+            await self._finalize_completed_analysis(
+                puuid, created_at, team_avgs, enemy_avgs
+            )
+        except Exception as e:
+            logger.error(
+                "Analysis failed",
+                puuid=puuid,
+                error_type=type(e).__name__,
+                exc_info=True,
+            )
+            raise
+
+    def _reset_run_state(self, puuid: str, created_at: datetime) -> None:
         self.requests_saved = 0
         self.api_calls_made = 0
         self._current_analysis_puuid = puuid
         self._current_analysis_created_at = created_at
         self._winrate_cache = {}
 
-        # Mark as started
+    async def _mark_analysis_in_progress(
+        self, puuid: str, created_at: datetime
+    ) -> None:
         await _ensure_riot_writer_maintenance_is_inactive(self.db)
         await self.db.execute(
             update(MatchmakingAnalysis)
@@ -518,194 +549,209 @@ class MatchmakingAnalysisService:
         )
         await self.db.commit()
 
-        try:
-            # --- Step 1: Get current player's last 10 ranked match IDs ---
-            # No endTime — we want the actual latest matches for the current player.
-            # This is always 1 API call that cannot be skipped.
-            spine_match_ids = await self._api_fetch_match_ids(
+    async def _load_spine_match_ids(
+        self, puuid: str, created_at: datetime
+    ) -> Optional[List[str]]:
+        # No endTime — actual latest matches. This call cannot be skipped.
+        spine_match_ids = await self._api_fetch_match_ids(
+            puuid,
+            count=self.MATCHES_TO_ANALYZE,
+            required=True,
+        )
+        found = len(spine_match_ids) if spine_match_ids else 0
+        if found < self.MIN_MATCHES_REQUIRED:
+            await self._complete_with_error(
                 puuid,
-                count=self.MATCHES_TO_ANALYZE,
-                required=True,
+                created_at,
+                "Player doesn't have enough ranked matches for this analysis. "
+                f"Found {found}, "
+                f"need {self.MIN_MATCHES_REQUIRED}.",
+                error_code="not_enough_matches",
             )
-            if not spine_match_ids or len(spine_match_ids) < self.MIN_MATCHES_REQUIRED:
-                await self._complete_with_error(
-                    puuid,
-                    created_at,
-                    "Player doesn't have enough ranked matches for this analysis. "
-                    f"Found {len(spine_match_ids) if spine_match_ids else 0}, "
-                    f"need {self.MIN_MATCHES_REQUIRED}.",
-                    error_code="not_enough_matches",
+            return None
+        return spine_match_ids
+
+    async def _ensure_spine_matches_ready(
+        self, puuid: str, created_at: datetime, spine_match_ids: List[str]
+    ) -> bool:
+        spine_in_db_count = 0
+        for mid in spine_match_ids:
+            was_in_db = await self._ensure_match_in_db(mid)
+            if was_in_db:
+                spine_in_db_count += 1
+
+        first_participants = await self._get_match_participants(spine_match_ids[0])
+        if not any(p == puuid for p, _ in first_participants):
+            await self._complete_with_error(
+                puuid,
+                created_at,
+                "The selected player could not be verified in the latest matches.",
+                error_code="player_not_in_match",
+            )
+            return False
+
+        logger.info(
+            "Spine matches ready",
+            puuid=puuid,
+            count=len(spine_match_ids),
+            in_db=spine_in_db_count,
+        )
+        return True
+
+    async def _initialize_progress_keys(
+        self, puuid: str, created_at: datetime, spine_match_ids: List[str]
+    ) -> None:
+        all_keys = []
+        for mid in spine_match_ids:
+            participants = await self._get_match_participants(mid)
+            for p_puuid, _ in participants:
+                all_keys.append(f"{p_puuid}:{mid}")
+
+        existing_analysis = await self._get_analysis(puuid, created_at)
+        existing_progress = existing_analysis.puuid_progress or {}
+        initial_progress = {
+            key: bool(existing_progress.get(key, False)) for key in all_keys
+        }
+        await self._update_progress(puuid, created_at, initial_progress)
+        logger.info("Progress initialized", puuid=puuid, total_keys=len(all_keys))
+
+    async def _collect_match_averages(
+        self, puuid: str, created_at: datetime, spine_match_ids: List[str]
+    ) -> Tuple[List[float], List[float]]:
+        team_avgs: List[float] = []
+        enemy_avgs: List[float] = []
+
+        for idx, match_id in enumerate(spine_match_ids):
+            match_anchor = await self._get_game_start_timestamp(match_id)
+            if match_anchor is None:
+                logger.warning(
+                    f"Could not get timestamp for match {match_id}, skipping"
                 )
-                return
+                continue
 
-            # --- Step 2: Ensure all spine matches are in DB ---
-            spine_in_db_count = 0
-            for mid in spine_match_ids:
-                was_in_db = await self._ensure_match_in_db(mid)
-                if was_in_db:
-                    spine_in_db_count += 1
-
-            # Verify current player is in the first match
-            first_participants = await self._get_match_participants(spine_match_ids[0])
-            if not any(p == puuid for p, _ in first_participants):
-                await self._complete_with_error(
-                    puuid,
-                    created_at,
-                    "The selected player could not be verified in the latest matches.",
-                    error_code="player_not_in_match",
-                )
-                return
-
+            match_anchor_seconds = match_anchor // 1000 + 1
             logger.info(
-                "Spine matches ready",
-                puuid=puuid,
-                count=len(spine_match_ids),
-                in_db=spine_in_db_count,
+                f"Processing match {idx + 1}/{len(spine_match_ids)}",
+                match_id=match_id,
+                anchor=match_anchor,
             )
-
-            # --- Step 3: Pre-populate progress keys ---
-            all_keys = []
-            for mid in spine_match_ids:
-                participants = await self._get_match_participants(mid)
-                for p_puuid, _ in participants:
-                    all_keys.append(f"{p_puuid}:{mid}")
-
-            existing_analysis = await self._get_analysis(puuid, created_at)
-            existing_progress = existing_analysis.puuid_progress or {}
-            initial_progress = {
-                key: bool(existing_progress.get(key, False)) for key in all_keys
-            }
-            await self._update_progress(puuid, created_at, initial_progress)
-            logger.info("Progress initialized", puuid=puuid, total_keys=len(all_keys))
-
-            # --- Step 4: Process each spine match with per-match anchor ---
-            team_avgs: List[float] = []
-            enemy_avgs: List[float] = []
-
-            for idx, match_id in enumerate(spine_match_ids):
-                # Get THIS match's timestamp as the anchor for this match
-                match_anchor = await self._get_game_start_timestamp(match_id)
-                if match_anchor is None:
-                    logger.warning(
-                        f"Could not get timestamp for match {match_id}, skipping"
-                    )
-                    continue
-
-                match_anchor_seconds = match_anchor // 1000 + 1
-
-                logger.info(
-                    f"Processing match {idx + 1}/{len(spine_match_ids)}",
-                    match_id=match_id,
-                    anchor=match_anchor,
-                )
-                result = await self._process_match(
-                    puuid, created_at, match_id, match_anchor_seconds
-                )
-                if result:
-                    if result["team"]:
-                        team_avgs.append(sum(result["team"]) / len(result["team"]))
-                    if result["enemy"]:
-                        enemy_avgs.append(sum(result["enemy"]) / len(result["enemy"]))
-
-            # --- Step 5: Final averages ---
-            team_avg = sum(team_avgs) / len(team_avgs) if team_avgs else 0.0
-            enemy_avg = sum(enemy_avgs) / len(enemy_avgs) if enemy_avgs else 0.0
-
-            expected_other_players = self.MATCHES_TO_ANALYZE * 9
-            expected_players = expected_other_players + 1
-            expected_match_details_per_other = max(1, self.MATCHES_FOR_WINRATE - 1)
-
-            # Basis size shown in UI:
-            # 10 (current player's matches) + 90 players * 10 matches each = 910
-            expected_matches_analyzed = self.MATCHES_TO_ANALYZE + (
-                expected_other_players * self.MATCHES_FOR_WINRATE
+            result = await self._process_match(
+                puuid, created_at, match_id, match_anchor_seconds
             )
+            if result:
+                self._append_match_side_averages(team_avgs, enemy_avgs, result)
 
-            results = {
-                "team_avg_winrate": round(team_avg, 4),
-                "enemy_avg_winrate": round(enemy_avg, 4),
-                "matches_analyzed": expected_matches_analyzed,
-                "players_analyzed": expected_players,
-            }
+        return team_avgs, enemy_avgs
 
-            # Calculate requests saved:
-            # Theoretical maximum without DB:
-            #   - 1 call for current player's spine IDs
-            #   - expected_other_players calls for other players' match IDs
-            #   - MATCHES_TO_ANALYZE match details for spine matches
-            #   - expected_other_players * (MATCHES_FOR_WINRATE - 1) additional
-            #     match details (1 of each player's 10 matches is the already-known
-            #     spine match)
-            match_list_calls = 1 + expected_other_players
-            match_detail_calls = self.MATCHES_TO_ANALYZE + (
-                expected_other_players * expected_match_details_per_other
-            )
-            theoretical_max = match_list_calls + match_detail_calls
-            self.requests_saved = max(theoretical_max - self.api_calls_made, 0)
+    @staticmethod
+    def _append_match_side_averages(
+        team_avgs: List[float],
+        enemy_avgs: List[float],
+        result: Dict[str, List[float]],
+    ) -> None:
+        if result["team"]:
+            team_avgs.append(sum(result["team"]) / len(result["team"]))
+        if result["enemy"]:
+            enemy_avgs.append(sum(result["enemy"]) / len(result["enemy"]))
 
-            now = datetime.now(timezone.utc)
-            await _ensure_riot_writer_maintenance_is_inactive(self.db)
-            await self.db.execute(
-                update(MatchmakingAnalysis)
-                .where(
-                    and_(
-                        MatchmakingAnalysis.puuid == puuid,
-                        MatchmakingAnalysis.created_at == created_at,
-                        MatchmakingAnalysis.status.in_(ACTIVE_ANALYSIS_STATUSES),
-                    )
-                )
-                .values(
-                    status="completed",
-                    results=results,
-                    completed_at=now,
-                    error_code=None,
-                    error_message=None,
-                    requests_saved=self.requests_saved,
-                    rate_limit_reset_at=None,
+    def _build_completion_results(
+        self, team_avgs: List[float], enemy_avgs: List[float]
+    ) -> Dict[str, float | int]:
+        team_avg = sum(team_avgs) / len(team_avgs) if team_avgs else 0.0
+        enemy_avg = sum(enemy_avgs) / len(enemy_avgs) if enemy_avgs else 0.0
+
+        expected_other_players = self.MATCHES_TO_ANALYZE * 9
+        expected_players = expected_other_players + 1
+        expected_match_details_per_other = max(1, self.MATCHES_FOR_WINRATE - 1)
+        # Basis size shown in UI:
+        # 10 (current player's matches) + 90 players * 10 matches each = 910
+        expected_matches_analyzed = self.MATCHES_TO_ANALYZE + (
+            expected_other_players * self.MATCHES_FOR_WINRATE
+        )
+
+        # Theoretical maximum without DB:
+        #   - 1 call for current player's spine IDs
+        #   - expected_other_players calls for other players' match IDs
+        #   - MATCHES_TO_ANALYZE match details for spine matches
+        #   - expected_other_players * (MATCHES_FOR_WINRATE - 1) additional
+        #     match details (1 of each player's 10 matches is the already-known
+        #     spine match)
+        match_list_calls = 1 + expected_other_players
+        match_detail_calls = self.MATCHES_TO_ANALYZE + (
+            expected_other_players * expected_match_details_per_other
+        )
+        theoretical_max = match_list_calls + match_detail_calls
+        self.requests_saved = max(theoretical_max - self.api_calls_made, 0)
+
+        return {
+            "team_avg_winrate": round(team_avg, 4),
+            "enemy_avg_winrate": round(enemy_avg, 4),
+            "matches_analyzed": expected_matches_analyzed,
+            "players_analyzed": expected_players,
+        }
+
+    async def _finalize_completed_analysis(
+        self,
+        puuid: str,
+        created_at: datetime,
+        team_avgs: List[float],
+        enemy_avgs: List[float],
+    ) -> None:
+        results = self._build_completion_results(team_avgs, enemy_avgs)
+        now = datetime.now(timezone.utc)
+        await _ensure_riot_writer_maintenance_is_inactive(self.db)
+        await self.db.execute(
+            update(MatchmakingAnalysis)
+            .where(
+                and_(
+                    MatchmakingAnalysis.puuid == puuid,
+                    MatchmakingAnalysis.created_at == created_at,
+                    MatchmakingAnalysis.status.in_(ACTIVE_ANALYSIS_STATUSES),
                 )
             )
-
-            completion_status = await self.db.execute(
-                select(MatchmakingAnalysis.status).where(
-                    and_(
-                        MatchmakingAnalysis.puuid == puuid,
-                        MatchmakingAnalysis.created_at == created_at,
-                    )
-                )
-            )
-            if completion_status.scalar_one_or_none() != "completed":
-                await self.db.rollback()
-                logger.info(
-                    "Analysis completion ignored after terminal state",
-                    puuid=puuid,
-                    created_at=created_at,
-                )
-                return
-
-            from app.features.players.models import Player
-
-            await self.db.execute(
-                update(Player)
-                .where(Player.puuid == puuid)
-                .values(last_matchmaking_analysis=now)
-            )
-            await self.db.commit()
-
-            logger.info(
-                "Analysis completed",
-                puuid=puuid,
+            .values(
+                status="completed",
                 results=results,
+                completed_at=now,
+                error_code=None,
+                error_message=None,
                 requests_saved=self.requests_saved,
+                rate_limit_reset_at=None,
             )
+        )
 
-        except Exception as e:
-            logger.error(
-                "Analysis failed",
-                puuid=puuid,
-                error_type=type(e).__name__,
-                exc_info=True,
+        completion_status = await self.db.execute(
+            select(MatchmakingAnalysis.status).where(
+                and_(
+                    MatchmakingAnalysis.puuid == puuid,
+                    MatchmakingAnalysis.created_at == created_at,
+                )
             )
-            raise
+        )
+        if completion_status.scalar_one_or_none() != "completed":
+            await self.db.rollback()
+            logger.info(
+                "Analysis completion ignored after terminal state",
+                puuid=puuid,
+                created_at=created_at,
+            )
+            return
+
+        from app.features.players.models import Player
+
+        await self.db.execute(
+            update(Player)
+            .where(Player.puuid == puuid)
+            .values(last_matchmaking_analysis=now)
+        )
+        await self.db.commit()
+
+        logger.info(
+            "Analysis completed",
+            puuid=puuid,
+            results=results,
+            requests_saved=self.requests_saved,
+        )
 
     # ================================================================
     # Match Processing
@@ -717,18 +763,13 @@ class MatchmakingAnalysisService:
         analysis_created_at: datetime,
         match_id: str,
         end_time_seconds: int,
-    ) -> Optional[Dict]:
+    ) -> Optional[Dict[str, List[float]]]:
         """Process a single spine match: compute winrates for all participants."""
         participants = await self._get_match_participants(match_id)
         if not participants:
             return None
 
-        # Find the current player's team
-        target_team = None
-        for p_puuid, team_id in participants:
-            if p_puuid == analysis_puuid:
-                target_team = team_id
-                break
+        target_team = self._team_id_for_player(participants, analysis_puuid)
         if target_team is None:
             logger.warning("Current player not in match", match_id=match_id)
             return None
@@ -737,29 +778,63 @@ class MatchmakingAnalysisService:
         enemy_wrs: List[float] = []
 
         for p_puuid, team_id in participants:
-            if p_puuid in self._winrate_cache:
-                wr = self._winrate_cache[p_puuid]
-            else:
-                wr = await self._calculate_player_winrate(p_puuid, end_time_seconds)
-                self._winrate_cache[p_puuid] = wr
-
-                # Update progress
-                analysis = await self._get_analysis(analysis_puuid, analysis_created_at)
-                progress = analysis.puuid_progress or {}
-                for key in list(progress.keys()):
-                    if key.startswith(f"{p_puuid}:"):
-                        progress[key] = True
-                await self._update_progress(
-                    analysis_puuid, analysis_created_at, progress
-                )
-
-            if wr is not None:
-                if team_id == target_team:
-                    team_wrs.append(wr)
-                else:
-                    enemy_wrs.append(wr)
+            wr = await self._cached_player_winrate(
+                p_puuid, end_time_seconds, analysis_puuid, analysis_created_at
+            )
+            self._append_side_winrate(team_wrs, enemy_wrs, wr, team_id, target_team)
 
         return {"team": team_wrs, "enemy": enemy_wrs}
+
+    @staticmethod
+    def _team_id_for_player(
+        participants: List[Tuple[str, int]], analysis_puuid: str
+    ) -> Optional[int]:
+        for p_puuid, team_id in participants:
+            if p_puuid == analysis_puuid:
+                return team_id
+        return None
+
+    async def _cached_player_winrate(
+        self,
+        p_puuid: str,
+        end_time_seconds: int,
+        analysis_puuid: str,
+        analysis_created_at: datetime,
+    ) -> Optional[float]:
+        if p_puuid in self._winrate_cache:
+            return self._winrate_cache[p_puuid]
+        wr = await self._calculate_player_winrate(p_puuid, end_time_seconds)
+        self._winrate_cache[p_puuid] = wr
+        await self._mark_player_progress(analysis_puuid, analysis_created_at, p_puuid)
+        return wr
+
+    async def _mark_player_progress(
+        self,
+        analysis_puuid: str,
+        analysis_created_at: datetime,
+        p_puuid: str,
+    ) -> None:
+        analysis = await self._get_analysis(analysis_puuid, analysis_created_at)
+        progress = analysis.puuid_progress or {}
+        for key in list(progress.keys()):
+            if key.startswith(f"{p_puuid}:"):
+                progress[key] = True
+        await self._update_progress(analysis_puuid, analysis_created_at, progress)
+
+    @staticmethod
+    def _append_side_winrate(
+        team_wrs: List[float],
+        enemy_wrs: List[float],
+        wr: Optional[float],
+        team_id: int,
+        target_team: int,
+    ) -> None:
+        if wr is None:
+            return
+        if team_id == target_team:
+            team_wrs.append(wr)
+        else:
+            enemy_wrs.append(wr)
 
     async def _calculate_player_winrate(
         self,
@@ -777,7 +852,6 @@ class MatchmakingAnalysisService:
         """
         anchor_ms = end_time_seconds * 1000
 
-        # DB-first check
         result = await self.db.execute(
             select(MatchParticipant.win)
             .join(Match, MatchParticipant.match_id == Match.match_id)
@@ -793,19 +867,23 @@ class MatchmakingAnalysisService:
         db_wins = result.all()
 
         if len(db_wins) >= self.MATCHES_FOR_WINRATE:
-            # DB shortcut - no API calls needed for this player
-            win_count = sum(1 for (w,) in db_wins if w)
-            return win_count / len(db_wins)
+            return self._winrate_from_rows(db_wins)
 
-        # Fall back to API
         match_ids = await self._get_match_ids_for_player(puuid, end_time_seconds)
         if not match_ids:
-            # Use whatever DB data we have
-            if db_wins:
-                win_count = sum(1 for (w,) in db_wins if w)
-                return win_count / len(db_wins)
-            return None
+            return self._winrate_from_rows(db_wins)
+        return await self._winrate_from_match_ids(match_ids, puuid)
 
+    @staticmethod
+    def _winrate_from_rows(db_wins: Sequence[Any]) -> Optional[float]:
+        if not db_wins:
+            return None
+        win_count = sum(1 for (w,) in db_wins if w)
+        return win_count / len(db_wins)
+
+    async def _winrate_from_match_ids(
+        self, match_ids: List[str], puuid: str
+    ) -> Optional[float]:
         wins = 0
         total = 0
         for mid in match_ids:
@@ -814,8 +892,9 @@ class MatchmakingAnalysisService:
                 total += 1
                 if win:
                     wins += 1
-
-        return wins / total if total > 0 else None
+        if total <= 0:
+            return None
+        return wins / total
 
     # ================================================================
     # Data Access (DB-first)
@@ -934,20 +1013,12 @@ class MatchmakingAnalysisService:
         max_retries = 10
         for attempt in range(max_retries):
             try:
-                if self.rate_limiter:
-                    if not await self.rate_limiter.acquire_with_wait_callback(
-                        wait_callback=self._rate_limit_wait_callback,
-                    ):
-                        logger.warning(
-                            "Rate limit: cannot fetch match IDs", puuid=puuid
-                        )
-                        if required:
-                            raise MatchmakingAnalysisRuntimeError(
-                                "rate_limit_unavailable",
-                                "The analysis is still unable to obtain Riot request "
-                                "capacity. Please try again later.",
-                            )
-                        return []
+                if not await self._acquire_rate_limit_slot(
+                    required=required,
+                    unavailable_message="Rate limit: cannot fetch match IDs",
+                    puuid=puuid,
+                ):
+                    return []
 
                 match_list = await self.riot_client.get_match_list_by_puuid(
                     puuid=puuid,
@@ -956,16 +1027,11 @@ class MatchmakingAnalysisService:
                     queue=420,
                     end_time=end_time,
                 )
-
-                if self.rate_limiter:
-                    await self.rate_limiter.record_request()
-
-                self.api_calls_made += 1
-                await self._clear_rate_limit_wait_if_active()
+                await self._record_successful_api_call()
                 return match_list.match_ids
 
             except RateLimitError as e:
-                retry_after = int(e.retry_after or 120)
+                retry_after = self._rate_limit_retry_after(e)
                 logger.info(
                     "Rate limit on match ID fetch",
                     puuid=puuid,
@@ -980,50 +1046,34 @@ class MatchmakingAnalysisService:
                     puuid=puuid,
                     error_type=type(e).__name__,
                 )
-                if isinstance(e, (AuthenticationError, ForbiddenError)) or required:
+                if self._should_reraise_riot_error(e, required=required):
                     raise
                 return []
 
         logger.warning("Max retries for match ID fetch", puuid=puuid)
-        if required:
-            raise MatchmakingAnalysisRuntimeError(
-                "rate_limit_wait_exhausted",
-                "The analysis could not resume within the allowed Riot rate-limit "
-                "wait. Please try again later.",
-            )
+        self._raise_if_retries_exhausted(required=required)
         return []
 
-    async def _api_fetch_match(self, match_id: str, *, required: bool = False):
+    async def _api_fetch_match(
+        self, match_id: str, *, required: bool = False
+    ) -> Optional[MatchDTO]:
         """Fetch a single match from API. Returns MatchDTO or None."""
         max_retries = 10
         for attempt in range(max_retries):
             try:
-                if self.rate_limiter:
-                    if not await self.rate_limiter.acquire_with_wait_callback(
-                        wait_callback=self._rate_limit_wait_callback,
-                    ):
-                        logger.warning(
-                            "Rate limit: cannot fetch match", match_id=match_id
-                        )
-                        if required:
-                            raise MatchmakingAnalysisRuntimeError(
-                                "rate_limit_unavailable",
-                                "The analysis is still unable to obtain Riot request "
-                                "capacity. Please try again later.",
-                            )
-                        return None
+                if not await self._acquire_rate_limit_slot(
+                    required=required,
+                    unavailable_message="Rate limit: cannot fetch match",
+                    match_id=match_id,
+                ):
+                    return None
 
                 dto = await self.riot_client.get_match(match_id)
-
-                if self.rate_limiter:
-                    await self.rate_limiter.record_request()
-
-                self.api_calls_made += 1
-                await self._clear_rate_limit_wait_if_active()
+                await self._record_successful_api_call()
                 return dto
 
             except RateLimitError as e:
-                retry_after = int(e.retry_after or 120)
+                retry_after = self._rate_limit_retry_after(e)
                 logger.info(
                     "Rate limit on match fetch",
                     match_id=match_id,
@@ -1038,18 +1088,58 @@ class MatchmakingAnalysisService:
                     match_id=match_id,
                     error_type=type(e).__name__,
                 )
-                if isinstance(e, (AuthenticationError, ForbiddenError)) or required:
+                if self._should_reraise_riot_error(e, required=required):
                     raise
                 return None
 
         logger.warning("Max retries for match fetch", match_id=match_id)
+        self._raise_if_retries_exhausted(required=required)
+        return None
+
+    async def _acquire_rate_limit_slot(
+        self,
+        *,
+        required: bool,
+        unavailable_message: str,
+        **log_fields: object,
+    ) -> bool:
+        if self.rate_limiter is None:
+            return True
+        acquired = await self.rate_limiter.acquire_with_wait_callback(
+            wait_callback=self._rate_limit_wait_callback,
+        )
+        if acquired:
+            return True
+        logger.warning(unavailable_message, **log_fields)
+        if required:
+            raise MatchmakingAnalysisRuntimeError(
+                "rate_limit_unavailable",
+                "The analysis is still unable to obtain Riot request "
+                "capacity. Please try again later.",
+            )
+        return False
+
+    async def _record_successful_api_call(self) -> None:
+        if self.rate_limiter:
+            await self.rate_limiter.record_request()
+        self.api_calls_made += 1
+        await self._clear_rate_limit_wait_if_active()
+
+    @staticmethod
+    def _rate_limit_retry_after(error: RateLimitError) -> int:
+        return int(error.retry_after or 120)
+
+    @staticmethod
+    def _should_reraise_riot_error(error: RiotAPIError, *, required: bool) -> bool:
+        return isinstance(error, (AuthenticationError, ForbiddenError)) or required
+
+    def _raise_if_retries_exhausted(self, *, required: bool) -> None:
         if required:
             raise MatchmakingAnalysisRuntimeError(
                 "rate_limit_wait_exhausted",
                 "The analysis could not resume within the allowed Riot rate-limit "
                 "wait. Please try again later.",
             )
-        return None
 
     # ================================================================
     # Rate Limit Waiting
@@ -1090,7 +1180,7 @@ class MatchmakingAnalysisService:
         force_clear: bool = False,
     ) -> None:
         """Update the persisted rate-limit lifecycle timing."""
-        if not self._current_analysis_puuid or not self._current_analysis_created_at:
+        if not self._has_current_analysis():
             return
         try:
             result = await self.db.execute(
@@ -1105,15 +1195,9 @@ class MatchmakingAnalysisService:
             )
             current_reset = result.scalar_one_or_none()
             now = datetime.now(timezone.utc)
-
-            next_reset = reset_at
-            if reset_at is None and not force_clear:
-                # Keep future reset time if another wait cycle is still active.
-                if current_reset and current_reset > now:
-                    next_reset = current_reset
-            elif reset_at is not None and current_reset and current_reset > reset_at:
-                # Keep the later reset time if one is already set
-                next_reset = current_reset
+            next_reset = self._next_rate_limit_reset(
+                reset_at, current_reset, now, force_clear
+            )
 
             await _ensure_riot_writer_maintenance_is_inactive(self.db)
             await self.db.execute(
@@ -1127,7 +1211,7 @@ class MatchmakingAnalysisService:
                     )
                 )
                 .values(
-                    status=("waiting_rate_limit" if next_reset else "in_progress"),
+                    status=self._status_for_rate_limit(next_reset),
                     rate_limit_reset_at=next_reset,
                     requests_saved=self.requests_saved,
                 )
@@ -1138,10 +1222,35 @@ class MatchmakingAnalysisService:
                 "Failed to set rate_limit_reset_at",
                 error_type=type(e).__name__,
             )
-            try:
-                await self.db.rollback()
-            except Exception:
-                pass
+            await rollback_quietly(self.db)
+
+    def _has_current_analysis(self) -> bool:
+        return bool(self._current_analysis_puuid and self._current_analysis_created_at)
+
+    @staticmethod
+    def _next_rate_limit_reset(
+        reset_at: Optional[datetime],
+        current_reset: Optional[datetime],
+        now: datetime,
+        force_clear: bool,
+    ) -> Optional[datetime]:
+        if reset_at is None and not force_clear:
+            if current_reset is not None and current_reset > now:
+                return current_reset
+            return reset_at
+        if (
+            reset_at is not None
+            and current_reset is not None
+            and current_reset > reset_at
+        ):
+            return current_reset
+        return reset_at
+
+    @staticmethod
+    def _status_for_rate_limit(next_reset: Optional[datetime]) -> str:
+        if next_reset is not None:
+            return "waiting_rate_limit"
+        return "in_progress"
 
     # ================================================================
     # Analysis Record Helpers

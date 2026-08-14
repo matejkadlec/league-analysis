@@ -5,6 +5,8 @@ from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.features.matches.rune_transform import transform_runes_payload
+
 
 class MatchBase(BaseModel):
     """Base Match schema with common attributes."""
@@ -128,48 +130,7 @@ class PlayerMatchParticipant(BaseModel):
     @classmethod
     def transform_runes(cls, v: Any) -> Optional[Dict[str, Any]]:
         """Transform raw Riot API perks structure to flattened runes data."""
-        if v is None or not isinstance(v, dict):
-            return v
-
-        # Check if already transformed (has primary_style key)
-        if "primary_style" in v:
-            return v
-
-        # Check if raw Riot API format (has 'styles' key)
-        if "styles" not in v:
-            return None
-
-        # Extract data from Riot API format
-        styles = v.get("styles", [])
-        stat_perks = v.get("statPerks", {})
-
-        primary_style = None
-        sub_style = None
-        keystone = None
-        primary_perks = []
-        sub_perks = []
-
-        for style in styles:
-            if style.get("description") == "primaryStyle":
-                primary_style = style.get("style")
-                selections = style.get("selections", [])
-                if selections:
-                    keystone = selections[0].get("perk")
-                    primary_perks = [s.get("perk") for s in selections]
-
-            elif style.get("description") == "subStyle":
-                sub_style = style.get("style")
-                selections = style.get("selections", [])
-                sub_perks = [s.get("perk") for s in selections]
-
-        return {
-            "primary_style": primary_style,
-            "sub_style": sub_style,
-            "keystone": keystone,
-            "primary_perks": primary_perks,
-            "sub_perks": sub_perks,
-            "stat_perks": stat_perks,
-        }
+        return transform_runes_payload(v)
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -201,48 +162,7 @@ class EnemyLaneOpponent(BaseModel):
     @classmethod
     def transform_runes(cls, v: Any) -> Optional[Dict[str, Any]]:
         """Transform raw Riot API perks structure to flattened runes data."""
-        if v is None or not isinstance(v, dict):
-            return v
-
-        # Check if already transformed (has primary_style key)
-        if "primary_style" in v:
-            return v
-
-        # Check if raw Riot API format (has 'styles' key)
-        if "styles" not in v:
-            return None
-
-        # Extract data from Riot API format
-        styles = v.get("styles", [])
-        stat_perks = v.get("statPerks", {})
-
-        primary_style = None
-        sub_style = None
-        keystone = None
-        primary_perks = []
-        sub_perks = []
-
-        for style in styles:
-            if style.get("description") == "primaryStyle":
-                primary_style = style.get("style")
-                selections = style.get("selections", [])
-                if selections:
-                    keystone = selections[0].get("perk")
-                    primary_perks = [s.get("perk") for s in selections]
-
-            elif style.get("description") == "subStyle":
-                sub_style = style.get("style")
-                selections = style.get("selections", [])
-                sub_perks = [s.get("perk") for s in selections]
-
-        return {
-            "primary_style": primary_style,
-            "sub_style": sub_style,
-            "keystone": keystone,
-            "primary_perks": primary_perks,
-            "sub_perks": sub_perks,
-            "stat_perks": stat_perks,
-        }
+        return transform_runes_payload(v)
 
     model_config = ConfigDict(from_attributes=True)
 
