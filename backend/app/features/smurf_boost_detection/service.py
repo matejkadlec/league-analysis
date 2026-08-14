@@ -6,6 +6,7 @@ no Riot API call, joins no rate limiter, and writes no Riot-owned table.
 
 from __future__ import annotations
 
+import math
 from dataclasses import asdict
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional, cast
@@ -24,6 +25,7 @@ from app.features.settings.schemas import CardId, normalize_stored_card_preferen
 
 from .composite import EligibleMatch
 from .config import (
+    COMPOSITE_WEIGHTS,
     DEFAULT_PRESET,
     ELIGIBLE_QUEUE_ID,
     MINIMUM_GAME_DURATION_SECONDS,
@@ -61,6 +63,16 @@ def _to_float(value: Any) -> float:
     return float(value) if value is not None else 0.0
 
 
+def _is_scorable(match: EligibleMatch) -> bool:
+    """True when every metric this match contributes is a real number.
+
+    A stored `NaN` would survive standardization and then clamp to the positive
+    bound, which reads as maximum performance and pushes a band upward. A row
+    that cannot be scored honestly is dropped instead.
+    """
+    return all(math.isfinite(match.metric(name)) for name in sorted(COMPOSITE_WEIGHTS))
+
+
 class SmurfBoostDetectionError(Exception):
     """Internal failure carrying only reviewed client-safe diagnostics."""
 
@@ -77,14 +89,20 @@ class SmurfBoostDetectionService:
         self.db = db
 
     async def _load_eligible(self, puuid: str) -> list[EligibleMatch]:
-        """Newest-first eligible ranked games for one player."""
+        """The newest eligible ranked games for one player, newest first.
+
+        The cap is applied in SQL because the engine can never consume more than
+        the largest configurable windows combined, and the deepest stored
+        accounts hold several times that.
+        """
         result = await self.db.execute(
             select(MatchParticipant, Match)
             .join(Match, Match.match_id == MatchParticipant.match_id)
             .where(*self._eligibility_filter(puuid))
             .order_by(Match.game_start_timestamp.desc(), Match.match_id.desc())
+            .limit(MAX_WINDOW_MATCHES)
         )
-        return [
+        loaded = [
             EligibleMatch(
                 match_id=match.match_id,
                 game_start_timestamp=match.game_start_timestamp,
@@ -105,6 +123,14 @@ class SmurfBoostDetectionService:
             )
             for participant, match in result.all()
         ]
+        scorable = [match for match in loaded if _is_scorable(match)]
+        if len(scorable) != len(loaded):
+            logger.warning(
+                "smurf_boost_unscorable_matches_dropped",
+                puuid=puuid,
+                dropped=len(loaded) - len(scorable),
+            )
+        return scorable
 
     def _eligibility_filter(self, puuid: str) -> list[Any]:
         """The one eligibility predicate every query in this feature shares."""
@@ -162,25 +188,27 @@ class SmurfBoostDetectionService:
         return (latest - earliest).total_seconds() / 86400.0
 
     async def _prior_champion_games(
-        self, puuid: str, recent_size: int
+        self, puuid: str, recent_match_ids: list[str]
     ) -> dict[int, int]:
-        """Champion counts over every eligible game older than the recent window.
+        """Champion counts over every eligible game outside the recent window.
 
         This deliberately reads the player's whole eligible history rather than
         the capped window the engine scores. A champion is novel only when this
         application has stored almost nothing of it, and truncating the history
         first would make long-established champions look new.
+
+        The window is excluded by identifier rather than by a repeated offset,
+        so a match ingested between this query and the one that loaded the
+        window cannot shift what counts as recent.
         """
-        older = (
-            select(MatchParticipant.champion_id.label("champion_id"))
-            .join(Match, Match.match_id == MatchParticipant.match_id)
-            .where(*self._eligibility_filter(puuid))
-            .order_by(Match.game_start_timestamp.desc(), Match.match_id.desc())
-            .offset(recent_size)
-            .subquery()
-        )
         result = await self.db.execute(
-            select(older.c.champion_id, func.count()).group_by(older.c.champion_id)
+            select(MatchParticipant.champion_id, func.count())
+            .join(Match, Match.match_id == MatchParticipant.match_id)
+            .where(
+                *self._eligibility_filter(puuid),
+                MatchParticipant.match_id.notin_(recent_match_ids),
+            )
+            .group_by(MatchParticipant.champion_id)
         )
         return {champion_id: count for champion_id, count in result.all()}
 
@@ -188,16 +216,29 @@ class SmurfBoostDetectionService:
         self, puuid: str, thresholds: dict[str, float]
     ) -> AnalysisRequest:
         """Assemble every input the pure engine needs."""
-        eligible = (await self._load_eligible(puuid))[:MAX_WINDOW_MATCHES]
+        eligible = await self._load_eligible(puuid)
         recent_size = int(thresholds["recent_window_size"])
+        recent_match_ids = [match.match_id for match in eligible[:recent_size]]
         return AnalysisRequest(
             eligible=eligible,
             summoner_level=await self._load_summoner_level(puuid),
             rank_span_days=await self._load_rank_span_days(puuid),
             thresholds=thresholds,
-            prior_champion_games=await self._prior_champion_games(puuid, recent_size),
+            prior_champion_games=await self._prior_champion_games(
+                puuid, recent_match_ids
+            ),
             total_eligible_games=await self._count_eligible(puuid),
         )
+
+    async def _newest_run(self, puuid: str) -> Optional[SmurfBoostAnalysis]:
+        """The most recently created run for a player, whatever its status."""
+        result = await self.db.execute(
+            select(SmurfBoostAnalysis)
+            .where(SmurfBoostAnalysis.puuid == puuid)
+            .order_by(SmurfBoostAnalysis.created_at.desc())
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
 
     async def _active_run(self, puuid: str) -> Optional[SmurfBoostAnalysis]:
         """The one active run for a player, if any."""
@@ -288,7 +329,10 @@ class SmurfBoostDetectionService:
             await self.db.commit()
         except IntegrityError:
             await self.db.rollback()
-            concurrent = await self._active_run(puuid)
+            # The winner of the race may already have finished, in which case
+            # there is no active row left to attach to and its completed result
+            # is the honest answer to this identical request.
+            concurrent = await self._active_run(puuid) or await self._newest_run(puuid)
             if not concurrent:
                 raise
             if not self._matches_configuration(concurrent, thresholds):
@@ -372,7 +416,9 @@ class SmurfBoostDetectionService:
         created_at, concurrent = await self._claim_run(puuid, thresholds)
         if concurrent is not None:
             logger.info("smurf_boost_attached_to_active_run", puuid=puuid)
-            return self._to_response(concurrent, is_stale=False)
+            return self._to_response(
+                concurrent, is_stale=await self._is_stale(concurrent)
+            )
 
         assert created_at is not None
         try:
@@ -409,14 +455,15 @@ class SmurfBoostDetectionService:
         return self._to_response(run, is_stale=False)
 
     async def get_latest(self, puuid: str) -> Optional[SmurfBoostAnalysisResponse]:
-        """The newest run for a player, with a computed staleness flag."""
-        result = await self.db.execute(
-            select(SmurfBoostAnalysis)
-            .where(SmurfBoostAnalysis.puuid == puuid)
-            .order_by(SmurfBoostAnalysis.created_at.desc())
-            .limit(1)
-        )
-        run = result.scalar_one_or_none()
+        """The newest run for a player, with a computed staleness flag.
+
+        A client that polls after an interrupted request would otherwise be told
+        a comparison is still running forever, because only a new request used
+        to clear the abandoned row and the page offers no way to start one while
+        a run looks active.
+        """
+        await self._expire_abandoned(puuid)
+        run = await self._newest_run(puuid)
         if run is None:
             return None
         return self._to_response(run, is_stale=await self._is_stale(run))

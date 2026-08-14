@@ -226,8 +226,9 @@ def evaluate_a3(inputs: SignalInputs) -> SignalResult:
         threshold,
         value >= threshold,
         len(scores),
-        f"{len(scores)} recent games on rarely played champions scored "
-        f"{value:+.2f} standardized units against the baseline.",
+        f"{len(scores)} recent games on champions with almost no games stored "
+        f"here scored {value:+.2f} standardized units against the baseline. "
+        "That means unfamiliar to this application, not new to the player.",
         (NOTE_NOVEL_IS_STORAGE_SCOPED,),
     )
 

@@ -31,8 +31,10 @@ following hard boundaries:
   earlier games, never to a population baseline. See
   [Why self-referential](#why-self-referential).
 - **Two families, never collapsed.** Rapid-improvement evidence and
-  account-change evidence are reported separately, each with its own band,
-  confidence, and signal list.
+  account-change evidence are reported separately, each with its own band and
+  signal list. Confidence is one figure for the whole comparison, because every
+  input to it — window coverage, patch spread, timestamp quality, rank span —
+  describes the data both families were read from.
 - **Not a moderation surface.** The feature produces no report button, no export,
   no ranking of "most suspicious" players, and no cross-user aggregation.
 - **Every threshold in this document is measured, not assumed.** See
@@ -220,9 +222,11 @@ sigma[r][m] = population standard deviation (denominator n) of m
 
 When a role has fewer than five matches in `B` — including a role that appears
 only in `R` and therefore has none — that role falls back to the pooled `B`
-distribution and every affected match carries the data-quality note
-`role_baseline_pooled`. A role that appears only in `R` is never left without a
-baseline.
+distribution and the analysis carries the data-quality note
+`role_baseline_pooled`. Notes describe the run, not individual matches: the
+payload has no per-match note field, because a reader is being told how much to
+trust one reading, not which games produced it. A role that appears only in `R`
+is never left without a baseline.
 
 `sigma` is floored to keep the z-score defined for a degenerate distribution:
 
@@ -244,8 +248,13 @@ cs_per_minute  = (total_minions_killed + neutral_minions_killed) / minutes
 ```
 
 Eligibility guarantees `game_duration >= 300`, so `minutes` is always positive
-even when the stored `time_played` is zero. A match that falls back to
-`game_duration` carries the note `time_played_missing`.
+even when the stored `time_played` is zero. When any match in either window
+falls back to `game_duration`, the analysis carries the note
+`time_played_missing`.
+
+A metric that is not a real number cannot be standardized honestly, and a `NaN`
+would clamp to `+3` and read as maximum performance. Any match carrying a
+non-finite metric is dropped before the windows are cut.
 
 ```
 z[i][m]  = clamp( (x[i][m] - mu[r][m]) / sigma_effective[r][m], -3, +3 )
@@ -276,8 +285,11 @@ makes `mean(C_R)` literally readable as "how many baseline standard deviations
 above their own baseline this player has been playing". This has been verified
 empirically on all three accounts with sufficient history.
 
-When `sd_C <= EPSILON` the baseline is **degenerate** — every baseline game is
-effectively identical on every composite metric — and `C` is not defined at all.
+When `sd_C <= EPSILON` the baseline is **degenerate**: every baseline game has
+effectively the same weighted composite, so there is no spread to standardize
+against and `C` is not defined at all. This does not require the individual
+metrics to be identical — different metric vectors can cancel to the same
+weighted sum — only that the composite does not vary.
 Every signal that reads `C` (A1, A3, A4, B1, B2, and B3) is then reported as
 **unavailable** with the note `degenerate_baseline`. Only A2 and B4, which read
 win rate alone, remain computable. The division is never performed against a
@@ -359,7 +371,9 @@ g        = J * (mean(C_R) - mean(C_B)) / s_pooled
 ```
 
 Raw value `g`. Conservative threshold **1.20**, saturation **3.00**, weight
-**0.30**. Unavailable when `s_pooled` is zero.
+**0.30**. Unavailable with the note `undefined_statistic` when `s_pooled` is
+zero. Every "is zero" test in this document is `<= EPSILON`, never an exact
+floating-point comparison.
 
 #### A2 — Win-rate surge
 
@@ -463,7 +477,8 @@ raw_value = abs( log2(ratio) )
 A raw value of 1.0 means the recent window is either half or double the baseline
 spread. Measured over the calibration set the median is **0.168** and the 95th percentile
 **0.541**. Conservative threshold **1.15**, saturation **2.00**, weight **0.25**.
-Unavailable when `sd(C_R)` is zero.
+Unavailable with the note `undefined_statistic` when `sd(C_R)` is zero, which
+is also the note B3 reports when its coefficient is undefined.
 
 #### B3 — Bimodal performance split
 
@@ -497,12 +512,27 @@ triggered when BC > bimodality_threshold                  (Conservative 0.65)
 raw_value = BC
 ```
 
+`BC` is a shape statistic built from skewness and kurtosis. It does not locate
+modes and it does not test for them: a sufficiently skewed unimodal window can
+exceed the same value. That is why the trigger is a conjunction — the two tail
+fractions are what require games to be present at both ends, and neither the
+statistic nor the threshold on its own is evidence of two modes. The signal is
+named for the pattern it looks for, not for a property it establishes.
+
 The trigger reads the **configured** threshold, so the preset value is live
 rather than decorative. `n_R >= 12` is required as a stability floor — the `g2`
 denominator is merely defined for `n > 3`, but the estimate is unusable below 12.
 Below that, or when `m2` is zero, the signal reports
 `insufficient_shape_sample` and is unavailable. Saturation **0.90**, weight
 **0.20**.
+
+This floor has a consequence a reader configuring the window should know: the
+recent-window range allows 10 and 11, and at those two values B3 can never be
+available. Family B is then left with at most two evidence groups — B1 and B4
+share one — so **Family B cannot reach Strong indicators at a recent window of
+10 or 11**, and its highest reachable score is 0.55. Family A is unaffected. A
+configuration that cannot produce the strongest reading is a safe failure, so it
+is documented rather than rejected.
 
 Measured with these exact estimators over the calibration set, `BC` has a median
 of 0.381 and a maximum of 0.630 on observed history, so the Conservative pair
@@ -562,9 +592,13 @@ distinct_evidence(family) =
     count of evidence groups in that family with at least one triggered signal
 ```
 
-Both families can therefore reach a maximum of three. A1 and A4 read literally
-the same number — the mean of `C_R` — so a result carried by those two alone
-counts once, not twice.
+Both families can therefore reach a maximum of three. A1 and A4 are grouped
+because they read the same shift in the same direction of the same quantity:
+A4 is `mean(C_R)` outright, and A1 is that same shift expressed as a
+standardized effect size, so a result carried by those two alone counts once,
+not twice. They are not the identical number — Hedges' `g` also depends on both
+windows' variances and sizes, and it is in **pooled** standard deviations, so
+A1's `1.20` and A4's `1.20` are not the same distance.
 
 These groups are **not statistically independent** and the specification does not
 claim they are. They are computed over the same matches, and the moments of one
@@ -604,7 +638,8 @@ target_B      = the configured baseline window size
 coverage      = min(1, n_R / target_R) * min(1, n_B / target_B)
 patch_factor  = 1.00 if R and B share a major.minor patch prefix else 0.85
 time_factor   = 1.00 if every match in R and B has
-                game_start_timestamp_source = 'riot_game_start' else 0.90
+                game_start_timestamp_source = 'riot_game_start' else 0.90,
+                which attaches the note legacy_game_start_timestamps
 rank_span_days = (max(created_at) - min(created_at)) in days, over
                  core.player_leagues rows for this puuid with
                  queue_type = 'RANKED_SOLO_5x5'
@@ -636,8 +671,12 @@ never needed it.
 
 ## Threshold derivation
 
-No threshold in this document was chosen by intuition. Each was selected by
-measuring how often the rule fires across the **observed stored history**.
+No **signal** threshold in this document was chosen by intuition. Each was
+selected by measuring how often its rule fires across the **observed stored
+history**. The signal weights, the saturation points and the two band cut points
+are not measured — there is nothing to measure them against without labelled
+cases — so they are stated as the deliberate defaults they are, and every one of
+them is a versioned constant an owner can revise.
 
 ### Calibration set
 
@@ -669,6 +708,20 @@ figures below are **observed trigger rates on stored history**, not false-positi
 rates. A rule that fires on 0% of them is not proven correct; it is only shown
 not to fire on the history this application actually holds. That is the weakest
 claim consistent with the data, and it is the claim being made.
+
+The 185 pairs are also nowhere near 185 independent observations, and the
+denominator must be read with that in mind:
+
+- **They overlap heavily.** The offset advances by three games, so consecutive
+  pairs share 17 of 20 recent games and 57 of 60 baseline games.
+- **They are one account.** 183 of the 185 come from a single history; the other
+  two accounts contribute one pair each.
+
+So "3/185" means "this rule fired on three overlapping windows of one player's
+history", not "this rule fired on three players in a hundred and eighty-five".
+The measurement is enough to reject a threshold that fires constantly on
+ordinary play, which is what it was used for. It is not enough to estimate a
+rate, and no rate is claimed.
 
 | Signal rule at its Conservative value | Observed trigger rate |
 | --- | --- |
@@ -826,9 +879,12 @@ ranked games exist and how many are needed — not an error and not a toast.
 ### Synthetic fixtures
 
 Following existing backend practice, the computation engine is pure and tested
-with constructed participant rows rather than a database. Each fixture asserts a
-band, the exact set of triggered signal identifiers, and the exact set of
-unavailable ones. Every fixture fixes all confidence inputs explicitly — patch
+with constructed participant rows rather than a database. Each fixture asserts
+whatever its row below names — a band, a set of triggered or unavailable signal
+identifiers, or a raw value against its threshold — and nothing weaker than
+that. Eligibility is not part of the engine: it lives entirely in the load
+query, so the fixtures that concern it assert the compiled SQL rather than a
+band. Every fixture fixes all confidence inputs explicitly — patch
 prefix, `game_start_timestamp_source`, and league-snapshot count — so the
 asserted confidence band is deterministic. Unless a fixture names a preset, it
 runs against **Conservative**.
@@ -837,8 +893,8 @@ runs against **Conservative**.
 | --- | --- | --- |
 | `flat_baseline` | 80 games, all `MIDDLE`, every metric drawn from one fixed distribution; recent 20 at 10/20 wins and baseline 60 at 30/60 wins | No signal triggered, both families No unusual pattern. Asserted against all three presets. |
 | `below_floor` | 9 eligible recent games | Both families: Not enough data, naming the shortfall |
-| `remakes_excluded` | 30 raw matches of which 15 are remakes and 5 under 300s | Windows contain only the 10 eligible matches; result is Not enough data |
-| `invalid_position_excluded` | Baseline containing `'Invalid'` rows | Those rows never reach `mu[r][m]` |
+| `eligibility_is_one_predicate` | The compiled load query | Remakes, non-`420` queues, games under 300s and unrecognized positions are all excluded, by one shared predicate every query in the feature reuses |
+| `unscorable_metric_dropped` | A loaded row whose `kda` is `NaN` and one whose `gold_per_minute` is infinite | Neither reaches the windows, because a non-finite metric clamps to `+3` and would read as maximum performance |
 | `degenerate_baseline` | Every baseline game identical on all six composite metrics, so `sd_C <= EPSILON` | A1, A3, A4, B1, B2, B3 all unavailable with `degenerate_baseline`; A2 and B4 still computed; no division performed |
 | `step_change` | Recent 20 with every `C[i]` at exactly +2.0, baseline 60 standard normal by construction | A1 `g` at least 1.20 — triggered; band at least Weak |
 | `winrate_surge_small` | Recent 10 at 9/10 wins, baseline 30/60 | A2 raw 0.0958 — **not** triggered at any preset; the Wilson guard holds |
@@ -890,6 +946,15 @@ cases exist; the word is reserved for that meaning.
   "No unusual pattern" — exists to raise the cost of triggering. The measured
   per-signal trigger rate over the calibration set at Conservative values is
   between 0.0% and 1.6%.
+- **The guards are not evenly distributed, and B1 is the exposed one.** A2
+  compares a Wilson lower bound against the baseline rate, so a short lucky run
+  is discounted before it is compared. B1 compares two plain win rates with no
+  such discount: a baseline of 24/60 and a recent 20-game window at 14/20, with
+  the composite unchanged, meets the Conservative rule exactly. Ordinary
+  variance, teammates and premades can produce that history, and duo detection
+  is out of scope. Giving B1 the same uncertainty treatment as A2 would change
+  what the signal measures and needs its own calibration, so it is a candidate
+  for the next model version rather than a silent edit to this one.
 - **False negatives are the accepted error.** The tool is expected to say "No
   unusual pattern" or "Not enough data" for the overwhelming majority of players
   in this database, and that is the correct behavior at 24,349 players with fewer
@@ -920,8 +985,11 @@ Results persist to `core.smurf_boost_analyses` (revision `20260814_0010`), one
 row per `(puuid, created_at)`, storing the `model_version` and the exact
 `thresholds` used. A one-active-row partial unique index plus an
 IntegrityError-to-attach path makes a repeated request attach to the run already
-in flight rather than start a second one; this is verified against a real
-PostgreSQL instance, where five concurrent analyses produce exactly one row.
+in flight rather than start a second one. If the run it lost the race to has
+already finished, the identical request is answered with that completed result
+rather than with the database error. The index is PostgreSQL-only and the test
+suite is database-free, so the concurrent behavior was exercised by hand against
+a real instance during LGA-20 review and is not covered by a standing test.
 
 A request only attaches to an in-flight run when that run's `model_version` and
 every threshold value match its own. A run configured differently is a
@@ -939,7 +1007,7 @@ run computed over an empty history goes stale as soon as a first game arrives.
 
 ### Two boundaries the load cap must not cross
 
-The service loads at most 250 matches, which is all the largest configurable
+The load query is limited to 250 rows, which is all the largest configurable
 windows can consume. Two values are nevertheless read from the player's whole
 eligible history, because truncating them changes what the model means:
 
@@ -947,7 +1015,10 @@ eligible history, because truncating them changes what the model means:
   slice would understate a long history and make the staleness comparison
   meaningless.
 - The prior-champion counts behind A3, read with the same eligibility
-  predicate offset past the recent window and with no limit. On the deepest
+  predicate, excluding the recent window by match identifier, and with no
+  limit. Excluding by identifier rather than by a repeated offset means a match
+  ingested between the two queries cannot shift what counts as recent. On the
+  deepest
   stored account the capped counting saw 230 games across 68 champions against
   609 games across 99 champions for the full history, and **35 champions with
   real stored history would have been treated as newly picked**.
@@ -956,9 +1027,13 @@ eligible history, because truncating them changes what the model means:
 
 The stored document and the HTTP response are the same validated
 `SmurfBoostResults` shape, built in one place. Each signal is emitted as `id`
-plus `family`; the fixed disclaimer is always present; and the internal
-weighted sum that produced a band is retained only in memory, so no per-family
-number is ever persisted or sent to a client.
+plus `family`; the fixed disclaimer is always present; and the per-family
+weighted sum that produced a band is never itself emitted, stored, or
+displayed. Each triggered signal does carry its own `magnitude`, `weight` and
+`contribution`, because a result no one can check is worse than a number no one
+should read as a probability; a client holding the payload can therefore add
+the contributions back up. What the boundary buys is that no single number is
+ever presented as the answer.
 
 `GET /api/v1/smurf-boost-detection/presets` emits each preset in the card
 settings write contract's own field names and numeric types, so a client can

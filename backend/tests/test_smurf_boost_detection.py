@@ -20,6 +20,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from sqlalchemy.dialects import postgresql
+from sqlalchemy.exc import IntegrityError
 
 # `Player` declares a relationship to this model by name, so the ORM registry
 # has to know it before any query over that mapper can be compiled.
@@ -38,9 +39,12 @@ from app.features.smurf_boost_detection.config import (
     BAND_STRONG,
     BAND_WEAK,
     DEFAULT_PRESET,
+    ELIGIBLE_QUEUE_ID,
     MIN_MAGNITUDE,
+    MINIMUM_GAME_DURATION_SECONDS,
     MODEL_VERSION,
     PRESETS,
+    RECOGNIZED_POSITIONS,
     SIGNAL_SATURATIONS,
     SIGNAL_WEIGHTS,
 )
@@ -50,8 +54,10 @@ from app.features.smurf_boost_detection.engine import (
     AnalysisRequest,
     analyze,
 )
+from app.features.smurf_boost_detection.router import ERROR_STATUS_CODES
 from app.features.smurf_boost_detection.schemas import DISCLAIMER
 from app.features.smurf_boost_detection.service import (
+    MAX_WINDOW_MATCHES,
     SmurfBoostDetectionError,
     SmurfBoostDetectionService,
     _serialize,
@@ -59,6 +65,7 @@ from app.features.smurf_boost_detection.service import (
 )
 from app.features.smurf_boost_detection.statistics import (
     bimodality_coefficient,
+    clamp,
     hedges_g,
     wilson_lower_bound,
 )
@@ -963,20 +970,175 @@ async def test_nothing_is_committed_when_no_run_is_abandoned() -> None:
 
 
 @pytest.mark.asyncio
-async def test_novelty_counting_skips_the_recent_window_not_the_history() -> None:
-    """Champion history is counted past the load cap, offset by the window."""
+async def test_novelty_counting_excludes_the_window_by_identifier() -> None:
+    """Champion history is counted past the load cap, minus the exact window.
+
+    Excluding by identifier rather than by a repeated offset means a match
+    ingested between the two queries cannot shift what counts as recent.
+    """
     execute = AsyncMock(return_value=SimpleNamespace(all=lambda: [(1, 40), (2, 3)]))
     service = _service(MagicMock(execute=execute))
 
-    counts = await service._prior_champion_games("p", 20)
+    counts = await service._prior_champion_games("p", ["EUN1_9", "EUN1_8"])
 
     assert counts == {1: 40, 2: 3}
     compiled = str(
-        execute.await_args.args[0].compile(dialect=postgresql.dialect())
-    ).upper()
-    # Offset past the recent window, but no cap on how far back it reaches.
-    assert "OFFSET" in compiled
-    assert "LIMIT ALL" in compiled
+        execute.await_args.args[0].compile(
+            dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}
+        )
+    ).replace("\n", " ")
+    # The window itself is excluded, by the identifiers that were actually
+    # scored rather than by a count the second query would have to re-derive.
+    assert "NOT IN ('EUN1_9', 'EUN1_8')" in compiled
+    assert "OFFSET" not in compiled.upper()
+    # No cap on how far back the history reaches.
+    assert "LIMIT" not in compiled.upper()
+
+
+@pytest.mark.asyncio
+async def test_the_excluded_window_is_the_window_that_was_scored() -> None:
+    """Novelty must exclude exactly the games the engine treats as recent."""
+    eligible = _window(30)
+    service = _service(MagicMock())
+    service._load_eligible = AsyncMock(return_value=eligible)
+    service._load_summoner_level = AsyncMock(return_value=300)
+    service._load_rank_span_days = AsyncMock(return_value=None)
+    service._prior_champion_games = AsyncMock(return_value={})
+    service._count_eligible = AsyncMock(return_value=30)
+    thresholds = dict(CONSERVATIVE) | {"recent_window_size": 12.0}
+
+    await service._build_request("p", thresholds)
+
+    passed = service._prior_champion_games.await_args.args[1]
+    assert passed == [match.match_id for match in eligible[:12]]
+
+
+def _row(**overrides: Any) -> tuple[SimpleNamespace, SimpleNamespace]:
+    """One `(participant, match)` pair exactly as the load query returns it."""
+    participant = SimpleNamespace(
+        team_position="MIDDLE",
+        champion_id=1,
+        win=True,
+        total_minions_killed=BASE_MINIONS,
+        neutral_minions_killed=0,
+        time_played=1800,
+        **{**BASE_METRICS, **overrides},
+    )
+    match = SimpleNamespace(
+        match_id="EUN1_1",
+        game_start_timestamp=1,
+        game_version="16.16.1",
+        game_start_timestamp_source="riot_game_start",
+        game_duration=1800,
+    )
+    return participant, match
+
+
+@pytest.mark.asyncio
+async def test_a_match_carrying_an_unscorable_metric_is_dropped() -> None:
+    """`NaN` survives standardization and clamps to the positive bound.
+
+    Left in, one corrupt row reads as maximum performance and can push a band
+    upward, which is the one direction this feature must never fail in.
+    """
+    assert clamp(float("nan"), -3.0, 3.0) == 3.0
+
+    rows = [_row(), _row(kda=float("nan")), _row(gold_per_minute=float("inf"))]
+    execute = AsyncMock(return_value=SimpleNamespace(all=lambda: rows))
+    service = _service(MagicMock(execute=execute))
+
+    loaded = await service._load_eligible("p")
+
+    assert len(loaded) == 1
+    assert loaded[0].kda == BASE_METRICS["kda"]
+
+
+@pytest.mark.asyncio
+async def test_eligibility_is_one_predicate_every_query_reuses() -> None:
+    """Eligibility lives only in SQL, so only SQL can assert it.
+
+    Remakes, other queues, very short games and the `'Invalid'` position are all
+    excluded here or nowhere: the engine never sees a reason to reject a match.
+    """
+    execute = AsyncMock(return_value=SimpleNamespace(all=lambda: []))
+    service = _service(MagicMock(execute=execute))
+
+    await service._load_eligible("p")
+
+    compiled = str(
+        execute.await_args.args[0].compile(
+            dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}
+        )
+    ).replace("\n", " ")
+    assert "match_participants.remake IS false" in compiled
+    assert f"matches.queue_id = {ELIGIBLE_QUEUE_ID}" in compiled
+    assert f"matches.game_duration >= {MINIMUM_GAME_DURATION_SECONDS}" in compiled
+    for position in RECOGNIZED_POSITIONS:
+        assert f"'{position}'" in compiled
+    assert "'Invalid'" not in compiled
+
+
+@pytest.mark.asyncio
+async def test_the_load_cap_is_applied_in_sql() -> None:
+    """A deep account must not hydrate hundreds of rows the engine discards."""
+    execute = AsyncMock(return_value=SimpleNamespace(all=lambda: []))
+    service = _service(MagicMock(execute=execute))
+
+    await service._load_eligible("p")
+
+    compiled = str(
+        execute.await_args.args[0].compile(
+            dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}
+        )
+    ).replace("\n", " ")
+    assert f"LIMIT {MAX_WINDOW_MATCHES}" in compiled
+
+
+@pytest.mark.asyncio
+async def test_polling_alone_terminalizes_an_abandoned_run() -> None:
+    """The page offers no way to start a run while one still looks active.
+
+    Without this sweep on the read path, an interrupted request leaves the
+    client polling a run that will never finish.
+    """
+    service = _service(MagicMock())
+    service._expire_abandoned = AsyncMock()
+    service._newest_run = AsyncMock(return_value=None)
+
+    assert await service.get_latest("p") is None
+    service._expire_abandoned.assert_awaited_once_with("p")
+
+
+@pytest.mark.asyncio
+async def test_a_race_loser_attaches_to_a_winner_that_already_finished() -> None:
+    """The winner can complete before the loser looks for an active row.
+
+    Re-raising the database error there would answer an ordinary duplicate
+    request with a 500 instead of the result it asked for.
+    """
+    winner = _completed_run()
+    service = _service(
+        MagicMock(
+            execute=AsyncMock(),
+            commit=AsyncMock(side_effect=IntegrityError("insert", None, Exception())),
+            rollback=AsyncMock(),
+            add=MagicMock(),
+        )
+    )
+    service._expire_abandoned = AsyncMock()
+    service._active_run = AsyncMock(return_value=None)
+    service._newest_run = AsyncMock(return_value=winner)
+
+    created_at, concurrent = await service._claim_run("p", dict(CONSERVATIVE))
+
+    assert created_at is None
+    assert concurrent is winner
+
+
+def test_a_run_that_cannot_be_read_back_is_not_the_caller_s_fault() -> None:
+    """`analysis_missing` is a persistence invariant failure, not a bad body."""
+    assert ERROR_STATUS_CODES["analysis_missing"] == 500
+    assert ERROR_STATUS_CODES["analysis_in_progress"] == 409
 
 
 def test_the_stored_result_carries_the_disclaimer_and_no_family_score() -> None:
