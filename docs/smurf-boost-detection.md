@@ -1029,10 +1029,14 @@ enforces the ranges but exposes none of them. That duplication is a drift
 surface, so `frontend/tests/smurf-boost-settings.test.ts` reads
 `backend/app/features/settings/schemas.py` and fails if any bound, kind, or
 field disappears or changes. The same test restates the one cross-field rule
-the server enforces. Client validation exists to explain a value in the reader's
-own words, never to decide it: the server still validates every write, and its
-rejection is reworded before display because the raw body is a Pydantic report
-naming a model class and a schema URL.
+the server enforces, and asserts that the server still has it.
+
+Client validation exists to explain a value in the reader's own words, never to
+decide it: the server validates every write regardless. Its rejection is not
+shown verbatim — the raw body is a Pydantic report naming a model class and a
+schema URL, and the shared error normalization already replaces a body like
+that with a safe sentence. Nothing is lost, because every rule this form can
+break is stated beside the field it belongs to.
 
 Settings are per user. They are read through the shared card-preferences
 endpoint, which returns the whole catalog, so the response shape cannot be

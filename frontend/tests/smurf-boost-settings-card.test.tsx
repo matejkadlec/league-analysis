@@ -258,15 +258,17 @@ describe("SmurfBoostSettingsCard", () => {
     ).toBe(true);
   });
 
-  it("states the rule when the server rejects a set", async () => {
-    // The real 422 body is a Pydantic report. The reader gets the rule it
-    // names, never the model name or the schema link.
+  it("reports a rejected write without leaking the server's own words", async () => {
+    // The real 422 body is a Pydantic report naming a model class and a schema
+    // URL. `normalizeApiError` replaces it before any component sees it, so
+    // what reaches this card is already the shared safe sentence.
     updateCardPreference.mockResolvedValue({
       success: false,
       error: {
         message:
-          "1 validation error for SmurfBoostDetectionMutableSettingsWriteV1\n  Value error, a3MinimumNovelGames must not exceed recentWindowSize [type=value_error, input_value={'recentWindowSize': 10}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/value_error",
+          "The request could not be completed. Check the information and try again.",
         kind: "validation",
+        code: "VALIDATION_ERROR",
         status: 422,
       },
     });
@@ -282,14 +284,94 @@ describe("SmurfBoostSettingsCard", () => {
     await waitFor(() =>
       expect(
         screen.getByText(
-          "a3MinimumNovelGames must not exceed recentWindowSize.",
+          "The request could not be completed. Check the information and try again.",
         ),
       ).toBeTruthy(),
     );
-    expect(document.body.textContent ?? "").not.toContain("pydantic");
-    expect(document.body.textContent ?? "").not.toContain(
-      "SmurfBoostDetectionMutableSettingsWriteV1",
+    const body = document.body.textContent ?? "";
+    expect(body).not.toContain("pydantic");
+    expect(body).not.toContain("SmurfBoostDetectionMutableSettingsWriteV1");
+    expect(toast.error).toHaveBeenCalled();
+  });
+
+  it("treats a cleared field as missing rather than as zero", async () => {
+    // One threshold legitimately allows zero, so `Number("")` would make an
+    // empty field look like a valid setting and save it.
+    const user = userEvent.setup();
+    renderCard();
+
+    await waitFor(() =>
+      expect(screen.getByLabelText("B1 performance treated as flat")).toBeTruthy(),
     );
+    const input = document.querySelector(
+      "#smurf-boost-b1CompositeFlatCeiling",
+    ) as HTMLInputElement;
+    await user.clear(input);
+
+    await waitFor(() =>
+      expect(
+        screen.getByText("B1 performance treated as flat needs a number."),
+      ).toBeTruthy(),
+    );
+    expect(
+      screen.getByRole("button", { name: /Save thresholds/ }).hasAttribute(
+        "disabled",
+      ),
+    ).toBe(true);
+  });
+
+  it("does not write an override for an edit that changes nothing", async () => {
+    const user = userEvent.setup();
+    renderCard();
+
+    await waitFor(() =>
+      expect(screen.getByLabelText("Recent games compared")).toBeTruthy(),
+    );
+    await typeValue(user, "recentWindowSize", "35");
+    expect(
+      screen.getByRole("button", { name: /Save thresholds/ }).hasAttribute(
+        "disabled",
+      ),
+    ).toBe(false);
+
+    await typeValue(user, "recentWindowSize", "20");
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: /Save thresholds/ }).hasAttribute(
+          "disabled",
+        ),
+      ).toBe(true),
+    );
+    // The preset already in use is not an action either: clicking it would
+    // store an override identical to the defaults and change the badge.
+    expect(
+      screen
+        .getByTestId("smurf-boost-preset-conservative")
+        .hasAttribute("disabled"),
+    ).toBe(true);
+    expect(updateCardPreference).not.toHaveBeenCalled();
+  });
+
+  it("points assistive technology at both sides of the cross-field rule", async () => {
+    const user = userEvent.setup();
+    renderCard();
+
+    await waitFor(() =>
+      expect(screen.getByLabelText("Recent games compared")).toBeTruthy(),
+    );
+    await typeValue(user, "recentWindowSize", "10");
+    await typeValue(user, "a3MinimumNovelGames", "15");
+
+    await waitFor(() => expect(screen.getByRole("alert")).toBeTruthy());
+    for (const name of ["recentWindowSize", "a3MinimumNovelGames"]) {
+      const input = document.querySelector(
+        `#smurf-boost-${name}`,
+      ) as HTMLInputElement;
+      expect(input.getAttribute("aria-invalid")).toBe("true");
+      expect(input.getAttribute("aria-describedby")).toContain(
+        "smurf-boost-cross-error",
+      );
+    }
   });
 
   it("resets to the shipped defaults through the card's own endpoint", async () => {

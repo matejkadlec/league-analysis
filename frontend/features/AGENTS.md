@@ -81,5 +81,5 @@ public API via `index.ts`.
   failed run and a run already in flight with HTTP 200, so neither is a result.
   Threshold ranges are duplicated in `smurf-boost/smurf-boost-settings.ts` and
   guarded against the backend by `tests/smurf-boost-settings.test.ts`; strip the
-  card's fixed settings before a write, and reword a server rejection rather
-  than showing its raw body.
+  card's fixed settings before a write, and leave a server rejection to the
+  shared error normalization rather than parsing its raw body.

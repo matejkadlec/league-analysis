@@ -4,13 +4,72 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
+import { CardPreferenceSchema } from "../lib/core/schemas";
 import {
   crossFieldError,
   fieldError,
   matchesPreset,
+  numericSettings,
   THRESHOLD_FIELDS,
   writableSettings,
 } from "../features/smurf-boost/smurf-boost-settings";
+
+/** The three-card response exactly as the running API returns it. */
+const LIVE_CATALOG = [
+  {
+    cardId: "profile.top-champions",
+    version: 1,
+    settings: {
+      queueId: 420,
+      displayLimit: 5,
+      minimumGames: 1,
+      minimumWinRate: 0.0,
+      minimumKda: 0.0,
+      includedRoles: [],
+    },
+    isDefault: true,
+    requiresRecovery: false,
+    updatedAt: null,
+  },
+  {
+    cardId: "profile.recent-performance",
+    version: 1,
+    settings: {
+      queueId: 420,
+      recentMatchCount: 10,
+      winRateTrendDelta: 0.05,
+      relativeMetricTrendDelta: 0.05,
+    },
+    isDefault: true,
+    requiresRecovery: false,
+    updatedAt: null,
+  },
+  {
+    cardId: "profile.smurf-boost-detection",
+    version: 1,
+    settings: {
+      queueId: 420,
+      recentWindowSize: 20,
+      baselineWindowSize: 60,
+      a1StepChangeThreshold: 1.2,
+      a2WinRateSurgeThreshold: 0.2,
+      a3NovelChampionThreshold: 1.2,
+      a3MinimumNovelGames: 8,
+      a4SummonerLevelGate: 45,
+      a4PerformanceThreshold: 1.2,
+      b1WinRateDeltaThreshold: 0.3,
+      b1CompositeFlatCeiling: 0.05,
+      b2ConsistencyShiftThreshold: 1.15,
+      b3BimodalityThreshold: 0.65,
+      b3TailFraction: 0.3,
+      b4HighRateFloor: 0.62,
+      b4DropThreshold: 0.2,
+    },
+    isDefault: true,
+    requiresRecovery: false,
+    updatedAt: null,
+  },
+];
 
 /**
  * The backend owns every bound and exposes none of them over the API, so the
@@ -93,6 +152,40 @@ describe("smurf and boost threshold catalog", () => {
     expect(
       crossFieldError({ recentWindowSize: 20, a3MinimumNovelGames: 8 }),
     ).toBeNull();
+  });
+
+  it("restates a rule the backend still has", () => {
+    // Without this, deleting the server-side rule would leave the guard above
+    // green while the form kept explaining a constraint nobody enforces.
+    const here = dirname(fileURLToPath(import.meta.url));
+    const source = readFileSync(
+      join(here, "../../backend/app/features/settings/schemas.py"),
+      "utf8",
+    );
+    expect(source).toContain(
+      "a3MinimumNovelGames must not exceed recentWindowSize",
+    );
+    expect(source).toContain("_validate_smurf_boost_cross_fields");
+    // Exactly one cross-field rule exists, so the form is not silently missing
+    // a second one.
+    expect(
+      source.split("must not exceed recentWindowSize").length - 1,
+    ).toBe(1);
+  });
+
+  it("accepts the whole card catalog the API actually returns", () => {
+    // A numeric-only settings shape rejected every card, because Top Champions
+    // carries a role list. That failure hid the smurf-boost card completely.
+    for (const card of LIVE_CATALOG) {
+      expect(() => CardPreferenceSchema.parse(card)).not.toThrow();
+    }
+    const smurfBoost = CardPreferenceSchema.parse(LIVE_CATALOG[2]);
+    const numeric = numericSettings(smurfBoost.settings);
+    expect(Object.keys(numeric).length).toBe(THRESHOLD_FIELDS.length + 1);
+    expect(numeric.recentWindowSize).toBe(20);
+
+    const topChampions = CardPreferenceSchema.parse(LIVE_CATALOG[0]);
+    expect(Array.isArray(topChampions.settings.includedRoles)).toBe(true);
   });
 
   it("sends back only the fields the write contract accepts", () => {

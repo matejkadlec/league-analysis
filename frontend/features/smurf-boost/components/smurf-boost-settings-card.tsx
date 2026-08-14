@@ -34,19 +34,10 @@ import {
 } from "../smurf-boost-settings";
 
 const PREFERENCE_KEY = ["card-preferences"] as const;
-const PRESETS_KEY = ["smurf-boost-presets"] as const;
 
-/**
- * A server rejection is a Pydantic message aimed at a developer. The reader
- * gets the part that names the rule, never the model name or the schema link.
- */
-function readableRejection(detail: string): string {
-  const rule = /Value error, (.+?) \[type=/.exec(detail);
-  if (rule) {
-    return `${rule[1]}.`;
-  }
-  return "Those settings were rejected. Check the allowed range under each field.";
-}
+/** Both sides of the one cross-field rule, so both inputs can be marked. */
+const CROSS_FIELD_NAMES = ["recentWindowSize", "a3MinimumNovelGames"];
+const PRESETS_KEY = ["smurf-boost-presets"] as const;
 
 function SettingsSkeleton() {
   return (
@@ -114,9 +105,14 @@ export function SmurfBoostSettingsCard() {
     mutationFn: async (settings: Record<string, number>) => {
       const result = await updateCardPreference(SMURF_BOOST_CARD_ID, settings);
       if (!result.success) {
+        // A rejected write is reported through the shared normalization,
+        // which replaces a body carrying a class name or a schema URL with a
+        // safe sentence. Every rule this form can break is already stated
+        // beside the field, so nothing is lost by not repeating the server's.
         throw new Error(
-          readableRejection(
-            apiErrorMessage(result.error, "Those settings were rejected."),
+          apiErrorMessage(
+            result.error,
+            "Those settings were rejected. Check the allowed range under each field.",
           ),
         );
       }
@@ -194,8 +190,15 @@ export function SmurfBoostSettingsCard() {
       ]),
     );
 
+  // `Number("")` is 0, and one threshold legitimately allows 0, so a cleared
+  // field would otherwise save as zero without ever looking wrong.
   const parsed: Record<string, number> = Object.fromEntries(
-    THRESHOLD_FIELDS.map((field) => [field.name, Number(values[field.name])]),
+    THRESHOLD_FIELDS.map((field) => [
+      field.name,
+      values[field.name].trim() === ""
+        ? Number.NaN
+        : Number(values[field.name]),
+    ]),
   );
   const errors: Record<string, string> = {};
   for (const field of THRESHOLD_FIELDS) {
@@ -206,6 +209,11 @@ export function SmurfBoostSettingsCard() {
   }
   const crossError = crossFieldError(parsed);
   const invalid = Object.keys(errors).length > 0 || crossError !== null;
+  // Editing a field back to its stored value is not a change. Saving it would
+  // still write an override and turn "Shipped defaults" into "Your settings".
+  const changed = THRESHOLD_FIELDS.some(
+    (field) => parsed[field.name] !== effective[field.name],
+  );
   const dirty = draft !== null;
   const busy = saveMutation.isPending || resetMutation.isPending;
 
@@ -256,7 +264,7 @@ export function SmurfBoostSettingsCard() {
                     type="button"
                     data-testid={`smurf-boost-preset-${preset.name}`}
                     aria-pressed={active}
-                    disabled={busy}
+                    disabled={busy || active}
                     onClick={() =>
                       saveMutation.mutate(writableSettings(preset.thresholds))
                     }
@@ -302,8 +310,19 @@ export function SmurfBoostSettingsCard() {
                   min={field.min}
                   max={field.max}
                   disabled={busy}
-                  aria-invalid={Boolean(errors[field.name])}
-                  aria-describedby={`smurf-boost-${field.name}-help`}
+                  aria-invalid={Boolean(
+                    errors[field.name] ??
+                      (crossError && CROSS_FIELD_NAMES.includes(field.name)),
+                  )}
+                  aria-describedby={[
+                    `smurf-boost-${field.name}-help`,
+                    errors[field.name] ? `smurf-boost-${field.name}-error` : "",
+                    crossError && CROSS_FIELD_NAMES.includes(field.name)
+                      ? "smurf-boost-cross-error"
+                      : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
                   value={values[field.name]}
                   onChange={(event) =>
                     setDraft({ ...values, [field.name]: event.target.value })
@@ -316,7 +335,11 @@ export function SmurfBoostSettingsCard() {
                   {field.explanation} Allowed: {field.min} to {field.max}.
                 </p>
                 {errors[field.name] && (
-                  <p className="text-xs text-destructive">
+                  <p
+                    id={`smurf-boost-${field.name}-error`}
+                    role="alert"
+                    className="text-xs text-destructive"
+                  >
                     {errors[field.name]}
                   </p>
                 )}
@@ -324,14 +347,20 @@ export function SmurfBoostSettingsCard() {
             ))}
           </div>
           {crossError && (
-            <p className="text-xs text-destructive">{crossError}</p>
+            <p
+              id="smurf-boost-cross-error"
+              role="alert"
+              className="text-xs text-destructive"
+            >
+              {crossError}
+            </p>
           )}
         </div>
 
         <div className="flex flex-wrap gap-3">
           <Button
             onClick={() => saveMutation.mutate(parsed)}
-            disabled={busy || invalid || !dirty}
+            disabled={busy || invalid || !changed}
           >
             {saveMutation.isPending ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
