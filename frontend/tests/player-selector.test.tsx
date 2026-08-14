@@ -65,24 +65,39 @@ describe("PlayerSelector", () => {
     const user = userEvent.setup();
 
     await user.type(screen.getByLabelText("Choose test player"), "Selected");
-    await user.click(
-      await screen.findByRole("option", { name: "Selected#TAG (EUW)" }),
-    );
+    const savedSuggestion = await screen.findByRole("option", {
+      name: "Selected#TAG (EUW)",
+    });
+    expect(
+      screen.queryByRole("button", {
+        name: "Search Riot for this Name#Tag",
+      }),
+    ).toBeNull();
+    await user.click(savedSuggestion);
 
     await waitFor(() => expect(onPlayerSelected).toHaveBeenCalledWith(player));
     expect(discoverPlayer).not.toHaveBeenCalled();
   });
 
-  it("asks for a server before discovering an unknown Riot ID", async () => {
-    searchPlayerSuggestions.mockResolvedValue({ success: true, data: [] });
-    discoverPlayer.mockResolvedValue({ success: true, data: player });
+  it("keeps exact Riot discovery available beside fuzzy saved suggestions", async () => {
+    const discoveredPlayer = {
+      ...player,
+      puuid: "discovered-player-puuid",
+      game_name: "Target",
+      tag_line: "NEW",
+    };
+    searchPlayerSuggestions.mockResolvedValue({
+      success: true,
+      data: [player],
+    });
+    discoverPlayer.mockResolvedValue({ success: true, data: discoveredPlayer });
     const onPlayerSelected = renderSelector();
     const user = userEvent.setup();
 
-    await user.type(
-      screen.getByLabelText("Choose test player"),
-      "Selected#TAG",
-    );
+    await user.type(screen.getByLabelText("Choose test player"), "Target#NEW");
+    expect(
+      await screen.findByRole("option", { name: "Selected#TAG (EUW)" }),
+    ).not.toBeNull();
     await user.click(
       await screen.findByRole("button", {
         name: "Search Riot for this Name#Tag",
@@ -93,11 +108,11 @@ describe("PlayerSelector", () => {
 
     await waitFor(() => {
       expect(discoverPlayer).toHaveBeenCalledWith({
-        game_name: "Selected",
-        tag_line: "TAG",
+        game_name: "Target",
+        tag_line: "NEW",
         platform: "eun1",
       });
-      expect(onPlayerSelected).toHaveBeenCalledWith(player);
+      expect(onPlayerSelected).toHaveBeenCalledWith(discoveredPlayer);
     });
   });
 });

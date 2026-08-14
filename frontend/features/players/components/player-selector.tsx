@@ -56,6 +56,15 @@ function playerLabel(player: Player): string {
   return `${riotId} (${getPlatformDisplayName(player.platform)})`;
 }
 
+function isValidRiotId(value: string): boolean {
+  try {
+    parseRiotId(value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 interface PlayerSelectorProps {
   id: string;
   ariaLabel: string;
@@ -248,7 +257,8 @@ export function PlayerSelector({
               {playerLabel(player)}
             </button>
           ))}
-          {!suggestionsQuery.isFetching && suggestions.length === 0 && (
+          {!suggestionsQuery.isFetching &&
+            (suggestions.length === 0 || isValidRiotId(searchValue)) && (
             <button
               type="button"
               className="w-full rounded px-2 py-2 text-left text-xs text-muted-foreground hover:bg-accent hover:text-accent-foreground"
