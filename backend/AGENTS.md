@@ -66,7 +66,10 @@ authentication path, and refuses any database other than the exact loopback
 `league_analysis_local_dev` target.
 The post-authority `scripts/mirror_pi_postgres_to_local.py` path accepts only a
 read-only Pi export, restores into a local staging database, and keeps durable
-rollback state through the atomic local name swap.
+rollback state through the atomic local name swap. It compares the live Pi and
+local Alembic heads before export and refuses a schema mismatch without changing
+the local database; the installed mirror is not pinned to the migration head
+that existed when its local snapshot was installed.
 
 The production backend image is defined by `Dockerfile`. It installs from
 `uv.lock`, runs Uvicorn without reload as non-root UID/GID 10001, and is

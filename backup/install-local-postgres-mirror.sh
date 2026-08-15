@@ -15,8 +15,6 @@ unit_source="$source_directory/systemd"
 unit_directory="$HOME/.config/systemd/user"
 config_file="$HOME/projects/league-analysis/.env"
 mirror_source="$repository_root/backend/scripts/mirror_pi_postgres_to_local.py"
-migration_contract_source="$repository_root/backend/scripts/migration_contract.py"
-expected_head_source="$repository_root/backend/alembic/expected-head.txt"
 snapshot_source="$source_directory/postgres-snapshot.sql"
 service_name="league-analysis-local-postgres-mirror.service"
 timer_name="league-analysis-local-postgres-mirror.timer"
@@ -29,8 +27,6 @@ if [[ "$operation_root" != /* || "$operation_root" == "/" || \
 fi
 for source_file in \
   "$mirror_source" \
-  "$migration_contract_source" \
-  "$expected_head_source" \
   "$snapshot_source" \
   "$unit_source/$service_name" \
   "$unit_source/$timer_name"; do
@@ -55,14 +51,9 @@ if ! flock -n 9; then
 fi
 
 install -m 700 -- "$mirror_source" "$operations_directory/local-postgres-mirror"
-install -m 600 -- "$migration_contract_source" \
-  "$operations_directory/migration_contract.py"
-install -m 600 -- "$expected_head_source" \
-  "$operations_directory/expected-alembic-head.txt"
 install -m 600 -- "$snapshot_source" "$operations_directory/postgres-snapshot.sql"
 PYTHONDONTWRITEBYTECODE=1 /usr/bin/python3 -m py_compile \
-  "$operations_directory/local-postgres-mirror" \
-  "$operations_directory/migration_contract.py"
+  "$operations_directory/local-postgres-mirror"
 "$operations_directory/local-postgres-mirror" \
   --database league_analysis_local_dev \
   --remote pi5ram16 \
@@ -80,4 +71,4 @@ systemctl --user daemon-reload
 systemctl --user enable --now "$timer_name"
 systemctl --user is-enabled --quiet "$timer_name"
 systemctl --user is-active --quiet "$timer_name"
-printf 'Installed and enabled the daily League Analysis Pi-to-local mirror timer.\n'
+printf 'Installed and enabled the League Analysis Pi-to-local mirror timer.\n'
