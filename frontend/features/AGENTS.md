@@ -86,3 +86,16 @@ public API via `index.ts`.
   guarded against the backend by `tests/smurf-boost-settings.test.ts`; strip the
   card's fixed settings before a write, and leave a server rejection to the
   shared error normalization rather than parsing its raw body.
+- Smurf & Boost Detection renders every measurement twice: stacked blocks below
+  the `sm` breakpoint and the table from `sm` up. Both must render from the same
+  `SignalOutcome`, `formatValue`, and `noteLabel`, so the two can never disagree
+  about what a value means. The stacked list carries `role="list"`, because the
+  Tailwind reset drops the marker and WebKit drops the list role with it. Query
+  either layout by `data-testid="smurf-boost-measurements-stacked-<family>"`
+  rather than by breakpoint class.
+- `main` in `app/layout.tsx` is a flex item with the default `min-width: auto`,
+  so it never shrinks below its content and an `overflow-x-auto` beneath it does
+  not engage on its own. Content wider than a phone stretches the whole document
+  instead of scrolling inside its card. Give a wide element a narrow-screen
+  layout of its own, or add `min-w-0` on the way down, and assert the document
+  width rather than trusting the scroll container.
