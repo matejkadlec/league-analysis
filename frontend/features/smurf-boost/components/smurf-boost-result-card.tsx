@@ -4,7 +4,6 @@ import { CircleAlert, CircleHelp, Gauge, ShieldQuestion } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
 import {
   Table,
   TableBody,
@@ -52,6 +51,26 @@ function bandColor(band: SmurfBoostFamily["band"]): string {
       return "text-emerald-500";
     default:
       return "text-muted-foreground";
+  }
+}
+
+/**
+ * The same four steps as a left edge on the family's own card, so the two
+ * readings stay tellable apart at a glance while scrolling. It repeats the band
+ * word's colour and never carries the reading alone.
+ */
+function bandAccent(band: SmurfBoostFamily["band"]): string {
+  switch (band) {
+    case "strong_indicators":
+      return "border-l-rose-500";
+    case "notable_indicators":
+      return "border-l-amber-500";
+    case "weak_indicators":
+      return "border-l-yellow-500";
+    case "no_unusual_pattern":
+      return "border-l-emerald-500";
+    default:
+      return "border-l-muted-foreground";
   }
 }
 
@@ -111,7 +130,9 @@ function SignalOutcome({ signal }: { signal: SmurfBoostSignal }) {
     return <Badge variant="secondary">Above threshold</Badge>;
   }
   return (
-    <span className="text-xs text-muted-foreground">
+    // Each family sizes its own table, so this column can end up narrower in
+    // one than the other and split a two-word outcome across lines.
+    <span className="whitespace-nowrap text-xs text-muted-foreground">
       {signalOutcome(signal)}
     </span>
   );
@@ -274,38 +295,47 @@ function FamilySection({
   const insufficient = family.band === "not_enough_data";
 
   return (
-    <div className="space-y-3">
-      {/* The band is the reading. Beside the title there is room for it on the
-          right, but once the row wraps on a phone `justify-between` leaves it
-          stranded mid-line, so below `sm` the two simply stack. */}
-      <div className="flex flex-col gap-1 sm:flex-row sm:flex-wrap sm:items-baseline sm:justify-between sm:gap-2">
-        <h2 className="text-base font-semibold">
-          {familyTitle(family.family)}
-        </h2>
-        <span className="sm:text-right">
-          <span
-            data-testid={`smurf-boost-band-${family.family}`}
-            className={`block text-lg font-bold ${bandColor(family.band)}`}
-          >
-            {BAND_LABELS[family.band]}
+    // Each family is read on its own and never combined, so each gets its own
+    // card. The tint separates it from the run card holding it, which shares
+    // the same `bg-card`.
+    <Card
+      className={`border-l-4 bg-muted/20 shadow-none ${bandAccent(family.band)}`}
+    >
+      <CardHeader className="pb-3">
+        {/* The band is the reading. Beside the title there is room for it on
+            the right, but once the row wraps on a phone `justify-between`
+            leaves it stranded mid-line, so below `sm` the two simply stack. */}
+        <div className="flex flex-col gap-1 sm:flex-row sm:flex-wrap sm:items-baseline sm:justify-between sm:gap-2">
+          <h2 className="text-base font-semibold">
+            {familyTitle(family.family)}
+          </h2>
+          <span className="sm:text-right">
+            <span
+              data-testid={`smurf-boost-band-${family.family}`}
+              className={`block text-lg font-bold ${bandColor(family.band)}`}
+            >
+              {BAND_LABELS[family.band]}
+            </span>
+            <span className="block text-xs text-muted-foreground">
+              {bandMeaning(family.band)}
+            </span>
           </span>
-          <span className="block text-xs text-muted-foreground">
-            {bandMeaning(family.band)}
-          </span>
-        </span>
-      </div>
-      <p className="text-sm text-muted-foreground">
-        {familyDescription(family.family)}
-      </p>
-      {insufficient ? (
-        <p className="text-sm text-muted-foreground">{shortfall}</p>
-      ) : (
-        <>
-          <FamilySummary family={family} />
-          {family.signals.length > 0 && <SignalTable family={family} />}
-        </>
-      )}
-    </div>
+        </div>
+        <p className="text-sm text-muted-foreground">
+          {familyDescription(family.family)}
+        </p>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {insufficient ? (
+          <p className="text-sm text-muted-foreground">{shortfall}</p>
+        ) : (
+          <>
+            <FamilySummary family={family} />
+            {family.signals.length > 0 && <SignalTable family={family} />}
+          </>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -359,14 +389,13 @@ export function SmurfBoostResultCard({
           </span>
         </div>
       </CardHeader>
-      <CardContent className="space-y-6">
-        {results.families.map((family, index) => (
-          <div key={family.family} className="space-y-6">
-            {index > 0 && (
-              <Separator className="my-4 bg-gradient-to-r from-transparent via-gray-300 to-transparent" />
-            )}
-            <FamilySection family={family} shortfall={shortfall} />
-          </div>
+      <CardContent className="space-y-4">
+        {results.families.map((family) => (
+          <FamilySection
+            key={family.family}
+            family={family}
+            shortfall={shortfall}
+          />
         ))}
 
         {insufficient && (
