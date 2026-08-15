@@ -99,8 +99,10 @@ async def _upsert_match_participant(
     match_id: str,
     participant: Any,
     platform_id: str,
+    queue_id: int,
 ) -> None:
     """Merge the participant's skeletal player row and match participant row."""
+    from app.features.matches.match_lp import initialize_participant_lp
     from app.features.matches.transformers import MatchDTOTransformer
 
     existing_player_result = await db.execute(
@@ -120,7 +122,14 @@ async def _upsert_match_participant(
         )
     )
     participant_data = MatchDTOTransformer.extract_participant_data(participant)
-    await db.merge(MatchParticipant(match_id=match_id, **participant_data))
+    participant_model = await db.merge(
+        MatchParticipant(match_id=match_id, **participant_data)
+    )
+    initialize_participant_lp(
+        participant_model,
+        queue_id=queue_id,
+        remake=participant_data["remake"],
+    )
 
 
 async def _upsert_match(
@@ -140,7 +149,13 @@ async def _upsert_match(
     try:
         await db.merge(_build_fully_analyzed_match(match_dto))
         for participant in match_dto.info.participants:
-            await _upsert_match_participant(db, match_id, participant, platform_id)
+            await _upsert_match_participant(
+                db,
+                match_id,
+                participant,
+                platform_id,
+                match_dto.info.queue_id,
+            )
         await replace_match_timeline_rows(db, match_dto, timeline_payload)
         await db.commit()
     except Exception as e:

@@ -1,5 +1,6 @@
 """Match participant model for storing individual player performance in matches."""
 
+from datetime import datetime
 from decimal import Decimal
 from typing import Any, Dict, Optional
 
@@ -10,6 +11,9 @@ from sqlalchemy import (
     Index,
     Integer,
     String,
+)
+from sqlalchemy import (
+    DateTime as SQLDateTime,
 )
 from sqlalchemy import (
     Numeric as SQLDecimal,
@@ -98,6 +102,31 @@ class MatchParticipant(Base):
         nullable=False,
         default=False,
         comment="Inverted eligibleForProgression",
+    )
+    lp_change: Mapped[Optional[int]] = mapped_column(
+        Integer,
+        nullable=True,
+        comment="Observed Solo/Duo LP change; null when unavailable",
+    )
+    lp_change_source: Mapped[Optional[str]] = mapped_column(
+        String(32),
+        nullable=True,
+        comment="Provenance of the persisted LP value or unavailable state",
+    )
+    lp_change_reason: Mapped[Optional[str]] = mapped_column(
+        String(64),
+        nullable=True,
+        comment="Stable reason for the LP observation result",
+    )
+    lp_before_snapshot_at: Mapped[Optional[datetime]] = mapped_column(
+        SQLDateTime(timezone=True),
+        nullable=True,
+        comment="League snapshot preceding the LP observation window",
+    )
+    lp_after_snapshot_at: Mapped[Optional[datetime]] = mapped_column(
+        SQLDateTime(timezone=True),
+        nullable=True,
+        comment="League snapshot closing the LP observation window",
     )
 
     # KDA

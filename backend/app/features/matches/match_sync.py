@@ -21,6 +21,7 @@ logger = structlog.get_logger("app.features.matches.service")
 AnalysisMatchResult = str
 
 OnFailure = Optional[Callable[[str, Exception, dict[str, Any]], None]]
+OnMatchStored = Optional[Callable[[int, str], None]]
 
 
 class EnsureMaintenance(Protocol):
@@ -277,6 +278,7 @@ async def sync_full_queue_match(
     on_failure: OnFailure,
     is_current_game_version: Callable[[str], bool],
     reprocess_match: ReprocessMatch,
+    on_match_stored: OnMatchStored,
 ) -> tuple[int, bool]:
     """Fetch and store one current-season match. The bool is True when the queue is done."""
     await acquire_rate_limiter_or_raise(rate_limiter)
@@ -300,6 +302,8 @@ async def sync_full_queue_match(
         skip_match_on_error=False,
     )
     await reprocess_match(match_dto, timeline_payload=timeline_payload)
+    if on_match_stored:
+        on_match_stored(queue_id, match_id)
     return 1, False
 
 
@@ -316,6 +320,7 @@ async def process_queue_sync_match(
     ensure_maintenance: EnsureMaintenance,
     is_current_game_version: Callable[[str], bool],
     reprocess_match: ReprocessMatch,
+    on_match_stored: OnMatchStored,
 ) -> tuple[int, bool]:
     """Process one queue-sync match, including recoverable per-match failures."""
     try:
@@ -342,6 +347,7 @@ async def process_queue_sync_match(
             on_failure,
             is_current_game_version,
             reprocess_match,
+            on_match_stored,
         )
     except AuthenticationError, ForbiddenError, RateLimitError:
         raise
@@ -377,6 +383,7 @@ async def process_queue_sync_batch(
     ensure_maintenance: EnsureMaintenance,
     is_current_game_version: Callable[[str], bool],
     reprocess_match: ReprocessMatch,
+    on_match_stored: OnMatchStored,
     keep_fetching: bool,
 ) -> tuple[int, bool]:
     """Process one page of queue-sync match IDs."""
@@ -395,6 +402,7 @@ async def process_queue_sync_batch(
             ensure_maintenance,
             is_current_game_version,
             reprocess_match,
+            on_match_stored,
         )
         stored += delta
         if stop_queue:
@@ -413,6 +421,7 @@ async def sync_single_queue_for_player(
     ensure_maintenance: EnsureMaintenance,
     is_current_game_version: Callable[[str], bool],
     reprocess_match: ReprocessMatch,
+    on_match_stored: OnMatchStored = None,
 ) -> int:
     """Sync one queue for a single player."""
     start = 0
@@ -455,6 +464,7 @@ async def sync_single_queue_for_player(
             ensure_maintenance,
             is_current_game_version,
             reprocess_match,
+            on_match_stored,
             keep_fetching,
         )
         queue_stored += stored

@@ -56,6 +56,9 @@ public API via `index.ts`.
   silhouettes with generic icon-library approximations. The Voidgrub uses the
   bottom cell of Riot's `right_icons_grub.png` sprite, normalized to the same
   source palette, team-color filter, and perceived size as the other icons.
+- Match History displays only the backend's persisted per-match LP value:
+  signed gain/loss, `+0 LP` for a persisted remake, and neutral `— LP` when the
+  value is unavailable. Never infer a value in the browser.
 - The Match Fetcher Jobs card has no per-queue checkboxes. Backend product
   support determines its complete queue set; the UI retains only job-level
   status, schedule, triggering, testing, pause/stop, and history controls.
