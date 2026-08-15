@@ -17,9 +17,10 @@ Deep topic docs live in [`docs/`](docs/README.md).
 Nothing else about how work gets delivered is prescribed. Branches, commits,
 PR grouping, and when to validate are your judgment.
 
-Known runtime traps that no gate catches live in the `pitfall-check` agent
-(`.claude/agents/pitfall-check.md`) — run it against a diff, and record new
-lessons in its ledger.
+Runtime traps that no gate catches are listed in
+[`.claude/pitfalls.md`](.claude/pitfalls.md); the `pitfall-check` agent
+reviews a diff against them. Record a new one there — and prefer a type, a
+test, or a hook whenever one would catch it instead.
 
 ## Commands
 
