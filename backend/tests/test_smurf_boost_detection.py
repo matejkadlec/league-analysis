@@ -1,6 +1,6 @@
 """Regression coverage for the `smurf-boost/v1` detection model.
 
-The fixtures mirror the validation plan in `docs/smurf-boost-detection.md`. The
+The fixtures mirror the model's own validation plan. The
 engine is pure, so every case is built from constructed matches with no database
 and no mocking.
 

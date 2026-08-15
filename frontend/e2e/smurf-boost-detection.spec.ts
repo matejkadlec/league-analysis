@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 import { installSmurfBoostMocks, PUUID } from "./support/smurf-boost-harness";
 
-/** Words `docs/smurf-boost-detection.md` forbids in the rendered page. */
+/** Words the model's result wording forbids in the rendered page. */
 const FORBIDDEN = [
   "smurf detected",
   "likely boosted",

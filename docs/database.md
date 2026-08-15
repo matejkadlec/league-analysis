@@ -99,8 +99,7 @@ because these values drive staleness decisions.
   under later rules and is never silently recomputed. `latest_match_id` — not a
   row count — is the staleness key, because the service caps how many matches it
   loads. The run reads only stored rows: it makes no Riot API call, joins no
-  rate limiter, and writes no Riot-owned table. See
-  [`smurf-boost-detection.md`](smurf-boost-detection.md).
+  rate limiter, and writes no Riot-owned table.
 
 ## Local Riot-Data Cleanse and QA Fixtures (LGA-11)
 

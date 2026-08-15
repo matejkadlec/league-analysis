@@ -76,7 +76,8 @@ public API via `index.ts`.
   0-100 score, or a probability. Keep unavailable signals visible with their
   reason, render an unknown note identifier as itself, and keep the disclaimer
   always expanded. The forbidden wording and the band vocabulary are fixed by
-  [`../../docs/smurf-boost-detection.md`](../../docs/smurf-boost-detection.md).
+  `smurf-boost/smurf-boost-vocabulary.ts`, which the backend's own
+  `smurf_boost_detection/schemas.py` is checked against.
   Read the persisted run lifecycle before rendering: the backend answers a
   failed run and a run already in flight with HTTP 200, so neither is a result,
   while a run in flight under *different* thresholds is a `409`. Never report a
@@ -93,9 +94,9 @@ public API via `index.ts`.
   Tailwind reset drops the marker and WebKit drops the list role with it. Query
   either layout by `data-testid="smurf-boost-measurements-stacked-<family>"`
   rather than by breakpoint class.
-- `main` in `app/layout.tsx` is a flex item with the default `min-width: auto`,
-  so it never shrinks below its content and an `overflow-x-auto` beneath it does
-  not engage on its own. Content wider than a phone stretches the whole document
-  instead of scrolling inside its card. Give a wide element a narrow-screen
-  layout of its own, or add `min-w-0` on the way down, and assert the document
-  width rather than trusting the scroll container.
+- `main` in `app/layout.tsx` carries `min-w-0`. A flex item defaults to
+  `min-width: auto` and then refuses to shrink below its content, which makes
+  every `overflow-x-auto` beneath it inert and lets one wide child stretch the
+  whole document sideways. Keep that class. It bounds the shell, not the page:
+  content with no scroll container of its own still overflows visibly, so assert
+  the document width at a phone viewport rather than trusting either.

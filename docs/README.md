@@ -18,7 +18,6 @@ Jira project `LGA` remains the source for task planning and execution state.
 | Background jobs | [`jobs.md`](jobs.md) | Scheduler lifecycle, job behavior, controls, and API surface |
 | Cookie/storage consent | [`cookie-consent-compliance.md`](cookie-consent-compliance.md) | Compliance baseline and implementation boundary |
 | Matchmaking analysis | [`matchmaking-analysis.md`](matchmaking-analysis.md) | Algorithm, data flow, persistence, API, and UI behavior |
-| Smurfing and boosting detection (LGA-19 model) | [`smurf-boost-detection.md`](smurf-boost-detection.md) | Signals, windows, normalization, scoring, presets, result wording, and validation plan for `smurf-boost/v1` |
 
 The root [`README.md`](../README.md) is the private repository entry point. The
 root [`AGENTS.md`](../AGENTS.md) is the mandatory repository instruction map;

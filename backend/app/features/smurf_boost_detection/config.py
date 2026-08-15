@@ -1,7 +1,7 @@
 """Fixed model constants for `smurf-boost/v1`.
 
 Everything in this module is part of the versioned model and is deliberately not
-user-configurable. The authority is `docs/smurf-boost-detection.md`; changing any
+user-configurable. This module is the authority for them; changing any
 value here requires a new model version.
 """
 

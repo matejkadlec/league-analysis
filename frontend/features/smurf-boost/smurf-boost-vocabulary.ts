@@ -4,7 +4,7 @@ import type {
 } from "@/lib/core/schemas";
 
 /**
- * The wording `docs/smurf-boost-detection.md` fixes.
+ * The wording the model fixes. This module is its only copy in the frontend.
  *
  * That document fixes the band vocabulary, the family titles, the confidence
  * labels, the note readings and the disclaimer, and forbids words such as

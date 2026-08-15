@@ -53,7 +53,7 @@ const CONSERVATIVE_THRESHOLDS = {
   baseline_window_size: 60,
 };
 
-/** Words `docs/smurf-boost-detection.md` forbids in any result. */
+/** Words the model's result wording forbids in any result. */
 const FORBIDDEN = [
   "smurf detected",
   "likely boosted",
