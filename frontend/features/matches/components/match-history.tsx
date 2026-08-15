@@ -84,6 +84,8 @@ interface MatchHistoryProps {
   lastUpdated?: string | null;
 }
 
+const MATCH_HISTORY_SEARCH_DEBOUNCE_MS = 300;
+
 // Format time as "H:MM AM/PM"
 function formatTime(timestamp: number): string {
   const date = new Date(timestamp);
@@ -648,6 +650,7 @@ export function MatchHistory({ puuid, lastUpdated }: MatchHistoryProps) {
     MatchHistoryQueueFilter[]
   >([...DEFAULT_MATCH_HISTORY_QUEUE_SELECTION]);
   const [matchSearch, setMatchSearch] = useState("");
+  const [debouncedMatchSearch, setDebouncedMatchSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState<MatchHistoryPageSize>(
     DEFAULT_MATCH_HISTORY_PAGE_SIZE,
@@ -656,6 +659,14 @@ export function MatchHistory({ puuid, lastUpdated }: MatchHistoryProps) {
   const [pageSizeOpen, setPageSizeOpen] = useState(false);
   const queueQueryParam = getMatchHistoryQueueQuery(activeQueueFilters);
   const normalizedMatchSearch = matchSearch.trim();
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      setDebouncedMatchSearch(normalizedMatchSearch);
+    }, MATCH_HISTORY_SEARCH_DEBOUNCE_MS);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [normalizedMatchSearch]);
 
   /* eslint-disable react-hooks/set-state-in-effect -- Optional browser preferences initialize after hydration to preserve a stable server snapshot. */
   useEffect(() => {
@@ -687,7 +698,7 @@ export function MatchHistory({ puuid, lastUpdated }: MatchHistoryProps) {
       "matchHistoryDetailed",
       puuid,
       queueQueryParam,
-      normalizedMatchSearch,
+      debouncedMatchSearch,
       currentPage,
       pageSize,
     ],
@@ -697,7 +708,7 @@ export function MatchHistory({ puuid, lastUpdated }: MatchHistoryProps) {
         `/matches/player/${puuid}/detailed`,
         {
           queues: queueQueryParam,
-          search: normalizedMatchSearch || undefined,
+          search: debouncedMatchSearch || undefined,
           start: (currentPage - 1) * pageSize,
           count: pageSize,
         },
@@ -820,7 +831,7 @@ export function MatchHistory({ puuid, lastUpdated }: MatchHistoryProps) {
     pageSize,
     apiTotalMatches,
   );
-  const hasActiveSearch = normalizedMatchSearch.length > 0;
+  const hasActiveSearch = debouncedMatchSearch.length > 0;
 
   useEffect(() => {
     if (isPlaceholderData) {
@@ -1008,7 +1019,7 @@ export function MatchHistory({ puuid, lastUpdated }: MatchHistoryProps) {
             <AlertDescription>
               {hasActiveSearch ? (
                 <p className="font-medium">
-                  No matches found for &quot;{normalizedMatchSearch}&quot;.
+                  No matches found for &quot;{debouncedMatchSearch}&quot;.
                 </p>
               ) : (
                 <p className="font-medium">

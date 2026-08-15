@@ -43,6 +43,8 @@ public API via `index.ts`.
   change, and preserve unknown IDs as `Queue N` instead of mapping them to a
   supported mode. Champion or player search is server-backed across every
   participant in the selected queue union and must run before pagination.
+  Debounce its normalized value before it enters the TanStack Query key so one
+  typing burst produces only the final detailed-history request.
   Ranked Solo/Duo and 25 matches are the defaults; queue selection and page
   size persist only through consent-gated optional browser storage.
 - Match History objective order, accessible labels, counts, and dedicated

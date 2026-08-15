@@ -255,4 +255,47 @@ describe("Match History controls", () => {
 
     queryClient.clear();
   });
+
+  it("debounces server-backed search requests while typing", async () => {
+    const queryClient = renderHistory();
+
+    await screen.findByText("Showing 1 to 25 of 126 matches");
+    validatedGet.mockClear();
+
+    const searchInput = screen.getByPlaceholderText(
+      "Search for champion or player",
+    );
+    fireEvent.change(searchInput, { target: { value: "A" } });
+    fireEvent.change(searchInput, { target: { value: "Ah" } });
+    fireEvent.change(searchInput, { target: { value: "Ahri" } });
+
+    expect(
+      validatedGet.mock.calls.filter(
+        ([, path, params]) =>
+          path === "/matches/player/player-puuid/detailed" && params?.search,
+      ),
+    ).toHaveLength(0);
+
+    await waitFor(() =>
+      expect(
+        hasDetailedRequest({
+          queues: "420",
+          search: "Ahri",
+          start: 0,
+          count: 25,
+        }),
+      ).toBe(true),
+    );
+    expect(
+      validatedGet.mock.calls
+        .filter(
+          ([, path, params]) =>
+            path === "/matches/player/player-puuid/detailed" &&
+            params?.search,
+        )
+        .map(([, , params]) => params?.search),
+    ).toEqual(["Ahri"]);
+
+    queryClient.clear();
+  });
 });
