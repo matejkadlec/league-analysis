@@ -750,6 +750,10 @@ async def shutdown_scheduler() -> None:
     try:
         logger.info("Shutting down job scheduler")
 
+        # Never wait. A Riot execution can run for many minutes, and draining
+        # one would stall every deployment for as long as it happens to have
+        # left. Startup recovery owns whatever persisted state an interrupted
+        # run leaves behind, so cutting it short is the recoverable choice.
         _scheduler.shutdown(wait=False)
 
         _scheduler = None
