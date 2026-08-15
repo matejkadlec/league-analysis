@@ -102,6 +102,21 @@ function signalOutcome(signal: SmurfBoostSignal): string {
   return met ? "Other conditions not met" : "Below threshold";
 }
 
+/** The outcome pill, identical in both the table and the stacked layout. */
+function SignalOutcome({ signal }: { signal: SmurfBoostSignal }) {
+  if (!signal.available) {
+    return <Badge variant="outline">Not available</Badge>;
+  }
+  if (signal.triggered) {
+    return <Badge variant="secondary">Above threshold</Badge>;
+  }
+  return (
+    <span className="text-xs text-muted-foreground">
+      {signalOutcome(signal)}
+    </span>
+  );
+}
+
 function SignalRow({ signal }: { signal: SmurfBoostSignal }) {
   return (
     <TableRow>
@@ -128,49 +143,105 @@ function SignalRow({ signal }: { signal: SmurfBoostSignal }) {
         {signal.sample_size}
       </TableCell>
       <TableCell className="text-right align-top">
-        {!signal.available ? (
-          <Badge variant="outline">Not available</Badge>
-        ) : signal.triggered ? (
-          <Badge variant="secondary">Above threshold</Badge>
-        ) : (
-          <span className="text-xs text-muted-foreground">
-            {signalOutcome(signal)}
-          </span>
-        )}
+        <SignalOutcome signal={signal} />
       </TableCell>
     </TableRow>
   );
 }
 
+/**
+ * The same measurement stacked for a narrow screen.
+ *
+ * The table needs roughly 450px of intrinsic width before it starts truncating,
+ * which is wider than a phone. Scrolling it sideways would hide the threshold
+ * and the outcome — the two columns that decide what the row means — behind a
+ * gesture, so below `sm` each measurement becomes its own block instead.
+ */
+function SignalBlock({ signal }: { signal: SmurfBoostSignal }) {
+  const figures: { label: string; value: string }[] = [
+    { label: "Value", value: formatValue(signal.raw_value) },
+    { label: "Threshold", value: formatValue(signal.threshold) },
+    { label: "Games", value: String(signal.sample_size) },
+  ];
+
+  return (
+    <li className="rounded-md border border-border/60 bg-muted/20 p-3">
+      <div className="flex items-center justify-between gap-2">
+        <span className="font-mono text-xs text-primary">{signal.id}</span>
+        <SignalOutcome signal={signal} />
+      </div>
+      <p className="mt-2 text-sm">{signal.reason}</p>
+      {signal.notes.length > 0 && (
+        <ul className="mt-1 space-y-0.5">
+          {signal.notes.map((note) => (
+            <li key={note} className="text-xs text-muted-foreground">
+              {noteLabel(note)}
+            </li>
+          ))}
+        </ul>
+      )}
+      <dl className="mt-3 grid grid-cols-3 gap-2 border-t border-border/40 pt-2">
+        {figures.map((figure) => (
+          <div key={figure.label}>
+            <dt className="text-[0.6875rem] uppercase tracking-wide text-muted-foreground">
+              {figure.label}
+            </dt>
+            <dd className="font-mono text-sm">{figure.value}</dd>
+          </div>
+        ))}
+      </dl>
+    </li>
+  );
+}
+
 function SignalTable({ family }: { family: SmurfBoostFamily }) {
   return (
-    <div className="overflow-x-auto">
-      <Table aria-label={`${familyTitle(family.family)} measurements`}>
-        <TableHeader>
-          <TableRow className="h-11 border-b border-border/50">
-            <TableHead scope="col">Area</TableHead>
-            <TableHead scope="col">What was measured</TableHead>
-            <TableHead scope="col" className="text-right">
-              Value
-            </TableHead>
-            <TableHead scope="col" className="text-right">
-              Threshold
-            </TableHead>
-            <TableHead scope="col" className="text-right">
-              Games
-            </TableHead>
-            <TableHead scope="col" className="text-right">
-              Outcome
-            </TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {family.signals.map((signal) => (
-            <SignalRow key={signal.id} signal={signal} />
-          ))}
-        </TableBody>
-      </Table>
-      <p className="mt-1 text-xs text-muted-foreground">
+    <div>
+      {/* Tailwind's reset removes the list marker, and WebKit then drops the
+          list role — which would leave this labelled group unannounced on the
+          one platform that ever sees it. `role="list"` puts the semantics back. */}
+      <ul
+        role="list"
+        aria-label={`${familyTitle(family.family)} measurements`}
+        data-testid={`smurf-boost-measurements-stacked-${family.family}`}
+        className="space-y-3 sm:hidden"
+      >
+        {family.signals.map((signal) => (
+          <SignalBlock key={signal.id} signal={signal} />
+        ))}
+      </ul>
+
+      {/* The shadcn `Table` supplies its own `overflow-auto` wrapper, so this
+          element only decides which layout is on show. */}
+      <div className="hidden sm:block">
+        <Table aria-label={`${familyTitle(family.family)} measurements`}>
+          <TableHeader>
+            <TableRow className="h-11 border-b border-border/50">
+              <TableHead scope="col">Area</TableHead>
+              <TableHead scope="col">What was measured</TableHead>
+              <TableHead scope="col" className="text-right">
+                Value
+              </TableHead>
+              <TableHead scope="col" className="text-right">
+                Threshold
+              </TableHead>
+              <TableHead scope="col" className="text-right">
+                Games
+              </TableHead>
+              <TableHead scope="col" className="text-right">
+                Outcome
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {family.signals.map((signal) => (
+              <SignalRow key={signal.id} signal={signal} />
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+
+      <p className="mt-2 text-xs text-muted-foreground">
         Each value is in the unit named in its own description: standardized
         units, a win rate, or doublings of spread.
       </p>
@@ -204,11 +275,14 @@ function FamilySection({
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
+      {/* The band is the reading. Beside the title there is room for it on the
+          right, but once the row wraps on a phone `justify-between` leaves it
+          stranded mid-line, so below `sm` the two simply stack. */}
+      <div className="flex flex-col gap-1 sm:flex-row sm:flex-wrap sm:items-baseline sm:justify-between sm:gap-2">
         <h2 className="text-base font-semibold">
           {familyTitle(family.family)}
         </h2>
-        <span className="text-right">
+        <span className="sm:text-right">
           <span
             data-testid={`smurf-boost-band-${family.family}`}
             className={`block text-lg font-bold ${bandColor(family.band)}`}
