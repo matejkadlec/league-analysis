@@ -29,6 +29,9 @@ from app.features.matchmaking_analysis.router import router as matchmaking_route
 from app.features.players.router import router as players_router
 from app.features.playstyle_analysis.router import router as playstyle_analysis_router
 from app.features.settings.router import router as settings_router
+from app.features.smurf_boost_detection.router import (
+    router as smurf_boost_router,
+)
 
 settings = get_global_settings()
 logging.basicConfig(
@@ -139,6 +142,10 @@ tags_metadata = [
     {"name": "jobs", "description": "Background job management."},
     {"name": "settings", "description": "System settings."},
     {"name": "matchmaking-analysis", "description": "Matchmaking fairness analysis."},
+    {
+        "name": "smurf-boost-detection",
+        "description": "Explainable smurfing and boosting indicators.",
+    },
     {"name": "health", "description": "Health check endpoints."},
 ]
 
@@ -182,6 +189,7 @@ app.include_router(
 app.include_router(jobs_router, prefix="/api/v1", tags=["jobs"])
 app.include_router(settings_router, prefix="/api/v1", tags=["settings"])
 app.include_router(matchmaking_router, prefix="/api/v1", tags=["matchmaking-analysis"])
+app.include_router(smurf_boost_router, prefix="/api/v1", tags=["smurf-boost-detection"])
 
 # Legacy route compatibility
 app.include_router(players_router)

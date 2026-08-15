@@ -54,9 +54,9 @@ TanStack Query owns server-data fetching and cache state. Zod validates API
 payloads at the frontend boundary.
 
 The authenticated player provider owns the normal current-player context.
-Player Overview and Match History use an explicit `?puuid=` as the tab-local
-authority and the account's saved current PUUID only as the default for new
-navigation. Player Overview owns aggregate/statistical cards; Match History is
+Player Overview, Match History and Smurf & Boost Detection use an explicit
+`?puuid=` as the tab-local authority and the account's saved current PUUID only
+as the default for new navigation. Player Overview owns aggregate/statistical cards; Match History is
 a separate top-level detailed workflow. The sidebar is the canonical search
 and current-player surface. Clicking the current-player row opens the Tracked
 Players dialog without changing the active route; that dialog owns the complete

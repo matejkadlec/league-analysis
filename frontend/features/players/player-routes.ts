@@ -1,9 +1,11 @@
 export const PLAYER_OVERVIEW_PATH = "/player-overview";
 export const MATCH_HISTORY_PATH = "/match-history";
+export const SMURF_BOOST_DETECTION_PATH = "/smurf-boost-detection";
 
 const PLAYER_CENTRIC_PATHS = new Set([
   PLAYER_OVERVIEW_PATH,
   MATCH_HISTORY_PATH,
+  SMURF_BOOST_DETECTION_PATH,
 ]);
 
 export function isPlayerCentricPath(pathname: string): boolean {

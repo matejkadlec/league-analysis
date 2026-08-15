@@ -78,3 +78,34 @@ public API via `index.ts`.
   `error_code=RIOT_API_KEY_INVALID` must activate the shared API-key header
   refresh signal; accepting, polling, or completing a run must not mark the key
   valid. Only backend-observed direct Riot responses own that decision.
+- Smurf & Boost Detection takes every string the specification fixes — bands,
+  family titles, confidence labels, note readings, disclaimer — from
+  `smurf-boost/smurf-boost-vocabulary.ts`; never write one of those inline.
+  Present one band per family and never a combined verdict, a percentage, a
+  0-100 score, or a probability. Keep unavailable signals visible with their
+  reason, render an unknown note identifier as itself, and keep the disclaimer
+  always expanded. The forbidden wording and the band vocabulary are fixed by
+  `smurf-boost/smurf-boost-vocabulary.ts`, which the backend's own
+  `smurf_boost_detection/schemas.py` is checked against.
+  Read the persisted run lifecycle before rendering: the backend answers a
+  failed run and a run already in flight with HTTP 200, so neither is a result,
+  while a run in flight under *different* thresholds is a `409`. Never report a
+  signal as below its threshold when its value is not: four of the eight
+  combine the threshold with a second condition that can fail on its own.
+  Threshold ranges are duplicated in `smurf-boost/smurf-boost-settings.ts` and
+  guarded against the backend by `tests/smurf-boost-settings.test.ts`; strip the
+  card's fixed settings before a write, and leave a server rejection to the
+  shared error normalization rather than parsing its raw body.
+- Smurf & Boost Detection renders every measurement twice: stacked blocks below
+  the `sm` breakpoint and the table from `sm` up. Both must render from the same
+  `SignalOutcome`, `formatValue`, and `noteLabel`, so the two can never disagree
+  about what a value means. The stacked list carries `role="list"`, because the
+  Tailwind reset drops the marker and WebKit drops the list role with it. Query
+  either layout by `data-testid="smurf-boost-measurements-stacked-<family>"`
+  rather than by breakpoint class.
+- `main` in `app/layout.tsx` carries `min-w-0`. A flex item defaults to
+  `min-width: auto` and then refuses to shrink below its content, which makes
+  every `overflow-x-auto` beneath it inert and lets one wide child stretch the
+  whole document sideways. Keep that class. It bounds the shell, not the page:
+  content with no scroll container of its own still overflows visibly, so assert
+  the document width at a phone viewport rather than trusting either.

@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from logging.config import fileConfig
 
+from alembic import context
 from sqlalchemy import engine_from_config, pool
 
-from alembic import context
 from app.core.config import get_settings
 from app.core.models import Base
 from app.features.auth import (
@@ -35,6 +35,9 @@ from app.features.players import leagues  # noqa: F401
 from app.features.players import models as player_models  # noqa: F401
 from app.features.playstyle_analysis import models as playstyle_models  # noqa: F401
 from app.features.settings import models as settings_models  # noqa: F401
+from app.features.smurf_boost_detection import (
+    models as smurf_boost_models,  # noqa: F401
+)
 
 config = context.config
 
