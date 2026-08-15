@@ -1,8 +1,7 @@
 # Features (features/)
 
 Each feature is self-contained: `components/`, `index.ts` public API, optional
-`types.ts`/`utils/`. Kebab-case files, PascalCase components, TypeScript prop
-interfaces, shadcn/ui from `@/components/ui/`.
+`types.ts`/`utils/`. shadcn/ui primitives come from `@/components/ui/`.
 
 - Player-derived query keys must include the exact PUUID; after an explicit
   update, refetch only matching active keys and show the completion message

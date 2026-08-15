@@ -34,6 +34,16 @@ repos:
         language: fail
         files: '(^|/)(\.env|id_rsa|id_ed25519)$|\.(pem|key)$'
 
+      # ESLint has no filename rule and adding a plugin for one convention is
+      # not worth the dependency. The tree is fully kebab-case today, so this
+      # only ever fires on a new violation. Next.js dynamic segments and route
+      # groups are lowercase already, so they pass.
+      - id: forbid-non-kebab-frontend-filenames
+        name: Frontend source filenames stay kebab-case
+        entry: 'Frontend source filenames must be kebab-case:'
+        language: fail
+        files: '^frontend/(?!node_modules/)(?:[^/]*/)*[^/]*[A-Z_][^/]*\.(?:ts|tsx)$'
+
       # Reviewed Alembic revisions are the schema authority. This catches the
       # committed-code half of that rule; dropping or resetting a populated
       # schema is a runtime action no hook can see.

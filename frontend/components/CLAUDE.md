@@ -4,7 +4,7 @@
   `npx shadcn@latest add <component>`; no custom UI primitives.
 - Feature-specific components go in `features/`, not here. `cn()` for
   conditional classes; TanStack Query, never direct axios; never skip
-  loading/error states or TypeScript prop interfaces; no camelCase file names.
+  loading/error states.
 - `header-messages.tsx` polls shared backend credential health — keep the
   polling/focus/event refreshes and the server health revision for
   dismissible incident IDs; never infer key validity from cached or locally

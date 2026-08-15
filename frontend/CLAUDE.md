@@ -1,17 +1,14 @@
 # Frontend
 
-Stack: Node (pinned by `.nvmrc`) + npm (pinned by `packageManager`), Next.js
-App Router, React 19, TypeScript strict, Tailwind 4, shadcn/ui (New York),
-TanStack Query v5, Zod v4, Axios, sonner, lucide-react, Vitest + Testing
-Library + jsdom. Domain UI under `features/<name>/`, shared components under
-`components/`, utilities under `lib/core/`. The `typescript` npm package is a
-TypeScript 6 compatibility alias for ESLint while the native TypeScript 7
-compiler supplies `tsc` — Next's TypeScript API mode stays enabled.
+Next.js App Router with shadcn/ui (New York). Domain UI under
+`features/<name>/`, shared components under `components/`, utilities under
+`lib/core/`. `package.json` is the version authority; the two-TypeScript-package
+arrangement is explained in
+[`../docs/project-overview.md`](../docs/project-overview.md#technology).
 
 ## Rules
 
-- TypeScript strict (no `any`), interfaces for props, kebab-case files,
-  PascalCase components.
+- Interfaces for props.
 - `"use client"` for hooks/events/browser APIs.
 - TanStack Query for all data fetching: `validatedGet` + Zod schemas from
   `lib/core`; always handle loading/error/success states.
@@ -50,6 +47,6 @@ compiler supplies `tsc` — Next's TypeScript API mode stays enabled.
 
 ## Commands
 
-`../test.sh -f`, `npm run dev`, `npm run lint`, `npm run typecheck`,
-`npm test`, `npm run build`, `rm -rf .next` (clear cache). Playwright:
-`npx playwright install chromium` once, then `npm run test:e2e`.
+`../test.sh -f` for the scoped gate; the rest are `package.json` scripts.
+`rm -rf .next` clears a stale cache. Playwright needs
+`npx playwright install chromium` once before `npm run test:e2e`.
