@@ -263,6 +263,10 @@ export function normalizeApiError(error: unknown): ApiError {
       };
     }
 
+    // A reachability failure may point at this application's own backend, and
+    // never at the user's internet connection. The browser reached this code,
+    // so their connection demonstrably works; blaming it sends people to
+    // reboot a router over a service outage.
     return {
       kind: "network",
       code: "NETWORK_ERROR",

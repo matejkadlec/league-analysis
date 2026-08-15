@@ -36,6 +36,7 @@ import {
   getRuneStyleName,
 } from "@/lib/core/data-dragon";
 import { useDDragonVersion } from "@/lib/core/data-dragon-context";
+import { playerQueryKey } from "@/features/players";
 import { getMatchHistoryErrorMessage } from "../utils/match-history-error";
 import {
   Tooltip,
@@ -768,9 +769,12 @@ export function MatchHistory({ puuid, lastUpdated }: MatchHistoryProps) {
       setTimeout(async () => {
         await Promise.all([
           refetch(),
-          queryClient.invalidateQueries({ queryKey: ["player"] }),
-          queryClient.invalidateQueries({ queryKey: ["player-league"] }),
-          queryClient.invalidateQueries({ queryKey: ["player-stats"] }),
+          // Scoped to this player. Without the PUUID these are prefix
+          // matches that invalidate every cached player, so switching to
+          // someone else afterwards refetches their data too.
+          queryClient.invalidateQueries({ queryKey: playerQueryKey(puuid) }),
+          queryClient.invalidateQueries({ queryKey: ["player-league", puuid] }),
+          queryClient.invalidateQueries({ queryKey: ["player-stats", puuid] }),
         ]);
         router.refresh();
         setIsUpdating(false);

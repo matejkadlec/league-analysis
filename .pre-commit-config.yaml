@@ -16,13 +16,122 @@ repos:
       - id: detect-private-key
       - id: debug-statements
 
+  # Secret *values* in any file type. The filename hook below only blocks
+  # credential-shaped paths, and detect-private-key only matches PEM blocks,
+  # so neither catches an API key pasted into a doc, JSON, or test fixture.
+  # Scans the staged diff only; the tracked history is clean as of v8.30.1,
+  # so no .gitleaksignore is needed.
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks
+
   - repo: local
     hooks:
+      # A bare `.env` was the only env file this caught. The suffixed forms
+      # (`.env.local`, `.env.production`) and the `<name>.env` form this
+      # project actually deploys with are the ones most likely to be staged by
+      # accident. Committable templates are exempt.
       - id: forbid-credential-filenames
         name: Forbid credential-looking filenames
         entry: 'A staged filename looks like a credential:'
         language: fail
-        files: '(^|/)(\.env|id_rsa|id_ed25519)$|\.(pem|key)$'
+        files: '(?i)(^|/)(?!\.env\.(?:example|template|sample)$)(?:\.env(?:\.[^/]+)?|[^/]+\.env|id_rsa|id_dsa|id_ecdsa|id_ed25519|credentials\.json)$|\.(pem|key|p12|pfx)$'
+
+      # ESLint has no filename rule and adding a plugin for one convention is
+      # not worth the dependency. The tree is fully kebab-case today, so this
+      # only ever fires on a new violation. Next.js dynamic segments and route
+      # groups are lowercase already, so they pass. The check covers every
+      # path segment, not just the basename — a PascalCase feature directory
+      # is the same violation as a PascalCase file.
+      - id: forbid-non-kebab-frontend-filenames
+        name: Frontend source filenames stay kebab-case
+        entry: 'Frontend source paths must be kebab-case:'
+        language: fail
+        files: '^frontend/(?!node_modules/)(?=.*(?:[A-Z ]|(?<!/)_)).*\.(?:ts|tsx|js|jsx|mjs|cjs|mts|cts)$'
+
+      # Features depend on core, never the reverse. app/core/match_utils.py
+      # already breaks this at module level and is excluded rather than
+      # silently legitimised — the exclusion is the todo list. Every other
+      # core module is held to the rule, so the violation cannot spread.
+      - id: forbid-core-importing-features
+        name: app/core must not import app/features
+        entry: 'from\s+app\.features|import\s+app\.features'
+        language: pygrep
+        files: '^backend/app/core/.*\.py$'
+        exclude: '^backend/app/core/match_utils\.py$'
+
+      # Reviewed Alembic revisions are the schema authority. This catches the
+      # committed-code half of that rule; dropping or resetting a populated
+      # schema is a runtime action no hook can see.
+      - id: forbid-metadata-create-all
+        name: Forbid Base.metadata.create_all (Alembic owns the schema)
+        entry: 'metadata\.create_all'
+        language: pygrep
+        files: \.py$
+
+      # All data fetching goes through TanStack Query over the validated
+      # client in lib/core. axios itself belongs to that client and its
+      # tests, so those two trees are excluded rather than the rest of the
+      # app being opted in — a rogue client under lib/ would otherwise pass.
+      # A type-only import performs no request, and static, require and
+      # dynamic forms all count.
+      - id: forbid-direct-axios
+        name: No direct axios outside lib/core (use the validated client)
+        entry: '^(?!\s*(?://|\*|/\*)).*(?:require\(\s*["'']axios["'']\s*\)|import\(\s*["'']axios["'']\s*\))|^(?!\s*(?://|\*|/\*)|\s*import\s+type\b).*from\s+["'']axios["'']'
+        language: pygrep
+        files: '^frontend/(?!node_modules/|lib/core/|tests/).*\.(?:ts|tsx|js|jsx)$'
+
+      # Same rule as the axios hook, other half: data fetching goes through
+      # TanStack Query over the validated client. features/auth is excluded
+      # because token bootstrapping sits *below* that client — it cannot call
+      # the thing whose token it is refreshing.
+      - id: forbid-direct-fetch
+        name: No raw fetch() in UI code (use the validated client)
+        entry: '^(?!\s*(?://|\*|/\*))(?=.*(?:(?<![.\w])fetch\s*\(|(?:globalThis|window|self)\.fetch\s*\())'
+        language: pygrep
+        files: '^frontend/(app|components|features)/.*\.(?:ts|tsx)$'
+        exclude: '^frontend/features/auth/'
+
+      # The Data Dragon version is resolved once through the cached manifest
+      # helper. A hardcoded CDN URL elsewhere pins a version that then rots.
+      - id: forbid-hardcoded-ddragon-url
+        name: Data Dragon URLs belong to the lib/core helper
+        entry: '(?i)ddragon\.leagueoflegends\.com'
+        language: pygrep
+        files: '^frontend/(?!node_modules/).*\.(?:ts|tsx)$'
+        exclude: '^frontend/(?:lib/core/data-dragon(?:-version)?\.ts$|next\.config\.ts$|tests/)'
+
+      # Objective icons are Riot's own art. An icon-library approximation is
+      # visually close enough to pass review and wrong for the product.
+      - id: forbid-icon-library-objective-icons
+        name: Objective icons stay Riot art, not icon-library shapes
+        entry: 'lucide-react|react-icons|@heroicons'
+        language: pygrep
+        files: '^frontend/features/matches/components/objective-icon'
+
+      # This project standardized on proxy.ts. Next resolves only
+      # `middleware.js|ts` (the installed docs say `proxy.js|ts`, middleware
+      # being the deprecated name), so .tsx/.jsx/.mjs cannot take effect on
+      # their own — they are caught anyway because a file with that basename
+      # states an intent to add request interception outside proxy.ts.
+      - id: forbid-nextjs-middleware
+        name: Next.js interception lives in proxy.ts, not middleware.ts
+        entry: 'This project uses frontend/proxy.ts, not middleware.ts:'
+        language: fail
+        files: '^frontend/(src/)?middleware\.(ts|tsx|js|jsx|mjs)$'
+
+      # Relative-link integrity and the docs/README.md topic index. Runs over
+      # the tracked corpus, not the staged subset: a rename breaks links in
+      # files the commit never touches. always_run because deleting a linked
+      # target stages no Markdown at all, and that is exactly the case a
+      # file filter would skip.
+      - id: check-docs-links
+        name: Docs links resolve and topics are indexed
+        entry: bash -c 'exec "$(git rev-parse --show-toplevel)/scripts/check-docs-links.sh"'
+        language: system
+        always_run: true
+        pass_filenames: false
 
   # Ruff - Fast Python linter and formatter (replaces black, isort, flake8)
   - repo: https://github.com/astral-sh/ruff-pre-commit

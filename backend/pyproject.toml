@@ -45,7 +45,20 @@ reportMissingImports = true
 reportMissingTypeStubs = "none"
 
 [tool.pytest.ini_options]
-addopts = ["--strict-config", "--strict-markers", "-ra"]
+# --disable-socket: the suite is offline by construction — it mocks Riot and
+# never opens the database. Nothing enforced that, so a new test could quietly
+# start making real Riot calls: burning the rate limit, failing whenever the
+# key rotates, and passing or failing on live data. A test that genuinely
+# needs a socket must say so with @pytest.mark.enable_socket.
+addopts = [
+    "--strict-config",
+    "--strict-markers",
+    "-ra",
+    "--disable-socket",
+    # asyncio builds every event loop's self-pipe from an AF_UNIX socketpair,
+    # so blocking that blocks every async test. It reaches no network.
+    "--allow-unix-socket",
+]
 asyncio_mode = "auto"
 filterwarnings = [
     "error",
@@ -78,6 +91,7 @@ dev = [
     "ruff==0.16.2",
     "vulture>=2.16",
     "xenon>=0.9.3",
+    "pytest-socket>=0.7.0",
 ]
 
 [tool.vulture]
