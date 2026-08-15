@@ -14,6 +14,3 @@ explained in
   (primary), `.red-gradient` (destructive), `.blue-gradient` (neutral), the
   `.button-*` sizes, `.icon-circle`, `.dialog-white-border`. Read a
   neighbouring dialog or card before writing inline Tailwind for the same job.
-- Normalize API failures through `lib/core/api-error.ts`: safe typed
-  validation/business messages may surface, but never raw response bodies or
-  unclassified exception text.

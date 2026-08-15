@@ -50,6 +50,17 @@ repos:
         language: fail
         files: '^frontend/(?!node_modules/).*[A-Z_ ].*\.(?:ts|tsx|js|jsx|mjs|cjs|mts|cts)$'
 
+      # Features depend on core, never the reverse. app/core/match_utils.py
+      # already breaks this at module level and is excluded rather than
+      # silently legitimised — the exclusion is the todo list. Every other
+      # core module is held to the rule, so the violation cannot spread.
+      - id: forbid-core-importing-features
+        name: app/core must not import app/features
+        entry: 'from\s+app\.features|import\s+app\.features'
+        language: pygrep
+        files: '^backend/app/core/.*\.py$'
+        exclude: '^backend/app/core/match_utils\.py$'
+
       # Reviewed Alembic revisions are the schema authority. This catches the
       # committed-code half of that rule; dropping or resetting a populated
       # schema is a runtime action no hook can see.
