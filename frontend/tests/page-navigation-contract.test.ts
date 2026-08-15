@@ -42,6 +42,15 @@ describe("page navigation contract", () => {
     expect(unregistered).toEqual([]);
   });
 
+  it("keeps /jobs behind the admin check", () => {
+    const page = readFileSync(join(APP_DIRECTORY, "jobs/page.tsx"), "utf8");
+
+    // `/jobs` exposes every player's sync state and the Riot key's health, and
+    // it is the only admin-only page. Dropping `requireAdmin` still renders,
+    // still typechecks, and shows all of it to any signed-in account.
+    expect(page).toMatch(/<ProtectedRoute\s+requireAdmin\b/);
+  });
+
   it("keeps every exempt route a redirect rather than a destination", () => {
     const destinations = [...NOT_NAVIGATION_TARGETS]
       .filter((route) => route !== "/")
