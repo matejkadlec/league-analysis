@@ -3,6 +3,6 @@
 - Jobs process the union of PUUIDs in `auth.user_tracked_players`; explicit
   Player Card updates pass an exact `target_puuids` allowlist and persist one
   active `PlayerSyncRun` per PUUID.
-- New job type: SQL enum value + reviewed Alembic revision, `BaseJob`
-  subclass, scheduler/router registration, incremental configuration
-  migration, then update `docs/jobs.md` and `docs/database.md`.
+- A new job type also needs the SQL enum value in a reviewed Alembic revision,
+  router registration, and an incremental configuration migration.
+  `test_job_type_registration.py` covers the implementation half.
