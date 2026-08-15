@@ -99,21 +99,29 @@ def _signature_from_object(kind: str, target: Any) -> str:
 
 
 def _database_enum_labels(connection: Connection) -> dict[str, set[str]]:
-    """Read every PostgreSQL enum type's labels, keyed by type name."""
+    """Read every PostgreSQL enum type's labels, keyed by qualified name.
+
+    The namespace join is load-bearing. An enum type name is unique only
+    within its schema, so keying on `typname` alone merges the labels of two
+    same-named enums in different schemas — and a merged set is a superset,
+    which makes a genuinely missing value look present and the parity check
+    pass. No such pair exists today; this keeps one from being silent.
+    """
     rows = connection.execute(
         text(
-            "SELECT t.typname, e.enumlabel FROM pg_type t "
-            "JOIN pg_enum e ON e.enumtypid = t.oid"
+            "SELECT n.nspname, t.typname, e.enumlabel FROM pg_type t "
+            "JOIN pg_enum e ON e.enumtypid = t.oid "
+            "JOIN pg_namespace n ON n.oid = t.typnamespace"
         )
     )
     labels: dict[str, set[str]] = {}
-    for type_name, label in rows:
-        labels.setdefault(type_name, set()).add(label)
+    for schema, type_name, label in rows:
+        labels.setdefault(_qualified(schema, type_name), set()).add(label)
     return labels
 
 
 def _declared_enums(metadata: Any) -> dict[str, set[str]]:
-    """Map each mapped enum type name to the values Python declares for it."""
+    """Map each mapped enum's qualified type name to its declared values."""
     declared: dict[str, set[str]] = {}
     for table in metadata.tables.values():
         for column in table.columns:
@@ -121,7 +129,9 @@ def _declared_enums(metadata: Any) -> dict[str, set[str]]:
             type_name = getattr(column.type, "name", None)
             if enum_class is None or type_name is None:
                 continue
-            declared.setdefault(type_name, set()).update(
+            # An enum with no schema of its own lives in its table's schema.
+            schema = getattr(column.type, "schema", None) or table.schema
+            declared.setdefault(_qualified(schema, type_name), set()).update(
                 member.value for member in enum_class
             )
     return declared
