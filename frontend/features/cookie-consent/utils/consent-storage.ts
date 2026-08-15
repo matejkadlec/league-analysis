@@ -7,7 +7,11 @@ export const COOKIE_CONSENT_UPDATED_EVENT =
 export const COOKIE_CONSENT_OPEN_PREFERENCES_EVENT =
   "league-analysis-cookie-consent-open-preferences";
 
-const OPTIONAL_STORAGE_KEYS = ["header_messages_closed"] as const;
+const OPTIONAL_STORAGE_KEYS = [
+  "header_messages_closed",
+  "league_analysis_match_history_page_size",
+  "league_analysis_match_history_queue_filters",
+] as const;
 
 export type CookieConsentLevel = "necessary" | "all";
 
@@ -125,7 +129,7 @@ export function clearOptionalBrowserStorage(): void {
   }
 
   for (const key of OPTIONAL_STORAGE_KEYS) {
-    localStorage.removeItem(key);
+    window.localStorage.removeItem(key);
   }
 }
 

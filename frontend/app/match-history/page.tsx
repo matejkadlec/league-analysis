@@ -28,6 +28,7 @@ export default function MatchHistoryPage() {
             <MatchHistorySkeleton />
           ) : currentPlayer ? (
             <MatchHistory
+              key={currentPlayer.puuid}
               puuid={currentPlayer.puuid}
               lastUpdated={currentPlayer.match_synced_at}
             />

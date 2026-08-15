@@ -103,6 +103,30 @@ export default async function CookiePolicyPage() {
               <td className="px-3 py-2">Persistent until deleted</td>
               <td className="px-3 py-2">First-party (League Analysis)</td>
             </tr>
+            <tr className="border-t border-white/10">
+              <td className="px-3 py-2 font-mono">
+                league_analysis_match_history_page_size
+              </td>
+              <td className="px-3 py-2">Local storage</td>
+              <td className="px-3 py-2">Optional preference</td>
+              <td className="px-3 py-2">
+                Remembers your selected Match History page size.
+              </td>
+              <td className="px-3 py-2">Persistent until deleted</td>
+              <td className="px-3 py-2">First-party (League Analysis)</td>
+            </tr>
+            <tr className="border-t border-white/10">
+              <td className="px-3 py-2 font-mono">
+                league_analysis_match_history_queue_filters
+              </td>
+              <td className="px-3 py-2">Local storage</td>
+              <td className="px-3 py-2">Optional preference</td>
+              <td className="px-3 py-2">
+                Remembers your selected Match History queue filters.
+              </td>
+              <td className="px-3 py-2">Persistent until deleted</td>
+              <td className="px-3 py-2">First-party (League Analysis)</td>
+            </tr>
           </tbody>
         </table>
       </div>

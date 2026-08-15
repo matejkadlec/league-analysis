@@ -19,6 +19,10 @@ and backend rules from [`../../AGENTS.md`](../../AGENTS.md).
 - Player records, matches, and freshness timestamps remain shared by PUUID.
   Current selection, tracked mappings, and recent ordering are always scoped by
   authenticated application user ID. Never infer one from the other.
+- Match History queue unions and champion/player search filter stored matches
+  before totals and offset/limit pagination. Participant search covers every
+  participant's champion name and Riot ID, while the requested player PUUID is
+  enforced independently; this database-only read path never calls Riot.
 - `discover_player` never merges two player rows. A row carrying the same Riot
   ID under a different PUUID is left alone, and a duplicate row is the accepted
   outcome. Discovery cannot distinguish a PUUID re-encrypted under a new

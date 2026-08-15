@@ -37,9 +37,14 @@ public API via `index.ts`.
   `playerQueryOptions()`. Never cache an API-result envelope or attach a query
   function with a different return shape to that key.
 - Match History queue labels, filter order, query IDs, and fixed label widths
-  live in `matches/queue-catalog.ts`. Keep All Queues unrestricted, reset local
-  pagination on a filter change, and preserve unknown IDs as `Queue N` instead
-  of mapping them to a supported mode.
+  live in `matches/queue-catalog.ts`. Keep All Queues unrestricted and
+  exclusive, use a normal selection for one queue and Shift selection for a
+  non-empty queue union, reset numbered pagination on any queue/search/page-size
+  change, and preserve unknown IDs as `Queue N` instead of mapping them to a
+  supported mode. Champion or player search is server-backed across every
+  participant in the selected queue union and must run before pagination.
+  Ranked Solo/Duo and 25 matches are the defaults; queue selection and page
+  size persist only through consent-gated optional browser storage.
 - Match History objective order, accessible labels, counts, and dedicated
   silhouettes and tuned visual sizes live in
   `matches/components/objective-icons.tsx`. Preserve the shared semantic
