@@ -52,8 +52,9 @@ the `pitfall-check` agent.
   suspect this whenever settings do not match the file on disk.
 
 - **Dropping a populated schema to fix a migration.** Alembic revisions are the
-  schema authority and a pre-commit hook blocks `metadata.create_all`, but no
-  gate can see a runtime action: resetting, dropping, or recreating a schema
+  schema authority; a pre-commit hook blocks `metadata.create_all` and
+  `validate_migrations.py` fails on a model change with no revision behind it.
+  Neither sees a runtime action: resetting, dropping, or recreating a schema
   that already holds data destroys it just as thoroughly as any bug. The
   baseline revision is deliberately non-reversible, so downgrading past it is
   not a recovery path either. Restore a verified backup instead. Flag any

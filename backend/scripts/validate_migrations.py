@@ -13,6 +13,12 @@ from pathlib import Path
 from uuid import uuid4
 
 from dotenv import load_dotenv
+from metadata_drift import (
+    BASELINE_PATH,
+    compare_against_baseline,
+    drift_signatures,
+    import_every_model_module,
+)
 from migration_contract import EXPECTED_ALEMBIC_HEAD
 from sqlalchemy import URL, create_engine, text
 
@@ -275,6 +281,49 @@ def seed_legacy_matchmaking_analyses(database: str) -> None:
         engine.dispose()
 
 
+def observed_drift(database: str) -> list[str]:
+    """Return one migrated database's divergence from the ORM metadata."""
+    from app.core.models import Base
+
+    import_every_model_module()
+    engine = create_engine(administration_url().set(database=database))
+    try:
+        with engine.connect() as connection:
+            return drift_signatures(connection, Base.metadata)
+    finally:
+        engine.dispose()
+
+
+def validate_metadata_drift(database: str, restored_database: str) -> None:
+    """Assert model/schema divergence matches the reviewed baseline exactly.
+
+    Compares both databases so the signatures are proven reproducible rather
+    than assumed: the restored copy is built by a different route (pg_dump and
+    pg_restore) than the migrated source, so agreement between them means the
+    baseline cannot drift with how the schema was produced.
+    """
+    observed = observed_drift(database)
+    if observed_drift(restored_database) != observed:
+        raise RuntimeError(
+            "metadata drift differs between the migrated and restored databases"
+        )
+
+    unrecorded, resolved = compare_against_baseline(observed)
+    if unrecorded:
+        raise RuntimeError(
+            "the models diverge from the migrated schema in ways no reviewed "
+            "Alembic revision accounts for. Add the revision, or record a "
+            f"deliberate divergence in {BASELINE_PATH.name}:\n  "
+            + "\n  ".join(unrecorded)
+        )
+    if resolved:
+        raise RuntimeError(
+            f"{BASELINE_PATH.name} records divergences that no longer exist. "
+            "Delete these lines — the baseline is a todo list and may only "
+            "shrink:\n  " + "\n  ".join(resolved)
+        )
+
+
 def validate_revision(database: str) -> None:
     """Assert the locked migration runner reached the reviewed Alembic head."""
     url = administration_url().set(database=database)
@@ -376,6 +425,7 @@ def main() -> int:
             restored_created = True
             restore_validation_archive(restored_database, archive)
             validate_revision(restored_database)
+            validate_metadata_drift(database, restored_database)
             if deterministic_snapshot(restored_database) != deterministic_snapshot(
                 database
             ):
