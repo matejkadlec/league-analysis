@@ -2,8 +2,7 @@
 
 > **Authority:** Human-facing index for the Jira/GitHub delivery lifecycle.
 > The authoritative agent procedures are the repository skills in
-> [`.claude/skills/`](../.claude/skills/) (exposed to Codex through the
-> [`.agents/skills/`](../.agents/skills/) symlinks).
+> [`.agents/skills/`](../.agents/skills/).
 >
 > **Maintenance:** Update when the lifecycle shape, the skill inventory, or
 > this index's pointers change. Procedure changes belong in the skill files.
@@ -31,7 +30,7 @@ TO DO -> NEXT -> IN PROGRESS -> [PENDING USER QA] -> PENDING CR -> DONE
 
 | Skill | Purpose |
 | --- | --- |
-| [`flow1`](../.claude/skills/flow1/SKILL.md) | Select and deliver the largest safe coherent batch of existing sprint work: intake, conflict control, batching, branches/worktrees, implementation, validation, ready-PR handoff. Also owns QA classification, `LGA-1` conventions, owner boundaries, and User QA launch commands. |
-| [`flow2`](../.claude/skills/flow2/SKILL.md) | Turn a rough user request into planned Jira work (search, create, classify, prioritize), then continue with `flow1`. |
-| [`qa1`](../.claude/skills/qa1/SKILL.md) | Record a passed owner visual QA and publish the same work as a ready pull request. |
-| [`qa2`](../.claude/skills/qa2/SKILL.md) | Record a failed owner visual QA and revise the same local work for another judgment. |
+| [`flow1`](../.agents/skills/flow1/SKILL.md) | Select and deliver the largest safe coherent batch of existing sprint work: intake, conflict control, batching, branches/worktrees, implementation, validation, ready-PR handoff. Also owns QA classification, `LGA-1` conventions, owner boundaries, and User QA launch commands. |
+| [`flow2`](../.agents/skills/flow2/SKILL.md) | Turn a rough user request into planned Jira work (search, create, classify, prioritize), then continue with `flow1`. |
+| [`qa1`](../.agents/skills/qa1/SKILL.md) | Record a passed owner visual QA and publish the same work as a ready pull request. |
+| [`qa2`](../.agents/skills/qa2/SKILL.md) | Record a failed owner visual QA and revise the same local work for another judgment. |

@@ -28,8 +28,7 @@ Before Jira intake, creation, or selection; Jira-scoped implementation;
 User-QA handoff or remediation; or PR publication/update, invoke the matching
 repository skill (flow1, flow2, qa1, or qa2) and follow its stop boundary.
 
-The skills live in [`.claude/skills/`](.claude/skills/) (Codex discovers the
-same files through the [`.agents/skills/`](.agents/skills/) symlinks). They
+The skills live in [`.agents/skills/`](.agents/skills/). They
 are authoritative for intake, batching, QA classification, branches and
 worktrees, pull requests, remediation, and owner handoff.
 [`docs/ai-development-flow.md`](docs/ai-development-flow.md) is the short

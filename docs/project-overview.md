@@ -213,15 +213,17 @@ longer needed; inspect dirty state and PR/merge state first.
 
 ## Agent Instruction Files
 
-Repository skills in [`.claude/skills/`](../.claude/skills/) (with
-[`.agents/skills/`](../.agents/skills/) symlinks for Codex discovery) are the
+Repository skills in [`.agents/skills/`](../.agents/skills/) are the
 authoritative workflow procedures (`flow1`, `flow2`, `qa1`, `qa2`);
 [`ai-development-flow.md`](ai-development-flow.md) is the short human-facing
-lifecycle index. `AGENTS.md` files are the canonical guides for non-Claude
-agents. `CLAUDE.md` files are self-contained Claude Code guides — trimmed
-hard-rules-and-pointers entry points that never reference or mirror
-`AGENTS.md`. Linked worktrees created under `.claude/worktrees/` are ignored
-and never published.
+lifecycle index. Together with the `AGENTS.md` files, they are the canonical
+guides for non-Claude agents.
+
+Claude Code does not use them. `CLAUDE.md` files are self-contained Claude
+Code guides — trimmed hard-rules-and-pointers entry points that never
+reference or mirror `AGENTS.md` — and they prescribe no delivery workflow
+beyond keeping Jira accurate and not duplicating tickets. Linked worktrees
+created under `.claude/worktrees/` are ignored and never published.
 
 ## Quality and Verification
 
