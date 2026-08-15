@@ -82,6 +82,34 @@ repos:
         language: pygrep
         files: '^frontend/(?!node_modules/|lib/core/|tests/).*\.(?:ts|tsx|js|jsx)$'
 
+      # Same rule as the axios hook, other half: data fetching goes through
+      # TanStack Query over the validated client. features/auth is excluded
+      # because token bootstrapping sits *below* that client — it cannot call
+      # the thing whose token it is refreshing.
+      - id: forbid-direct-fetch
+        name: No raw fetch() in UI code (use the validated client)
+        entry: '^(?!\s*(?://|\*)).*[^.\w]fetch\('
+        language: pygrep
+        files: '^frontend/(app|components|features)/.*\.(?:ts|tsx)$'
+        exclude: '^frontend/features/auth/'
+
+      # The Data Dragon version is resolved once through the cached manifest
+      # helper. A hardcoded CDN URL elsewhere pins a version that then rots.
+      - id: forbid-hardcoded-ddragon-url
+        name: Data Dragon URLs belong to the lib/core helper
+        entry: 'ddragon\.leagueoflegends\.com'
+        language: pygrep
+        files: '^frontend/(?!node_modules/).*\.(?:ts|tsx)$'
+        exclude: '^frontend/(lib/core/data-dragon|next\.config\.ts|tests/)'
+
+      # Objective icons are Riot's own art. An icon-library approximation is
+      # visually close enough to pass review and wrong for the product.
+      - id: forbid-icon-library-objective-icons
+        name: Objective icons stay Riot art, not icon-library shapes
+        entry: 'lucide-react|react-icons|@heroicons'
+        language: pygrep
+        files: '^frontend/features/matches/components/objective-icon'
+
       # Next.js resolves both names; this project standardized on proxy.ts,
       # and a stray middleware file would silently take effect. Next resolves
       # the extensionless basename, so every source extension is caught.

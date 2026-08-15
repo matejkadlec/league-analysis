@@ -8,6 +8,4 @@ integrations); `README.md` here is the topic index.
   fact, or an operational procedure. Mechanical facts (schema columns,
   endpoint lists, module inventories, code-flow narration) live in the code —
   keep them out of docs.
-- Frozen historical snapshots (dated reviews/audits) are never updated; add a
-  supersession note at most.
 - Date externally observed facts and cite the source.

@@ -59,3 +59,22 @@ the `pitfall-check` agent.
   not a recovery path either. Restore a verified backup instead. Flag any
   change or command that resets, drops, or recreates a populated schema, and
   any suggestion to "just recreate the tables" when a migration misbehaves.
+
+- **PUUID-scoped data answered from user-scoped state, or the reverse.** Player
+  records, matches and freshness timestamps are shared by PUUID: every
+  application user looking at the same player sees the same rows. Current
+  selection, tracked mappings and recent ordering are scoped by authenticated
+  application user ID. Inferring either from the other is silent and severe —
+  reading a PUUID row as user state shows one account another's selection, and
+  writing user state onto a PUUID row leaks it to everyone watching that
+  player. Neither typechecks as wrong. Check any query whose `WHERE` mixes
+  `puuid` with `user_id`, and any new endpoint that resolves a player without
+  saying which of the two it is scoped by.
+
+- **A freshness timestamp advanced by a check that did not fully succeed.**
+  `match_synced_at` / `league_synced_at` / `profile_synced_at` may only move
+  after the owning provider check succeeds. A clean zero-change check is fresh;
+  a partial or failed one is not. Advancing on a partial result is invisible at
+  the time and then indistinguishable from real freshness afterwards — the data
+  is stale and the UI swears it is current. Check any write to a `*_synced_at`
+  column that is not guarded by the success of the check that owns it.
