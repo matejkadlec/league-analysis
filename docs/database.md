@@ -87,8 +87,14 @@ because these values drive staleness decisions.
 ### Other invariants worth knowing
 
 - `core.player_leagues` is immutable rank history: one snapshot row per rank
-  change, no primary key by design; `league_id` is nullable because current
-  by-PUUID responses may omit it.
+  state change, keyed by PUUID and observation time; `league_id` is nullable
+  because current by-PUUID responses may omit it.
+- `core.match_participants` owns per-player, per-match Solo/Duo LP evidence.
+  Revision `20260815_0011` stores an exact value only for a remake or a single
+  match proven by the surrounding LEAGUE-V4 snapshots and win/loss counters.
+  The source, stable reason, and snapshot timestamps preserve provenance.
+  Historical or ambiguous values stay SQL `NULL`; they are never reconstructed
+  from rank labels or shared across a fetched batch.
 - `core.matches` keeps both `game_creation_timestamp` and
   `game_start_timestamp` with a `game_start_timestamp_source` marker
   (`riot_game_start` vs `legacy_game_creation`), so the provenance of every

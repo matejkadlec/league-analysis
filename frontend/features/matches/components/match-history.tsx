@@ -38,6 +38,7 @@ import {
 import { useDDragonVersion } from "@/lib/core/data-dragon-context";
 import { playerQueryKey } from "@/features/players";
 import { getMatchHistoryErrorMessage } from "../utils/match-history-error";
+import { formatMatchLpChange } from "../utils/lp-change";
 import {
   Tooltip,
   TooltipContent,
@@ -206,7 +207,7 @@ function MatchRow({
         ? blueTeamStats
         : null;
   const isRemake = Boolean(participant?.remake || match.early_surrender);
-  const displayedLpChange = match.lp_change ?? (isRemake ? 0 : null);
+  const displayedLpChange = match.lp_change;
 
   const killParticipation =
     participant && playerTeamStats && playerTeamStats.kills > 0
@@ -580,16 +581,16 @@ function MatchRow({
                     : "text-muted-foreground"
               }`}
             >
-              {displayedLpChange > 0
-                ? `+${displayedLpChange}`
-                : displayedLpChange < 0
-                  ? displayedLpChange
-                  : isRemake
-                    ? "+0"
-                    : "0"}{" "}
-              LP
+              {formatMatchLpChange(displayedLpChange, isRemake)}
             </span>
-          ) : null}
+          ) : (
+            <span
+              className="text-xs font-medium text-muted-foreground"
+              aria-label="LP change unavailable"
+            >
+              {formatMatchLpChange(displayedLpChange, isRemake)}
+            </span>
+          )}
         </div>
 
         {/* Column 8: Team Compositions */}

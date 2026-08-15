@@ -52,6 +52,10 @@ changes. Module responsibilities live in the code under this directory.
   Historical `config_json.enabled_queue_ids` values are ignored at runtime and
   stripped from API responses/ordinary configuration updates; active state and
   scheduling remain independent job-level controls.
+- Match Fetcher owns per-match Solo/Duo LP observation. Capture league state
+  before match ingestion and after the league refresh, persist a delta only for
+  one counter-proven progression match, keep remakes at zero, and leave every
+  ambiguous or unsupported case explicitly unavailable.
 - Update APScheduler immediately after configuration changes through
   `sync_job_configuration()`.
 - Preserve Riot API throttling and priority rules from

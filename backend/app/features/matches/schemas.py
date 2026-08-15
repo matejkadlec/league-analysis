@@ -249,7 +249,10 @@ class MatchWithPlayerData(MatchResponse):
     lane_opponent: Optional[EnemyLaneOpponent] = Field(
         None, description="The enemy lane opponent"
     )
-    lp_change: Optional[int] = Field(None, description="LP change from this match")
+    lp_change: Optional[int] = Field(
+        None,
+        description="Persisted observed LP change, or null when unavailable",
+    )
     team_compositions: Optional[TeamComposition] = Field(
         None, description="Team compositions for the match"
     )

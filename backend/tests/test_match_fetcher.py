@@ -75,6 +75,27 @@ async def test_match_sync_always_processes_the_complete_supported_queue_set() ->
     ] == list(PRODUCT_SUPPORTED_QUEUE_IDS)
 
 
+@pytest.mark.asyncio
+async def test_ranked_queue_reports_each_stored_match_for_lp_observation() -> None:
+    service = MatchService(_QueueSyncSession())  # type: ignore[arg-type]
+    service._reprocess_match = AsyncMock()  # type: ignore[method-assign]
+    stored_matches: list[tuple[int, str]] = []
+
+    await service._sync_single_queue_for_player(
+        riot_client=_QueueSyncClient("16.15.1"),
+        puuid="test-puuid",
+        region="EUROPE",
+        queue_id=420,
+        rate_limiter=None,
+        on_failure=None,
+        on_match_stored=lambda queue_id, match_id: stored_matches.append(
+            (queue_id, match_id)
+        ),
+    )
+
+    assert stored_matches == [(420, "EUN1_123")]
+
+
 def test_explicit_analysis_queue_subset_rejects_unsupported_ids() -> None:
     service = MatchService(_QueueSyncSession())  # type: ignore[arg-type]
 
@@ -179,7 +200,9 @@ async def test_match_fetcher_converts_rate_limit_to_a_non_failure_signal() -> No
         await job._process_player(
             db=object(),
             player=SimpleNamespace(puuid="test-puuid", game_name="Test"),
-            player_service=object(),
+            player_service=SimpleNamespace(
+                get_player_league=AsyncMock(return_value=None)
+            ),
             match_service=match_service,
             riot_client=object(),
             rate_limiter=object(),
@@ -222,7 +245,8 @@ async def test_match_fetcher_execute_propagates_rate_limit_to_base_job(
         match_fetcher_module,
         "PlayerService",
         lambda _db: SimpleNamespace(
-            get_globally_tracked_players=AsyncMock(return_value=[player])
+            get_globally_tracked_players=AsyncMock(return_value=[player]),
+            get_player_league=AsyncMock(return_value=None),
         ),
     )
     monkeypatch.setattr(match_fetcher_module, "MatchService", lambda _db: match_service)
@@ -255,7 +279,10 @@ async def test_match_fetcher_processes_the_player_league_refresh_path() -> None:
         commit=AsyncMock(),
         rollback=AsyncMock(),
     )
-    player_service = SimpleNamespace(update_player_league=AsyncMock(return_value=False))
+    player_service = SimpleNamespace(
+        get_player_league=AsyncMock(return_value=None),
+        update_player_league=AsyncMock(return_value=False),
+    )
     match_service = SimpleNamespace(sync_matches_for_player=AsyncMock(return_value=0))
     rate_limiter = SimpleNamespace(
         acquire=AsyncMock(return_value=True),
@@ -309,7 +336,10 @@ async def test_recoverable_match_failure_does_not_claim_match_freshness() -> Non
     match_service = SimpleNamespace(
         sync_matches_for_player=AsyncMock(side_effect=sync_with_failure)
     )
-    player_service = SimpleNamespace(update_player_league=AsyncMock(return_value=False))
+    player_service = SimpleNamespace(
+        get_player_league=AsyncMock(return_value=None),
+        update_player_league=AsyncMock(return_value=False),
+    )
     rate_limiter = SimpleNamespace(
         acquire=AsyncMock(return_value=True),
         record_request=AsyncMock(),

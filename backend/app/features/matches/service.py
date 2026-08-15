@@ -325,7 +325,6 @@ class MatchService:
                 player_participants_by_match,
                 participants_by_match,
                 timelines_by_match_team,
-                player_leagues,
             ) = await load_match_player_data_context(
                 self.db,
                 puuid,
@@ -336,7 +335,6 @@ class MatchService:
                 player_participants_by_match,
                 participants_by_match,
                 timelines_by_match_team,
-                player_leagues,
                 puuid,
             )
             page, pages = page_window(start, count, total_count)
@@ -1025,6 +1023,14 @@ class MatchService:
             participants = [
                 MatchParticipant(**p_data) for p_data in transformed["participants"]
             ]
+            from .match_lp import initialize_participant_lp
+
+            for participant in participants:
+                initialize_participant_lp(
+                    participant,
+                    queue_id=transformed["match"]["queue_id"],
+                    remake=participant.remake,
+                )
             self.db.add_all(participants)
 
             await self.db.commit()
@@ -1331,6 +1337,7 @@ class MatchService:
         player: Any,
         rate_limiter: Optional[DBRateLimiter] = None,
         on_failure: Optional[Callable[[str, Exception, dict[str, Any]], None]] = None,
+        on_match_stored: Optional[Callable[[int, str], None]] = None,
     ) -> int:
         """
         Sync matches for a player from Riot API (Current Season).
@@ -1368,6 +1375,7 @@ class MatchService:
                     queue_id=queue_id,
                     rate_limiter=rate_limiter,
                     on_failure=on_failure,
+                    on_match_stored=on_match_stored,
                 )
                 total_stored += queue_stored
             except AuthenticationError, ForbiddenError, RateLimitError:
@@ -1424,6 +1432,7 @@ class MatchService:
         queue_id: int,
         rate_limiter: Optional[DBRateLimiter],
         on_failure: Optional[Callable[[str, Exception, dict[str, Any]], None]],
+        on_match_stored: Optional[Callable[[int, str], None]] = None,
     ) -> int:
         """Sync one queue for a single player."""
         return await sync_single_queue_for_player(
@@ -1437,4 +1446,5 @@ class MatchService:
             ensure_maintenance=_ensure_riot_writer_maintenance_is_inactive,
             is_current_game_version=self.is_current_game_version,
             reprocess_match=self._reprocess_match,
+            on_match_stored=on_match_stored,
         )

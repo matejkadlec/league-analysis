@@ -1,14 +1,11 @@
-"""Match-history row assembly: LP, teams, opponents, and player cards."""
+"""Match-history row assembly: teams, opponents, and player cards."""
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, cast
 
-from sqlalchemy import desc, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.features.players.leagues import PlayerLeague
 
 from .lane import opposing_lane_participant
 from .match_stats import advanced_int, or_zero
@@ -33,21 +30,6 @@ ROLE_ORDER: dict[str, int] = {
     "UTILITY": 4,
 }
 
-TIER_ORDER: list[str] = [
-    "IRON",
-    "BRONZE",
-    "SILVER",
-    "GOLD",
-    "PLATINUM",
-    "EMERALD",
-    "DIAMOND",
-    "MASTER",
-    "GRANDMASTER",
-    "CHALLENGER",
-]
-
-RANK_ORDER: list[str] = ["IV", "III", "II", "I"]
-
 
 def group_participants_by_match(
     all_participants: List[MatchParticipant],
@@ -71,80 +53,6 @@ def index_timelines_by_match_team(
         if timeline_row.team_id not in match_teams:
             match_teams[timeline_row.team_id] = timeline_row
     return timelines_by_match_team
-
-
-def _league_datetime(league: PlayerLeague) -> datetime:
-    league_dt = league.created_at
-    if league_dt.tzinfo is None:
-        league_dt = league_dt.replace(tzinfo=timezone.utc)
-    return league_dt
-
-
-def find_lp_snapshots(
-    player_leagues: List[PlayerLeague],
-    match_end_dt: datetime,
-) -> tuple[Optional[PlayerLeague], Optional[PlayerLeague]]:
-    """Find the closest after-match snapshot and the snapshot immediately before it."""
-    after_snapshot: Optional[PlayerLeague] = None
-    before_snapshot: Optional[PlayerLeague] = None
-    for index, league in enumerate(player_leagues):
-        if _league_datetime(league) > match_end_dt:
-            after_snapshot = league
-            if index + 1 < len(player_leagues):
-                before_snapshot = player_leagues[index + 1]
-            continue
-        break
-    return after_snapshot, before_snapshot
-
-
-def _rank_index(rank: Optional[str]) -> int:
-    if rank:
-        return RANK_ORDER.index(rank)
-    return 0
-
-
-def lp_change_across_ranks(
-    after_snapshot: PlayerLeague,
-    before_snapshot: PlayerLeague,
-) -> int:
-    """Estimate LP change, including a rough promotion/demotion adjustment."""
-    after_lp = after_snapshot.league_points
-    before_lp = before_snapshot.league_points
-    if (
-        after_snapshot.tier == before_snapshot.tier
-        and after_snapshot.rank == before_snapshot.rank
-    ):
-        return after_lp - before_lp
-    try:
-        after_tier_idx = TIER_ORDER.index(after_snapshot.tier.upper())
-        before_tier_idx = TIER_ORDER.index(before_snapshot.tier.upper())
-        if after_tier_idx != before_tier_idx:
-            return (after_tier_idx - before_tier_idx) * 100 + (after_lp - before_lp)
-        rank_diff = _rank_index(after_snapshot.rank) - _rank_index(before_snapshot.rank)
-        return rank_diff * 100 + (after_lp - before_lp)
-    except ValueError, AttributeError:
-        return after_lp - before_lp
-
-
-def calculate_lp_change(
-    player_leagues: List[PlayerLeague],
-    match_end_timestamp: int,
-) -> Optional[int]:
-    """Calculate LP change for a match based on league snapshots."""
-    if len(player_leagues) < 2:
-        return None
-    match_end_dt = datetime.fromtimestamp(match_end_timestamp / 1000, tz=timezone.utc)
-    after_snapshot, before_snapshot = find_lp_snapshots(player_leagues, match_end_dt)
-    if after_snapshot is None or before_snapshot is None:
-        return None
-    return lp_change_across_ranks(after_snapshot, before_snapshot)
-
-
-def match_lp_change(match: Match, player_leagues: List[PlayerLeague]) -> Optional[int]:
-    """LP change is only derived for ranked solo/duo matches with an end time."""
-    if match.game_end_timestamp and match.queue_id == 420:
-        return calculate_lp_change(player_leagues, match.game_end_timestamp)
-    return None
 
 
 def find_lane_opponent(
@@ -460,7 +368,6 @@ def build_match_responses(
     player_participants_by_match: Dict[str, MatchParticipant],
     participants_by_match: Dict[str, List[MatchParticipant]],
     timelines_by_match_team: Dict[str, Dict[int, MatchTimeline]],
-    player_leagues: List[PlayerLeague],
     puuid: str,
 ) -> List[MatchWithPlayerData]:
     """Assemble the per-match player-data payload for a history page."""
@@ -477,7 +384,7 @@ def build_match_responses(
                 match,
                 build_player_match_participant(player_participant),
                 find_lane_opponent(puuid, player_participant, match_participants),
-                match_lp_change(match, player_leagues),
+                player_participant.lp_change if player_participant else None,
                 team_compositions,
                 team_stats,
             )
@@ -493,9 +400,8 @@ async def load_match_player_data_context(
     Dict[str, MatchParticipant],
     Dict[str, List[MatchParticipant]],
     Dict[str, Dict[int, MatchTimeline]],
-    List[PlayerLeague],
 ]:
-    """Load participants, timeline aggregates, and league snapshots for a page."""
+    """Load participants and timeline aggregates for a history page."""
     player_participants_result = await session.execute(
         select(MatchParticipant).where(
             MatchParticipant.match_id.in_(match_ids),
@@ -512,14 +418,8 @@ async def load_match_player_data_context(
     timeline_result = await session.execute(
         select(MatchTimeline).where(MatchTimeline.match_id.in_(match_ids))
     )
-    leagues_result = await session.execute(
-        select(PlayerLeague)
-        .where(PlayerLeague.puuid == puuid)
-        .order_by(desc(PlayerLeague.created_at))
-    )
     return (
         player_participants_by_match,
         group_participants_by_match(list(all_participants_result.scalars().all())),
         index_timelines_by_match_team(list(timeline_result.scalars().all())),
-        list(leagues_result.scalars().all()),
     )

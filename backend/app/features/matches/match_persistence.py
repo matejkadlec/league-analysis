@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.features.players.identity import resolve_player_display_fields
 from app.features.players.models import Player
 
+from .match_lp import initialize_participant_lp
 from .models import Match
 from .participants import MatchParticipant
 
@@ -81,12 +82,16 @@ def add_participants_from_dto(session: AsyncSession, match_dto: Any) -> None:
 
     for participant in match_dto.info.participants:
         participant_data = MatchDTOTransformer.extract_participant_data(participant)
-        session.add(
-            MatchParticipant(
-                match_id=match_dto.metadata.match_id,
-                **participant_data,
-            )
+        participant_model = MatchParticipant(
+            match_id=match_dto.metadata.match_id,
+            **participant_data,
         )
+        initialize_participant_lp(
+            participant_model,
+            queue_id=match_dto.info.queue_id,
+            remake=participant_data["remake"],
+        )
+        session.add(participant_model)
 
 
 def resolve_reprocess_player_fields(
@@ -134,9 +139,14 @@ async def merge_reprocess_participants(
     for participant in match_dto.info.participants:
         await merge_reprocess_player(session, participant, platform_id)
         participant_data = MatchDTOTransformer.extract_participant_data(participant)
-        await session.merge(
+        participant_model = await session.merge(
             MatchParticipant(
                 match_id=match_id,
                 **participant_data,
             )
+        )
+        initialize_participant_lp(
+            participant_model,
+            queue_id=match_dto.info.queue_id,
+            remake=participant_data["remake"],
         )
