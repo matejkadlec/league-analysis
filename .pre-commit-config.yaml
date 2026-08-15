@@ -53,6 +53,33 @@ repos:
         language: pygrep
         files: \.py$
 
+      # All data fetching goes through TanStack Query over the validated
+      # client in lib/core. axios itself belongs to that client and its
+      # tests, so this is scoped to the UI trees rather than the whole app.
+      - id: forbid-direct-axios
+        name: No direct axios outside lib/core (use the validated client)
+        entry: 'from\s+["'']axios["'']'
+        language: pygrep
+        files: '^frontend/(app|components|features)/.*\.tsx?$'
+
+      # Next.js resolves both names; this project standardized on proxy.ts,
+      # and a stray middleware.ts would silently take effect.
+      - id: forbid-nextjs-middleware
+        name: Next.js interception lives in proxy.ts, not middleware.ts
+        entry: 'This project uses frontend/proxy.ts, not middleware.ts:'
+        language: fail
+        files: '^frontend/(src/)?middleware\.(ts|js)$'
+
+      # Relative-link integrity and the docs/README.md topic index. Runs over
+      # the tracked corpus, not the staged subset: a rename breaks links in
+      # files the commit never touches.
+      - id: check-docs-links
+        name: Docs links resolve and topics are indexed
+        entry: bash -c 'exec "$(git rev-parse --show-toplevel)/scripts/check-docs-links.sh"'
+        language: system
+        files: \.md$
+        pass_filenames: false
+
   # Ruff - Fast Python linter and formatter (replaces black, isort, flake8)
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.16.2

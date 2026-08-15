@@ -15,13 +15,10 @@ arrangement is explained in
 - Data Dragon version: resolve server-side via the cached manifest helper,
   consume with `useDDragonVersion()`; keep the reviewed fallback for unknown
   IDs.
-- Features expose public APIs via `index.ts`. Use Next.js `proxy.ts` (not
-  `middleware.ts`).
+- Features expose public APIs via `index.ts`.
 
 ## Design-system contract (product decisions, not suggestions)
 
-- Every interactive element has `cursor: pointer` — enforced globally via
-  `globals.css`.
 - Branded classes from `globals.css` over inline Tailwind: `.gold-gradient`
   (primary CTA), `.red-gradient` (destructive/cancel), `.blue-gradient`
   (neutral/secondary), `.button-small/medium/full`, `.icon-circle`,
@@ -34,8 +31,7 @@ arrangement is explained in
   + `StopCircle`, mandatory app-wide) and submit CTA right (`button-medium
   no-rotation` or `gold-gradient` + icon). Validation errors sit directly
   under the related field.
-- Toasts: sonner via the `useToast()` hook from `@/lib/core/hooks` — only
-  that adapter and the shared `ToastHost` import sonner directly. Always an
+- Toasts: sonner via the `useToast()` hook from `@/lib/core/hooks`. Always an
   explicit variant: `success` (failable operation completed), `error`
   (failed), `warning` (non-blocking degradation, cautious guidance, invalid
   input), `info` (neutral/queued/started/running) — never the default

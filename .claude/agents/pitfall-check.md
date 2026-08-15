@@ -54,10 +54,16 @@ remembers.
 
 - **A failed background run looks like a successful one.** Background runs
   answer HTTP 200 whether they succeeded, failed, or are still in flight — the
-  status code carries no outcome. A client that branches on the response
-  status renders a failure as success, or a running job as finished. Any
-  consumer of a run endpoint must read the persisted lifecycle field before
-  rendering. Applies to Matchmaking Analysis and Smurf & Boost Detection.
+  status code carries no outcome. Any consumer must read the persisted
+  `status` field before rendering `results`. The schemas do not enforce this:
+  `MatchmakingAnalysisResponseSchema` and `SmurfBoostAnalysisResponseSchema`
+  are flat objects whose `results` is independently nullable, so
+  `if (data.results) render(data.results)` type-checks against a `failed`
+  payload. Smurf & Boost is covered by tests (`smurf-boost-detection.test.tsx`
+  asserts both the 200-failed and 200-in_progress paths); Matchmaking Analysis
+  is not — `MatchmakingAnalysisResults`, which holds the
+  `status !== "completed"` guard, is rendered by no test. Check matchmaking
+  result rendering closely.
 
 - **Stale credential health from the wrong authority.** Only a backend-observed
   direct Riot response decides whether the API key is valid: `2xx`/`404`
