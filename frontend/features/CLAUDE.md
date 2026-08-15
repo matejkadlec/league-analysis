@@ -42,6 +42,3 @@ Each feature is self-contained: `components/`, `index.ts` public API, optional
   states (14px icon, 10px label, 4px gap). The Tracked Players dialog shows
   player rows directly — no second title, count, search, or expand control;
   up to five rows before scrolling.
-- `main` in `app/layout.tsx` keeps `min-w-0` — a flex item's default
-  `min-width: auto` makes every `overflow-x-auto` beneath it inert and lets
-  one wide child stretch the document sideways.

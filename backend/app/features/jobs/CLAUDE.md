@@ -20,10 +20,6 @@ state in `jobs.apscheduler_jobs`.
   reintroduce per-queue configuration; historical `enabled_queue_ids` values
   are ignored and stripped. `sync_job_configuration()` updates APScheduler
   immediately after configuration changes.
-- Never read `job_execution`/`job_config` attributes off the ORM instance
-  during completion or after the job's session closes — use the cached
-  id/status/timestamp scalars (a rollback expires them; reloading outside the
-  async greenlet raises `MissingGreenlet`).
 - Isolated player/match/timeline/provider-shape errors finish `SUCCESS` with
   warning diagnostics. Missing/rejected Riot credentials stay `FAILED`; rate
   exhaustion is `RATE_LIMITED`; maintenance/operator stops are `CANCELLED`.

@@ -7,14 +7,6 @@ via `__init__.py`; minimize cross-feature dependencies.
 - Player records, matches, and freshness timestamps are shared by PUUID;
   current selection, tracked mappings, and recent ordering are scoped by
   authenticated application user ID. Never infer one from the other.
-- `discover_player` never merges player rows — a duplicate row is the accepted
-  outcome. Discovery cannot distinguish a PUUID re-encrypted under a new
-  developer account from a Riot ID renamed away and reclaimed by someone else,
-  and every table referencing `core.players(puuid)` cascades on delete, so a
-  wrong merge would move one player's history onto another and delete the
-  original. A `PuuidDecryptionError` on the superseded PUUID is not merge
-  authorization. Repairs go through an explicit operator-run pass with a
-  reviewed mapping.
 - Matchmaking Analysis start routes return the persisted active run before
   Riot preflight/work begins. Preserve the explicit lifecycle states, the
   one-active-run-per-PUUID constraint, exact-run cancellation, and the shared
