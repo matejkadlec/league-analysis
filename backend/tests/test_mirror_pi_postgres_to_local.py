@@ -118,6 +118,58 @@ def test_private_configuration_loads_without_exporting_password(
     assert os.environ.get("PGPASSWORD") != "opaque-test-value"
 
 
+def test_remote_operation_supports_both_reviewed_helper_layouts(
+    mirror: ModuleType,
+) -> None:
+    command = mirror.remote_operation_command(
+        "snapshot", "--confirm-target", mirror.REMOTE_DATABASE
+    )
+
+    assert (
+        '"$HOME/.local/share/league-analysis/current/backup/'
+        'pi-postgres-operations.sh"' in command
+    )
+    assert (
+        '"$HOME/.local/share/league-analysis/operations/pi-postgres-operations"'
+        in command
+    )
+    assert "snapshot --confirm-target league_analysis" in command
+
+
+def test_remote_source_accepts_matching_schema_without_legacy_authority_marker(
+    mirror: ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    identity = (
+        "container=league-analysis-postgres compose_project=league-analysis "
+        "compose_service=postgres database=league_analysis "
+        "postgres=18.4 (Debian) alembic=20260813_0010 host_ports=none"
+    )
+    monkeypatch.setattr(mirror, "remote_identity", lambda _host: identity)
+
+    assert (
+        mirror.verify_remote_source(
+            mirror.REMOTE_HOST, mirror.REMOTE_DATABASE, "20260813_0010"
+        )
+        == identity
+    )
+
+
+def test_remote_source_refuses_schema_mismatch_before_mirroring(
+    mirror: ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    identity = (
+        "container=league-analysis-postgres compose_project=league-analysis "
+        "compose_service=postgres database=league_analysis "
+        "postgres=18.4 (Debian) alembic=20260814_0011 host_ports=none"
+    )
+    monkeypatch.setattr(mirror, "remote_identity", lambda _host: identity)
+
+    with pytest.raises(mirror.MirrorRefusal, match="Alembic heads differ"):
+        mirror.verify_remote_source(
+            mirror.REMOTE_HOST, mirror.REMOTE_DATABASE, "20260813_0010"
+        )
+
+
 @pytest.mark.parametrize(
     ("phase", "target", "stage", "rollback", "expected"),
     [
@@ -231,7 +283,11 @@ def test_matching_snapshot_skips_full_mirror(
     monkeypatch.setattr(mirror, "mirror", unexpected_mirror)
 
     assert not mirror.refresh_if_changed(
-        config, paths, mirror.REMOTE_HOST, mirror.REMOTE_DATABASE
+        config,
+        paths,
+        mirror.REMOTE_HOST,
+        mirror.REMOTE_DATABASE,
+        "20260813_0010",
     )
 
 
@@ -259,6 +315,10 @@ def test_changed_snapshot_runs_full_mirror(
     monkeypatch.setattr(mirror, "mirror", lambda *args: calls.append(args))
 
     assert mirror.refresh_if_changed(
-        config, paths, mirror.REMOTE_HOST, mirror.REMOTE_DATABASE
+        config,
+        paths,
+        mirror.REMOTE_HOST,
+        mirror.REMOTE_DATABASE,
+        "20260813_0010",
     )
     assert len(calls) == 1

@@ -2,6 +2,7 @@
 
 from contextlib import asynccontextmanager
 from json import loads
+from types import SimpleNamespace
 
 import pytest
 from fastapi import Response
@@ -9,6 +10,42 @@ from starlette import status
 from starlette.responses import JSONResponse
 
 from app import main as app_main
+from app.core import database as database_module
+
+
+def test_database_pool_pre_pings_before_reusing_connections(monkeypatch) -> None:
+    engine = object()
+    engine_arguments: dict[str, object] = {}
+
+    def create_engine(database_url: str, **kwargs: object) -> object:
+        engine_arguments["database_url"] = database_url
+        engine_arguments.update(kwargs)
+        return engine
+
+    monkeypatch.setattr(database_module, "create_async_engine", create_engine)
+    monkeypatch.setattr(
+        database_module,
+        "async_sessionmaker",
+        lambda *_args, **_kwargs: object(),
+    )
+    monkeypatch.setattr(
+        database_module,
+        "get_global_settings",
+        lambda: SimpleNamespace(
+            database_url="postgresql+asyncpg://local-test",
+            debug=False,
+        ),
+    )
+
+    manager = database_module.DatabaseManager()
+
+    assert manager.engine is engine
+    assert engine_arguments == {
+        "database_url": "postgresql+asyncpg://local-test",
+        "echo": False,
+        "future": True,
+        "pool_pre_ping": True,
+    }
 
 
 @pytest.mark.asyncio

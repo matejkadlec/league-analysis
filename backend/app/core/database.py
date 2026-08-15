@@ -20,11 +20,13 @@ class DatabaseManager:
         settings = get_global_settings()
         self.database_url = settings.database_url
 
-        # Create async engine with default connection pool settings
+        # Atomic local mirror swaps terminate connections to the replaced database.
+        # Pre-ping discards those stale pooled connections before a request uses them.
         self.engine = create_async_engine(
             self.database_url,
             echo=settings.debug,  # Enable SQL logging in debug mode
             future=True,
+            pool_pre_ping=True,
         )
 
         # Create async session factory
