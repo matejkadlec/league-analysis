@@ -25,7 +25,7 @@ from typing import Any
 
 from alembic.autogenerate import compare_metadata
 from alembic.migration import MigrationContext
-from sqlalchemy import Connection
+from sqlalchemy import Connection, text
 
 BASELINE_PATH = Path(__file__).resolve().parents[1] / "alembic" / "metadata-drift.txt"
 
@@ -98,6 +98,55 @@ def _signature_from_object(kind: str, target: Any) -> str:
     return f"{kind} {_qualified(schema, str(table.name))} {own_name}"
 
 
+def _database_enum_labels(connection: Connection) -> dict[str, set[str]]:
+    """Read every PostgreSQL enum type's labels, keyed by type name."""
+    rows = connection.execute(
+        text(
+            "SELECT t.typname, e.enumlabel FROM pg_type t "
+            "JOIN pg_enum e ON e.enumtypid = t.oid"
+        )
+    )
+    labels: dict[str, set[str]] = {}
+    for type_name, label in rows:
+        labels.setdefault(type_name, set()).add(label)
+    return labels
+
+
+def _declared_enums(metadata: Any) -> dict[str, set[str]]:
+    """Map each mapped enum type name to the values Python declares for it."""
+    declared: dict[str, set[str]] = {}
+    for table in metadata.tables.values():
+        for column in table.columns:
+            enum_class = getattr(column.type, "enum_class", None)
+            type_name = getattr(column.type, "name", None)
+            if enum_class is None or type_name is None:
+                continue
+            declared.setdefault(type_name, set()).update(
+                member.value for member in enum_class
+            )
+    return declared
+
+
+def enum_parity_signatures(connection: Connection, metadata: Any) -> list[str]:
+    """Report enum values present on only one side of the mapping.
+
+    `compare_metadata` does not diff enum members at all, so an enum is exactly
+    the schema change this module would otherwise wave through. Both directions
+    matter and they fail differently: a value Python declares but the database
+    lacks makes every insert of it raise `InvalidTextRepresentation`, while a
+    value only the database has makes any existing row holding it unreadable
+    the moment Python tries to coerce it.
+    """
+    in_database = _database_enum_labels(connection)
+    declared = _declared_enums(metadata)
+    signatures = []
+    for type_name, values in declared.items():
+        stored = in_database.get(type_name, set())
+        signatures += [f"missing_enum_value {type_name} {v}" for v in values - stored]
+        signatures += [f"orphan_enum_value {type_name} {v}" for v in stored - values]
+    return sorted(signatures)
+
+
 def drift_signatures(connection: Connection, metadata: Any) -> list[str]:
     """Return the sorted, deduplicated divergence signatures for a database."""
     # Autogenerate narrates all ~300 known divergences at INFO. The signature
@@ -117,6 +166,7 @@ def drift_signatures(connection: Connection, metadata: Any) -> list[str]:
     signatures: set[str] = set()
     for difference in compare_metadata(context, metadata):
         signatures.update(_signatures_for(difference))
+    signatures.update(enum_parity_signatures(connection, metadata))
 
     # A signature that lost its subject would collapse every occurrence of that
     # operation into one line and silently match the baseline. Fail loudly

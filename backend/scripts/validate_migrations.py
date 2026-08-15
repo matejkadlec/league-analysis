@@ -379,15 +379,33 @@ async def verify_application_database_access(database: str) -> None:
                     {"user_id": user_id},
                 )
             ).scalar_one()
-            job_count = (
-                await session.execute(
-                    text("SELECT COUNT(*) FROM jobs.job_configurations")
+            configured_job_types = set(
+                (
+                    await session.execute(
+                        text("SELECT job_type FROM jobs.job_configurations")
+                    )
                 )
-            ).scalar_one()
+                .scalars()
+                .all()
+            )
             await session.rollback()
-        if settings_count != 1 or card_preference_user_id != user_id or job_count != 2:
+        if settings_count != 1 or card_preference_user_id != user_id:
             raise RuntimeError(
                 "Application migration smoke check returned unexpected rows"
+            )
+
+        # Every job type needs a configuration row, seeded by an incremental
+        # migration. Without one the type is declared, registered, runnable —
+        # and never scheduled, because the scheduler iterates configurations.
+        # This replaced a hardcoded row count, which a new job type satisfied
+        # by simply being absent.
+        from app.features.jobs.models import JobType
+
+        unconfigured = {member.value for member in JobType} - configured_job_types
+        if unconfigured:
+            raise RuntimeError(
+                "job types have no configuration row from any migration: "
+                + ", ".join(sorted(unconfigured))
             )
     finally:
         from app.core.database import db_manager

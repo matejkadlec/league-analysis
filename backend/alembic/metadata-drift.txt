@@ -268,6 +268,9 @@ modify_type auth.users password_hash
 modify_type core.matches match_id
 modify_type core.matches platform
 modify_type core.playstyle_analyses id
+orphan_enum_value job_type_enum BAN_CHECKER
+orphan_enum_value job_type_enum PLAYER_ANALYZER
+orphan_enum_value job_type_enum TRACKED_PLAYER_UPDATER
 remove_constraint auth.refresh_tokens uq_refresh_tokens_token_id
 remove_constraint auth.revoked_access_tokens uq_revoked_access_tokens_token_id
 remove_constraint auth.subject_counts ck_subject_counts_non_negative
