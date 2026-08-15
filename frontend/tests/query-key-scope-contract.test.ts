@@ -53,8 +53,10 @@ function queryKeyUses(): QueryKeyUse[] {
 
     // [^\]] already spans newlines, so no dotall flag is needed.
     for (const match of source.matchAll(/queryKey:\s*\[([^\]]*)\]/g)) {
-      const body = match[1];
-      const namespace = /^\s*"([^"]+)"/.exec(body)?.[1];
+      // A comment inside the array must not be read as a key element — it
+      // would let `["matches", otherId /* puuid */]` pass as scoped.
+      const body = match[1].replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*/g, "");
+      const namespace = /^\s*["']([^"']+)["']/.exec(body)?.[1];
       // A key built from a factory or spread is checked at the factory.
       if (!namespace) {
         continue;
@@ -63,7 +65,7 @@ function queryKeyUses(): QueryKeyUse[] {
         file: relative(process.cwd(), path),
         line: source.slice(0, match.index).split("\n").length,
         namespace,
-        carriesPuuid: /puuid/i.test(body),
+        carriesPuuid: /\bpuuid\b/i.test(body),
       });
     }
 

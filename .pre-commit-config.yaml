@@ -36,7 +36,7 @@ repos:
         name: Forbid credential-looking filenames
         entry: 'A staged filename looks like a credential:'
         language: fail
-        files: '(^|/)(?!\.env\.(?:example|template|sample)$)(?:\.env(?:\.[^/]+)?|[^/]+\.env|id_rsa|id_ed25519)$|\.(pem|key)$'
+        files: '(?i)(^|/)(?!\.env\.(?:example|template|sample)$)(?:\.env(?:\.[^/]+)?|[^/]+\.env|id_rsa|id_dsa|id_ecdsa|id_ed25519|credentials\.json)$|\.(pem|key|p12|pfx)$'
 
       # ESLint has no filename rule and adding a plugin for one convention is
       # not worth the dependency. The tree is fully kebab-case today, so this
@@ -48,7 +48,7 @@ repos:
         name: Frontend source filenames stay kebab-case
         entry: 'Frontend source paths must be kebab-case:'
         language: fail
-        files: '^frontend/(?!node_modules/).*[A-Z_ ].*\.(?:ts|tsx|js|jsx|mjs|cjs|mts|cts)$'
+        files: '^frontend/(?!node_modules/)(?=.*(?:[A-Z ]|(?<!/)_)).*\.(?:ts|tsx|js|jsx|mjs|cjs|mts|cts)$'
 
       # Features depend on core, never the reverse. app/core/match_utils.py
       # already breaks this at module level and is excluded rather than
@@ -78,7 +78,7 @@ repos:
       # dynamic forms all count.
       - id: forbid-direct-axios
         name: No direct axios outside lib/core (use the validated client)
-        entry: '^(?!\s*(?://|\*)|.*\bimport\s+type\b).*(?:from\s+["'']axios["'']|require\(\s*["'']axios["'']\s*\)|import\(\s*["'']axios["'']\s*\))'
+        entry: '^(?!\s*(?://|\*|/\*)).*(?:require\(\s*["'']axios["'']\s*\)|import\(\s*["'']axios["'']\s*\))|^(?!\s*(?://|\*|/\*)|\s*import\s+type\b).*from\s+["'']axios["'']'
         language: pygrep
         files: '^frontend/(?!node_modules/|lib/core/|tests/).*\.(?:ts|tsx|js|jsx)$'
 
@@ -88,7 +88,7 @@ repos:
       # the thing whose token it is refreshing.
       - id: forbid-direct-fetch
         name: No raw fetch() in UI code (use the validated client)
-        entry: '^(?!\s*(?://|\*)).*[^.\w]fetch\('
+        entry: '^(?!\s*(?://|\*|/\*))(?=.*(?:(?<![.\w])fetch\s*\(|(?:globalThis|window|self)\.fetch\s*\())'
         language: pygrep
         files: '^frontend/(app|components|features)/.*\.(?:ts|tsx)$'
         exclude: '^frontend/features/auth/'
@@ -97,10 +97,10 @@ repos:
       # helper. A hardcoded CDN URL elsewhere pins a version that then rots.
       - id: forbid-hardcoded-ddragon-url
         name: Data Dragon URLs belong to the lib/core helper
-        entry: 'ddragon\.leagueoflegends\.com'
+        entry: '(?i)ddragon\.leagueoflegends\.com'
         language: pygrep
         files: '^frontend/(?!node_modules/).*\.(?:ts|tsx)$'
-        exclude: '^frontend/(lib/core/data-dragon|next\.config\.ts|tests/)'
+        exclude: '^frontend/(?:lib/core/data-dragon(?:-version)?\.ts$|next\.config\.ts$|tests/)'
 
       # Objective icons are Riot's own art. An icon-library approximation is
       # visually close enough to pass review and wrong for the product.
@@ -110,9 +110,11 @@ repos:
         language: pygrep
         files: '^frontend/features/matches/components/objective-icon'
 
-      # Next.js resolves both names; this project standardized on proxy.ts,
-      # and a stray middleware file would silently take effect. Next resolves
-      # the extensionless basename, so every source extension is caught.
+      # This project standardized on proxy.ts. Next resolves only
+      # `middleware.js|ts` (the installed docs say `proxy.js|ts`, middleware
+      # being the deprecated name), so .tsx/.jsx/.mjs cannot take effect on
+      # their own — they are caught anyway because a file with that basename
+      # states an intent to add request interception outside proxy.ts.
       - id: forbid-nextjs-middleware
         name: Next.js interception lives in proxy.ts, not middleware.ts
         entry: 'This project uses frontend/proxy.ts, not middleware.ts:'

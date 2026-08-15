@@ -35,9 +35,16 @@ function sourceFiles(directory: string): string[] {
   });
 }
 
+/** Source with comments removed, so prose about `updated_at` is not a use. */
+function code(path: string): string {
+  return readFileSync(path, "utf8")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/\/\/.*/g, "");
+}
+
 function filesUsingUpdatedAt(): string[] {
   return SOURCE_DIRECTORIES.flatMap(sourceFiles)
-    .filter((path) => /\bupdated_at\b/.test(readFileSync(path, "utf8")))
+    .filter((path) => /\bupdated_at\b/.test(code(path)))
     .map((path) => relative(process.cwd(), path));
 }
 
