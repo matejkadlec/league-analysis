@@ -88,6 +88,8 @@ Implementation:
   - `league_analysis_cookie_consent`
 - Optional preference:
   - `header_messages_closed`
+  - `league_analysis_match_history_page_size`
+  - `league_analysis_match_history_queue_filters`
 
 ## Important Caveat
 

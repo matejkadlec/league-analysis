@@ -44,6 +44,8 @@ identity, delivery, and safety rules are inherited from
   - `league_analysis_cookie_consent` (cookie)
 - Optional preference storage:
   - `header_messages_closed` (localStorage)
+  - `league_analysis_match_history_page_size` (localStorage)
+  - `league_analysis_match_history_queue_filters` (localStorage)
 
 If you add any new key:
 1. classify it as strictly necessary vs optional,

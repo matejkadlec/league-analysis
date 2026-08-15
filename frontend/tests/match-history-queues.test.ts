@@ -1,15 +1,19 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  DEFAULT_MATCH_HISTORY_QUEUE_SELECTION,
   getMatchHistoryEmptyMessage,
   getMatchHistoryQueueQuery,
   getMatchQueueName,
-  MATCH_HISTORY_PAGE_SIZE,
   MATCH_HISTORY_QUEUE_FILTERS,
   selectMatchHistoryQueue,
 } from "@/features/matches/queue-catalog";
 
 describe("Match History queue catalog", () => {
+  it("defaults to Ranked Solo/Duo", () => {
+    expect(DEFAULT_MATCH_HISTORY_QUEUE_SELECTION).toEqual([420]);
+  });
+
   it("keeps the approved filter order and fixed-width labels", () => {
     expect(
       MATCH_HISTORY_QUEUE_FILTERS.map(({ id, label }) => ({ id, label })),
@@ -48,21 +52,37 @@ describe("Match History queue catalog", () => {
   });
 
   it("explains the Match-V5 availability boundary for the Mayhem filter", () => {
-    expect(getMatchHistoryEmptyMessage(2400)).toBe(
+    expect(getMatchHistoryEmptyMessage([2400])).toBe(
       "No ARAM: Mayhem matches are currently available from Riot Match-V5 for this player.",
     );
-    expect(getMatchHistoryEmptyMessage(450)).toBe(
+    expect(getMatchHistoryEmptyMessage([450])).toBe(
       "No matches found for ARAM.",
+    );
+    expect(getMatchHistoryEmptyMessage([420, 440])).toBe(
+      "No matches found for the selected queues.",
     );
   });
 
-  it("uses no queue restriction for All Queues and resets pagination on change", () => {
-    expect(getMatchHistoryQueueQuery("ALL")).toBeUndefined();
-    expect(getMatchHistoryQueueQuery(480)).toBe(480);
-    expect(selectMatchHistoryQueue("ALL", "ALL")).toBeNull();
-    expect(selectMatchHistoryQueue("ALL", 2400)).toEqual({
-      filter: 2400,
-      displayCount: MATCH_HISTORY_PAGE_SIZE,
-    });
+  it("uses no restriction for All Queues and serializes queue unions", () => {
+    expect(getMatchHistoryQueueQuery(["ALL"])).toBeUndefined();
+    expect(getMatchHistoryQueueQuery([420, 440, 450])).toBe("420,440,450");
+  });
+
+  it("uses normal selection as an exclusive queue choice", () => {
+    expect(selectMatchHistoryQueue(["ALL"], "ALL", false)).toBeNull();
+    expect(selectMatchHistoryQueue(["ALL"], 2400, false)).toEqual([2400]);
+    expect(selectMatchHistoryQueue([420, 440], 450, false)).toEqual([450]);
+  });
+
+  it("uses Shift selection for stable queue unions without allowing zero", () => {
+    expect(selectMatchHistoryQueue([420], 440, true)).toEqual([420, 440]);
+    expect(selectMatchHistoryQueue([420, 440], 420, true)).toEqual([440]);
+    expect(selectMatchHistoryQueue([420], 420, true)).toBeNull();
+    expect(selectMatchHistoryQueue([420, 440], "ALL", true)).toEqual([
+      "ALL",
+    ]);
+    expect(selectMatchHistoryQueue([440, 450], 420, true)).toEqual([
+      420, 440, 450,
+    ]);
   });
 });

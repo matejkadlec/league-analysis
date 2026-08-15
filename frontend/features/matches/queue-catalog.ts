@@ -21,35 +21,76 @@ export const MATCH_HISTORY_QUEUE_FILTERS = [
 export type MatchHistoryQueueFilter =
   (typeof MATCH_HISTORY_QUEUE_FILTERS)[number]["id"];
 
-export const MATCH_HISTORY_PAGE_SIZE = 20;
+export type MatchHistoryQueueSelection = MatchHistoryQueueFilter[];
+
+export const DEFAULT_MATCH_HISTORY_QUEUE_SELECTION: MatchHistoryQueueSelection = [
+  420,
+];
 
 export function getMatchQueueName(queueId: number): string {
   return MATCH_QUEUE_NAMES[queueId] ?? `Queue ${queueId}`;
 }
 
 export function getMatchHistoryQueueQuery(
-  filter: MatchHistoryQueueFilter,
-): number | undefined {
-  return filter === "ALL" ? undefined : filter;
+  filters: ReadonlyArray<MatchHistoryQueueFilter>,
+): string | undefined {
+  if (filters.includes("ALL")) {
+    return undefined;
+  }
+
+  return filters.join(",");
 }
 
 export function getMatchHistoryEmptyMessage(
-  filter: Exclude<MatchHistoryQueueFilter, "ALL">,
+  filters: ReadonlyArray<MatchHistoryQueueFilter>,
 ): string {
+  if (filters.length > 1) {
+    return "No matches found for the selected queues.";
+  }
+
+  const filter = filters[0];
   if (filter === 2400) {
     return "No ARAM: Mayhem matches are currently available from Riot Match-V5 for this player.";
+  }
+
+  if (filter === "ALL" || filter === undefined) {
+    return "This player has no matches in the database.";
   }
 
   return `No matches found for ${getMatchQueueName(filter)}.`;
 }
 
 export function selectMatchHistoryQueue(
-  currentFilter: MatchHistoryQueueFilter,
+  currentFilters: ReadonlyArray<MatchHistoryQueueFilter>,
   nextFilter: MatchHistoryQueueFilter,
-): { filter: MatchHistoryQueueFilter; displayCount: number } | null {
-  if (currentFilter === nextFilter) {
+  additive: boolean,
+): MatchHistoryQueueSelection | null {
+  if (nextFilter === "ALL") {
+    return currentFilters.length === 1 && currentFilters[0] === "ALL"
+      ? null
+      : ["ALL"];
+  }
+
+  if (!additive || currentFilters.includes("ALL")) {
+    return currentFilters.length === 1 && currentFilters[0] === nextFilter
+      ? null
+      : [nextFilter];
+  }
+
+  if (currentFilters.includes(nextFilter)) {
+    if (currentFilters.length === 1) {
+      return null;
+    }
+    return currentFilters.filter((filter) => filter !== nextFilter);
+  }
+
+  const selected = new Set([...currentFilters, nextFilter]);
+  const ordered = MATCH_HISTORY_QUEUE_FILTERS.map(({ id }) => id).filter(
+    (filter): filter is MatchHistoryQueueFilter => selected.has(filter),
+  );
+  if (ordered.length === currentFilters.length) {
     return null;
   }
 
-  return { filter: nextFilter, displayCount: MATCH_HISTORY_PAGE_SIZE };
+  return ordered;
 }

@@ -322,7 +322,7 @@ test("keeps player routes, sidebar switching, and dialog scroll lock determinist
   });
 
   await page.goto("/player-overview");
-  await page.getByRole("button", { name: "Accept necessary" }).click();
+  await page.getByRole("button", { name: "Accept all" }).click();
 
   await expect(page).toHaveURL(new RegExp(`puuid=${CURRENT_PUUID}`));
   const currentPlayerButton = page.getByTestId("current-player-button");
@@ -447,7 +447,19 @@ test("keeps player routes, sidebar switching, and dialog scroll lock determinist
     "href",
     `/match-history?puuid=${RECENT_PUUID}`,
   );
+  const defaultMatchHistoryRequest = page.waitForRequest((request) => {
+    const requestUrl = new URL(request.url());
+    return (
+      requestUrl.pathname.endsWith(
+        `/matches/player/${RECENT_PUUID}/detailed`,
+      ) &&
+      requestUrl.searchParams.get("queues") === "420" &&
+      requestUrl.searchParams.get("count") === "25" &&
+      requestUrl.searchParams.get("start") === "0"
+    );
+  });
   await matchHistoryNav.click();
+  await defaultMatchHistoryRequest;
   await expect(page).toHaveURL(
     new RegExp(`/match-history\\?puuid=${RECENT_PUUID}`),
   );
@@ -458,6 +470,15 @@ test("keeps player routes, sidebar switching, and dialog scroll lock determinist
       "Explore player's matches, queue results, team objectives, builds, runes, and performance details.",
     ),
   ).toBeVisible();
+  await expect(
+    page.getByText("10 total matches (6W / 4L) • 60.0% WR"),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Ranked Solo/Duo" }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await expect(
+    page.getByLabel("Match history page size"),
+  ).toContainText("25");
 
   const activePlayerFromMatchHistory = page.getByTestId(
     "current-player-button",
@@ -479,16 +500,125 @@ test("keeps player routes, sidebar switching, and dialog scroll lock determinist
   const matchCardBeforeFilter = await page
     .locator("#match-history")
     .boundingBox();
+  const mayhemRequest = page.waitForRequest((request) => {
+    const requestUrl = new URL(request.url());
+    return (
+      requestUrl.pathname.endsWith(
+        `/matches/player/${RECENT_PUUID}/detailed`,
+      ) && requestUrl.searchParams.get("queues") === "2400"
+    );
+  });
   await page.getByRole("button", { name: "ARAM: Mayhem" }).click();
+  await mayhemRequest;
   await expect(
     page.getByRole("button", { name: "ARAM: Mayhem" }),
   ).toHaveAttribute("aria-pressed", "true");
+
+  const queueUnionRequest = page.waitForRequest((request) => {
+    const requestUrl = new URL(request.url());
+    return (
+      requestUrl.pathname.endsWith(
+        `/matches/player/${RECENT_PUUID}/detailed`,
+      ) && requestUrl.searchParams.get("queues") === "450,2400"
+    );
+  });
+  await page
+    .getByRole("button", { name: "ARAM", exact: true })
+    .click({ modifiers: ["Shift"] });
+  await queueUnionRequest;
+  await expect(
+    page.getByRole("button", { name: "ARAM", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+
+  const matchSearch = page.getByPlaceholder(
+    "Search for champion or player",
+  );
+  await expect(matchSearch).toBeVisible();
+  await expect
+    .poll(() =>
+      matchSearch.evaluate((element) => {
+        const rect = element.getBoundingClientRect();
+        return { height: rect.height, width: rect.width };
+      }),
+    )
+    .toEqual({ height: 28, width: 230 });
+  const participantSearchRequest = page.waitForRequest((request) => {
+    const requestUrl = new URL(request.url());
+    return (
+      requestUrl.pathname.endsWith(
+        `/matches/player/${RECENT_PUUID}/detailed`,
+      ) &&
+      requestUrl.searchParams.get("queues") === "450,2400" &&
+      requestUrl.searchParams.get("search") === "Aurelion Sol"
+    );
+  });
+  await matchSearch.fill("Aurelion Sol");
+  await participantSearchRequest;
+
+  const scrollbarWidthBeforePageSize = await page.evaluate(
+    () => innerWidth - document.documentElement.clientWidth,
+  );
+  await page.getByLabel("Match history page size").click();
+  expect(
+    await page.evaluate(() => document.body.hasAttribute("data-scroll-locked")),
+  ).toBe(false);
+  expect(
+    await page.evaluate(
+      () => innerWidth - document.documentElement.clientWidth,
+    ),
+  ).toBe(scrollbarWidthBeforePageSize);
+
+  const pageSizeRequest = page.waitForRequest((request) => {
+    const requestUrl = new URL(request.url());
+    return (
+      requestUrl.pathname.endsWith(
+        `/matches/player/${RECENT_PUUID}/detailed`,
+      ) &&
+      requestUrl.searchParams.get("count") === "100" &&
+      requestUrl.searchParams.get("start") === "0"
+    );
+  });
+  await page.getByRole("option", { name: "100", exact: true }).click();
+  await pageSizeRequest;
+  await expect(page.getByText("Showing 0 to 0 of 0 matches")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Previous page" }),
+  ).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "Next page" }),
+  ).toBeDisabled();
+
   const matchCardAfterFilter = await page
     .locator("#match-history")
     .boundingBox();
   expect(
     Math.abs((matchCardAfterFilter?.x ?? 0) - (matchCardBeforeFilter?.x ?? 0)),
   ).toBeLessThanOrEqual(0.5);
+
+  await matchSearch.fill("");
+  const restoredMatchHistoryRequest = page.waitForRequest((request) => {
+    const requestUrl = new URL(request.url());
+    return (
+      requestUrl.pathname.endsWith(
+        `/matches/player/${RECENT_PUUID}/detailed`,
+      ) &&
+      requestUrl.searchParams.get("queues") === "450,2400" &&
+      requestUrl.searchParams.get("count") === "100" &&
+      requestUrl.searchParams.get("start") === "0" &&
+      requestUrl.searchParams.get("search") === null
+    );
+  });
+  await page.reload();
+  await restoredMatchHistoryRequest;
+  await expect(
+    page.getByRole("button", { name: "ARAM", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await expect(
+    page.getByRole("button", { name: "ARAM: Mayhem" }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await expect(
+    page.getByLabel("Match history page size"),
+  ).toContainText("100");
 
   const playerOverviewLink = page.getByRole("link", {
     name: "Player Overview",
