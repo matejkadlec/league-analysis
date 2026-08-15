@@ -28,21 +28,27 @@ repos:
 
   - repo: local
     hooks:
+      # A bare `.env` was the only env file this caught. The suffixed forms
+      # (`.env.local`, `.env.production`) and the `<name>.env` form this
+      # project actually deploys with are the ones most likely to be staged by
+      # accident. Committable templates are exempt.
       - id: forbid-credential-filenames
         name: Forbid credential-looking filenames
         entry: 'A staged filename looks like a credential:'
         language: fail
-        files: '(^|/)(\.env|id_rsa|id_ed25519)$|\.(pem|key)$'
+        files: '(^|/)(?!\.env\.(?:example|template|sample)$)(?:\.env(?:\.[^/]+)?|[^/]+\.env|id_rsa|id_ed25519)$|\.(pem|key)$'
 
       # ESLint has no filename rule and adding a plugin for one convention is
       # not worth the dependency. The tree is fully kebab-case today, so this
       # only ever fires on a new violation. Next.js dynamic segments and route
-      # groups are lowercase already, so they pass.
+      # groups are lowercase already, so they pass. The check covers every
+      # path segment, not just the basename — a PascalCase feature directory
+      # is the same violation as a PascalCase file.
       - id: forbid-non-kebab-frontend-filenames
         name: Frontend source filenames stay kebab-case
-        entry: 'Frontend source filenames must be kebab-case:'
+        entry: 'Frontend source paths must be kebab-case:'
         language: fail
-        files: '^frontend/(?!node_modules/)(?:[^/]*/)*[^/]*[A-Z_][^/]*\.(?:ts|tsx)$'
+        files: '^frontend/(?!node_modules/).*[A-Z_ ].*\.(?:ts|tsx|js|jsx|mjs|cjs|mts|cts)$'
 
       # Reviewed Alembic revisions are the schema authority. This catches the
       # committed-code half of that rule; dropping or resetting a populated
@@ -55,29 +61,35 @@ repos:
 
       # All data fetching goes through TanStack Query over the validated
       # client in lib/core. axios itself belongs to that client and its
-      # tests, so this is scoped to the UI trees rather than the whole app.
+      # tests, so those two trees are excluded rather than the rest of the
+      # app being opted in — a rogue client under lib/ would otherwise pass.
+      # A type-only import performs no request, and static, require and
+      # dynamic forms all count.
       - id: forbid-direct-axios
         name: No direct axios outside lib/core (use the validated client)
-        entry: 'from\s+["'']axios["'']'
+        entry: '^(?!\s*(?://|\*)|.*\bimport\s+type\b).*(?:from\s+["'']axios["'']|require\(\s*["'']axios["'']\s*\)|import\(\s*["'']axios["'']\s*\))'
         language: pygrep
-        files: '^frontend/(app|components|features)/.*\.tsx?$'
+        files: '^frontend/(?!node_modules/|lib/core/|tests/).*\.(?:ts|tsx|js|jsx)$'
 
       # Next.js resolves both names; this project standardized on proxy.ts,
-      # and a stray middleware.ts would silently take effect.
+      # and a stray middleware file would silently take effect. Next resolves
+      # the extensionless basename, so every source extension is caught.
       - id: forbid-nextjs-middleware
         name: Next.js interception lives in proxy.ts, not middleware.ts
         entry: 'This project uses frontend/proxy.ts, not middleware.ts:'
         language: fail
-        files: '^frontend/(src/)?middleware\.(ts|js)$'
+        files: '^frontend/(src/)?middleware\.(ts|tsx|js|jsx|mjs)$'
 
       # Relative-link integrity and the docs/README.md topic index. Runs over
       # the tracked corpus, not the staged subset: a rename breaks links in
-      # files the commit never touches.
+      # files the commit never touches. always_run because deleting a linked
+      # target stages no Markdown at all, and that is exactly the case a
+      # file filter would skip.
       - id: check-docs-links
         name: Docs links resolve and topics are indexed
         entry: bash -c 'exec "$(git rev-parse --show-toplevel)/scripts/check-docs-links.sh"'
         language: system
-        files: \.md$
+        always_run: true
         pass_filenames: false
 
   # Ruff - Fast Python linter and formatter (replaces black, isort, flake8)
