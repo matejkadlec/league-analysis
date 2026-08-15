@@ -16,6 +16,16 @@ repos:
       - id: detect-private-key
       - id: debug-statements
 
+  # Secret *values* in any file type. The filename hook below only blocks
+  # credential-shaped paths, and detect-private-key only matches PEM blocks,
+  # so neither catches an API key pasted into a doc, JSON, or test fixture.
+  # Scans the staged diff only; the tracked history is clean as of v8.30.1,
+  # so no .gitleaksignore is needed.
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks
+
   - repo: local
     hooks:
       - id: forbid-credential-filenames
@@ -23,6 +33,15 @@ repos:
         entry: 'A staged filename looks like a credential:'
         language: fail
         files: '(^|/)(\.env|id_rsa|id_ed25519)$|\.(pem|key)$'
+
+      # Reviewed Alembic revisions are the schema authority. This catches the
+      # committed-code half of that rule; dropping or resetting a populated
+      # schema is a runtime action no hook can see.
+      - id: forbid-metadata-create-all
+        name: Forbid Base.metadata.create_all (Alembic owns the schema)
+        entry: 'metadata\.create_all'
+        language: pygrep
+        files: \.py$
 
   # Ruff - Fast Python linter and formatter (replaces black, isort, flake8)
   - repo: https://github.com/astral-sh/ruff-pre-commit

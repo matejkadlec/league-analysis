@@ -17,15 +17,6 @@ Deep topic docs live in [`docs/`](docs/README.md).
 Nothing else about how work gets delivered is prescribed. Branches, commits,
 PR grouping, and when to validate are your judgment.
 
-## Hard safety rules
-
-- Schema changes only via reviewed Alembic revisions applied through
-  `backend/scripts/migrate.py`; never `Base.metadata.create_all()`, never
-  drop/reset a populated schema.
-- Stored PUUIDs are encrypted per developer account — a cross-account key sees
-  400s, not data corruption — so never "repair" it by merging player rows
-  ([docs/riot-api.md](docs/riot-api.md)).
-
 ## Commands
 
 - `./run.sh` — backend 8000, frontend 3000 (logs in `logs/`)

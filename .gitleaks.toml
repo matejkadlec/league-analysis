@@ -1,0 +1,16 @@
+# Gitleaks configuration for League Analysis.
+#
+# The default ruleset catches a Riot key only when it sits next to an
+# assignment keyword (RIOT_API_KEY=...), via generic-api-key. A bare key
+# pasted into prose — a doc, a PR body, a handoff note — passes. The RGAPI-
+# prefix is unmistakable, so an explicit rule costs nothing in false
+# positives and closes the realistic case.
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "riot-api-key"
+description = "Riot Games API key"
+regex = '''RGAPI-[0-9A-Za-z]{8}-[0-9A-Za-z]{4}-[0-9A-Za-z]{4}-[0-9A-Za-z]{4}-[0-9A-Za-z]{12}'''
+keywords = ["RGAPI-"]
