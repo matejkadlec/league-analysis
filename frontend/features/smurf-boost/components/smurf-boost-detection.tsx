@@ -132,7 +132,7 @@ export function SmurfBoostDetection({ puuid }: SmurfBoostDetectionProps) {
   }
 
   const running = runMutation.isPending || isActive(latest ?? null);
-  const results = latest?.results ?? null;
+  const results = latest?.status === "completed" ? latest.results : null;
   const storedFailure =
     latest && latest.status === "failed"
       ? (latest.error_message ??
