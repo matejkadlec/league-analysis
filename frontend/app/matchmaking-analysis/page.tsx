@@ -1,14 +1,15 @@
 "use client";
 
-import { Suspense } from "react";
+import { Suspense, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Scale } from "lucide-react";
 import { Player } from "@/lib/core/schemas";
 import {
-  PlayerSearch,
-  PlayerCard,
+  PlayerSelector,
   playerQueryKey,
   playerQueryOptions,
+  usePlayerContext,
 } from "@/features/players";
 import {
   MatchmakingAnalysis,
@@ -18,35 +19,58 @@ import {
 } from "@/features/matchmaking";
 import { ProtectedRoute } from "@/features/auth";
 
-import { Card } from "@/components/ui/card";
-import { PlayerCardSkeleton } from "@/components/loading-skeleton";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+
+function playerLabel(player: Player | null): string | null {
+  if (!player) return null;
+  return `${player.game_name ?? "Unknown"}${
+    player.tag_line ? `#${player.tag_line}` : ""
+  }`;
+}
 
 function MatchmakingAnalysisContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
+  const {
+    currentPlayer: referencePlayer,
+    isLoading: isLoadingReferencePlayer,
+  } = usePlayerContext();
   const puuidFromUrl = searchParams.get("puuid");
-  const { data: selectedPlayer, isLoading: isLoadingInitialPlayer } = useQuery(
-    playerQueryOptions(puuidFromUrl),
+  const analyzedPuuid = puuidFromUrl ?? referencePlayer?.puuid ?? null;
+  const { data: analyzedPlayer, isLoading: isLoadingAnalyzedPlayer } = useQuery(
+    playerQueryOptions(analyzedPuuid),
   );
+
+  useEffect(() => {
+    if (puuidFromUrl || !referencePlayer) return;
+    router.replace(
+      `/matchmaking-analysis?puuid=${encodeURIComponent(referencePlayer.puuid)}`,
+      { scroll: false },
+    );
+  }, [puuidFromUrl, referencePlayer, router]);
 
   const handlePlayerFound = (player: Player) => {
     queryClient.setQueryData(playerQueryKey(player.puuid), player);
-    router.push(`/matchmaking-analysis?puuid=${player.puuid}`, {
-      scroll: false,
-    });
+    router.push(
+      `/matchmaking-analysis?puuid=${encodeURIComponent(player.puuid)}`,
+      { scroll: false },
+    );
   };
 
-  const handleClearPlayer = () => {
-    router.push("/matchmaking-analysis", { scroll: false });
-
-    // Invalidate any queries related to this player
-    queryClient.invalidateQueries({ queryKey: ["matchmaking-analysis"] });
-    queryClient.invalidateQueries({
-      queryKey: ["matchmaking-analysis-results"],
-    });
-  };
+  const selector = (
+    <PlayerSelector
+      id="matchmaking-player-search"
+      ariaLabel="Choose player for analysis"
+      placeholder="Search for player"
+      onPlayerSelected={handlePlayerFound}
+    />
+  );
+  const isLoadingInitialPlayer =
+    isLoadingReferencePlayer || isLoadingAnalyzedPlayer;
+  const analyzedPlayerLabel = playerLabel(analyzedPlayer ?? null);
 
   return (
     <>
@@ -71,51 +95,74 @@ function MatchmakingAnalysisContent() {
       {/* Content - shows skeletons during initial load */}
       <div className="container mx-auto px-4 pb-8">
         <div className="mb-6 space-y-6">
-          {/* Two Column Layout */}
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            {/* Left Column: Player Search + Matchmaking Analysis */}
-            <div className="space-y-6">
-              <PlayerSearch
-                onPlayerFound={handlePlayerFound}
-                onClear={handleClearPlayer}
-                showClear={!!selectedPlayer}
-              />
-              {isLoadingInitialPlayer ? (
-                <>
-                  <Card className="p-6">
-                    <Skeleton className="h-6 w-48 mb-4" />
-                    <Skeleton className="h-10 w-full mb-2" />
-                    <Skeleton className="h-4 w-32" />
-                  </Card>
-                  <Card className="p-6 space-y-4">
-                    <Skeleton className="h-6 w-40" />
-                    {[...Array(3)].map((_, i) => (
-                      <Skeleton key={i} className="h-16 w-full" />
-                    ))}
-                  </Card>
-                </>
-              ) : selectedPlayer ? (
-                <>
-                  <MatchmakingAnalysis puuid={selectedPlayer.puuid} />
-                  <MatchmakingAnalysisResults puuid={selectedPlayer.puuid} />
-                  <MatchmakingExplanationCard />
-                </>
-              ) : null}
-            </div>
-
-            {/* Right Column: Player Card + Analysis History */}
-            <div className="space-y-6">
-              {isLoadingInitialPlayer ? (
-                <PlayerCardSkeleton />
-              ) : selectedPlayer ? (
-                <>
-                  <Suspense fallback={<PlayerCardSkeleton />}>
-                    <PlayerCard player={selectedPlayer} />
-                  </Suspense>
-                  <MatchmakingAnalysisHistory puuid={selectedPlayer.puuid} />
-                </>
-              ) : null}
-            </div>
+            {isLoadingInitialPlayer ? (
+              [...Array(4)].map((_, index) => (
+                <Card key={index} className="p-6 space-y-4">
+                  <Skeleton className="h-6 w-48" />
+                  <Skeleton className="h-20 w-full" />
+                  <Skeleton className="h-10 w-full" />
+                </Card>
+              ))
+            ) : analyzedPlayer && analyzedPlayerLabel ? (
+              <>
+                <MatchmakingAnalysis
+                  key={analyzedPlayer.puuid}
+                  puuid={analyzedPlayer.puuid}
+                  analyzedPlayerLabel={analyzedPlayerLabel}
+                  playerSelector={selector}
+                />
+                <MatchmakingAnalysisResults
+                  puuid={analyzedPlayer.puuid}
+                  analyzedPlayerLabel={analyzedPlayerLabel}
+                />
+                <MatchmakingExplanationCard />
+                <MatchmakingAnalysisHistory
+                  puuid={analyzedPlayer.puuid}
+                  analyzedPlayerLabel={analyzedPlayerLabel}
+                />
+              </>
+            ) : (
+              <>
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Scale className="h-5 w-5 text-primary" />
+                      Matchmaking Analysis
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <p className="text-sm text-muted-foreground">
+                      Choose a local analyzed player. This selection will not
+                      change or track the global reference player.
+                    </p>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="matchmaking-player-search">
+                        Choose player for analysis
+                      </Label>
+                      {selector}
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Last Analysis Result</CardTitle>
+                  </CardHeader>
+                  <CardContent className="text-sm text-muted-foreground">
+                    Select a player to load their latest completed result.
+                  </CardContent>
+                </Card>
+                <MatchmakingExplanationCard />
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Analysis History</CardTitle>
+                  </CardHeader>
+                  <CardContent className="text-sm text-muted-foreground">
+                    Select a player to load their analysis history.
+                  </CardContent>
+                </Card>
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -132,10 +179,13 @@ export default function MatchmakingAnalysisPage() {
             <Skeleton className="h-32 w-full rounded-lg mb-6" />
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
               <div className="space-y-6">
-                <Skeleton className="h-20 w-full rounded-lg" />
+                <Skeleton className="h-48 w-full rounded-lg" />
                 <Skeleton className="h-48 w-full rounded-lg" />
               </div>
-              <Skeleton className="h-80 w-full rounded-lg" />
+              <div className="space-y-6">
+                <Skeleton className="h-48 w-full rounded-lg" />
+                <Skeleton className="h-48 w-full rounded-lg" />
+              </div>
             </div>
           </div>
         }

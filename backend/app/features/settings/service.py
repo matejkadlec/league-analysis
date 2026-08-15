@@ -535,29 +535,14 @@ class SettingsService:
         return settings
 
     async def update_user_settings(self, user_id: int, update):
-        """Update user settings with provided values."""
-        from app.features.auth.user_settings import ThemeEnum
-
-        # Get or create settings first
+        """Accept the retired compatibility payload without persisting it."""
         settings = await self.get_or_create_user_settings(user_id)
-
-        # Update only provided fields
         update_data = update.model_dump(exclude_unset=True)
 
-        for field, value in update_data.items():
-            if field == "theme" and value is not None:
-                # Convert string to enum
-                settings.theme = ThemeEnum(value) if isinstance(value, str) else value
-            elif hasattr(settings, field):
-                setattr(settings, field, value)
-
-        await self.db.commit()
-        await self.db.refresh(settings)
-
         logger.info(
-            "Updated user settings",
+            "Ignored retired user settings compatibility update",
             user_id=user_id,
-            updated_fields=list(update_data.keys()),
+            ignored_fields=list(update_data.keys()),
         )
 
         return settings

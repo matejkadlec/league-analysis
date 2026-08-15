@@ -118,21 +118,6 @@ class User(Base):
         comment="Account lock expiration timestamp after too many failed logins",
     )
 
-    # Riot Account Connection
-    riot_account_connected: Mapped[bool] = mapped_column(
-        Boolean,
-        nullable=False,
-        default=False,
-        comment="Whether a Riot account has been linked to this user",
-    )
-
-    puuid: Mapped[Optional[str]] = mapped_column(
-        String(78),
-        nullable=True,
-        index=True,
-        comment="Linked Riot account PUUID (references core.players)",
-    )
-
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
         SQLDateTime(timezone=True),
@@ -184,7 +169,6 @@ Index("idx_users_email_is_active", User.email, User.is_active)
 Index("idx_users_last_login", User.last_login)
 Index("idx_users_locked_until", User.locked_until)
 Index("idx_users_created_at", User.created_at)
-Index("ix_users_puuid", User.puuid)
 
 # Ensure consent mapper is registered even when this module is imported directly.
 from .user_cookie_consent import UserCookieConsent  # noqa: F401,E402

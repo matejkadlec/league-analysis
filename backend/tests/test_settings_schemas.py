@@ -1,5 +1,8 @@
 """Settings boundary validation tests."""
 
+from datetime import datetime, timezone
+from types import SimpleNamespace
+
 import pytest
 from pydantic import ValidationError
 
@@ -8,6 +11,7 @@ from app.features.settings.schemas import (
     SettingUpdate,
     ThemeEnum,
     UserCookieConsentUpdate,
+    UserSettingsResponse,
     UserSettingsUpdate,
 )
 
@@ -30,6 +34,16 @@ def test_user_settings_accepts_bounded_values() -> None:
 def test_user_settings_rejects_oversized_values(field: str, value: str) -> None:
     with pytest.raises(ValidationError):
         UserSettingsUpdate(**{field: value})
+
+
+def test_retired_user_settings_response_uses_inert_compatibility_defaults() -> None:
+    timestamp = datetime.now(timezone.utc)
+    response = UserSettingsResponse.model_validate(
+        SimpleNamespace(created_at=timestamp, updated_at=timestamp),
+    )
+
+    assert response.theme is ThemeEnum.DARK
+    assert response.default_platform == "eun1"
 
 
 def test_cookie_consent_defaults_are_explicit_and_bounded() -> None:

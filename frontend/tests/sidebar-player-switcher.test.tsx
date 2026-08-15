@@ -5,12 +5,13 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { apiPost, selectPlayer, toast, validatedGet } = vi.hoisted(() => ({
-  apiPost: vi.fn(),
-  selectPlayer: vi.fn(),
-  toast: vi.fn(),
-  validatedGet: vi.fn(),
-}));
+const { discoverPlayer, searchPlayerSuggestions, selectPlayer, toast } =
+  vi.hoisted(() => ({
+    discoverPlayer: vi.fn(),
+    searchPlayerSuggestions: vi.fn(),
+    selectPlayer: vi.fn(),
+    toast: vi.fn(),
+  }));
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/match-history",
@@ -46,8 +47,8 @@ vi.mock("@/features/players/components/tracked-players-list", () => ({
 }));
 
 vi.mock("@/lib/core/api", () => ({
-  api: { post: apiPost },
-  validatedGet,
+  discoverPlayer,
+  searchPlayerSuggestions,
 }));
 
 vi.mock("@/lib/core/hooks", () => ({
@@ -56,10 +57,7 @@ vi.mock("@/lib/core/hooks", () => ({
 
 import { SidebarPlayerSwitcher } from "@/features/players/components/sidebar-player-switcher";
 
-function renderSwitcher(
-  manageOpen = false,
-  onManageOpenChange = vi.fn(),
-) {
+function renderSwitcher(manageOpen = false, onManageOpenChange = vi.fn()) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
@@ -75,11 +73,11 @@ function renderSwitcher(
 
 describe("SidebarPlayerSwitcher", () => {
   beforeEach(() => {
-    validatedGet.mockReset();
+    discoverPlayer.mockReset();
+    searchPlayerSuggestions.mockReset();
     selectPlayer.mockReset();
-    apiPost.mockReset();
     toast.mockReset();
-    validatedGet.mockResolvedValue({ success: true, data: [] });
+    searchPlayerSuggestions.mockResolvedValue({ success: true, data: [] });
     selectPlayer.mockResolvedValue(undefined);
   });
 
@@ -94,9 +92,9 @@ describe("SidebarPlayerSwitcher", () => {
       name: "Current#ONE",
     });
     expect(currentPlayerButton.getAttribute("aria-haspopup")).toBe("dialog");
-    expect(currentPlayerButton.parentElement?.parentElement?.className).toContain(
-      "pb-3",
-    );
+    expect(
+      currentPlayerButton.parentElement?.parentElement?.className,
+    ).toContain("pb-3");
     expect(screen.queryByRole("link", { name: "Current#ONE" })).toBeNull();
     expect(screen.queryByText("Recent One#ONE")).toBeNull();
     expect(screen.queryByText("Recent Three#ONE")).toBeNull();
@@ -112,7 +110,9 @@ describe("SidebarPlayerSwitcher", () => {
     expect(
       screen.getByRole("heading", { name: "Tracked Players" }),
     ).not.toBeNull();
-    expect(screen.getByText("View, add or remove tracked players.")).not.toBeNull();
+    expect(
+      screen.getByText("View, add or remove tracked players."),
+    ).not.toBeNull();
     expect(screen.queryByText("Manage Tracked Players")).toBeNull();
   });
 
@@ -122,7 +122,7 @@ describe("SidebarPlayerSwitcher", () => {
 
     expect(screen.queryByText("Select player server")).toBeNull();
     await user.type(screen.getByLabelText("Search for player"), "Unknown#TAG");
-    await waitFor(() => expect(validatedGet).toHaveBeenCalled());
+    await waitFor(() => expect(searchPlayerSuggestions).toHaveBeenCalled());
     await user.click(
       await screen.findByRole("button", {
         name: "Search Riot for this Name#Tag",

@@ -7,6 +7,7 @@ const THIRD_PUUID = "third-player-puuid";
 const FOURTH_PUUID = "fourth-player-puuid";
 const FIFTH_PUUID = "fifth-player-puuid";
 const SIXTH_PUUID = "sixth-player-puuid";
+const ANALYZED_PUUID = "analyzed-player-puuid";
 
 const players = {
   [CURRENT_PUUID]: {
@@ -95,12 +96,22 @@ const players = {
   },
 };
 
+const analyzedPlayer = {
+  ...players[CURRENT_PUUID],
+  puuid: ANALYZED_PUUID,
+  game_name: "Analyzed",
+  tag_line: "LOCAL",
+  platform: "euw1",
+  is_tracked: false,
+};
+
 test("keeps player routes, sidebar switching, and dialog scroll lock deterministic", async ({
   page,
 }) => {
   test.setTimeout(60_000);
   await page.setViewportSize({ width: 1440, height: 650 });
   let currentPuuid = CURRENT_PUUID;
+  let currentPlayerUpdates = 0;
   let syncStarts = 0;
 
   await page.addInitScript(() => {
@@ -141,6 +152,7 @@ test("keeps player routes, sidebar switching, and dialog scroll lock determinist
       if (path.endsWith("/players/context/current")) {
         const body = request.postDataJSON() as { puuid: string };
         currentPuuid = body.puuid;
+        currentPlayerUpdates += 1;
       }
       await route.fulfill({
         contentType: "application/json",
@@ -157,6 +169,26 @@ test("keeps player routes, sidebar switching, and dialog scroll lock determinist
         contentType: "application/json",
         body: JSON.stringify(Object.values(players)),
       });
+      return;
+    }
+
+    if (path.endsWith("/players/suggestions")) {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify([analyzedPlayer]),
+      });
+      return;
+    }
+
+    if (path.includes(`/matchmaking-analysis/player/${ANALYZED_PUUID}`)) {
+      if (path.endsWith("/history")) {
+        await route.fulfill({
+          contentType: "application/json",
+          body: JSON.stringify({ items: [] }),
+        });
+      } else {
+        await route.fulfill({ status: 404, body: "Not found" });
+      }
       return;
     }
 
@@ -334,14 +366,16 @@ test("keeps player routes, sidebar switching, and dialog scroll lock determinist
   await expect(
     page.getByRole("button", { name: "Player Summary" }),
   ).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "Match History" }),
-  ).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Match History" })).toHaveCount(
+    0,
+  );
 
   await expect(page.getByTestId("view-tracked-players-button")).toBeHidden();
 
   expect(
-    await page.evaluate(() => document.documentElement.scrollHeight > innerHeight),
+    await page.evaluate(
+      () => document.documentElement.scrollHeight > innerHeight,
+    ),
   ).toBe(true);
   const activeRowBeforeDialog = await currentPlayerButton.boundingBox();
   const pageUrlBeforeDialog = page.url();
@@ -362,8 +396,7 @@ test("keeps player routes, sidebar switching, and dialog scroll lock determinist
   const viewport = page.viewportSize();
   const topSpace = dialogBox?.y ?? 0;
   const bottomSpace =
-    (viewport?.height ?? 0) -
-    ((dialogBox?.y ?? 0) + (dialogBox?.height ?? 0));
+    (viewport?.height ?? 0) - ((dialogBox?.y ?? 0) + (dialogBox?.height ?? 0));
   expect(Math.abs(bottomSpace - topSpace * 2)).toBeLessThanOrEqual(2);
   await expect(dialog.getByText("Manage Tracked Players")).toHaveCount(0);
   await expect(dialog.getByLabel("Search tracked players")).toHaveCount(0);
@@ -439,14 +472,20 @@ test("keeps player routes, sidebar switching, and dialog scroll lock determinist
 
   await page.setViewportSize({ width: 1440, height: 2000 });
   expect(
-    await page.evaluate(() => document.documentElement.scrollHeight > innerHeight),
+    await page.evaluate(
+      () => document.documentElement.scrollHeight > innerHeight,
+    ),
   ).toBe(true);
-  const matchCardBeforeFilter = await page.locator("#match-history").boundingBox();
+  const matchCardBeforeFilter = await page
+    .locator("#match-history")
+    .boundingBox();
   await page.getByRole("button", { name: "ARAM: Mayhem" }).click();
   await expect(
     page.getByRole("button", { name: "ARAM: Mayhem" }),
   ).toHaveAttribute("aria-pressed", "true");
-  const matchCardAfterFilter = await page.locator("#match-history").boundingBox();
+  const matchCardAfterFilter = await page
+    .locator("#match-history")
+    .boundingBox();
   expect(
     Math.abs((matchCardAfterFilter?.x ?? 0) - (matchCardBeforeFilter?.x ?? 0)),
   ).toBeLessThanOrEqual(0.5);
@@ -463,7 +502,9 @@ test("keeps player routes, sidebar switching, and dialog scroll lock determinist
     new RegExp(`/player-overview\\?puuid=${RECENT_PUUID}`),
   );
   expect(
-    await page.evaluate(() => document.documentElement.scrollHeight <= innerHeight),
+    await page.evaluate(
+      () => document.documentElement.scrollHeight <= innerHeight,
+    ),
   ).toBe(true);
   const noScrollRow = page.getByTestId("current-player-button");
   const noScrollBefore = await noScrollRow.boundingBox();
@@ -484,7 +525,8 @@ test("keeps player routes, sidebar switching, and dialog scroll lock determinist
       ),
     )
     .toBe("rgb(207, 169, 58)");
-  const overviewTextX = (await playerOverviewNav.locator("span").boundingBox())?.x;
+  const overviewTextX = (await playerOverviewNav.locator("span").boundingBox())
+    ?.x;
   const overviewNavStyle = await playerOverviewNav.evaluate((element) => {
     const style = getComputedStyle(element);
     return {
@@ -532,6 +574,80 @@ test("keeps player routes, sidebar switching, and dialog scroll lock determinist
       "Analyze matchmaking fairness by comparing average winrates of teammates vs enemies in recent ranked matches.",
     ),
   ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Player Search" }),
+  ).toHaveCount(0);
+  await expect(page.locator("#player-summary")).toHaveCount(0);
+  await expect(
+    page.getByText("Reference player (global)", { exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByText("Analyzed player (this page)", { exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByText("Last Analysis Result", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Calculation Flowchart", { exact: true }),
+  ).toBeVisible();
+  const hiddenFlowchartToggle = page.getByRole("button", {
+    name: "Collapse",
+    includeHidden: true,
+  });
+  await expect(hiddenFlowchartToggle).toHaveCount(1);
+  await expect(hiddenFlowchartToggle).toBeHidden();
+  await expect(
+    page.getByRole("img", {
+      name: "Matchmaking Analysis Calculation Explanation",
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Analysis History", { exact: true }),
+  ).toBeVisible();
+
+  const currentBeforeLocalSelection = currentPuuid;
+  const contextUpdatesBeforeLocalSelection = currentPlayerUpdates;
+  const analysisPlayerSearch = page.getByRole("textbox", {
+    name: "Choose player for analysis",
+  });
+  await expect(analysisPlayerSearch).toHaveAttribute(
+    "placeholder",
+    "Search for player",
+  );
+  await analysisPlayerSearch.fill("Analyzed");
+  await page.getByRole("option", { name: "Analyzed#LOCAL (EUW)" }).click();
+  await expect(page).toHaveURL(new RegExp(`puuid=${ANALYZED_PUUID}`));
+  const analyzedPlayerResultLabels = page
+    .locator("p")
+    .filter({ hasText: /^Results for player Analyzed#LOCAL$/ });
+  await expect(analyzedPlayerResultLabels).toHaveCount(2);
+  for (let index = 0; index < 2; index += 1) {
+    const labelParts = analyzedPlayerResultLabels.nth(index).locator("span");
+    await expect(labelParts.nth(0)).toHaveAttribute(
+      "style",
+      "color: var(--color-muted-foreground);",
+    );
+    await expect(labelParts.nth(1)).toHaveAttribute(
+      "style",
+      "color: var(--color-card-foreground);",
+    );
+  }
+  expect(currentPuuid).toBe(currentBeforeLocalSelection);
+  expect(currentPlayerUpdates).toBe(contextUpdatesBeforeLocalSelection);
+  await expect(page.getByTestId("current-player-button")).toHaveText(
+    /Recent#TWO/,
+  );
+
+  await page.getByRole("link", { name: "Settings" }).click();
+  await expect(
+    page.getByText("Account Settings", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Application Settings", { exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByText("Connected Riot Account", { exact: true }),
+  ).toHaveCount(0);
 
   await page.goto(`/my-profile?puuid=${CURRENT_PUUID}`);
   await expect(page).toHaveURL(

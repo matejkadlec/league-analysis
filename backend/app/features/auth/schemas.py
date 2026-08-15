@@ -80,8 +80,6 @@ class UserResponse(UserBase):
     email_verified: bool
     email_verified_at: Optional[datetime] = None
     last_login: Optional[datetime] = None
-    riot_account_connected: bool = False
-    puuid: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
@@ -119,14 +117,6 @@ class RefreshTokenRequest(BaseModel):
     """Schema for refreshing an access token using refresh token rotation."""
 
     refresh_token: str = Field(..., min_length=20)
-
-
-class LinkRiotAccountRequest(BaseModel):
-    """Schema for linking a Riot account to a user."""
-
-    game_name: str = Field(..., min_length=1, max_length=16)
-    tag_line: str = Field(..., min_length=1, max_length=5, pattern=r"^[a-zA-Z0-9]+$")
-    platform: str = Field(..., min_length=1, max_length=10)
 
 
 class UserProfileUpdate(BaseModel):

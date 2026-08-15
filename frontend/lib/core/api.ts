@@ -326,6 +326,34 @@ export async function searchPlayerSuggestions(
   });
 }
 
+export interface DiscoverPlayerParams {
+  game_name: string;
+  tag_line: string;
+  platform: string;
+}
+
+export async function discoverPlayer(
+  params: DiscoverPlayerParams,
+): Promise<ApiResponse<Player>> {
+  try {
+    const response = await api.post("/players/discover", null, { params });
+    const parsed = PlayerSchema.safeParse(response.data);
+    if (!parsed.success) {
+      return {
+        success: false,
+        error: {
+          message: "The player response was invalid.",
+          code: "INVALID_RESPONSE",
+          kind: "invalid-response",
+        },
+      };
+    }
+    return { success: true, data: parsed.data };
+  } catch (error) {
+    return { success: false, error: normalizeApiError(error) };
+  }
+}
+
 // Matchmaking Analysis API Functions
 export async function checkPlayerMatches(
   puuid: string,
@@ -433,29 +461,6 @@ export async function deleteMatchmakingAnalysisRecord(
       `/matchmaking-analysis/player/${puuid}/analysis`,
       { params: { created_at: createdAt } },
     );
-    return {
-      success: true,
-      data: response.data,
-    };
-  } catch (error) {
-    return {
-      success: false,
-      error: normalizeApiError(error),
-    };
-  }
-}
-
-export interface ConnectRiotAccountRequest {
-  game_name: string;
-  tag_line: string;
-  platform: string;
-}
-
-export async function connectRiotAccount(
-  data: ConnectRiotAccountRequest,
-): Promise<ApiResponse<{ puuid: string; riot_account_connected: boolean }>> {
-  try {
-    const response = await api.post("/auth/connect-riot-account", data);
     return {
       success: true,
       data: response.data,

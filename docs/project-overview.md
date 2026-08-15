@@ -64,6 +64,14 @@ tracked-list switch/management flow. `/my-profile`, `/playstyle-analysis`, and
 `/tracked-players` are PUUID-preserving compatibility redirects to Player
 Overview.
 
+Matchmaking Analysis is the deliberate exception: the global current player is
+shown as its reference/default, while the page owns a separate analyzed-player
+PUUID. Its compact selector uses the shared suggestion/discovery contract and
+never tracks the analyzed player or changes the global context. Settings exposes
+working account/security controls and, for administrators, Riot API
+configuration; obsolete theme/default-server controls and the unapproved Riot
+account-link affordance are not product settings.
+
 The sign-in flow keeps its password-visibility control accessible and preserves
 the entered value while it toggles. It bounds the browser login request and maps
 trusted authentication codes, including inactive accounts, and HTTP status
