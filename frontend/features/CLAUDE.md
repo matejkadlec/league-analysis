@@ -1,8 +1,5 @@
 # Features (features/)
 
-- Player-derived query keys must include the exact PUUID, and after an
-  explicit update refetch only matching active keys — show the completion
-  message only once every refetch has succeeded.
-- Freshness: use `profile_synced_at` / `league_synced_at` / `match_synced_at`
-  per the card's actual source (multi-source identity cards: the oldest
-  complete required timestamp); never generic `updated_at`.
+- Pick the freshness timestamp matching the card's actual source
+  (`profile_synced_at` / `league_synced_at` / `match_synced_at`); a card built
+  from several sources shows the oldest of the timestamps it requires.

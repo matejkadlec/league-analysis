@@ -1,0 +1,61 @@
+import { readdirSync, readFileSync } from "node:fs";
+import { extname, join, relative } from "node:path";
+import { describe, expect, it } from "vitest";
+
+const SOURCE_DIRECTORIES = ["app", "components", "features", "lib"];
+
+/**
+ * Player freshness is `profile_synced_at` / `league_synced_at` /
+ * `match_synced_at` — the timestamp of the provider check that actually
+ * sourced the field. `updated_at` is a row-mutation timestamp: it moves when
+ * anything on the row changes, so a card using it claims data is fresh when
+ * only some unrelated column was touched.
+ *
+ * These files use `updated_at` for a record's own mutation time rather than
+ * for player freshness, which is what it is for. Anything else must either
+ * use a `*_synced_at` column or justify itself by being added here.
+ */
+const NON_FRESHNESS_UPDATED_AT = new Map([
+  ["lib/core/schemas.ts", "declares the wire shape, does not display it"],
+  ["features/auth/types.ts", "the signed-in user record's own mutation time"],
+  ["app/settings/page.tsx", "when a setting itself was last changed"],
+  [
+    "features/playstyle-analysis/components/playstyle-analysis.tsx",
+    "when the analysis was recomputed, not when player data was synced",
+  ],
+]);
+
+function sourceFiles(directory: string): string[] {
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(directory, entry.name);
+    if (entry.isDirectory()) {
+      return sourceFiles(path);
+    }
+    return [".ts", ".tsx"].includes(extname(entry.name)) ? [path] : [];
+  });
+}
+
+function filesUsingUpdatedAt(): string[] {
+  return SOURCE_DIRECTORIES.flatMap(sourceFiles)
+    .filter((path) => /\bupdated_at\b/.test(readFileSync(path, "utf8")))
+    .map((path) => relative(process.cwd(), path));
+}
+
+describe("freshness contract", () => {
+  it("never reads updated_at as a player freshness timestamp", () => {
+    const unjustified = filesUsingUpdatedAt().filter(
+      (path) => !NON_FRESHNESS_UPDATED_AT.has(path),
+    );
+
+    expect(unjustified).toEqual([]);
+  });
+
+  it("keeps the justification list free of dead entries", () => {
+    const using = new Set(filesUsingUpdatedAt());
+    const stale = [...NON_FRESHNESS_UPDATED_AT.keys()].filter(
+      (path) => !using.has(path),
+    );
+
+    expect(stale).toEqual([]);
+  });
+});
