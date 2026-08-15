@@ -98,9 +98,17 @@ because these values drive staleness decisions.
   provider evidence is accepted only for the current random `generation` and
   in timestamp order, making key replacement race-safe against concurrent
   request completion.
-- One-active-row-per-PUUID partial unique indexes guard both
-  `jobs.player_sync_runs` and `core.matchmaking_analyses`; their lifecycle
-  contracts are in [`jobs.md`](jobs.md).
+- One-active-row-per-PUUID partial unique indexes guard
+  `jobs.player_sync_runs`, `core.matchmaking_analyses`, and
+  `core.smurf_boost_analyses`; the first two lifecycle contracts are in
+  [`jobs.md`](jobs.md).
+- `core.smurf_boost_analyses` (revision `20260814_0010`) stores one explained
+  detection run per `(puuid, created_at)`. It records the `model_version` and
+  the exact `thresholds` the run used, so a stored result is never reinterpreted
+  under later rules and is never silently recomputed. `latest_match_id` — not a
+  row count — is the staleness key, because the service caps how many matches it
+  loads. The run reads only stored rows: it makes no Riot API call, joins no
+  rate limiter, and writes no Riot-owned table.
 
 ## Local Riot-Data Cleanse and QA Fixtures (LGA-11)
 

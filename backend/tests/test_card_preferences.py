@@ -230,11 +230,13 @@ def test_global_reset_requires_explicit_catalog_enumeration() -> None:
         cardIds=[
             "profile.top-champions",
             "profile.recent-performance",
+            "profile.smurf-boost-detection",
         ]
     )
     assert request.card_ids == [
         CardId.TOP_CHAMPIONS,
         CardId.RECENT_PERFORMANCE,
+        CardId.SMURF_BOOST_DETECTION,
     ]
 
     with pytest.raises(ValidationError):

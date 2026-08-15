@@ -11,7 +11,11 @@
 ## Goal and boundaries
 
 The first release should let a signed-in viewer tailor the two cards that
-already contain product thresholds or filtering expectations:
+already contain product thresholds or filtering expectations. LGA-20 added a
+third card to the same contract; see
+[Catalog additions after v1](#catalog-additions-after-v1).
+
+The two v1 cards are:
 
 - **Top Champions**: which champion aggregates qualify for display;
 - **Recent Performance**: how much a recent value must differ from the overall
@@ -65,7 +69,10 @@ fields, but reads always merge them with these defaults before the card uses
 them.
 
 ```ts
-type CardId = "profile.top-champions" | "profile.recent-performance";
+type CardId =
+  | "profile.top-champions"
+  | "profile.recent-performance"
+  | "profile.smurf-boost-detection";
 type Role = "TOP" | "JUNGLE" | "MIDDLE" | "BOTTOM" | "UTILITY";
 
 interface TopChampionsSettingsV1 {
@@ -312,10 +319,10 @@ The authenticated settings API exposes only the current viewer's records:
 
 | Operation | Route | Behavior |
 | --- | --- | --- |
-| Read effective catalog | `GET /api/v1/settings/card-preferences` | Returns exactly the two approved cards, including defaults where a v1 row is absent. |
+| Read effective catalog | `GET /api/v1/settings/card-preferences` | Returns every card in the current catalog, including defaults where a v1 row is absent. |
 | Replace one override | `PUT /api/v1/settings/card-preferences/{cardId}` | Requires `version: 1` and the complete mutable schema for that exact catalog card; PostgreSQL upsert makes concurrent replacements atomic. |
 | Reset one card | `DELETE /api/v1/settings/card-preferences/{cardId}` | Deletes only the viewer's v1 row for that card, then returns normalized defaults. |
-| Reset catalog | `POST /api/v1/settings/card-preferences/reset` | Requires an explicit `cardIds` enumeration of the current catalog, then removes only its v1 rows. |
+| Reset catalog | `POST /api/v1/settings/card-preferences/reset` | Requires an explicit `cardIds` enumeration of the current catalog — **every** card, exactly once — then removes only its v1 rows. A stale enumeration is a `422`, which is the point: the route refuses to guess what a caller meant to reset. |
 
 The routes never accept a user ID, player ID, or arbitrary card identifier, so
 the authenticated dependency provides the only ownership scope. Writes reject
@@ -335,6 +342,19 @@ five-row capacity with no padding, deterministic ordering, complete-population
 filtering, the current 10,000-match overall baseline cap, and the versioned
 lifecycle rules above. All other inventoried cards remain outside
 the first configurable-card release for their documented reasons.
+
+### Catalog additions after v1
+
+LGA-20 added `profile.smurf-boost-detection` — fifteen model thresholds and the
+same fixed `queueId: 420` — to `CardId`, to the reset enumeration, and to the
+effective catalog. It follows every rule above: viewer-global, versioned,
+server-validated bounds, `DELETE` resets one card.
+
+**This addition is not covered by the 2026-08-06 approval and is pending owner
+sign-off.** Two things change for a client the moment it merges: the catalog
+response carries three entries rather than two, and the catalog reset requires
+all three `cardIds`. A client still sending the two-card enumeration receives a
+`422`. Nothing else in this contract changes.
 
 The contract remains compatible with the planned follow-up tickets:
 

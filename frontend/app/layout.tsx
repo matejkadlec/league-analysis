@@ -77,7 +77,11 @@ export default async function RootLayout({
             <HeaderMessages />
             <div className="flex min-h-screen">
               <SidebarNav />
-              <main id="content" className="flex-1 bg-background">
+              {/* `min-w-0` because a flex item defaults to `min-width: auto`
+                  and so refuses to shrink below its content. Without it, one
+                  wide child stretches the whole document sideways and every
+                  `overflow-x-auto` beneath this element is inert. */}
+              <main id="content" className="min-w-0 flex-1 bg-background">
                 {children}
               </main>
             </div>
