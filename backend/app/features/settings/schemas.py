@@ -508,11 +508,14 @@ class ServiceStatusResponse(BaseModel):
 
 
 class UserSettingsResponse(BaseModel):
-    """Schema for user settings response."""
+    """Deprecated compatibility response for retired application settings."""
 
-    theme: ThemeEnum = Field(..., description="User's theme preference")
+    theme: ThemeEnum = Field(
+        ThemeEnum.DARK,
+        description="Deprecated fixed compatibility value; not persisted",
+    )
     default_platform: Optional[str] = Field(
-        "eun1", description="Default server/platform"
+        "eun1", description="Deprecated fixed compatibility value; not persisted"
     )
     created_at: datetime
     updated_at: datetime
@@ -521,7 +524,7 @@ class UserSettingsResponse(BaseModel):
 
 
 class UserSettingsUpdate(BaseModel):
-    """Schema for updating user settings."""
+    """Deprecated compatibility input; accepted values no longer affect behavior."""
 
     theme: Optional[ThemeEnum] = Field(None, description="Theme preference")
     default_platform: Optional[str] = Field(

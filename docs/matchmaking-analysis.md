@@ -199,6 +199,15 @@ completion reaches 100% and triggers result/history refresh.
 
 ## Frontend Contract Essentials
 
+- The global current player is the **reference player** and seeds the page only
+  when no local target has been chosen. The **analyzed player** is local to
+  Matchmaking Analysis and is encoded in that route's PUUID; selecting or
+  discovering it never changes global current-player context and never tracks
+  it. The action, latest result, active run, and history are all keyed by that
+  analyzed PUUID so changing targets cannot relabel another player's run.
+- Matchmaking Analysis and the sidebar reuse the same one-field player selector:
+  stored suggestions include their server, while a new `Name#Tag` asks for a
+  server only before the non-tracking discovery request.
 - The component polls the exact `created_at` run every 3 seconds, rehydrates an
   active run on reload, and keeps the `X / 100` count backend-authoritative.
 - **DB-only fast flow** detection: a run that completes without ever being

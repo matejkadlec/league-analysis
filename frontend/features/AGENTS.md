@@ -27,7 +27,9 @@ public API via `index.ts`.
   not rehydrate an old failure into a current-session alert.
 - Ordinary player-centric pages consume `usePlayerContext()` and keep the
   explicit URL PUUID authoritative for the current tab. Matchmaking Analysis
-  remains a deliberate local-target exception.
+  uses the global current player only as its initial reference/default, then
+  owns a local analyzed-player PUUID. Its shared one-field selector may
+  discover a canonical player but must not change global context or tracking.
 - Every player-derived TanStack Query key must include the exact PUUID. After
   explicit update completion, refetch only matching active keys and show the
   approved completion message only after every affected refetch succeeds.

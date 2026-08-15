@@ -545,25 +545,6 @@ export type Setting = z.infer<typeof SettingSchema>;
 export type SettingUpdate = z.infer<typeof SettingUpdateSchema>;
 export type SettingTestResponse = z.infer<typeof SettingTestResponseSchema>;
 
-// ===== USER SETTINGS SCHEMA =====
-export const ThemeEnum = z.enum(["LIGHT", "DARK"]);
-export type Theme = z.infer<typeof ThemeEnum>;
-
-export const UserSettingsSchema = z.object({
-  theme: ThemeEnum,
-  default_platform: z.string().nullable(),
-  created_at: z.string(),
-  updated_at: z.string(),
-});
-
-export const UserSettingsUpdateSchema = z.object({
-  theme: ThemeEnum.optional(),
-  default_platform: z.string().nullable().optional(),
-});
-
-export type UserSettings = z.infer<typeof UserSettingsSchema>;
-export type UserSettingsUpdate = z.infer<typeof UserSettingsUpdateSchema>;
-
 export const CookieConsentLevelSchema = z.enum(["necessary", "all"]);
 export type CookieConsentLevel = z.infer<typeof CookieConsentLevelSchema>;
 
@@ -596,8 +577,6 @@ export const UserResponseSchema = z.object({
   email_verified: z.boolean(),
   email_verified_at: z.string().nullable(),
   last_login: z.string().nullable(),
-  riot_account_connected: z.boolean(),
-  puuid: z.string().nullable(),
   created_at: z.string(),
   updated_at: z.string(),
 });

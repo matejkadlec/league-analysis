@@ -42,3 +42,6 @@ and backend rules from [`../../AGENTS.md`](../../AGENTS.md).
   revision to admins and non-admins. Job history and browser memory are never
   credential-health authority; all effective provider clients must use the
   tracked core factory.
+- The retired `/settings/user` theme/default-platform contract is compatibility
+  only: bounded legacy payloads are accepted and ignored, fixed defaults are
+  returned, and no database value may alter player search or theme behavior.

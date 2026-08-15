@@ -26,7 +26,7 @@ from .schemas import (
 from .service import AuthService
 from .subject_counts import SubjectCounts
 from .user_cookie_consent import CookieConsentLevel, UserCookieConsent
-from .user_settings import ThemeEnum, UserSettings
+from .user_settings import UserSettings
 from .user_tracked_player import UserTrackedPlayer
 
 __all__ = [
@@ -40,7 +40,6 @@ __all__ = [
     "UserSettings",
     "UserTrackedPlayer",
     "CookieConsentLevel",
-    "ThemeEnum",
     "UserResponse",
     "UserCreate",
     "Token",
