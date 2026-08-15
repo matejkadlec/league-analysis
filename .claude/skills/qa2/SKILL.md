@@ -1,22 +1,15 @@
 ---
 name: qa2
-description: Record that the owner failed visual User QA for a League Analysis (LGA) batch and revise the same local work for another owner judgment. Use after the owner rejects a PENDING USER QA batch and whenever the user invokes qa2.
+description: Record failed visual QA and revise the same local work for another owner judgment. Use when the user says "qa2" or reports problems with a PENDING USER QA batch.
 ---
 
-# qa2 — User QA Failed, Revise
-
-Purpose: record failed visual QA and revise the same local work. The
-repository identity and safety rules in the root `AGENTS.md` apply. The
-`flow1` skill owns the `LGA-1` conventions and the User QA launch commands.
-
-## Procedure
+# qa2 — visual QA failed, revise
 
 1. Keep the issues in `PENDING USER QA`.
-2. Preserve and amend the same branch/worktree; do not create replacement Jira
-   work or a separate branch for the same failed judgment.
-3. Apply the owner's focused feedback, update the existing `LGA-1` entry when
-   practical, and rerun affected automated checks.
-4. Return the same routes, states, viewports, and interactions for another
-   owner judgment, using the `flow1` skill's User QA launch commands.
-5. Do not publish a ready pull request or transition to `PENDING CR` until
-   `qa1` or explicit owner direction.
+2. Stay on the same branch/worktree — no replacement Jira work and no separate
+   branch for the failed judgment.
+3. Apply the owner's focused feedback and update the existing `LGA-1` entry.
+4. Rerun the affected automated checks.
+5. Return the exact routes, states, viewports, and interactions for another
+   owner judgment. No ready PR and no `PENDING CR` until `qa1` or explicit
+   owner direction.

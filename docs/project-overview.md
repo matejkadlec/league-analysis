@@ -211,6 +211,18 @@ Keep worktrees needed for User QA or remediation. Cleanup is appropriate only
 after the branch is safely published, ownership is clear, and the worktree is no
 longer needed; inspect dirty state and PR/merge state first.
 
+## Agent Instruction Files
+
+Repository skills in [`.claude/skills/`](../.claude/skills/) (with
+[`.agents/skills/`](../.agents/skills/) symlinks for Codex discovery) are the
+authoritative workflow procedures (`flow1`, `flow2`, `qa1`, `qa2`);
+[`ai-development-flow.md`](ai-development-flow.md) is the short human-facing
+lifecycle index. `AGENTS.md` files are the canonical guides for non-Claude
+agents. `CLAUDE.md` files are self-contained Claude Code guides — trimmed
+hard-rules-and-pointers entry points that never reference or mirror
+`AGENTS.md`. Linked worktrees created under `.claude/worktrees/` are ignored
+and never published.
+
 ## Quality and Verification
 
 [`quality-checks.md`](quality-checks.md) is authoritative for the gate design,
