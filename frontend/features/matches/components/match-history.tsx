@@ -1,14 +1,19 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertCircle,
+  Check,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Loader2,
   RefreshCw,
   Clock,
   ListRestart,
+  Search,
   Swords,
 } from "lucide-react";
 import { useToast } from "@/lib/core/hooks";
@@ -46,22 +51,41 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { useRelativeTime } from "@/lib/core/use-relative-time";
 import {
+  DEFAULT_MATCH_HISTORY_QUEUE_SELECTION,
   getMatchHistoryEmptyMessage,
   getMatchHistoryQueueQuery,
   getMatchQueueName,
-  MATCH_HISTORY_PAGE_SIZE,
   MATCH_HISTORY_QUEUE_FILTERS,
   MatchHistoryQueueFilter,
   selectMatchHistoryQueue,
 } from "../queue-catalog";
+import {
+  DEFAULT_MATCH_HISTORY_PAGE_SIZE,
+  getMatchHistoryPaginationItems,
+  getMatchHistoryRecordRange,
+  MATCH_HISTORY_PAGE_SIZES,
+  type MatchHistoryPageSize,
+} from "../match-history-pagination";
+import {
+  persistMatchHistoryPageSize,
+  persistMatchHistoryQueueFilters,
+  readMatchHistoryPreferences,
+} from "../match-history-preferences";
 import { TeamObjectiveStats } from "./objective-icons";
 
 interface MatchHistoryProps {
   puuid: string;
   lastUpdated?: string | null;
 }
+
+const MATCH_HISTORY_SEARCH_DEBOUNCE_MS = 300;
 
 // Format time as "H:MM AM/PM"
 function formatTime(timestamp: number): string {
@@ -618,29 +642,49 @@ function MatchRow({
 
 export function MatchHistory({ puuid, lastUpdated }: MatchHistoryProps) {
   const toast = useToast();
-  const loadMoreRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
   const router = useRouter();
   const relativeUpdatedAt = useRelativeTime(lastUpdated);
 
-  const [displayCount, setDisplayCount] = useState(MATCH_HISTORY_PAGE_SIZE);
   const [isUpdating, setIsUpdating] = useState(false);
-  const [activeQueueFilter, setActiveQueueFilter] =
-    useState<MatchHistoryQueueFilter>("ALL");
-  const [championSearch, setChampionSearch] = useState("");
-  const activeFilterConfig =
-    MATCH_HISTORY_QUEUE_FILTERS.find(
-      (filterOption) => filterOption.id === activeQueueFilter,
-    ) ?? MATCH_HISTORY_QUEUE_FILTERS[0];
-  const queueQueryParam = getMatchHistoryQueueQuery(activeFilterConfig.id);
+  const [activeQueueFilters, setActiveQueueFilters] = useState<
+    MatchHistoryQueueFilter[]
+  >([...DEFAULT_MATCH_HISTORY_QUEUE_SELECTION]);
+  const [matchSearch, setMatchSearch] = useState("");
+  const [debouncedMatchSearch, setDebouncedMatchSearch] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState<MatchHistoryPageSize>(
+    DEFAULT_MATCH_HISTORY_PAGE_SIZE,
+  );
+  const [preferencesReady, setPreferencesReady] = useState(false);
+  const [pageSizeOpen, setPageSizeOpen] = useState(false);
+  const queueQueryParam = getMatchHistoryQueueQuery(activeQueueFilters);
+  const normalizedMatchSearch = matchSearch.trim();
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      setDebouncedMatchSearch(normalizedMatchSearch);
+    }, MATCH_HISTORY_SEARCH_DEBOUNCE_MS);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [normalizedMatchSearch]);
+
+  /* eslint-disable react-hooks/set-state-in-effect -- Optional browser preferences initialize after hydration to preserve a stable server snapshot. */
+  useEffect(() => {
+    const preferences = readMatchHistoryPreferences();
+    setActiveQueueFilters(preferences.queueFilters);
+    setPageSize(preferences.pageSize);
+    setPreferencesReady(true);
+  }, []);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const { data: statsResult } = useQuery({
-    queryKey: ["match-history-stats", puuid, activeQueueFilter],
+    queryKey: ["match-history-stats", puuid, queueQueryParam],
     queryFn: () =>
       validatedGet(MatchStatsResponseSchema, `/matches/player/${puuid}/stats`, {
-        queue: queueQueryParam,
+        queues: queueQueryParam,
       }),
-    enabled: !!puuid,
+    enabled: !!puuid && preferencesReady,
   });
 
   const {
@@ -648,20 +692,29 @@ export function MatchHistory({ puuid, lastUpdated }: MatchHistoryProps) {
     isLoading,
     error,
     isFetching,
+    isPlaceholderData,
     refetch,
   } = useQuery({
-    queryKey: ["matchHistoryDetailed", puuid, activeQueueFilter, displayCount],
+    queryKey: [
+      "matchHistoryDetailed",
+      puuid,
+      queueQueryParam,
+      debouncedMatchSearch,
+      currentPage,
+      pageSize,
+    ],
     queryFn: () =>
       validatedGet(
         MatchListWithPlayerDataResponseSchema,
         `/matches/player/${puuid}/detailed`,
         {
-          queue: queueQueryParam,
-          start: 0,
-          count: displayCount,
+          queues: queueQueryParam,
+          search: debouncedMatchSearch || undefined,
+          start: (currentPage - 1) * pageSize,
+          count: pageSize,
         },
       ),
-    enabled: !!puuid,
+    enabled: !!puuid && preferencesReady,
     retry: (failureCount, error) => {
       if (
         error instanceof Error &&
@@ -734,76 +787,68 @@ export function MatchHistory({ puuid, lastUpdated }: MatchHistoryProps) {
     }
   };
 
-  const handleQueueFilterSelect = (queueId: MatchHistoryQueueFilter) => {
-    const selection = selectMatchHistoryQueue(activeQueueFilter, queueId);
+  const handleQueueFilterSelect = (
+    queueId: MatchHistoryQueueFilter,
+    additive: boolean,
+  ) => {
+    const selection = selectMatchHistoryQueue(
+      activeQueueFilters,
+      queueId,
+      additive,
+    );
     if (!selection) {
       return;
     }
 
-    setDisplayCount(selection.displayCount);
-    setActiveQueueFilter(selection.filter);
+    setActiveQueueFilters(selection);
+    persistMatchHistoryQueueFilters(selection);
+    setCurrentPage(1);
   };
 
-  const handleChampionSearchChange = (value: string) => {
-    setChampionSearch(value);
+  const handleMatchSearchChange = (value: string) => {
+    setMatchSearch(value.slice(0, 64));
+    setCurrentPage(1);
+  };
+
+  const handlePageSizeChange = (nextPageSize: MatchHistoryPageSize) => {
+    setPageSize(nextPageSize);
+    persistMatchHistoryPageSize(nextPageSize);
+    setCurrentPage(1);
+    setPageSizeOpen(false);
   };
 
   const data = response?.success ? response.data : null;
-  const allMatches = data?.matches || [];
+  const matches = data?.matches || [];
   const apiTotalMatches = data?.total || 0;
   const stats = statsResult?.success ? statsResult.data : null;
   const totalMatches = stats?.total_matches ?? apiTotalMatches;
   const wins = stats?.wins ?? 0;
   const losses = stats?.losses ?? 0;
-
-  const normalizedChampionSearch = championSearch.trim().toLowerCase();
-  const filteredMatches = allMatches.filter((match) => {
-    if (!normalizedChampionSearch) {
-      return true;
-    }
-
-    const championName = match.player_participant?.champion_name ?? "";
-    return championName.toLowerCase().includes(normalizedChampionSearch);
-  });
-
-  const hasMore = allMatches.length < apiTotalMatches;
-
-  const hasActiveSearch = normalizedChampionSearch.length > 0;
-
-  const loadMore = useCallback(() => {
-    if (!isFetching && hasMore) {
-      setDisplayCount((prev) => prev + MATCH_HISTORY_PAGE_SIZE);
-    }
-  }, [isFetching, hasMore]);
+  const winRate = stats?.win_rate ?? 0;
+  const totalPages = Math.ceil(apiTotalMatches / pageSize);
+  const paginationItems = getMatchHistoryPaginationItems(
+    currentPage,
+    totalPages,
+  );
+  const recordRange = getMatchHistoryRecordRange(
+    currentPage,
+    pageSize,
+    apiTotalMatches,
+  );
+  const hasActiveSearch = debouncedMatchSearch.length > 0;
 
   useEffect(() => {
-    if (!hasMore) {
+    if (isPlaceholderData) {
       return;
     }
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const first = entries[0];
-        if (first.isIntersecting) {
-          loadMore();
-        }
-      },
-      { threshold: 0.1, rootMargin: "100px" },
-    );
-
-    const currentRef = loadMoreRef.current;
-    if (currentRef) {
-      observer.observe(currentRef);
+    const lastAvailablePage = Math.max(1, totalPages);
+    if (currentPage > lastAvailablePage) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- The server total is authoritative when refreshed data removes the requested page.
+      setCurrentPage(lastAvailablePage);
     }
+  }, [currentPage, isPlaceholderData, totalPages]);
 
-    return () => {
-      if (currentRef) {
-        observer.unobserve(currentRef);
-      }
-    };
-  }, [hasMore, loadMore]);
-
-  if (isLoading) {
+  if (!preferencesReady || isLoading) {
     return (
       <Card>
         <CardHeader>
@@ -885,21 +930,32 @@ export function MatchHistory({ puuid, lastUpdated }: MatchHistoryProps) {
           <div
             className="order-3 col-span-2 min-w-0 w-full overflow-x-auto xl:order-none xl:col-span-1 xl:justify-self-center"
             data-testid="match-history-queue-filters"
+            aria-describedby="match-history-queue-instructions"
           >
+            <p id="match-history-queue-instructions" className="sr-only">
+              Select one queue, or hold Shift while selecting to combine
+              queues.
+            </p>
             <div className="flex w-max min-w-full items-center justify-center text-sm">
               {MATCH_HISTORY_QUEUE_FILTERS.map((queueOption, index) => {
-                const isSelected = queueOption.id === activeQueueFilter;
+                const isSelected = activeQueueFilters.includes(queueOption.id);
 
                 return (
                   <div key={queueOption.id} className="flex items-center">
                     <button
                       type="button"
-                      onClick={() => handleQueueFilterSelect(queueOption.id)}
+                      onClick={(event) =>
+                        handleQueueFilterSelect(
+                          queueOption.id,
+                          event.shiftKey,
+                        )
+                      }
                       aria-pressed={isSelected}
+                      aria-describedby="match-history-queue-instructions"
                       className={`${queueOption.widthClass} text-center transition-colors ${
                         isSelected
-                          ? "cursor-default font-semibold text-foreground"
-                          : "cursor-pointer text-[#aaa]"
+                          ? "font-semibold text-foreground"
+                          : "text-[#aaa]"
                       }`}
                     >
                       {queueOption.label}
@@ -929,16 +985,26 @@ export function MatchHistory({ puuid, lastUpdated }: MatchHistoryProps) {
           </Button>
         </div>
 
-        <div className="mt-1 flex items-center justify-between gap-3">
-          <Input
-            value={championSearch}
-            onChange={(event) => handleChampionSearchChange(event.target.value)}
-            placeholder="Search by champion..."
-            className="match-history-light-input h-7 w-[160px] !text-xs"
-          />
+        <div className="mt-1 flex flex-wrap items-center justify-between gap-3">
+          <div className="relative w-[230px] max-w-full shrink-0">
+            <Search
+              aria-hidden="true"
+              className="pointer-events-none absolute left-2.5 top-1.5 h-4 w-4 text-muted-foreground"
+            />
+            <Input
+              value={matchSearch}
+              onChange={(event) =>
+                handleMatchSearchChange(event.target.value)
+              }
+              placeholder="Search for champion or player"
+              aria-label="Search for champion or player"
+              className="h-7 w-full border-white/15 bg-white/5 pl-8 !text-xs text-white placeholder:text-white/45"
+            />
+          </div>
           {totalMatches > 0 && (
-            <div className="text-sm text-right">
-              {totalMatches} total matches ({wins}W / {losses}L)
+            <div className="shrink-0 text-sm text-right">
+              {totalMatches} total matches ({wins}W / {losses}L) •{" "}
+              {(winRate * 100).toFixed(1)}% WR
             </div>
           )}
         </div>
@@ -951,72 +1017,141 @@ export function MatchHistory({ puuid, lastUpdated }: MatchHistoryProps) {
         )}
       </CardHeader>
       <CardContent>
-        {filteredMatches.length === 0 ? (
+        {matches.length === 0 ? (
           <Alert>
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
               {hasActiveSearch ? (
                 <p className="font-medium">
-                  No matches found for champion search: &quot;{championSearch}
-                  &quot;.
-                </p>
-              ) : activeQueueFilter !== "ALL" ? (
-                <p className="font-medium">
-                  {getMatchHistoryEmptyMessage(activeQueueFilter)}
+                  No matches found for &quot;{debouncedMatchSearch}&quot;.
                 </p>
               ) : (
-                <div>
-                  <p className="font-medium">
-                    This player has no matches in the database.
-                  </p>
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    Tracked players matches will appear here as a background job
-                    fetches them from the Riot API. If player is tracked and
-                    matches are not appearing even after a few minutes,
-                    something is wrong. For non-tracked players, use the{" "}
-                    <b>Update</b> button.
-                  </p>
-                </div>
+                <p className="font-medium">
+                  {getMatchHistoryEmptyMessage(activeQueueFilters)}
+                </p>
               )}
             </AlertDescription>
           </Alert>
         ) : (
           <div className="rounded-md border">
-            {filteredMatches.map((match) => (
+            {matches.map((match) => (
               <MatchRow
                 key={match.match_id}
                 match={match}
                 playerPuuid={puuid}
               />
             ))}
-
-            {hasMore && (
-              <div
-                ref={loadMoreRef}
-                className="flex justify-center py-4 border-t bg-background/50"
-              >
-                {isFetching ? (
-                  <div className="flex items-center gap-2 text-muted-foreground">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    <span className="text-sm">Loading more matches...</span>
-                  </div>
-                ) : (
-                  <div className="text-sm text-muted-foreground">
-                    Showing {allMatches.length} of {totalMatches} fetched
-                    matches
-                  </div>
-                )}
-              </div>
-            )}
-            {!hasMore && filteredMatches.length > 0 && (
-              <div className="flex justify-center py-4 border-t bg-background/50">
-                <div className="text-sm text-muted-foreground">
-                  All {totalMatches} matches loaded
-                </div>
-              </div>
-            )}
           </div>
         )}
+
+        <div className="mt-3 grid items-center gap-3 border-t pt-3 text-sm text-muted-foreground md:grid-cols-[1fr_auto_1fr]">
+          <div className="justify-self-start" aria-live="polite">
+            Showing {recordRange.start} to {recordRange.end} of {apiTotalMatches}{" "}
+            matches
+          </div>
+
+          <nav
+            className="flex items-center justify-center gap-1"
+            aria-label="Match history pages"
+          >
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-[22px] min-w-[22px] p-0 text-card-foreground disabled:text-muted-foreground disabled:opacity-100"
+              aria-label="Previous page"
+              onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+              disabled={totalPages <= 1 || currentPage <= 1}
+            >
+              <ChevronLeft aria-hidden="true" />
+            </Button>
+            {paginationItems.map((item) =>
+              typeof item === "number" ? (
+                <Button
+                  key={item}
+                  type="button"
+                  variant={item === currentPage ? "default" : "outline"}
+                  size="sm"
+                  className="h-8 min-w-8 px-2"
+                  aria-current={item === currentPage ? "page" : undefined}
+                  onClick={() => setCurrentPage(item)}
+                  disabled={isFetching && item === currentPage}
+                >
+                  {item}
+                </Button>
+              ) : (
+                <span key={item} className="px-1" aria-hidden="true">
+                  …
+                </span>
+              ),
+            )}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-[22px] min-w-[22px] p-0 text-card-foreground disabled:text-muted-foreground disabled:opacity-100"
+              aria-label="Next page"
+              onClick={() =>
+                setCurrentPage((page) => Math.min(totalPages, page + 1))
+              }
+              disabled={totalPages <= 1 || currentPage >= totalPages}
+            >
+              <ChevronRight aria-hidden="true" />
+            </Button>
+          </nav>
+
+          <div className="flex items-center gap-2 md:justify-self-end">
+            <label htmlFor="match-history-page-size">Page size</label>
+            <Popover open={pageSizeOpen} onOpenChange={setPageSizeOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  id="match-history-page-size"
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 w-[76px] justify-between px-3 font-normal"
+                  role="combobox"
+                  aria-expanded={pageSizeOpen}
+                  aria-haspopup="listbox"
+                  aria-controls="match-history-page-size-options"
+                  aria-label="Match history page size"
+                >
+                  {pageSize}
+                  <ChevronDown
+                    aria-hidden="true"
+                    className="opacity-50"
+                  />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent
+                id="match-history-page-size-options"
+                role="listbox"
+                aria-label="Match history page size"
+                align="end"
+                className="w-[76px] p-1"
+              >
+                {MATCH_HISTORY_PAGE_SIZES.map((size) => (
+                  <button
+                    key={size}
+                    type="button"
+                    role="option"
+                    aria-selected={size === pageSize}
+                    onClick={() => handlePageSizeChange(size)}
+                    className="relative flex w-full items-center rounded-sm py-1.5 pl-2 pr-8 text-left text-sm outline-none hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground"
+                  >
+                    {size}
+                    {size === pageSize && (
+                      <Check
+                        aria-hidden="true"
+                        className="absolute right-2 h-4 w-4"
+                      />
+                    )}
+                  </button>
+                ))}
+              </PopoverContent>
+            </Popover>
+          </div>
+        </div>
       </CardContent>
     </Card>
   );

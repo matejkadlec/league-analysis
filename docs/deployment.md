@@ -324,7 +324,13 @@ No password is accepted on the command line. The private config must be a
 current-user-owned, non-symlink regular file with mode `0600`; the target must
 be the configured PostgreSQL 18 loopback database in the `dev` environment.
 The Pi identity must match the exact League Analysis container/project/service,
-database, Alembic head, and absent host binding.
+database, and absent host binding. The mirror compares the live Pi and local
+Alembic heads before requesting an archive. A mismatch fails closed and leaves
+the local database unchanged; a matching newer head does not require the local
+mirror snapshot to be reinstalled merely to update a copied migration marker.
+The SSH command supports both the current release helper and the existing
+worktree-independent operations helper used when the SSH and deployment
+accounts are different.
 
 An apply first compares the deterministic Pi and local snapshots. An exact
 match skips the dump, transfer, restore, and swap. A mismatch streams a complete
@@ -339,8 +345,9 @@ validation failure. The old local database is dropped only after the new target
 validates. A Pi write immediately after a matching fingerprint can be delayed
 until the next daily check; it can never cause a partial local snapshot.
 Active local backend connections are terminated only for a changed snapshot and
-reconnect to the new target; restart a development session if its connection
-pool does not recover cleanly.
+reconnect to the new target. The backend pre-pings pooled connections so the
+first request after a swap discards a terminated connection and reconnects
+without requiring a development-session restart.
 
 Install a worktree-independent snapshot and the local user-systemd timer:
 

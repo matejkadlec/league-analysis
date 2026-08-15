@@ -10,6 +10,7 @@ import ipaddress
 import json
 import os
 import re
+import shlex
 import signal
 import stat
 import subprocess
@@ -20,19 +21,16 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import NoReturn
 
-try:
-    from migration_contract import EXPECTED_ALEMBIC_HEAD
-except ModuleNotFoundError:  # Loaded as scripts.* by the focused module tests.
-    from scripts.migration_contract import EXPECTED_ALEMBIC_HEAD
-
 LOCAL_DATABASE = "league_analysis_local_dev"
 REMOTE_DATABASE = "league_analysis"
 REMOTE_HOST = "pi5ram16"
-REMOTE_SCRIPT = (
-    "$HOME/.local/share/league-analysis/current/backup/pi-postgres-operations.sh"
+REMOTE_SCRIPT_CANDIDATES = (
+    "$HOME/.local/share/league-analysis/current/backup/pi-postgres-operations.sh",
+    "$HOME/.local/share/league-analysis/operations/pi-postgres-operations",
 )
 DEFAULT_CONFIG = Path.home() / "projects" / "league-analysis" / ".env"
 DEFAULT_OPERATION_ROOT = Path.home() / ".local" / "share" / "league-analysis"
+ALEMBIC_HEAD_PATTERN = re.compile(r"^[0-9]{8}_[0-9]{4}$")
 DATABASE_NAME_PATTERN = re.compile(r"^[a-z][a-z0-9_]{0,62}$")
 GENERATED_NAME_PATTERN = re.compile(
     rf"^{LOCAL_DATABASE}_mirror_(?:stage|rollback)_[0-9]{{8}}t[0-9]{{6}}$"
@@ -280,7 +278,17 @@ def psql_snapshot(
     return result.stdout.strip()
 
 
-def verify_local_database(config: LocalDatabaseConfig) -> None:
+def database_alembic_head(config: LocalDatabaseConfig, database: str) -> str:
+    """Read one validated Alembic head from a local database."""
+    head = psql_query(
+        config, database, "SELECT version_num FROM public.alembic_version;"
+    )
+    if ALEMBIC_HEAD_PATTERN.fullmatch(head) is None:
+        raise MirrorRefusal(f"database {database} has an invalid Alembic head")
+    return head
+
+
+def verify_local_database(config: LocalDatabaseConfig) -> str:
     """Prove the exact local target, PostgreSQL version, and loopback binding."""
     identity = psql_query(
         config,
@@ -303,13 +311,7 @@ def verify_local_database(config: LocalDatabaseConfig) -> None:
     ]
     if not listen_items or not all(is_loopback_address(item) for item in listen_items):
         raise MirrorRefusal("local PostgreSQL listen_addresses is not loopback-only")
-    if (
-        psql_query(
-            config, config.database, "SELECT version_num FROM public.alembic_version;"
-        )
-        != EXPECTED_ALEMBIC_HEAD
-    ):
-        raise MirrorRefusal("the local Alembic head is not the reviewed head")
+    alembic_head = database_alembic_head(config, config.database)
     if (
         psql_query(
             config,
@@ -321,12 +323,29 @@ def verify_local_database(config: LocalDatabaseConfig) -> None:
         raise MirrorRefusal(
             "the configured local role requires CREATEDB for safe staging"
         )
+    return alembic_head
+
+
+def remote_operation_command(*arguments: str) -> str:
+    """Build one constrained command over the supported Pi helper layouts."""
+    candidates = " ".join(f'"{candidate}"' for candidate in REMOTE_SCRIPT_CANDIDATES)
+    operation_arguments = " ".join(shlex.quote(argument) for argument in arguments)
+    return (
+        "set -eu; "
+        f"for operation in {candidates}; do "
+        'if [ -f "$operation" ] && [ ! -L "$operation" ] && '
+        '[ -x "$operation" ]; then '
+        f'exec "$operation" {operation_arguments}; '
+        "fi; done; "
+        "printf '%s\\n' 'League Analysis Pi operations helper is unavailable.' >&2; "
+        "exit 127"
+    )
 
 
 def remote_identity(host: str) -> str:
     """Read the secret-safe exact Pi identity through the approved SSH alias."""
     result = subprocess.run(
-        ["ssh", host, f'exec "{REMOTE_SCRIPT}" identity'],
+        ["ssh", host, remote_operation_command("identity")],
         check=True,
         capture_output=True,
         text=True,
@@ -334,8 +353,8 @@ def remote_identity(host: str) -> str:
     return result.stdout.strip()
 
 
-def verify_remote_authority(host: str, database: str) -> str:
-    """Require the exact PostgreSQL 18 Pi authority before any local replacement."""
+def verify_remote_source(host: str, database: str, local_alembic_head: str) -> str:
+    """Require the exact Pi source and a schema matching the local database."""
     identity = remote_identity(host)
     required_fragments = (
         "container=league-analysis-postgres",
@@ -343,12 +362,22 @@ def verify_remote_authority(host: str, database: str) -> str:
         "compose_service=postgres",
         f"database={database}",
         "postgres=18.",
-        f"alembic={EXPECTED_ALEMBIC_HEAD}",
         "host_ports=none",
-        "authority=pi",
     )
     if any(fragment not in identity for fragment in required_fragments):
         raise MirrorRefusal(f"unexpected secret-safe Pi identity: {identity}")
+    remote_head_match = re.search(
+        r"(?:^| )alembic=([0-9]{8}_[0-9]{4})(?: |$)", identity
+    )
+    if remote_head_match is None:
+        raise MirrorRefusal(f"unexpected secret-safe Pi identity: {identity}")
+    remote_alembic_head = remote_head_match.group(1)
+    if remote_alembic_head != local_alembic_head:
+        raise MirrorRefusal(
+            "the Pi and local Alembic heads differ "
+            f"({remote_alembic_head} != {local_alembic_head}); "
+            "the local database was left unchanged"
+        )
     return identity
 
 
@@ -358,7 +387,7 @@ def remote_snapshot(host: str, database: str) -> str:
         [
             "ssh",
             host,
-            f'exec "{REMOTE_SCRIPT}" snapshot --confirm-target {database}',
+            remote_operation_command("snapshot", "--confirm-target", database),
         ],
         check=True,
         capture_output=True,
@@ -383,7 +412,9 @@ def download_remote_archive(host: str, database: str, archive: Path) -> str:
                 [
                     "ssh",
                     host,
-                    f'exec "{REMOTE_SCRIPT}" mirror-dump --confirm-target {database}',
+                    remote_operation_command(
+                        "mirror-dump", "--confirm-target", database
+                    ),
                 ],
                 stdout=archive_output,
                 check=True,
@@ -530,13 +561,13 @@ def rename_database(config: LocalDatabaseConfig, old: str, new: str) -> None:
 
 
 def validate_database(
-    config: LocalDatabaseConfig, database: str, snapshot_sql: Path
+    config: LocalDatabaseConfig,
+    database: str,
+    snapshot_sql: Path,
+    expected_alembic_head: str,
 ) -> str:
     """Validate schema, constraints, admins, and deterministic restored state."""
-    if (
-        psql_query(config, database, "SELECT version_num FROM public.alembic_version;")
-        != EXPECTED_ALEMBIC_HEAD
-    ):
+    if database_alembic_head(config, database) != expected_alembic_head:
         raise MirrorRefusal(f"database {database} has an unexpected Alembic head")
     unvalidated = psql_query(
         config,
@@ -670,7 +701,8 @@ def recover_pending_replacement(
             drop_database(config, stage)
         set_connections_allowed(config, rollback, True)
         rename_database(config, rollback, target)
-        validate_database(config, target, paths.snapshot_sql)
+        restored_head = database_alembic_head(config, target)
+        validate_database(config, target, paths.snapshot_sql, restored_head)
         print("Recovered the pre-sync local database from durable rollback state.")
     elif action == "discard_stage":
         set_connections_allowed(config, target, True)
@@ -679,7 +711,8 @@ def recover_pending_replacement(
             "Removed an interrupted local staging database; the mirror target was unchanged."
         )
     else:
-        validate_database(config, target, paths.snapshot_sql)
+        committed_head = database_alembic_head(config, target)
+        validate_database(config, target, paths.snapshot_sql, committed_head)
         print("Confirmed an interrupted mirror had already committed successfully.")
     paths.state_file.unlink()
 
@@ -689,6 +722,7 @@ def activate_archive(
     paths: MirrorPaths,
     archive: Path,
     digest: str,
+    expected_alembic_head: str,
 ) -> str:
     """Restore, validate, atomically swap, and discard the old local snapshot."""
     timestamp = datetime.now().astimezone().strftime("%Y%m%dt%H%M%S")
@@ -713,7 +747,7 @@ def activate_archive(
 
     try:
         restore_archive(config, stage, archive)
-        validate_database(config, stage, paths.snapshot_sql)
+        validate_database(config, stage, paths.snapshot_sql, expected_alembic_head)
         set_connections_allowed(config, stage, False)
         write_state(
             paths.state_file,
@@ -728,7 +762,9 @@ def activate_archive(
             paths.state_file,
             state_payload("validating", LOCAL_DATABASE, stage, rollback, digest),
         )
-        snapshot = validate_database(config, LOCAL_DATABASE, paths.snapshot_sql)
+        snapshot = validate_database(
+            config, LOCAL_DATABASE, paths.snapshot_sql, expected_alembic_head
+        )
         write_state(
             paths.state_file,
             state_payload("committing", LOCAL_DATABASE, stage, rollback, digest),
@@ -752,7 +788,11 @@ def install_signal_handlers() -> None:
 
 
 def mirror(
-    config: LocalDatabaseConfig, paths: MirrorPaths, host: str, database: str
+    config: LocalDatabaseConfig,
+    paths: MirrorPaths,
+    host: str,
+    database: str,
+    expected_alembic_head: str,
 ) -> None:
     """Download a complete Pi archive before replacing any local database."""
     with tempfile.TemporaryDirectory(prefix="league-analysis-pi-mirror-") as temporary:
@@ -760,7 +800,9 @@ def mirror(
         temporary_path.chmod(0o700)
         archive = temporary_path / "pi-source.dump"
         digest = download_remote_archive(host, database, archive)
-        snapshot = activate_archive(config, paths, archive, digest)
+        snapshot = activate_archive(
+            config, paths, archive, digest, expected_alembic_head
+        )
     local_snapshot_digest = snapshot_digest(snapshot)
     print(f"Activated complete Pi archive SHA-256: {digest}")
     print(f"Validated local snapshot SHA-256: {local_snapshot_digest}")
@@ -772,6 +814,7 @@ def refresh_if_changed(
     paths: MirrorPaths,
     host: str,
     database: str,
+    expected_alembic_head: str,
 ) -> bool:
     """Skip the full archive transfer when Pi and local snapshots already match."""
     source_snapshot = remote_snapshot(host, database)
@@ -783,7 +826,7 @@ def refresh_if_changed(
         print("Skipped full dump, transfer, restore, and database swap.")
         return False
     print(f"Pi snapshot differs from local: {source_digest}")
-    mirror(config, paths, host, database)
+    mirror(config, paths, host, database, expected_alembic_head)
     return True
 
 
@@ -796,10 +839,13 @@ def main(argv: list[str] | None = None) -> int:
         try:
             install_signal_handlers()
             config = load_local_config(arguments.config, arguments.database)
-            verify_local_database(config)
+            local_alembic_head = verify_local_database(config)
             recover_pending_replacement(config, paths)
-            identity = verify_remote_authority(
-                arguments.remote, arguments.remote_database
+            local_alembic_head = verify_local_database(config)
+            identity = verify_remote_source(
+                arguments.remote,
+                arguments.remote_database,
+                local_alembic_head,
             )
             if not arguments.apply:
                 print("Local mirror preflight passed; no database changes were made.")
@@ -813,6 +859,7 @@ def main(argv: list[str] | None = None) -> int:
                 paths,
                 arguments.remote,
                 arguments.remote_database,
+                local_alembic_head,
             )
             return 0
         finally:

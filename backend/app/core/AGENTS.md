@@ -36,3 +36,6 @@ invalid setting value.
 Production readiness is `/health/ready`, not the liveness-only `/health` route.
 Keep readiness secret-safe and fail it unless a real database `SELECT 1`
 succeeds; container orchestration depends on this distinction.
+The async SQLAlchemy engine keeps `pool_pre_ping` enabled so an atomic local
+mirror swap cannot hand a terminated pooled PostgreSQL connection to the next
+request.

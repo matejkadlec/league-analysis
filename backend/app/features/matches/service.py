@@ -1,9 +1,9 @@
 """Match service for handling match data operations."""
 
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Sequence
 
 import structlog
-from sqlalchemy import desc, func, select
+from sqlalchemy import desc, exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.riot_api.constants import (
@@ -66,6 +66,79 @@ if TYPE_CHECKING:
 logger = structlog.get_logger(__name__)
 
 
+def normalize_match_queue_ids(
+    queue: Optional[int], queue_ids: Optional[Sequence[int]]
+) -> tuple[int, ...] | None:
+    """Return one stable queue union while preserving the legacy scalar filter."""
+    if queue_ids is not None:
+        return tuple(dict.fromkeys(queue_ids)) or None
+    if queue is not None:
+        return (queue,)
+    return None
+
+
+def build_match_history_conditions(
+    puuid: str,
+    queue_ids: Optional[Sequence[int]] = None,
+    search: Optional[str] = None,
+    start_time: Optional[int] = None,
+    end_time: Optional[int] = None,
+    exclude_aram: bool = False,
+) -> list[Any]:
+    """Build shared filters so search and queue unions precede pagination."""
+    match_table = Match.__table__
+    player_participant = MatchParticipant.__table__.alias("player_participant")
+    conditions: list[Any] = [
+        exists(
+            select(1).where(
+                player_participant.c.match_id == match_table.c.match_id,
+                player_participant.c.puuid == puuid,
+            )
+        )
+    ]
+
+    if queue_ids:
+        conditions.append(match_table.c.queue_id.in_(queue_ids))
+    if exclude_aram:
+        conditions.append(match_table.c.queue_id != 450)
+    if start_time is not None:
+        conditions.append(match_table.c.game_start_timestamp >= start_time)
+    if end_time is not None:
+        conditions.append(match_table.c.game_start_timestamp <= end_time)
+
+    normalized_search = search.strip() if search else ""
+    if normalized_search:
+        searchable_participant = MatchParticipant.__table__.alias(
+            "searchable_participant"
+        )
+        full_riot_id = func.concat(
+            searchable_participant.c.game_name,
+            "#",
+            searchable_participant.c.tag_line,
+        )
+        conditions.append(
+            exists(
+                select(1).where(
+                    searchable_participant.c.match_id == match_table.c.match_id,
+                    or_(
+                        searchable_participant.c.champion_name.icontains(
+                            normalized_search, autoescape=True
+                        ),
+                        searchable_participant.c.game_name.icontains(
+                            normalized_search, autoescape=True
+                        ),
+                        searchable_participant.c.tag_line.icontains(
+                            normalized_search, autoescape=True
+                        ),
+                        full_riot_id.icontains(normalized_search, autoescape=True),
+                    ),
+                )
+            )
+        )
+
+    return conditions
+
+
 def _must_abort_writer_sync(error: Exception) -> bool:
     """Return whether a lower-level sync error must reach the owning job."""
     return must_abort_writer_sync(error)
@@ -100,6 +173,7 @@ class MatchService:
         start: int = 0,
         count: int = 20,
         queue: Optional[int] = None,
+        queue_ids: Optional[Sequence[int]] = None,
         start_time: Optional[int] = None,
         end_time: Optional[int] = None,
         exclude_aram: bool = False,
@@ -123,19 +197,35 @@ class MatchService:
             MatchListResponse with matches from database
         """
         try:
+            effective_queue_ids = normalize_match_queue_ids(queue, queue_ids)
+
             # Get matches from database only
             db_matches = await self._get_matches_from_db(
-                puuid, start, count, queue, start_time, end_time, exclude_aram
+                puuid=puuid,
+                start=start,
+                count=count,
+                queue_ids=effective_queue_ids,
+                start_time=start_time,
+                end_time=end_time,
+                exclude_aram=exclude_aram,
             )
 
             # Get total count of matches for pagination
             total_count = await self._count_matches_from_db(
-                puuid, queue, start_time, end_time, exclude_aram
+                puuid=puuid,
+                queue_ids=effective_queue_ids,
+                start_time=start_time,
+                end_time=end_time,
+                exclude_aram=exclude_aram,
             )
 
             # Get total analyzed matches count
             total_analyzed = await self._count_analyzed_matches_from_db(
-                puuid, queue, start_time, end_time, exclude_aram
+                puuid=puuid,
+                queue_ids=effective_queue_ids,
+                start_time=start_time,
+                end_time=end_time,
+                exclude_aram=exclude_aram,
             )
 
             match_responses = [
@@ -177,6 +267,8 @@ class MatchService:
         start: int = 0,
         count: int = 20,
         queue: Optional[int] = None,
+        queue_ids: Optional[Sequence[int]] = None,
+        search: Optional[str] = None,
         exclude_aram: bool = False,
     ) -> MatchListWithPlayerDataResponse:
         """
@@ -196,26 +288,39 @@ class MatchService:
             MatchListWithPlayerDataResponse with detailed match data
         """
         try:
+            effective_queue_ids = normalize_match_queue_ids(queue, queue_ids)
             db_matches = await self._get_matches_from_db(
-                puuid, start, count, queue, None, None, exclude_aram
+                puuid=puuid,
+                start=start,
+                count=count,
+                queue_ids=effective_queue_ids,
+                search=search,
+                exclude_aram=exclude_aram,
+            )
+
+            total_count = await self._count_matches_from_db(
+                puuid=puuid,
+                queue_ids=effective_queue_ids,
+                search=search,
+                exclude_aram=exclude_aram,
+            )
+            total_analyzed = await self._count_analyzed_matches_from_db(
+                puuid=puuid,
+                queue_ids=effective_queue_ids,
+                search=search,
+                exclude_aram=exclude_aram,
             )
 
             if not db_matches:
+                page, pages = page_window(start, count, total_count)
                 return MatchListWithPlayerDataResponse(
                     matches=[],
-                    total=0,
-                    total_analyzed=0,
-                    page=0,
+                    total=total_count,
+                    total_analyzed=total_analyzed,
+                    page=page,
                     size=count,
-                    pages=0,
+                    pages=pages,
                 )
-
-            total_count = await self._count_matches_from_db(
-                puuid, queue, None, None, exclude_aram
-            )
-            total_analyzed = await self._count_analyzed_matches_from_db(
-                puuid, queue, None, None, exclude_aram
-            )
             (
                 player_participants_by_match,
                 participants_by_match,
@@ -320,6 +425,7 @@ class MatchService:
         self,
         puuid: str,
         queue: Optional[int] = None,
+        queue_ids: Optional[Sequence[int]] = None,
         limit: Optional[int] = None,
         exclude_aram: bool = False,
     ) -> MatchStatsResponse:
@@ -343,6 +449,7 @@ class MatchService:
                 puuid,
                 count=fetch_limit,
                 queue=queue,
+                queue_ids=queue_ids,
                 exclude_aram=exclude_aram,
             )
 
@@ -756,29 +863,31 @@ class MatchService:
         puuid: str,
         start: int,
         count: int,
-        queue: Optional[int],
-        start_time: Optional[int],
-        end_time: Optional[int],
+        queue: Optional[int] = None,
+        queue_ids: Optional[Sequence[int]] = None,
+        search: Optional[str] = None,
+        start_time: Optional[int] = None,
+        end_time: Optional[int] = None,
         exclude_aram: bool = False,
     ) -> List[Match]:
         """Get matches from database."""
+        effective_queue_ids = normalize_match_queue_ids(queue, queue_ids)
         query = (
             select(Match)
-            .join(MatchParticipant)
-            .where(MatchParticipant.puuid == puuid)
-            .order_by(desc(Match.game_start_timestamp))
+            .where(
+                *build_match_history_conditions(
+                    puuid=puuid,
+                    queue_ids=effective_queue_ids,
+                    search=search,
+                    start_time=start_time,
+                    end_time=end_time,
+                    exclude_aram=exclude_aram,
+                )
+            )
+            .order_by(desc(Match.game_start_timestamp), desc(Match.match_id))
             .offset(start)
             .limit(count)
         )
-
-        if queue:
-            query = query.where(Match.queue_id == queue)
-        if exclude_aram:
-            query = query.where(Match.queue_id != 450)
-        if start_time:
-            query = query.where(Match.game_start_timestamp >= start_time)
-        if end_time:
-            query = query.where(Match.game_start_timestamp <= end_time)
 
         result = await self.db.execute(query)
         return list(result.scalars().all())
@@ -786,26 +895,25 @@ class MatchService:
     async def _count_matches_from_db(
         self,
         puuid: str,
-        queue: Optional[int],
-        start_time: Optional[int],
-        end_time: Optional[int],
+        queue: Optional[int] = None,
+        queue_ids: Optional[Sequence[int]] = None,
+        search: Optional[str] = None,
+        start_time: Optional[int] = None,
+        end_time: Optional[int] = None,
         exclude_aram: bool = False,
     ) -> int:
         """Count total matches for a player from database."""
-        query = (
-            select(func.count(Match.match_id))
-            .join(MatchParticipant)
-            .where(MatchParticipant.puuid == puuid)
+        effective_queue_ids = normalize_match_queue_ids(queue, queue_ids)
+        query = select(func.count(Match.match_id)).where(
+            *build_match_history_conditions(
+                puuid=puuid,
+                queue_ids=effective_queue_ids,
+                search=search,
+                start_time=start_time,
+                end_time=end_time,
+                exclude_aram=exclude_aram,
+            )
         )
-
-        if queue:
-            query = query.where(Match.queue_id == queue)
-        if exclude_aram:
-            query = query.where(Match.queue_id != 450)
-        if start_time:
-            query = query.where(Match.game_start_timestamp >= start_time)
-        if end_time:
-            query = query.where(Match.game_start_timestamp <= end_time)
 
         result = await self.db.execute(query)
         return result.scalar_one()
@@ -813,27 +921,26 @@ class MatchService:
     async def _count_analyzed_matches_from_db(
         self,
         puuid: str,
-        queue: Optional[int],
-        start_time: Optional[int],
-        end_time: Optional[int],
+        queue: Optional[int] = None,
+        queue_ids: Optional[Sequence[int]] = None,
+        search: Optional[str] = None,
+        start_time: Optional[int] = None,
+        end_time: Optional[int] = None,
         exclude_aram: bool = False,
     ) -> int:
         """Count total analyzed matches for a player from database."""
-        query = (
-            select(func.count(Match.match_id))
-            .join(MatchParticipant)
-            .where(MatchParticipant.puuid == puuid)
-            .where(Match.fully_analyzed.is_(True))
+        effective_queue_ids = normalize_match_queue_ids(queue, queue_ids)
+        query = select(func.count(Match.match_id)).where(
+            *build_match_history_conditions(
+                puuid=puuid,
+                queue_ids=effective_queue_ids,
+                search=search,
+                start_time=start_time,
+                end_time=end_time,
+                exclude_aram=exclude_aram,
+            ),
+            Match.fully_analyzed.is_(True),
         )
-
-        if queue:
-            query = query.where(Match.queue_id == queue)
-        if exclude_aram:
-            query = query.where(Match.queue_id != 450)
-        if start_time:
-            query = query.where(Match.game_start_timestamp >= start_time)
-        if end_time:
-            query = query.where(Match.game_start_timestamp <= end_time)
 
         result = await self.db.execute(query)
         return result.scalar_one()
