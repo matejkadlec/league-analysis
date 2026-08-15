@@ -15,6 +15,5 @@ via `__init__.py`; minimize cross-feature dependencies.
   `error_code=RIOT_API_KEY_INVALID` so the frontend credential warning
   survives the background-run HTTP 200 polling boundary.
 - Settings exposes the same backend-owned credential source, status, and
-  health revision to admins and non-admins; job history and browser memory are
-  never credential-health authority. The retired `/settings/user`
+  health revision to admins and non-admins. The retired `/settings/user`
   theme/default-platform contract is compatibility-only.

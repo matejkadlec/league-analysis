@@ -29,15 +29,12 @@ Each feature is self-contained: `components/`, `index.ts` public API, optional
   titles, confidence labels, note readings, disclaimer) comes from
   `smurf-boost/smurf-boost-vocabulary.ts` — never inline one. One band per
   family; never a combined verdict, percentage, 0-100 score, or probability.
-  A failed run and an in-flight run both answer HTTP 200 — read the persisted
-  lifecycle before rendering; a run in flight under different thresholds is a
-  409.
+  A run in flight under different thresholds is a 409.
 - Matchmaking Analysis: seed the active UI from the fast start response,
   rehydrate and poll the exact persisted run, treat rate-limit waits as
   active, cancel by `created_at`, one total ETA on the active card. Persisted
   failures with `error_code=RIOT_API_KEY_INVALID` must activate the shared
-  header refresh signal; only backend-observed direct Riot responses decide
-  key validity.
+  header refresh signal.
 - The Player Card tracking toggle keeps a fixed 72x24 border box across all
   states (14px icon, 10px label, 4px gap). The Tracked Players dialog shows
   player rows directly — no second title, count, search, or expand control;

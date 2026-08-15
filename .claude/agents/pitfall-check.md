@@ -51,3 +51,27 @@ remembers.
   in `frontend/app/layout.tsx` carries `min-w-0` for exactly this reason.
   Check any change that touches the app shell's flex layout, and any new
   scroll container that does not scroll.
+
+- **A failed background run looks like a successful one.** Background runs
+  answer HTTP 200 whether they succeeded, failed, or are still in flight — the
+  status code carries no outcome. A client that branches on the response
+  status renders a failure as success, or a running job as finished. Any
+  consumer of a run endpoint must read the persisted lifecycle field before
+  rendering. Applies to Matchmaking Analysis and Smurf & Boost Detection.
+
+- **Stale credential health from the wrong authority.** Only a backend-observed
+  direct Riot response decides whether the API key is valid: `2xx`/`404`
+  validate the current generation, `401`/`403` invalidate it. Cached reads,
+  rate limits, job history, locally completed work, and browser memory are all
+  neutral — inferring validity from any of them shows a working key as broken
+  or the reverse. Flag any client-side or history-derived judgement about key
+  validity.
+
+- **Inherited process environment silently beats the env file.** A backend
+  configuration name already exported in the shell wins over the value in the
+  `.env` being loaded, so the app starts against something other than the file
+  it appears to read — in production this once pointed a deploy at an empty
+  volume. `run.sh` clears inherited backend configuration names before loading
+  the worktree file; `LGA_RUN_USE_PROCESS_ENV=1` is the deliberate one-off
+  override. Check any change to config loading or container env wiring, and
+  suspect this whenever settings do not match the file on disk.

@@ -7,8 +7,7 @@
   loading/error states.
 - `header-messages.tsx` polls shared backend credential health — keep the
   polling/focus/event refreshes and the server health revision for
-  dismissible incident IDs; never infer key validity from cached or locally
-  completed work.
+  dismissible incident IDs.
 - Sidebar player selector stays below the logo and above ordinary navigation.
   Selection must not silently track a player or start Riot synchronization.
   Player Overview / Match History nav links preserve the current URL's

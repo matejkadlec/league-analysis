@@ -10,9 +10,7 @@ is `app.core.dependencies.get_riot_client`.
   health record. `RIOT_API_KEY_VERSION` identifies a deployment generation and
   must never contain or derive from the key. Never expose either value.
 - Settings load from the repo-root `.env` via Pydantic settings
-  (`app/core/config.py` is the field inventory). `./run.sh` clears inherited
-  backend configuration names before loading the worktree file; use
-  `LGA_RUN_USE_PROCESS_ENV=1` only for a deliberate one-off override.
+  (`app/core/config.py` is the field inventory).
 - Production readiness is `/health/ready`, not liveness-only `/health`: keep
   it secret-safe and failing unless a real database `SELECT 1` succeeds —
   container orchestration depends on the distinction.

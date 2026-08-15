@@ -22,16 +22,9 @@ scripts ../scripts/*.py`, `uv run pyright`, `uv run bandit --quiet
 
 ## Safety boundaries
 
-- Never `Base.metadata.create_all()` for application schemas: every
-  schema/model change is a reviewed Alembic revision applied through the
-  locked `scripts/migrate.py`. The baseline revision is intentionally
-  non-reversible — restore a verified backup rather than dropping a
-  populated schema. `run.sh` applies `upgrade head` before starting writers
-  and aborts on failure.
-- The local Riot-data cleanup command owns the
-  `config_json.riot_maintenance_mode` interlock: never bypass it in a Riot
-  writer or clear it through an administrator update.
+- Schema changes are reviewed Alembic revisions applied through the locked
+  `scripts/migrate.py` (a pre-commit hook forbids `create_all`). The baseline
+  revision is intentionally non-reversible, and no hook can see a runtime
+  action — restore a verified backup rather than dropping a populated schema.
 - Production image: installs from `uv.lock`, runs as non-root UID/GID 10001,
-  read-only at runtime; `/health/ready` must include a database round trip;
-  scheduler shutdown stays non-draining (`wait=False`) — startup recovery
-  classifies interrupted persisted executions.
+  read-only at runtime.

@@ -13,10 +13,6 @@
   upstream failures, cached reads, and lifecycle results are neutral. Keep the
   generation/timestamp guards so stale requests cannot overwrite evidence.
   Never log or expose an API key.
-- A Riot 400 whose `status.message` reports a decryption failure is
-  `PuuidDecryptionError`, not `BadRequestError` — the stored PUUID belongs to
-  another developer account. Keep the condition on the exception type and the
-  provider payload out of the message.
 - The Riot queue reference catalog stays separate from the product allowlist
   (420, 440, 480, 400, 450, 2400). Reject unknown queue/type/platform inputs
   before I/O; Match Fetcher always consumes the complete allowlist.

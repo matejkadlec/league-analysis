@@ -1,7 +1,6 @@
 # Profile feature (features/profile/)
 
-Player Overview statistics cards — regression-protected (Vitest covers Top
-Champions pagination boundaries, Playwright covers browser interaction):
+Player Overview statistics cards:
 
 - Cards render aggregate statistics for the globally selected player.
 - Top Champions: exactly five champion rows per local page with a stable card
