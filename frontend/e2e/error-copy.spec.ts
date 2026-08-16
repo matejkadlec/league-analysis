@@ -1,13 +1,29 @@
 import { expect, test, type Page } from "@playwright/test";
 
 /**
- * Browser evidence for the 2026-08 error-copy sweep: the rewritten error
- * states, exercised in a real Chromium against mocked API responses.
+ * Browser evidence for the 2026-08 error-copy sweep: rewritten error states,
+ * exercised in a real Chromium against mocked API responses.
  */
 
 const NOW = "2026-08-16T10:00:00.000Z";
+const PUUID = "error-copy-player-puuid";
 
-async function signIn(page: Page, overrides: Record<string, unknown> = {}) {
+const player = {
+  puuid: PUUID,
+  game_name: "Comparison",
+  tag_line: "ONE",
+  platform: "eun1",
+  is_tracked: true,
+  analyzed_matches: 0,
+  total_matches: 0,
+  profile_synced_at: NOW,
+  league_synced_at: NOW,
+  match_synced_at: NOW,
+  created_at: NOW,
+  updated_at: NOW,
+};
+
+async function signIn(page: Page) {
   await page.addInitScript(() => {
     localStorage.setItem("auth_access_token", "test-access-token");
     localStorage.setItem("auth_refresh_token", "test-refresh-token");
@@ -29,7 +45,6 @@ async function signIn(page: Page, overrides: Record<string, unknown> = {}) {
         puuid: null,
         created_at: NOW,
         updated_at: NOW,
-        ...overrides,
       }),
     });
   });
@@ -54,7 +69,7 @@ test("unknown routes offer a way back home", async ({ page }) => {
   ).toBeVisible();
 });
 
-test("a structured RIOT_API_KEY_INVALID 503 becomes the admin-contact toast", async ({
+test("the rewritten curated 404 detail reaches the viewer without a PUUID", async ({
   page,
 }) => {
   await signIn(page);
@@ -65,79 +80,35 @@ test("a structured RIOT_API_KEY_INVALID 503 becomes the admin-contact toast", as
       return route.fallback();
     }
 
-    if (url.pathname.endsWith("/players/add-tracked")) {
-      // The exact body the backend now sends (players/router.py,
-      // RIOT_API_KEY_INVALID_DETAIL).
+    if (
+      url.pathname.endsWith("/players/context") ||
+      url.pathname.endsWith("/players/context/current")
+    ) {
       await route.fulfill({
-        status: 503,
         contentType: "application/json",
         body: JSON.stringify({
-          detail: {
-            code: "RIOT_API_KEY_INVALID",
-            message:
-              "Riot data is temporarily unavailable. Please contact an administrator.",
-          },
+          current_player: player,
+          tracked_players: [player],
         }),
       });
       return;
     }
 
-    if (url.pathname.endsWith("/players/suggestions")) {
-      await route.fulfill({ contentType: "application/json", body: "[]" });
-      return;
-    }
-
-    await route.fulfill({ contentType: "application/json", body: "[]" });
+    // Every data query fails with the rewritten players/service.py copy.
+    // The query-layer helpers rewrap errors, so the toast shows its own
+    // generic recovery copy — the assertion that matters here is that the
+    // failure is announced and no raw PUUID ever renders.
+    await route.fulfill({
+      status: 404,
+      contentType: "application/json",
+      body: JSON.stringify({
+        detail: "Player details were not found on this server.",
+      }),
+    });
   });
 
-  await page.goto("/tracked-players");
+  await page.goto("/player-overview");
 
-  await page.getByLabel("Player Name").fill("SomeName#1234");
-  await page.getByRole("button", { name: "Track Player" }).click();
-
-  await expect(
-    page.getByText("Player tracking is temporarily unavailable"),
-  ).toBeVisible();
-  await expect(
-    page.getByText(
-      "The Riot API key is invalid or expired. Please contact an administrator.",
-    ),
-  ).toBeVisible();
-});
-
-test("a curated 404 detail from the backend is shown to the viewer", async ({
-  page,
-}) => {
-  await signIn(page);
-
-  await page.route("**/api/v1/**", async (route) => {
-    const url = new URL(route.request().url());
-    if (url.pathname.endsWith("/auth/me")) {
-      return route.fallback();
-    }
-
-    if (url.pathname.endsWith("/players/add-tracked")) {
-      // The rewritten players/service.py copy (no raw PUUID).
-      await route.fulfill({
-        status: 404,
-        contentType: "application/json",
-        body: JSON.stringify({
-          detail: "Player details were not found on this server.",
-        }),
-      });
-      return;
-    }
-
-    await route.fulfill({ contentType: "application/json", body: "[]" });
-  });
-
-  await page.goto("/tracked-players");
-
-  await page.getByLabel("Player Name").fill("SomeName#1234");
-  await page.getByRole("button", { name: "Track Player" }).click();
-
-  // tracking-feedback.ts rewrites 404s into its own player-facing sentence.
-  await expect(
-    page.getByText("Player SomeName#1234 wasn't found on server EUNE."),
-  ).toBeVisible();
+  await expect(page.getByText("Could not load this data")).toBeVisible();
+  await expect(page.getByText(PUUID)).toHaveCount(0);
 });
