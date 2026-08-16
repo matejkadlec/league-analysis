@@ -18,10 +18,9 @@ import sys
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 from dotenv import load_dotenv
-from sqlalchemy import URL, Connection, Engine, create_engine, text
+from sqlalchemy import URL, Connection, Engine, RowMapping, create_engine, text
 
 from app.core.config import Settings, get_settings
 from app.features.auth.service import AuthService
@@ -221,7 +220,7 @@ def table_counts(
     }
 
 
-def account_rows(connection: Connection, email: str) -> list[Mapping[str, Any]]:
+def account_rows(connection: Connection, email: str) -> list[RowMapping]:
     """Find one account by normalized email without exposing its password hash."""
     return list(
         connection.execute(

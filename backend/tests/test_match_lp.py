@@ -1,9 +1,11 @@
 """Persisted per-match LP observation regressions."""
 
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from types import SimpleNamespace
+from typing import cast
 
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.features.matches.match_lp import (
     LP_SOURCE_OBSERVED,
@@ -13,8 +15,52 @@ from app.features.matches.match_lp import (
     initialize_participant_lp,
     persist_match_lp_observations,
 )
+from app.features.matches.models import Match
+from app.features.matches.participants import MatchParticipant
+from app.features.players.leagues import PlayerLeague
 
 BASE_TIME = datetime(2026, 8, 15, 12, tzinfo=UTC)
+
+# The three doubles below mirror one column group each, with the column's own
+# `Mapped[...]` type. Real ORM instances are not usable here: constructing one
+# configures every mapper in the registry, which would drag the entire model
+# universe — and its relationship targets — into a pure-arithmetic test. Each
+# factory casts once, so the seam is named in exactly one place per type.
+
+
+@dataclass
+class _LeagueSnapshot:
+    """The `PlayerLeague` columns LP attribution reads."""
+
+    created_at: datetime
+    league_points: int
+    wins: int
+    losses: int
+    tier: str
+    rank: str | None
+
+
+@dataclass
+class _Participant:
+    """The `MatchParticipant` columns LP attribution reads and writes."""
+
+    match_id: str
+    win: bool
+    remake: bool
+    lp_change: int | None
+    lp_change_source: str | None
+    lp_change_reason: str | None
+    lp_before_snapshot_at: datetime | None
+    lp_after_snapshot_at: datetime | None
+
+
+@dataclass
+class _Match:
+    """The `Match` columns LP attribution reads."""
+
+    match_id: str
+    queue_id: int
+    game_end_timestamp: int | None
 
 
 def _snapshot(
@@ -25,36 +71,45 @@ def _snapshot(
     losses: int,
     tier: str = "GOLD",
     rank: str = "II",
-) -> SimpleNamespace:
-    return SimpleNamespace(
-        created_at=created_at,
-        league_points=lp,
-        wins=wins,
-        losses=losses,
-        tier=tier,
-        rank=rank,
+) -> PlayerLeague:
+    return cast(
+        PlayerLeague,
+        _LeagueSnapshot(
+            created_at=created_at,
+            league_points=lp,
+            wins=wins,
+            losses=losses,
+            tier=tier,
+            rank=rank,
+        ),
     )
 
 
-def _participant(*, win: bool, remake: bool = False) -> SimpleNamespace:
-    return SimpleNamespace(
-        match_id="EUN1_123",
-        win=win,
-        remake=remake,
-        lp_change=None,
-        lp_change_source=None,
-        lp_change_reason=None,
-        lp_before_snapshot_at=None,
-        lp_after_snapshot_at=None,
+def _participant(*, win: bool, remake: bool = False) -> MatchParticipant:
+    return cast(
+        MatchParticipant,
+        _Participant(
+            match_id="EUN1_123",
+            win=win,
+            remake=remake,
+            lp_change=None,
+            lp_change_source=None,
+            lp_change_reason=None,
+            lp_before_snapshot_at=None,
+            lp_after_snapshot_at=None,
+        ),
     )
 
 
-def _match(*, queue_id: int = 420, minutes_after: int = 30) -> SimpleNamespace:
+def _match(*, queue_id: int = 420, minutes_after: int = 30) -> Match:
     end = BASE_TIME + timedelta(minutes=minutes_after)
-    return SimpleNamespace(
-        match_id="EUN1_123",
-        queue_id=queue_id,
-        game_end_timestamp=int(end.timestamp() * 1000),
+    return cast(
+        Match,
+        _Match(
+            match_id="EUN1_123",
+            queue_id=queue_id,
+            game_end_timestamp=int(end.timestamp() * 1000),
+        ),
     )
 
 
@@ -87,10 +142,10 @@ def test_single_match_counter_transition_has_exact_signed_lp(
     )
 
     result = attribute_lp_change(
-        _participant(win=win),  # type: ignore[arg-type]
-        _match(),  # type: ignore[arg-type]
-        before,  # type: ignore[arg-type]
-        after,  # type: ignore[arg-type]
+        _participant(win=win),
+        _match(),
+        before,
+        after,
         progression_match_count=1,
     )
 
@@ -107,24 +162,24 @@ def test_win_remake_loss_batch_keeps_only_the_remake_certain() -> None:
         losses=9,
     )
     win = attribute_lp_change(
-        _participant(win=True),  # type: ignore[arg-type]
-        _match(),  # type: ignore[arg-type]
-        before,  # type: ignore[arg-type]
-        after,  # type: ignore[arg-type]
+        _participant(win=True),
+        _match(),
+        before,
+        after,
         progression_match_count=2,
     )
     remake = attribute_lp_change(
-        _participant(win=False, remake=True),  # type: ignore[arg-type]
-        _match(),  # type: ignore[arg-type]
-        before,  # type: ignore[arg-type]
-        after,  # type: ignore[arg-type]
+        _participant(win=False, remake=True),
+        _match(),
+        before,
+        after,
         progression_match_count=2,
     )
     loss = attribute_lp_change(
-        _participant(win=False),  # type: ignore[arg-type]
-        _match(),  # type: ignore[arg-type]
-        before,  # type: ignore[arg-type]
-        after,  # type: ignore[arg-type]
+        _participant(win=False),
+        _match(),
+        before,
+        after,
         progression_match_count=2,
     )
 
@@ -174,16 +229,16 @@ def test_win_remake_loss_batch_keeps_only_the_remake_certain() -> None:
     ],
 )
 def test_unprovable_lp_transitions_remain_unavailable(
-    before: SimpleNamespace | None,
-    after: SimpleNamespace | None,
-    match: SimpleNamespace,
+    before: PlayerLeague | None,
+    after: PlayerLeague | None,
+    match: Match,
     expected_reason: str,
 ) -> None:
     result = attribute_lp_change(
-        _participant(win=True),  # type: ignore[arg-type]
-        match,  # type: ignore[arg-type]
-        before,  # type: ignore[arg-type]
-        after,  # type: ignore[arg-type]
+        _participant(win=True),
+        match,
+        before,
+        after,
         progression_match_count=1,
     )
 
@@ -194,7 +249,7 @@ def test_unprovable_lp_transitions_remain_unavailable(
 
 def test_lp_initialization_preserves_an_observation_during_reprocessing() -> None:
     participant = _participant(win=True)
-    initialize_participant_lp(  # type: ignore[arg-type]
+    initialize_participant_lp(
         participant,
         queue_id=420,
         remake=False,
@@ -204,7 +259,7 @@ def test_lp_initialization_preserves_an_observation_during_reprocessing() -> Non
     participant.lp_change = 18
     participant.lp_change_source = LP_SOURCE_OBSERVED
     participant.lp_change_reason = "single_match_counter_transition"
-    initialize_participant_lp(  # type: ignore[arg-type]
+    initialize_participant_lp(
         participant,
         queue_id=420,
         remake=False,
@@ -215,15 +270,15 @@ def test_lp_initialization_preserves_an_observation_during_reprocessing() -> Non
 
 
 class _RowsResult:
-    def __init__(self, rows: list[tuple[object, object]]) -> None:
+    def __init__(self, rows: list[tuple[MatchParticipant, Match]]) -> None:
         self._rows = rows
 
-    def all(self) -> list[tuple[object, object]]:
+    def all(self) -> list[tuple[MatchParticipant, Match]]:
         return self._rows
 
 
 class _ObservationSession:
-    def __init__(self, rows: list[tuple[object, object]]) -> None:
+    def __init__(self, rows: list[tuple[MatchParticipant, Match]]) -> None:
         self.rows = rows
 
     async def execute(self, _statement: object) -> _RowsResult:
@@ -241,21 +296,23 @@ async def test_persisted_observation_is_idempotent_on_retry() -> None:
         wins=11,
         losses=8,
     )
-    session = _ObservationSession([(participant, match)])
+    # The double answers the one `execute` the function makes with fixed rows;
+    # `AsyncSession` is too large to implement, so the seam is a named cast.
+    session = cast(AsyncSession, _ObservationSession([(participant, match)]))
 
     first = await persist_match_lp_observations(
-        session,  # type: ignore[arg-type]
+        session,
         "player-puuid",
         [match.match_id],
-        before,  # type: ignore[arg-type]
-        after,  # type: ignore[arg-type]
+        before,
+        after,
     )
     second = await persist_match_lp_observations(
-        session,  # type: ignore[arg-type]
+        session,
         "player-puuid",
         [match.match_id],
-        before,  # type: ignore[arg-type]
-        after,  # type: ignore[arg-type]
+        before,
+        after,
     )
 
     assert first == 1

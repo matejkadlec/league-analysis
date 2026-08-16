@@ -33,7 +33,7 @@ def test_user_settings_accepts_bounded_values() -> None:
 @pytest.mark.parametrize(("field", "value"), [("default_platform", "eun11")])
 def test_user_settings_rejects_oversized_values(field: str, value: str) -> None:
     with pytest.raises(ValidationError):
-        UserSettingsUpdate(**{field: value})
+        UserSettingsUpdate.model_validate({field: value})
 
 
 def test_retired_user_settings_response_uses_inert_compatibility_defaults() -> None:

@@ -6,6 +6,7 @@ from typing import cast
 from unittest.mock import AsyncMock, Mock
 
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.riot_api.client import RiotAPIClient
 from app.core.riot_api.credential_health import (
@@ -173,7 +174,7 @@ async def test_admin_and_user_status_share_the_same_health_snapshot(
         "synchronize_riot_credential_health",
         AsyncMock(return_value=(SimpleNamespace(), snapshot)),
     )
-    service = SettingsService(SimpleNamespace())  # type: ignore[arg-type]
+    service = SettingsService(cast(AsyncSession, SimpleNamespace()))
 
     admin_status = await service.get_api_key_status()
     user_status = await service.get_service_status()
@@ -198,8 +199,8 @@ async def test_candidate_validation_keeps_transient_failure_distinct(
         "RiotAPIClient",
         Mock(return_value=candidate_client),
     )
-    service = SettingsService(SimpleNamespace())  # type: ignore[arg-type]
-    service._test_api_key_with_client = AsyncMock(  # type: ignore[method-assign]
+    service = SettingsService(cast(AsyncSession, SimpleNamespace()))
+    service._test_api_key_with_client = AsyncMock(
         side_effect=RateLimitError("limited", status_code=429, retry_after=60)
     )
 

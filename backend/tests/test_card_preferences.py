@@ -2,12 +2,15 @@
 
 from datetime import UTC, datetime
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, cast
 
 import pytest
 from pydantic import ValidationError
+from sqlalchemy import ClauseElement, Table
 from sqlalchemy.dialects import postgresql
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.features.auth.models import User
 from app.features.settings import router
 from app.features.settings import service as settings_service_module
 from app.features.settings.models import UserCardPreference
@@ -219,19 +222,23 @@ def test_card_preference_legacy_normalization_rejects_incompatible_numeric_types
 
 def test_card_preference_model_declares_the_migration_index() -> None:
     """Autogeneration metadata retains the reviewed user/update ordering index."""
-    assert {index.name for index in UserCardPreference.__table__.indexes} == {
+    table = UserCardPreference.__table__
+    assert isinstance(table, Table)
+    assert {index.name for index in table.indexes} == {
         "ix_user_card_preferences_user_updated"
     }
 
 
 def test_global_reset_requires_explicit_catalog_enumeration() -> None:
     """The all-card reset is a deliberate confirmation, not a broad delete."""
-    request = CardPreferencesResetRequest(
-        cardIds=[
-            "profile.top-champions",
-            "profile.recent-performance",
-            "profile.smurf-boost-detection",
-        ]
+    request = CardPreferencesResetRequest.model_validate(
+        {
+            "cardIds": [
+                "profile.top-champions",
+                "profile.recent-performance",
+                "profile.smurf-boost-detection",
+            ]
+        }
     )
     assert request.card_ids == [
         CardId.TOP_CHAMPIONS,
@@ -240,7 +247,9 @@ def test_global_reset_requires_explicit_catalog_enumeration() -> None:
     ]
 
     with pytest.raises(ValidationError):
-        CardPreferencesResetRequest(cardIds=["profile.top-champions"])
+        CardPreferencesResetRequest.model_validate(
+            {"cardIds": ["profile.top-champions"]}
+        )
 
 
 class _Result:
@@ -254,10 +263,10 @@ class _Result:
 class _Session:
     def __init__(self, result_value: object):
         self.result_value = result_value
-        self.statements: list[object] = []
+        self.statements: list[ClauseElement] = []
         self.committed = False
 
-    async def execute(self, statement: object) -> _Result:
+    async def execute(self, statement: ClauseElement) -> _Result:
         self.statements.append(statement)
         return _Result(self.result_value)
 
@@ -280,38 +289,41 @@ class _PreferencesSession:
     def __init__(self, preferences: list[object]):
         self.preferences = preferences
 
-    async def execute(self, _statement: object) -> _PreferencesResult:
+    async def execute(self, _statement: ClauseElement) -> _PreferencesResult:
         return _PreferencesResult(self.preferences)
 
 
 @pytest.mark.asyncio
 async def test_card_preference_read_signals_recovery_and_observes_future_version(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A corrupted v1 row remains custom while future-version coexistence is logged."""
     warnings: list[tuple[str, dict[str, object]]] = []
-    monkeypatch.setattr(
-        settings_service_module.logger,
-        "warning",
-        lambda event, **context: warnings.append((event, context)),
-    )
+
+    def _capture_warning(event: str, **context: object) -> None:
+        warnings.append((event, context))
+
+    monkeypatch.setattr(settings_service_module.logger, "warning", _capture_warning)
     timestamp = datetime(2026, 8, 6, tzinfo=UTC)
     service = SettingsService(
-        _PreferencesSession(
-            [
-                SimpleNamespace(
-                    card_id=CardId.TOP_CHAMPIONS.value,
-                    version=1,
-                    settings={"minimum_games": "invalid"},
-                    updated_at=timestamp,
-                ),
-                SimpleNamespace(
-                    card_id=CardId.TOP_CHAMPIONS.value,
-                    version=2,
-                    settings={"minimum_games": 30},
-                    updated_at=timestamp,
-                ),
-            ]
+        cast(
+            AsyncSession,
+            _PreferencesSession(
+                [
+                    SimpleNamespace(
+                        card_id=CardId.TOP_CHAMPIONS.value,
+                        version=1,
+                        settings={"minimum_games": "invalid"},
+                        updated_at=timestamp,
+                    ),
+                    SimpleNamespace(
+                        card_id=CardId.TOP_CHAMPIONS.value,
+                        version=2,
+                        settings={"minimum_games": 30},
+                        updated_at=timestamp,
+                    ),
+                ]
+            ),
         )
     )
 
@@ -343,7 +355,7 @@ async def test_upsert_is_atomic_and_scoped_to_the_authenticated_user() -> None:
             updated_at=timestamp,
         )
     )
-    service = SettingsService(session)  # type: ignore[arg-type]
+    service = SettingsService(cast(AsyncSession, session))
 
     response = await service.update_card_preference(
         73,
@@ -352,7 +364,7 @@ async def test_upsert_is_atomic_and_scoped_to_the_authenticated_user() -> None:
     )
 
     statement = session.statements[0]
-    compiled = str(statement.compile(dialect=postgresql.dialect()))  # type: ignore[union-attr]
+    compiled = str(statement.compile(dialect=postgresql.dialect()))
     assert "ON CONFLICT (user_id, card_id, version) DO UPDATE" in compiled
     assert "INSERT INTO auth.user_card_preferences" in compiled
     assert response.card_id is CardId.TOP_CHAMPIONS
@@ -379,8 +391,8 @@ async def test_card_preference_route_uses_only_the_current_user_id() -> None:
     result = await router.update_card_preference(
         CardId.RECENT_PERFORMANCE,
         CardPreferenceUpdate(version=1, settings=RECENT_PERFORMANCE_PAYLOAD),
-        Service(),  # type: ignore[arg-type]
-        SimpleNamespace(id=91),
+        cast(SettingsService, Service()),
+        cast(User, SimpleNamespace(id=91)),
     )
 
     assert result == "ok"
@@ -392,12 +404,12 @@ async def test_card_preference_route_uses_only_the_current_user_id() -> None:
 async def test_card_reset_targets_only_the_current_v1_row() -> None:
     """Per-card reset leaves future-version records available to later servers."""
     session = _Session(None)
-    service = SettingsService(session)  # type: ignore[arg-type]
+    service = SettingsService(cast(AsyncSession, session))
 
     response = await service.reset_card_preference(11, CardId.RECENT_PERFORMANCE)
 
     statement = session.statements[0]
-    compiled = str(statement.compile(dialect=postgresql.dialect()))  # type: ignore[union-attr]
+    compiled = str(statement.compile(dialect=postgresql.dialect()))
     assert "DELETE FROM auth.user_card_preferences" in compiled
     assert "user_card_preferences.version = %(version_1)s" in compiled
     assert response.is_default

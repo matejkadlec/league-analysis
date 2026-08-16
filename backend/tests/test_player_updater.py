@@ -2,14 +2,20 @@
 
 from datetime import UTC, datetime
 from types import SimpleNamespace
+from typing import cast
 from unittest.mock import AsyncMock, Mock
 
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.riot_api.client import RiotAPIClient
+from app.core.riot_api.db_rate_limiter import DBRateLimiter
 from app.features.jobs.error_handling import RateLimitSignal
 from app.features.jobs.implementations import player_updater as player_updater_module
 from app.features.jobs.implementations.player_updater import PlayerUpdaterJob
 from app.features.players import service as player_service_module
+from app.features.players.models import Player
+from app.features.players.schemas import PlayerResponse
 from app.features.players.service import PlayerService
 
 
@@ -45,8 +51,12 @@ async def test_player_updater_continues_after_a_recoverable_player_error(
         )
         for player in players
     }
+
+    def load_player_model(_model: object, puuid: str) -> SimpleNamespace:
+        return player_models[puuid]
+
     db = SimpleNamespace(
-        get=AsyncMock(side_effect=lambda _model, puuid: player_models[puuid]),
+        get=AsyncMock(side_effect=load_player_model),
         commit=AsyncMock(),
         rollback=AsyncMock(),
     )
@@ -66,21 +76,28 @@ async def test_player_updater_continues_after_a_recoverable_player_error(
         "get_job_riot_api_client",
         AsyncMock(return_value=_FakeRiotClient()),
     )
+
+    def build_player_service(_db: object) -> SimpleNamespace:
+        return player_service
+
+    def build_rate_limiter(*_args: object) -> SimpleNamespace:
+        return rate_limiter
+
     monkeypatch.setattr(
         player_updater_module,
         "PlayerService",
-        lambda _db: player_service,
+        build_player_service,
     )
     monkeypatch.setattr(
         player_updater_module,
         "DBRateLimiter",
-        lambda *_args: rate_limiter,
+        build_rate_limiter,
     )
 
     job = PlayerUpdaterJob(job_config_id=7)
     job.check_control_state = AsyncMock()
 
-    await job.execute(db)
+    await job.execute(cast(AsyncSession, db))
 
     assert player_service.update_player_profile.await_count == 2
     assert job.execution_log["errors"][0]["operation"] == "player profile update"
@@ -101,11 +118,11 @@ async def test_player_updater_reports_local_capacity_as_rate_limited() -> None:
 
     with pytest.raises(RateLimitSignal):
         await job._update_player_profile(
-            db=db,
-            player=SimpleNamespace(puuid="sanitized-puuid"),
-            player_service=object(),
-            riot_client=object(),
-            rate_limiter=rate_limiter,
+            db=cast(AsyncSession, db),
+            player=cast(PlayerResponse, SimpleNamespace(puuid="sanitized-puuid")),
+            player_service=cast(PlayerService, object()),
+            riot_client=cast(RiotAPIClient, object()),
+            rate_limiter=cast(DBRateLimiter, rate_limiter),
         )
 
 
@@ -135,8 +152,8 @@ async def test_optional_account_identity_does_not_erase_known_riot_id(
         ),
     )
 
-    changed = await PlayerService(object()).update_player_profile(  # type: ignore[arg-type]
-        player, riot_client
+    changed = await PlayerService(cast(AsyncSession, object())).update_player_profile(
+        cast(Player, player), cast(RiotAPIClient, riot_client)
     )
 
     assert not changed
@@ -164,7 +181,10 @@ async def test_new_player_uses_submitted_riot_id_when_account_omits_it(
         tag_line = object()
         platform = object()
 
-    monkeypatch.setattr(player_service_module, "select", lambda *_args: _Statement())
+    def build_statement(*_args: object) -> _Statement:
+        return _Statement()
+
+    monkeypatch.setattr(player_service_module, "select", build_statement)
     monkeypatch.setattr(player_service_module, "Player", _FakePlayer)
 
     async def populate_database_timestamps(player: SimpleNamespace) -> None:
@@ -177,8 +197,8 @@ async def test_new_player_uses_submitted_riot_id_when_account_omits_it(
         commit=AsyncMock(),
         refresh=AsyncMock(side_effect=populate_database_timestamps),
     )
-    service = PlayerService(db)
-    service.track_player = AsyncMock(return_value=SimpleNamespace(puuid="safe"))  # type: ignore[method-assign]
+    service = PlayerService(cast(AsyncSession, db))
+    service.track_player = AsyncMock(return_value=SimpleNamespace(puuid="safe"))
     riot_client = SimpleNamespace(
         get_account_by_riot_id=AsyncMock(
             return_value=SimpleNamespace(puuid="p" * 78, game_name=None, tag_line=None)
@@ -189,7 +209,7 @@ async def test_new_player_uses_submitted_riot_id_when_account_omits_it(
     )
 
     await service.add_and_track_player(
-        riot_client,
+        cast(RiotAPIClient, riot_client),
         "Submitted Name",
         "SAFE",
         user_id=7,

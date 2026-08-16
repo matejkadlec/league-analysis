@@ -3,6 +3,7 @@
 import json
 from copy import deepcopy
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -10,26 +11,26 @@ from app.core.riot_api.models import AccountDTO, MatchDTO, SummonerDTO
 from app.core.riot_api.transformers import MatchTransformer
 from app.features.matches.timeline import build_match_timeline_rows
 
-FIXTURE = json.loads(
+FIXTURE: dict[str, Any] = json.loads(
     (Path(__file__).parent / "fixtures" / "riot_contracts_2026_08_08.json").read_text()
 )
-QUEUE_VARIANTS = json.loads(
+QUEUE_VARIANTS: dict[str, Any] = json.loads(
     (Path(__file__).parent / "fixtures" / "supported_queue_variants.json").read_text()
 )
 
 
-def _match_payload(queue_id: str) -> dict:
-    payload = deepcopy(FIXTURE["matches"][queue_id])
+def _match_payload(queue_id: str) -> dict[str, Any]:
+    payload: dict[str, Any] = deepcopy(FIXTURE["matches"][queue_id])
     payload.pop("timeline")
     payload["info"]["participants"] = [deepcopy(FIXTURE["participant"])]
     return payload
 
 
-def _timeline_payload(queue_id: str) -> dict:
+def _timeline_payload(queue_id: str) -> dict[str, Any]:
     event_samples = FIXTURE["matches"][queue_id]["timeline"]["info"]["events"]
-    events = []
+    events: list[dict[str, Any]] = []
     for index, sample in enumerate(event_samples, start=1):
-        event = deepcopy(sample)
+        event: dict[str, Any] = deepcopy(sample)
         event.update(
             {
                 "killerId": 1,
@@ -72,7 +73,9 @@ def test_raw_match_transformer_keeps_both_timestamp_semantics() -> None:
 
 
 @pytest.mark.parametrize("variant", QUEUE_VARIANTS["queues"])
-def test_new_supported_queue_variants_preserve_queue_identity(variant: dict) -> None:
+def test_new_supported_queue_variants_preserve_queue_identity(
+    variant: dict[str, Any],
+) -> None:
     payload = _match_payload(variant["base_fixture"])
     payload["metadata"]["matchId"] = f"EUN1_SANITIZED_{variant['id']}"
     payload["info"].update(

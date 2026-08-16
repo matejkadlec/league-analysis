@@ -1,23 +1,32 @@
 """Matchmaking-analysis lifecycle regressions."""
 
 import asyncio
+import inspect
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
+from typing import cast
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi import HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql import ClauseElement
+from starlette.requests import Request
 
+from app.core.riot_api.client import RiotAPIClient
 from app.core.riot_api.errors import AuthenticationError, ForbiddenError
 from app.features.matchmaking_analysis import router as analysis_router
 from app.features.matchmaking_analysis import service as analysis_service_module
+from app.features.matchmaking_analysis.models import MatchmakingAnalysis
+from app.features.matchmaking_analysis.schemas import MatchmakingAnalysisRequest
 from app.features.matchmaking_analysis.service import MatchmakingAnalysisService
 
+_PUUID = "test-puuid"
 
-def _request():
+
+def _request() -> Request:
     """Build the minimal request required by rate-limited route wrappers."""
-    from starlette.requests import Request
-
     return Request(
         {
             "type": "http",
@@ -29,62 +38,71 @@ def _request():
     )
 
 
-def _analysis(status: str = "pending") -> SimpleNamespace:
-    return SimpleNamespace(
-        puuid="test-puuid",
-        created_at=datetime.now(UTC),
-        status=status,
-        results=None,
-        started_at=None,
-        completed_at=None,
-        error_code=None,
-        error_message=None,
-        puuid_progress={},
-        requests_saved=0,
-        rate_limit_reset_at=None,
+def _unwrapped[**P, R](endpoint: Callable[P, R]) -> Callable[P, R]:
+    """Reach the endpoint under slowapi's rate-limit wrapper, signature intact."""
+    return cast(Callable[P, R], inspect.unwrap(endpoint))
+
+
+def _analysis(status: str = "pending") -> MatchmakingAnalysis:
+    """A persisted run stub carrying every attribute the code under test reads."""
+    return cast(
+        MatchmakingAnalysis,
+        SimpleNamespace(
+            puuid=_PUUID,
+            created_at=datetime.now(UTC),
+            status=status,
+            results=None,
+            started_at=None,
+            completed_at=None,
+            error_code=None,
+            error_message=None,
+            puuid_progress={},
+            requests_saved=0,
+            rate_limit_reset_at=None,
+        ),
     )
 
 
-def _compiled_values(statement: object) -> list[object]:
-    return list(statement.compile().params.values())  # type: ignore[attr-defined]
+def _compiled_values(statement: ClauseElement) -> list[object]:
+    params = statement.compile().params
+    assert params is not None, "a compiled DML statement always carries bind params"
+    return list(params.values())
 
 
 @pytest.mark.asyncio
 async def test_start_route_returns_without_riot_preflight() -> None:
     """The start request never owns the long Riot minimum-match check."""
     expected = _analysis()
-    service = SimpleNamespace(
-        check_player_has_enough_matches=AsyncMock(
-            side_effect=AssertionError("preflight must run in the background")
-        ),
-        start_analysis=AsyncMock(return_value=expected),
+    service = MagicMock(spec=MatchmakingAnalysisService)
+    service.check_player_has_enough_matches.side_effect = AssertionError(
+        "preflight must run in the background"
     )
+    service.start_analysis.return_value = expected
 
     result = await analysis_router.start_analysis(
         request=_request(),
-        payload=SimpleNamespace(puuid="test-puuid"),
-        service=service,
+        payload=MatchmakingAnalysisRequest(puuid=_PUUID),
+        service=cast(MatchmakingAnalysisService, service),
     )
 
     assert result is expected
     service.check_player_has_enough_matches.assert_not_awaited()
-    service.start_analysis.assert_awaited_once_with("test-puuid")
+    service.start_analysis.assert_awaited_once_with(_PUUID)
 
 
 @pytest.mark.asyncio
 async def test_match_check_preserves_the_shared_invalid_key_signal() -> None:
     """The diagnostic route keeps the global banner's established error code."""
-    service = SimpleNamespace(
-        check_player_has_enough_matches=AsyncMock(
-            side_effect=ForbiddenError("provider detail", status_code=403)
-        )
+    service = MagicMock(spec=MatchmakingAnalysisService)
+    service.check_player_has_enough_matches.side_effect = ForbiddenError(
+        "provider detail", status_code=403
     )
 
     with pytest.raises(HTTPException) as error:
-        await analysis_router.check_player_matches.__wrapped__(
+        await _unwrapped(analysis_router.check_player_matches)(
             request=_request(),
-            payload=SimpleNamespace(puuid="test-puuid"),
-            service=service,
+            payload=MatchmakingAnalysisRequest(puuid=_PUUID),
+            service=cast(MatchmakingAnalysisService, service),
         )
 
     assert error.value.status_code == 503
@@ -92,7 +110,9 @@ async def test_match_check_preserves_the_shared_invalid_key_signal() -> None:
 
 
 @pytest.mark.asyncio
-async def test_repeated_start_attaches_to_the_existing_active_run(monkeypatch) -> None:
+async def test_repeated_start_attaches_to_the_existing_active_run(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """A retry returns the same persisted run instead of creating another."""
     guard = AsyncMock()
     monkeypatch.setattr(
@@ -102,9 +122,11 @@ async def test_repeated_start_attaches_to_the_existing_active_run(monkeypatch) -
     )
     existing = _analysis("in_progress")
     database = SimpleNamespace(add=MagicMock())
-    service = MatchmakingAnalysisService(database, object())  # type: ignore[arg-type]
-    service._get_active_analysis = AsyncMock(return_value=existing)  # type: ignore[method-assign]
-    service._ensure_background_task = MagicMock()  # type: ignore[method-assign]
+    service = MatchmakingAnalysisService(
+        cast(AsyncSession, database), cast(RiotAPIClient, object())
+    )
+    service._get_active_analysis = AsyncMock(return_value=existing)
+    service._ensure_background_task = MagicMock()
 
     response = await service.start_analysis(existing.puuid)
 
@@ -119,21 +141,22 @@ async def test_repeated_start_attaches_to_the_existing_active_run(monkeypatch) -
 @pytest.mark.asyncio
 async def test_new_run_replaces_a_finishing_previous_task_handle() -> None:
     """A completed worker's brief cleanup window cannot strand the next run."""
-    puuid = "test-puuid"
     old_created_at = datetime.now(UTC) - timedelta(minutes=1)
     new_created_at = datetime.now(UTC)
     old_task = asyncio.create_task(asyncio.sleep(60))
     new_started = asyncio.Event()
     database = SimpleNamespace()
-    service = MatchmakingAnalysisService(database, object())  # type: ignore[arg-type]
+    service = MatchmakingAnalysisService(
+        cast(AsyncSession, database), cast(RiotAPIClient, object())
+    )
 
-    async def run_new_analysis(run_puuid: str, created_at: datetime) -> None:
-        assert run_puuid == puuid
+    async def run_new_analysis(puuid: str, created_at: datetime) -> None:
+        assert puuid == _PUUID
         assert created_at == new_created_at
         new_started.set()
 
-    service._run_analysis_background = run_new_analysis  # type: ignore[method-assign]
-    analysis_service_module._running_analyses[puuid] = (
+    service._run_analysis_background = run_new_analysis
+    analysis_service_module._running_analyses[_PUUID] = (
         analysis_service_module.RunningAnalysis(
             created_at=old_created_at,
             task=old_task,
@@ -141,16 +164,16 @@ async def test_new_run_replaces_a_finishing_previous_task_handle() -> None:
     )
 
     try:
-        service._ensure_background_task(puuid, new_created_at)
+        service._ensure_background_task(_PUUID, new_created_at)
         await asyncio.wait_for(new_started.wait(), timeout=1)
-        replacement = analysis_service_module._running_analyses[puuid]
+        replacement = analysis_service_module._running_analyses[_PUUID]
         assert replacement.created_at == new_created_at
         assert replacement.task is not old_task
         await replacement.task
     finally:
         old_task.cancel()
         await asyncio.gather(old_task, return_exceptions=True)
-        analysis_service_module._running_analyses.pop(puuid, None)
+        analysis_service_module._running_analyses.pop(_PUUID, None)
 
 
 @pytest.mark.asyncio
@@ -163,7 +186,9 @@ async def test_cancel_targets_and_retains_the_exact_active_run() -> None:
         commit=AsyncMock(),
         delete=AsyncMock(),
     )
-    service = MatchmakingAnalysisService(database, object())  # type: ignore[arg-type]
+    service = MatchmakingAnalysisService(
+        cast(AsyncSession, database), cast(RiotAPIClient, object())
+    )
 
     cancelled = await service.cancel_analysis(active.puuid, active.created_at)
 
@@ -178,7 +203,9 @@ async def test_cancel_targets_and_retains_the_exact_active_run() -> None:
 
 
 @pytest.mark.asyncio
-async def test_rate_limit_wait_is_persisted_as_an_active_state(monkeypatch) -> None:
+async def test_rate_limit_wait_is_persisted_as_an_active_state(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """A bounded Riot wait remains attachable and visible rather than failing."""
     guard = AsyncMock()
     monkeypatch.setattr(
@@ -192,8 +219,10 @@ async def test_rate_limit_wait_is_persisted_as_an_active_state(monkeypatch) -> N
         commit=AsyncMock(),
         rollback=AsyncMock(),
     )
-    service = MatchmakingAnalysisService(database, object())  # type: ignore[arg-type]
-    service._current_analysis_puuid = "test-puuid"
+    service = MatchmakingAnalysisService(
+        cast(AsyncSession, database), cast(RiotAPIClient, object())
+    )
+    service._current_analysis_puuid = _PUUID
     service._current_analysis_created_at = datetime.now(UTC)
     reset_at = datetime.now(UTC) + timedelta(seconds=90)
 
@@ -207,7 +236,9 @@ async def test_rate_limit_wait_is_persisted_as_an_active_state(monkeypatch) -> N
 
 
 @pytest.mark.asyncio
-async def test_analysis_failure_keeps_a_safe_terminal_diagnostic(monkeypatch) -> None:
+async def test_analysis_failure_keeps_a_safe_terminal_diagnostic(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Expected failures remain retryable without exposing raw provider text."""
     guard = AsyncMock()
     monkeypatch.setattr(
@@ -216,11 +247,13 @@ async def test_analysis_failure_keeps_a_safe_terminal_diagnostic(monkeypatch) ->
         guard,
     )
     database = SimpleNamespace(execute=AsyncMock(), commit=AsyncMock())
-    service = MatchmakingAnalysisService(database, object())  # type: ignore[arg-type]
+    service = MatchmakingAnalysisService(
+        cast(AsyncSession, database), cast(RiotAPIClient, object())
+    )
     created_at = datetime.now(UTC)
 
     await service._complete_with_error(
-        "test-puuid",
+        _PUUID,
         created_at,
         "Player doesn't have enough ranked matches for this analysis.",
         error_code="not_enough_matches",
@@ -261,9 +294,9 @@ async def test_optional_fetch_does_not_swallow_invalid_key_failure() -> None:
         )
     )
     service = MatchmakingAnalysisService(
-        SimpleNamespace(),
-        riot_client,  # type: ignore[arg-type]
+        cast(AsyncSession, SimpleNamespace()),
+        cast(RiotAPIClient, riot_client),
     )
 
     with pytest.raises(ForbiddenError):
-        await service._api_fetch_match_ids("test-puuid")
+        await service._api_fetch_match_ids(_PUUID)

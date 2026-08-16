@@ -15,16 +15,15 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
 
-# `Player` declares a relationship to this model by name, so the ORM registry
-# has to know it before any query over that mapper can be compiled.
-from app.features.playstyle_analysis import models as _playstyle_models  # noqa: F401
+from app.features.playstyle_analysis.models import PlaystyleAnalysis
 from app.features.settings.schemas import (
     CardId,
     CardPreferencesResetRequest,
@@ -54,6 +53,7 @@ from app.features.smurf_boost_detection.engine import (
     AnalysisRequest,
     analyze,
 )
+from app.features.smurf_boost_detection.models import SmurfBoostAnalysis
 from app.features.smurf_boost_detection.router import ERROR_STATUS_CODES
 from app.features.smurf_boost_detection.schemas import DISCLAIMER
 from app.features.smurf_boost_detection.service import (
@@ -69,6 +69,11 @@ from app.features.smurf_boost_detection.statistics import (
     hedges_g,
     wilson_lower_bound,
 )
+
+# `Player` declares a relationship to this model by name, so the ORM registry
+# has to know it before any query over that mapper can be compiled. Naming the
+# class here is what keeps that import from reading as removable.
+_RELATIONSHIP_TARGET_REGISTERED = PlaystyleAnalysis
 
 CONSERVATIVE = {key: float(value) for key, value in PRESETS["conservative"].items()}
 
@@ -108,7 +113,9 @@ def _match(
         kill_participation=BASE_METRICS["kill_participation"] * scale,
         team_damage_percentage=BASE_METRICS["team_damage_percentage"] * scale,
         vision_score_per_minute=BASE_METRICS["vision_score_per_minute"] * scale,
-        total_minions_killed=BASE_MINIONS * scale,
+        # Minions are counted, so a scaled fixture still has to land on a whole
+        # number the way a stored row would.
+        total_minions_killed=round(BASE_MINIONS * scale),
         neutral_minions_killed=0,
         time_played=TIME_PLAYED,
         game_duration=TIME_PLAYED,
@@ -823,17 +830,21 @@ def test_detection_settings_reject_an_unsatisfiable_novel_gate() -> None:
 
 def test_global_reset_must_enumerate_the_extended_catalog() -> None:
     """A reset that omits the new card is ambiguous and must be rejected."""
-    assert CardPreferencesResetRequest(
-        cardIds=[
-            "profile.top-champions",
-            "profile.recent-performance",
-            "profile.smurf-boost-detection",
-        ]
+    # The request model accepts its camel-case aliases only, which is a
+    # validation-time contract rather than a constructor signature.
+    assert CardPreferencesResetRequest.model_validate(
+        {
+            "cardIds": [
+                "profile.top-champions",
+                "profile.recent-performance",
+                "profile.smurf-boost-detection",
+            ]
+        }
     ).card_ids == list(CardId)
 
     with pytest.raises(ValueError):
-        CardPreferencesResetRequest(
-            cardIds=["profile.top-champions", "profile.recent-performance"]
+        CardPreferencesResetRequest.model_validate(
+            {"cardIds": ["profile.top-champions", "profile.recent-performance"]}
         )
 
 
@@ -847,7 +858,7 @@ def test_global_reset_must_enumerate_the_extended_catalog() -> None:
 # ---------------------------------------------------------------------------
 
 
-def _completed_run(**overrides: Any) -> SimpleNamespace:
+def _completed_run(**overrides: Any) -> SmurfBoostAnalysis:
     """A stored run in whatever state a case needs."""
     fields: dict[str, Any] = {
         "puuid": "p",
@@ -858,11 +869,17 @@ def _completed_run(**overrides: Any) -> SimpleNamespace:
         "latest_match_id": "EUN1_2",
     }
     fields.update(overrides)
-    return SimpleNamespace(**fields)
+    return SmurfBoostAnalysis(**fields)
 
 
-def _service(db: Any) -> SmurfBoostDetectionService:
-    return SmurfBoostDetectionService(db)
+def _service(db: MagicMock) -> SmurfBoostDetectionService:
+    return SmurfBoostDetectionService(cast(AsyncSession, db))
+
+
+def _await_args(mock: AsyncMock) -> tuple[Any, ...]:
+    """Positional arguments of the recorded await, which must have happened."""
+    assert mock.await_args is not None
+    return mock.await_args.args
 
 
 @pytest.mark.asyncio
@@ -949,7 +966,7 @@ async def test_an_abandoned_run_is_terminalized_rather_than_blocking() -> None:
     await service._expire_abandoned("p")
 
     commit.assert_awaited_once()
-    statement = str(execute.await_args.args[0])
+    statement = str(_await_args(execute)[0])
     assert "SET status=" in statement
     assert "created_at <" in statement
 
@@ -983,7 +1000,7 @@ async def test_novelty_counting_excludes_the_window_by_identifier() -> None:
 
     assert counts == {1: 40, 2: 3}
     compiled = str(
-        execute.await_args.args[0].compile(
+        _await_args(execute)[0].compile(
             dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}
         )
     ).replace("\n", " ")
@@ -1009,7 +1026,7 @@ async def test_the_excluded_window_is_the_window_that_was_scored() -> None:
 
     await service._build_request("p", thresholds)
 
-    passed = service._prior_champion_games.await_args.args[1]
+    passed = _await_args(service._prior_champion_games)[1]
     assert passed == [match.match_id for match in eligible[:12]]
 
 
@@ -1032,6 +1049,11 @@ def _row(**overrides: Any) -> tuple[SimpleNamespace, SimpleNamespace]:
         game_duration=1800,
     )
     return participant, match
+
+
+def _no_rows() -> list[tuple[SimpleNamespace, SimpleNamespace]]:
+    """An empty result set, shaped like the one the load query returns."""
+    return []
 
 
 @pytest.mark.asyncio
@@ -1060,13 +1082,13 @@ async def test_eligibility_is_one_predicate_every_query_reuses() -> None:
     Remakes, other queues, very short games and the `'Invalid'` position are all
     excluded here or nowhere: the engine never sees a reason to reject a match.
     """
-    execute = AsyncMock(return_value=SimpleNamespace(all=lambda: []))
+    execute = AsyncMock(return_value=SimpleNamespace(all=_no_rows))
     service = _service(MagicMock(execute=execute))
 
     await service._load_eligible("p")
 
     compiled = str(
-        execute.await_args.args[0].compile(
+        _await_args(execute)[0].compile(
             dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}
         )
     ).replace("\n", " ")
@@ -1081,13 +1103,13 @@ async def test_eligibility_is_one_predicate_every_query_reuses() -> None:
 @pytest.mark.asyncio
 async def test_the_load_cap_is_applied_in_sql() -> None:
     """A deep account must not hydrate hundreds of rows the engine discards."""
-    execute = AsyncMock(return_value=SimpleNamespace(all=lambda: []))
+    execute = AsyncMock(return_value=SimpleNamespace(all=_no_rows))
     service = _service(MagicMock(execute=execute))
 
     await service._load_eligible("p")
 
     compiled = str(
-        execute.await_args.args[0].compile(
+        _await_args(execute)[0].compile(
             dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}
         )
     ).replace("\n", " ")

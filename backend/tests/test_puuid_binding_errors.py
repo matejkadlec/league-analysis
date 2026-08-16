@@ -1,13 +1,15 @@
 """Regressions for stale-PUUID classification and job completion bookkeeping."""
 
 from datetime import UTC, datetime
-from types import SimpleNamespace
-from typing import Any, cast
+from types import ModuleType, SimpleNamespace
+from typing import Any, NoReturn, Self, cast, override
 from unittest.mock import AsyncMock, Mock
 
 import pytest
+from sqlalchemy import Table, Update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.models import Base
 from app.core.riot_api.client import RiotAPIClient
 from app.core.riot_api.errors import BadRequestError, PuuidDecryptionError
 from app.features.jobs import player_sync as player_sync_module
@@ -21,15 +23,26 @@ from app.features.jobs.models import (
 )
 from app.features.jobs.player_sync import _failure_from_job, _finish_sync
 from app.features.players import service as player_service_module
+from app.features.players.models import Player
 from app.features.players.service import PlayerService
 
 # `Player` relationships are resolved by name, so every related mapper has to be
 # imported before the real model can be instantiated.
-from app.features.auth import models as _auth_models  # noqa: F401  isort:skip
-from app.features.matches import models as _match_models  # noqa: F401  isort:skip
-from app.features.matchmaking_analysis import models as _mm_models  # noqa: F401  isort:skip
-from app.features.players import leagues as _league_models  # noqa: F401  isort:skip
-from app.features.playstyle_analysis import models as _ps_models  # noqa: F401  isort:skip
+from app.features.auth import models as _auth_models  # isort:skip
+from app.features.matches import models as _match_models  # isort:skip
+from app.features.matchmaking_analysis import models as _mm_models  # isort:skip
+from app.features.players import leagues as _league_models  # isort:skip
+from app.features.playstyle_analysis import models as _ps_models  # isort:skip
+
+# Naming the modules keeps the imports above from looking unused to a linter
+# while preserving the reason they exist: the mappers must be registered.
+_RELATED_MAPPERS: tuple[ModuleType, ...] = (
+    _auth_models,
+    _match_models,
+    _mm_models,
+    _league_models,
+    _ps_models,
+)
 
 FRESH_PUUID = "f" * 78
 
@@ -37,12 +50,27 @@ FRESH_PUUID = "f" * 78
 class _Job(BaseJob):
     """Minimal concrete job used to exercise BaseJob bookkeeping."""
 
-    async def execute(self, db) -> None:  # pragma: no cover - never invoked
+    @override
+    async def execute(
+        self, db: AsyncSession
+    ) -> None:  # pragma: no cover - never invoked
         return None
 
 
 def _client() -> RiotAPIClient:
     return RiotAPIClient(api_key="test-key")
+
+
+def _job_double(**attributes: object) -> BaseJob:
+    """Present a duck-typed writer result as the `BaseJob` the API declares.
+
+    `_failure_from_job` is documented to read only the writer's cached scalars
+    and its two classification predicates, and several tests below exist to
+    prove it touches nothing else. A real `BaseJob` carries a live
+    `JobExecution`, so it would hide exactly the regression under test; the
+    cast records that only the read attributes are populated on purpose.
+    """
+    return cast(BaseJob, SimpleNamespace(**attributes))
 
 
 def test_decrypt_400_becomes_puuid_decryption_error() -> None:
@@ -76,7 +104,7 @@ def test_status_message_extraction_survives_a_non_json_body() -> None:
 
     class _Response:
         @staticmethod
-        def json():
+        def json() -> NoReturn:
             raise ValueError("not json")
 
     assert RiotAPIClient._extract_riot_status_message(_Response()) is None
@@ -87,7 +115,7 @@ def test_status_message_extraction_reads_riot_shape() -> None:
 
     class _Response:
         @staticmethod
-        def json():
+        def json() -> dict[str, dict[str, str]]:
             return {"status": {"message": "Bad Request - Exception decrypting X"}}
 
     assert (
@@ -133,7 +161,7 @@ def test_get_job_logs_never_touches_the_orm_instance() -> None:
 
 def test_failure_from_job_reports_a_stale_player_id() -> None:
     """The player card must explain a stale PUUID instead of a generic failure."""
-    job = SimpleNamespace(
+    job = _job_double(
         job_execution_id=11,
         job_execution_status=JobStatus.SUCCESS,
         skipped_as_already_running=False,
@@ -152,7 +180,7 @@ def test_failure_from_job_reports_a_stale_player_id() -> None:
 
 def test_failure_from_job_keeps_the_key_error_precedence() -> None:
     """A rejected API key stays the more actionable diagnosis."""
-    job = SimpleNamespace(
+    job = _job_double(
         job_execution_id=12,
         job_execution_status=JobStatus.FAILED,
         skipped_as_already_running=False,
@@ -167,7 +195,7 @@ def test_failure_from_job_keeps_the_key_error_precedence() -> None:
 
 def test_generic_failure_is_unchanged() -> None:
     """Unclassified failures keep their existing contract."""
-    job = SimpleNamespace(
+    job = _job_double(
         job_execution_id=13,
         job_execution_status=JobStatus.FAILED,
         skipped_as_already_running=False,
@@ -197,7 +225,7 @@ def test_failure_from_job_never_touches_the_execution_instance() -> None:
         def status(self):
             raise AssertionError("expired ORM attribute was read")
 
-    job = SimpleNamespace(
+    job = _job_double(
         job_execution=_Exploding(),
         job_execution_id=99,
         job_execution_status=JobStatus.SUCCESS,
@@ -213,7 +241,7 @@ def test_failure_from_job_never_touches_the_execution_instance() -> None:
 
 def test_a_skipped_writer_reports_a_busy_writer() -> None:
     """A writer the scheduler skipped keeps the existing busy contract."""
-    job = SimpleNamespace(
+    job = _job_double(
         job_execution_id=None,
         job_execution_status=None,
         skipped_as_already_running=True,
@@ -232,7 +260,7 @@ def test_a_failed_start_is_not_reported_as_a_busy_writer() -> None:
     Classifying that database failure as a competing update would tell the user
     to wait for a run that never exists.
     """
-    job = SimpleNamespace(
+    job = _job_double(
         job_execution_id=None,
         job_execution_status=None,
         skipped_as_already_running=False,
@@ -251,10 +279,10 @@ class _FailingSession:
     def __init__(self) -> None:
         self.rollbacks = 0
 
-    async def execute(self, *args, **kwargs):
+    async def execute(self, *args: object, **kwargs: object) -> NoReturn:
         raise RuntimeError("connection lost")
 
-    async def commit(self) -> None:
+    async def commit(self) -> NoReturn:
         raise RuntimeError("connection lost")
 
     async def rollback(self) -> None:
@@ -272,7 +300,7 @@ async def test_completion_flag_requires_a_successful_write() -> None:
     job.job_config_type_value = "match_fetcher"
     db = _FailingSession()
 
-    await job.log_completion(cast(object, db), success=True)  # type: ignore[arg-type]
+    await job.log_completion(cast(AsyncSession, db), success=True)
 
     assert job._completion_logged is False
     # A status the database never accepted must not reach the classifier.
@@ -291,7 +319,7 @@ async def test_a_failed_completion_write_does_not_publish_its_status() -> None:
     db = _FailingSession()
 
     await job.log_completion(
-        cast(object, db),  # type: ignore[arg-type]
+        cast(AsyncSession, db),
         success=True,
         status=JobStatus.CANCELLED,
     )
@@ -307,22 +335,26 @@ class _RecordingSession:
         self.committed = False
         self.locked = False
 
-    async def get(self, _model, _identity, with_for_update: bool = False):
+    async def get(
+        self, _model: object, _identity: object, with_for_update: bool = False
+    ) -> object:
         self.locked = with_for_update
         return self._run
 
     async def commit(self) -> None:
         self.committed = True
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> Self:
         return self
 
-    async def __aexit__(self, *_exc) -> None:
+    async def __aexit__(self, *_exc: object) -> None:
         return None
 
 
 @pytest.mark.asyncio
-async def test_a_cancelled_sync_run_is_never_reopened(monkeypatch) -> None:
+async def test_a_cancelled_sync_run_is_never_reopened(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """An operator stop or startup recovery may cancel a run mid-flight.
 
     The orchestrator may still be running, and an unguarded write would set that
@@ -341,7 +373,9 @@ async def test_a_cancelled_sync_run_is_never_reopened(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_an_active_sync_run_still_advances(monkeypatch) -> None:
+async def test_an_active_sync_run_still_advances(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """The guard must not block the ordinary lifecycle."""
     run = SimpleNamespace(
         status="pending",
@@ -370,40 +404,42 @@ class _NoMergeSession:
     """
 
     def __init__(self) -> None:
-        self.added: list[Any] = []
+        self.added: list[Player] = []
 
-    async def get(self, _model, identity, **_kwargs):
+    async def get(self, _model: object, identity: object, **_kwargs: object) -> None:
         assert identity == FRESH_PUUID, "discovery must only load the resolved PUUID"
         return None
 
-    def add(self, instance: Any) -> None:
+    def add(self, instance: Player) -> None:
         self.added.append(instance)
 
     async def commit(self) -> None:
         return None
 
-    async def refresh(self, instance: Any) -> None:
+    async def refresh(self, instance: Player) -> None:
         instance.created_at = datetime.now(UTC)
         instance.updated_at = datetime.now(UTC)
 
-    async def execute(self, *_args, **_kwargs):
+    async def execute(self, *_args: object, **_kwargs: object) -> NoReturn:
         raise AssertionError("discovery must not run a statement against other rows")
 
-    async def scalars(self, *_args, **_kwargs):
+    async def scalars(self, *_args: object, **_kwargs: object) -> NoReturn:
         raise AssertionError("discovery must not search for rows sharing the Riot ID")
 
-    async def scalar(self, *_args, **_kwargs):
+    async def scalar(self, *_args: object, **_kwargs: object) -> NoReturn:
         raise AssertionError("discovery must not search for rows sharing the Riot ID")
 
-    async def delete(self, *_args, **_kwargs):
+    async def delete(self, *_args: object, **_kwargs: object) -> NoReturn:
         raise AssertionError("discovery must never delete a player row")
 
-    def expunge(self, *_args, **_kwargs):
+    def expunge(self, *_args: object, **_kwargs: object) -> NoReturn:
         raise AssertionError("discovery must not detach another player row")
 
 
 @pytest.mark.asyncio
-async def test_discovery_never_merges_a_row_sharing_the_riot_id(monkeypatch) -> None:
+async def test_discovery_never_merges_a_row_sharing_the_riot_id(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """A stale-looking row must survive discovery untouched.
 
     Discovery cannot tell a PUUID re-encrypted under a new developer account
@@ -444,10 +480,10 @@ class _CapturingSession:
     """Session that records the statements startup recovery issues."""
 
     def __init__(self) -> None:
-        self.executed: list[Any] = []
+        self.executed: list[Update] = []
         self.committed = False
 
-    async def execute(self, statement):
+    async def execute(self, statement: Update) -> SimpleNamespace:
         self.executed.append(statement)
         return SimpleNamespace(rowcount=1)
 
@@ -458,15 +494,24 @@ class _CapturingSession:
         return None
 
 
-def _compiled(statement) -> tuple[str, dict[str, Any]]:
+def _target_table(statement: Update) -> str:
+    """Return the qualified name of the table one UPDATE writes to."""
+    table = statement.table
+    assert isinstance(table, Table), "startup recovery updates a mapped table"
+    return table.fullname
+
+
+def _compiled(statement: Update) -> tuple[str, dict[str, Any]]:
     """Return one UPDATE's target table and its bound parameter values."""
     compiled = statement.compile()
-    return statement.table.fullname, dict(compiled.params)
+    return _target_table(statement), dict(compiled.params)
 
 
-def _indexed_active_statuses(model, index_name: str) -> set[str]:
+def _indexed_active_statuses(model: type[Base], index_name: str) -> set[str]:
     """Read the statuses a table's partial unique index actually covers."""
-    for index in model.__table__.indexes:
+    table = model.__table__
+    assert isinstance(table, Table), f"{model.__name__} must map to a real table"
+    for index in table.indexes:
         if index.name != index_name:
             continue
         predicate = str(index.dialect_options["postgresql"]["where"])
@@ -521,9 +566,9 @@ async def test_startup_recovery_matches_the_partial_index_exactly() -> None:
     await _cancel_orphaned_player_syncs(cast(AsyncSession, session))
 
     (statement,) = session.executed
-    predicate = str(
-        statement.whereclause.compile(compile_kwargs={"literal_binds": True})
-    )
+    whereclause = statement.whereclause
+    assert whereclause is not None, "the recovery update must be filtered"
+    predicate = str(whereclause.compile(compile_kwargs={"literal_binds": True}))
     listed = predicate.split("(")[1].split(")")[0]
     targeted = {entry.strip().strip("'") for entry in listed.split(",")}
 
@@ -546,12 +591,14 @@ async def test_startup_recovery_never_touches_matchmaking_analyses() -> None:
 
     await _cancel_orphaned_player_syncs(cast(AsyncSession, session))
 
-    touched = {statement.table.fullname for statement in session.executed}
+    touched = {_target_table(statement) for statement in session.executed}
     assert "core.matchmaking_analyses" not in touched
 
 
 @pytest.mark.asyncio
-async def test_task_cancellation_leaves_the_analysis_resumable(monkeypatch) -> None:
+async def test_task_cancellation_leaves_the_analysis_resumable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Process shutdown cancels the task; the persisted run must stay active.
 
     Writing a terminal row here would discard completed progress on every
@@ -566,16 +613,16 @@ async def test_task_cancellation_leaves_the_analysis_resumable(monkeypatch) -> N
     opened: list[object] = []
 
     class _Session:
-        async def __aenter__(self):
+        async def __aenter__(self) -> Self:
             opened.append(self)
             return self
 
-        async def __aexit__(self, *_exc) -> None:
+        async def __aexit__(self, *_exc: object) -> None:
             return None
 
     monkeypatch.setattr(analysis_module.db_manager, "get_session", lambda: _Session())
 
-    async def _cancelled(*_args, **_kwargs):
+    async def _cancelled(*_args: object, **_kwargs: object) -> NoReturn:
         raise asyncio.CancelledError()
 
     monkeypatch.setattr(analysis_module, "create_tracked_riot_api_client", _cancelled)
@@ -592,7 +639,9 @@ async def test_task_cancellation_leaves_the_analysis_resumable(monkeypatch) -> N
 
 
 @pytest.mark.asyncio
-async def test_failed_mandatory_recovery_stops_startup(monkeypatch) -> None:
+async def test_failed_mandatory_recovery_stops_startup(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Serving with sync rows stranded looks healthy while players poll forever.
 
     The route hands an orphaned active row back with `created=False`, so no
@@ -602,18 +651,21 @@ async def test_failed_mandatory_recovery_stops_startup(monkeypatch) -> None:
 
     ran: list[str] = []
 
+    async def _record_executions(_db: object) -> None:
+        ran.append("executions")
+
     class _Session:
-        async def __aenter__(self):
+        async def __aenter__(self) -> Self:
             return self
 
-        async def __aexit__(self, *_exc) -> None:
+        async def __aexit__(self, *_exc: object) -> None:
             return None
 
     monkeypatch.setattr(scheduler_module.db_manager, "get_session", lambda: _Session())
     monkeypatch.setattr(
         scheduler_module,
         "_mark_stale_jobs_as_failed",
-        AsyncMock(side_effect=lambda _db: ran.append("executions")),
+        AsyncMock(side_effect=_record_executions),
     )
     monkeypatch.setattr(
         scheduler_module,
@@ -628,15 +680,17 @@ async def test_failed_mandatory_recovery_stops_startup(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_a_failed_optional_recovery_does_not_stop_startup(monkeypatch) -> None:
+async def test_a_failed_optional_recovery_does_not_stop_startup(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Job-execution recovery stays best-effort; a degraded scheduler still serves."""
     from app.features.jobs import scheduler as scheduler_module
 
     class _Session:
-        async def __aenter__(self):
+        async def __aenter__(self) -> Self:
             return self
 
-        async def __aexit__(self, *_exc) -> None:
+        async def __aexit__(self, *_exc: object) -> None:
             return None
 
     monkeypatch.setattr(scheduler_module.db_manager, "get_session", lambda: _Session())
@@ -653,7 +707,9 @@ async def test_a_failed_optional_recovery_does_not_stop_startup(monkeypatch) -> 
 
 
 @pytest.mark.asyncio
-async def test_startup_recovery_failure_reaches_the_application(monkeypatch) -> None:
+async def test_startup_recovery_failure_reaches_the_application(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """`_start_scheduler_safely` swallows scheduler faults but not this one."""
     from app import main as main_module
 
@@ -674,22 +730,30 @@ async def test_startup_recovery_failure_reaches_the_application(monkeypatch) -> 
 
 
 @pytest.mark.asyncio
-async def test_each_recovery_step_gets_its_own_session(monkeypatch) -> None:
+async def test_each_recovery_step_gets_its_own_session(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """One step's failure — including its session teardown — must not skip the next."""
     from app.features.jobs import scheduler as scheduler_module
 
     calls: list[str] = []
     sessions: list[object] = []
 
+    async def _record_executions(_db: object) -> None:
+        calls.append("executions")
+
+    async def _record_player_syncs(_db: object) -> None:
+        calls.append("player_syncs")
+
     class _Session:
         def __init__(self, fail_on_exit: bool) -> None:
             self._fail_on_exit = fail_on_exit
 
-        async def __aenter__(self):
+        async def __aenter__(self) -> Self:
             sessions.append(self)
             return self
 
-        async def __aexit__(self, *_exc) -> None:
+        async def __aexit__(self, *_exc: object) -> None:
             if self._fail_on_exit:
                 raise RuntimeError("session teardown failed")
 
@@ -700,12 +764,12 @@ async def test_each_recovery_step_gets_its_own_session(monkeypatch) -> None:
     monkeypatch.setattr(
         scheduler_module,
         "_mark_stale_jobs_as_failed",
-        AsyncMock(side_effect=lambda _db: calls.append("executions")),
+        AsyncMock(side_effect=_record_executions),
     )
     monkeypatch.setattr(
         scheduler_module,
         "_cancel_orphaned_player_syncs",
-        AsyncMock(side_effect=lambda _db: calls.append("player_syncs")),
+        AsyncMock(side_effect=_record_player_syncs),
     )
 
     await scheduler_module._run_startup_recovery()
@@ -716,7 +780,7 @@ async def test_each_recovery_step_gets_its_own_session(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_scheduler_startup_runs_recovery(monkeypatch) -> None:
+async def test_scheduler_startup_runs_recovery(monkeypatch: pytest.MonkeyPatch) -> None:
     """Pins the real `start_scheduler` call site, not just the helper.
 
     A test that only calls `_run_startup_recovery()` would stay green if the

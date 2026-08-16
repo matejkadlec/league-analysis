@@ -2,6 +2,7 @@
 
 import json
 from pathlib import Path
+from typing import TypedDict
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -30,6 +31,21 @@ from app.core.riot_api.rate_limiter import RateLimiter
 LEAGUE_FIXTURES = json.loads(
     (Path(__file__).parent / "fixtures" / "league_entries_by_puuid.json").read_text()
 )
+
+
+class MatchListKwargs(TypedDict, total=False):
+    """The subset of `get_match_list_by_puuid` keywords the bounds cases vary.
+
+    Values here are all accepted by the signature; the rejection is a runtime
+    bounds check, not a typing one.
+    """
+
+    start: int
+    count: int
+    queue: int | str | QueueType
+    type: str | MatchType
+    start_time: int
+    end_time: int
 
 
 def test_client_requires_explicit_api_key() -> None:
@@ -102,7 +118,7 @@ async def test_by_puuid_league_contract_preserves_optional_league_id(
     expected_ids: list[str | None],
 ) -> None:
     client = RiotAPIClient(api_key="RGAPI-test-only")
-    client._make_request = AsyncMock(return_value=LEAGUE_FIXTURES[fixture_name])  # type: ignore[method-assign]
+    client._make_request = AsyncMock(return_value=LEAGUE_FIXTURES[fixture_name])
 
     entries = await client.get_league_entries_by_puuid("sanitized-puuid")
 
@@ -113,7 +129,7 @@ async def test_by_puuid_league_contract_preserves_optional_league_id(
 @pytest.mark.asyncio
 async def test_by_puuid_league_contract_keeps_rank_fields_required() -> None:
     client = RiotAPIClient(api_key="RGAPI-test-only")
-    client._make_request = AsyncMock(return_value=LEAGUE_FIXTURES["malformed"])  # type: ignore[method-assign]
+    client._make_request = AsyncMock(return_value=LEAGUE_FIXTURES["malformed"])
 
     with pytest.raises(PydanticValidationError) as error:
         await client.get_league_entries_by_puuid("sanitized-puuid")
@@ -155,11 +171,11 @@ def test_platform_mapping_and_endpoint_parameters_fail_closed() -> None:
     ],
 )
 async def test_match_list_rejects_invalid_provider_parameters(
-    kwargs: dict[str, object], message: str
+    kwargs: MatchListKwargs, message: str
 ) -> None:
     client = RiotAPIClient(api_key="RGAPI-test-only")
     with pytest.raises(ValueError, match=message):
-        await client.get_match_list_by_puuid("sanitized-puuid", **kwargs)  # type: ignore[arg-type]
+        await client.get_match_list_by_puuid("sanitized-puuid", **kwargs)
 
 
 def test_adaptive_rate_windows_keep_original_reset_and_routing_scope() -> None:

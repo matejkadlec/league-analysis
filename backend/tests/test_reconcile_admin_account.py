@@ -67,14 +67,18 @@ def test_listener_configuration_requires_only_loopback_addresses() -> None:
     assert not is_loopback_listener_configuration("localhost,0.0.0.0")
 
 
-def test_password_stdin_reads_without_printing(monkeypatch) -> None:
+def test_password_stdin_reads_without_printing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """The non-interactive path consumes one hidden input line."""
     monkeypatch.setattr("sys.stdin", io.StringIO("private-value\nignored\n"))
 
     assert read_password(password_stdin=True) == "private-value"
 
 
-def test_password_stdin_rejects_an_empty_value(monkeypatch) -> None:
+def test_password_stdin_rejects_an_empty_value(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """An empty input cannot result in a usable account."""
     monkeypatch.setattr("sys.stdin", io.StringIO("\n"))
 

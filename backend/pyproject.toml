@@ -39,8 +39,14 @@ packages = ["app"]
 [tool.pyright]
 pythonVersion = "3.14"
 typeCheckingMode = "strict"
-include = ["app"]
-exclude = ["**/__pycache__", "**/.pytest_cache", "**/tests", ".venv"]
+# `alembic` is deliberately outside this list. Revisions are an append-only
+# record of what was already applied to a live database, so editing a merged
+# one to satisfy a type checker changes a historical document without changing
+# the schema it produced, and `env.py` is framework boilerplate. The schema
+# authority is the revision itself plus `scripts/validate_migrations.py`, which
+# is checked.
+include = ["app", "tests", "scripts"]
+exclude = ["**/__pycache__", "**/.pytest_cache", ".venv"]
 # Without these, Pyright resolves imports against whatever interpreter it finds
 # rather than this project's environment, and every third-party import becomes
 # `Unknown`. That inflates a strict-mode run from a few hundred real errors to
@@ -73,6 +79,18 @@ reportUnnecessaryTypeIgnoreComment = "error"
 # Requires @override on every overriding method, so a renamed or mistyped base
 # method turns into a type error instead of a silently orphaned override.
 reportImplicitOverride = "error"
+
+# `tests` is checked at the same strictness as `app`, with one exception. A
+# test suite legitimately reaches for the private helper it is testing:
+# `_binding_signature`, `_upsert_match` and friends are exactly the units worth
+# covering directly. Leaving reportPrivateUsage on would force the choice
+# between widening a production interface for the test's benefit or not testing
+# the unit at all, and both are worse than the rule. Every other strict
+# diagnostic still applies here — notably reportArgumentType, which is what
+# catches a test asserting against a signature the application no longer has.
+[[tool.pyright.executionEnvironments]]
+root = "tests"
+reportPrivateUsage = "none"
 
 [tool.pytest.ini_options]
 # --disable-socket: the suite is offline by construction — it mocks Riot and
