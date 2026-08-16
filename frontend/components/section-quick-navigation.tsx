@@ -38,8 +38,11 @@ export function SectionQuickNavigation({
   };
 
   return (
+    // Hidden below `sm`: the collapsed tab is a fixed 40px, which is ~10% of a
+    // 390px viewport that it never gives back. It is a shortcut to sections
+    // the page already scrolls to, so a phone loses no reach.
     <div
-      className="fixed right-0 top-1/2 z-40 -translate-y-1/2"
+      className="fixed right-0 top-1/2 z-40 hidden -translate-y-1/2 sm:block"
       data-testid="section-quick-navigation"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}

@@ -414,9 +414,12 @@ export function JobExecutions({
         open={!!internalSelectedExecution}
         onOpenChange={(open) => !open && handleCloseDialog()}
       >
-        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="dialog-white-border max-w-5xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Execution Details</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5 text-gold-base" />
+              Execution Details
+            </DialogTitle>
           </DialogHeader>
 
           {internalSelectedExecution && (
