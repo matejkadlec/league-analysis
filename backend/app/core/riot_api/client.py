@@ -29,6 +29,7 @@ from .models import (
     LegacyLeagueEntryDTO,
     MatchDTO,
     MatchListDTO,
+    MatchTimelineDTO,
     SummonerDTO,
 )
 from .rate_limiter import RateLimiter
@@ -562,7 +563,7 @@ class RiotAPIClient:
 
     async def get_match_timeline(
         self, match_id: str, region: Region | None = None
-    ) -> dict[str, Any]:
+    ) -> MatchTimelineDTO:
         """Get match timeline by match ID."""
         used_region = region or self.region
         self._record_api_call(
@@ -572,7 +573,9 @@ class RiotAPIClient:
         )
         url = self.endpoints.match_timeline_by_id(match_id, region)
         response = await self._make_request(url)
-        return self._require_object(response, "match timeline")
+        return MatchTimelineDTO.model_validate(
+            self._require_object(response, "match timeline")
+        )
 
     # League endpoints
     async def get_league_entries_by_summoner_id(

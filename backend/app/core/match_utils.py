@@ -15,14 +15,14 @@ instead of implementing its own storage logic. This handles:
 - Timeline objective aggregates are fetched and stored when available
 """
 
-from typing import Any, Protocol
+from typing import Protocol
 
 import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db_session import rollback_quietly
-from app.core.riot_api.models import MatchDTO, ParticipantDTO
+from app.core.riot_api.models import MatchDTO, MatchTimelineDTO, ParticipantDTO
 from app.features.matches.models import Match
 from app.features.matches.participants import MatchParticipant
 from app.features.matches.timeline import replace_match_timeline_rows
@@ -36,12 +36,12 @@ class MatchDataSource(Protocol):
     """The slice of the Riot client this module consumes.
 
     `RiotAPIClient` satisfies it structurally; naming the two calls here keeps
-    the timeline payload typed as a JSON object instead of a bare `dict`.
+    both responses typed as the validated Riot DTOs rather than bare dicts.
     """
 
     async def get_match(self, match_id: str) -> MatchDTO: ...
 
-    async def get_match_timeline(self, match_id: str) -> dict[str, Any]: ...
+    async def get_match_timeline(self, match_id: str) -> MatchTimelineDTO: ...
 
 
 async def ensure_match_fully_analyzed(
@@ -78,7 +78,7 @@ async def ensure_match_fully_analyzed(
     if match_dto is None:
         return row is not None
 
-    timeline_payload: dict[str, Any] | None = None
+    timeline_payload: MatchTimelineDTO | None = None
     try:
         timeline_payload = await riot_client.get_match_timeline(match_id)
     except Exception as timeline_error:
@@ -151,7 +151,7 @@ async def _upsert_match_participant(
 async def upsert_match(
     db: AsyncSession,
     match_dto: MatchDTO,
-    timeline_payload: dict[str, Any] | None = None,
+    timeline_payload: MatchTimelineDTO | None = None,
 ) -> None:
     """Upsert a match and its participants with fully_analyzed=True.
 

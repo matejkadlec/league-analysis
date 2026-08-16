@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Awaitable, Callable
-from typing import Any
 
 import structlog
 from sqlalchemy import select
@@ -12,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.riot_api.client import RiotAPIClient
 from app.core.riot_api.db_rate_limiter import DBRateLimiter
-from app.core.riot_api.models import MatchListDTO
+from app.core.riot_api.models import MatchListDTO, MatchTimelineDTO
 
 from .match_sync import AnalysisMatchResult, ReprocessMatch
 from .models import Match
@@ -154,7 +153,7 @@ async def fetch_analysis_timeline(
     puuid: str,
     match_id: str,
     rate_limiter: DBRateLimiter | None,
-) -> tuple[dict[str, Any] | None, bool]:
+) -> tuple[MatchTimelineDTO | None, bool]:
     """Fetch a timeline for analysis. The bool is True when the limiter blocked."""
     try:
         timeline_requested = False

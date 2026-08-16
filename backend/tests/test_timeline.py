@@ -3,6 +3,7 @@
 from types import SimpleNamespace
 from typing import cast
 
+from app.core.riot_api.models import MatchTimelineDTO
 from app.features.matches.match_sync import build_synthetic_match_dto
 from app.features.matches.participants import MatchParticipant
 from app.features.matches.timeline import build_match_timeline_rows
@@ -31,6 +32,14 @@ def test_timeline_rows_tolerate_missing_game_version() -> None:
     match_dto = build_synthetic_match_dto("EUN1_1", [participant])
     rows = build_match_timeline_rows(
         match_dto,
-        {"info": {"frameInterval": 60000, "frames": [{"events": []}]}},
+        MatchTimelineDTO.model_validate(
+            {
+                "metadata": {"matchId": "EUN1_1", "participants": []},
+                "info": {
+                    "frameInterval": 60000,
+                    "frames": [{"timestamp": 0, "events": []}],
+                },
+            }
+        ),
     )
     assert rows == [] or all("match_id" in row for row in rows)

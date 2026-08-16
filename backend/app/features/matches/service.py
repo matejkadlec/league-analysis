@@ -21,7 +21,7 @@ from app.core.riot_api.errors import (
     RateLimitError,
     RiotAPIError,
 )
-from app.core.riot_api.models import MatchDTO
+from app.core.riot_api.models import MatchDTO, MatchTimelineDTO
 from app.core.riot_api.transformers import MatchTransformer
 from app.features.players.models import Player
 
@@ -743,7 +743,7 @@ class MatchService:
         try:
             match_dto = await riot_api_client.get_match(match_id)
             if match_dto:
-                timeline_payload: dict[str, Any] | None = None
+                timeline_payload: MatchTimelineDTO | None = None
                 try:
                     timeline_payload = await riot_api_client.get_match_timeline(
                         match_id
@@ -1075,7 +1075,7 @@ class MatchService:
         self,
         match_dto: MatchDTO,
         default_platform: str = "EUN1",
-        timeline_payload: dict[str, Any] | None = None,
+        timeline_payload: MatchTimelineDTO | None = None,
     ) -> Match:
         """Store match and participants from Riot API DTO.
 
@@ -1316,7 +1316,7 @@ class MatchService:
     async def _reprocess_match(
         self,
         match_dto: MatchDTO,
-        timeline_payload: dict[str, Any] | None = None,
+        timeline_payload: MatchTimelineDTO | None = None,
     ) -> None:
         """Update existing match or insert new match using merge (upsert)."""
         await _ensure_riot_writer_maintenance_is_inactive(self.db)

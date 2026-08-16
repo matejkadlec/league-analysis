@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from datetime import datetime
-from typing import Any, Protocol, TypeIs
+from typing import Any, Protocol
 
 import structlog
 from sqlalchemy import (
@@ -26,6 +26,11 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from app.core.models import Base
+from app.core.riot_api.models import (
+    MatchTimelineDTO,
+    MatchTimelineEventDTO,
+    MatchTimelineFrameDTO,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -252,23 +257,13 @@ Index("idx_match_timelines_puuid", MatchTimeline.puuid)
 Index("idx_match_timelines_match_team", MatchTimeline.match_id, MatchTimeline.team_id)
 
 
-def _is_json_object(value: object) -> TypeIs[dict[str, Any]]:
-    """Narrow an unvalidated timeline fragment to a string-keyed object.
-
-    Timeline payloads arrive straight off Riot's wire, so a declared dict type
-    is a claim about the format rather than a guarantee. The runtime checks
-    below stay, and narrowing through them keeps each fragment typed.
-    """
-    return isinstance(value, dict)
-
-
-def _is_json_array(value: object) -> TypeIs[list[Any]]:
-    """Narrow an unvalidated timeline fragment to an array."""
-    return isinstance(value, list)
-
-
 def _normalize_int(value: object) -> int | None:
-    """Normalize values to int where possible."""
+    """Normalize values to int where possible.
+
+    The only remaining caller reads participant identity off `TimelineMatch`,
+    whose implementations include a synthetic DTO rebuilt from stored rows —
+    still a structural promise rather than a validated one.
+    """
     if isinstance(value, bool):
         return None
     if isinstance(value, int):
@@ -280,9 +275,13 @@ def _normalize_int(value: object) -> int | None:
     return None
 
 
-def _normalize_text(value: object) -> str | None:
-    """Normalize values to uppercase non-empty text."""
-    if not isinstance(value, str):
+def _normalize_text(value: str | None) -> str | None:
+    """Normalize an optional Riot text field to uppercase non-empty text.
+
+    The DTO types these fields but does not constrain their contents, so the
+    case-folding and empty-string handling here stay load-bearing.
+    """
+    if value is None:
         return None
     cleaned = value.strip()
     if not cleaned:
@@ -304,11 +303,11 @@ def _uses_historical_atakhan_contract(game_version: str) -> bool:
 
 
 def _collect_involved_participants(
-    event: dict[str, Any],
+    event: MatchTimelineEventDTO,
     valid_participant_ids: set[int],
 ) -> tuple[int | None, list[int]]:
     """Extract unique participant IDs involved in an objective event."""
-    killer_raw = _normalize_int(event.get("killerId"))
+    killer_raw = event.killer_id
     killer_id = killer_raw if killer_raw in valid_participant_ids else None
 
     involved: list[int] = []
@@ -318,22 +317,19 @@ def _collect_involved_participants(
         involved.append(killer_id)
         seen.add(killer_id)
 
-    assisting_ids = event.get("assistingParticipantIds")
-    if _is_json_array(assisting_ids):
-        for assist_raw in assisting_ids:
-            assist_id = _normalize_int(assist_raw)
-            if assist_id is None or assist_id not in valid_participant_ids:
-                continue
-            if assist_id in seen:
-                continue
-            involved.append(assist_id)
-            seen.add(assist_id)
+    for assist_id in event.assisting_participant_ids or []:
+        if assist_id not in valid_participant_ids:
+            continue
+        if assist_id in seen:
+            continue
+        involved.append(assist_id)
+        seen.add(assist_id)
 
     return killer_id, involved
 
 
 def _determine_killer_team_id(
-    event: dict[str, Any],
+    event: MatchTimelineEventDTO,
     killer_id: int | None,
     participant_team_by_id: dict[int, int],
 ) -> int | None:
@@ -343,12 +339,12 @@ def _determine_killer_team_id(
         if killer_team in VALID_TEAM_IDS:
             return killer_team
 
-    explicit_team = _normalize_int(event.get("killerTeamId"))
+    explicit_team = event.killer_team_id
     if explicit_team in VALID_TEAM_IDS:
         return explicit_team
 
-    if event.get("type") == "BUILDING_KILL":
-        destroyed_team = _normalize_int(event.get("teamId"))
+    if event.type == "BUILDING_KILL":
+        destroyed_team = event.team_id
         if destroyed_team == 100:
             return 200
         if destroyed_team == 200:
@@ -359,7 +355,7 @@ def _determine_killer_team_id(
 
 def _append_compact_objective_event(
     row: dict[str, Any],
-    timestamp: int | None,
+    timestamp: int,
     objective: str,
     role: str,
     lane: str | None = None,
@@ -367,9 +363,6 @@ def _append_compact_objective_event(
     monster_type: str | None = None,
 ) -> None:
     """Append a compact objective event entry to row JSON."""
-    if timestamp is None:
-        return
-
     entry: dict[str, Any] = {"t": timestamp, "o": objective, "r": role}
     if lane:
         entry["l"] = lane
@@ -446,21 +439,6 @@ def _new_participant_row(
         "team_other_epic_monsters_slain": {},
         "objective_events": [],
     }
-
-
-def _extract_timeline_frames(
-    timeline_payload: object,
-) -> tuple[dict[str, Any], list[Any]] | None:
-    """Return `(info, frames)` when the timeline payload has a usable shape."""
-    if not timeline_payload or not _is_json_object(timeline_payload):
-        return None
-    info = timeline_payload.get("info")
-    if not _is_json_object(info):
-        return None
-    frames = info.get("frames")
-    if not _is_json_array(frames):
-        return None
-    return info, frames
 
 
 def _collect_participant_rows(
@@ -573,7 +551,7 @@ def _credit_known_objective(
     row: dict[str, Any],
     objective: str,
     role: str,
-    timestamp: int | None,
+    timestamp: int,
     *,
     lane: str | None = None,
     lane_field: str | None = None,
@@ -601,7 +579,7 @@ def _credit_monster_takedown(
     row: dict[str, Any],
     objective: str | None,
     role: str,
-    timestamp: int | None,
+    timestamp: int,
     monster_type: str,
     monster_subtype: str | None,
 ) -> None:
@@ -633,7 +611,7 @@ def _record_unknown_building(
     building_type: str | None,
     tower_type: str | None,
     lane_type: str | None,
-    timestamp: int | None,
+    timestamp: int,
     killer_id: int | None,
     involved: list[int],
     rows_by_participant_id: dict[int, dict[str, Any]],
@@ -660,7 +638,7 @@ def _record_unknown_building(
 
 
 def _apply_building_kill(
-    event: dict[str, Any],
+    event: MatchTimelineEventDTO,
     match_id: str,
     killer_id: int | None,
     involved: list[int],
@@ -669,10 +647,10 @@ def _apply_building_kill(
     team_totals: dict[int, dict[str, Any]],
 ) -> None:
     """Apply a BUILDING_KILL event to team totals and participant rows."""
-    building_type = _normalize_text(event.get("buildingType"))
-    lane_type = _normalize_text(event.get("laneType"))
-    tower_type = _normalize_text(event.get("towerType"))
-    timestamp = _normalize_int(event.get("timestamp"))
+    building_type = _normalize_text(event.building_type)
+    lane_type = _normalize_text(event.lane_type)
+    tower_type = _normalize_text(event.tower_type)
+    timestamp = event.timestamp
     objective, team_total_field, lane_field, subtype = _resolve_building_objective(
         building_type, tower_type
     )
@@ -704,7 +682,7 @@ def _apply_building_kill(
 
 
 def _apply_elite_monster_kill(
-    event: dict[str, Any],
+    event: MatchTimelineEventDTO,
     match_id: str,
     game_version: str,
     historical_atakhan: bool,
@@ -715,9 +693,9 @@ def _apply_elite_monster_kill(
     team_totals: dict[int, dict[str, Any]],
 ) -> None:
     """Apply an ELITE_MONSTER_KILL event to team totals and participant rows."""
-    monster_type = _normalize_text(event.get("monsterType"))
-    monster_subtype = _normalize_text(event.get("monsterSubType"))
-    timestamp = _normalize_int(event.get("timestamp"))
+    monster_type = _normalize_text(event.monster_type)
+    monster_subtype = _normalize_text(event.monster_sub_type)
+    timestamp = event.timestamp
     if monster_type is None:
         return
 
@@ -753,7 +731,7 @@ def _apply_elite_monster_kill(
 
 
 def _process_timeline_event(
-    event: object,
+    event: MatchTimelineEventDTO,
     match_id: str,
     game_version: str,
     historical_atakhan: bool,
@@ -763,9 +741,7 @@ def _process_timeline_event(
     team_totals: dict[int, dict[str, Any]],
 ) -> None:
     """Dispatch one timeline event when it is an objective kill."""
-    if not _is_json_object(event):
-        return
-    event_type = event.get("type")
+    event_type = event.type
     if event_type not in {"BUILDING_KILL", "ELITE_MONSTER_KILL"}:
         return
 
@@ -796,7 +772,7 @@ def _process_timeline_event(
 
 
 def _process_timeline_frames(
-    frames: list[Any],
+    frames: Sequence[MatchTimelineFrameDTO],
     match_id: str,
     game_version: str,
     historical_atakhan: bool,
@@ -807,12 +783,7 @@ def _process_timeline_frames(
     """Walk timeline frames and apply recognized objective events."""
     valid_participant_ids = set(rows_by_participant_id.keys())
     for frame in frames:
-        if not _is_json_object(frame):
-            continue
-        events = frame.get("events")
-        if not _is_json_array(events):
-            continue
-        for event in events:
+        for event in frame.events:
             _process_timeline_event(
                 event,
                 match_id,
@@ -860,17 +831,17 @@ def _finalize_timeline_rows(
 
 def build_match_timeline_rows(
     match_dto: TimelineMatch,
-    timeline_payload: dict[str, Any] | None,
+    timeline_payload: MatchTimelineDTO | None,
 ) -> list[dict[str, Any]]:
     """Build participant timeline aggregates for objective-focused analytics."""
-    extracted = _extract_timeline_frames(timeline_payload)
-    if extracted is None:
+    if timeline_payload is None:
         return []
 
-    info, frames = extracted
+    info = timeline_payload.info
+    frames = info.frames
     participant_team_by_id, rows_by_participant_id = _collect_participant_rows(
         match_dto,
-        _normalize_int(info.get("frameInterval")),
+        info.frame_interval,
         len(frames),
     )
     if not rows_by_participant_id:
@@ -893,7 +864,7 @@ def build_match_timeline_rows(
 async def replace_match_timeline_rows(
     db: AsyncSession,
     match_dto: TimelineMatch,
-    timeline_payload: dict[str, Any] | None,
+    timeline_payload: MatchTimelineDTO | None,
 ) -> int:
     """Replace timeline rows for one match when timeline payload is available."""
     rows = build_match_timeline_rows(match_dto, timeline_payload)

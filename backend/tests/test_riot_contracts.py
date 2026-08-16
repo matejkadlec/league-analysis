@@ -7,7 +7,12 @@ from typing import Any
 
 import pytest
 
-from app.core.riot_api.models import AccountDTO, MatchDTO, SummonerDTO
+from app.core.riot_api.models import (
+    AccountDTO,
+    MatchDTO,
+    MatchTimelineDTO,
+    SummonerDTO,
+)
 from app.core.riot_api.transformers import MatchTransformer
 from app.features.matches.timeline import build_match_timeline_rows
 
@@ -26,7 +31,16 @@ def _match_payload(queue_id: str) -> dict[str, Any]:
     return payload
 
 
-def _timeline_payload(queue_id: str) -> dict[str, Any]:
+def _timeline_metadata(queue_id: str) -> dict[str, Any]:
+    """The metadata block Riot always sends and the timeline DTO requires.
+
+    Aggregation never reads it — the match DTO supplies match identity — but
+    the client now validates the whole response, so the sample carries it.
+    """
+    return deepcopy(FIXTURE["matches"][queue_id]["metadata"])
+
+
+def _timeline_payload(queue_id: str) -> MatchTimelineDTO:
     event_samples = FIXTURE["matches"][queue_id]["timeline"]["info"]["events"]
     events: list[dict[str, Any]] = []
     for index, sample in enumerate(event_samples, start=1):
@@ -39,7 +53,15 @@ def _timeline_payload(queue_id: str) -> dict[str, Any]:
             }
         )
         events.append(event)
-    return {"info": {"frameInterval": 60_000, "frames": [{"events": events}]}}
+    return MatchTimelineDTO.model_validate(
+        {
+            "metadata": _timeline_metadata(queue_id),
+            "info": {
+                "frameInterval": 60_000,
+                "frames": [{"timestamp": 0, "events": events}],
+            },
+        }
+    )
 
 
 def test_current_account_and_summoner_contracts_allow_provider_optionality() -> None:
@@ -109,35 +131,40 @@ def test_current_mode_timeline_samples_remain_parseable(queue_id: str) -> None:
 
 def test_atakhan_is_historical_and_unknown_current_objectives_are_retained() -> None:
     current = MatchDTO.model_validate(_match_payload("420"))
-    current_timeline = {
-        "info": {
-            "frames": [
-                {
-                    "events": [
-                        {
-                            "type": "ELITE_MONSTER_KILL",
-                            "monsterType": "ATAKHAN",
-                            "monsterSubType": "RUINOUS_ATAKHAN",
-                            "killerId": 1,
-                            "timestamp": 60_000,
-                        },
-                        {
-                            "type": "ELITE_MONSTER_KILL",
-                            "monsterType": "FUTURE_MONSTER",
-                            "killerId": 1,
-                            "timestamp": 120_000,
-                        },
-                        {
-                            "type": "BUILDING_KILL",
-                            "buildingType": "FUTURE_BUILDING",
-                            "killerId": 1,
-                            "timestamp": 180_000,
-                        },
-                    ]
-                }
-            ]
+    current_timeline = MatchTimelineDTO.model_validate(
+        {
+            "metadata": _timeline_metadata("420"),
+            "info": {
+                "frameInterval": 60_000,
+                "frames": [
+                    {
+                        "timestamp": 0,
+                        "events": [
+                            {
+                                "type": "ELITE_MONSTER_KILL",
+                                "monsterType": "ATAKHAN",
+                                "monsterSubType": "RUINOUS_ATAKHAN",
+                                "killerId": 1,
+                                "timestamp": 60_000,
+                            },
+                            {
+                                "type": "ELITE_MONSTER_KILL",
+                                "monsterType": "FUTURE_MONSTER",
+                                "killerId": 1,
+                                "timestamp": 120_000,
+                            },
+                            {
+                                "type": "BUILDING_KILL",
+                                "buildingType": "FUTURE_BUILDING",
+                                "killerId": 1,
+                                "timestamp": 180_000,
+                            },
+                        ],
+                    }
+                ],
+            },
         }
-    }
+    )
     current_row = build_match_timeline_rows(current, current_timeline)[0]
     assert current_row["atakhan_takedowns"] == 0
     assert current_row["other_epic_monster_takedowns"] == {

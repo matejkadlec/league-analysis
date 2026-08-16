@@ -257,3 +257,244 @@ class LegacyLeagueEntryDTO(LeagueEntryDTO):
 
     summoner_id: str | None = Field(default=None, alias="summonerId")
     summoner_name: str | None = Field(default=None, alias="summonerName")
+
+
+# ---------------------------------------------------------------------------
+# Match-V5 timeline
+#
+# Generated from Riot's published OpenAPI specification rather than written by
+# hand, and the slice these mirror is vendored at
+# `tests/data/riot_match_v5_timeline_schema.json` so
+# `test_timeline_dto_matches_riot_schema` can prove they still agree without a
+# network call. Refresh both with `tests/data/refresh_timeline_schema.py`.
+#
+# Only the structural spine is required: metadata/info, frames, and each
+# frame's timestamp and events. Every leaf is optional even where Riot's
+# specification marks it required, because the specification is generated from
+# a reference that is documented to carry "small errors or missing DTO specs",
+# and this codebase has already been bitten by exactly that — see
+# `LeagueEntryDTO.league_id` above. A ValidationError on a field nothing reads
+# would be a regression against the `dict.get()` access this replaces.
+class MatchTimelinePositionDTO(BaseModel):
+    """A map coordinate."""
+
+    x: int
+    y: int
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class MatchTimelineChampionStatsDTO(BaseModel):
+    """Champion combat stats at one frame."""
+
+    ability_haste: int | None = Field(default=None, alias="abilityHaste")
+    ability_power: int | None = Field(default=None, alias="abilityPower")
+    armor: int | None = Field(default=None)
+    armor_pen: int | None = Field(default=None, alias="armorPen")
+    armor_pen_percent: int | None = Field(default=None, alias="armorPenPercent")
+    attack_damage: int | None = Field(default=None, alias="attackDamage")
+    attack_speed: int | None = Field(default=None, alias="attackSpeed")
+    bonus_armor_pen_percent: int | None = Field(
+        default=None, alias="bonusArmorPenPercent"
+    )
+    bonus_magic_pen_percent: int | None = Field(
+        default=None, alias="bonusMagicPenPercent"
+    )
+    cc_reduction: int | None = Field(default=None, alias="ccReduction")
+    cooldown_reduction: int | None = Field(default=None, alias="cooldownReduction")
+    health: int | None = Field(default=None)
+    health_max: int | None = Field(default=None, alias="healthMax")
+    health_regen: int | None = Field(default=None, alias="healthRegen")
+    lifesteal: int | None = Field(default=None)
+    magic_pen: int | None = Field(default=None, alias="magicPen")
+    magic_pen_percent: int | None = Field(default=None, alias="magicPenPercent")
+    magic_resist: int | None = Field(default=None, alias="magicResist")
+    movement_speed: int | None = Field(default=None, alias="movementSpeed")
+    omnivamp: int | None = Field(default=None)
+    physical_vamp: int | None = Field(default=None, alias="physicalVamp")
+    power: int | None = Field(default=None)
+    power_max: int | None = Field(default=None, alias="powerMax")
+    power_regen: int | None = Field(default=None, alias="powerRegen")
+    spell_vamp: int | None = Field(default=None, alias="spellVamp")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class MatchTimelineDamageStatsDTO(BaseModel):
+    """Cumulative damage totals at one frame."""
+
+    magic_damage_done: int | None = Field(default=None, alias="magicDamageDone")
+    magic_damage_done_to_champions: int | None = Field(
+        default=None, alias="magicDamageDoneToChampions"
+    )
+    magic_damage_taken: int | None = Field(default=None, alias="magicDamageTaken")
+    physical_damage_done: int | None = Field(default=None, alias="physicalDamageDone")
+    physical_damage_done_to_champions: int | None = Field(
+        default=None, alias="physicalDamageDoneToChampions"
+    )
+    physical_damage_taken: int | None = Field(default=None, alias="physicalDamageTaken")
+    total_damage_done: int | None = Field(default=None, alias="totalDamageDone")
+    total_damage_done_to_champions: int | None = Field(
+        default=None, alias="totalDamageDoneToChampions"
+    )
+    total_damage_taken: int | None = Field(default=None, alias="totalDamageTaken")
+    true_damage_done: int | None = Field(default=None, alias="trueDamageDone")
+    true_damage_done_to_champions: int | None = Field(
+        default=None, alias="trueDamageDoneToChampions"
+    )
+    true_damage_taken: int | None = Field(default=None, alias="trueDamageTaken")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class MatchTimelineVictimDamageDTO(BaseModel):
+    """One damage contribution to a kill."""
+
+    basic: bool | None = Field(default=None)
+    magic_damage: int | None = Field(default=None, alias="magicDamage")
+    name: str | None = Field(default=None)
+    participant_id: int | None = Field(default=None, alias="participantId")
+    physical_damage: int | None = Field(default=None, alias="physicalDamage")
+    spell_name: str | None = Field(default=None, alias="spellName")
+    spell_slot: int | None = Field(default=None, alias="spellSlot")
+    true_damage: int | None = Field(default=None, alias="trueDamage")
+    type: str | None = Field(default=None)
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class MatchTimelineParticipantFrameDTO(BaseModel):
+    """Per-participant state at one frame."""
+
+    champion_stats: MatchTimelineChampionStatsDTO | None = Field(
+        default=None, alias="championStats"
+    )
+    current_gold: int | None = Field(default=None, alias="currentGold")
+    damage_stats: MatchTimelineDamageStatsDTO | None = Field(
+        default=None, alias="damageStats"
+    )
+    gold_per_second: int | None = Field(default=None, alias="goldPerSecond")
+    jungle_minions_killed: int | None = Field(default=None, alias="jungleMinionsKilled")
+    level: int | None = Field(default=None)
+    minions_killed: int | None = Field(default=None, alias="minionsKilled")
+    participant_id: int | None = Field(default=None, alias="participantId")
+    position: MatchTimelinePositionDTO | None = Field(default=None)
+    time_enemy_spent_controlled: int | None = Field(
+        default=None, alias="timeEnemySpentControlled"
+    )
+    total_gold: int | None = Field(default=None, alias="totalGold")
+    xp: int | None = Field(default=None)
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class MatchTimelineEventDTO(BaseModel):
+    """A single timeline event.
+
+    Events are polymorphic: Riot marks only `timestamp` and `type` as always
+    present, and every other field belongs to a subset of event types."""
+
+    timestamp: int
+    real_timestamp: int | None = Field(default=None, alias="realTimestamp")
+    type: str
+    item_id: int | None = Field(default=None, alias="itemId")
+    participant_id: int | None = Field(default=None, alias="participantId")
+    level_up_type: str | None = Field(default=None, alias="levelUpType")
+    skill_slot: int | None = Field(default=None, alias="skillSlot")
+    creator_id: int | None = Field(default=None, alias="creatorId")
+    ward_type: str | None = Field(default=None, alias="wardType")
+    level: int | None = Field(default=None)
+    assisting_participant_ids: list[int] | None = Field(
+        default=None, alias="assistingParticipantIds"
+    )
+    bounty: int | None = Field(default=None)
+    kill_streak_length: int | None = Field(default=None, alias="killStreakLength")
+    killer_id: int | None = Field(default=None, alias="killerId")
+    position: MatchTimelinePositionDTO | None = Field(default=None)
+    victim_damage_dealt: list[MatchTimelineVictimDamageDTO] | None = Field(
+        default=None, alias="victimDamageDealt"
+    )
+    victim_damage_received: list[MatchTimelineVictimDamageDTO] | None = Field(
+        default=None, alias="victimDamageReceived"
+    )
+    victim_id: int | None = Field(default=None, alias="victimId")
+    kill_type: str | None = Field(default=None, alias="killType")
+    lane_type: str | None = Field(default=None, alias="laneType")
+    team_id: int | None = Field(default=None, alias="teamId")
+    multi_kill_length: int | None = Field(default=None, alias="multiKillLength")
+    killer_team_id: int | None = Field(default=None, alias="killerTeamId")
+    monster_type: str | None = Field(default=None, alias="monsterType")
+    monster_sub_type: str | None = Field(default=None, alias="monsterSubType")
+    building_type: str | None = Field(default=None, alias="buildingType")
+    tower_type: str | None = Field(default=None, alias="towerType")
+    after_id: int | None = Field(default=None, alias="afterId")
+    before_id: int | None = Field(default=None, alias="beforeId")
+    gold_gain: int | None = Field(default=None, alias="goldGain")
+    game_id: int | None = Field(default=None, alias="gameId")
+    winning_team: int | None = Field(default=None, alias="winningTeam")
+    transform_type: str | None = Field(default=None, alias="transformType")
+    name: str | None = Field(default=None)
+    shutdown_bounty: int | None = Field(default=None, alias="shutdownBounty")
+    actual_start_time: int | None = Field(default=None, alias="actualStartTime")
+    feat_type: int | None = Field(default=None, alias="featType")
+    feat_value: int | None = Field(default=None, alias="featValue")
+    victim_teamfight_damage_dealt: list[MatchTimelineVictimDamageDTO] | None = Field(
+        default=None, alias="victimTeamfightDamageDealt"
+    )
+    victim_teamfight_damage_received: list[MatchTimelineVictimDamageDTO] | None = Field(
+        default=None, alias="victimTeamfightDamageReceived"
+    )
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class MatchTimelineFrameDTO(BaseModel):
+    """One timeline frame (default interval 60s)."""
+
+    events: list[MatchTimelineEventDTO]
+    participant_frames: dict[int, MatchTimelineParticipantFrameDTO] | None = Field(
+        default=None, alias="participantFrames"
+    )
+    timestamp: int
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class MatchTimelineParticipantDTO(BaseModel):
+    """Participant identity within the timeline."""
+
+    participant_id: int = Field(..., alias="participantId")
+    puuid: str
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class MatchTimelineInfoDTO(BaseModel):
+    """Timeline body: frames and participants."""
+
+    end_of_game_result: str | None = Field(default=None, alias="endOfGameResult")
+    frame_interval: int = Field(..., alias="frameInterval")
+    game_id: int | None = Field(default=None, alias="gameId")
+    participants: list[MatchTimelineParticipantDTO] | None = Field(default=None)
+    frames: list[MatchTimelineFrameDTO]
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class MatchTimelineMetadataDTO(BaseModel):
+    """Timeline metadata."""
+
+    data_version: str | None = Field(default=None, alias="dataVersion")
+    match_id: str = Field(..., alias="matchId")
+    participants: list[str]
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class MatchTimelineDTO(BaseModel):
+    """Match-V5 timeline response."""
+
+    metadata: MatchTimelineMetadataDTO
+    info: MatchTimelineInfoDTO
+
+    model_config = ConfigDict(populate_by_name=True)

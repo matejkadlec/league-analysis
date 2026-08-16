@@ -14,7 +14,7 @@ from app.core.riot_api.client import RiotAPIClient
 from app.core.riot_api.constants import Region
 from app.core.riot_api.db_rate_limiter import DBRateLimiter
 from app.core.riot_api.errors import AuthenticationError, ForbiddenError, RateLimitError
-from app.core.riot_api.models import MatchDTO, MatchListDTO
+from app.core.riot_api.models import MatchDTO, MatchListDTO, MatchTimelineDTO
 
 from .models import Match
 from .participants import MatchParticipant
@@ -36,7 +36,7 @@ class ReprocessMatch(Protocol):
     async def __call__(
         self,
         match_dto: MatchDTO,
-        timeline_payload: dict[str, Any] | None = None,
+        timeline_payload: MatchTimelineDTO | None = None,
     ) -> None: ...
 
 
@@ -214,9 +214,9 @@ async def fetch_sync_timeline(
     operation: str,
     log_message: str,
     skip_match_on_error: bool,
-) -> tuple[dict[str, Any] | None, bool]:
+) -> tuple[MatchTimelineDTO | None, bool]:
     """Fetch a timeline during queue sync. The bool is True when the match should be skipped."""
-    timeline_payload: dict[str, Any] | None = None
+    timeline_payload: MatchTimelineDTO | None = None
     timeline_request_attempted = False
     try:
         await acquire_rate_limiter_or_raise(rate_limiter)

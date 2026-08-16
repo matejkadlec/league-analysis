@@ -15,7 +15,7 @@ from app.core.riot_api.client import RiotAPIClient
 from app.core.riot_api.constants import PRODUCT_SUPPORTED_QUEUE_IDS, Region
 from app.core.riot_api.db_rate_limiter import DBRateLimiter
 from app.core.riot_api.errors import RateLimitError
-from app.core.riot_api.models import LeagueEntryDTO
+from app.core.riot_api.models import LeagueEntryDTO, MatchTimelineDTO
 from app.features.jobs.base import BaseJob
 from app.features.jobs.error_handling import RateLimitSignal
 from app.features.jobs.implementations import match_fetcher as match_fetcher_module
@@ -58,8 +58,13 @@ class _QueueSyncClient:
 
     async def get_match_timeline(
         self, _match_id: str, **_kwargs: object
-    ) -> dict[str, object]:
-        return {}
+    ) -> MatchTimelineDTO:
+        return MatchTimelineDTO.model_validate(
+            {
+                "metadata": {"matchId": "EUN1_123", "participants": []},
+                "info": {"frameInterval": 60_000, "frames": []},
+            }
+        )
 
 
 class _NoopJob(BaseJob):
