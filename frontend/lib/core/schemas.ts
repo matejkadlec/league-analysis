@@ -675,10 +675,13 @@ type RunLifecycleSplit<TWire extends { status: string }, TResults> =
  * full status enum and TypeScript refuses to discriminate on it.
  *
  * `TResults` is constrained against the wire's own `results` so a caller
- * cannot ask for a type the payload does not carry.
+ * cannot ask for a type the payload does not carry. `undefined` is spelled out
+ * in that constraint because `exactOptionalPropertyTypes` reads a bare
+ * `results?: T | null` as "absent, or present and non-undefined", which no
+ * Zod `.nullable().optional()` field satisfies.
  */
 function splitRunOnLifecycle<
-  TWire extends { status: string; results?: TResults | null },
+  TWire extends { status: string; results?: TResults | null | undefined },
   TResults,
 >(run: TWire): RunLifecycleSplit<TWire, TResults> {
   const { results, status, ...common } = run;
