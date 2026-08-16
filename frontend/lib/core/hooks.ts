@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
 import { toast as sonnerToast } from "sonner";
 
+import { apiErrorMessage, normalizeApiError } from "./api-error";
+
 export type ToastVariant = "success" | "error" | "warning" | "info";
 
 export const TOAST_DEFAULT_DURATION_MS = 4_000;
@@ -84,4 +86,40 @@ export const appToast = {
 
 export function useToast() {
   return appToast;
+}
+
+/**
+ * Decide what a failed query should announce, or `null` to stay silent.
+ *
+ * Kept pure and separate from the cache handler that calls it so the silence
+ * rules are testable: a handler that decided inline could only be checked by
+ * driving a real QueryClient and intercepting Sonner.
+ */
+export function queryErrorToast(
+  error: unknown,
+  meta?: Record<string, unknown>,
+): ToastOptions | null {
+  const apiError = normalizeApiError(error);
+
+  // The auth gate already redirects on these, so a toast per in-flight query
+  // would pile onto a transition the viewer can plainly see.
+  if (apiError.kind === "authentication" || apiError.kind === "authorization") {
+    return null;
+  }
+
+  if (meta?.["silenceErrorToast"] === true) {
+    return null;
+  }
+
+  return {
+    title:
+      typeof meta?.["errorTitle"] === "string"
+        ? meta["errorTitle"]
+        : "Could not load this data",
+    description: apiErrorMessage(apiError, "Please try again in a moment."),
+    variant: "error",
+    // One outage fails every query in flight. Keying by failure kind collapses
+    // that into a single toast rather than one per query.
+    id: `query-error:${apiError.kind}`,
+  };
 }
