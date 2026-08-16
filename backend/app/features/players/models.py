@@ -5,6 +5,7 @@ from typing import override
 
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
     Index,
     Integer,
     String,
@@ -22,7 +23,20 @@ class Player(Base):
     """Player model storing Riot API player data."""
 
     __tablename__ = "players"
-    __table_args__ = ({"schema": "core"},)
+    __table_args__ = (
+        # Five write paths disagreed about this column's casing while two
+        # lookups compared it case-sensitively, so a player first seen through
+        # a match was stored lowercase and then could not be found by name and
+        # tag. Normalising in Python fixes the code; this makes the invariant
+        # the database's, so a future writer that forgets fails loudly instead
+        # of silently hiding rows. Canonical is lowercase — Riot's own spelling
+        # and the `Platform` enum's values. See `normalize_platform`.
+        CheckConstraint(
+            "platform = lower(platform)",
+            name="ck_players_platform_is_lowercase",
+        ),
+        {"schema": "core"},
+    )
 
     # Primary key - PUUID is the unique identifier from Riot API
     # Note: Riot PUUID is a base64-encoded string, not a standard UUID
@@ -47,7 +61,7 @@ class Player(Base):
         String(4),
         nullable=False,
         index=True,
-        comment="Platform (e.g. EUN1)",
+        comment="Platform, canonical lowercase (e.g. eun1)",
     )
 
     # Player statistics

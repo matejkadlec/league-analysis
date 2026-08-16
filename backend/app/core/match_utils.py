@@ -22,6 +22,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db_session import rollback_quietly
+from app.core.riot_api.constants import normalize_platform
 from app.core.riot_api.models import MatchDTO, MatchTimelineDTO, ParticipantDTO
 from app.features.matches.models import Match
 from app.features.matches.participants import MatchParticipant
@@ -131,7 +132,7 @@ async def _upsert_match_participant(
             puuid=participant.puuid,
             game_name=fields["game_name"],
             tag_line=fields["tag_line"],
-            platform=platform_id.lower(),
+            platform=normalize_platform(platform_id),
             profile_icon_id=fields["profile_icon_id"],
             summoner_level=fields["summoner_level"],
             is_tracked=fields["is_tracked"],

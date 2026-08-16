@@ -12,6 +12,7 @@ from app.core.riot_api.constants import (
     PRODUCT_SUPPORTED_QUEUE_IDS,
     Region,
     get_region_by_platform,
+    normalize_platform,
 )
 from app.core.riot_api.db_rate_limiter import DBRateLimiter
 from app.core.riot_api.errors import (
@@ -1014,7 +1015,7 @@ class MatchService:
                     tag_line=info["tag_line"],
                     summoner_level=info["summoner_level"],
                     profile_icon_id=info["profile_icon_id"],
-                    platform=platform_id.upper(),
+                    platform=normalize_platform(platform_id),
                     is_tracked=False,
                 )
             )

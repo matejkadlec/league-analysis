@@ -6,6 +6,7 @@ from typing import Final, Literal, override
 from sqlalchemy import (
     BigInteger,
     Boolean,
+    CheckConstraint,
     Index,
     Integer,
     String,
@@ -23,7 +24,16 @@ class Match(Base):
     """Match model storing League of Legends match data."""
 
     __tablename__ = "matches"
-    __table_args__: Final = {"schema": "core"}
+    __table_args__: Final = (
+        # Same canonical spelling as `core.players.platform`. This column was
+        # internally consistent at uppercase, but two columns of the same name
+        # disagreeing is a comparison bug waiting to be written.
+        CheckConstraint(
+            "platform = lower(platform)",
+            name="ck_matches_platform_is_lowercase",
+        ),
+        {"schema": "core"},
+    )
 
     # Primary key - match ID from Riot API
     match_id: Mapped[str] = mapped_column(
@@ -38,7 +48,7 @@ class Match(Base):
         String(8),
         nullable=False,
         index=True,
-        comment="Platform where the match was played (e.g., EUW1, EUN1)",
+        comment="Platform where the match was played, canonical lowercase (e.g. euw1)",
     )
 
     # Game information

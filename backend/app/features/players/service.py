@@ -19,7 +19,11 @@ from app.core.decorators import input_validation, service_error_handler
 from app.core.exceptions import (
     PlayerServiceError,
 )
-from app.core.riot_api.constants import Platform, get_region_by_platform
+from app.core.riot_api.constants import (
+    Platform,
+    get_region_by_platform,
+    normalize_platform,
+)
 from app.core.riot_api.models import LeagueEntryDTO, MatchDTO
 from app.features.auth.models import User
 from app.features.auth.user_settings import UserSettings
@@ -139,7 +143,7 @@ class PlayerService:
         # Normalize inputs
         safe_game_name = game_name.strip()
         safe_tag_line = tag_line.strip() if tag_line else None
-        normalized_platform = platform.strip().upper()
+        normalized_platform = normalize_platform(platform)
 
         # Query database only
         result = await self.db.execute(
@@ -223,7 +227,7 @@ class PlayerService:
         """
         # Normalize inputs
         safe_game_name = game_name.strip()
-        normalized_platform = platform.strip().upper()
+        normalized_platform = normalize_platform(platform)
 
         # Search database for exact match or partial match
         result = await self.db.execute(
@@ -1152,7 +1156,7 @@ class PlayerService:
         from app.features.matches.transformers import PlayerDataSanitizer
 
         await _ensure_riot_writer_maintenance_is_inactive(self.db)
-        normalized_platform = platform.strip().upper()
+        normalized_platform = normalize_platform(platform)
         discovered_count = 0
 
         for participant in match_dto.info.participants:
