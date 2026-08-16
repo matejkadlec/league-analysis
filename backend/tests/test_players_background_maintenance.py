@@ -27,6 +27,7 @@ from app.features.jobs.models import JobStatus, JobType
 from app.features.matches import router as matches_router
 from app.features.matches import service as matches_service_module
 from app.features.matches.service import MatchService
+from app.features.players import background_sync
 from app.features.players import router as players_router
 from app.features.players import service as players_service_module
 from app.features.players.service import PlayerService
@@ -51,8 +52,8 @@ def _request() -> Request:
 @pytest.mark.parametrize(
     ("runner", "job_type"),
     [
-        (players_router.run_background_match_sync, JobType.MATCH_FETCHER),
-        (players_router.run_background_player_update, JobType.PLAYER_UPDATER),
+        (background_sync.run_background_match_sync, JobType.MATCH_FETCHER),
+        (background_sync.run_background_player_update, JobType.PLAYER_UPDATER),
     ],
 )
 async def test_player_add_writers_lock_and_honor_the_cleanup_interlock(
@@ -87,9 +88,9 @@ async def test_player_add_writers_lock_and_honor_the_cleanup_interlock(
         yield session
 
     riot_client_factory = AsyncMock()
-    monkeypatch.setattr(players_router.db_manager, "get_session", fake_get_session)
+    monkeypatch.setattr(background_sync.db_manager, "get_session", fake_get_session)
     monkeypatch.setattr(
-        players_router, "create_tracked_riot_api_client", riot_client_factory
+        background_sync, "create_tracked_riot_api_client", riot_client_factory
     )
 
     await runner("test-puuid", "eun1")
@@ -156,23 +157,23 @@ async def test_background_match_sync_records_rate_limit_retry_after(
         )
     )
 
-    monkeypatch.setattr(players_router.db_manager, "get_session", fake_get_session)
+    monkeypatch.setattr(background_sync.db_manager, "get_session", fake_get_session)
     monkeypatch.setattr(
-        players_router,
+        background_sync,
         "_locked_background_writer_configuration",
         AsyncMock(return_value=job_config),
     )
     monkeypatch.setattr(job_models, "JobExecution", _FakeJobExecution)
     monkeypatch.setattr(
-        players_router,
+        background_sync,
         "create_tracked_riot_api_client",
         AsyncMock(return_value=riot_client),
     )
     monkeypatch.setattr(
-        players_router, "MatchService", Mock(return_value=match_service)
+        background_sync, "MatchService", Mock(return_value=match_service)
     )
 
-    await players_router.run_background_match_sync("test-puuid", "eun1")
+    await background_sync.run_background_match_sync("test-puuid", "eun1")
 
     execution = session.added[0]
     assert execution.status is JobStatus.RATE_LIMITED
@@ -417,20 +418,20 @@ async def _run_background_sync_with(
     async def fake_stamp(_session: object, puuid: str) -> None:
         stamped.append(puuid)
 
-    monkeypatch.setattr(players_router.db_manager, "get_session", fake_get_session)
+    monkeypatch.setattr(background_sync.db_manager, "get_session", fake_get_session)
     monkeypatch.setattr(
-        players_router,
+        background_sync,
         "_locked_background_writer_configuration",
         AsyncMock(return_value=job_config),
     )
     monkeypatch.setattr(job_models, "JobExecution", _FakeJobExecution)
     monkeypatch.setattr(
-        players_router,
+        background_sync,
         "create_tracked_riot_api_client",
         AsyncMock(return_value=SimpleNamespace(close=AsyncMock())),
     )
     monkeypatch.setattr(
-        players_router,
+        background_sync,
         "MatchService",
         Mock(
             return_value=SimpleNamespace(
@@ -438,9 +439,9 @@ async def _run_background_sync_with(
             )
         ),
     )
-    monkeypatch.setattr(players_router, "_stamp_player_match_synced", fake_stamp)
+    monkeypatch.setattr(background_sync, "_stamp_player_match_synced", fake_stamp)
 
-    await players_router.run_background_match_sync("test-puuid", "eun1")
+    await background_sync.run_background_match_sync("test-puuid", "eun1")
     return stamped
 
 
