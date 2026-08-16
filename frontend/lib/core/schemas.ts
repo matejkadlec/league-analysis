@@ -333,40 +333,6 @@ export const MatchParticipantSchema = z.object({
   advanced_stats: z.record(z.string(), z.any()).nullable().optional(),
 });
 
-// Playstyle Tag Schema
-// Allowing the struct to be flexible because the backend returns a flexible dictionary
-export const PlaystyleTagSchema = z
-  .object({
-    value: z.number().optional().default(0),
-    threshold_met: z.boolean().optional().default(false),
-    description: z.string().optional(),
-    details: z.string().optional(),
-  })
-  .passthrough();
-
-// Playstyle Analysis Response Schema
-export const PlaystyleAnalysisResponseSchema = z.object({
-  id: z.number().optional(),
-  puuid: z.string(),
-  status: z.enum([
-    "PENDING",
-    "IN_PROGRESS",
-    "COMPLETED",
-    "FAILED",
-    "CANCELLED",
-  ]),
-  tags: z.record(z.string(), PlaystyleTagSchema),
-  summary_stats: z.record(z.string(), z.any()),
-  created_at: z.string().optional(),
-  updated_at: z.string().optional(),
-});
-
-// Playstyle Analysis Request Schema
-export const PlaystyleAnalysisRequestSchema = z.object({
-  puuid: z.string(),
-  force_reanalyze: z.boolean().optional().default(true),
-});
-
 // Infer TypeScript types from schemas
 export type Match = z.infer<typeof MatchSchema>;
 export type MatchListResponse = z.infer<typeof MatchListResponseSchema>;
@@ -381,13 +347,6 @@ export type TeamComposition = z.infer<typeof TeamCompositionSchema>;
 export type MatchWithPlayerData = z.infer<typeof MatchWithPlayerDataSchema>;
 export type MatchListWithPlayerDataResponse = z.infer<
   typeof MatchListWithPlayerDataResponseSchema
->;
-export type PlaystyleTag = z.infer<typeof PlaystyleTagSchema>;
-export type PlaystyleAnalysisResponse = z.infer<
-  typeof PlaystyleAnalysisResponseSchema
->;
-export type PlaystyleAnalysisRequest = z.infer<
-  typeof PlaystyleAnalysisRequestSchema
 >;
 
 // ===== JOB SCHEMAS =====
