@@ -82,13 +82,13 @@ function PlayerOverviewContent({ puuid }: { puuid: string }) {
   const laneStats = laneStatsResult?.success ? laneStatsResult.data : null;
 
   const handleRefreshAll = () => {
-    queryClient.invalidateQueries({ queryKey: playerQueryKey(puuid) });
-    queryClient.invalidateQueries({ queryKey: ["champion-stats", puuid] });
-    queryClient.invalidateQueries({ queryKey: ["lane-stats", puuid] });
-    queryClient.invalidateQueries({ queryKey: ["recent-stats", puuid] });
-    queryClient.invalidateQueries({ queryKey: ["overall-stats", puuid] });
-    queryClient.invalidateQueries({ queryKey: ["player-league", puuid] });
-    queryClient.invalidateQueries({ queryKey: ["player-stats", puuid] });
+    void queryClient.invalidateQueries({ queryKey: playerQueryKey(puuid) });
+    void queryClient.invalidateQueries({ queryKey: ["champion-stats", puuid] });
+    void queryClient.invalidateQueries({ queryKey: ["lane-stats", puuid] });
+    void queryClient.invalidateQueries({ queryKey: ["recent-stats", puuid] });
+    void queryClient.invalidateQueries({ queryKey: ["overall-stats", puuid] });
+    void queryClient.invalidateQueries({ queryKey: ["player-league", puuid] });
+    void queryClient.invalidateQueries({ queryKey: ["player-stats", puuid] });
   };
 
   if (playerError) {

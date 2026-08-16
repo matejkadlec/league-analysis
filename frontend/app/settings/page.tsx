@@ -79,17 +79,17 @@ interface APIKeyStatus {
 }
 
 interface BackendErrorDetail {
-  code?: string;
-  message?: string;
-  locked_until?: string;
-  attempts_remaining?: number;
+  code?: string | undefined;
+  message?: string | undefined;
+  locked_until?: string | undefined;
+  attempts_remaining?: number | undefined;
 }
 
 interface MutationError extends Error {
-  code?: string;
-  lockedUntil?: string;
-  attemptsRemaining?: number;
-  status?: number;
+  code?: string | undefined;
+  lockedUntil?: string | undefined;
+  attemptsRemaining?: number | undefined;
+  status?: number | undefined;
 }
 
 function isPasswordStrong(password: string): boolean {
@@ -198,14 +198,14 @@ function SettingsPageContent() {
         toast.success("Riot API key updated", {
           description: "The new key is active; no server restart is required.",
         });
-        queryClient.invalidateQueries({
+        void queryClient.invalidateQueries({
           queryKey: ["settings", "riot_api_key"],
         });
         notifyRiotCredentialHealthUpdated();
-        queryClient.invalidateQueries({
+        void queryClient.invalidateQueries({
           queryKey: ["apiKeyStatus"],
         });
-        queryClient.invalidateQueries({
+        void queryClient.invalidateQueries({
           queryKey: ["service-status"],
         });
         setApiKey("");

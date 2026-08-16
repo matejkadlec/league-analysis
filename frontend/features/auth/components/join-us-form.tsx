@@ -326,7 +326,10 @@ export function JoinUsForm({ isAuthenticatedHint = false }: JoinUsFormProps) {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <form onSubmit={handleSubmit} className="space-y-5">
+                <form
+                  onSubmit={(event) => void handleSubmit(event)}
+                  className="space-y-5"
+                >
                   <div className="space-y-2">
                     <Label className="text-white">Subject</Label>
                     <div className="relative">

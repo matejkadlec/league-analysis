@@ -186,12 +186,16 @@ export function TrackedPlayersList({
       return response.data;
     },
     onSuccess: (_, puuid) => {
-      queryClient.invalidateQueries({ queryKey: ["tracked-players", userId] });
-      queryClient.invalidateQueries({ queryKey: ["player-context", userId] });
-      queryClient.invalidateQueries({
+      void queryClient.invalidateQueries({
+        queryKey: ["tracked-players", userId],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["player-context", userId],
+      });
+      void queryClient.invalidateQueries({
         queryKey: ["tracking-status", userId, puuid],
       });
-      queryClient.invalidateQueries({ queryKey: ["player", puuid] });
+      void queryClient.invalidateQueries({ queryKey: ["player", puuid] });
 
       const player = data?.find(
         (trackedPlayer) => trackedPlayer.puuid === puuid,
@@ -260,7 +264,7 @@ export function TrackedPlayersList({
               variant="outline"
               size="sm"
               className="mt-2"
-              onClick={() => refetch()}
+              onClick={() => void refetch()}
             >
               Retry
             </Button>

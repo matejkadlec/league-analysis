@@ -169,6 +169,8 @@ export function crossFieldError(
   const novel = values.a3MinimumNovelGames;
   const recent = values.recentWindowSize;
   if (
+    novel !== undefined &&
+    recent !== undefined &&
     Number.isFinite(novel) &&
     Number.isFinite(recent) &&
     novel > recent

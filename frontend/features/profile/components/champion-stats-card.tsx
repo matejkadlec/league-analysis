@@ -28,7 +28,7 @@ import {
 interface ChampionStatsCardProps {
   dataSourceKey: string;
   stats: ChampionStatsResponse;
-  lastUpdated?: string | null;
+  lastUpdated?: string | null | undefined;
 }
 
 // Helper function to get win rate color

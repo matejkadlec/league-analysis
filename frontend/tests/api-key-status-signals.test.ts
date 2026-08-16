@@ -30,7 +30,13 @@ describe("Riot credential-health refresh signals", () => {
   });
 
   afterAll(() => {
-    api.defaults.adapter = originalAdapter;
+    // `adapter` is an optional property: restoring "absent" means deleting it,
+    // not assigning `undefined`.
+    if (originalAdapter === undefined) {
+      delete api.defaults.adapter;
+    } else {
+      api.defaults.adapter = originalAdapter;
+    }
   });
 
   it("does not treat accepting or polling an active analysis as key validation", async () => {

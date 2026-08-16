@@ -209,7 +209,7 @@ export function JobExecutions({
     const observer = new IntersectionObserver(
       (entries) => {
         const first = entries[0];
-        if (first.isIntersecting && hasMore && !isFetching) {
+        if (first?.isIntersecting && hasMore && !isFetching) {
           loadMore();
         }
       },

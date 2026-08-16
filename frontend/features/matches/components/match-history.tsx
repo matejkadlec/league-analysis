@@ -83,7 +83,7 @@ import { TeamObjectiveStats } from "./objective-icons";
 
 interface MatchHistoryProps {
   puuid: string;
-  lastUpdated?: string | null;
+  lastUpdated?: string | null | undefined;
 }
 
 const MATCH_HISTORY_SEARCH_DEBOUNCE_MS = 300;
@@ -241,9 +241,9 @@ function MatchRow({
   const renderRunes = (
     runes:
       | {
-          primary_style?: number | null;
-          sub_style?: number | null;
-          keystone?: number | null;
+          primary_style?: number | null | undefined;
+          sub_style?: number | null | undefined;
+          keystone?: number | null | undefined;
         }
       | null
       | undefined,
@@ -767,18 +767,24 @@ export function MatchHistory({ puuid, lastUpdated }: MatchHistoryProps) {
       });
 
       // Wait a bit then refetch data
-      setTimeout(async () => {
-        await Promise.all([
-          refetch(),
-          // Scoped to this player. Without the PUUID these are prefix
-          // matches that invalidate every cached player, so switching to
-          // someone else afterwards refetches their data too.
-          queryClient.invalidateQueries({ queryKey: playerQueryKey(puuid) }),
-          queryClient.invalidateQueries({ queryKey: ["player-league", puuid] }),
-          queryClient.invalidateQueries({ queryKey: ["player-stats", puuid] }),
-        ]);
-        router.refresh();
-        setIsUpdating(false);
+      setTimeout(() => {
+        void (async () => {
+          await Promise.all([
+            refetch(),
+            // Scoped to this player. Without the PUUID these are prefix
+            // matches that invalidate every cached player, so switching to
+            // someone else afterwards refetches their data too.
+            queryClient.invalidateQueries({ queryKey: playerQueryKey(puuid) }),
+            queryClient.invalidateQueries({
+              queryKey: ["player-league", puuid],
+            }),
+            queryClient.invalidateQueries({
+              queryKey: ["player-stats", puuid],
+            }),
+          ]);
+          router.refresh();
+          setIsUpdating(false);
+        })();
       }, 5000);
     } catch {
       toast.error("Player profile update could not start", {
@@ -901,7 +907,7 @@ export function MatchHistory({ puuid, lastUpdated }: MatchHistoryProps) {
                 <div className="space-y-2">
                   <p>{errorMessage}</p>
                   <Button
-                    onClick={() => refetch()}
+                    onClick={() => void refetch()}
                     type="submit"
                     size="sm"
                     className="mt-2"
@@ -971,7 +977,7 @@ export function MatchHistory({ puuid, lastUpdated }: MatchHistoryProps) {
           </div>
 
           <Button
-            onClick={handleUpdate}
+            onClick={() => void handleUpdate()}
             disabled={isUpdating}
             variant="outline"
             size="sm"

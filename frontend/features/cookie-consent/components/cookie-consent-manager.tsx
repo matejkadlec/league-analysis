@@ -219,7 +219,7 @@ export function CookieConsentManager() {
               <Button
                 type="button"
                 disabled={isSaving}
-                onClick={() => saveChoice("necessary")}
+                onClick={() => void saveChoice("necessary")}
                 className="cursor-pointer h-11 min-w-[180px] border border-white/35 bg-[#122445] px-5 text-white hover:bg-[#1a315d]"
               >
                 Accept necessary
@@ -228,7 +228,7 @@ export function CookieConsentManager() {
               <Button
                 type="button"
                 disabled={isSaving}
-                onClick={() => saveChoice("all")}
+                onClick={() => void saveChoice("all")}
                 className="cursor-pointer h-11 min-w-[180px] border border-[#f2d17a]/80 bg-[#cfa93a] px-5 text-[#07162b] hover:bg-[#e1bc55]"
               >
                 Accept all

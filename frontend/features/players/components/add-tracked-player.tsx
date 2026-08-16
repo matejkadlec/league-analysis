@@ -221,7 +221,11 @@ export function AddTrackedPlayer() {
         setSelectedIndex((index) => (index > 0 ? index - 1 : -1));
       } else if (event.key === "Enter" && selectedIndex >= 0) {
         event.preventDefault();
-        selectSuggestion(suggestions[selectedIndex]);
+        // `selectedIndex` never leaves the list bounds, so this always hits.
+        const suggestion = suggestions[selectedIndex];
+        if (suggestion) {
+          selectSuggestion(suggestion);
+        }
       } else if (event.key === "Escape") {
         event.preventDefault();
         setShowSuggestions(false);
@@ -262,12 +266,18 @@ export function AddTrackedPlayer() {
     },
     onSuccess: (player) => {
       const userId = user?.id;
-      queryClient.invalidateQueries({ queryKey: ["tracked-players", userId] });
-      queryClient.invalidateQueries({ queryKey: ["player-context", userId] });
-      queryClient.invalidateQueries({
+      void queryClient.invalidateQueries({
+        queryKey: ["tracked-players", userId],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["player-context", userId],
+      });
+      void queryClient.invalidateQueries({
         queryKey: ["tracking-status", userId, player.puuid],
       });
-      queryClient.invalidateQueries({ queryKey: ["player", player.puuid] });
+      void queryClient.invalidateQueries({
+        queryKey: ["player", player.puuid],
+      });
       toast({
         title: "Player added for tracking",
         description: `${displayRiotId(player)} is now being tracked.`,
@@ -324,11 +334,13 @@ export function AddTrackedPlayer() {
       <CardContent>
         <Form {...form}>
           <form
-            onSubmit={form.handleSubmit((data) => {
-              if (canTrackPlayer) {
-                mutate(data);
-              }
-            })}
+            onSubmit={(event) =>
+              void form.handleSubmit((data) => {
+                if (canTrackPlayer) {
+                  mutate(data);
+                }
+              })(event)
+            }
             className="space-y-4"
           >
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_10rem]">

@@ -12,7 +12,7 @@ import { useRelativeTime } from "@/lib/core/use-relative-time";
 
 interface RecentPerformanceCardProps {
   puuid: string;
-  lastUpdated?: string | null;
+  lastUpdated?: string | null | undefined;
 }
 
 // Helper function to get performance trend indicator
