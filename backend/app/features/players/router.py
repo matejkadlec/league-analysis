@@ -630,7 +630,14 @@ async def _close_riot_client(riot_client: RiotAPIClient | None) -> None:
 
 
 async def _stamp_player_match_synced(session: AsyncSession, puuid: str) -> None:
-    """Record that a background match sync completed for this player."""
+    """Record that a background match sync *fully* succeeded for this player.
+
+    Only call this when the sync reported no per-match failures. A partial sync
+    that advances `match_synced_at` is indistinguishable afterwards from a
+    complete one, so the data is stale and every reader believes it is current.
+    `MatchFetcherJob._process_player` gates the same stamp on its own error
+    count; this path is the second caller and must agree.
+    """
     from datetime import datetime
 
     from app.features.players.models import Player
@@ -671,14 +678,51 @@ async def run_background_match_sync(puuid: str, platform: str) -> None:
             player_obj = _BackgroundSyncPlayer(puuid=puuid, platform=platform)
 
             logger.info("Starting background match sync", puuid=puuid)
-            count = await match_service.sync_matches_for_player(riot_client, player_obj)
-            await _stamp_player_match_synced(session, puuid)
-            logger.info("Background match sync completed", puuid=puuid, count=count)
+
+            # `sync_matches_for_player` swallows per-match failures: anything
+            # `must_abort_writer_sync` does not classify as fatal is logged and
+            # handed to `on_failure`, then the loop continues. Without a
+            # callback here those failures left no trace at all, and the stamp
+            # below advanced as though the sync had been complete.
+            sync_failures: list[tuple[str, Exception]] = []
+
+            def record_match_sync_failure(
+                operation: str,
+                error: Exception,
+                context: dict[str, object],
+            ) -> None:
+                sync_failures.append((operation, error))
+                logger.warning(
+                    "Background match sync failure",
+                    puuid=puuid,
+                    operation=operation,
+                    error=str(error),
+                    **context,
+                )
+
+            count = await match_service.sync_matches_for_player(
+                riot_client,
+                player_obj,
+                on_failure=record_match_sync_failure,
+            )
+            if not sync_failures:
+                await _stamp_player_match_synced(session, puuid)
+            logger.info(
+                "Background match sync completed",
+                puuid=puuid,
+                count=count,
+                failures=len(sync_failures),
+            )
+            summary = f"Synced {count} matches for new player"
+            if sync_failures:
+                summary += (
+                    f"; {len(sync_failures)} match(es) failed, freshness not advanced"
+                )
             await _mark_background_job_success(
                 session,
                 job_execution,
                 records_created=count,
-                detailed_logs={"message": f"Synced {count} matches for new player"},
+                detailed_logs={"message": summary},
             )
         except RateLimitError as error:
             logger.warning(

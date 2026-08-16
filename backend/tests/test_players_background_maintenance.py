@@ -394,3 +394,105 @@ async def test_match_storage_rechecks_maintenance_before_each_write(
         await service.store_match_from_dto(cast(MatchDTO, SimpleNamespace()))
 
     guard.assert_awaited_once()
+
+
+async def _run_background_sync_with(
+    monkeypatch: pytest.MonkeyPatch,
+    sync_matches_for_player: AsyncMock,
+) -> list[str]:
+    """Run the background match sync and report which PUUIDs got stamped.
+
+    Returns the arguments `_stamp_player_match_synced` was called with, so a
+    test can assert on freshness without needing a database.
+    """
+    job_config = SimpleNamespace(id=7, job_type=JobType.MATCH_FETCHER, config_json={})
+    session = _RecordingSession()
+
+    @asynccontextmanager
+    async def fake_get_session() -> AsyncGenerator[_RecordingSession]:
+        yield session
+
+    stamped: list[str] = []
+
+    async def fake_stamp(_session: object, puuid: str) -> None:
+        stamped.append(puuid)
+
+    monkeypatch.setattr(players_router.db_manager, "get_session", fake_get_session)
+    monkeypatch.setattr(
+        players_router,
+        "_locked_background_writer_configuration",
+        AsyncMock(return_value=job_config),
+    )
+    monkeypatch.setattr(job_models, "JobExecution", _FakeJobExecution)
+    monkeypatch.setattr(
+        players_router,
+        "create_tracked_riot_api_client",
+        AsyncMock(return_value=SimpleNamespace(close=AsyncMock())),
+    )
+    monkeypatch.setattr(
+        players_router,
+        "MatchService",
+        Mock(
+            return_value=SimpleNamespace(
+                sync_matches_for_player=sync_matches_for_player
+            )
+        ),
+    )
+    monkeypatch.setattr(players_router, "_stamp_player_match_synced", fake_stamp)
+
+    await players_router.run_background_match_sync("test-puuid", "eun1")
+    return stamped
+
+
+@pytest.mark.asyncio
+async def test_background_sync_does_not_advance_freshness_after_a_failed_match(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A swallowed per-match failure must not look like a complete sync.
+
+    `sync_matches_for_player` reports anything `must_abort_writer_sync` does not
+    classify as fatal through `on_failure` and keeps going, so the call returns
+    normally with a partial result. Stamping `match_synced_at` on that outcome
+    is unrecoverable: afterwards it is indistinguishable from a full sync, and
+    every reader treats the missing matches as genuinely absent.
+    """
+
+    async def sync_with_one_failure(
+        _riot_client: object,
+        _player: object,
+        on_failure: Callable[[str, Exception, dict[str, object]], None] | None = None,
+        **_kwargs: object,
+    ) -> int:
+        assert on_failure is not None, (
+            "the background route must pass on_failure, or per-match failures "
+            "leave no trace at all"
+        )
+        on_failure("get_match_timeline", ValueError("malformed timeline"), {})
+        return 4
+
+    stamped = await _run_background_sync_with(
+        monkeypatch, AsyncMock(side_effect=sync_with_one_failure)
+    )
+
+    assert stamped == []
+
+
+@pytest.mark.asyncio
+async def test_background_sync_advances_freshness_when_every_match_succeeds(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The gate must not be so strict that a clean sync stops counting."""
+
+    async def clean_sync(
+        _riot_client: object,
+        _player: object,
+        on_failure: Callable[[str, Exception, dict[str, object]], None] | None = None,
+        **_kwargs: object,
+    ) -> int:
+        return 4
+
+    stamped = await _run_background_sync_with(
+        monkeypatch, AsyncMock(side_effect=clean_sync)
+    )
+
+    assert stamped == ["test-puuid"]
