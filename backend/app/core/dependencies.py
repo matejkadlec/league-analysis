@@ -14,7 +14,7 @@ from .riot_api.credential_health import create_tracked_riot_api_client
 
 async def get_riot_client(
     db: Annotated[AsyncSession, Depends(get_db)],
-) -> AsyncGenerator[RiotAPIClient, None]:
+) -> AsyncGenerator[RiotAPIClient]:
     """Get Riot API client instance."""
     try:
         client = await create_tracked_riot_api_client(

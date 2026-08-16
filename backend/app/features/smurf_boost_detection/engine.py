@@ -6,8 +6,8 @@ result. It touches no database, makes no Riot call, and is deterministic.
 
 from __future__ import annotations
 
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
-from typing import Callable, Optional, Sequence
 
 from .composite import (
     CompositeContext,
@@ -84,11 +84,11 @@ class AnalysisRequest:
     """Everything one analysis needs, already loaded from storage."""
 
     eligible: list[EligibleMatch]
-    summoner_level: Optional[int]
-    rank_span_days: Optional[float]
+    summoner_level: int | None
+    rank_span_days: float | None
     thresholds: dict[str, float]
-    prior_champion_games: dict[int, int] = field(default_factory=dict)
-    total_eligible_games: Optional[int] = None
+    prior_champion_games: dict[int, int] = field(default_factory=dict[int, int])
+    total_eligible_games: int | None = None
 
     @property
     def eligible_total(self) -> int:
@@ -122,7 +122,7 @@ def _major_minor(game_version: str) -> str:
 def _confidence_notes(
     recent: Sequence[EligibleMatch],
     baseline: Sequence[EligibleMatch],
-    rank_span_days: Optional[float],
+    rank_span_days: float | None,
 ) -> tuple[float, set[str]]:
     """Multiplicative confidence factors from data quality alone."""
     notes: set[str] = set()

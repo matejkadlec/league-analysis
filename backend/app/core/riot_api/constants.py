@@ -146,6 +146,24 @@ PRODUCT_SUPPORTED_QUEUE_IDS: tuple[int, ...] = tuple(
 )
 
 
+def normalize_platform(platform: Platform | str) -> str:
+    """Return the canonical stored spelling of a platform id.
+
+    Lowercase is canonical because it is what Riot itself uses: it is the
+    `Platform` enum's own values, what appears in every Riot URL, and what
+    `get_region_by_platform` below already coerces to before matching. Riot's
+    match payload spells the same id `EUW1`, so a value arriving from there
+    needs converting rather than trusting.
+
+    Every read and write of `core.players.platform` goes through here. They
+    used not to, and the column ended up holding both spellings while two
+    lookups compared it case-sensitively — see the check constraint on
+    `Player.__table_args__`.
+    """
+    value = platform.value if isinstance(platform, Platform) else platform
+    return value.strip().lower()
+
+
 def get_region_by_platform(platform: Platform | str) -> Region:
     """Map a supported platform to its regional route or fail closed."""
     p = platform.value if isinstance(platform, Platform) else platform.lower()

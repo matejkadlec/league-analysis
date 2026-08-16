@@ -408,13 +408,13 @@ export function MatchmakingAnalysis({
           toast.success("Matchmaking analysis finished", {
             description: "The latest results and history are ready.",
           });
-          finalizeCompletion();
+          void finalizeCompletion();
         }, 750);
       }
     } else if (phase === "completing-slow") {
       // Just wait at 100% then finalize
       timer = setTimeout(() => {
-        finalizeCompletion();
+        void finalizeCompletion();
       }, 1000);
     }
 
@@ -537,10 +537,10 @@ export function MatchmakingAnalysis({
       await queryClient.invalidateQueries({
         queryKey: ["matchmaking-analysis", puuid],
       });
-      queryClient.invalidateQueries({
+      void queryClient.invalidateQueries({
         queryKey: ["matchmaking-analysis-results", puuid],
       });
-      queryClient.invalidateQueries({
+      void queryClient.invalidateQueries({
         queryKey: ["matchmaking-analysis-history", puuid],
       });
       sawInProgressRef.current = false;

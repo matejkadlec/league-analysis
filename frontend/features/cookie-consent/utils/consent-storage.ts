@@ -29,7 +29,7 @@ function parseCookieConsentValue(rawValue: string): CookieConsentState | null {
   const decoded = decodeURIComponent(rawValue);
   const [version, level, updatedAt] = decoded.split("|");
 
-  if (version.length === 0) {
+  if (!version) {
     return null;
   }
 

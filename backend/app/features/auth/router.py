@@ -1,12 +1,12 @@
 """Authentication router with login, refresh, logout, and user management endpoints."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import select
 
-from app.core.rate_limiter import limiter
+from app.core.rate_limiter import rate_limit
 
 from .dependencies import get_current_active_user, get_current_admin_user
 from .models import User
@@ -49,7 +49,7 @@ router = APIRouter()
 
 
 @router.post("/login", response_model=Token)
-@limiter.limit("5/minute")
+@rate_limit("5/minute")
 async def login(
     request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
@@ -75,25 +75,25 @@ async def login(
             detail={
                 "code": "ACCOUNT_LOCKED",
                 "message": "Account is temporarily locked after repeated failed sign-in attempts.",
-                "locked_until": e.locked_until.astimezone(timezone.utc).isoformat(),
+                "locked_until": e.locked_until.astimezone(UTC).isoformat(),
             },
-        )
-    except CaptchaRequiredError:
+        ) from e
+    except CaptchaRequiredError as e:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={
                 "code": "CAPTCHA_REQUIRED",
                 "message": "Complete CAPTCHA verification to continue signing in.",
             },
-        )
-    except CaptchaVerificationError:
+        ) from e
+    except CaptchaVerificationError as e:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={
                 "code": "CAPTCHA_INVALID",
                 "message": "CAPTCHA verification failed. Please try again.",
             },
-        )
+        ) from e
 
     if not user:
         raise HTTPException(
@@ -125,7 +125,7 @@ async def login(
     await auth_service.update_last_login(user.id)
     await auth_service.cleanup_expired_token_state()
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     return Token(
         access_token=access_token,
         refresh_token=refresh_token,
@@ -139,7 +139,7 @@ async def login(
 
 
 @router.post("/refresh", response_model=Token)
-@limiter.limit("20/minute")
+@rate_limit("20/minute")
 async def refresh_access_token(
     request: Request,
     refresh_request: RefreshTokenRequest,
@@ -173,7 +173,7 @@ async def refresh_access_token(
 
     await auth_service.cleanup_expired_token_state()
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     return Token(
         access_token=access_token,
         refresh_token=refresh_token,
@@ -210,7 +210,7 @@ async def get_current_user_info(
 @router.post(
     "/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED
 )
-@limiter.limit("3/minute")
+@rate_limit("3/minute")
 async def register_user(
     request: Request,
     user_create: UserCreate,
@@ -229,7 +229,7 @@ async def register_user(
 
 
 @router.post("/join-us/contact", response_model=MessageResponse)
-@limiter.limit("5/minute")
+@rate_limit("5/minute")
 async def submit_join_us_contact(
     request: Request,
     payload: JoinUsContactRequest,
@@ -243,30 +243,30 @@ async def submit_join_us_contact(
             captcha_token=payload.captcha_token,
             remote_ip=request.client.host if request.client else None,
         )
-    except JoinUsCaptchaRequiredError:
+    except JoinUsCaptchaRequiredError as e:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={
                 "code": "CONTACT_CAPTCHA_REQUIRED",
                 "message": "Complete CAPTCHA verification before submitting the form.",
             },
-        )
-    except JoinUsCaptchaVerificationError:
+        ) from e
+    except JoinUsCaptchaVerificationError as e:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={
                 "code": "CONTACT_CAPTCHA_INVALID",
                 "message": "CAPTCHA verification failed. Please try again.",
             },
-        )
-    except JoinUsBodyTooShortError:
+        ) from e
+    except JoinUsBodyTooShortError as e:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail={
                 "code": "CONTACT_BODY_TOO_SHORT",
                 "message": "Message must contain at least 300 characters unless it ends with #nl.",
             },
-        )
+        ) from e
     except JoinUsRateLimitExceededError as e:
         retry_minutes = max(1, (e.retry_after_seconds + 59) // 60)
         raise HTTPException(
@@ -280,23 +280,23 @@ async def submit_join_us_contact(
                 "retry_after_seconds": e.retry_after_seconds,
             },
             headers={"Retry-After": str(e.retry_after_seconds)},
-        )
-    except JoinUsEmailNotConfiguredError:
+        ) from e
+    except JoinUsEmailNotConfiguredError as e:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail={
                 "code": "CONTACT_EMAIL_NOT_CONFIGURED",
                 "message": "Contact form email delivery is not configured yet.",
             },
-        )
-    except JoinUsEmailDeliveryError:
+        ) from e
+    except JoinUsEmailDeliveryError as e:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail={
                 "code": "CONTACT_EMAIL_DELIVERY_FAILED",
                 "message": "Failed to send your message. Please try again later.",
             },
-        )
+        ) from e
 
     return MessageResponse(message="Your message has been sent successfully.")
 
@@ -318,12 +318,12 @@ async def update_current_user_profile(
     auth_service: AuthService = Depends(get_auth_service),
 ) -> User:
     """Update current user's profile fields (display_name, etc.)."""
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     if update.display_name is not None:
         current_user.display_name = update.display_name
 
-    current_user.updated_at = datetime.now(timezone.utc)
+    current_user.updated_at = datetime.now(UTC)
     await auth_service.db.commit()
     await auth_service.db.refresh(current_user)
 
@@ -331,7 +331,7 @@ async def update_current_user_profile(
 
 
 @router.post("/change-email/request-code", response_model=EmailChangeCodeResponse)
-@limiter.limit("10/minute")
+@rate_limit("10/minute")
 async def request_email_change_code(
     request: Request,
     payload: EmailChangeRequest,
@@ -349,40 +349,40 @@ async def request_email_change_code(
             message="Verification code sent to your new email.",
             expires_at=expires_at,
         )
-    except EmailUnchangedError:
+    except EmailUnchangedError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={
                 "code": "EMAIL_UNCHANGED",
                 "message": "New email must be different from your current email.",
             },
-        )
-    except EmailAlreadyRegisteredError:
+        ) from e
+    except EmailAlreadyRegisteredError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={
                 "code": "EMAIL_ALREADY_REGISTERED",
                 "message": "This email is already registered.",
             },
-        )
+        ) from e
     except EmailChangeLockedError as e:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail={
                 "code": "EMAIL_CHANGE_LOCKED",
                 "message": "Too many failed attempts. Try again in 5 minutes.",
-                "locked_until": e.locked_until.astimezone(timezone.utc).isoformat(),
+                "locked_until": e.locked_until.astimezone(UTC).isoformat(),
             },
-        )
+        ) from e
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to send verification code: {str(e)}",
-        )
+            detail=f"Failed to send verification code: {e!s}",
+        ) from e
 
 
 @router.post("/change-email/verify", response_model=UserResponse)
-@limiter.limit("15/minute")
+@rate_limit("15/minute")
 async def verify_email_change_code(
     request: Request,
     payload: EmailChangeVerifyRequest,
@@ -396,22 +396,22 @@ async def verify_email_change_code(
             current_user=current_user,
             code=payload.code,
         )
-    except EmailVerificationRequestNotFoundError:
+    except EmailVerificationRequestNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={
                 "code": "EMAIL_CHANGE_REQUEST_NOT_FOUND",
                 "message": "No pending email change request found.",
             },
-        )
-    except EmailVerificationCodeExpiredError:
+        ) from e
+    except EmailVerificationCodeExpiredError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={
                 "code": "EMAIL_CHANGE_CODE_EXPIRED",
                 "message": "Verification code expired. Request a new code.",
             },
-        )
+        ) from e
     except InvalidEmailVerificationCodeError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -420,28 +420,28 @@ async def verify_email_change_code(
                 "message": "This code is incorrect.",
                 "attempts_remaining": e.attempts_remaining,
             },
-        )
+        ) from e
     except EmailChangeLockedError as e:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail={
                 "code": "EMAIL_CHANGE_TOO_MANY_ATTEMPTS",
                 "message": "Too many failed attempts. Try again in 5 minutes.",
-                "locked_until": e.locked_until.astimezone(timezone.utc).isoformat(),
+                "locked_until": e.locked_until.astimezone(UTC).isoformat(),
             },
-        )
-    except EmailAlreadyRegisteredError:
+        ) from e
+    except EmailAlreadyRegisteredError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={
                 "code": "EMAIL_ALREADY_REGISTERED",
                 "message": "This email is already registered.",
             },
-        )
+        ) from e
 
 
 @router.post("/change-password", response_model=MessageResponse)
-@limiter.limit("10/minute")
+@rate_limit("10/minute")
 async def change_password(
     request: Request,
     payload: PasswordChangeRequest,
@@ -456,13 +456,13 @@ async def change_password(
             current_password=payload.current_password,
             new_password=payload.new_password,
         )
-    except InvalidCurrentPasswordError:
+    except InvalidCurrentPasswordError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={
                 "code": "CURRENT_PASSWORD_INVALID",
                 "message": "Current password is invalid.",
             },
-        )
+        ) from e
 
     return MessageResponse(message="Password changed successfully.")

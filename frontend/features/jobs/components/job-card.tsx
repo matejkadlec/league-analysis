@@ -176,12 +176,14 @@ export function JobCard({ job, onExecutionClick }: JobCardProps) {
     (isTestRunning && job.is_test_force_stopping);
 
   const refreshJobsData = () => {
-    queryClient.invalidateQueries({ queryKey: ["jobs"] });
-    queryClient.invalidateQueries({ queryKey: ["job-status"] });
-    queryClient.invalidateQueries({ queryKey: ["job-executions"] });
-    queryClient.invalidateQueries({ queryKey: ["job-executions-all"] });
-    queryClient.invalidateQueries({ queryKey: ["job-executions-infinite"] });
-    queryClient.refetchQueries({ queryKey: ["jobs"], type: "active" });
+    void queryClient.invalidateQueries({ queryKey: ["jobs"] });
+    void queryClient.invalidateQueries({ queryKey: ["job-status"] });
+    void queryClient.invalidateQueries({ queryKey: ["job-executions"] });
+    void queryClient.invalidateQueries({ queryKey: ["job-executions-all"] });
+    void queryClient.invalidateQueries({
+      queryKey: ["job-executions-infinite"],
+    });
+    void queryClient.refetchQueries({ queryKey: ["jobs"], type: "active" });
   };
 
   // Fetch latest 5 REGULAR executions for this job (for history display)

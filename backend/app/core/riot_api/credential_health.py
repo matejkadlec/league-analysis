@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import os
 import re
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from enum import StrEnum
-from typing import TYPE_CHECKING, Awaitable, Callable
 from uuid import uuid4
 
 import structlog
@@ -27,10 +27,12 @@ from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
 from app.core.models import Base
-
-if TYPE_CHECKING:
-    from app.core.riot_api.client import RiotAPIClient
-    from app.core.riot_api.constants import Platform, Region
+from app.core.riot_api.client import RiotAPIClient
+from app.core.riot_api.constants import Platform, Region
+from app.core.riot_api.credential_vocabulary import (
+    RiotCredentialEvidence,
+    RiotCredentialStatus,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -50,30 +52,11 @@ class RiotCredentialSource(StrEnum):
     ENVIRONMENT = "env"
 
 
-class RiotCredentialStatus(StrEnum):
-    """Authoritative credential-health states exposed by the backend."""
-
-    MISSING = "missing"
-    UNKNOWN = "unknown"
-    VALID = "valid"
-    INVALID = "invalid"
-
-
-class RiotCredentialEvidence(StrEnum):
-    """Safe evidence categories persisted without provider payloads."""
-
-    MISSING = "missing"
-    CONFIGURED = "configured"
-    SETTINGS_VALIDATION = "settings_validation"
-    PROVIDER_SUCCESS = "provider_success"
-    CREDENTIAL_REJECTED = "credential_rejected"
-
-
 class RiotAPIKey(Base):
     """Database-stored Riot API credential."""
 
     __tablename__ = "riot_api_keys"
-    __table_args__ = {"schema": "core"}
+    __table_args__ = ({"schema": "core"},)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     key_value: Mapped[str] = mapped_column(
@@ -331,7 +314,7 @@ async def synchronize_riot_credential_health(
     This commits only credential selection/health changes and must be called
     before the caller begins domain writes.
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     db_key = await _active_database_key(db, now)
     env_key = os.getenv("RIOT_API_KEY")
     has_env_key = bool(env_key and env_key.strip())
@@ -505,8 +488,6 @@ async def create_tracked_riot_api_client(
     request_callback: Callable[[str, int], None] | None = None,
 ) -> RiotAPIClient:
     """Build a client bound to the current durable credential generation."""
-    from app.core.riot_api.client import RiotAPIClient
-
     credential, _snapshot_value = await synchronize_riot_credential_health(db)
     if credential is None:
         raise ValueError("No active Riot API key configured")

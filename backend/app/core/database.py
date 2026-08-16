@@ -1,7 +1,7 @@
 """Database connection and session management for PostgreSQL using SQLAlchemy with async support."""
 
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
@@ -38,7 +38,7 @@ class DatabaseManager:
         )
 
     @asynccontextmanager
-    async def get_session(self) -> AsyncGenerator[AsyncSession, None]:
+    async def get_session(self) -> AsyncGenerator[AsyncSession]:
         """Get a database session with proper cleanup."""
         async with self.async_session_factory() as session:
             try:
@@ -59,7 +59,7 @@ db_manager = DatabaseManager()
 
 
 # Dependency for FastAPI routes
-async def get_db() -> AsyncGenerator[AsyncSession, None]:
+async def get_db() -> AsyncGenerator[AsyncSession]:
     """Fastapi dependency for getting a database session."""
     async with db_manager.get_session() as session:
         yield session

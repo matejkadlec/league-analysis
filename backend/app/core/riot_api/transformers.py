@@ -1,6 +1,6 @@
 """Data transformation utilities for Riot API match data."""
 
-from typing import Any, Dict, List
+from typing import Any
 
 import structlog
 
@@ -12,7 +12,7 @@ logger = structlog.get_logger(__name__)
 class MatchTransformer:
     """Transform Riot API match data to database format."""
 
-    def transform_match_data(self, match_data: Dict[str, Any]) -> Dict[str, Any]:
+    def transform_match_data(self, match_data: dict[str, Any]) -> dict[str, Any]:
         """
         Transform Riot API match data to database format.
 
@@ -44,8 +44,8 @@ class MatchTransformer:
             raise
 
     def _transform_match_info(
-        self, metadata: Dict[str, Any], info: Dict[str, Any]
-    ) -> Dict[str, Any]:
+        self, metadata: dict[str, Any], info: dict[str, Any]
+    ) -> dict[str, Any]:
         """Transform match information."""
         # Calculate derived flags from participants
         participants = info.get("participants", [])
@@ -73,14 +73,14 @@ class MatchTransformer:
         }
 
     def _transform_participants(
-        self, match_id: str, participants: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
+        self, match_id: str, participants: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
         """Transform participant data."""
-        transformed_participants: List[Dict[str, Any]] = []
+        transformed_participants: list[dict[str, Any]] = []
 
         for idx, participant in enumerate(participants):
             try:
-                participant_dict: Dict[str, Any] = {
+                participant_dict: dict[str, Any] = {
                     "match_id": match_id,
                     "participant_id": participant.get("participantId", idx + 1),
                     "puuid": participant.get("puuid"),
@@ -171,7 +171,7 @@ class MatchTransformer:
 
         return transformed_participants
 
-    def validate_match_data(self, match_data: Dict[str, Any]) -> bool:
+    def validate_match_data(self, match_data: dict[str, Any]) -> bool:
         """
         Validate that match data has required fields.
 
@@ -209,12 +209,9 @@ class MatchTransformer:
 
             # Validate participants list
             participants = match_data.get("info", {}).get("participants", [])
-            if not validate_list_items(
+            return validate_list_items(
                 participants, required_participant_fields, "participant"
-            ):
-                return False
-
-            return True
+            )
         except Exception as e:
             logger.error("Error validating match data", error=str(e))
             return False

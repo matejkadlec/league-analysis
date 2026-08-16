@@ -4,14 +4,11 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import TYPE_CHECKING, List
 
 from dotenv import load_dotenv
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
-
-if TYPE_CHECKING:
-    from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession
 
 # Load environment variables from .env file in project root
 # Get the project root (4 levels up from this file: backend/app/core/config.py -> root)
@@ -48,7 +45,7 @@ class Settings(BaseSettings):
     cors_origins: str = Field(default="http://localhost:3000,http://127.0.0.1:3000")
 
     @property
-    def cors_origins_list(self) -> List[str]:
+    def cors_origins_list(self) -> list[str]:
         """Get CORS origins as a list."""
         return [
             origin.strip() for origin in self.cors_origins.split(",") if origin.strip()

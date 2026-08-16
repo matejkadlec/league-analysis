@@ -16,24 +16,24 @@ export type ApiErrorKind =
 
 export interface ApiError {
   message: string;
-  code?: string;
-  status?: number;
+  code?: string | undefined;
+  status?: number | undefined;
   kind: ApiErrorKind;
   details?: unknown;
 }
 
 interface StructuredErrorDetail {
-  code?: string;
-  message?: string;
-  locked_until?: string;
-  attempts_remaining?: number;
-  retry_after_seconds?: number;
+  code?: string | undefined;
+  message?: string | undefined;
+  locked_until?: string | undefined;
+  attempts_remaining?: number | undefined;
+  retry_after_seconds?: number | undefined;
 }
 
 interface ExtractedResponseError {
-  code?: string;
-  message?: string;
-  structuredDetail?: StructuredErrorDetail;
+  code?: string | undefined;
+  message?: string | undefined;
+  structuredDetail?: StructuredErrorDetail | undefined;
 }
 
 const SAFE_CODE_PATTERN = /^[A-Z][A-Z0-9_]{1,63}$/;

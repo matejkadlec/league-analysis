@@ -2,7 +2,7 @@
 
 from datetime import datetime
 from enum import Enum as PyEnum
-from typing import Any, Literal, Optional
+from typing import Any, Literal, TypeGuard
 
 from pydantic import (
     BaseModel,
@@ -71,7 +71,7 @@ class TopChampionsMutableSettingsV1(_CardSettingsBase):
     minimum_games: int = Field(default=1, ge=1, le=999)
     minimum_win_rate: float = Field(default=0, ge=0, le=100)
     minimum_kda: float = Field(default=0, ge=0, le=50, multiple_of=0.1)
-    included_roles: list[CardRole] = Field(default_factory=list)
+    included_roles: list[CardRole] = Field(default_factory=list[CardRole])
 
     @field_validator("included_roles")
     @classmethod
@@ -128,7 +128,7 @@ class SmurfBoostDetectionMutableSettingsV1(_CardSettingsBase):
     b4_drop_threshold: float = Field(default=0.20, ge=0.10, le=0.45)
 
     @model_validator(mode="after")
-    def cross_field_rules_must_hold(self) -> "SmurfBoostDetectionMutableSettingsV1":
+    def cross_field_rules_must_hold(self) -> SmurfBoostDetectionMutableSettingsV1:
         """Reject a set whose signals could never be satisfiable together."""
         _validate_smurf_boost_cross_fields(
             self.a3_minimum_novel_games, self.recent_window_size
@@ -136,14 +136,14 @@ class SmurfBoostDetectionMutableSettingsV1(_CardSettingsBase):
         return self
 
 
-def _require_json_integer(value: Any) -> int:
+def _require_json_integer(value: object) -> int:
     """Reject coerced values while accepting only JSON integer settings writes."""
     if isinstance(value, bool) or not isinstance(value, int):
         raise ValueError("must be an integer")
     return value
 
 
-def _require_json_number(value: Any) -> float | int:
+def _require_json_number(value: object) -> float | int:
     """Reject boolean and string coercion for JSON numeric settings writes."""
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise ValueError("must be a number")
@@ -153,20 +153,24 @@ def _require_json_number(value: Any) -> float | int:
 class TopChampionsMutableSettingsWriteV1(_CardSettingsWriteBase):
     """Strict write-only contract that leaves legacy reads tolerant."""
 
-    minimum_games: int = Field(default=1, ge=1, le=999)
-    minimum_win_rate: float = Field(default=0, ge=0, le=100)
-    minimum_kda: float = Field(default=0, ge=0, le=50, multiple_of=0.1)
-    included_roles: list[CardRole] = Field(default_factory=list)
+    minimum_games: int = Field(alias="minimumGames", default=1, ge=1, le=999)
+    minimum_win_rate: float = Field(alias="minimumWinRate", default=0, ge=0, le=100)
+    minimum_kda: float = Field(
+        alias="minimumKda", default=0, ge=0, le=50, multiple_of=0.1
+    )
+    included_roles: list[CardRole] = Field(
+        alias="includedRoles", default_factory=list[CardRole]
+    )
 
     @field_validator("minimum_games", mode="before")
     @classmethod
-    def minimum_games_must_be_an_integer(cls, value: Any) -> int:
+    def minimum_games_must_be_an_integer(cls, value: object) -> int:
         """Reject strings, booleans, and decimal values before coercion."""
         return _require_json_integer(value)
 
     @field_validator("minimum_win_rate", "minimum_kda", mode="before")
     @classmethod
-    def threshold_must_be_a_number(cls, value: Any) -> float | int:
+    def threshold_must_be_a_number(cls, value: object) -> float | int:
         """Reject strings and booleans before normal numeric validation."""
         return _require_json_number(value)
 
@@ -182,13 +186,17 @@ class TopChampionsMutableSettingsWriteV1(_CardSettingsWriteBase):
 class RecentPerformanceMutableSettingsWriteV1(_CardSettingsWriteBase):
     """Strict write-only contract that leaves legacy reads tolerant."""
 
-    recent_match_count: int = Field(default=10, ge=5, le=50)
-    win_rate_trend_delta: float = Field(default=0.05, ge=0.01, le=0.25)
-    relative_metric_trend_delta: float = Field(default=0.05, ge=0.01, le=0.25)
+    recent_match_count: int = Field(alias="recentMatchCount", default=10, ge=5, le=50)
+    win_rate_trend_delta: float = Field(
+        alias="winRateTrendDelta", default=0.05, ge=0.01, le=0.25
+    )
+    relative_metric_trend_delta: float = Field(
+        alias="relativeMetricTrendDelta", default=0.05, ge=0.01, le=0.25
+    )
 
     @field_validator("recent_match_count", mode="before")
     @classmethod
-    def match_count_must_be_an_integer(cls, value: Any) -> int:
+    def match_count_must_be_an_integer(cls, value: object) -> int:
         """Reject strings, booleans, and decimal values before coercion."""
         return _require_json_integer(value)
 
@@ -196,7 +204,7 @@ class RecentPerformanceMutableSettingsWriteV1(_CardSettingsWriteBase):
         "win_rate_trend_delta", "relative_metric_trend_delta", mode="before"
     )
     @classmethod
-    def threshold_must_be_a_number(cls, value: Any) -> float | int:
+    def threshold_must_be_a_number(cls, value: object) -> float | int:
         """Reject strings and booleans before normal numeric validation."""
         return _require_json_number(value)
 
@@ -204,21 +212,49 @@ class RecentPerformanceMutableSettingsWriteV1(_CardSettingsWriteBase):
 class SmurfBoostDetectionMutableSettingsWriteV1(_CardSettingsWriteBase):
     """Strict write-only smurf and boost detection threshold contract."""
 
-    recent_window_size: int = Field(default=20, ge=10, le=50)
-    baseline_window_size: int = Field(default=60, ge=15, le=200)
-    a1_step_change_threshold: float = Field(default=1.20, ge=0.60, le=2.00)
-    a2_win_rate_surge_threshold: float = Field(default=0.20, ge=0.10, le=0.35)
-    a3_novel_champion_threshold: float = Field(default=1.20, ge=0.60, le=2.00)
-    a3_minimum_novel_games: int = Field(default=8, ge=5, le=15)
-    a4_summoner_level_gate: int = Field(default=45, ge=30, le=150)
-    a4_performance_threshold: float = Field(default=1.20, ge=0.60, le=2.00)
-    b1_win_rate_delta_threshold: float = Field(default=0.30, ge=0.15, le=0.45)
-    b1_composite_flat_ceiling: float = Field(default=0.05, ge=0.00, le=0.40)
-    b2_consistency_shift_threshold: float = Field(default=1.15, ge=0.60, le=1.50)
-    b3_bimodality_threshold: float = Field(default=0.65, ge=0.555, le=0.80)
-    b3_tail_fraction: float = Field(default=0.30, ge=0.15, le=0.40)
-    b4_high_rate_floor: float = Field(default=0.62, ge=0.50, le=0.80)
-    b4_drop_threshold: float = Field(default=0.20, ge=0.10, le=0.45)
+    recent_window_size: int = Field(alias="recentWindowSize", default=20, ge=10, le=50)
+    baseline_window_size: int = Field(
+        alias="baselineWindowSize", default=60, ge=15, le=200
+    )
+    a1_step_change_threshold: float = Field(
+        alias="a1StepChangeThreshold", default=1.20, ge=0.60, le=2.00
+    )
+    a2_win_rate_surge_threshold: float = Field(
+        alias="a2WinRateSurgeThreshold", default=0.20, ge=0.10, le=0.35
+    )
+    a3_novel_champion_threshold: float = Field(
+        alias="a3NovelChampionThreshold", default=1.20, ge=0.60, le=2.00
+    )
+    a3_minimum_novel_games: int = Field(
+        alias="a3MinimumNovelGames", default=8, ge=5, le=15
+    )
+    a4_summoner_level_gate: int = Field(
+        alias="a4SummonerLevelGate", default=45, ge=30, le=150
+    )
+    a4_performance_threshold: float = Field(
+        alias="a4PerformanceThreshold", default=1.20, ge=0.60, le=2.00
+    )
+    b1_win_rate_delta_threshold: float = Field(
+        alias="b1WinRateDeltaThreshold", default=0.30, ge=0.15, le=0.45
+    )
+    b1_composite_flat_ceiling: float = Field(
+        alias="b1CompositeFlatCeiling", default=0.05, ge=0.00, le=0.40
+    )
+    b2_consistency_shift_threshold: float = Field(
+        alias="b2ConsistencyShiftThreshold", default=1.15, ge=0.60, le=1.50
+    )
+    b3_bimodality_threshold: float = Field(
+        alias="b3BimodalityThreshold", default=0.65, ge=0.555, le=0.80
+    )
+    b3_tail_fraction: float = Field(
+        alias="b3TailFraction", default=0.30, ge=0.15, le=0.40
+    )
+    b4_high_rate_floor: float = Field(
+        alias="b4HighRateFloor", default=0.62, ge=0.50, le=0.80
+    )
+    b4_drop_threshold: float = Field(
+        alias="b4DropThreshold", default=0.20, ge=0.10, le=0.45
+    )
 
     @field_validator(
         "recent_window_size",
@@ -228,7 +264,7 @@ class SmurfBoostDetectionMutableSettingsWriteV1(_CardSettingsWriteBase):
         mode="before",
     )
     @classmethod
-    def window_setting_must_be_an_integer(cls, value: Any) -> int:
+    def window_setting_must_be_an_integer(cls, value: object) -> int:
         """Reject strings, booleans, and decimal values before coercion."""
         return _require_json_integer(value)
 
@@ -247,14 +283,14 @@ class SmurfBoostDetectionMutableSettingsWriteV1(_CardSettingsWriteBase):
         mode="before",
     )
     @classmethod
-    def detection_threshold_must_be_a_number(cls, value: Any) -> float | int:
+    def detection_threshold_must_be_a_number(cls, value: object) -> float | int:
         """Reject strings and booleans before normal numeric validation."""
         return _require_json_number(value)
 
     @model_validator(mode="after")
     def cross_field_rules_must_hold(
         self,
-    ) -> "SmurfBoostDetectionMutableSettingsWriteV1":
+    ) -> SmurfBoostDetectionMutableSettingsWriteV1:
         """Reject a set whose signals could never be satisfiable together."""
         _validate_smurf_boost_cross_fields(
             self.a3_minimum_novel_games, self.recent_window_size
@@ -270,7 +306,7 @@ class CardPreferenceUpdate(_CardSettingsWriteBase):
 
     @field_validator("version", mode="before")
     @classmethod
-    def version_must_be_an_integer(cls, value: Any) -> int:
+    def version_must_be_an_integer(cls, value: object) -> int:
         """Reject coercion before the supported-version literal is checked."""
         return _require_json_integer(value)
 
@@ -283,13 +319,13 @@ class CardPreferenceResponse(_CardSettingsBase):
     settings: dict[str, Any]
     is_default: bool
     requires_recovery: bool = False
-    updated_at: Optional[datetime] = None
+    updated_at: datetime | None = None
 
 
 class CardPreferencesResetRequest(_CardSettingsWriteBase):
     """Explicit catalog confirmation required before resetting every card."""
 
-    card_ids: list[CardId] = Field(min_length=3, max_length=3)
+    card_ids: list[CardId] = Field(alias="cardIds", min_length=3, max_length=3)
 
     @field_validator("card_ids")
     @classmethod
@@ -367,16 +403,21 @@ def _is_compatible_legacy_setting_value(field_name: str, value: object) -> bool:
     silently become integer card settings on a legacy read.
     """
     if field_name in _LEGACY_INTEGER_SETTING_FIELDS:
-        return (
-            isinstance(value, int)
-            and not isinstance(value, bool)
-            or isinstance(value, str)
-            and value.isascii()
-            and value.isdecimal()
+        return (isinstance(value, int) and not isinstance(value, bool)) or (
+            isinstance(value, str) and value.isascii() and value.isdecimal()
         )
     if field_name in _LEGACY_NUMBER_SETTING_FIELDS:
         return isinstance(value, (int, float)) and not isinstance(value, bool)
     return True
+
+
+def _is_json_object(value: object) -> TypeGuard[dict[str, Any]]:
+    """Narrow a decoded JSONB column to the object shape its writers produce.
+
+    A JSONB object always decodes with string keys; its values are whatever an
+    older contract wrote, and each one is screened before it reaches a model.
+    """
+    return isinstance(value, dict)
 
 
 def validate_card_preference_update(
@@ -399,7 +440,7 @@ def normalize_stored_card_preference(
     model_type = _CARD_SETTINGS_MODELS[card_id]
     normalized = model_type().model_dump(mode="json")
     warnings: list[str] = []
-    if not isinstance(stored_settings, dict):
+    if not _is_json_object(stored_settings):
         return {**_CARD_FIXED_SETTINGS_V1[card_id], **normalized}, ("settings",)
 
     renames = _LEGACY_SETTING_RENAMES[card_id]
@@ -454,7 +495,9 @@ class SettingValidationResponse(BaseModel):
     valid: bool = Field(..., description="Whether the value is valid")
     status: Literal["valid", "invalid", "unavailable"]
     message: str = Field(..., description="Validation message")
-    details: Optional[str] = Field(None, description="Additional validation details")
+    details: str | None = Field(
+        default=None, description="Additional validation details"
+    )
 
 
 class SettingTestResponse(BaseModel):
@@ -463,7 +506,9 @@ class SettingTestResponse(BaseModel):
     success: bool = Field(..., description="Whether the test was successful")
     status: Literal["valid", "invalid", "unavailable"]
     message: str = Field(..., description="Test result message")
-    details: Optional[dict] = Field(None, description="Additional test details")
+    details: dict[str, Any] | None = Field(
+        default=None, description="Additional test details"
+    )
 
 
 class APIKeyStatusResponse(BaseModel):
@@ -496,8 +541,8 @@ class ServiceStatusResponse(BaseModel):
     has_recent_recovery: bool = Field(
         ..., description="Whether the current generation recovered from key failure"
     )
-    recovery_notice_key: Optional[str] = Field(
-        None,
+    recovery_notice_key: str | None = Field(
+        default=None,
         description=(
             "Unique key for the latest recovery event, used by frontend for dismiss persistence"
         ),
@@ -511,11 +556,12 @@ class UserSettingsResponse(BaseModel):
     """Deprecated compatibility response for retired application settings."""
 
     theme: ThemeEnum = Field(
-        ThemeEnum.DARK,
+        default=ThemeEnum.DARK,
         description="Deprecated fixed compatibility value; not persisted",
     )
-    default_platform: Optional[str] = Field(
-        "eun1", description="Deprecated fixed compatibility value; not persisted"
+    default_platform: str | None = Field(
+        default="eun1",
+        description="Deprecated fixed compatibility value; not persisted",
     )
     created_at: datetime
     updated_at: datetime
@@ -526,9 +572,9 @@ class UserSettingsResponse(BaseModel):
 class UserSettingsUpdate(BaseModel):
     """Deprecated compatibility input; accepted values no longer affect behavior."""
 
-    theme: Optional[ThemeEnum] = Field(None, description="Theme preference")
-    default_platform: Optional[str] = Field(
-        None, max_length=4, description="Default server/platform"
+    theme: ThemeEnum | None = Field(default=None, description="Theme preference")
+    default_platform: str | None = Field(
+        default=None, max_length=4, description="Default server/platform"
     )
 
 

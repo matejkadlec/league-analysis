@@ -200,7 +200,11 @@ describe("SmurfBoostSettingsCard", () => {
     await user.click(screen.getByTestId("smurf-boost-preset-sensitive"));
 
     await waitFor(() => expect(updateCardPreference).toHaveBeenCalled());
-    const [cardId, sent] = updateCardPreference.mock.calls[0];
+    const firstCall = updateCardPreference.mock.calls[0];
+    if (!firstCall) {
+      throw new Error("updateCardPreference was not called");
+    }
+    const [cardId, sent] = firstCall;
     expect(cardId).toBe("profile.smurf-boost-detection");
     expect(sent.queueId).toBeUndefined();
     expect(Object.keys(sent).length).toBe(THRESHOLD_FIELDS.length);

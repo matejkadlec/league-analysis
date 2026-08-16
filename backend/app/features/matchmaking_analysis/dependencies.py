@@ -25,4 +25,4 @@ MatchmakingServiceDep = Annotated[
     MatchmakingAnalysisService, Depends(get_matchmaking_service)
 ]
 
-__all__ = ["get_matchmaking_service", "MatchmakingServiceDep"]
+__all__ = ["MatchmakingServiceDep", "get_matchmaking_service"]

@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any, Callable, Dict, List, Optional
+from collections.abc import Awaitable, Callable
 
 import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.riot_api.client import RiotAPIClient
 from app.core.riot_api.db_rate_limiter import DBRateLimiter
+from app.core.riot_api.models import MatchListDTO, MatchTimelineDTO
 
 from .match_sync import AnalysisMatchResult, ReprocessMatch
 from .models import Match
@@ -18,22 +20,27 @@ from .timeline import MatchTimeline
 
 logger = structlog.get_logger("app.features.matches.service")
 
+# Reported as `(current, total)`; the loop awaits it for every queued match.
+ProgressCallback = Callable[[int, int], Awaitable[None]]
+# Polled between matches so a caller can stop a long analysis run early.
+CancelCheck = Callable[[], bool]
 
-def extract_queue_match_ids(match_list: Any) -> List[str]:
+
+def extract_queue_match_ids(match_list: MatchListDTO | list[str] | None) -> list[str]:
     """Accept both DTO objects and bare match-id lists from the Riot client."""
     if not match_list:
         return []
-    if hasattr(match_list, "match_ids"):
-        return list(match_list.match_ids)
     if isinstance(match_list, list):
         return match_list
+    if hasattr(match_list, "match_ids"):
+        return list(match_list.match_ids)
     return []
 
 
 def append_unique_match_ids(
-    api_match_ids: List[str],
+    api_match_ids: list[str],
     seen_match_ids: set[str],
-    queue_match_ids: List[str],
+    queue_match_ids: list[str],
 ) -> None:
     """Preserve first-seen order while merging per-queue match IDs."""
     for match_id in queue_match_ids:
@@ -44,13 +51,13 @@ def append_unique_match_ids(
 
 
 async def collect_analysis_api_match_ids(
-    riot_api_client: Any,
+    riot_api_client: RiotAPIClient,
     puuid: str,
-    target_queue_ids: List[int],
-    rate_limiter: Optional[DBRateLimiter],
-) -> List[str]:
+    target_queue_ids: list[int],
+    rate_limiter: DBRateLimiter | None,
+) -> list[str]:
     """Fetch recent match IDs for each requested queue, stopping on rate limits."""
-    api_match_ids: List[str] = []
+    api_match_ids: list[str] = []
     seen_match_ids: set[str] = set()
     for queue_id in target_queue_ids:
         if rate_limiter:
@@ -80,8 +87,8 @@ async def collect_analysis_api_match_ids(
 async def load_analysis_process_sets(
     session: AsyncSession,
     puuid: str,
-    api_match_ids: List[str],
-) -> tuple[List[str], set[str], set[str], set[str]]:
+    api_match_ids: list[str],
+) -> tuple[list[str], set[str], set[str], set[str]]:
     """Load analyzed, incomplete, and missing-timeline sets for smart analysis."""
     existing_analyzed_result = await session.execute(
         select(Match.match_id)
@@ -123,11 +130,11 @@ async def load_analysis_process_sets(
 
 
 def order_analysis_matches(
-    api_match_ids: List[str],
-    new_match_ids: List[str],
+    api_match_ids: list[str],
+    new_match_ids: list[str],
     needs_reanalysis_ids: set[str],
     missing_timeline_ids: set[str],
-) -> List[str]:
+) -> list[str]:
     """Prefer Riot's newest-first order, then append leftover incomplete IDs."""
     matches_to_process = (
         set(new_match_ids) | needs_reanalysis_ids | missing_timeline_ids
@@ -142,11 +149,11 @@ def order_analysis_matches(
 
 
 async def fetch_analysis_timeline(
-    riot_api_client: Any,
+    riot_api_client: RiotAPIClient,
     puuid: str,
     match_id: str,
-    rate_limiter: Optional[DBRateLimiter],
-) -> tuple[Optional[Dict[str, Any]], bool]:
+    rate_limiter: DBRateLimiter | None,
+) -> tuple[MatchTimelineDTO | None, bool]:
     """Fetch a timeline for analysis. The bool is True when the limiter blocked."""
     try:
         timeline_requested = False
@@ -174,10 +181,10 @@ async def fetch_analysis_timeline(
 
 
 async def process_analysis_match(
-    riot_api_client: Any,
+    riot_api_client: RiotAPIClient,
     puuid: str,
     match_id: str,
-    rate_limiter: Optional[DBRateLimiter],
+    rate_limiter: DBRateLimiter | None,
     is_current_game_version: Callable[[str], bool],
     reprocess_match: ReprocessMatch,
 ) -> AnalysisMatchResult:
@@ -236,12 +243,12 @@ def apply_analysis_match_result(
 
 
 async def run_analysis_processing_loop(
-    ordered_to_process: List[str],
+    ordered_to_process: list[str],
     puuid: str,
-    should_cancel: Optional[Any],
-    progress_callback: Optional[Any],
-    riot_api_client: Any,
-    rate_limiter: Optional[DBRateLimiter],
+    should_cancel: CancelCheck | None,
+    progress_callback: ProgressCallback | None,
+    riot_api_client: RiotAPIClient,
+    rate_limiter: DBRateLimiter | None,
     is_current_game_version: Callable[[str], bool],
     reprocess_match: ReprocessMatch,
 ) -> tuple[int, int]:

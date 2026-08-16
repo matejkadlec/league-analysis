@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, cast
+from typing import Any, cast
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -32,10 +32,10 @@ ROLE_ORDER: dict[str, int] = {
 
 
 def group_participants_by_match(
-    all_participants: List[MatchParticipant],
-) -> Dict[str, List[MatchParticipant]]:
+    all_participants: list[MatchParticipant],
+) -> dict[str, list[MatchParticipant]]:
     """Group participant rows by match ID."""
-    participants_by_match: Dict[str, List[MatchParticipant]] = {}
+    participants_by_match: dict[str, list[MatchParticipant]] = {}
     for participant in all_participants:
         if participant.match_id not in participants_by_match:
             participants_by_match[participant.match_id] = []
@@ -44,10 +44,10 @@ def group_participants_by_match(
 
 
 def index_timelines_by_match_team(
-    timeline_rows: List[MatchTimeline],
-) -> Dict[str, Dict[int, MatchTimeline]]:
+    timeline_rows: list[MatchTimeline],
+) -> dict[str, dict[int, MatchTimeline]]:
     """Index one timeline row per team for each match."""
-    timelines_by_match_team: Dict[str, Dict[int, MatchTimeline]] = {}
+    timelines_by_match_team: dict[str, dict[int, MatchTimeline]] = {}
     for timeline_row in timeline_rows:
         match_teams = timelines_by_match_team.setdefault(timeline_row.match_id, {})
         if timeline_row.team_id not in match_teams:
@@ -57,9 +57,9 @@ def index_timelines_by_match_team(
 
 def find_lane_opponent(
     puuid: str,
-    player_participant: Optional[MatchParticipant],
-    match_participants: List[MatchParticipant],
-) -> Optional[EnemyLaneOpponent]:
+    player_participant: MatchParticipant | None,
+    match_participants: list[MatchParticipant],
+) -> EnemyLaneOpponent | None:
     """Return the opposing player in the same assigned lane, if any."""
     if not player_participant:
         return None
@@ -87,23 +87,29 @@ def _enemy_lane_opponent(participant: MatchParticipant) -> EnemyLaneOpponent:
         or 0,
         summoner1_id=participant.summoner1_id,
         summoner2_id=participant.summoner2_id,
+        # The column holds `dict[str, Any] | None` but the field is declared
+        # `RunesData | None`, and the raw dict is what the `mode="before"`
+        # validator `transform_runes` is there to convert. Pyright checks the
+        # call against the declared field type, which no pre-validator input
+        # ever matches, so this cast marks a validator boundary rather than
+        # silencing a real mismatch.
         runes=cast(Any, participant.runes),
     )
 
 
-def timeline_int_or_none(timeline: Optional[MatchTimeline], attr: str) -> Optional[int]:
+def timeline_int_or_none(timeline: MatchTimeline | None, attr: str) -> int | None:
     if timeline is None:
         return None
     return getattr(timeline, attr)
 
 
-def timeline_int_or_zero(timeline: Optional[MatchTimeline], attr: str) -> int:
+def timeline_int_or_zero(timeline: MatchTimeline | None, attr: str) -> int:
     if timeline is None:
         return 0
     return getattr(timeline, attr)
 
 
-def empty_team_stats(timeline: Optional[MatchTimeline]) -> dict[str, Any]:
+def empty_team_stats(timeline: MatchTimeline | None) -> dict[str, Any]:
     """Seed team objective totals from timeline rows when they exist."""
     return {
         "kills": 0,
@@ -159,8 +165,8 @@ def apply_participant_objective_fallback(
 
 def accumulate_team_participant(
     participant: MatchParticipant,
-    blue_team: List[TeamChampion],
-    red_team: List[TeamChampion],
+    blue_team: list[TeamChampion],
+    red_team: list[TeamChampion],
     blue_stats: dict[str, Any],
     red_stats: dict[str, Any],
     blue_has_timeline: bool,
@@ -224,7 +230,7 @@ def apply_voidgrub_fallback(
     )
 
 
-def calc_team_kda(kills: int, deaths: int, assists: int) -> Optional[float]:
+def calc_team_kda(kills: int, deaths: int, assists: int) -> float | None:
     """Team KDA is None when the team has no kills, deaths, or assists."""
     if deaths == 0:
         return float(kills + assists) if kills + assists > 0 else None
@@ -251,12 +257,12 @@ def role_sort_key(champion: TeamChampion) -> int:
 
 
 def build_team_compositions_and_stats(
-    match_participants: List[MatchParticipant],
-    timeline_by_team: Dict[int, MatchTimeline],
+    match_participants: list[MatchParticipant],
+    timeline_by_team: dict[int, MatchTimeline],
 ) -> tuple[TeamComposition, TeamStatsComposition]:
     """Build both team compositions and aggregated team statistics."""
-    blue_team: List[TeamChampion] = []
-    red_team: List[TeamChampion] = []
+    blue_team: list[TeamChampion] = []
+    red_team: list[TeamChampion] = []
     blue_timeline = timeline_by_team.get(100)
     red_timeline = timeline_by_team.get(200)
     blue_has_timeline = blue_timeline is not None
@@ -301,8 +307,8 @@ def player_total_cs(participant: MatchParticipant) -> int:
 
 
 def build_player_match_participant(
-    player_participant: Optional[MatchParticipant],
-) -> Optional[PlayerMatchParticipant]:
+    player_participant: MatchParticipant | None,
+) -> PlayerMatchParticipant | None:
     """Build the focused player card for a match list row."""
     if not player_participant:
         return None
@@ -324,15 +330,16 @@ def build_player_match_participant(
         or 0,
         summoner1_id=player_participant.summoner1_id,
         summoner2_id=player_participant.summoner2_id,
+        # Same validator boundary as in the opponent builder above.
         runes=cast(Any, player_participant.runes),
     )
 
 
 def build_match_with_player_data(
     match: Match,
-    player_data: Optional[PlayerMatchParticipant],
-    lane_opponent: Optional[EnemyLaneOpponent],
-    lp_change: Optional[int],
+    player_data: PlayerMatchParticipant | None,
+    lane_opponent: EnemyLaneOpponent | None,
+    lp_change: int | None,
     team_compositions: TeamComposition,
     team_stats: TeamStatsComposition,
 ) -> MatchWithPlayerData:
@@ -364,14 +371,14 @@ def build_match_with_player_data(
 
 
 def build_match_responses(
-    db_matches: List[Match],
-    player_participants_by_match: Dict[str, MatchParticipant],
-    participants_by_match: Dict[str, List[MatchParticipant]],
-    timelines_by_match_team: Dict[str, Dict[int, MatchTimeline]],
+    db_matches: list[Match],
+    player_participants_by_match: dict[str, MatchParticipant],
+    participants_by_match: dict[str, list[MatchParticipant]],
+    timelines_by_match_team: dict[str, dict[int, MatchTimeline]],
     puuid: str,
-) -> List[MatchWithPlayerData]:
+) -> list[MatchWithPlayerData]:
     """Assemble the per-match player-data payload for a history page."""
-    match_responses: List[MatchWithPlayerData] = []
+    match_responses: list[MatchWithPlayerData] = []
     for match in db_matches:
         player_participant = player_participants_by_match.get(match.match_id)
         match_participants = participants_by_match.get(match.match_id, [])
@@ -395,11 +402,11 @@ def build_match_responses(
 async def load_match_player_data_context(
     session: AsyncSession,
     puuid: str,
-    match_ids: List[str],
+    match_ids: list[str],
 ) -> tuple[
-    Dict[str, MatchParticipant],
-    Dict[str, List[MatchParticipant]],
-    Dict[str, Dict[int, MatchTimeline]],
+    dict[str, MatchParticipant],
+    dict[str, list[MatchParticipant]],
+    dict[str, dict[int, MatchTimeline]],
 ]:
     """Load participants and timeline aggregates for a history page."""
     player_participants_result = await session.execute(

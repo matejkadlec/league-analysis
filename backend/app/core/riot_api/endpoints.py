@@ -1,6 +1,6 @@
 """Riot API endpoint definitions and routing information."""
 
-from typing import Dict, List, Optional
+from enum import Enum
 from urllib.parse import quote, urlencode
 
 import structlog
@@ -26,24 +26,26 @@ class RiotAPIEndpoints:
         self.region = region
         self.platform = platform
 
-    def get_base_url(self, region: Optional[Region] = None) -> str:
+    def get_base_url(self, region: Region | None = None) -> str:
         """Get base URL for regional endpoints."""
         region = region or self.region
         return f"https://{self._enum_str(region)}.api.riotgames.com"
 
-    def get_platform_url(self, platform: Optional[Platform] = None) -> str:
+    def get_platform_url(self, platform: Platform | None = None) -> str:
         """Get base URL for platform endpoints."""
         platform = platform or self.platform
         return f"https://{self._enum_str(platform)}.api.riotgames.com"
 
     @staticmethod
-    def _enum_str(value) -> str:
+    def _enum_str(value: Region | Platform | str) -> str:
         """Extract string value from enum or return as-is."""
-        return value.value if hasattr(value, "value") else value
+        if isinstance(value, Enum):
+            return str(value.value)
+        return value
 
     # Account endpoints (Regional)
     def account_by_riot_id(
-        self, game_name: str, tag_line: str, region: Optional[Region] = None
+        self, game_name: str, tag_line: str, region: Region | None = None
     ) -> str:
         """Get account by Riot ID endpoint."""
         base_url = self.get_base_url(region)
@@ -54,12 +56,12 @@ class RiotAPIEndpoints:
             f"{encoded_name}/{encoded_tag}"
         )
 
-    def account_by_puuid(self, puuid: str, region: Optional[Region] = None) -> str:
+    def account_by_puuid(self, puuid: str, region: Region | None = None) -> str:
         """Get account by PUUID endpoint."""
         base_url = self.get_base_url(region)
         return f"{base_url}/riot/account/v1/accounts/by-puuid/{quote(puuid, safe='')}"
 
-    def summoner_by_puuid(self, puuid: str, platform: Optional[Platform] = None) -> str:
+    def summoner_by_puuid(self, puuid: str, platform: Platform | None = None) -> str:
         """Get summoner by PUUID endpoint."""
         platform_url = self.get_platform_url(platform)
         return (
@@ -72,11 +74,11 @@ class RiotAPIEndpoints:
         puuid: str,
         start: int = 0,
         count: int = 20,
-        queue: Optional[QueueType] = None,
-        type: Optional[MatchType] = None,
-        start_time: Optional[int] = None,
-        end_time: Optional[int] = None,
-        region: Optional[Region] = None,
+        queue: QueueType | None = None,
+        type: MatchType | None = None,
+        start_time: int | None = None,
+        end_time: int | None = None,
+        region: Region | None = None,
     ) -> str:
         """Get match list by PUUID endpoint."""
         base_url = self.get_base_url(region)
@@ -96,21 +98,19 @@ class RiotAPIEndpoints:
 
         return f"{url}?{urlencode(params)}"
 
-    def match_by_id(self, match_id: str, region: Optional[Region] = None) -> str:
+    def match_by_id(self, match_id: str, region: Region | None = None) -> str:
         """Get match by ID endpoint."""
         base_url = self.get_base_url(region)
         return f"{base_url}/lol/match/v5/matches/{quote(match_id, safe='')}"
 
-    def match_timeline_by_id(
-        self, match_id: str, region: Optional[Region] = None
-    ) -> str:
+    def match_timeline_by_id(self, match_id: str, region: Region | None = None) -> str:
         """Get match timeline by ID endpoint."""
         base_url = self.get_base_url(region)
         return f"{base_url}/lol/match/v5/matches/{quote(match_id, safe='')}/timeline"
 
     # League endpoints (Platform)
     def league_entries_by_summoner_id(
-        self, summoner_id: str, platform: Optional[Platform] = None
+        self, summoner_id: str, platform: Platform | None = None
     ) -> str:
         """Get league entries by encrypted Summoner ID endpoint."""
         platform_url = self.get_platform_url(platform)
@@ -120,14 +120,14 @@ class RiotAPIEndpoints:
         )
 
     def league_entries_by_puuid(
-        self, puuid: str, platform: Optional[Platform] = None
+        self, puuid: str, platform: Platform | None = None
     ) -> str:
         """Get league entries by encrypted PUUID endpoint."""
         platform_url = self.get_platform_url(platform)
         return f"{platform_url}/lol/league/v4/entries/by-puuid/{quote(puuid, safe='')}"
 
 
-def parse_rate_limit_header(header_value: str) -> List[Dict[str, int]]:
+def parse_rate_limit_header(header_value: str) -> list[dict[str, int]]:
     """
     Parse rate limit header value.
 
@@ -156,7 +156,7 @@ def parse_rate_limit_header(header_value: str) -> List[Dict[str, int]]:
     return limits
 
 
-def parse_rate_count_header(header_value: str) -> List[Dict[str, int]]:
+def parse_rate_count_header(header_value: str) -> list[dict[str, int]]:
     """
     Parse rate count header value.
 

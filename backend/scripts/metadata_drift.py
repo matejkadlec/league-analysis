@@ -149,7 +149,7 @@ def enum_parity_signatures(connection: Connection, metadata: Any) -> list[str]:
     """
     in_database = _database_enum_labels(connection)
     declared = _declared_enums(metadata)
-    signatures = []
+    signatures: list[str] = []
     for type_name, values in declared.items():
         stored = in_database.get(type_name, set())
         signatures += [f"missing_enum_value {type_name} {v}" for v in values - stored]
@@ -187,7 +187,9 @@ def drift_signatures(connection: Connection, metadata: Any) -> list[str]:
     return sorted(signatures)
 
 
-def _signatures_for(difference: Any) -> list[str]:
+def _signatures_for(
+    difference: tuple[Any, ...] | list[tuple[Any, ...]],
+) -> list[str]:
     """Reduce one autogenerate diff to signatures, dispatching on its shape.
 
     Autogenerate emits three shapes and getting this wrong is silent: an

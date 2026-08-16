@@ -2,7 +2,7 @@
 
 from datetime import datetime
 from enum import Enum as PyEnum
-from typing import Any, Dict, Optional
+from typing import Any, Final, override
 
 from sqlalchemy import (
     BigInteger,
@@ -57,7 +57,7 @@ class JobConfiguration(Base):
     """Job configuration model storing job scheduling and settings."""
 
     __tablename__ = "job_configurations"
-    __table_args__ = {"schema": "jobs"}
+    __table_args__: Final = {"schema": "jobs"}
 
     # Primary key
     id: Mapped[int] = mapped_column(
@@ -83,7 +83,7 @@ class JobConfiguration(Base):
         comment="Unique name for this job configuration",
     )
 
-    description: Mapped[Optional[str]] = mapped_column(
+    description: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
         comment="Description of what the job does",
@@ -112,7 +112,7 @@ class JobConfiguration(Base):
         comment="Whether a currently running job execution is paused",
     )
 
-    config_json: Mapped[Optional[Dict[str, Any]]] = mapped_column(
+    config_json: Mapped[dict[str, Any] | None] = mapped_column(
         JSONB,
         nullable=True,
         comment="Job-specific configuration parameters in JSON format",
@@ -142,6 +142,7 @@ class JobConfiguration(Base):
         order_by="JobExecution.started_at.desc()",
     )
 
+    @override
     def __repr__(self) -> str:
         """Return string representation of the job configuration."""
         return f"<JobConfiguration(id={self.id}, name='{self.name}', type='{self.job_type.value}', active={self.is_active})>"
@@ -151,7 +152,7 @@ class JobExecution(Base):
     """Job execution model storing job run history and metrics."""
 
     __tablename__ = "job_executions"
-    __table_args__ = {"schema": "jobs"}
+    __table_args__: Final = {"schema": "jobs"}
 
     # Primary key
     id: Mapped[int] = mapped_column(
@@ -179,7 +180,7 @@ class JobExecution(Base):
         comment="When this job execution started",
     )
 
-    completed_at: Mapped[Optional[datetime]] = mapped_column(
+    completed_at: Mapped[datetime | None] = mapped_column(
         SQLDateTime(timezone=True),
         nullable=True,
         index=True,
@@ -218,21 +219,21 @@ class JobExecution(Base):
     )
 
     # Error handling
-    error_message: Mapped[Optional[str]] = mapped_column(
+    error_message: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
         comment="Error message if job execution failed",
     )
 
     # Detailed execution log
-    execution_log: Mapped[Optional[Dict[str, Any]]] = mapped_column(
+    execution_log: Mapped[dict[str, Any] | None] = mapped_column(
         JSONB,
         nullable=True,
         comment="Detailed execution log and metrics in JSON format",
     )
 
     # Detailed logs captured during execution
-    detailed_logs: Mapped[Optional[Dict[str, Any]]] = mapped_column(
+    detailed_logs: Mapped[dict[str, Any] | None] = mapped_column(
         JSONB,
         nullable=True,
         comment="All logs captured during job execution (INFO, WARNING, ERROR, etc.)",
@@ -267,6 +268,7 @@ class JobExecution(Base):
     # Relationships
     job_config = relationship("JobConfiguration", back_populates="executions")
 
+    @override
     def __repr__(self) -> str:
         """Return string representation of the job execution."""
         return f"<JobExecution(id={self.id}, config_id={self.job_config_id}, status='{self.status.value}', started={self.started_at})>"
@@ -306,25 +308,25 @@ class PlayerSyncRun(Base):
     status: Mapped[str] = mapped_column(
         String(32), nullable=False, default="pending", server_default="pending"
     )
-    match_execution_id: Mapped[Optional[int]] = mapped_column(
+    match_execution_id: Mapped[int | None] = mapped_column(
         Integer,
         ForeignKey("jobs.job_executions.id", ondelete="SET NULL"),
         nullable=True,
     )
-    profile_execution_id: Mapped[Optional[int]] = mapped_column(
+    profile_execution_id: Mapped[int | None] = mapped_column(
         Integer,
         ForeignKey("jobs.job_executions.id", ondelete="SET NULL"),
         nullable=True,
     )
-    error_code: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
-    error_message: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    error_message: Mapped[str | None] = mapped_column(String(500), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         SQLDateTime(timezone=True), nullable=False, server_default=func.now()
     )
-    started_at: Mapped[Optional[datetime]] = mapped_column(
+    started_at: Mapped[datetime | None] = mapped_column(
         SQLDateTime(timezone=True), nullable=True
     )
-    completed_at: Mapped[Optional[datetime]] = mapped_column(
+    completed_at: Mapped[datetime | None] = mapped_column(
         SQLDateTime(timezone=True), nullable=True
     )
     updated_at: Mapped[datetime] = mapped_column(

@@ -1,12 +1,14 @@
 """Regression coverage for Match History filtering before pagination."""
 
 from types import SimpleNamespace
+from typing import cast
 from unittest.mock import AsyncMock
 
 import pytest
 from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.dialects import postgresql
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.features.matches.models import Match
 from app.features.matches.router import parse_match_queue_ids
@@ -67,10 +69,12 @@ def test_history_conditions_search_every_participant_before_pagination() -> None
 
 @pytest.mark.asyncio
 async def test_empty_page_retains_filtered_total_for_client_clamping() -> None:
-    service = MatchService(SimpleNamespace())  # type: ignore[arg-type]
-    service._get_matches_from_db = AsyncMock(return_value=[])  # type: ignore[method-assign]
-    service._count_matches_from_db = AsyncMock(return_value=63)  # type: ignore[method-assign]
-    service._count_analyzed_matches_from_db = AsyncMock(return_value=40)  # type: ignore[method-assign]
+    # Every query the service would make is replaced below, so the session is
+    # never touched; `AsyncSession` is too large to implement for that.
+    service = MatchService(cast(AsyncSession, SimpleNamespace()))
+    service._get_matches_from_db = AsyncMock(return_value=[])
+    service._count_matches_from_db = AsyncMock(return_value=63)
+    service._count_analyzed_matches_from_db = AsyncMock(return_value=40)
 
     response = await service.get_player_matches_with_data(
         puuid="selected-puuid",

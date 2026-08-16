@@ -1,7 +1,7 @@
 """Persisted matchmaking analysis lifecycle and immutable results."""
 
 from datetime import datetime
-from typing import Optional
+from typing import TypedDict, override
 
 from sqlalchemy import (
     CheckConstraint,
@@ -18,6 +18,19 @@ from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
 from app.core.models import Base
+
+
+class MatchmakingAnalysisResultsJSON(TypedDict, total=False):
+    """Shape of the ``results`` JSONB payload written on completion.
+
+    Every key is optional because rows persisted by earlier revisions predate
+    later additions, so readers must keep treating each key as possibly absent.
+    """
+
+    team_avg_winrate: float
+    enemy_avg_winrate: float
+    matches_analyzed: int
+    players_analyzed: int
 
 
 class MatchmakingAnalysis(Base):
@@ -40,20 +53,20 @@ class MatchmakingAnalysis(Base):
     )
 
     # Analysis results - stored as JSON for flexibility
-    results: Mapped[Optional[dict]] = mapped_column(
+    results: Mapped[MatchmakingAnalysisResultsJSON | None] = mapped_column(
         JSONB,
         nullable=True,
         comment="Analysis results as JSON (team/enemy winrates)",
     )
 
     # Timestamps
-    started_at: Mapped[Optional[datetime]] = mapped_column(
+    started_at: Mapped[datetime | None] = mapped_column(
         SQLDateTime(timezone=True),
         nullable=True,
         comment="When this analysis was started",
     )
 
-    completed_at: Mapped[Optional[datetime]] = mapped_column(
+    completed_at: Mapped[datetime | None] = mapped_column(
         SQLDateTime(timezone=True),
         nullable=True,
         comment="When this analysis was completed",
@@ -67,20 +80,20 @@ class MatchmakingAnalysis(Base):
         comment="Authoritative analysis lifecycle state",
     )
 
-    error_code: Mapped[Optional[str]] = mapped_column(
+    error_code: Mapped[str | None] = mapped_column(
         String(64),
         nullable=True,
         comment="Stable client-safe failure classification",
     )
 
-    error_message: Mapped[Optional[str]] = mapped_column(
+    error_message: Mapped[str | None] = mapped_column(
         String(500),
         nullable=True,
         comment="Reviewed user-safe terminal failure message",
     )
 
     # Progress tracking - which PUUIDs have been analyzed
-    puuid_progress: Mapped[Optional[dict]] = mapped_column(
+    puuid_progress: Mapped[dict[str, bool] | None] = mapped_column(
         JSONB,
         nullable=True,
         default=dict,
@@ -95,7 +108,7 @@ class MatchmakingAnalysis(Base):
     )
 
     # Rate limit wait tracking - timestamp when rate limit resets (NULL = not waiting)
-    rate_limit_reset_at: Mapped[Optional[datetime]] = mapped_column(
+    rate_limit_reset_at: Mapped[datetime | None] = mapped_column(
         SQLDateTime(timezone=True),
         nullable=True,
         default=None,
@@ -122,6 +135,7 @@ class MatchmakingAnalysis(Base):
         {"schema": "core"},
     )
 
+    @override
     def __repr__(self) -> str:
         """String representation of the analysis."""
         progress_count = len(self.puuid_progress) if self.puuid_progress else 0

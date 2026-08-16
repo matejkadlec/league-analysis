@@ -1,7 +1,7 @@
 """Player league model for storing ranked information."""
 
 from datetime import datetime
-from typing import Optional
+from typing import override
 
 from sqlalchemy import (
     Boolean,
@@ -27,7 +27,7 @@ class PlayerLeague(Base):
     """
 
     __tablename__ = "player_leagues"
-    __table_args__ = {"schema": "core"}
+    __table_args__ = ({"schema": "core"},)
 
     # Composite primary key using puuid + created_at
     puuid: Mapped[str] = mapped_column(
@@ -45,7 +45,7 @@ class PlayerLeague(Base):
     )
 
     # League information
-    league_id: Mapped[Optional[str]] = mapped_column(
+    league_id: Mapped[str | None] = mapped_column(
         String(36),
         nullable=True,
         index=True,
@@ -66,7 +66,7 @@ class PlayerLeague(Base):
         comment="Rank tier (e.g., GOLD, PLATINUM, DIAMOND)",
     )
 
-    rank: Mapped[Optional[str]] = mapped_column(
+    rank: Mapped[str | None] = mapped_column(
         String(4), nullable=True, index=True, comment="Rank division (I, II, III, IV)"
     )
 
@@ -113,6 +113,7 @@ class PlayerLeague(Base):
     # Relationships
     player = relationship("Player", back_populates="leagues")
 
+    @override
     def __repr__(self) -> str:
         """Return string representation of the player league."""
         return f"<PlayerLeague(puuid='{self.puuid}', queue='{self.queue_type}', tier='{self.tier}', rank='{self.rank}')>"

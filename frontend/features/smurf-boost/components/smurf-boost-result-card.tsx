@@ -91,7 +91,10 @@ function requiredGames(
   const stored = thresholds.recent_window_size;
   // A run stored under an older threshold contract may not carry the window at
   // all; its own recent count is then the only honest stand-in.
-  const recentWindow = Number.isFinite(stored) ? stored : results.recent_games;
+  const recentWindow =
+    stored !== undefined && Number.isFinite(stored)
+      ? stored
+      : results.recent_games;
   const required = recentWindow + minimumBaselineGames;
   return {
     recentWindow,

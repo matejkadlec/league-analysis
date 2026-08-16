@@ -8,7 +8,7 @@ import { useRelativeTime } from "@/lib/core/use-relative-time";
 
 interface RoleStatsCardProps {
   stats: LaneStatsResponse;
-  lastUpdated?: string | null;
+  lastUpdated?: string | null | undefined;
 }
 
 // Helper function to get win rate color

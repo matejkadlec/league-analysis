@@ -1,7 +1,7 @@
 """Schemas for matchmaking analysis requests and responses."""
 
 from datetime import datetime
-from typing import Dict, Literal, Optional
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field
 
@@ -49,16 +49,16 @@ class MatchmakingAnalysisResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     puuid: str
-    results: Optional[MatchmakingAnalysisResults] = None
+    results: MatchmakingAnalysisResults | None = None
     created_at: datetime
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
     status: MatchmakingAnalysisStatus
-    error_code: Optional[str] = None
-    error_message: Optional[str] = None
-    puuid_progress: Optional[Dict[str, bool]] = None
+    error_code: str | None = None
+    error_message: str | None = None
+    puuid_progress: dict[str, bool] | None = None
     requests_saved: int = 0
-    rate_limit_reset_at: Optional[datetime] = None
+    rate_limit_reset_at: datetime | None = None
 
     @computed_field
     @property
@@ -86,14 +86,14 @@ class MatchmakingAnalysisStatusResponse(BaseModel):
     status: MatchmakingAnalysisStatus
     progress: int
     total_puuids: int
-    results: Optional[MatchmakingAnalysisResults] = None
+    results: MatchmakingAnalysisResults | None = None
     created_at: datetime
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
-    error_code: Optional[str] = None
-    error_message: Optional[str] = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    error_code: str | None = None
+    error_message: str | None = None
     requests_saved: int = 0
-    rate_limit_reset_at: Optional[datetime] = None
+    rate_limit_reset_at: datetime | None = None
 
 
 class MatchmakingAnalysisHistoryItem(BaseModel):

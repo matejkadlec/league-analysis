@@ -106,7 +106,7 @@ run_backend_tests() {
     DEBUG=false \
     JWT_SECRET_KEY=league-analysis-test-jwt-secret-32-characters \
     ENVIRONMENT=test \
-    uv run pytest
+    uv run pytest --cov --cov-report=term
 }
 
 run_backend_migration_validation() {
@@ -171,7 +171,10 @@ run_frontend_typecheck() {
 
 run_frontend_tests() {
   cd "$repository_root/frontend"
-  npm test
+  # --coverage is what arms the thresholds in vitest.config.mts. Without it
+  # Vitest never computes coverage and never compares it to the floors, so the
+  # configured minimums would sit in the repository doing nothing.
+  npm test -- --coverage
 }
 
 run_frontend_build() {
@@ -192,6 +195,11 @@ else
 fi
 
 run_step 'Repository hygiene' run_repository_hygiene
+# Secret scanning and the architecture rules used to run only from
+# .githooks/pre-commit, which every developer has to opt into. These two steps
+# are what makes them true of master rather than of one machine.
+run_step 'Secret scan' "$repository_root/scripts/run-gitleaks.sh"
+run_step 'Repository architecture rules' "$repository_root/scripts/run-local-precommit-hooks.sh"
 run_step 'ShellCheck' "$repository_root/scripts/run-shellcheck.sh"
 run_step 'GitHub workflow syntax' "$repository_root/scripts/run-actionlint.sh"
 run_step 'PostgreSQL backup retention regression' "$repository_root/scripts/test-postgres-backup-retention.sh"

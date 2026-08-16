@@ -46,6 +46,15 @@ so it is safe to call from the main checkout or any worktree.
   commit or skip a deletion-only change. They do not run pytest (needs the
   test database) or live CVE scans (advisory databases are not deterministic;
   Dependabot owns that).
+- **The hooks that need no hook environment also run in the gate.** Secret
+  scanning and the `repo: local` architecture rules were enforced only by
+  `.githooks/pre-commit`, which each developer has to opt into, so a commit
+  from a machine without it reached `master` unchecked. `./test.sh` runs both
+  in its repository scope: gitleaks from the pinned binary in the gate image,
+  and the local hooks through pre-commit against a generated configuration
+  that names nothing else. The remote hooks stay commit-time only, because
+  pre-commit installs their environments over the network while it runs, and
+  the gate installs nothing.
 - **Xenon is a blocking B-rank gate.** Every block under `backend/app` must
   stay at rank B or better (CC <= 10). It runs at commit time and in
   `./test.sh -b`.

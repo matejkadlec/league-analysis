@@ -9,8 +9,9 @@ Error Handling Strategy:
 - General errors: Re-raise if critical=True, log and return None otherwise
 """
 
+from collections.abc import Callable, Coroutine, Iterator
 from functools import wraps
-from typing import Any, Callable, Iterator, Optional, ParamSpec, TypeVar
+from typing import Any, Protocol, overload
 
 import structlog
 from sqlalchemy.exc import SQLAlchemyError
@@ -25,8 +26,24 @@ from app.core.riot_api.errors import (
 
 logger = structlog.get_logger(__name__)
 
-P = ParamSpec("P")
-R = TypeVar("R")
+#: Callback that turns a decorated function's own arguments into log fields.
+LogContextExtractor = Callable[..., dict[str, Any]]
+
+
+class ErrorHandlingDecorator(Protocol):
+    """Decorator returned by :func:`handle_riot_api_errors`.
+
+    The wrapper keeps the wrapped function's parameters and may return ``None``
+    instead of the wrapped result when a non-critical error is swallowed.
+    """
+
+    @overload
+    def __call__[**P, R](
+        self, func: Callable[P, Coroutine[Any, Any, R]], /
+    ) -> Callable[P, Coroutine[Any, Any, R | None]]: ...
+
+    @overload
+    def __call__[**P, R](self, func: Callable[P, R], /) -> Callable[P, R | None]: ...
 
 
 class RateLimitSignal(Exception):
@@ -40,7 +57,7 @@ class RateLimitSignal(Exception):
     """
 
     def __init__(
-        self, retry_after: Optional[float] = None, message: str = "Rate limit hit"
+        self, retry_after: float | None = None, message: str = "Rate limit hit"
     ):
         """Initialize rate limit signal.
 
@@ -104,8 +121,8 @@ def handle_riot_api_errors(
     *,
     operation: str,
     critical: bool = True,
-    log_context: Optional[Callable[..., dict[str, Any]]] = None,
-):
+    log_context: LogContextExtractor | None = None,
+) -> ErrorHandlingDecorator:
     """Decorator to handle common Riot API errors with consistent behavior.
 
     :param operation: Description of the operation (e.g., "fetch matches").
@@ -130,7 +147,15 @@ def handle_riot_api_errors(
             pass
     """
 
-    def decorator(func: Callable[P, R]) -> Callable[P, R]:
+    @overload
+    def decorator[**P, R](
+        func: Callable[P, Coroutine[Any, Any, R]], /
+    ) -> Callable[P, Coroutine[Any, Any, R | None]]: ...
+
+    @overload
+    def decorator[**P, R](func: Callable[P, R], /) -> Callable[P, R | None]: ...
+
+    def decorator(func: Callable[..., Any], /) -> Callable[..., Any]:
         import inspect
 
         # Choose wrapper based on function type
@@ -142,8 +167,11 @@ def handle_riot_api_errors(
 
 
 def _extract_log_context(
-    log_context: Optional[Callable], args: tuple, kwargs: dict, func_name: str
-) -> dict:
+    log_context: LogContextExtractor | None,
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+    func_name: str,
+) -> dict[str, Any]:
     """Extract logging context from function arguments."""
     if not log_context:
         return {}
@@ -160,7 +188,7 @@ def _extract_log_context(
 
 
 def _handle_error(
-    error: Exception, operation: str, critical: bool, context: dict
+    error: Exception, operation: str, critical: bool, context: dict[str, Any]
 ) -> None:
     """Handle exceptions with consistent logging and re-raise logic."""
     if isinstance(error, RateLimitError):
@@ -194,14 +222,20 @@ def _handle_error(
         raise
 
 
-def _create_async_wrapper(
-    func: Callable, operation: str, critical: bool, log_context: Optional[Callable]
-) -> Callable:
+def _create_async_wrapper[**P, R](
+    func: Callable[P, Coroutine[Any, Any, R]],
+    operation: str,
+    critical: bool,
+    log_context: LogContextExtractor | None,
+) -> Callable[P, Coroutine[Any, Any, R | None]]:
     """Create async wrapper for error handling."""
 
     @wraps(func)
-    async def async_wrapper(*args, **kwargs):
-        context = _extract_log_context(log_context, args, kwargs, func.__name__)
+    async def async_wrapper(*args: P.args, **kwargs: P.kwargs) -> R | None:
+        # ``@wraps`` has already copied the wrapped function's ``__name__``.
+        context = _extract_log_context(
+            log_context, args, kwargs, async_wrapper.__name__
+        )
         try:
             return await func(*args, **kwargs)
         except RateLimitSignal:
@@ -214,14 +248,18 @@ def _create_async_wrapper(
     return async_wrapper
 
 
-def _create_sync_wrapper(
-    func: Callable, operation: str, critical: bool, log_context: Optional[Callable]
-) -> Callable:
+def _create_sync_wrapper[**P, R](
+    func: Callable[P, R],
+    operation: str,
+    critical: bool,
+    log_context: LogContextExtractor | None,
+) -> Callable[P, R | None]:
     """Create sync wrapper for error handling."""
 
     @wraps(func)
-    def sync_wrapper(*args, **kwargs):
-        context = _extract_log_context(log_context, args, kwargs, func.__name__)
+    def sync_wrapper(*args: P.args, **kwargs: P.kwargs) -> R | None:
+        # ``@wraps`` has already copied the wrapped function's ``__name__``.
+        context = _extract_log_context(log_context, args, kwargs, sync_wrapper.__name__)
         try:
             return func(*args, **kwargs)
         except RateLimitSignal:

@@ -627,7 +627,7 @@ def write_state(path: Path, payload: dict[str, str]) -> None:
             state_output.write("\n")
             state_output.flush()
             os.fsync(state_output.fileno())
-        os.replace(temporary, path)
+        temporary.replace(path)
         path.chmod(0o600)
     finally:
         temporary.unlink(missing_ok=True)

@@ -1,7 +1,7 @@
 """Refresh token model for rotating long-lived sessions."""
 
 from datetime import datetime
-from typing import Optional
+from typing import Final, override
 
 from sqlalchemy import (
     BigInteger,
@@ -22,7 +22,7 @@ class RefreshToken(Base):
     """Refresh token storage for session rotation and revocation."""
 
     __tablename__ = "refresh_tokens"
-    __table_args__ = {"schema": "auth"}
+    __table_args__: Final = {"schema": "auth"}
 
     id: Mapped[int] = mapped_column(
         BigInteger,
@@ -62,28 +62,29 @@ class RefreshToken(Base):
         index=True,
         comment="Refresh token expiration timestamp",
     )
-    revoked_at: Mapped[Optional[datetime]] = mapped_column(
+    revoked_at: Mapped[datetime | None] = mapped_column(
         SQLDateTime(timezone=True),
         nullable=True,
         index=True,
         comment="When token was revoked (NULL means active)",
     )
-    replaced_by_token_id: Mapped[Optional[str]] = mapped_column(
+    replaced_by_token_id: Mapped[str | None] = mapped_column(
         String(36),
         nullable=True,
         comment="Token ID that replaced this token during rotation",
     )
-    created_from_ip: Mapped[Optional[str]] = mapped_column(
+    created_from_ip: Mapped[str | None] = mapped_column(
         String(45),
         nullable=True,
         comment="Source IP address when token was created",
     )
-    user_agent: Mapped[Optional[str]] = mapped_column(
+    user_agent: Mapped[str | None] = mapped_column(
         String(255),
         nullable=True,
         comment="Request user-agent when token was created",
     )
 
+    @override
     def __repr__(self) -> str:
         """Return string representation of refresh token."""
         return f"<RefreshToken(id={self.id}, user_id={self.user_id}, token_id='{self.token_id}')>"

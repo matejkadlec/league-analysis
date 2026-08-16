@@ -10,7 +10,9 @@ const playerNameValidation = z
 
     // We expect the # to be present if it's coming from our controlled input
     const parts = val.split("#");
-    const name = parts[0];
+    // `String.prototype.split` always yields at least one element, so the
+    // fallback is unreachable and only satisfies the compiler.
+    const name = parts[0] ?? "";
     // If there are multiple # (which shouldn't happen if controlled), we take the last part or join?
     // Let's assume standard Name#Tag format.
     const tag = parts.length > 1 ? parts.slice(1).join("#") : "";

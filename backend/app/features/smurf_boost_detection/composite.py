@@ -79,7 +79,7 @@ class CompositeContext:
     baseline_center: float
     baseline_spread: float
     degenerate: bool
-    notes: set[str] = field(default_factory=set)
+    notes: set[str] = field(default_factory=set[str])
 
 
 def _effective_spread(center: float, spread: float) -> float:

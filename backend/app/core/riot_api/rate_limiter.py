@@ -3,7 +3,6 @@
 import asyncio
 import time
 from dataclasses import dataclass
-from typing import Dict
 from urllib.parse import urlsplit
 
 import structlog
@@ -167,7 +166,7 @@ class RateLimiter:
     @staticmethod
     def _parse_rate_headers(
         limit_header: str, count_header: str
-    ) -> tuple[list[Dict[str, int]], list[Dict[str, int]]] | None:
+    ) -> tuple[list[dict[str, int]], list[dict[str, int]]] | None:
         """Parse a limit/count header pair."""
         if not limit_header or not count_header:
             return None
@@ -238,7 +237,7 @@ class RateLimiter:
             )
 
     def update_limits(
-        self, headers: Dict[str, str], endpoint: str, method: str = "GET"
+        self, headers: dict[str, str], endpoint: str, method: str = "GET"
     ) -> None:
         """Update routing-scoped application and method windows from a response."""
         try:

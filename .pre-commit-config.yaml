@@ -70,6 +70,22 @@ repos:
         language: pygrep
         files: \.py$
 
+      # `Field(None, description=...)` passes the default positionally, and
+      # Pyright's dataclass_transform handling does not recognise that as a
+      # default — so it types the field as REQUIRED while Pydantic treats it as
+      # optional at runtime. The two disagree silently: constructing the model
+      # the way production does is a type error, and no gate reports it until
+      # something tries to build one in checked code. Only `Field(default=...)`
+      # is understood. `Field(...)` (genuinely required) and keyword-only forms
+      # like `Field(min_length=3)` are fine, so the rule targets a positional
+      # first argument specifically.
+      - id: forbid-positional-field-default
+        name: Pydantic Field defaults must be keyword (Field(default=...))
+        entry: 'Field\((?!\s*(?:\)|\.\.\.|[A-Za-z_]\w*\s*=))\s*\S'
+        language: pygrep
+        args: [--multiline]
+        files: '^backend/.*\.py$'
+
       # All data fetching goes through TanStack Query over the validated
       # client in lib/core. axios itself belongs to that client and its
       # tests, so those two trees are excluded rather than the rest of the

@@ -34,6 +34,7 @@ RUN set -eux; \
 # and checksummed by hand.
 COPY --from=koalaman/shellcheck:v0.11.0 /bin/shellcheck /usr/local/bin/shellcheck
 COPY --from=rhysd/actionlint:1.7.12 /usr/local/bin/actionlint /usr/local/bin/actionlint
+COPY --from=zricethezav/gitleaks:v8.30.1 /usr/bin/gitleaks /usr/local/bin/gitleaks
 
 # uv, and the Python it resolves from .python-version.
 COPY --from=ghcr.io/astral-sh/uv:0.12.3 /uv /usr/local/bin/uv
@@ -46,6 +47,18 @@ RUN set -eux; \
     uv python install; \
     rm /tmp/.python-version; \
     chmod -R a+rX /opt/uv-python
+
+# pre-commit, which the gate uses for the `repo: local` architecture rules in
+# .pre-commit-config.yaml. It lives in its own environment rather than in
+# backend/.venv so that the repository scope of the gate needs no backend sync,
+# and so that nothing is installed while the gate runs. Keep the version in
+# step with the one backend/pyproject.toml locks for .githooks/pre-commit.
+RUN set -eux; \
+    uv venv --python 3.14 /opt/pre-commit; \
+    VIRTUAL_ENV=/opt/pre-commit uv pip install --no-cache pre-commit==4.6.2; \
+    ln --symbolic /opt/pre-commit/bin/pre-commit /usr/local/bin/pre-commit; \
+    chmod -R a+rX /opt/pre-commit; \
+    pre-commit --version
 
 # npm and uv write here when the container runs as the invoking user rather
 # than root. compose.gate.yml mounts persistent volumes at both cache paths so

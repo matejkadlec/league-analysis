@@ -1,6 +1,6 @@
 """Persist and run explicit per-player synchronization lifecycles."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import structlog
 from sqlalchemy import select
@@ -78,7 +78,7 @@ async def get_active_player_sync(db: AsyncSession, puuid: str) -> PlayerSyncRun 
     )
 
 
-def _failure_from_job(job) -> tuple[str, str, str]:
+def _failure_from_job(job: BaseJob) -> tuple[str, str, str]:
     """Map an internal writer result to a stable client-safe terminal state.
 
     Reads only the writer's cached scalars. A per-player Riot failure rolls the
@@ -156,10 +156,10 @@ async def _finish_sync(
         if profile_execution_id is not None:
             sync_run.profile_execution_id = profile_execution_id
         if status == "running" and sync_run.started_at is None:
-            sync_run.started_at = datetime.now(timezone.utc)
+            sync_run.started_at = datetime.now(UTC)
         if status not in ACTIVE_SYNC_STATUSES:
-            sync_run.completed_at = datetime.now(timezone.utc)
-        sync_run.updated_at = datetime.now(timezone.utc)
+            sync_run.completed_at = datetime.now(UTC)
+        sync_run.updated_at = datetime.now(UTC)
         await db.commit()
 
 

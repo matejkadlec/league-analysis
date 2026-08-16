@@ -1,7 +1,7 @@
 """Pydantic schemas for Player model."""
 
 from datetime import datetime
-from typing import Literal, Optional
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -26,10 +26,10 @@ class PlayerCreate(PlayerBase):
 class PlayerUpdate(BaseModel):
     """Schema for updating an existing player."""
 
-    game_name: Optional[str] = None
-    tag_line: Optional[str] = None
-    summoner_level: Optional[int] = None
-    profile_icon_id: Optional[int] = None
+    game_name: str | None = None
+    tag_line: str | None = None
+    summoner_level: int | None = None
+    profile_icon_id: int | None = None
 
 
 class PlayerResponse(PlayerBase):
@@ -50,20 +50,20 @@ class PlayerResponse(PlayerBase):
         default=0,
         description="Number of matches that are fully analyzed",
     )
-    last_playstyle_analysis: Optional[datetime] = Field(
-        None, description="Time of last playstyle analysis"
+    last_playstyle_analysis: datetime | None = Field(
+        default=None, description="Time of last playstyle analysis"
     )
-    last_matchmaking_analysis: Optional[datetime] = Field(
-        None, description="Time of last matchmaking analysis"
+    last_matchmaking_analysis: datetime | None = Field(
+        default=None, description="Time of last matchmaking analysis"
     )
-    profile_synced_at: Optional[datetime] = Field(
-        None, description="Last successful profile identity check"
+    profile_synced_at: datetime | None = Field(
+        default=None, description="Last successful profile identity check"
     )
-    league_synced_at: Optional[datetime] = Field(
-        None, description="Last successful ranked-data check"
+    league_synced_at: datetime | None = Field(
+        default=None, description="Last successful ranked-data check"
     )
-    match_synced_at: Optional[datetime] = Field(
-        None, description="Last complete successful match-history check"
+    match_synced_at: datetime | None = Field(
+        default=None, description="Last complete successful match-history check"
     )
 
     model_config = ConfigDict(from_attributes=True)
@@ -84,13 +84,13 @@ class PlayerListResponse(BaseModel):
 class CurrentPlayerUpdate(BaseModel):
     """Set or clear the authenticated user's normal current player."""
 
-    puuid: Optional[str] = Field(None, min_length=78, max_length=78)
+    puuid: str | None = Field(default=None, min_length=78, max_length=78)
 
 
 class PlayerContextResponse(BaseModel):
     """Per-user navigation context over shared canonical player records."""
 
-    current_player: Optional[PlayerResponse] = None
+    current_player: PlayerResponse | None = None
     tracked_players: list[PlayerResponse]
 
 
@@ -107,13 +107,13 @@ class PlayerSyncRunResponse(BaseModel):
         "cancelled",
         "rate_limited",
     ]
-    match_execution_id: Optional[int] = None
-    profile_execution_id: Optional[int] = None
-    error_code: Optional[str] = None
-    error_message: Optional[str] = None
+    match_execution_id: int | None = None
+    profile_execution_id: int | None = None
+    error_code: str | None = None
+    error_message: str | None = None
     created_at: datetime
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
