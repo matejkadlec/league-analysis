@@ -16,7 +16,7 @@ class JobConfigurationBase(BaseModel):
         ..., min_length=1, max_length=128, description="Unique name for this job"
     )
     description: str | None = Field(
-        None, description="Description of what the job does"
+        default=None, description="Description of what the job does"
     )
     schedule: str = Field(
         ..., min_length=1, max_length=256, description="Job schedule (cron or interval)"
@@ -27,7 +27,7 @@ class JobConfigurationBase(BaseModel):
         description="Whether the currently running execution is paused",
     )
     config_json: dict[str, Any] | None = Field(
-        None,
+        default=None,
         description="Job-specific configuration (for example interval_seconds)",
     )
 
@@ -41,9 +41,9 @@ class JobConfigurationCreate(JobConfigurationBase):
 class JobConfigurationUpdate(BaseModel):
     """Schema for updating an existing job configuration."""
 
-    name: str | None = Field(None, min_length=1, max_length=128)
-    description: str | None = Field(None)
-    schedule: str | None = Field(None, min_length=1, max_length=256)
+    name: str | None = Field(default=None, min_length=1, max_length=128)
+    description: str | None = Field(default=None)
+    schedule: str | None = Field(default=None, min_length=1, max_length=256)
     is_active: bool | None = None
     is_paused: bool | None = None
     config_json: dict[str, Any] | None = None
@@ -89,17 +89,21 @@ class JobExecutionResponse(BaseModel):
     id: int = Field(..., description="Unique identifier")
     job_config_id: int = Field(..., description="Reference to job configuration")
     started_at: datetime = Field(..., description="Execution start time")
-    completed_at: datetime | None = Field(None, description="Execution completion time")
+    completed_at: datetime | None = Field(
+        default=None, description="Execution completion time"
+    )
     status: JobStatus = Field(..., description="Execution status")
     api_requests_made: int = Field(default=0, description="Number of API requests made")
     records_created: int = Field(default=0, description="Number of records created")
     records_updated: int = Field(default=0, description="Number of records updated")
-    error_message: str | None = Field(None, description="Error message if failed")
+    error_message: str | None = Field(
+        default=None, description="Error message if failed"
+    )
     execution_log: dict[str, Any] | None = Field(
-        None, description="Detailed execution log"
+        default=None, description="Detailed execution log"
     )
     detailed_logs: dict[str, Any] | None = Field(
-        None,
+        default=None,
         description="All logs captured during execution (includes logs array and summary)",
     )
     triggered_by: str = Field(
@@ -125,10 +129,10 @@ class JobStatusResponse(BaseModel):
         ..., description="Number of currently running executions"
     )
     last_execution: JobExecutionResponse | None = Field(
-        None, description="Most recent job execution"
+        default=None, description="Most recent job execution"
     )
     next_run_time: datetime | None = Field(
-        None, description="When the next job is scheduled"
+        default=None, description="When the next job is scheduled"
     )
 
 
@@ -137,7 +141,9 @@ class JobTriggerResponse(BaseModel):
 
     success: bool = Field(..., description="Whether the job was triggered successfully")
     message: str = Field(..., description="Result message")
-    execution_id: int | None = Field(None, description="ID of created execution record")
+    execution_id: int | None = Field(
+        default=None, description="ID of created execution record"
+    )
 
 
 class JobControlActionResponse(BaseModel):

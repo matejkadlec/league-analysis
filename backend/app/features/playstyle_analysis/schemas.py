@@ -15,7 +15,7 @@ class PlaystyleAnalysisRequest(BaseModel):
 
     puuid: str = Field(..., description="Player PUUID to analyze")
     force_reanalyze: bool = Field(
-        False, description="Force reanalysis even if recent analysis exists"
+        default=False, description="Force reanalysis even if recent analysis exists"
     )
 
 

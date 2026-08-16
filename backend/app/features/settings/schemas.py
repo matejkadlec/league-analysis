@@ -459,7 +459,9 @@ class SettingValidationResponse(BaseModel):
     valid: bool = Field(..., description="Whether the value is valid")
     status: Literal["valid", "invalid", "unavailable"]
     message: str = Field(..., description="Validation message")
-    details: str | None = Field(None, description="Additional validation details")
+    details: str | None = Field(
+        default=None, description="Additional validation details"
+    )
 
 
 class SettingTestResponse(BaseModel):
@@ -468,7 +470,9 @@ class SettingTestResponse(BaseModel):
     success: bool = Field(..., description="Whether the test was successful")
     status: Literal["valid", "invalid", "unavailable"]
     message: str = Field(..., description="Test result message")
-    details: dict[str, Any] | None = Field(None, description="Additional test details")
+    details: dict[str, Any] | None = Field(
+        default=None, description="Additional test details"
+    )
 
 
 class APIKeyStatusResponse(BaseModel):
@@ -502,7 +506,7 @@ class ServiceStatusResponse(BaseModel):
         ..., description="Whether the current generation recovered from key failure"
     )
     recovery_notice_key: str | None = Field(
-        None,
+        default=None,
         description=(
             "Unique key for the latest recovery event, used by frontend for dismiss persistence"
         ),
@@ -516,11 +520,12 @@ class UserSettingsResponse(BaseModel):
     """Deprecated compatibility response for retired application settings."""
 
     theme: ThemeEnum = Field(
-        ThemeEnum.DARK,
+        default=ThemeEnum.DARK,
         description="Deprecated fixed compatibility value; not persisted",
     )
     default_platform: str | None = Field(
-        "eun1", description="Deprecated fixed compatibility value; not persisted"
+        default="eun1",
+        description="Deprecated fixed compatibility value; not persisted",
     )
     created_at: datetime
     updated_at: datetime
@@ -531,9 +536,9 @@ class UserSettingsResponse(BaseModel):
 class UserSettingsUpdate(BaseModel):
     """Deprecated compatibility input; accepted values no longer affect behavior."""
 
-    theme: ThemeEnum | None = Field(None, description="Theme preference")
+    theme: ThemeEnum | None = Field(default=None, description="Theme preference")
     default_platform: str | None = Field(
-        None, max_length=4, description="Default server/platform"
+        default=None, max_length=4, description="Default server/platform"
     )
 
 

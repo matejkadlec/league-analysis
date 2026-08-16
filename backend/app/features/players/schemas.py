@@ -51,19 +51,19 @@ class PlayerResponse(PlayerBase):
         description="Number of matches that are fully analyzed",
     )
     last_playstyle_analysis: datetime | None = Field(
-        None, description="Time of last playstyle analysis"
+        default=None, description="Time of last playstyle analysis"
     )
     last_matchmaking_analysis: datetime | None = Field(
-        None, description="Time of last matchmaking analysis"
+        default=None, description="Time of last matchmaking analysis"
     )
     profile_synced_at: datetime | None = Field(
-        None, description="Last successful profile identity check"
+        default=None, description="Last successful profile identity check"
     )
     league_synced_at: datetime | None = Field(
-        None, description="Last successful ranked-data check"
+        default=None, description="Last successful ranked-data check"
     )
     match_synced_at: datetime | None = Field(
-        None, description="Last complete successful match-history check"
+        default=None, description="Last complete successful match-history check"
     )
 
     model_config = ConfigDict(from_attributes=True)
@@ -84,7 +84,7 @@ class PlayerListResponse(BaseModel):
 class CurrentPlayerUpdate(BaseModel):
     """Set or clear the authenticated user's normal current player."""
 
-    puuid: str | None = Field(None, min_length=78, max_length=78)
+    puuid: str | None = Field(default=None, min_length=78, max_length=78)
 
 
 class PlayerContextResponse(BaseModel):

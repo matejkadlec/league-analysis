@@ -332,14 +332,7 @@ async def test_job_configuration_update_locks_cleanup_tables_before_its_row(
 
     updated = await service.update_job_configuration(
         7,
-        # `JobConfigurationUpdate(config_json=...)` reads as a missing-argument
-        # error to a type checker: `name`, `description` and `schedule` declare
-        # their `None` default positionally in `Field(None, ...)`, which Pyright
-        # does not treat as a default. Validating the same payload keeps
-        # `model_fields_set` — and so the service's `exclude_unset` — identical.
-        JobConfigurationUpdate.model_validate(
-            {"config_json": {"enabled_queue_ids": [440]}}
-        ),
+        JobConfigurationUpdate(config_json={"enabled_queue_ids": [440]}),
     )
 
     assert str(session.statements[0]) == (

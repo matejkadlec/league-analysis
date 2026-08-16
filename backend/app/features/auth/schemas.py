@@ -121,7 +121,7 @@ class RefreshTokenRequest(BaseModel):
 class UserProfileUpdate(BaseModel):
     """Schema for updating user profile fields."""
 
-    display_name: str | None = Field(None, min_length=1, max_length=128)
+    display_name: str | None = Field(default=None, min_length=1, max_length=128)
 
 
 class EmailChangeRequest(BaseModel):

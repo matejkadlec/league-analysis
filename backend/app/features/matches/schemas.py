@@ -30,22 +30,22 @@ class MatchBase(BaseModel):
     queue_id: int = Field(..., description="Queue type ID")
     game_version: str = Field(..., max_length=32, description="Game version")
     map_id: int = Field(..., description="Map ID")
-    game_mode: str | None = Field(None, max_length=32, description="Game mode")
-    game_type: str | None = Field(None, max_length=32, description="Game type")
+    game_mode: str | None = Field(default=None, max_length=32, description="Game mode")
+    game_type: str | None = Field(default=None, max_length=32, description="Game type")
     game_end_timestamp: int | None = Field(
-        None, description="Game end timestamp in milliseconds since epoch"
+        default=None, description="Game end timestamp in milliseconds since epoch"
     )
     early_surrender: bool | None = Field(
-        None, description="Whether the game ended in early surrender"
+        default=None, description="Whether the game ended in early surrender"
     )
     surrender: bool | None = Field(
-        None, description="Whether the game ended in surrender"
+        default=None, description="Whether the game ended in surrender"
     )
     game_result: str | None = Field(
-        None, max_length=32, description="End of game result"
+        default=None, max_length=32, description="End of game result"
     )
     fully_analyzed: bool = Field(
-        False,
+        default=False,
         description="Whether this match has been processed for playstyle analysis",
     )
 
@@ -62,15 +62,16 @@ class MatchUpdate(BaseModel):
     """Schema for updating a Match."""
 
     game_duration: int | None = Field(
-        None, ge=0, description="Game duration in seconds"
+        default=None, ge=0, description="Game duration in seconds"
     )
     game_end_timestamp: int | None = Field(
-        None, description="Game end timestamp in milliseconds since epoch"
+        default=None, description="Game end timestamp in milliseconds since epoch"
     )
-    game_mode: str | None = Field(None, max_length=32, description="Game mode")
-    game_type: str | None = Field(None, max_length=32, description="Game type")
+    game_mode: str | None = Field(default=None, max_length=32, description="Game mode")
+    game_type: str | None = Field(default=None, max_length=32, description="Game type")
     fully_analyzed: bool | None = Field(
-        None, description="Whether this match has been processed for playstyle analysis"
+        default=None,
+        description="Whether this match has been processed for playstyle analysis",
     )
 
 
@@ -93,12 +94,16 @@ class MatchResponse(MatchBase):
 class RunesData(BaseModel):
     """Schema for runes data with flattened structure."""
 
-    primary_style: int | None = Field(None, description="Primary rune style ID")
-    sub_style: int | None = Field(None, description="Sub rune style ID")
-    keystone: int | None = Field(None, description="Keystone rune ID")
-    primary_perks: list[int] | None = Field(None, description="Primary perk IDs")
-    sub_perks: list[int] | None = Field(None, description="Sub perk IDs")
-    stat_perks: dict[str, int] | None = Field(None, description="Stat perk values")
+    primary_style: int | None = Field(default=None, description="Primary rune style ID")
+    sub_style: int | None = Field(default=None, description="Sub rune style ID")
+    keystone: int | None = Field(default=None, description="Keystone rune ID")
+    primary_perks: list[int] | None = Field(
+        default=None, description="Primary perk IDs"
+    )
+    sub_perks: list[int] | None = Field(default=None, description="Sub perk IDs")
+    stat_perks: dict[str, int] | None = Field(
+        default=None, description="Stat perk values"
+    )
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -109,22 +114,26 @@ class PlayerMatchParticipant(BaseModel):
     champion_id: int = Field(..., description="Champion ID")
     champion_name: str = Field(..., description="Champion name")
     champion_level: int = Field(..., description="Champion level at end of game")
-    team_position: str | None = Field(None, description="Lane position")
+    team_position: str | None = Field(default=None, description="Lane position")
     team_id: int = Field(..., description="Team ID (100=Blue, 200=Red)")
     win: bool = Field(..., description="Whether the player won")
-    remake: bool = Field(False, description="Whether it was a remake")
-    kills: int = Field(0, description="Kills")
-    deaths: int = Field(0, description="Deaths")
-    assists: int = Field(0, description="Assists")
-    kda: float | None = Field(None, description="Computed KDA")
-    total_cs: int = Field(0, description="Total CS (minions + monsters)")
-    vision_score: int = Field(0, description="Vision score")
+    remake: bool = Field(default=False, description="Whether it was a remake")
+    kills: int = Field(default=0, description="Kills")
+    deaths: int = Field(default=0, description="Deaths")
+    assists: int = Field(default=0, description="Assists")
+    kda: float | None = Field(default=None, description="Computed KDA")
+    total_cs: int = Field(default=0, description="Total CS (minions + monsters)")
+    vision_score: int = Field(default=0, description="Vision score")
     total_damage_dealt_to_champions: int = Field(
-        0, description="Total damage to champions"
+        default=0, description="Total damage to champions"
     )
-    summoner1_id: int | None = Field(None, description="First summoner spell ID")
-    summoner2_id: int | None = Field(None, description="Second summoner spell ID")
-    runes: RunesData | None = Field(None, description="Runes data")
+    summoner1_id: int | None = Field(
+        default=None, description="First summoner spell ID"
+    )
+    summoner2_id: int | None = Field(
+        default=None, description="Second summoner spell ID"
+    )
+    runes: RunesData | None = Field(default=None, description="Runes data")
 
     @field_validator("runes", mode="before")
     @classmethod
@@ -141,18 +150,22 @@ class EnemyLaneOpponent(BaseModel):
     champion_id: int = Field(..., description="Enemy champion ID")
     champion_name: str = Field(..., description="Enemy champion name")
     champion_level: int = Field(..., description="Enemy champion level")
-    kills: int = Field(0, description="Enemy kills")
-    deaths: int = Field(0, description="Enemy deaths")
-    assists: int = Field(0, description="Enemy assists")
-    kda: float | None = Field(None, description="Enemy KDA")
-    total_cs: int = Field(0, description="Enemy total CS")
-    vision_score: int = Field(0, description="Enemy vision score")
+    kills: int = Field(default=0, description="Enemy kills")
+    deaths: int = Field(default=0, description="Enemy deaths")
+    assists: int = Field(default=0, description="Enemy assists")
+    kda: float | None = Field(default=None, description="Enemy KDA")
+    total_cs: int = Field(default=0, description="Enemy total CS")
+    vision_score: int = Field(default=0, description="Enemy vision score")
     total_damage_dealt_to_champions: int = Field(
-        0, description="Enemy damage to champions"
+        default=0, description="Enemy damage to champions"
     )
-    summoner1_id: int | None = Field(None, description="Enemy first summoner spell ID")
-    summoner2_id: int | None = Field(None, description="Enemy second summoner spell ID")
-    runes: RunesData | None = Field(None, description="Enemy runes data")
+    summoner1_id: int | None = Field(
+        default=None, description="Enemy first summoner spell ID"
+    )
+    summoner2_id: int | None = Field(
+        default=None, description="Enemy second summoner spell ID"
+    )
+    runes: RunesData | None = Field(default=None, description="Enemy runes data")
 
     @field_validator("runes", mode="before")
     @classmethod
@@ -168,7 +181,7 @@ class TeamChampion(BaseModel):
 
     champion_id: int = Field(..., description="Champion ID")
     champion_name: str = Field(..., description="Champion name")
-    team_position: str | None = Field(None, description="Lane position")
+    team_position: str | None = Field(default=None, description="Lane position")
     puuid: str = Field(..., description="Player PUUID")
 
     model_config = ConfigDict(from_attributes=True)
@@ -190,31 +203,32 @@ class TeamComposition(BaseModel):
 class TeamStats(BaseModel):
     """Schema for aggregated team statistics."""
 
-    kills: int = Field(0, description="Total team kills")
-    deaths: int = Field(0, description="Total team deaths")
-    assists: int = Field(0, description="Total team assists")
-    kda: float | None = Field(None, description="Team KDA")
+    kills: int = Field(default=0, description="Total team kills")
+    deaths: int = Field(default=0, description="Total team deaths")
+    assists: int = Field(default=0, description="Total team assists")
+    kda: float | None = Field(default=None, description="Team KDA")
     turrets: int | None = Field(
-        None,
+        default=None,
         description="Total turrets destroyed (null when timeline data is missing)",
     )
     inhibitors: int | None = Field(
-        None,
+        default=None,
         description="Total inhibitors destroyed (null when timeline data is missing)",
     )
     dragons: int | None = Field(
-        None, description="Total dragons killed (null when timeline data is missing)"
+        default=None,
+        description="Total dragons killed (null when timeline data is missing)",
     )
     barons: int = Field(
-        0,
+        default=0,
         description="Total barons killed (timeline-backed, fallback to participant stats)",
     )
     rift_heralds: int = Field(
-        0,
+        default=0,
         description="Total rift heralds killed (timeline-backed, fallback to participant stats)",
     )
     voidgrubs: int | None = Field(
-        None,
+        default=None,
         description="Total voidgrubs killed (null when timeline data is missing)",
     )
 
@@ -240,20 +254,20 @@ class MatchWithPlayerData(MatchResponse):
     """Match response including player-specific participant data."""
 
     player_participant: PlayerMatchParticipant | None = Field(
-        None, description="The player's participation data"
+        default=None, description="The player's participation data"
     )
     lane_opponent: EnemyLaneOpponent | None = Field(
-        None, description="The enemy lane opponent"
+        default=None, description="The enemy lane opponent"
     )
     lp_change: int | None = Field(
-        None,
+        default=None,
         description="Persisted observed LP change, or null when unavailable",
     )
     team_compositions: TeamComposition | None = Field(
-        None, description="Team compositions for the match"
+        default=None, description="Team compositions for the match"
     )
     team_stats: TeamStatsComposition | None = Field(
-        None, description="Team statistics for the match"
+        default=None, description="Team statistics for the match"
     )
 
     model_config = ConfigDict(from_attributes=True)
@@ -264,7 +278,9 @@ class MatchListResponse(BaseModel):
 
     matches: list[MatchResponse]
     total: int = Field(..., description="Total matches available")
-    total_analyzed: int = Field(0, description="Total number of fully analyzed matches")
+    total_analyzed: int = Field(
+        default=0, description="Total number of fully analyzed matches"
+    )
     page: int = Field(..., description="Current page number")
     size: int = Field(..., description="Number of matches per page")
     pages: int = Field(..., description="Total number of pages")
@@ -277,7 +293,9 @@ class MatchListWithPlayerDataResponse(BaseModel):
 
     matches: list[MatchWithPlayerData]
     total: int = Field(..., description="Total matches available")
-    total_analyzed: int = Field(0, description="Total number of fully analyzed matches")
+    total_analyzed: int = Field(
+        default=0, description="Total number of fully analyzed matches"
+    )
     page: int = Field(..., description="Current page number")
     size: int = Field(..., description="Number of matches per page")
     pages: int = Field(..., description="Total number of pages")

@@ -29,12 +29,6 @@ def _job_row(job_type: JobType) -> JobConfigurationResponse:
         schedule="*/5 * * * *",
         created_at=now,
         updated_at=now,
-        # `description` and `config_json` declare their default positionally,
-        # as `Field(None, ...)`, which Pyright does not read as a default. They
-        # are optional at runtime; passing their own default keeps the two
-        # views of the schema in agreement.
-        description=None,
-        config_json=None,
     )
 
 

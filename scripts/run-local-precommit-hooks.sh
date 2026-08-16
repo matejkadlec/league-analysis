@@ -55,6 +55,7 @@ GATE_HOOKS = (
     "forbid-non-kebab-frontend-filenames",
     "forbid-core-importing-features",
     "forbid-metadata-create-all",
+    "forbid-positional-field-default",
     "forbid-direct-axios",
     "forbid-direct-fetch",
     "forbid-hardcoded-ddragon-url",

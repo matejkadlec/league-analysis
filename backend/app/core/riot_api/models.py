@@ -46,23 +46,23 @@ class ParticipantDTO(BaseModel):
     participant_id: int = Field(..., alias="participantId")
     puuid: str
     summoner_name: str | None = Field(default=None, alias="summonerName")
-    summoner_id: str | None = Field(None, alias="summonerId")
-    summoner_level: int = Field(0, alias="summonerLevel")
-    profile_icon: int = Field(0, alias="profileIcon")
+    summoner_id: str | None = Field(default=None, alias="summonerId")
+    summoner_level: int = Field(default=0, alias="summonerLevel")
+    profile_icon: int = Field(default=0, alias="profileIcon")
 
     # Riot ID fields
-    game_name: str | None = Field(None, alias="riotIdGameName")
-    tag_line: str | None = Field(None, alias="riotIdTagline")
+    game_name: str | None = Field(default=None, alias="riotIdGameName")
+    tag_line: str | None = Field(default=None, alias="riotIdTagline")
 
     # Team & Position
     team_id: int = Field(..., alias="teamId")
-    team_position: str | None = Field(None, alias="teamPosition")
+    team_position: str | None = Field(default=None, alias="teamPosition")
 
     # Champions
     champion_id: int = Field(..., alias="championId")
     champion_name: str = Field(..., alias="championName")
     champion_level: int = Field(..., alias="champLevel")
-    champion_transform: int = Field(0, alias="championTransform")
+    champion_transform: int = Field(default=0, alias="championTransform")
 
     # KDA & Perf
     win: bool
@@ -70,80 +70,88 @@ class ParticipantDTO(BaseModel):
     deaths: int
     assists: int
     kda: float = Field(
-        0.0
+        default=0.0
     )  # Calculated property in API, but explicit here for validation
 
-    largest_multi_kill: int = Field(0, alias="largestMultiKill")
-    largest_killing_spree: int = Field(0, alias="largestKillingSpree")
-    first_blood_kill: bool = Field(False, alias="firstBloodKill")
-    first_tower_kill: bool = Field(False, alias="firstTowerKill")
+    largest_multi_kill: int = Field(default=0, alias="largestMultiKill")
+    largest_killing_spree: int = Field(default=0, alias="largestKillingSpree")
+    first_blood_kill: bool = Field(default=False, alias="firstBloodKill")
+    first_tower_kill: bool = Field(default=False, alias="firstTowerKill")
 
     # Economy & Vision
-    gold_earned: int = Field(0, alias="goldEarned")
-    gold_spent: int = Field(0, alias="goldSpent")
-    vision_score: float | None = Field(None, alias="visionScore")
-    vision_wards_placed: int = Field(0, alias="detectorWardsPlaced")
-    vision_wards_bought: int = Field(0, alias="visionWardsBoughtInGame")
-    wards_placed: int = Field(0, alias="wardsPlaced")
-    wards_killed: int = Field(0, alias="wardsKilled")
+    gold_earned: int = Field(default=0, alias="goldEarned")
+    gold_spent: int = Field(default=0, alias="goldSpent")
+    vision_score: float | None = Field(default=None, alias="visionScore")
+    vision_wards_placed: int = Field(default=0, alias="detectorWardsPlaced")
+    vision_wards_bought: int = Field(default=0, alias="visionWardsBoughtInGame")
+    wards_placed: int = Field(default=0, alias="wardsPlaced")
+    wards_killed: int = Field(default=0, alias="wardsKilled")
 
     # Farming
-    total_minions_killed: int = Field(0, alias="totalMinionsKilled")
-    neutral_minions_killed: int = Field(0, alias="neutralMinionsKilled")
+    total_minions_killed: int = Field(default=0, alias="totalMinionsKilled")
+    neutral_minions_killed: int = Field(default=0, alias="neutralMinionsKilled")
 
     # Damage
-    total_damage_dealt: int = Field(0, alias="totalDamageDealt")
-    total_damage_dealt_to_champions: int = Field(0, alias="totalDamageDealtToChampions")
-    physical_damage_dealt_to_champions: int = Field(
-        0, alias="physicalDamageDealtToChampions"
+    total_damage_dealt: int = Field(default=0, alias="totalDamageDealt")
+    total_damage_dealt_to_champions: int = Field(
+        default=0, alias="totalDamageDealtToChampions"
     )
-    magic_damage_dealt_to_champions: int = Field(0, alias="magicDamageDealtToChampions")
-    true_damage_dealt_to_champions: int = Field(0, alias="trueDamageDealtToChampions")
-    damage_dealt_to_objectives: int = Field(0, alias="damageDealtToObjectives")
-    damage_dealt_to_turrets: int = Field(0, alias="damageDealtToTurrets")
+    physical_damage_dealt_to_champions: int = Field(
+        default=0, alias="physicalDamageDealtToChampions"
+    )
+    magic_damage_dealt_to_champions: int = Field(
+        default=0, alias="magicDamageDealtToChampions"
+    )
+    true_damage_dealt_to_champions: int = Field(
+        default=0, alias="trueDamageDealtToChampions"
+    )
+    damage_dealt_to_objectives: int = Field(default=0, alias="damageDealtToObjectives")
+    damage_dealt_to_turrets: int = Field(default=0, alias="damageDealtToTurrets")
 
-    total_damage_taken: int = Field(0, alias="totalDamageTaken")
-    physical_damage_taken: int = Field(0, alias="physicalDamageTaken")
-    magic_damage_taken: int = Field(0, alias="magicDamageTaken")
-    true_damage_taken: int = Field(0, alias="trueDamageTaken")
+    total_damage_taken: int = Field(default=0, alias="totalDamageTaken")
+    physical_damage_taken: int = Field(default=0, alias="physicalDamageTaken")
+    magic_damage_taken: int = Field(default=0, alias="magicDamageTaken")
+    true_damage_taken: int = Field(default=0, alias="trueDamageTaken")
 
     # Healing & Shielding
-    total_self_healing: int = Field(0, alias="totalHeal")
-    total_healing: int = Field(0, alias="totalHealsOnTeammates")
-    total_shielding: int = Field(0, alias="totalDamageShieldedOnTeammates")
-    total_self_mitigated: int = Field(0, alias="damageSelfMitigated")
+    total_self_healing: int = Field(default=0, alias="totalHeal")
+    total_healing: int = Field(default=0, alias="totalHealsOnTeammates")
+    total_shielding: int = Field(default=0, alias="totalDamageShieldedOnTeammates")
+    total_self_mitigated: int = Field(default=0, alias="damageSelfMitigated")
 
     # Items
-    item0: int = Field(0)
-    item1: int = Field(0)
-    item2: int = Field(0)
-    item3: int = Field(0)
-    item4: int = Field(0)
-    item5: int = Field(0)
-    trinket: int = Field(0, alias="item6")
-    items_purchased: int = Field(0, alias="itemsPurchased")
-    consumables_purchased: int = Field(0, alias="consumablesPurchased")
-    role_bound_item: int = Field(0, alias="roleBoundItem")
+    item0: int = Field(default=0)
+    item1: int = Field(default=0)
+    item2: int = Field(default=0)
+    item3: int = Field(default=0)
+    item4: int = Field(default=0)
+    item5: int = Field(default=0)
+    trinket: int = Field(default=0, alias="item6")
+    items_purchased: int = Field(default=0, alias="itemsPurchased")
+    consumables_purchased: int = Field(default=0, alias="consumablesPurchased")
+    role_bound_item: int = Field(default=0, alias="roleBoundItem")
 
     # Spells/Objectives/Time
-    summoner1_id: int = Field(0, alias="summoner1Id")
-    summoner1_casts: int = Field(0, alias="summoner1Casts")
-    summoner2_id: int = Field(0, alias="summoner2Id")
-    summoner2_casts: int = Field(0, alias="summoner2Casts")
+    summoner1_id: int = Field(default=0, alias="summoner1Id")
+    summoner1_casts: int = Field(default=0, alias="summoner1Casts")
+    summoner2_id: int = Field(default=0, alias="summoner2Id")
+    summoner2_casts: int = Field(default=0, alias="summoner2Casts")
 
-    turret_kills: int = Field(0, alias="turretKills")
-    inhibitor_kills: int = Field(0, alias="inhibitorKills")
-    objectives_stolen: int = Field(0, alias="objectivesStolen")
+    turret_kills: int = Field(default=0, alias="turretKills")
+    inhibitor_kills: int = Field(default=0, alias="inhibitorKills")
+    objectives_stolen: int = Field(default=0, alias="objectivesStolen")
 
-    time_spent_dead: int = Field(0, alias="totalTimeSpentDead")
-    time_played: int = Field(0, alias="timePlayed")
+    time_spent_dead: int = Field(default=0, alias="totalTimeSpentDead")
+    time_played: int = Field(default=0, alias="timePlayed")
 
     # Flags
-    eligible_for_progression: bool = Field(True, alias="eligibleForProgression")
+    eligible_for_progression: bool = Field(default=True, alias="eligibleForProgression")
     game_ended_in_early_surrender: bool | None = Field(
-        None, alias="gameEndedInEarlySurrender"
+        default=None, alias="gameEndedInEarlySurrender"
     )
-    game_ended_in_surrender: bool | None = Field(None, alias="gameEndedInSurrender")
+    game_ended_in_surrender: bool | None = Field(
+        default=None, alias="gameEndedInSurrender"
+    )
 
     @property
     def remake(self) -> bool:
@@ -158,7 +166,7 @@ class ParticipantDTO(BaseModel):
 
     # Legacy / Unused in new schema but kept for completeness or other uses
     role: str | None = None
-    individual_position: str | None = Field(None, alias="individualPosition")
+    individual_position: str | None = Field(default=None, alias="individualPosition")
 
     @property
     def calculated_kda(self) -> float:
@@ -181,8 +189,8 @@ class MatchInfoDTO(BaseModel):
     game_version: str = Field(..., alias="gameVersion")
     game_mode: str = Field(..., alias="gameMode")
     game_type: str = Field(..., alias="gameType")
-    game_end_timestamp: int | None = Field(None, alias="gameEndTimestamp")
-    game_result: str | None = Field(None, alias="endOfGameResult")
+    game_end_timestamp: int | None = Field(default=None, alias="gameEndTimestamp")
+    game_result: str | None = Field(default=None, alias="endOfGameResult")
     participants: list[ParticipantDTO]
     platform: str = Field(..., alias="platformId")
 
