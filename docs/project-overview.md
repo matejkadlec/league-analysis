@@ -33,9 +33,8 @@ that constrain changes.
 ### Backend
 
 `backend/app/main.py` creates the FastAPI application and registers feature
-routers. The normal API prefix is `/api/v1`; authentication lives below
-`/api/v1/auth`. The application retains unversioned compatibility routes for
-players, matches, playstyle analysis, and jobs.
+routers. The API prefix is `/api/v1`; authentication lives below
+`/api/v1/auth`.
 
 `backend/app/core/` owns shared configuration, database sessions, validation,
 errors, and Riot API infrastructure. Domain features may depend on core; core

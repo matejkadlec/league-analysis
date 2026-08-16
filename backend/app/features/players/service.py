@@ -17,7 +17,6 @@ from sqlalchemy import and_, delete, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.decorators import input_validation, service_error_handler
 from app.core.exceptions import (
     PlayerServiceError,
 )
@@ -117,10 +116,6 @@ class PlayerService:
 
         return is_globally_tracked
 
-    @service_error_handler("PlayerService")
-    @input_validation(
-        validate_non_empty=["game_name", "platform"],
-    )
     async def get_player_by_name_and_tag(
         self, game_name: str, tag_line: str, platform: str
     ) -> PlayerResponse:
@@ -140,8 +135,13 @@ class PlayerService:
 
         Raises:
             PlayerServiceError: If player is not found or database error occurs
-            ValidationError: If input parameters are invalid
+            ValueError: If input parameters are invalid
         """
+        if not game_name or not game_name.strip():
+            raise ValueError("game_name cannot be empty")
+        if not platform or not platform.strip():
+            raise ValueError("platform cannot be empty")
+
         # Normalize inputs
         safe_game_name = game_name.strip()
         safe_tag_line = tag_line.strip() if tag_line else None
@@ -225,7 +225,6 @@ class PlayerService:
 
         Raises:
             PlayerServiceError: If player is not found
-            ValidationError: If input parameters are invalid
         """
         # Normalize inputs
         safe_game_name = game_name.strip()
@@ -639,8 +638,6 @@ class PlayerService:
 
         return responses
 
-    @service_error_handler("PlayerService")
-    @input_validation(validate_non_empty=["puuid"], validate_positive=["limit"])
     async def get_recent_opponents_with_details(
         self, puuid: str, limit: int
     ) -> list[PlayerResponse]:
@@ -656,7 +653,15 @@ class PlayerService:
 
         Returns:
             List of PlayerResponse objects for opponents found in database
+
+        Raises:
+            ValueError: If puuid is empty or limit is not positive
         """
+        if not puuid or not puuid.strip():
+            raise ValueError("puuid cannot be empty")
+        if limit <= 0:
+            raise ValueError("limit must be positive")
+
         from app.features.matches.participants import MatchParticipant
 
         # Use a single JOIN query to get opponent player data efficiently (fixes N+1 query problem)
@@ -1126,10 +1131,6 @@ class PlayerService:
     # Helper Methods for Jobs
     # ============================================
 
-    @service_error_handler("PlayerService")
-    @input_validation(
-        validate_non_empty=["platform"],
-    )
     async def discover_players_from_match(
         self, match_dto: MatchDTO, platform: str
     ) -> int:
@@ -1152,9 +1153,11 @@ class PlayerService:
 
         Raises:
             PlayerServiceError: If match processing fails
-            ValidationError: If input parameters are invalid
-            DatabaseError: If database operations fail
+            ValueError: If input parameters are invalid
         """
+        if not platform or not platform.strip():
+            raise ValueError("platform cannot be empty")
+
         from app.features.matches.transformers import PlayerDataSanitizer
 
         await _ensure_riot_writer_maintenance_is_inactive(self.db)
@@ -1212,7 +1215,6 @@ class PlayerService:
 
         return discovered_count
 
-    @service_error_handler("PlayerService")
     async def update_player_profile(
         self, player: Player, riot_api_client: RiotAPIClient
     ) -> bool:
@@ -1327,7 +1329,6 @@ class PlayerService:
             hot_streak=solo_entry.hot_streak,
         )
 
-    @service_error_handler("PlayerService")
     async def update_player_league(
         self, player: Player, riot_api_client: RiotAPIClient
     ) -> bool:
