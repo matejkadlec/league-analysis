@@ -16,6 +16,9 @@ class UserTrackedPlayer(Base):
     __tablename__ = "user_tracked_players"
     __table_args__ = (
         Index("ix_user_tracked_players_recent", "user_id", "last_selected_at"),
+        # Present in the database since the baseline; declared here so the
+        # models stop proposing its removal.
+        Index("idx_user_tracked_players_puuid", "puuid"),
         {"schema": "auth"},
     )
 

@@ -21,8 +21,14 @@ from sqlalchemy.orm import DeclarativeBase, mapped_column
 # Create a base class for declarative models using SQLAlchemy 2.0 style
 # Use a custom naming convention for constraints and indexes
 convention = {
-    "ix": "ix_%(column_0_label)s",
+    # `%(column_0_label)s` renders the schema too (`ix_auth_users_email`), which
+    # no index in the database is named after. `%(table_name)s_%(column_0_name)s`
+    # is the spelling the migrations actually created.
+    "ix": "ix_%(table_name)s_%(column_0_name)s",
     "uq": "uq_%(table_name)s_%(column_0_name)s",
+    # Note the `%(constraint_name)s` token: an explicit `name=` on a
+    # CheckConstraint is substituted *into* this template, so spell those bare
+    # or they come out as `ck_<table>_ck_<table>_...`.
     "ck": "ck_%(table_name)s_%(constraint_name)s",
     "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
     "pk": "pk_%(table_name)s",

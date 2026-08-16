@@ -43,13 +43,12 @@ class Player(Base):
     puuid: Mapped[str] = mapped_column(
         String(78),  # Riot PUUIDs are 78 characters
         primary_key=True,
-        index=True,
         comment="Player's universally unique identifier from Riot API",
     )
 
     # Player Name & Tag (Game Name + Tag Line)
     game_name: Mapped[str] = mapped_column(
-        String(16), nullable=False, index=True, comment="Player's game name"
+        String(16), nullable=False, comment="Player's game name"
     )
 
     tag_line: Mapped[str] = mapped_column(
@@ -149,5 +148,7 @@ class Player(Base):
     )
 
 
-# Create composite indexes for common queries
+# Create composite indexes for common queries. `game_name` carries no
+# `index=True` of its own -- this index leads with it and so serves a game-name
+# lookup already -- and neither does `puuid`, which the primary key covers.
 Index("idx_players_game_name_tag_line", Player.game_name, Player.tag_line)

@@ -5,13 +5,13 @@ from enum import Enum as PyEnum
 from typing import Any, Final
 
 from sqlalchemy import (
-    DateTime as SQLDateTime,
-)
-from sqlalchemy import (
+    BigInteger,
     Enum,
     ForeignKey,
-    Integer,
     String,
+)
+from sqlalchemy import (
+    DateTime as SQLDateTime,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -38,7 +38,7 @@ class PlaystyleAnalysis(Base):
 
     # Primary key
     id: Mapped[int] = mapped_column(
-        Integer,
+        BigInteger,
         primary_key=True,
         autoincrement=True,
         comment="Auto-incrementing primary key",
@@ -61,6 +61,7 @@ class PlaystyleAnalysis(Base):
         ),
         nullable=False,
         default=AnalysisStatus.PENDING,
+        index=True,
         comment="Current status of the analysis",
     )
 

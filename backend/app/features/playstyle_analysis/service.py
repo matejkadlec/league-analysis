@@ -5,6 +5,7 @@ from typing import Any
 
 import structlog
 from sqlalchemy import select, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -159,31 +160,30 @@ class PlaystyleAnalysisService:
         )
         await self.db.execute(stmt_update_matches)
 
-        # Check existing analysis record
-        stmt = select(PlaystyleAnalysis).where(PlaystyleAnalysis.puuid == puuid)
-        result = await self.db.execute(stmt)
-        existing = result.scalar_one_or_none()
-
-        if existing:
-            existing.tags = tags
-            existing.summary_stats = stats
-            existing.status = AnalysisStatus.COMPLETED
-            existing.updated_at = current_time
-            self.db.add(existing)
-            await self.db.commit()
-            await self.db.refresh(existing)
-            return existing
-        else:
-            new_analysis = PlaystyleAnalysis(
-                puuid=puuid,
-                tags=tags,
-                summary_stats=stats,
-                status=AnalysisStatus.COMPLETED,
-            )
-            self.db.add(new_analysis)
-            await self.db.commit()
-            await self.db.refresh(new_analysis)
-            return new_analysis
+        # One statement rather than select-then-insert. Two concurrent first
+        # analyses of the same player both miss a select and both insert, which
+        # `ix_playstyle_analyses_puuid` -- unique since 20260816_0014 -- now
+        # rejects outright instead of quietly storing a duplicate.
+        insert_analysis = pg_insert(PlaystyleAnalysis).values(
+            puuid=puuid,
+            tags=tags,
+            summary_stats=stats,
+            status=AnalysisStatus.COMPLETED,
+        )
+        upsert_analysis = insert_analysis.on_conflict_do_update(
+            index_elements=[PlaystyleAnalysis.puuid],
+            set_={
+                "tags": insert_analysis.excluded.tags,
+                "summary_stats": insert_analysis.excluded.summary_stats,
+                "status": insert_analysis.excluded.status,
+                # `onupdate` does not fire for a Core-level upsert, so the
+                # timestamp is set here exactly as the update path used to.
+                "updated_at": current_time,
+            },
+        ).returning(PlaystyleAnalysis)
+        saved_analysis = (await self.db.execute(upsert_analysis)).scalar_one()
+        await self.db.commit()
+        return saved_analysis
 
     async def _save_empty_analysis(self, puuid: str) -> PlaystyleAnalysis:
         return await self._save_analysis(puuid, {}, {"note": "No match data available"})

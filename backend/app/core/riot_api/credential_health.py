@@ -16,14 +16,18 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     ForeignKey,
+    Index,
     Integer,
     String,
+    desc,
     select,
+    text,
 )
 from sqlalchemy import DateTime as SQLDateTime
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.schema import conv
 from sqlalchemy.sql import func
 
 from app.core.models import Base
@@ -56,7 +60,27 @@ class RiotAPIKey(Base):
     """Database-stored Riot API credential."""
 
     __tablename__ = "riot_api_keys"
-    __table_args__ = ({"schema": "core"},)
+    __table_args__ = (
+        # `conv()` keeps the pre-convention name the baseline actually created;
+        # without it the `ck` convention would render
+        # `ck_riot_api_keys_check_riot_key_format` and drift from the database.
+        # A single `%` is correct here: SQLAlchemy escapes it for the DBAPI when
+        # it compiles the DDL, so spelling `%%` renders as `%%%%`.
+        CheckConstraint(
+            "key_value LIKE 'RGAPI-%' AND length(key_value) = 42",
+            name=conv("check_riot_key_format"),
+        ),
+        # Present in the database since the baseline; declared here so the
+        # models stop proposing its removal.
+        # `added_at DESC` is part of the index the baseline created; declaring it
+        # ascending here would leave two different indexes under one name.
+        Index(
+            "idx_riot_api_keys_active_added",
+            "is_active",
+            desc(text("added_at")),
+        ),
+        {"schema": "core", "comment": "Storage for Riot API keys"},
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     key_value: Mapped[str] = mapped_column(

@@ -2,7 +2,7 @@
 
 from typing import Final, override
 
-from sqlalchemy import Integer, SmallInteger
+from sqlalchemy import CheckConstraint, Integer, SmallInteger
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.models import Base
@@ -12,7 +12,15 @@ class SubjectCounts(Base):
     """Stores per-subject counters for Join Us contact emails."""
 
     __tablename__ = "subject_counts"
-    __table_args__: Final = {"schema": "auth"}
+    # Bare names; the `ck` convention prefixes them with `ck_subject_counts_`.
+    __table_args__: Final = (
+        CheckConstraint("id = 1", name="singleton"),
+        CheckConstraint(
+            "beta_tester >= 0 AND full_stack_developer >= 0 AND other >= 0",
+            name="non_negative",
+        ),
+        {"schema": "auth"},
+    )
 
     id: Mapped[int] = mapped_column(
         SmallInteger,

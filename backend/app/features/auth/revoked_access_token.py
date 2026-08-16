@@ -46,7 +46,8 @@ class RevokedAccessToken(Base):
     expires_at: Mapped[datetime] = mapped_column(
         SQLDateTime(timezone=True),
         nullable=False,
-        index=True,
+        # Indexed by `idx_revoked_access_tokens_expires_at` at the bottom of
+        # this module; `index=True` would declare a second index on it.
         comment="Original token expiration timestamp",
     )
     reason: Mapped[str] = mapped_column(

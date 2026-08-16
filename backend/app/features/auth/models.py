@@ -8,6 +8,7 @@ from sqlalchemy import (
     Boolean,
     Index,
     String,
+    Text,
 )
 from sqlalchemy import (
     DateTime as SQLDateTime,
@@ -48,7 +49,7 @@ class User(Base):
     )
 
     password_hash: Mapped[str] = mapped_column(
-        String,  # Text type in database, no length limit
+        Text,  # matches the `text` column the baseline actually creates
         nullable=False,
         comment="Hashed password using Argon2id",
     )
@@ -167,8 +168,9 @@ class User(Base):
 # Create composite indexes for common queries
 Index("idx_users_is_active_is_admin", User.is_active, User.is_admin)
 Index("idx_users_email_is_active", User.email, User.is_active)
-Index("idx_users_last_login", User.last_login)
-Index("idx_users_locked_until", User.locked_until)
+# `last_login` and `locked_until` already carry `index=True`, which is what the
+# database was built with; declaring them again here would be a second index on
+# each. `created_at` has no `index=True`, so it needs this one.
 Index("idx_users_created_at", User.created_at)
 
 # Ensure consent mapper is registered even when this module is imported directly.
