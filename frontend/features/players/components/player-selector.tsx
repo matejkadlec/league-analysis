@@ -22,7 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { discoverPlayer, searchPlayerSuggestions } from "@/lib/core/api";
+import { discoverPlayer, searchPlayerSuggestions } from "../player-api";
 import { useToast } from "@/lib/core/hooks";
 import { getPlatformDisplayName } from "@/lib/core/platform-utils";
 import type { Player } from "@/lib/core/schemas";

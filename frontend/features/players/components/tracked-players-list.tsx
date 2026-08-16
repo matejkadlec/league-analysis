@@ -9,7 +9,9 @@ import {
   UserMinus,
   Users,
 } from "lucide-react";
-import { untrackPlayer, validatedGet } from "@/lib/core/api";
+import { validatedGet } from "@/lib/core/api";
+
+import { untrackPlayer } from "../player-api";
 import { useToast } from "@/lib/core/hooks";
 import {
   PlayerLeagueSchema,

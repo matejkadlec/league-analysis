@@ -3,7 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { TrendingUp, Users } from "lucide-react";
 
-import { getLatestCompletedMatchmakingAnalysis } from "@/lib/core/api";
+import { getLatestCompletedMatchmakingAnalysis } from "../matchmaking-api";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {

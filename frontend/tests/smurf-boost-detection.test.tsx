@@ -30,7 +30,7 @@ const {
   },
 }));
 
-vi.mock("@/lib/core/api", () => ({
+vi.mock("@/features/smurf-boost/smurf-boost-api", () => ({
   getLatestSmurfBoostDetection,
   startSmurfBoostDetection,
 }));

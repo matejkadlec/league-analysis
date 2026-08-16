@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { startSmurfBoostDetection } from "@/lib/core/api";
+import { startSmurfBoostDetection } from "../smurf-boost-api";
 import { apiErrorMessage } from "@/lib/core/api-error";
 import { useToast } from "@/lib/core/hooks";
 import { useRelativeTime } from "@/lib/core/use-relative-time";

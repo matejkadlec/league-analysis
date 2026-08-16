@@ -38,7 +38,7 @@ import {
   addTrackedPlayer,
   searchPlayerSuggestions,
   trackPlayer,
-} from "@/lib/core/api";
+} from "../player-api";
 import { useToast } from "@/lib/core/hooks";
 import { Player, PlayerSchema } from "@/lib/core/schemas";
 import { useAuth } from "@/features/auth";
