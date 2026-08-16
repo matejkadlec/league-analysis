@@ -562,28 +562,38 @@ class SettingsService:
             UserCookieConsent,
         )
 
-        stmt = select(UserCookieConsent).where(UserCookieConsent.user_id == user_id)
-        result = await self.db.execute(stmt)
-        consent = result.scalar_one_or_none()
-
         consent_level = CookieConsentLevel(update.consent_level.value)
 
-        if consent is None:
-            consent = UserCookieConsent(
+        # Selecting and then branching on the result raced: two concurrent PUTs
+        # both saw no row, both inserted, and the loser got a 500 from
+        # `user_cookie_consents_pkey`. One statement cannot lose that race.
+        statement = (
+            insert(UserCookieConsent)
+            .values(
                 user_id=user_id,
                 consent_level=consent_level,
                 consent_version=update.consent_version,
                 consent_source=update.consent_source,
             )
-            self.db.add(consent)
-        else:
-            consent.consent_level = consent_level
-            consent.consent_version = update.consent_version
-            consent.consent_source = update.consent_source
-            consent.consented_at = datetime.now(UTC)
-
+            .on_conflict_do_update(
+                index_elements=[UserCookieConsent.user_id],
+                set_={
+                    "consent_level": consent_level,
+                    "consent_version": update.consent_version,
+                    "consent_source": update.consent_source,
+                    # `consented_at` records an explicit choice, so a repeat
+                    # consent moves it, matching the previous update branch.
+                    # `updated_at` is set here because its `onupdate` is an
+                    # ORM-level hook that a Core ON CONFLICT never fires.
+                    "consented_at": func.now(),
+                    "updated_at": func.now(),
+                },
+            )
+            .returning(UserCookieConsent)
+        )
+        result = await self.db.execute(statement)
+        consent = result.scalar_one()
         await self.db.commit()
-        await self.db.refresh(consent)
 
         logger.info(
             "updated_user_cookie_consent",
