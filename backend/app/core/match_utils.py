@@ -1,3 +1,9 @@
+# The file-level `strict` above also re-enables rules pyproject.toml turns off
+# project-wide, so this restores one of them (see pyproject's comment above
+# `reportUnnecessaryIsInstance`): the ORM models and the Riot DTOs describe
+# values more confidently than the data does, so the `is None` guard below is
+# load-bearing and must not be deleted on the word of an annotation.
+# pyright: reportUnnecessaryComparison=false
 """Global match storage utilities.
 
 Provides a single entry point for ensuring matches are fully analyzed in DB.
@@ -9,7 +15,7 @@ instead of implementing its own storage logic. This handles:
 - Timeline objective aggregates are fetched and stored when available
 """
 
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, Protocol
 
 import structlog
 from sqlalchemy import select
@@ -23,14 +29,26 @@ from app.features.players.identity import resolve_player_display_fields
 from app.features.players.models import Player
 
 if TYPE_CHECKING:
-    from app.core.riot_api.client import RiotAPIClient
+    from app.core.riot_api.models import MatchDTO
 
 logger = structlog.get_logger(__name__)
 
 
+class MatchDataSource(Protocol):
+    """The slice of the Riot client this module consumes.
+
+    `RiotAPIClient` satisfies it structurally; naming the two calls here keeps
+    the timeline payload typed as a JSON object instead of a bare `dict`.
+    """
+
+    async def get_match(self, match_id: str) -> MatchDTO: ...
+
+    async def get_match_timeline(self, match_id: str) -> dict[str, Any]: ...
+
+
 async def ensure_match_fully_analyzed(
     db: AsyncSession,
-    riot_client: "RiotAPIClient",
+    riot_client: MatchDataSource,
     match_id: str,
 ) -> bool:
     """Ensure a match is stored in DB with fully_analyzed=True.
@@ -62,7 +80,7 @@ async def ensure_match_fully_analyzed(
     if match_dto is None:
         return row is not None
 
-    timeline_payload = None
+    timeline_payload: dict[str, Any] | None = None
     try:
         timeline_payload = await riot_client.get_match_timeline(match_id)
     except Exception as timeline_error:
@@ -72,7 +90,7 @@ async def ensure_match_fully_analyzed(
             error=str(timeline_error),
         )
 
-    await _upsert_match(db, match_dto, timeline_payload=timeline_payload)
+    await upsert_match(db, match_dto, timeline_payload=timeline_payload)
     return True
 
 
@@ -132,10 +150,10 @@ async def _upsert_match_participant(
     )
 
 
-async def _upsert_match(
+async def upsert_match(
     db: AsyncSession,
     match_dto: Any,
-    timeline_payload: Optional[dict] = None,
+    timeline_payload: dict[str, Any] | None = None,
 ) -> None:
     """Upsert a match and its participants with fully_analyzed=True.
 

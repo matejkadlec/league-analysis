@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -51,7 +51,7 @@ def build_match_record(
     early_surrender: bool,
     surrender: bool,
     *,
-    fully_analyzed: Optional[bool] = None,
+    fully_analyzed: bool | None = None,
 ) -> Match:
     """Build a Match row from a Riot match DTO."""
     match = Match(
@@ -96,7 +96,7 @@ def add_participants_from_dto(session: AsyncSession, match_dto: Any) -> None:
 
 def resolve_reprocess_player_fields(
     participant: Any,
-    existing_player: Optional[Player],
+    existing_player: Player | None,
     platform_id: str,
 ) -> dict[str, Any]:
     """Preserve known identity fields when a Riot participant payload is incomplete."""

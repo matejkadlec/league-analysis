@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from types import SimpleNamespace
-from typing import Any, Callable, Dict, List, Optional, Protocol
+from typing import Any, Protocol
 
 import structlog
 from sqlalchemy import func, select
@@ -20,8 +21,8 @@ logger = structlog.get_logger("app.features.matches.service")
 
 AnalysisMatchResult = str
 
-OnFailure = Optional[Callable[[str, Exception, dict[str, Any]], None]]
-OnMatchStored = Optional[Callable[[int, str], None]]
+OnFailure = Callable[[str, Exception, dict[str, Any]], None] | None
+OnMatchStored = Callable[[int, str], None] | None
 
 
 class EnsureMaintenance(Protocol):
@@ -32,7 +33,7 @@ class ReprocessMatch(Protocol):
     async def __call__(
         self,
         match_dto: Any,
-        timeline_payload: Optional[Dict[str, Any]] = None,
+        timeline_payload: dict[str, Any] | None = None,
     ) -> None: ...
 
 
@@ -47,7 +48,7 @@ def must_abort_writer_sync(error: Exception) -> bool:
 
 
 async def acquire_rate_limiter_or_raise(
-    rate_limiter: Optional[DBRateLimiter],
+    rate_limiter: DBRateLimiter | None,
 ) -> None:
     """Raise the same RateLimitError the queue-sync path used for a blocked slot."""
     if rate_limiter:
@@ -60,7 +61,7 @@ async def acquire_rate_limiter_or_raise(
 
 
 async def record_rate_limiter_request(
-    rate_limiter: Optional[DBRateLimiter],
+    rate_limiter: DBRateLimiter | None,
     requested: bool,
 ) -> None:
     if rate_limiter and requested:
@@ -74,7 +75,7 @@ async def fetch_queue_match_list(
     queue_id: int,
     start: int,
     count: int,
-    rate_limiter: Optional[DBRateLimiter],
+    rate_limiter: DBRateLimiter | None,
 ) -> Any:
     """Fetch one page of match IDs for a supported queue."""
     try:
@@ -103,7 +104,7 @@ async def fetch_queue_match_list(
 
 async def load_queue_sync_completion_ids(
     session: AsyncSession,
-    ids_list: List[str],
+    ids_list: list[str],
 ) -> tuple[set[str], set[str]]:
     """Load fully-analyzed IDs and IDs whose timeline rows are already complete."""
     analyzed_result = await session.execute(
@@ -126,10 +127,10 @@ async def load_queue_sync_completion_ids(
 
 
 def classify_queue_match_ids(
-    ids_list: List[str],
+    ids_list: list[str],
     analyzed_ids: set[str],
     timeline_complete_ids: set[str],
-) -> tuple[List[str], set[str]]:
+) -> tuple[list[str], set[str]]:
     """Split a page into matches that still need work and timeline-only backfills."""
     ids_to_process = [
         match_id
@@ -146,7 +147,7 @@ def classify_queue_match_ids(
 
 def build_synthetic_match_dto(
     match_id: str,
-    participants: List[MatchParticipant],
+    participants: list[MatchParticipant],
     game_version: str = "",
 ) -> SimpleNamespace:
     """Build the minimal DTO shape timeline replacement needs for a stored match."""
@@ -172,15 +173,15 @@ async def fetch_sync_timeline(
     region: Any,
     queue_id: int,
     match_id: str,
-    rate_limiter: Optional[DBRateLimiter],
+    rate_limiter: DBRateLimiter | None,
     on_failure: OnFailure,
     *,
     operation: str,
     log_message: str,
     skip_match_on_error: bool,
-) -> tuple[Optional[Dict[str, Any]], bool]:
+) -> tuple[dict[str, Any] | None, bool]:
     """Fetch a timeline during queue sync. The bool is True when the match should be skipped."""
-    timeline_payload: Optional[Dict[str, Any]] = None
+    timeline_payload: dict[str, Any] | None = None
     timeline_request_attempted = False
     try:
         await acquire_rate_limiter_or_raise(rate_limiter)
@@ -220,7 +221,7 @@ async def backfill_timeline_only_match(
     region: Any,
     queue_id: int,
     match_id: str,
-    rate_limiter: Optional[DBRateLimiter],
+    rate_limiter: DBRateLimiter | None,
     on_failure: OnFailure,
     ensure_maintenance: EnsureMaintenance,
 ) -> int:
@@ -274,7 +275,7 @@ async def sync_full_queue_match(
     region: Any,
     queue_id: int,
     match_id: str,
-    rate_limiter: Optional[DBRateLimiter],
+    rate_limiter: DBRateLimiter | None,
     on_failure: OnFailure,
     is_current_game_version: Callable[[str], bool],
     reprocess_match: ReprocessMatch,
@@ -315,7 +316,7 @@ async def process_queue_sync_match(
     queue_id: int,
     match_id: str,
     timeline_only_ids: set[str],
-    rate_limiter: Optional[DBRateLimiter],
+    rate_limiter: DBRateLimiter | None,
     on_failure: OnFailure,
     ensure_maintenance: EnsureMaintenance,
     is_current_game_version: Callable[[str], bool],
@@ -376,9 +377,9 @@ async def process_queue_sync_batch(
     puuid: str,
     region: Any,
     queue_id: int,
-    ids_to_process: List[str],
+    ids_to_process: list[str],
     timeline_only_ids: set[str],
-    rate_limiter: Optional[DBRateLimiter],
+    rate_limiter: DBRateLimiter | None,
     on_failure: OnFailure,
     ensure_maintenance: EnsureMaintenance,
     is_current_game_version: Callable[[str], bool],
@@ -416,7 +417,7 @@ async def sync_single_queue_for_player(
     puuid: str,
     region: Any,
     queue_id: int,
-    rate_limiter: Optional[DBRateLimiter],
+    rate_limiter: DBRateLimiter | None,
     on_failure: OnFailure,
     ensure_maintenance: EnsureMaintenance,
     is_current_game_version: Callable[[str], bool],

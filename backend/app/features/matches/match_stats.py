@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, List
+from typing import Any, TypeIs
 
 from .schemas import ChampionStatsItem, LaneStatsItem
 
@@ -27,9 +27,18 @@ def or_zero(value: Any) -> int:
     return value or 0
 
 
+def _is_json_object(value: object) -> TypeIs[dict[str, Any]]:
+    """Narrow an unvalidated `advanced_stats` blob to a string-keyed object.
+
+    `advanced_stats` is stored verbatim from Riot's `challenges` payload, so the
+    runtime check is load-bearing; narrowing through it keeps the read typed.
+    """
+    return isinstance(value, dict)
+
+
 def advanced_int(advanced_stats: Any, key: str) -> int:
     """Safely read integer-like advanced_stats values."""
-    if not isinstance(advanced_stats, dict):
+    if not _is_json_object(advanced_stats):
         return 0
     raw_value = advanced_stats.get(key, 0)
     if raw_value is None:
@@ -122,9 +131,9 @@ def champion_stats_sort_key(champion: ChampionStatsItem) -> tuple[int, str]:
 
 def build_champion_stat_items(
     champion_data: dict[str, dict[str, int]],
-) -> List[ChampionStatsItem]:
+) -> list[ChampionStatsItem]:
     """Build the complete ordered champion-statistics population."""
-    champions: List[ChampionStatsItem] = []
+    champions: list[ChampionStatsItem] = []
     for champ_name, data in champion_data.items():
         games, wins, losses, win_rate, avg_kills, avg_deaths, avg_assists, avg_kda = (
             averages_from_totals(data)
@@ -147,9 +156,9 @@ def build_champion_stat_items(
     return champions
 
 
-def build_lane_stat_items(lane_data: dict[str, dict[str, int]]) -> List[LaneStatsItem]:
+def build_lane_stat_items(lane_data: dict[str, dict[str, int]]) -> list[LaneStatsItem]:
     """Build per-lane statistics sorted by games played."""
-    lanes: List[LaneStatsItem] = []
+    lanes: list[LaneStatsItem] = []
     for lane, data in lane_data.items():
         games, wins, losses, win_rate, avg_kills, avg_deaths, avg_assists, avg_kda = (
             averages_from_totals(data)

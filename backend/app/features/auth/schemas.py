@@ -3,7 +3,6 @@
 import re
 from datetime import datetime
 from enum import Enum
-from typing import Optional
 
 from pydantic import (
     BaseModel,
@@ -78,8 +77,8 @@ class UserResponse(UserBase):
     is_active: bool
     is_admin: bool
     email_verified: bool
-    email_verified_at: Optional[datetime] = None
-    last_login: Optional[datetime] = None
+    email_verified_at: datetime | None = None
+    last_login: datetime | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -106,11 +105,11 @@ class Token(BaseModel):
 class TokenData(BaseModel):
     """Schema for token payload data."""
 
-    email: Optional[str] = None
-    user_id: Optional[int] = None
-    token_id: Optional[str] = None
-    token_type: Optional[str] = None
-    exp: Optional[int] = None
+    email: str | None = None
+    user_id: int | None = None
+    token_id: str | None = None
+    token_type: str | None = None
+    exp: int | None = None
 
 
 class RefreshTokenRequest(BaseModel):
@@ -122,7 +121,7 @@ class RefreshTokenRequest(BaseModel):
 class UserProfileUpdate(BaseModel):
     """Schema for updating user profile fields."""
 
-    display_name: Optional[str] = Field(None, min_length=1, max_length=128)
+    display_name: str | None = Field(None, min_length=1, max_length=128)
 
 
 class EmailChangeRequest(BaseModel):
@@ -158,7 +157,7 @@ class PasswordChangeRequest(BaseModel):
         return validate_password_strength(value)
 
     @model_validator(mode="after")
-    def validate_password_match(self) -> "PasswordChangeRequest":
+    def validate_password_match(self) -> PasswordChangeRequest:
         """Ensure repeated password exactly matches."""
         if self.new_password != self.repeat_password:
             raise ValueError("Passwords do not match")

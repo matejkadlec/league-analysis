@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from typing import Any, Iterable
+from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -33,8 +34,8 @@ def league_snapshot_datetime(snapshot: Any) -> datetime:
     """Normalize stored league timestamps to an aware UTC datetime."""
     value = snapshot.created_at
     if value.tzinfo is None:
-        return value.replace(tzinfo=timezone.utc)
-    return value.astimezone(timezone.utc)
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
 
 
 def initialize_participant_lp(
@@ -127,7 +128,7 @@ def attribute_lp_change(
 
     match_end = datetime.fromtimestamp(
         match.game_end_timestamp / 1000,
-        tz=timezone.utc,
+        tz=UTC,
     )
     if not (
         league_snapshot_datetime(before) < match_end < league_snapshot_datetime(after)

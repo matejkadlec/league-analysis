@@ -1,11 +1,11 @@
 """Job service for managing job configurations and executions."""
 
 import math
-from datetime import datetime, timezone
-from typing import Any, List, Optional
+from datetime import UTC, datetime
+from typing import Any, TypeVar
 
 import structlog
-from sqlalchemy import desc, func, select
+from sqlalchemy import Select, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .control import (
@@ -28,6 +28,11 @@ from .schemas import (
 )
 
 logger = structlog.get_logger(__name__)
+
+# The execution filters apply to two different selects — the row query
+# (`Select[tuple[JobExecution]]`) and its count query (`Select[tuple[int]]`) —
+# so the helper has to hand the caller back the same select type it was given.
+SelectT = TypeVar("SelectT", bound=Select[Any])
 
 
 class JobService:
@@ -64,7 +69,7 @@ class JobService:
 
     async def get_job_configuration(
         self, job_id: int
-    ) -> Optional[JobConfigurationResponse]:
+    ) -> JobConfigurationResponse | None:
         """Get a job configuration by ID.
 
         Args:
@@ -81,9 +86,7 @@ class JobService:
             return self._to_job_response(job)
         return None
 
-    async def get_job_configuration_model(
-        self, job_id: int
-    ) -> Optional[JobConfiguration]:
+    async def get_job_configuration_model(self, job_id: int) -> JobConfiguration | None:
         """Get the ORM model for a job configuration by ID."""
         query = select(JobConfiguration).where(JobConfiguration.id == job_id)
         result = await self.db.execute(query)
@@ -91,7 +94,7 @@ class JobService:
 
     async def list_job_configurations(
         self, active_only: bool = False
-    ) -> List[JobConfigurationResponse]:
+    ) -> list[JobConfigurationResponse]:
         """List all job configurations.
 
         Args:
@@ -112,7 +115,7 @@ class JobService:
 
     async def update_job_configuration(
         self, job_id: int, job_update: JobConfigurationUpdate
-    ) -> Optional[JobConfigurationResponse]:
+    ) -> JobConfigurationResponse | None:
         """Update a job configuration.
 
         Args:
@@ -159,7 +162,7 @@ class JobService:
         elif "config_json" in update_dict:
             update_dict["config_json"] = incoming_config
 
-        update_dict["updated_at"] = datetime.now(timezone.utc)
+        update_dict["updated_at"] = datetime.now(UTC)
 
         for key, value in update_dict.items():
             setattr(job, key, value)
@@ -180,11 +183,11 @@ class JobService:
 
     def _apply_execution_filters(
         self,
-        query,
-        job_config_id: Optional[int],
-        status: Optional[JobStatus],
-        execution_type: Optional[ExecutionType] = None,
-    ):
+        query: SelectT,
+        job_config_id: int | None,
+        status: JobStatus | None,
+        execution_type: ExecutionType | None = None,
+    ) -> SelectT:
         """Apply filters to a job execution query."""
         if job_config_id:
             query = query.where(JobExecution.job_config_id == job_config_id)
@@ -196,9 +199,9 @@ class JobService:
 
     async def list_job_executions(
         self,
-        job_config_id: Optional[int] = None,
-        status: Optional[JobStatus] = None,
-        execution_type: Optional[ExecutionType] = None,
+        job_config_id: int | None = None,
+        status: JobStatus | None = None,
+        execution_type: ExecutionType | None = None,
         page: int = 1,
         size: int = 20,
     ) -> JobExecutionListResponse:
@@ -249,8 +252,8 @@ class JobService:
         )
 
     async def get_latest_execution(
-        self, job_config_id: Optional[int] = None
-    ) -> Optional[JobExecutionResponse]:
+        self, job_config_id: int | None = None
+    ) -> JobExecutionResponse | None:
         """Get the most recent regular job execution.
 
         Args:
@@ -319,7 +322,7 @@ class JobService:
             )
             if not is_runtime_job_running(runtime_key):
                 execution.status = JobStatus.FAILED
-                execution.completed_at = datetime.now(timezone.utc)
+                execution.completed_at = datetime.now(UTC)
                 execution.error_message = (
                     "Execution orphaned - no active runtime control found"
                 )
@@ -379,7 +382,7 @@ class JobService:
 
     async def get_job_control_state(
         self, job_id: int
-    ) -> Optional[JobControlActionResponse]:
+    ) -> JobControlActionResponse | None:
         """Get runtime control state for a specific job configuration."""
         job = await self.get_job_configuration_model(job_id)
         if not job:
@@ -399,7 +402,7 @@ class JobService:
         self,
         job_id: int,
         paused: bool,
-    ) -> Optional[JobControlActionResponse]:
+    ) -> JobControlActionResponse | None:
         """Pause or resume a running job execution."""
         job = await self.get_job_configuration_model(job_id)
         if not job:
@@ -417,7 +420,7 @@ class JobService:
             )
 
         job.is_paused = paused
-        job.updated_at = datetime.now(timezone.utc)
+        job.updated_at = datetime.now(UTC)
         await self.db.commit()
         await self.db.refresh(job)
 
@@ -435,7 +438,7 @@ class JobService:
         self,
         job_id: int,
         force: bool,
-    ) -> Optional[JobControlActionResponse]:
+    ) -> JobControlActionResponse | None:
         """Request graceful or forced stop for a running job execution."""
         job = await self.get_job_configuration_model(job_id)
         if not job:
@@ -457,7 +460,7 @@ class JobService:
         # Ensure paused flag does not remain stuck when stopping.
         if job.is_paused:
             job.is_paused = False
-            job.updated_at = datetime.now(timezone.utc)
+            job.updated_at = datetime.now(UTC)
             await self.db.commit()
             await self.db.refresh(job)
 
@@ -476,7 +479,7 @@ class JobService:
 
     async def get_job_config_by_type(
         self, job_type: JobType
-    ) -> Optional[JobConfigurationResponse]:
+    ) -> JobConfigurationResponse | None:
         """Get job configuration by job type.
 
         Args:

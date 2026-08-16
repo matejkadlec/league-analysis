@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import os
 import re
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from enum import StrEnum
-from typing import TYPE_CHECKING, Awaitable, Callable
+from typing import TYPE_CHECKING
 from uuid import uuid4
 
 import structlog
@@ -73,7 +74,7 @@ class RiotAPIKey(Base):
     """Database-stored Riot API credential."""
 
     __tablename__ = "riot_api_keys"
-    __table_args__ = {"schema": "core"}
+    __table_args__ = ({"schema": "core"},)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     key_value: Mapped[str] = mapped_column(
@@ -331,7 +332,7 @@ async def synchronize_riot_credential_health(
     This commits only credential selection/health changes and must be called
     before the caller begins domain writes.
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     db_key = await _active_database_key(db, now)
     env_key = os.getenv("RIOT_API_KEY")
     has_env_key = bool(env_key and env_key.strip())

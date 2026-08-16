@@ -1,7 +1,7 @@
 """Pydantic schemas for Match model."""
 
 from datetime import datetime
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -30,18 +30,18 @@ class MatchBase(BaseModel):
     queue_id: int = Field(..., description="Queue type ID")
     game_version: str = Field(..., max_length=32, description="Game version")
     map_id: int = Field(..., description="Map ID")
-    game_mode: Optional[str] = Field(None, max_length=32, description="Game mode")
-    game_type: Optional[str] = Field(None, max_length=32, description="Game type")
-    game_end_timestamp: Optional[int] = Field(
+    game_mode: str | None = Field(None, max_length=32, description="Game mode")
+    game_type: str | None = Field(None, max_length=32, description="Game type")
+    game_end_timestamp: int | None = Field(
         None, description="Game end timestamp in milliseconds since epoch"
     )
-    early_surrender: Optional[bool] = Field(
+    early_surrender: bool | None = Field(
         None, description="Whether the game ended in early surrender"
     )
-    surrender: Optional[bool] = Field(
+    surrender: bool | None = Field(
         None, description="Whether the game ended in surrender"
     )
-    game_result: Optional[str] = Field(
+    game_result: str | None = Field(
         None, max_length=32, description="End of game result"
     )
     fully_analyzed: bool = Field(
@@ -61,15 +61,15 @@ class MatchCreate(MatchBase):
 class MatchUpdate(BaseModel):
     """Schema for updating a Match."""
 
-    game_duration: Optional[int] = Field(
+    game_duration: int | None = Field(
         None, ge=0, description="Game duration in seconds"
     )
-    game_end_timestamp: Optional[int] = Field(
+    game_end_timestamp: int | None = Field(
         None, description="Game end timestamp in milliseconds since epoch"
     )
-    game_mode: Optional[str] = Field(None, max_length=32, description="Game mode")
-    game_type: Optional[str] = Field(None, max_length=32, description="Game type")
-    fully_analyzed: Optional[bool] = Field(
+    game_mode: str | None = Field(None, max_length=32, description="Game mode")
+    game_type: str | None = Field(None, max_length=32, description="Game type")
+    fully_analyzed: bool | None = Field(
         None, description="Whether this match has been processed for playstyle analysis"
     )
 
@@ -93,12 +93,12 @@ class MatchResponse(MatchBase):
 class RunesData(BaseModel):
     """Schema for runes data with flattened structure."""
 
-    primary_style: Optional[int] = Field(None, description="Primary rune style ID")
-    sub_style: Optional[int] = Field(None, description="Sub rune style ID")
-    keystone: Optional[int] = Field(None, description="Keystone rune ID")
-    primary_perks: Optional[List[int]] = Field(None, description="Primary perk IDs")
-    sub_perks: Optional[List[int]] = Field(None, description="Sub perk IDs")
-    stat_perks: Optional[Dict[str, int]] = Field(None, description="Stat perk values")
+    primary_style: int | None = Field(None, description="Primary rune style ID")
+    sub_style: int | None = Field(None, description="Sub rune style ID")
+    keystone: int | None = Field(None, description="Keystone rune ID")
+    primary_perks: list[int] | None = Field(None, description="Primary perk IDs")
+    sub_perks: list[int] | None = Field(None, description="Sub perk IDs")
+    stat_perks: dict[str, int] | None = Field(None, description="Stat perk values")
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -109,26 +109,26 @@ class PlayerMatchParticipant(BaseModel):
     champion_id: int = Field(..., description="Champion ID")
     champion_name: str = Field(..., description="Champion name")
     champion_level: int = Field(..., description="Champion level at end of game")
-    team_position: Optional[str] = Field(None, description="Lane position")
+    team_position: str | None = Field(None, description="Lane position")
     team_id: int = Field(..., description="Team ID (100=Blue, 200=Red)")
     win: bool = Field(..., description="Whether the player won")
     remake: bool = Field(False, description="Whether it was a remake")
     kills: int = Field(0, description="Kills")
     deaths: int = Field(0, description="Deaths")
     assists: int = Field(0, description="Assists")
-    kda: Optional[float] = Field(None, description="Computed KDA")
+    kda: float | None = Field(None, description="Computed KDA")
     total_cs: int = Field(0, description="Total CS (minions + monsters)")
     vision_score: int = Field(0, description="Vision score")
     total_damage_dealt_to_champions: int = Field(
         0, description="Total damage to champions"
     )
-    summoner1_id: Optional[int] = Field(None, description="First summoner spell ID")
-    summoner2_id: Optional[int] = Field(None, description="Second summoner spell ID")
-    runes: Optional[RunesData] = Field(None, description="Runes data")
+    summoner1_id: int | None = Field(None, description="First summoner spell ID")
+    summoner2_id: int | None = Field(None, description="Second summoner spell ID")
+    runes: RunesData | None = Field(None, description="Runes data")
 
     @field_validator("runes", mode="before")
     @classmethod
-    def transform_runes(cls, v: Any) -> Optional[Dict[str, Any]]:
+    def transform_runes(cls, v: Any) -> dict[str, Any] | None:
         """Transform raw Riot API perks structure to flattened runes data."""
         return transform_runes_payload(v)
 
@@ -144,23 +144,19 @@ class EnemyLaneOpponent(BaseModel):
     kills: int = Field(0, description="Enemy kills")
     deaths: int = Field(0, description="Enemy deaths")
     assists: int = Field(0, description="Enemy assists")
-    kda: Optional[float] = Field(None, description="Enemy KDA")
+    kda: float | None = Field(None, description="Enemy KDA")
     total_cs: int = Field(0, description="Enemy total CS")
     vision_score: int = Field(0, description="Enemy vision score")
     total_damage_dealt_to_champions: int = Field(
         0, description="Enemy damage to champions"
     )
-    summoner1_id: Optional[int] = Field(
-        None, description="Enemy first summoner spell ID"
-    )
-    summoner2_id: Optional[int] = Field(
-        None, description="Enemy second summoner spell ID"
-    )
-    runes: Optional[RunesData] = Field(None, description="Enemy runes data")
+    summoner1_id: int | None = Field(None, description="Enemy first summoner spell ID")
+    summoner2_id: int | None = Field(None, description="Enemy second summoner spell ID")
+    runes: RunesData | None = Field(None, description="Enemy runes data")
 
     @field_validator("runes", mode="before")
     @classmethod
-    def transform_runes(cls, v: Any) -> Optional[Dict[str, Any]]:
+    def transform_runes(cls, v: Any) -> dict[str, Any] | None:
         """Transform raw Riot API perks structure to flattened runes data."""
         return transform_runes_payload(v)
 
@@ -172,7 +168,7 @@ class TeamChampion(BaseModel):
 
     champion_id: int = Field(..., description="Champion ID")
     champion_name: str = Field(..., description="Champion name")
-    team_position: Optional[str] = Field(None, description="Lane position")
+    team_position: str | None = Field(None, description="Lane position")
     puuid: str = Field(..., description="Player PUUID")
 
     model_config = ConfigDict(from_attributes=True)
@@ -181,11 +177,11 @@ class TeamChampion(BaseModel):
 class TeamComposition(BaseModel):
     """Schema for team compositions in a match."""
 
-    blue_team: List[TeamChampion] = Field(
-        default_factory=list, description="Blue team (100) champions"
+    blue_team: list[TeamChampion] = Field(
+        default_factory=list[TeamChampion], description="Blue team (100) champions"
     )
-    red_team: List[TeamChampion] = Field(
-        default_factory=list, description="Red team (200) champions"
+    red_team: list[TeamChampion] = Field(
+        default_factory=list[TeamChampion], description="Red team (200) champions"
     )
 
     model_config = ConfigDict(from_attributes=True)
@@ -197,16 +193,16 @@ class TeamStats(BaseModel):
     kills: int = Field(0, description="Total team kills")
     deaths: int = Field(0, description="Total team deaths")
     assists: int = Field(0, description="Total team assists")
-    kda: Optional[float] = Field(None, description="Team KDA")
-    turrets: Optional[int] = Field(
+    kda: float | None = Field(None, description="Team KDA")
+    turrets: int | None = Field(
         None,
         description="Total turrets destroyed (null when timeline data is missing)",
     )
-    inhibitors: Optional[int] = Field(
+    inhibitors: int | None = Field(
         None,
         description="Total inhibitors destroyed (null when timeline data is missing)",
     )
-    dragons: Optional[int] = Field(
+    dragons: int | None = Field(
         None, description="Total dragons killed (null when timeline data is missing)"
     )
     barons: int = Field(
@@ -217,7 +213,7 @@ class TeamStats(BaseModel):
         0,
         description="Total rift heralds killed (timeline-backed, fallback to participant stats)",
     )
-    voidgrubs: Optional[int] = Field(
+    voidgrubs: int | None = Field(
         None,
         description="Total voidgrubs killed (null when timeline data is missing)",
     )
@@ -243,20 +239,20 @@ class TeamStatsComposition(BaseModel):
 class MatchWithPlayerData(MatchResponse):
     """Match response including player-specific participant data."""
 
-    player_participant: Optional[PlayerMatchParticipant] = Field(
+    player_participant: PlayerMatchParticipant | None = Field(
         None, description="The player's participation data"
     )
-    lane_opponent: Optional[EnemyLaneOpponent] = Field(
+    lane_opponent: EnemyLaneOpponent | None = Field(
         None, description="The enemy lane opponent"
     )
-    lp_change: Optional[int] = Field(
+    lp_change: int | None = Field(
         None,
         description="Persisted observed LP change, or null when unavailable",
     )
-    team_compositions: Optional[TeamComposition] = Field(
+    team_compositions: TeamComposition | None = Field(
         None, description="Team compositions for the match"
     )
-    team_stats: Optional[TeamStatsComposition] = Field(
+    team_stats: TeamStatsComposition | None = Field(
         None, description="Team statistics for the match"
     )
 
@@ -266,7 +262,7 @@ class MatchWithPlayerData(MatchResponse):
 class MatchListResponse(BaseModel):
     """Schema for paginated Match list response."""
 
-    matches: List[MatchResponse]
+    matches: list[MatchResponse]
     total: int = Field(..., description="Total matches available")
     total_analyzed: int = Field(0, description="Total number of fully analyzed matches")
     page: int = Field(..., description="Current page number")
@@ -279,7 +275,7 @@ class MatchListResponse(BaseModel):
 class MatchListWithPlayerDataResponse(BaseModel):
     """Schema for paginated Match list with player participation data."""
 
-    matches: List[MatchWithPlayerData]
+    matches: list[MatchWithPlayerData]
     total: int = Field(..., description="Total matches available")
     total_analyzed: int = Field(0, description="Total number of fully analyzed matches")
     page: int = Field(..., description="Current page number")
@@ -329,8 +325,8 @@ class ChampionStatsResponse(BaseModel):
 
     puuid: str = Field(..., description="Player PUUID")
     total_champions: int = Field(..., ge=0, description="Total unique champions played")
-    champions: List[ChampionStatsItem] = Field(
-        default_factory=list,
+    champions: list[ChampionStatsItem] = Field(
+        default_factory=list[ChampionStatsItem],
         description="Every qualifying champion, ordered for local pagination",
     )
 
@@ -360,8 +356,8 @@ class LaneStatsResponse(BaseModel):
 
     puuid: str = Field(..., description="Player PUUID")
     total_lanes: int = Field(..., ge=0, description="Total unique lanes played")
-    lanes: List[LaneStatsItem] = Field(
-        default_factory=list, description="List of lane stats"
+    lanes: list[LaneStatsItem] = Field(
+        default_factory=list[LaneStatsItem], description="List of lane stats"
     )
 
     model_config = ConfigDict(from_attributes=True)

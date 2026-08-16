@@ -1,7 +1,13 @@
+# `_check_exact_match` guards `game_name`/`tag_line` against NULL even though
+# the ORM types them non-optional, because alembic/metadata-drift.txt records
+# the schema disagreeing. Mirrors `reportUnnecessaryComparison = "none"` in
+# pyproject.toml, which the file-level `strict` pragma otherwise discards.
+# pyright: reportUnnecessaryComparison=none
 """Player service for handling player data operations."""
 
-from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any, List, Sequence
+from collections.abc import Sequence
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any, TypedDict
 
 import structlog
 from Levenshtein import distance as levenshtein_distance
@@ -29,6 +35,18 @@ if TYPE_CHECKING:
 logger = structlog.get_logger(__name__)
 
 MAX_TRACKED_PLAYERS_PER_USER = 10
+
+
+class ScoredPlayer(TypedDict):
+    """A fuzzy-search candidate together with the keys it is ranked by.
+
+    ``name`` is the sort tiebreaker and is the empty string when the row has
+    no game name, so it stays a plain ``str`` rather than an optional.
+    """
+
+    player: Player
+    score: float
+    name: str
 
 
 async def _ensure_riot_writer_maintenance_is_inactive(session: AsyncSession) -> None:
@@ -87,7 +105,7 @@ class PlayerService:
             .where(Player.puuid == puuid)
             .values(
                 is_tracked=is_globally_tracked,
-                updated_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(UTC),
             )
         )
 
@@ -439,7 +457,7 @@ class PlayerService:
         tag_line: str | None,
     ) -> list[int]:
         """Calculate Levenshtein distances for all relevant fields."""
-        distances = []
+        distances: list[int] = []
 
         # Score game name
         name_dist = PlayerService._score_game_name(player, search_type, query_lower)
@@ -523,9 +541,9 @@ class PlayerService:
         game_name: str | None,
         tag_line: str | None,
         limit: int,
-    ) -> list[dict]:
+    ) -> list[ScoredPlayer]:
         """Score players by relevance and return top matches."""
-        scored_players = [
+        scored_players: list[ScoredPlayer] = [
             {
                 "player": player,
                 "score": self._score_player_match(
@@ -545,7 +563,7 @@ class PlayerService:
         platform: str | None,
         limit: int = 10,
         user_id: int | None = None,
-    ) -> List[PlayerResponse]:
+    ) -> list[PlayerResponse]:
         """
         Search for players using fuzzy matching with Levenshtein distance.
 
@@ -619,7 +637,7 @@ class PlayerService:
     @input_validation(validate_non_empty=["puuid"], validate_positive=["limit"])
     async def get_recent_opponents_with_details(
         self, puuid: str, limit: int
-    ) -> List[PlayerResponse]:
+    ) -> list[PlayerResponse]:
         """
         Get recent opponents for a player with their details from database only.
 
@@ -677,7 +695,7 @@ class PlayerService:
 
     async def add_and_track_player(
         self,
-        riot_client: "RiotAPIClient",
+        riot_client: RiotAPIClient,
         game_name: str,
         tag_line: str,
         user_id: int,
@@ -718,7 +736,7 @@ class PlayerService:
 
     async def discover_player(
         self,
-        riot_client: "RiotAPIClient",
+        riot_client: RiotAPIClient,
         game_name: str,
         tag_line: str,
         platform: str,
@@ -735,7 +753,7 @@ class PlayerService:
         if not summoner:
             raise ValueError(f"Summoner not found for PUUID: {account.puuid}")
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         # A Riot ID whose stored row carries a different PUUID is left alone.
         # Discovery cannot tell a re-encrypted PUUID apart from a Riot ID that
         # was renamed away and reclaimed by another account, so merging the two
@@ -817,7 +835,7 @@ class PlayerService:
             .values(
                 user_id=user_id,
                 puuid=puuid,
-                last_selected_at=datetime.now(timezone.utc),
+                last_selected_at=datetime.now(UTC),
             )
             .on_conflict_do_nothing(index_elements=["user_id", "puuid"])
         )
@@ -886,7 +904,7 @@ class PlayerService:
 
         return await self._is_player_tracked_by_user(puuid, user_id)
 
-    async def get_tracked_players(self, user_id: int) -> List[PlayerResponse]:
+    async def get_tracked_players(self, user_id: int) -> list[PlayerResponse]:
         """Get all players tracked by a specific user.
 
         Returns:
@@ -964,12 +982,12 @@ class PlayerService:
                     UserTrackedPlayer.user_id == user_id,
                     UserTrackedPlayer.puuid == puuid,
                 )
-                .values(last_selected_at=datetime.now(timezone.utc))
+                .values(last_selected_at=datetime.now(UTC))
             )
         await self.db.commit()
         return await self.get_player_context(user_id)
 
-    async def get_globally_tracked_players(self) -> List[PlayerResponse]:
+    async def get_globally_tracked_players(self) -> list[PlayerResponse]:
         """Get all players tracked by at least one user."""
         query = (
             select(Player).where(Player.is_tracked.is_(True)).order_by(Player.game_name)
@@ -995,7 +1013,7 @@ class PlayerService:
 
     async def get_players_needing_matches(
         self, limit: int, target_matches: int
-    ) -> List[Player]:
+    ) -> list[Player]:
         """
         Get discovered players with insufficient match history.
 
@@ -1047,7 +1065,7 @@ class PlayerService:
 
     async def get_players_ready_for_analysis(
         self, limit: int, min_matches: int = 20
-    ) -> List[Player]:
+    ) -> list[Player]:
         """
         Get unanalyzed players with sufficient match history for playstyle analysis.
 
@@ -1188,7 +1206,7 @@ class PlayerService:
 
     @service_error_handler("PlayerService")
     async def update_player_profile(
-        self, player: Player, riot_api_client: "RiotAPIClient"
+        self, player: Player, riot_api_client: RiotAPIClient
     ) -> bool:
         """Update player's profile info (game_name, tag_line, profile_icon_id, summoner_level) from Riot API.
 
@@ -1204,7 +1222,7 @@ class PlayerService:
         Raises:
             ValueError: If player has invalid platform
         """
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         from app.core.riot_api.constants import Platform, get_region_by_platform
 
@@ -1239,10 +1257,10 @@ class PlayerService:
 
         # A successful check is freshness evidence even when Riot returned the
         # same values. Keep it separate from generic ORM updated_at changes.
-        player.profile_synced_at = datetime.now(timezone.utc)
+        player.profile_synced_at = datetime.now(UTC)
 
         if changed:
-            player.updated_at = datetime.now(timezone.utc)
+            player.updated_at = datetime.now(UTC)
             logger.info(
                 "Updated player profile",
                 puuid=player.puuid,
@@ -1278,7 +1296,7 @@ class PlayerService:
         )
 
     @staticmethod
-    def _player_league_from_entry(puuid: str, solo_entry: Any) -> "PlayerLeague":
+    def _player_league_from_entry(puuid: str, solo_entry: Any) -> PlayerLeague:
         """Build an immutable league snapshot from a live Solo/Duo entry."""
         from .leagues import PlayerLeague
 
@@ -1299,7 +1317,7 @@ class PlayerService:
 
     @service_error_handler("PlayerService")
     async def update_player_league(
-        self, player: Player, riot_api_client: "RiotAPIClient"
+        self, player: Player, riot_api_client: RiotAPIClient
     ) -> bool:
         """Update player's current league from Riot API.
 
@@ -1357,7 +1375,7 @@ class PlayerService:
 
     async def get_player_league(
         self, puuid: str, queue_type: str = "RANKED_SOLO_5x5"
-    ) -> "PlayerLeague | None":
+    ) -> PlayerLeague | None:
         """Get the most recent league for a player.
 
         Args:

@@ -1,5 +1,7 @@
 """Singleton counters for Join Us contact subject sequencing."""
 
+from typing import Final, override
+
 from sqlalchemy import Integer, SmallInteger
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -10,7 +12,7 @@ class SubjectCounts(Base):
     """Stores per-subject counters for Join Us contact emails."""
 
     __tablename__ = "subject_counts"
-    __table_args__ = {"schema": "auth"}
+    __table_args__: Final = {"schema": "auth"}
 
     id: Mapped[int] = mapped_column(
         SmallInteger,
@@ -37,6 +39,7 @@ class SubjectCounts(Base):
         comment="How many Other contact emails have been submitted",
     )
 
+    @override
     def __repr__(self) -> str:
         """Return string representation of subject counters."""
         return (

@@ -1,7 +1,5 @@
 """Regression coverage for the guarded administrator reconciler."""
 
-# ruff: noqa: I001 -- root pre-commit and backend-local Ruff classify scripts differently.
-
 from __future__ import annotations
 
 import io

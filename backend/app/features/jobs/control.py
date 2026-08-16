@@ -4,14 +4,13 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from typing import Optional
 
 
 @dataclass
 class RuntimeJobControl:
     """In-memory runtime control flags for a currently running job."""
 
-    task: Optional[asyncio.Task[None]] = None
+    task: asyncio.Task[None] | None = None
     stop_requested: bool = False
     force_stop_requested: bool = False
 
@@ -21,7 +20,7 @@ _runtime_controls: dict[int, RuntimeJobControl] = {}
 
 def register_runtime_control(
     job_config_id: int,
-    task: Optional[asyncio.Task[None]],
+    task: asyncio.Task[None] | None,
 ) -> None:
     """Register runtime control object for a running job."""
     _runtime_controls[job_config_id] = RuntimeJobControl(task=task)

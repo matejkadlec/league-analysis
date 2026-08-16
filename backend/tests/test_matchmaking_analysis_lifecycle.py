@@ -1,7 +1,7 @@
 """Matchmaking-analysis lifecycle regressions."""
 
 import asyncio
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
@@ -32,7 +32,7 @@ def _request():
 def _analysis(status: str = "pending") -> SimpleNamespace:
     return SimpleNamespace(
         puuid="test-puuid",
-        created_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
         status=status,
         results=None,
         started_at=None,
@@ -120,8 +120,8 @@ async def test_repeated_start_attaches_to_the_existing_active_run(monkeypatch) -
 async def test_new_run_replaces_a_finishing_previous_task_handle() -> None:
     """A completed worker's brief cleanup window cannot strand the next run."""
     puuid = "test-puuid"
-    old_created_at = datetime.now(timezone.utc) - timedelta(minutes=1)
-    new_created_at = datetime.now(timezone.utc)
+    old_created_at = datetime.now(UTC) - timedelta(minutes=1)
+    new_created_at = datetime.now(UTC)
     old_task = asyncio.create_task(asyncio.sleep(60))
     new_started = asyncio.Event()
     database = SimpleNamespace()
@@ -194,8 +194,8 @@ async def test_rate_limit_wait_is_persisted_as_an_active_state(monkeypatch) -> N
     )
     service = MatchmakingAnalysisService(database, object())  # type: ignore[arg-type]
     service._current_analysis_puuid = "test-puuid"
-    service._current_analysis_created_at = datetime.now(timezone.utc)
-    reset_at = datetime.now(timezone.utc) + timedelta(seconds=90)
+    service._current_analysis_created_at = datetime.now(UTC)
+    reset_at = datetime.now(UTC) + timedelta(seconds=90)
 
     await service._set_rate_limit_reset(reset_at)
 
@@ -217,7 +217,7 @@ async def test_analysis_failure_keeps_a_safe_terminal_diagnostic(monkeypatch) ->
     )
     database = SimpleNamespace(execute=AsyncMock(), commit=AsyncMock())
     service = MatchmakingAnalysisService(database, object())  # type: ignore[arg-type]
-    created_at = datetime.now(timezone.utc)
+    created_at = datetime.now(UTC)
 
     await service._complete_with_error(
         "test-puuid",

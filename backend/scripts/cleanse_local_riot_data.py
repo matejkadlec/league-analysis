@@ -347,7 +347,8 @@ def create_verified_backup(
 
 def lock_cleanup_tables(connection: Connection) -> None:
     """Block cleanup-table writers while allowing pg_dump's read lock to proceed."""
-    changed_tables = RIOT_DATA_TABLES + (
+    changed_tables = (
+        *RIOT_DATA_TABLES,
         ("auth", "users"),
         ("auth", "user_settings"),
         ("auth", "refresh_tokens"),

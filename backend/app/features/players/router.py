@@ -1,7 +1,8 @@
 """Player API endpoints for the Riot API application."""
 
 import re
-from typing import Annotated, Any, Optional
+from datetime import UTC
+from typing import Annotated, Any
 
 import structlog
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
@@ -11,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import db_manager
 from app.core.dependencies import get_riot_client
+from app.core.rate_limiter import typed_limit
 from app.core.riot_api.client import RiotAPIClient
 from app.core.riot_api.constants import Platform
 from app.core.riot_api.credential_health import create_tracked_riot_api_client
@@ -21,7 +23,7 @@ from app.core.riot_api.errors import (
 )
 from app.features.auth.dependencies import get_current_active_user
 from app.features.auth.models import User
-from app.features.jobs.models import PlayerSyncRun
+from app.features.jobs.models import JobConfiguration, JobType, PlayerSyncRun
 from app.features.jobs.player_sync import (
     create_or_get_player_sync,
     get_active_player_sync,
@@ -81,7 +83,7 @@ def _validate_tag_line(tag_line: str) -> None:
 
 
 @router.get("/search", response_model=list[PlayerResponse])
-@limiter.limit("100/minute")
+@typed_limit(limiter, "100/minute")
 async def search_player(
     request: Request,
     player_service: PlayerServiceDep,
@@ -92,7 +94,7 @@ async def search_player(
         max_length=30,
         description="Search query (game name, tag line or both)",
     ),
-    platform: Optional[Platform] = Query(
+    platform: Platform | None = Query(
         None, description="Optional platform filter (e.g. EUN1)"
     ),
 ):
@@ -145,7 +147,7 @@ async def get_player_suggestions(
         max_length=30,
         description="Search query (name, tag, or Name#Tag)",
     ),
-    platform: Optional[Platform] = Query(
+    platform: Platform | None = Query(
         None, description="Optional platform filter (e.g. EUN1)"
     ),
     limit: int = Query(
@@ -232,7 +234,7 @@ async def update_current_player(
 
 
 @router.post("/discover", response_model=PlayerResponse)
-@limiter.limit("30/minute")
+@typed_limit(limiter, "30/minute")
 async def discover_player(
     request: Request,
     player_service: PlayerServiceDep,
@@ -296,7 +298,7 @@ async def get_player_by_puuid(
 
 
 @router.post("/{puuid}/sync", response_model=PlayerSyncRunResponse)
-@limiter.limit("10/minute")
+@typed_limit(limiter, "10/minute")
 async def start_player_sync(
     request: Request,
     puuid: str,
@@ -380,23 +382,23 @@ async def track_player(
     try:
         player = await player_service.track_player(puuid, current_user.id)
         return player
-    except RiotWriterMaintenanceActiveError:
+    except RiotWriterMaintenanceActiveError as e:
         raise HTTPException(
             status_code=503,
             detail="Riot data maintenance is in progress. Try again after it completes.",
-        )
+        ) from e
     except ValueError as e:
         if "not found" in str(e).lower():
-            raise HTTPException(status_code=404, detail=str(e))
+            raise HTTPException(status_code=404, detail=str(e)) from e
         else:
             # Tracking limit reached or other validation error
-            raise HTTPException(status_code=400, detail=str(e))
+            raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         logger.error("track_player_failed", error=str(e), puuid=puuid, exc_info=True)
         raise HTTPException(
             status_code=500,
             detail="Internal server error tracking player",
-        )
+        ) from e
 
 
 @router.delete("/{puuid}/track", response_model=PlayerResponse)
@@ -421,13 +423,13 @@ async def untrack_player(
         player = await player_service.untrack_player(puuid, current_user.id)
         return player
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
         logger.error("untrack_player_failed", error=str(e), puuid=puuid, exc_info=True)
         raise HTTPException(
             status_code=500,
             detail="Internal server error untracking player",
-        )
+        ) from e
 
 
 @router.get("/{puuid}/tracking-status")
@@ -451,7 +453,7 @@ async def get_tracking_status(
         )
         return {"is_tracked": is_tracked}
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
         logger.error(
             "get_tracking_status_failed", error=str(e), puuid=puuid, exc_info=True
@@ -459,7 +461,7 @@ async def get_tracking_status(
         raise HTTPException(
             status_code=500,
             detail="Internal server error retrieving tracking status",
-        )
+        ) from e
 
 
 @router.get("/tracked/list", response_model=list[PlayerResponse])
@@ -481,10 +483,12 @@ async def get_tracked_players(
         raise HTTPException(
             status_code=500,
             detail="Internal server error retrieving tracked players",
-        )
+        ) from e
 
 
-async def _locked_background_writer_configuration(session, job_type):
+async def _locked_background_writer_configuration(
+    session: AsyncSession, job_type: JobType
+) -> JobConfiguration | None:
     """Load a direct writer configuration after any cleanup interlock commits."""
     from app.features.jobs.maintenance import locked_riot_writer_configurations
 
@@ -492,7 +496,7 @@ async def _locked_background_writer_configuration(session, job_type):
     return configurations.get(job_type)
 
 
-async def _riot_writer_maintenance_is_active(session) -> bool:
+async def _riot_writer_maintenance_is_active(session: AsyncSession) -> bool:
     """Check the cleanup interlock before a foreground Riot-data write."""
     from app.features.jobs.maintenance import (
         locked_riot_writer_configurations,
@@ -504,7 +508,7 @@ async def _riot_writer_maintenance_is_active(session) -> bool:
 
 
 async def _maybe_start_background_writer_job(
-    session: AsyncSession, job_type: object, puuid: str, skip_message: str
+    session: AsyncSession, job_type: JobType, puuid: str, skip_message: str
 ) -> tuple[Any, bool]:
     """Create a running JobExecution unless local writer maintenance is active."""
     from sqlalchemy import func
@@ -608,14 +612,14 @@ async def _close_riot_client(riot_client: RiotAPIClient | None) -> None:
 
 async def _stamp_player_match_synced(session: AsyncSession, puuid: str) -> None:
     """Record that a background match sync completed for this player."""
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     from app.features.players.models import Player
 
     player_model = await session.get(Player, puuid)
     if player_model is None:
         return
-    player_model.match_synced_at = datetime.now(timezone.utc)
+    player_model.match_synced_at = datetime.now(UTC)
     await session.commit()
 
 
@@ -679,7 +683,7 @@ async def run_background_player_update(puuid: str, platform: str) -> None:
     Also creates a JobExecution entry so it appears in the Jobs dashboard.
     """
     async with db_manager.get_session() as session:
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         from app.features.jobs.models import JobType
         from app.features.players.models import Player
@@ -713,7 +717,7 @@ async def run_background_player_update(puuid: str, platform: str) -> None:
             league_updated = await player_service.update_player_league(
                 player_model, riot_client
             )
-            player_model.league_synced_at = datetime.now(timezone.utc)
+            player_model.league_synced_at = datetime.now(UTC)
             await session.commit()
 
             logger.info(
@@ -798,23 +802,25 @@ async def add_tracked_player(
 
         return result
 
-    except RiotWriterMaintenanceActiveError:
+    except RiotWriterMaintenanceActiveError as e:
         raise HTTPException(
             status_code=503,
             detail="Riot data maintenance is in progress. Try again after it completes.",
-        )
+        ) from e
     except ValueError as e:
         _handle_tracking_value_error(e)
-    except NotFoundError:
-        raise HTTPException(status_code=404, detail="Player not found")
-    except RateLimitError:
-        raise HTTPException(status_code=429, detail="Riot API rate limit reached")
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail="Player not found") from e
+    except RateLimitError as e:
+        raise HTTPException(
+            status_code=429, detail="Riot API rate limit reached"
+        ) from e
     except AuthenticationError as e:
         logger.error("riot_api_auth_error", error=str(e))
         raise HTTPException(
             status_code=503,
             detail="Riot API Key is invalid or expired. Please update it in Settings.",
-        )
+        ) from e
     except HTTPException:
         raise
     except Exception as e:
@@ -822,7 +828,7 @@ async def add_tracked_player(
         _handle_tracking_unexpected_error(e, full_id, game_name, platform)
         raise HTTPException(
             status_code=500, detail="Internal server error adding tracked player"
-        )
+        ) from e
 
 
 def _handle_tracking_value_error(e: ValueError) -> None:
@@ -844,7 +850,7 @@ def _handle_tracking_unexpected_error(
         full_id=full_id,
         game_name=game_name,
         platform=platform,
-        exc_info=True,
+        exc_info=e,
     )
     raise HTTPException(
         status_code=500,
@@ -856,12 +862,12 @@ def _handle_tracking_unexpected_error(
 
 
 @router.post("/{puuid}/refresh-league", response_model=PlayerLeagueResponse | None)
-@limiter.limit("30/minute")
+@typed_limit(limiter, "30/minute")
 async def refresh_player_league(
     request: Request,
     puuid: str,
     player_service: PlayerServiceDep,
-    riot_client: Annotated["RiotAPIClient", Depends(get_riot_client)],
+    riot_client: Annotated[RiotAPIClient, Depends(get_riot_client)],
     _current_user: User = Depends(get_current_active_user),
     queue_type: str = Query(
         "RANKED_SOLO_5x5", description="Queue type to refresh league for"
@@ -899,9 +905,9 @@ async def refresh_player_league(
 
         # Update league from Riot API (adds record to player_service.db session)
         await player_service.update_player_league(player_model, riot_client)
-        from datetime import datetime, timezone
+        from datetime import datetime
 
-        player_model.league_synced_at = datetime.now(timezone.utc)
+        player_model.league_synced_at = datetime.now(UTC)
 
         # Commit using the same session the service used
         await player_service.db.commit()
@@ -913,11 +919,11 @@ async def refresh_player_league(
         return None
     except HTTPException:
         raise
-    except RiotWriterMaintenanceActiveError:
+    except RiotWriterMaintenanceActiveError as e:
         raise HTTPException(
             status_code=503,
             detail="Riot data maintenance is in progress. Try again after it completes.",
-        )
+        ) from e
     except AuthenticationError as e:
         logger.error(
             "refresh_player_league_failed",
@@ -928,9 +934,9 @@ async def refresh_player_league(
         raise HTTPException(
             status_code=503,
             detail="Riot API Key is invalid or expired. Please update it in Settings.",
-        )
+        ) from e
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
         logger.error(
             "refresh_player_league_failed",
@@ -941,7 +947,7 @@ async def refresh_player_league(
         raise HTTPException(
             status_code=500,
             detail="Internal server error refreshing player league",
-        )
+        ) from e
 
 
 @router.get("/{puuid}/league", response_model=PlayerLeagueResponse | None)
@@ -982,4 +988,4 @@ async def get_player_current_league(
         raise HTTPException(
             status_code=500,
             detail="Internal server error retrieving player league",
-        )
+        ) from e

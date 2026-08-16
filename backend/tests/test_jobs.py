@@ -1,7 +1,7 @@
 """Background-job configuration and error-boundary tests."""
 
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -73,7 +73,7 @@ async def test_overdue_startup_job_is_queued_without_awaiting_execution(
         schedule="interval:900",
     )
     last_execution = SimpleNamespace(
-        started_at=datetime.now(timezone.utc) - timedelta(minutes=16)
+        started_at=datetime.now(UTC) - timedelta(minutes=16)
     )
 
     class ResultDouble:
@@ -304,7 +304,7 @@ async def test_job_configuration_update_locks_cleanup_tables_before_its_row(
     assert str(session.statements[0]) == (
         f"LOCK TABLE {', '.join(RIOT_WRITER_TABLES)} IN ROW EXCLUSIVE MODE"
     )
-    assert getattr(session.statements[1], "_for_update_arg") is not None
+    assert session.statements[1]._for_update_arg is not None
     assert updated.config_json == {
         RIOT_MAINTENANCE_MODE_KEY: True,
     }

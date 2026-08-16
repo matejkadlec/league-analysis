@@ -2,6 +2,7 @@
 
 from datetime import datetime
 from enum import Enum as PyEnum
+from typing import Final, override
 
 from sqlalchemy import (
     BigInteger,
@@ -25,11 +26,20 @@ class CookieConsentLevel(PyEnum):
     ALL = "all"
 
 
+def _cookie_consent_enum_values(enum_cls: type[CookieConsentLevel]) -> list[str]:
+    """Return the database labels SQLAlchemy should persist for the enum.
+
+    Without this the column would store the member *names* (``NECESSARY``)
+    rather than the lower-case values the schema declares.
+    """
+    return [member.value for member in enum_cls]
+
+
 class UserCookieConsent(Base):
     """Authenticated user cookie-consent record."""
 
     __tablename__ = "user_cookie_consents"
-    __table_args__ = {"schema": "auth"}
+    __table_args__: Final = {"schema": "auth"}
 
     user_id: Mapped[int] = mapped_column(
         BigInteger,
@@ -43,7 +53,7 @@ class UserCookieConsent(Base):
             CookieConsentLevel,
             schema="auth",
             name="cookie_consent_level_enum",
-            values_callable=lambda enum_cls: [member.value for member in enum_cls],
+            values_callable=_cookie_consent_enum_values,
             validate_strings=True,
         ),
         nullable=False,
@@ -81,6 +91,7 @@ class UserCookieConsent(Base):
 
     user = relationship("User", back_populates="cookie_consent")
 
+    @override
     def __repr__(self) -> str:
         """Return string representation of cookie consent."""
         return (

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING
 
 from dotenv import load_dotenv
 from pydantic import Field, field_validator
@@ -48,7 +48,7 @@ class Settings(BaseSettings):
     cors_origins: str = Field(default="http://localhost:3000,http://127.0.0.1:3000")
 
     @property
-    def cors_origins_list(self) -> List[str]:
+    def cors_origins_list(self) -> list[str]:
         """Get CORS origins as a list."""
         return [
             origin.strip() for origin in self.cors_origins.split(",") if origin.strip()

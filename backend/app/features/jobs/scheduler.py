@@ -1,7 +1,13 @@
+# APScheduler 3.x ships neither stubs nor a `py.typed` marker, and the
+# `JobConfiguration.job_type` column drifts from its ORM annotation. Both rules
+# are off project-wide in `pyproject.toml`; the `strict` header above resets
+# them to the strict defaults, so restore the project setting here.
+# pyright: reportMissingTypeStubs=false, reportUnnecessaryIsInstance=false
 """Scheduler module for managing automated background jobs."""
 
-from datetime import datetime, timezone
-from typing import Any, Dict, Optional, Type
+from collections.abc import Callable
+from datetime import UTC, datetime
+from typing import Any, Protocol
 
 import structlog
 from apscheduler.executors.asyncio import AsyncIOExecutor
@@ -11,32 +17,80 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import db_manager, get_global_settings
+from app.core.config import Settings
 
 from .base import BaseJob
 from .models import JobConfiguration, JobExecution, JobStatus, JobType
 
 logger = structlog.get_logger(__name__)
 
+
+class SchedulerLike(Protocol):
+    """The slice of APScheduler's scheduler this module and the router drive.
+
+    APScheduler is unannotated, so every call through the concrete class comes
+    back as `Unknown`. Naming the surface we actually use pins the argument and
+    return types at the boundary, and lets the test doubles that already stand
+    in for the scheduler be checked against the same shape.
+    """
+
+    @property
+    def running(self) -> bool: ...
+
+    def start(self, paused: bool = False) -> None: ...
+
+    def shutdown(self, wait: bool = True) -> None: ...
+
+    def resume(self) -> None: ...
+
+    # APScheduler funnels trigger arguments through `**trigger_args`, where they
+    # collide with its own `jobstore`/`executor` keywords. Naming the two this
+    # module actually passes keeps the boundary typed: `seconds` for the
+    # recurring interval schedules, `run_date` for one-shot catch-up entries.
+    def add_job(
+        self,
+        func: Callable[..., object],
+        trigger: str | None = None,
+        *,
+        id: str | None = None,
+        name: str | None = None,
+        replace_existing: bool = False,
+        seconds: int | None = None,
+        run_date: datetime | None = None,
+    ) -> object: ...
+
+    # `jobstore` is deliberately absent from these four. APScheduler accepts it,
+    # but nothing here passes it, and a Protocol is meant to state what this
+    # module actually depends on rather than mirror the concrete class.
+    def remove_job(self, job_id: str) -> None: ...
+
+    def remove_all_jobs(self) -> None: ...
+
+    def pause_job(self, job_id: str) -> object: ...
+
+    def resume_job(self, job_id: str) -> object: ...
+
+
 # Global scheduler instance
-_scheduler: Optional[AsyncIOScheduler] = None
-_JOB_REGISTRY: Optional[Dict[JobType, Type[BaseJob]]] = None
+_scheduler: SchedulerLike | None = None
+_job_registry: dict[JobType, type[BaseJob]] | None = None
 
 
-def _get_job_registry() -> Dict[JobType, Type[BaseJob]]:
-    global _JOB_REGISTRY
-    if _JOB_REGISTRY is None:
+def _get_job_registry() -> dict[JobType, type[BaseJob]]:
+    global _job_registry
+    if _job_registry is None:
         from .implementations.match_fetcher import MatchFetcherJob
         from .implementations.player_updater import PlayerUpdaterJob
 
-        _JOB_REGISTRY = {
+        _job_registry = {
             JobType.MATCH_FETCHER: MatchFetcherJob,
             JobType.PLAYER_UPDATER: PlayerUpdaterJob,
         }
 
-    return _JOB_REGISTRY
+    return _job_registry
 
 
-def get_scheduler() -> Optional[AsyncIOScheduler]:
+def get_scheduler() -> SchedulerLike | None:
     """Get the global scheduler instance.
 
     Returns:
@@ -73,7 +127,7 @@ def _resolve_interval_seconds(job_config: JobConfiguration) -> int:
     )
 
 
-def _parse_interval_from_config(custom_value: Any) -> Optional[int]:
+def _parse_interval_from_config(custom_value: Any) -> int | None:
     """Parse interval from config JSON value.
 
     :param custom_value: Value from config_json['interval_seconds'].
@@ -94,7 +148,7 @@ def _parse_interval_from_config(custom_value: Any) -> Optional[int]:
     return None
 
 
-def _parse_interval_from_schedule(schedule: str) -> Optional[int]:
+def _parse_interval_from_schedule(schedule: str) -> int | None:
     """Parse interval from schedule string.
 
     Supports formats:
@@ -209,7 +263,6 @@ async def _cancel_orphaned_player_syncs(db: AsyncSession) -> None:
     Raises:
         Exception: Whatever the update or commit raised, after rolling back.
     """
-    from datetime import timezone
 
     from sqlalchemy import update
 
@@ -217,7 +270,7 @@ async def _cancel_orphaned_player_syncs(db: AsyncSession) -> None:
     from .player_sync import ACTIVE_SYNC_STATUSES
 
     try:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         result = await db.execute(
             update(PlayerSyncRun)
             .where(PlayerSyncRun.status.in_(ACTIVE_SYNC_STATUSES))
@@ -323,7 +376,45 @@ async def _mark_stale_jobs_as_failed(db: AsyncSession) -> None:
         await db.rollback()
 
 
-async def start_scheduler() -> AsyncIOScheduler:
+def _build_scheduler(settings: Settings) -> SchedulerLike:
+    """Construct the APScheduler instance behind the `SchedulerLike` boundary.
+
+    Returning the protocol rather than `AsyncIOScheduler` is what keeps the
+    caller from inheriting the unannotated concrete class.
+    """
+    # Construct synchronous database URL for APScheduler's SQLAlchemyJobStore
+    # APScheduler uses synchronous psycopg2, not async asyncpg
+    # Store APScheduler jobs in jobs schema
+    jobstore_url = f"postgresql+psycopg2://{settings.postgres_user}:{settings.postgres_password}@{settings.postgres_host}:{settings.postgres_port}/{settings.postgres_db}"
+
+    # Configure job stores (APScheduler stores job state in jobs.apscheduler_jobs)
+    jobstores = {
+        "default": SQLAlchemyJobStore(
+            url=jobstore_url, tablename="apscheduler_jobs", tableschema="jobs"
+        ),
+    }
+
+    # Configure executors (how jobs are executed)
+    executors = {
+        "default": AsyncIOExecutor(),  # Async executor for our async jobs
+    }
+
+    # Configure job defaults
+    job_defaults = {
+        "coalesce": True,  # Combine multiple missed runs into one
+        "max_instances": 1,  # Only one instance of each job at a time
+        "misfire_grace_time": 60,  # Allow 60 seconds grace for missed jobs
+    }
+
+    return AsyncIOScheduler(
+        jobstores=jobstores,
+        executors=executors,
+        job_defaults=job_defaults,
+        timezone="UTC",
+    )
+
+
+async def start_scheduler() -> SchedulerLike:
     """Initialize and start the APScheduler instance.
 
     This function:
@@ -351,37 +442,7 @@ async def start_scheduler() -> AsyncIOScheduler:
     try:
         logger.info("Initializing job scheduler")
 
-        # Construct synchronous database URL for APScheduler's SQLAlchemyJobStore
-        # APScheduler uses synchronous psycopg2, not async asyncpg
-        # Store APScheduler jobs in jobs schema
-        jobstore_url = f"postgresql+psycopg2://{settings.postgres_user}:{settings.postgres_password}@{settings.postgres_host}:{settings.postgres_port}/{settings.postgres_db}"
-
-        # Configure job stores (APScheduler stores job state in jobs.apscheduler_jobs)
-        jobstores = {
-            "default": SQLAlchemyJobStore(
-                url=jobstore_url, tablename="apscheduler_jobs", tableschema="jobs"
-            ),
-        }
-
-        # Configure executors (how jobs are executed)
-        executors = {
-            "default": AsyncIOExecutor(),  # Async executor for our async jobs
-        }
-
-        # Configure job defaults
-        job_defaults = {
-            "coalesce": True,  # Combine multiple missed runs into one
-            "max_instances": 1,  # Only one instance of each job at a time
-            "misfire_grace_time": 60,  # Allow 60 seconds grace for missed jobs
-        }
-
-        # Create scheduler
-        _scheduler = AsyncIOScheduler(
-            jobstores=jobstores,
-            executors=executors,
-            job_defaults=job_defaults,
-            timezone="UTC",
-        )
+        _scheduler = _build_scheduler(settings)
 
         await _run_startup_recovery()
 
@@ -416,7 +477,7 @@ async def start_scheduler() -> AsyncIOScheduler:
         raise
 
 
-def _convert_job_type(job_config: JobConfiguration) -> Optional[JobType]:
+def _convert_job_type(job_config: JobConfiguration) -> JobType | None:
     """Convert job configuration type to JobType enum.
 
     :param job_config: Job configuration to convert.
@@ -436,7 +497,11 @@ def _convert_job_type(job_config: JobConfiguration) -> Optional[JobType]:
     return job_type
 
 
-def _get_job_class(job_type: JobType, job_config: JobConfiguration, registry: Dict):
+def _get_job_class(
+    job_type: JobType,
+    job_config: JobConfiguration,
+    registry: dict[JobType, type[BaseJob]],
+) -> type[BaseJob] | None:
     """Get job class from registry.
 
     :param job_type: Type of job to get.
@@ -455,7 +520,7 @@ def _get_job_class(job_type: JobType, job_config: JobConfiguration, registry: Di
 
 
 def _schedule_job(
-    job_config: JobConfiguration, job_class: Type[BaseJob], interval_seconds: int
+    job_config: JobConfiguration, job_class: type[BaseJob], interval_seconds: int
 ):
     """Schedule a single job with the scheduler.
 
@@ -547,10 +612,10 @@ async def sync_job_configuration(job_config_id: int) -> None:
 
 
 def _overdue_reason(
-    last_execution: Optional[JobExecution],
+    last_execution: JobExecution | None,
     now: datetime,
     interval_seconds: int,
-) -> Optional[str]:
+) -> str | None:
     """Return the overdue reason, or None when the job is still on schedule."""
     if last_execution is None:
         return "never run before"
@@ -563,7 +628,7 @@ def _overdue_reason(
     return None
 
 
-async def _last_job_execution(job_config_id: int) -> Optional[JobExecution]:
+async def _last_job_execution(job_config_id: int) -> JobExecution | None:
     """Return the most recent execution for one configuration, if any."""
     from sqlalchemy import select
 
@@ -580,11 +645,11 @@ async def _last_job_execution(job_config_id: int) -> Optional[JobExecution]:
 
 async def _collect_overdue_jobs(
     job_configs: list[JobConfiguration],
-    registry: Dict[JobType, Type[BaseJob]],
+    registry: dict[JobType, type[BaseJob]],
     now: datetime,
-) -> list[tuple[JobConfiguration, Type[BaseJob]]]:
+) -> list[tuple[JobConfiguration, type[BaseJob]]]:
     """Inspect active configurations and return those that need catch-up."""
-    overdue_jobs: list[tuple[JobConfiguration, Type[BaseJob]]] = []
+    overdue_jobs: list[tuple[JobConfiguration, type[BaseJob]]] = []
     for job_config in job_configs:
         try:
             job_type = _convert_job_type(job_config)
@@ -618,7 +683,7 @@ async def _collect_overdue_jobs(
 
 
 def _queue_overdue_jobs(
-    overdue_jobs: list[tuple[JobConfiguration, Type[BaseJob]]],
+    overdue_jobs: list[tuple[JobConfiguration, type[BaseJob]]],
     now: datetime,
 ) -> None:
     """Queue one-shot catch-up entries without awaiting provider work."""
@@ -666,7 +731,7 @@ async def _check_and_run_overdue_jobs() -> None:
             logger.info("No active jobs to check")
             return
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         overdue_jobs = await _collect_overdue_jobs(
             list(job_configs), _get_job_registry(), now
         )

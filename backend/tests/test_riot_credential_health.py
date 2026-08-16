@@ -1,6 +1,6 @@
 """Credential-generation and server-authoritative Riot health regressions."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from typing import cast
 from unittest.mock import AsyncMock, Mock
@@ -48,7 +48,7 @@ def _health(
 
 
 def test_new_generation_resets_old_failure_without_key_fingerprint() -> None:
-    observed_at = datetime(2026, 8, 11, tzinfo=timezone.utc)
+    observed_at = datetime(2026, 8, 11, tzinfo=UTC)
     health = _health(
         status=RiotCredentialStatus.INVALID,
         evidence_at=observed_at,
@@ -71,7 +71,7 @@ def test_new_generation_resets_old_failure_without_key_fingerprint() -> None:
 
 
 def test_ordered_evidence_rejects_stale_generation_and_late_old_request() -> None:
-    started_at = datetime(2026, 8, 11, tzinfo=timezone.utc)
+    started_at = datetime(2026, 8, 11, tzinfo=UTC)
     health = _health(evidence_at=started_at)
 
     assert apply_riot_credential_evidence(
@@ -115,7 +115,7 @@ async def test_only_provider_acceptance_or_rejection_changes_health() -> None:
         api_key="RGAPI-test-only",
         credential_health_callback=callback,
     )
-    observed_at = datetime(2026, 8, 11, tzinfo=timezone.utc)
+    observed_at = datetime(2026, 8, 11, tzinfo=UTC)
 
     for status_code in (200, 204, 404):
         await client._record_credential_health(status_code, observed_at)
@@ -156,7 +156,7 @@ def test_environment_generation_is_explicit_or_runtime_random(
 async def test_admin_and_user_status_share_the_same_health_snapshot(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    observed_at = datetime(2026, 8, 11, tzinfo=timezone.utc)
+    observed_at = datetime(2026, 8, 11, tzinfo=UTC)
     snapshot = SimpleNamespace(
         has_db_key=True,
         has_env_key=True,

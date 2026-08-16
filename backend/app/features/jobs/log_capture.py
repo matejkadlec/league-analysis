@@ -5,7 +5,8 @@ It's in a separate module to avoid circular import issues.
 """
 
 from collections import deque
-from typing import Any, MutableMapping
+from collections.abc import MutableMapping
+from typing import Any
 
 
 class BoundedLogCapture:
@@ -16,7 +17,7 @@ class BoundedLogCapture:
 
     def __init__(self, maxlen: int = 1000):
         """Initialize with bounded deque that auto-drops oldest entries."""
-        self.entries = deque(maxlen=maxlen)
+        self.entries: deque[MutableMapping[str, Any]] = deque(maxlen=maxlen)
 
     def __call__(
         self, _: Any, _method_name: str, event_dict: MutableMapping[str, Any]

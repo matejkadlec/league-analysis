@@ -1,6 +1,6 @@
 """Persisted per-match LP observation regressions."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 
 import pytest
@@ -14,7 +14,7 @@ from app.features.matches.match_lp import (
     persist_match_lp_observations,
 )
 
-BASE_TIME = datetime(2026, 8, 15, 12, tzinfo=timezone.utc)
+BASE_TIME = datetime(2026, 8, 15, 12, tzinfo=UTC)
 
 
 def _snapshot(

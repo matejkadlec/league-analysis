@@ -1,6 +1,6 @@
 """Pydantic models for Riot API response data."""
 
-from typing import List, Optional
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -18,9 +18,9 @@ class AccountDTO(BaseModel):
 class SummonerDTO(BaseModel):
     """League of Legends Summoner information."""
 
-    id: Optional[str] = None
+    id: str | None = None
     puuid: str
-    name: Optional[str] = None
+    name: str | None = None
     profile_icon_id: int = Field(..., alias="profileIconId")
     summoner_level: int = Field(..., alias="summonerLevel")
 
@@ -30,11 +30,11 @@ class SummonerDTO(BaseModel):
 class MatchListDTO(BaseModel):
     """Match list response."""
 
-    match_ids: List[str] = Field(..., alias="matchIds")
+    match_ids: list[str] = Field(..., alias="matchIds")
     start: int
     count: int
-    total: Optional[int] = None
-    puuid: Optional[str] = None
+    total: int | None = None
+    puuid: str | None = None
 
     model_config = ConfigDict(populate_by_name=True)
 
@@ -46,17 +46,17 @@ class ParticipantDTO(BaseModel):
     participant_id: int = Field(..., alias="participantId")
     puuid: str
     summoner_name: str | None = Field(default=None, alias="summonerName")
-    summoner_id: Optional[str] = Field(None, alias="summonerId")
+    summoner_id: str | None = Field(None, alias="summonerId")
     summoner_level: int = Field(0, alias="summonerLevel")
     profile_icon: int = Field(0, alias="profileIcon")
 
     # Riot ID fields
-    game_name: Optional[str] = Field(None, alias="riotIdGameName")
-    tag_line: Optional[str] = Field(None, alias="riotIdTagline")
+    game_name: str | None = Field(None, alias="riotIdGameName")
+    tag_line: str | None = Field(None, alias="riotIdTagline")
 
     # Team & Position
     team_id: int = Field(..., alias="teamId")
-    team_position: Optional[str] = Field(None, alias="teamPosition")
+    team_position: str | None = Field(None, alias="teamPosition")
 
     # Champions
     champion_id: int = Field(..., alias="championId")
@@ -81,7 +81,7 @@ class ParticipantDTO(BaseModel):
     # Economy & Vision
     gold_earned: int = Field(0, alias="goldEarned")
     gold_spent: int = Field(0, alias="goldSpent")
-    vision_score: Optional[float] = Field(None, alias="visionScore")
+    vision_score: float | None = Field(None, alias="visionScore")
     vision_wards_placed: int = Field(0, alias="detectorWardsPlaced")
     vision_wards_bought: int = Field(0, alias="visionWardsBoughtInGame")
     wards_placed: int = Field(0, alias="wardsPlaced")
@@ -140,10 +140,10 @@ class ParticipantDTO(BaseModel):
 
     # Flags
     eligible_for_progression: bool = Field(True, alias="eligibleForProgression")
-    game_ended_in_early_surrender: Optional[bool] = Field(
+    game_ended_in_early_surrender: bool | None = Field(
         None, alias="gameEndedInEarlySurrender"
     )
-    game_ended_in_surrender: Optional[bool] = Field(None, alias="gameEndedInSurrender")
+    game_ended_in_surrender: bool | None = Field(None, alias="gameEndedInSurrender")
 
     @property
     def remake(self) -> bool:
@@ -153,12 +153,12 @@ class ParticipantDTO(BaseModel):
     # Advanced
 
     # Advanced
-    runes: dict = Field(default_factory=dict, alias="perks")
-    advanced_stats: dict = Field(default_factory=dict, alias="challenges")
+    runes: dict[str, Any] = Field(default_factory=dict, alias="perks")
+    advanced_stats: dict[str, Any] = Field(default_factory=dict, alias="challenges")
 
     # Legacy / Unused in new schema but kept for completeness or other uses
-    role: Optional[str] = None
-    individual_position: Optional[str] = Field(None, alias="individualPosition")
+    role: str | None = None
+    individual_position: str | None = Field(None, alias="individualPosition")
 
     @property
     def calculated_kda(self) -> float:
@@ -181,9 +181,9 @@ class MatchInfoDTO(BaseModel):
     game_version: str = Field(..., alias="gameVersion")
     game_mode: str = Field(..., alias="gameMode")
     game_type: str = Field(..., alias="gameType")
-    game_end_timestamp: Optional[int] = Field(None, alias="gameEndTimestamp")
-    game_result: Optional[str] = Field(None, alias="endOfGameResult")
-    participants: List[ParticipantDTO]
+    game_end_timestamp: int | None = Field(None, alias="gameEndTimestamp")
+    game_result: str | None = Field(None, alias="endOfGameResult")
+    participants: list[ParticipantDTO]
     platform: str = Field(..., alias="platformId")
 
     model_config = ConfigDict(populate_by_name=True)
@@ -193,7 +193,7 @@ class MatchMetadataDTO(BaseModel):
     """Match metadata."""
 
     match_id: str = Field(..., alias="matchId")
-    participants: List[str]
+    participants: list[str]
 
     model_config = ConfigDict(populate_by_name=True)
 

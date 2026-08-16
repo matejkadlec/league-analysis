@@ -1,6 +1,6 @@
 """Player Updater execution and recovery regressions."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
@@ -17,7 +17,7 @@ class _FakeRiotClient:
     def __init__(self, **_kwargs: object) -> None:
         return None
 
-    async def __aenter__(self) -> "_FakeRiotClient":
+    async def __aenter__(self) -> _FakeRiotClient:
         return self
 
     async def __aexit__(self, *_args: object) -> None:
@@ -155,7 +155,7 @@ async def test_new_player_uses_submitted_riot_id_when_account_omits_it(
     )
 
     class _Statement:
-        def where(self, *_conditions: object) -> "_Statement":
+        def where(self, *_conditions: object) -> _Statement:
             return self
 
     class _FakePlayer(SimpleNamespace):
@@ -168,8 +168,8 @@ async def test_new_player_uses_submitted_riot_id_when_account_omits_it(
     monkeypatch.setattr(player_service_module, "Player", _FakePlayer)
 
     async def populate_database_timestamps(player: SimpleNamespace) -> None:
-        player.created_at = datetime.now(timezone.utc)
-        player.updated_at = datetime.now(timezone.utc)
+        player.created_at = datetime.now(UTC)
+        player.updated_at = datetime.now(UTC)
 
     db = SimpleNamespace(
         get=AsyncMock(return_value=None),

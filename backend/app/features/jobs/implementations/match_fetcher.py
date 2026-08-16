@@ -1,5 +1,5 @@
-from datetime import datetime, timezone
-from typing import List
+from datetime import UTC, datetime
+from typing import override
 
 import structlog
 from sqlalchemy import select
@@ -48,10 +48,11 @@ class MatchFetcherJob(BaseJob):
         if metric_name == "requests_made":
             self.metrics["api_requests_made"] += count
 
-    def _store_api_calls(self, api_calls: List[APICallRecord]) -> None:
+    def _store_api_calls(self, api_calls: list[APICallRecord]) -> None:
         """Store API call records from the RiotAPIClient."""
         self._api_call_records = api_calls
 
+    @override
     async def execute(self, db: AsyncSession) -> None:
         """Execute the match fetcher job."""
         if not self.job_config:
@@ -172,7 +173,7 @@ class MatchFetcherJob(BaseJob):
     async def _process_player(
         self,
         db: AsyncSession,
-        player: "PlayerResponse",
+        player: PlayerResponse,
         player_service: PlayerService,
         match_service: MatchService,
         riot_client: RiotAPIClient,
@@ -225,7 +226,7 @@ class MatchFetcherJob(BaseJob):
             return
 
         if len(self._errors_encountered) == error_count_before:
-            player_model.match_synced_at = datetime.now(timezone.utc)
+            player_model.match_synced_at = datetime.now(UTC)
             await db.commit()
 
         # Update player league (will only insert if league has changed)
@@ -297,7 +298,7 @@ class MatchFetcherJob(BaseJob):
             league_before,
             league_after,
         )
-        player_model.league_synced_at = datetime.now(timezone.utc)
+        player_model.league_synced_at = datetime.now(UTC)
         await db.commit()
         await rate_limiter.record_request()
         return league_updated, lp_observations

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, TypeIs
 
 import structlog
 from sqlalchemy import (
@@ -39,7 +39,7 @@ OBJECTIVE_KINDS = {
     "atakhan",
 }
 
-_BUILDING_SPECS: Dict[str, tuple[str, str, str, bool]] = {
+_BUILDING_SPECS: dict[str, tuple[str, str, str, bool]] = {
     "TOWER_BUILDING": (
         "turret",
         "team_turrets_destroyed",
@@ -54,7 +54,7 @@ _BUILDING_SPECS: Dict[str, tuple[str, str, str, bool]] = {
     ),
 }
 
-_MONSTER_SPECS: Dict[str, tuple[str, str]] = {
+_MONSTER_SPECS: dict[str, tuple[str, str]] = {
     "DRAGON": ("dragon", "team_dragons_slain"),
     "RIFTHERALD": ("rift_herald", "team_rift_heralds_slain"),
     "BARON_NASHOR": ("baron", "team_barons_slain"),
@@ -116,8 +116,8 @@ class MatchTimeline(Base):
     # Participant identity and match-level timeline shape.
     participant_id: Mapped[int] = mapped_column(Integer, nullable=False)
     team_id: Mapped[int] = mapped_column(Integer, nullable=False)
-    frame_interval_ms: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    frame_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    frame_interval_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    frame_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     # Player objective contribution (takedown = killer or assister).
     objective_takedowns_total: Mapped[int] = mapped_column(
@@ -147,16 +147,16 @@ class MatchTimeline(Base):
     atakhan_last_hits: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     # Compact breakdowns for flexible analytics.
-    turret_takedowns_by_lane: Mapped[Dict[str, int]] = mapped_column(
+    turret_takedowns_by_lane: Mapped[dict[str, int]] = mapped_column(
         JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
     )
-    inhibitor_takedowns_by_lane: Mapped[Dict[str, int]] = mapped_column(
+    inhibitor_takedowns_by_lane: Mapped[dict[str, int]] = mapped_column(
         JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
     )
-    dragon_takedowns_by_subtype: Mapped[Dict[str, int]] = mapped_column(
+    dragon_takedowns_by_subtype: Mapped[dict[str, int]] = mapped_column(
         JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
     )
-    other_epic_monster_takedowns: Mapped[Dict[str, int]] = mapped_column(
+    other_epic_monster_takedowns: Mapped[dict[str, int]] = mapped_column(
         JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
     )
 
@@ -176,7 +176,7 @@ class MatchTimeline(Base):
         Integer, nullable=False, default=0
     )
     team_atakhan_slain: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    team_other_epic_monsters_slain: Mapped[Dict[str, int]] = mapped_column(
+    team_other_epic_monsters_slain: Mapped[dict[str, int]] = mapped_column(
         JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
     )
 
@@ -205,7 +205,22 @@ Index("idx_match_timelines_puuid", MatchTimeline.puuid)
 Index("idx_match_timelines_match_team", MatchTimeline.match_id, MatchTimeline.team_id)
 
 
-def _normalize_int(value: Any) -> Optional[int]:
+def _is_json_object(value: object) -> TypeIs[dict[str, Any]]:
+    """Narrow an unvalidated timeline fragment to a string-keyed object.
+
+    Timeline payloads arrive straight off Riot's wire, so a declared dict type
+    is a claim about the format rather than a guarantee. The runtime checks
+    below stay, and narrowing through them keeps each fragment typed.
+    """
+    return isinstance(value, dict)
+
+
+def _is_json_array(value: object) -> TypeIs[list[Any]]:
+    """Narrow an unvalidated timeline fragment to an array."""
+    return isinstance(value, list)
+
+
+def _normalize_int(value: Any) -> int | None:
     """Normalize values to int where possible."""
     if isinstance(value, bool):
         return None
@@ -218,7 +233,7 @@ def _normalize_int(value: Any) -> Optional[int]:
     return None
 
 
-def _normalize_text(value: Any) -> Optional[str]:
+def _normalize_text(value: Any) -> str | None:
     """Normalize values to uppercase non-empty text."""
     if not isinstance(value, str):
         return None
@@ -228,7 +243,7 @@ def _normalize_text(value: Any) -> Optional[str]:
     return cleaned.upper()
 
 
-def _increment_counter(counter: Dict[str, int], key: str) -> None:
+def _increment_counter(counter: dict[str, int], key: str) -> None:
     """Increment a string-keyed integer counter."""
     counter[key] = counter.get(key, 0) + 1
 
@@ -242,9 +257,9 @@ def _uses_historical_atakhan_contract(game_version: str) -> bool:
 
 
 def _collect_involved_participants(
-    event: Dict[str, Any],
+    event: dict[str, Any],
     valid_participant_ids: set[int],
-) -> tuple[Optional[int], list[int]]:
+) -> tuple[int | None, list[int]]:
     """Extract unique participant IDs involved in an objective event."""
     killer_raw = _normalize_int(event.get("killerId"))
     killer_id = killer_raw if killer_raw in valid_participant_ids else None
@@ -257,7 +272,7 @@ def _collect_involved_participants(
         seen.add(killer_id)
 
     assisting_ids = event.get("assistingParticipantIds")
-    if isinstance(assisting_ids, list):
+    if _is_json_array(assisting_ids):
         for assist_raw in assisting_ids:
             assist_id = _normalize_int(assist_raw)
             if assist_id is None or assist_id not in valid_participant_ids:
@@ -271,10 +286,10 @@ def _collect_involved_participants(
 
 
 def _determine_killer_team_id(
-    event: Dict[str, Any],
-    killer_id: Optional[int],
-    participant_team_by_id: Dict[int, int],
-) -> Optional[int]:
+    event: dict[str, Any],
+    killer_id: int | None,
+    participant_team_by_id: dict[int, int],
+) -> int | None:
     """Resolve killer team from event payload and participant mapping."""
     if killer_id is not None:
         killer_team = participant_team_by_id.get(killer_id)
@@ -296,19 +311,19 @@ def _determine_killer_team_id(
 
 
 def _append_compact_objective_event(
-    row: Dict[str, Any],
-    timestamp: Optional[int],
+    row: dict[str, Any],
+    timestamp: int | None,
     objective: str,
     role: str,
-    lane: Optional[str] = None,
-    subtype: Optional[str] = None,
-    monster_type: Optional[str] = None,
+    lane: str | None = None,
+    subtype: str | None = None,
+    monster_type: str | None = None,
 ) -> None:
     """Append a compact objective event entry to row JSON."""
     if timestamp is None:
         return
 
-    entry: Dict[str, Any] = {"t": timestamp, "o": objective, "r": role}
+    entry: dict[str, Any] = {"t": timestamp, "o": objective, "r": role}
     if lane:
         entry["l"] = lane
     if subtype:
@@ -319,7 +334,7 @@ def _append_compact_objective_event(
     row["objective_events"].append(entry)
 
 
-def _new_team_total_bucket() -> Dict[str, Any]:
+def _new_team_total_bucket() -> dict[str, Any]:
     """Create an empty team-level objective totals bucket."""
     return {
         "team_turrets_destroyed": 0,
@@ -333,7 +348,7 @@ def _new_team_total_bucket() -> Dict[str, Any]:
     }
 
 
-def _new_team_totals() -> Dict[int, Dict[str, Any]]:
+def _new_team_totals() -> dict[int, dict[str, Any]]:
     """Create empty team totals for both sides."""
     return {100: _new_team_total_bucket(), 200: _new_team_total_bucket()}
 
@@ -343,9 +358,9 @@ def _new_participant_row(
     puuid: str,
     participant_id: int,
     team_id: int,
-    frame_interval_ms: Optional[int],
+    frame_interval_ms: int | None,
     frame_count: int,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Create an empty participant timeline aggregate row."""
     return {
         "match_id": match_id,
@@ -387,28 +402,28 @@ def _new_participant_row(
 
 
 def _extract_timeline_frames(
-    timeline_payload: Optional[Dict[str, Any]],
-) -> Optional[tuple[Dict[str, Any], list[Any]]]:
+    timeline_payload: object,
+) -> tuple[dict[str, Any], list[Any]] | None:
     """Return `(info, frames)` when the timeline payload has a usable shape."""
-    if not timeline_payload or not isinstance(timeline_payload, dict):
+    if not timeline_payload or not _is_json_object(timeline_payload):
         return None
     info = timeline_payload.get("info")
-    if not isinstance(info, dict):
+    if not _is_json_object(info):
         return None
     frames = info.get("frames")
-    if not isinstance(frames, list):
+    if not _is_json_array(frames):
         return None
     return info, frames
 
 
 def _collect_participant_rows(
     match_dto: Any,
-    frame_interval_ms: Optional[int],
+    frame_interval_ms: int | None,
     frame_count: int,
-) -> tuple[Dict[int, int], Dict[int, Dict[str, Any]]]:
+) -> tuple[dict[int, int], dict[int, dict[str, Any]]]:
     """Index valid participants and their empty timeline rows."""
-    participant_team_by_id: Dict[int, int] = {}
-    rows_by_participant_id: Dict[int, Dict[str, Any]] = {}
+    participant_team_by_id: dict[int, int] = {}
+    rows_by_participant_id: dict[int, dict[str, Any]] = {}
     match_id = match_dto.metadata.match_id
 
     for participant in match_dto.info.participants:
@@ -429,7 +444,7 @@ def _collect_participant_rows(
     return participant_team_by_id, rows_by_participant_id
 
 
-def _event_role(killer_id: Optional[int], participant_id: int) -> str:
+def _event_role(killer_id: int | None, participant_id: int) -> str:
     """Return compact killer/assist role for an involved participant."""
     if killer_id is not None and participant_id == killer_id:
         return "K"
@@ -438,10 +453,10 @@ def _event_role(killer_id: Optional[int], participant_id: int) -> str:
 
 def _iter_involved_rows(
     involved: list[int],
-    rows_by_participant_id: Dict[int, Dict[str, Any]],
-) -> list[tuple[int, Dict[str, Any]]]:
+    rows_by_participant_id: dict[int, dict[str, Any]],
+) -> list[tuple[int, dict[str, Any]]]:
     """Return involved participant IDs that have an aggregate row."""
-    rows: list[tuple[int, Dict[str, Any]]] = []
+    rows: list[tuple[int, dict[str, Any]]] = []
     for participant_id in involved:
         row = rows_by_participant_id.get(participant_id)
         if row is None:
@@ -451,9 +466,9 @@ def _iter_involved_rows(
 
 
 def _resolve_building_objective(
-    building_type: Optional[str],
-    tower_type: Optional[str],
-) -> tuple[Optional[str], Optional[str], Optional[str], Optional[str]]:
+    building_type: str | None,
+    tower_type: str | None,
+) -> tuple[str | None, str | None, str | None, str | None]:
     """Map a building kill to objective, team-total, lane, and subtype fields."""
     spec = _BUILDING_SPECS.get(building_type) if building_type is not None else None
     if spec is None:
@@ -467,7 +482,7 @@ def _resolve_building_objective(
 def _resolve_monster_objective(
     monster_type: str,
     historical_atakhan: bool,
-) -> tuple[Optional[str], Optional[str]]:
+) -> tuple[str | None, str | None]:
     """Map an elite monster kill to objective and team-total fields."""
     spec = _MONSTER_SPECS.get(monster_type)
     if spec is not None:
@@ -478,9 +493,9 @@ def _resolve_monster_objective(
 
 
 def _increment_known_team_total(
-    team_totals: Dict[int, Dict[str, Any]],
-    killer_team_id: Optional[int],
-    team_total_field: Optional[str],
+    team_totals: dict[int, dict[str, Any]],
+    killer_team_id: int | None,
+    team_total_field: str | None,
 ) -> None:
     """Increment a known team objective counter when the killer team is valid."""
     if team_total_field is None or killer_team_id not in VALID_TEAM_IDS:
@@ -489,10 +504,10 @@ def _increment_known_team_total(
 
 
 def _credit_team_monster(
-    team_totals: Dict[int, Dict[str, Any]],
-    killer_team_id: Optional[int],
-    objective: Optional[str],
-    team_total_field: Optional[str],
+    team_totals: dict[int, dict[str, Any]],
+    killer_team_id: int | None,
+    objective: str | None,
+    team_total_field: str | None,
     monster_type: str,
 ) -> None:
     """Credit a team-level epic-monster kill or retain an unknown type."""
@@ -508,14 +523,14 @@ def _credit_team_monster(
 
 
 def _credit_known_objective(
-    row: Dict[str, Any],
+    row: dict[str, Any],
     objective: str,
     role: str,
-    timestamp: Optional[int],
+    timestamp: int | None,
     *,
-    lane: Optional[str] = None,
-    lane_field: Optional[str] = None,
-    subtype: Optional[str] = None,
+    lane: str | None = None,
+    lane_field: str | None = None,
+    subtype: str | None = None,
 ) -> None:
     """Increment known-objective takedown counters and append a compact event."""
     row[f"{objective}_takedowns"] += 1
@@ -536,12 +551,12 @@ def _credit_known_objective(
 
 
 def _credit_monster_takedown(
-    row: Dict[str, Any],
-    objective: Optional[str],
+    row: dict[str, Any],
+    objective: str | None,
     role: str,
-    timestamp: Optional[int],
+    timestamp: int | None,
     monster_type: str,
-    monster_subtype: Optional[str],
+    monster_subtype: str | None,
 ) -> None:
     """Credit a participant monster takedown or retain an unknown type."""
     if objective in OBJECTIVE_KINDS:
@@ -568,13 +583,13 @@ def _credit_monster_takedown(
 
 def _record_unknown_building(
     match_id: str,
-    building_type: Optional[str],
-    tower_type: Optional[str],
-    lane_type: Optional[str],
-    timestamp: Optional[int],
-    killer_id: Optional[int],
+    building_type: str | None,
+    tower_type: str | None,
+    lane_type: str | None,
+    timestamp: int | None,
+    killer_id: int | None,
     involved: list[int],
-    rows_by_participant_id: Dict[int, Dict[str, Any]],
+    rows_by_participant_id: dict[int, dict[str, Any]],
 ) -> None:
     """Log and retain an unrecognized building objective for involved players."""
     logger.warning(
@@ -598,13 +613,13 @@ def _record_unknown_building(
 
 
 def _apply_building_kill(
-    event: Dict[str, Any],
+    event: dict[str, Any],
     match_id: str,
-    killer_id: Optional[int],
+    killer_id: int | None,
     involved: list[int],
-    killer_team_id: Optional[int],
-    rows_by_participant_id: Dict[int, Dict[str, Any]],
-    team_totals: Dict[int, Dict[str, Any]],
+    killer_team_id: int | None,
+    rows_by_participant_id: dict[int, dict[str, Any]],
+    team_totals: dict[int, dict[str, Any]],
 ) -> None:
     """Apply a BUILDING_KILL event to team totals and participant rows."""
     building_type = _normalize_text(event.get("buildingType"))
@@ -642,15 +657,15 @@ def _apply_building_kill(
 
 
 def _apply_elite_monster_kill(
-    event: Dict[str, Any],
+    event: dict[str, Any],
     match_id: str,
     game_version: str,
     historical_atakhan: bool,
-    killer_id: Optional[int],
+    killer_id: int | None,
     involved: list[int],
-    killer_team_id: Optional[int],
-    rows_by_participant_id: Dict[int, Dict[str, Any]],
-    team_totals: Dict[int, Dict[str, Any]],
+    killer_team_id: int | None,
+    rows_by_participant_id: dict[int, dict[str, Any]],
+    team_totals: dict[int, dict[str, Any]],
 ) -> None:
     """Apply an ELITE_MONSTER_KILL event to team totals and participant rows."""
     monster_type = _normalize_text(event.get("monsterType"))
@@ -696,12 +711,12 @@ def _process_timeline_event(
     game_version: str,
     historical_atakhan: bool,
     valid_participant_ids: set[int],
-    participant_team_by_id: Dict[int, int],
-    rows_by_participant_id: Dict[int, Dict[str, Any]],
-    team_totals: Dict[int, Dict[str, Any]],
+    participant_team_by_id: dict[int, int],
+    rows_by_participant_id: dict[int, dict[str, Any]],
+    team_totals: dict[int, dict[str, Any]],
 ) -> None:
     """Dispatch one timeline event when it is an objective kill."""
-    if not isinstance(event, dict):
+    if not _is_json_object(event):
         return
     event_type = event.get("type")
     if event_type not in {"BUILDING_KILL", "ELITE_MONSTER_KILL"}:
@@ -738,17 +753,17 @@ def _process_timeline_frames(
     match_id: str,
     game_version: str,
     historical_atakhan: bool,
-    participant_team_by_id: Dict[int, int],
-    rows_by_participant_id: Dict[int, Dict[str, Any]],
-    team_totals: Dict[int, Dict[str, Any]],
+    participant_team_by_id: dict[int, int],
+    rows_by_participant_id: dict[int, dict[str, Any]],
+    team_totals: dict[int, dict[str, Any]],
 ) -> None:
     """Walk timeline frames and apply recognized objective events."""
     valid_participant_ids = set(rows_by_participant_id.keys())
     for frame in frames:
-        if not isinstance(frame, dict):
+        if not _is_json_object(frame):
             continue
         events = frame.get("events")
-        if not isinstance(events, list):
+        if not _is_json_array(events):
             continue
         for event in events:
             _process_timeline_event(
@@ -764,7 +779,7 @@ def _process_timeline_frames(
 
 
 def _apply_team_totals_to_row(
-    row: Dict[str, Any], totals: Optional[Dict[str, Any]]
+    row: dict[str, Any], totals: dict[str, Any] | None
 ) -> None:
     """Copy team totals onto a participant row when the team is known."""
     if totals is None:
@@ -776,18 +791,18 @@ def _apply_team_totals_to_row(
     )
 
 
-def _freeze_row_counters(row: Dict[str, Any]) -> None:
+def _freeze_row_counters(row: dict[str, Any]) -> None:
     """Snapshot mutable counter dicts so later mutations cannot leak."""
     for field in _COUNTER_COPY_FIELDS:
         row[field] = dict(row[field])
 
 
 def _finalize_timeline_rows(
-    rows_by_participant_id: Dict[int, Dict[str, Any]],
-    team_totals: Dict[int, Dict[str, Any]],
-) -> list[Dict[str, Any]]:
+    rows_by_participant_id: dict[int, dict[str, Any]],
+    team_totals: dict[int, dict[str, Any]],
+) -> list[dict[str, Any]]:
     """Attach team totals and return rows ordered by participant ID."""
-    rows: list[Dict[str, Any]] = []
+    rows: list[dict[str, Any]] = []
     for participant_id in sorted(rows_by_participant_id.keys()):
         row = rows_by_participant_id[participant_id]
         _apply_team_totals_to_row(row, team_totals.get(row["team_id"]))
@@ -798,8 +813,8 @@ def _finalize_timeline_rows(
 
 def build_match_timeline_rows(
     match_dto: Any,
-    timeline_payload: Optional[Dict[str, Any]],
-) -> list[Dict[str, Any]]:
+    timeline_payload: dict[str, Any] | None,
+) -> list[dict[str, Any]]:
     """Build participant timeline aggregates for objective-focused analytics."""
     extracted = _extract_timeline_frames(timeline_payload)
     if extracted is None:
@@ -831,7 +846,7 @@ def build_match_timeline_rows(
 async def replace_match_timeline_rows(
     db: AsyncSession,
     match_dto: Any,
-    timeline_payload: Optional[Dict[str, Any]],
+    timeline_payload: dict[str, Any] | None,
 ) -> int:
     """Replace timeline rows for one match when timeline payload is available."""
     rows = build_match_timeline_rows(match_dto, timeline_payload)

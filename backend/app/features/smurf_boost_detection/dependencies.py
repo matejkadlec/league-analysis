@@ -23,4 +23,4 @@ SmurfBoostServiceDep = Annotated[
     SmurfBoostDetectionService, Depends(get_smurf_boost_service)
 ]
 
-__all__ = ["get_smurf_boost_service", "SmurfBoostServiceDep"]
+__all__ = ["SmurfBoostServiceDep", "get_smurf_boost_service"]

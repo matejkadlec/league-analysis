@@ -8,7 +8,7 @@ pins exact choices.
 from __future__ import annotations
 
 import math
-from typing import Optional, Sequence
+from collections.abc import Sequence
 
 from .config import EPSILON
 
@@ -58,7 +58,7 @@ def wilson_lower_bound(successes: int, trials: int) -> float:
     return (centre - margin) / (1 + z_squared / trials)
 
 
-def hedges_g(recent: Sequence[float], baseline: Sequence[float]) -> Optional[float]:
+def hedges_g(recent: Sequence[float], baseline: Sequence[float]) -> float | None:
     """Standardized mean difference with the Hedges small-sample correction.
 
     Both variances are unbiased sample variances. Returns None when the pooled
@@ -80,7 +80,7 @@ def hedges_g(recent: Sequence[float], baseline: Sequence[float]) -> Optional[flo
     return correction * (mean(recent) - mean(baseline)) / pooled
 
 
-def bimodality_coefficient(values: Sequence[float]) -> Optional[float]:
+def bimodality_coefficient(values: Sequence[float]) -> float | None:
     """Bias-corrected bimodality coefficient.
 
     Skewness and excess kurtosis are standardized by the population second
@@ -108,7 +108,7 @@ def bimodality_coefficient(values: Sequence[float]) -> Optional[float]:
     return (skewness**2 + 1) / denominator
 
 
-def log2_ratio(numerator: float, denominator: float) -> Optional[float]:
+def log2_ratio(numerator: float, denominator: float) -> float | None:
     """Absolute base-2 log of a ratio, or None when it is undefined."""
     if numerator <= EPSILON or denominator <= EPSILON:
         return None

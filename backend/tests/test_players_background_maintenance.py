@@ -83,7 +83,7 @@ async def test_player_add_writers_lock_and_honor_the_cleanup_interlock(
     assert str(session.statements[0]) == (
         f"LOCK TABLE {', '.join(RIOT_WRITER_TABLES)} IN ROW EXCLUSIVE MODE"
     )
-    assert getattr(session.statements[1], "_for_update_arg") is not None
+    assert session.statements[1]._for_update_arg is not None
     riot_client_factory.assert_not_called()
 
 

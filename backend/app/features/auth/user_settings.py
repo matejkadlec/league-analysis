@@ -1,7 +1,7 @@
 """User settings model for per-user preferences."""
 
 from datetime import datetime
-from typing import Optional
+from typing import Final, override
 
 from sqlalchemy import BigInteger, ForeignKey, String
 from sqlalchemy import (
@@ -17,7 +17,7 @@ class UserSettings(Base):
     """User settings model for storing per-user preferences."""
 
     __tablename__ = "user_settings"
-    __table_args__ = {"schema": "auth"}
+    __table_args__: Final = {"schema": "auth"}
 
     # Primary key (also FK to users)
     user_id: Mapped[int] = mapped_column(
@@ -27,7 +27,7 @@ class UserSettings(Base):
         comment="Reference to the user",
     )
 
-    current_player_puuid: Mapped[Optional[str]] = mapped_column(
+    current_player_puuid: Mapped[str | None] = mapped_column(
         String(78),
         ForeignKey("core.players.puuid", ondelete="SET NULL"),
         nullable=True,
@@ -54,6 +54,7 @@ class UserSettings(Base):
     # Relationships
     user = relationship("User", back_populates="settings")
 
+    @override
     def __repr__(self) -> str:
         """Return string representation of the user settings."""
         return f"<UserSettings(user_id={self.user_id})>"

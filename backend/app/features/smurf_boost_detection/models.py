@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
+from typing import Any, override
 
 from sqlalchemy import (
     CheckConstraint,
@@ -55,13 +55,13 @@ class SmurfBoostAnalysis(Base):
         comment="Detection model version that produced this row",
     )
 
-    thresholds: Mapped[dict] = mapped_column(
+    thresholds: Mapped[dict[str, float]] = mapped_column(
         JSONB,
         nullable=False,
         comment="Exact threshold set the run was computed with",
     )
 
-    results: Mapped[Optional[dict]] = mapped_column(
+    results: Mapped[dict[str, Any] | None] = mapped_column(
         JSONB,
         nullable=True,
         comment="Explained per-family bands, signals, confidence and notes",
@@ -75,25 +75,25 @@ class SmurfBoostAnalysis(Base):
         comment="Eligible ranked games available when the run executed",
     )
 
-    latest_match_id: Mapped[Optional[str]] = mapped_column(
+    latest_match_id: Mapped[str | None] = mapped_column(
         String(32),
         nullable=True,
         comment="Newest eligible match the run considered, for staleness checks",
     )
 
-    error_code: Mapped[Optional[str]] = mapped_column(
+    error_code: Mapped[str | None] = mapped_column(
         String(64),
         nullable=True,
         comment="Stable client-safe failure classification",
     )
 
-    error_message: Mapped[Optional[str]] = mapped_column(
+    error_message: Mapped[str | None] = mapped_column(
         String(500),
         nullable=True,
         comment="Reviewed user-safe terminal failure message",
     )
 
-    completed_at: Mapped[Optional[datetime]] = mapped_column(
+    completed_at: Mapped[datetime | None] = mapped_column(
         SQLDateTime(timezone=True),
         nullable=True,
         comment="When the run reached a terminal state",
@@ -116,6 +116,7 @@ class SmurfBoostAnalysis(Base):
         {"schema": "core"},
     )
 
+    @override
     def __repr__(self) -> str:
         """String representation of the analysis run."""
         return (

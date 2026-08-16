@@ -1,6 +1,6 @@
 """Matchmaking-analysis maintenance interlock regressions."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -80,7 +80,7 @@ async def test_matchmaking_fetched_match_honors_the_maintenance_interlock(
     )
     from app.core import match_utils
 
-    monkeypatch.setattr(match_utils, "_upsert_match", upsert)
+    monkeypatch.setattr(match_utils, "upsert_match", upsert)
     database = object()
     service = MatchmakingAnalysisService(database, object())  # type: ignore[arg-type]
 
@@ -104,7 +104,7 @@ async def test_matchmaking_progress_writes_when_maintenance_is_inactive(
         guard,
     )
     service = MatchmakingAnalysisService(database, object())  # type: ignore[arg-type]
-    created_at = datetime.now(timezone.utc)
+    created_at = datetime.now(UTC)
 
     await service._update_progress("test-puuid", created_at, {"key": True})
 

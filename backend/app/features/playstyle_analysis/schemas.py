@@ -3,7 +3,7 @@ Pydantic schemas for playstyle analysis API.
 """
 
 from datetime import datetime
-from typing import Any, Dict
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -25,8 +25,8 @@ class PlaystyleAnalysisResponse(BaseModel):
     id: int
     puuid: str
     status: AnalysisStatus
-    tags: Dict[str, Any] = Field(..., description="Detected playstyle tags")
-    summary_stats: Dict[str, Any] = Field(..., description="Summary statistics")
+    tags: dict[str, Any] = Field(..., description="Detected playstyle tags")
+    summary_stats: dict[str, Any] = Field(..., description="Summary statistics")
     created_at: datetime
     updated_at: datetime
 

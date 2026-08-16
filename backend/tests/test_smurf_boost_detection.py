@@ -13,9 +13,9 @@ direct handle on `C`.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from types import SimpleNamespace
-from typing import Any, Optional
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -130,11 +130,11 @@ def _spread_wins(count: int, wins: int) -> list[bool]:
 def _window(
     count: int,
     *,
-    levels: Optional[list[float]] = None,
+    levels: list[float] | None = None,
     wins: int = 0,
-    win_pattern: Optional[list[bool]] = None,
+    win_pattern: list[bool] | None = None,
     start_index: int = 0,
-    champion_ids: Optional[list[int]] = None,
+    champion_ids: list[int] | None = None,
     role: str = "MIDDLE",
     patch: str = "16.14.794.9266",
     timestamp_source: str = "riot_game_start",
@@ -161,10 +161,10 @@ def _request(
     recent: list[EligibleMatch],
     baseline: list[EligibleMatch],
     *,
-    summoner_level: Optional[int] = 300,
-    rank_span_days: Optional[float] = None,
-    thresholds: Optional[dict[str, float]] = None,
-    prior_champion_games: Optional[dict[int, int]] = None,
+    summoner_level: int | None = 300,
+    rank_span_days: float | None = None,
+    thresholds: dict[str, float] | None = None,
+    prior_champion_games: dict[int, int] | None = None,
 ) -> AnalysisRequest:
     """Bundle two prepared windows into an analysis request."""
     counts: dict[int, int] = prior_champion_games or {}
@@ -851,7 +851,7 @@ def _completed_run(**overrides: Any) -> SimpleNamespace:
     """A stored run in whatever state a case needs."""
     fields: dict[str, Any] = {
         "puuid": "p",
-        "created_at": datetime(2026, 8, 14, tzinfo=timezone.utc),
+        "created_at": datetime(2026, 8, 14, tzinfo=UTC),
         "status": "completed",
         "model_version": MODEL_VERSION,
         "thresholds": dict(CONSERVATIVE),

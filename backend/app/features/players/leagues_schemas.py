@@ -1,7 +1,6 @@
 """Pydantic schemas for PlayerLeague model."""
 
 from datetime import datetime
-from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -17,14 +16,14 @@ class PlayerLeagueBase(BaseModel):
     puuid: str = Field(
         ..., max_length=78, description="Reference to the player (Riot PUUID)"
     )
-    league_id: Optional[str] = Field(
+    league_id: str | None = Field(
         None,
         max_length=36,
         description="Riot league ID when supplied by the upstream response",
     )
     queue_type: str = Field(..., max_length=32, description="Queue type")
     tier: Tier = Field(..., description="Rank tier")
-    rank: Optional[str] = Field(None, max_length=4, description="Rank division")
+    rank: str | None = Field(None, max_length=4, description="Rank division")
     league_points: int = Field(0, ge=0, le=100, description="League points")
     wins: int = Field(0, ge=0, description="Number of wins")
     losses: int = Field(0, ge=0, description="Number of losses")

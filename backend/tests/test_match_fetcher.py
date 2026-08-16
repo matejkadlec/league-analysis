@@ -22,7 +22,7 @@ from app.features.matches.service import MatchService
 class _EmptyQueryResult:
     """Minimal SQLAlchemy-result double for queue sync lookup queries."""
 
-    def scalars(self) -> "_EmptyQueryResult":
+    def scalars(self) -> _EmptyQueryResult:
         return self
 
     def all(self) -> list[object]:
@@ -219,7 +219,7 @@ async def test_match_fetcher_execute_propagates_rate_limit_to_base_job(
         def __init__(self, **_kwargs: object) -> None:
             return None
 
-        async def __aenter__(self) -> "FakeRiotClient":
+        async def __aenter__(self) -> FakeRiotClient:
             return self
 
         async def __aexit__(self, *_args: object) -> None:

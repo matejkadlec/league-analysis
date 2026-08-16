@@ -1,15 +1,16 @@
 """Tag evaluators and summary statistics for playstyle analysis."""
 
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from collections.abc import Callable
+from typing import Any
 
 from app.features.matches.lane import opposing_lane_participant
 from app.features.matches.participants import MatchParticipant
 from app.features.playstyle_analysis.aggregates import calculate_aggregate_value
 from app.features.playstyle_analysis.tag_checks import MatchesById, lookup_match
 
-TagResult = Optional[Dict[str, Any]]
+TagResult = dict[str, Any] | None
 TagEvaluator = Callable[
-    [List[MatchParticipant], MatchesById, int, str, Dict[str, Any]],
+    [list[MatchParticipant], MatchesById, int, str, dict[str, Any]],
     TagResult,
 ]
 
@@ -29,11 +30,11 @@ def format_value(value: float) -> str:
 
 
 def evaluate_tag(
-    participants: List[MatchParticipant],
+    participants: list[MatchParticipant],
     matches: MatchesById,
     game_count: int,
     tag_code: str,
-    config: Dict[str, Any],
+    config: dict[str, Any],
 ) -> TagResult:
     """Evaluate a single tag configuration."""
     tag_type = config.get("type")
@@ -51,11 +52,11 @@ def evaluate_tag(
 
 
 def evaluate_generic_threshold(
-    participants: List[MatchParticipant],
+    participants: list[MatchParticipant],
     matches: MatchesById,
     game_count: int,
     tag_code: str,
-    config: Dict[str, Any],
+    config: dict[str, Any],
 ) -> TagResult:
     """Evaluate threshold based on actual average across ALL games."""
     if tag_code in ["aggresive_laner", "passive_laner"]:
@@ -75,11 +76,11 @@ def evaluate_generic_threshold(
 
 
 def evaluate_occurrence_percentage(
-    participants: List[MatchParticipant],
+    participants: list[MatchParticipant],
     matches: MatchesById,
     game_count: int,
     tag_code: str,
-    config: Dict[str, Any],
+    config: dict[str, Any],
 ) -> TagResult:
     """Evaluate tags based on occurrence percentage (for aggressive/passive laner)."""
     target_percentage = config.get("percentage_matches", 0.0)
@@ -99,11 +100,11 @@ def evaluate_occurrence_percentage(
 
 
 def evaluate_occurrence_count(
-    participants: List[MatchParticipant],
+    participants: list[MatchParticipant],
     matches: MatchesById,
     game_count: int,
     tag_code: str,
-    config: Dict[str, Any],
+    config: dict[str, Any],
 ) -> TagResult:
     """Evaluate tags based on total occurrence count (pentakills, epic steals)."""
     aggregate_value = calculate_aggregate_value(
@@ -115,11 +116,11 @@ def evaluate_occurrence_count(
 
 
 def evaluate_gold_diff_check(
-    participants: List[MatchParticipant],
+    participants: list[MatchParticipant],
     matches: MatchesById,
     game_count: int,
     tag_code: str,
-    config: Dict[str, Any],
+    config: dict[str, Any],
 ) -> TagResult:
     """Evaluate gold diff vs opponent (lead or deficit)."""
     check_deficit = config.get("check_deficit", False)
@@ -145,11 +146,11 @@ def evaluate_gold_diff_check(
 
 
 def evaluate_damage_type(
-    participants: List[MatchParticipant],
+    participants: list[MatchParticipant],
     matches: MatchesById,
     game_count: int,
     tag_code: str,
-    config: Dict[str, Any],
+    config: dict[str, Any],
 ) -> TagResult:
     target_percentage = config.get("percentage_matches", 50.0)
     target_type = config.get("target")
@@ -167,11 +168,11 @@ def evaluate_damage_type(
 
 
 def evaluate_side_preference(
-    participants: List[MatchParticipant],
+    participants: list[MatchParticipant],
     matches: MatchesById,
     game_count: int,
     tag_code: str,
-    config: Dict[str, Any],
+    config: dict[str, Any],
 ) -> TagResult:
     target_team = config.get("target")
     blue_stats, red_stats = _side_win_stats(participants)
@@ -187,11 +188,11 @@ def evaluate_side_preference(
 
 
 def evaluate_surrender(
-    participants: List[MatchParticipant],
+    participants: list[MatchParticipant],
     matches: MatchesById,
     game_count: int,
     tag_code: str,
-    config: Dict[str, Any],
+    config: dict[str, Any],
 ) -> TagResult:
     check_type = config.get("check")
     surrender_count, total_games = _count_surrenders(participants, matches)
@@ -199,23 +200,21 @@ def evaluate_surrender(
         return None
 
     surrender_rate = (surrender_count / total_games) * 100.0
-    if check_type == "never":
-        if surrender_rate <= 10.0:
-            return _hover_result(config, surrender_rate)
+    if check_type == "never" and surrender_rate <= 10.0:
+        return _hover_result(config, surrender_rate)
 
-    if check_type == "often":
-        if surrender_rate >= 30.0:
-            return _hover_result(config, surrender_rate)
+    if check_type == "often" and surrender_rate >= 30.0:
+        return _hover_result(config, surrender_rate)
 
     return None
 
 
 def evaluate_kill_greed(
-    participants: List[MatchParticipant],
+    participants: list[MatchParticipant],
     matches: MatchesById,
     game_count: int,
     tag_code: str,
-    config: Dict[str, Any],
+    config: dict[str, Any],
 ) -> TagResult:
     """Evaluate takes_all_kills: Non-solo kills vs assists ratio (per-match)."""
     target_percentage = config.get("percentage_matches", 40.0)
@@ -231,11 +230,11 @@ def evaluate_kill_greed(
 
 
 def evaluate_solo_kill_ratio(
-    participants: List[MatchParticipant],
+    participants: list[MatchParticipant],
     matches: MatchesById,
     game_count: int,
     tag_code: str,
-    config: Dict[str, Any],
+    config: dict[str, Any],
 ) -> TagResult:
     """Evaluate duelist: Solo kills vs assists ratio (per-match)."""
     target_percentage = config.get("percentage_matches", 30.0)
@@ -251,11 +250,11 @@ def evaluate_solo_kill_ratio(
 
 
 def evaluate_objective_participation(
-    participants: List[MatchParticipant],
+    participants: list[MatchParticipant],
     matches: MatchesById,
     game_count: int,
     tag_code: str,
-    config: Dict[str, Any],
+    config: dict[str, Any],
 ) -> TagResult:
     """Evaluate ignores_objectives: Player's obj damage < 10% of team (per-match)."""
     target_percentage = config.get("percentage_matches", 40.0)
@@ -271,11 +270,11 @@ def evaluate_objective_participation(
 
 
 def evaluate_nolifer(
-    participants: List[MatchParticipant],
+    participants: list[MatchParticipant],
     matches: MatchesById,
     game_count: int,
     tag_code: str,
-    config: Dict[str, Any],
+    config: dict[str, Any],
 ) -> TagResult:
     if not participants:
         return None
@@ -287,11 +286,11 @@ def evaluate_nolifer(
 
 
 def evaluate_otp(
-    participants: List[MatchParticipant],
+    participants: list[MatchParticipant],
     matches: MatchesById,
     game_count: int,
     tag_code: str,
-    config: Dict[str, Any],
+    config: dict[str, Any],
 ) -> TagResult:
     return _evaluate_champion_play_rate(
         participants, game_count, config, default_min_play_rate=70.0
@@ -299,11 +298,11 @@ def evaluate_otp(
 
 
 def evaluate_main_champion(
-    participants: List[MatchParticipant],
+    participants: list[MatchParticipant],
     matches: MatchesById,
     game_count: int,
     tag_code: str,
-    config: Dict[str, Any],
+    config: dict[str, Any],
 ) -> TagResult:
     return _evaluate_champion_play_rate(
         participants, game_count, config, default_min_play_rate=50.0
@@ -311,13 +310,13 @@ def evaluate_main_champion(
 
 
 def evaluate_main_role(
-    participants: List[MatchParticipant],
+    participants: list[MatchParticipant],
     matches: MatchesById,
     game_count: int,
     tag_code: str,
-    config: Dict[str, Any],
+    config: dict[str, Any],
 ) -> TagResult:
-    roles: Dict[str, int] = {}
+    roles: dict[str, int] = {}
     for p in participants:
         r = p.team_position
         if r and r != "UNKNOWN":
@@ -344,8 +343,8 @@ def evaluate_main_role(
 
 
 def generate_summary_stats(
-    participants: List[MatchParticipant], game_count: int
-) -> Dict[str, Any]:
+    participants: list[MatchParticipant], game_count: int
+) -> dict[str, Any]:
     """Generate summary statistics for the player."""
     if game_count == 0:
         return {}
@@ -383,8 +382,8 @@ def generate_summary_stats(
 
 
 def _met_criteria_result(
-    config: Dict[str, Any], aggregate_value: float
-) -> Dict[str, Any]:
+    config: dict[str, Any], aggregate_value: float
+) -> dict[str, Any]:
     formatted_value = format_value(aggregate_value)
     description = config.get("hover_template", "Met criteria").format(
         value=formatted_value
@@ -396,14 +395,14 @@ def _met_criteria_result(
     }
 
 
-def _hover_result(config: Dict[str, Any], value: float) -> Dict[str, Any]:
+def _hover_result(config: dict[str, Any], value: float) -> dict[str, Any]:
     formatted_value = format_value(value)
     description = config.get("hover_template", "").format(value=formatted_value)
     return {"threshold_met": True, "description": description, "value": value}
 
 
 def _compare_aggregate_to_thresholds(
-    config: Dict[str, Any], aggregate_value: float
+    config: dict[str, Any], aggregate_value: float
 ) -> TagResult:
     for key, threshold in config.items():
         if key.startswith("min_") and key != "min_play_rate":
@@ -418,8 +417,8 @@ def _compare_aggregate_to_thresholds(
 
 
 def _sum_lane_gold_diffs(
-    participants: List[MatchParticipant], matches: MatchesById
-) -> Tuple[float, int]:
+    participants: list[MatchParticipant], matches: MatchesById
+) -> tuple[float, int]:
     total_gold_diff = 0
     games_with_opponent = 0
     for p in participants:
@@ -437,8 +436,8 @@ def _sum_lane_gold_diffs(
 
 
 def _accumulate_damage(
-    participants: List[MatchParticipant], target_type: Any
-) -> Tuple[int, int, int, int]:
+    participants: list[MatchParticipant], target_type: Any
+) -> tuple[int, int, int, int]:
     matching_games = 0
     total_phys_damage = 0
     total_magic_damage = 0
@@ -449,9 +448,9 @@ def _accumulate_damage(
         total_phys_damage += phys
         total_magic_damage += magic
         total_damage += phys + magic
-        if target_type == "physical" and phys > magic:
-            matching_games += 1
-        elif target_type == "magic" and magic > phys:
+        if (target_type == "physical" and phys > magic) or (
+            target_type == "magic" and magic > phys
+        ):
             matching_games += 1
     return matching_games, total_phys_damage, total_magic_damage, total_damage
 
@@ -467,8 +466,8 @@ def _typed_damage_percentage(
 
 
 def _side_win_stats(
-    participants: List[MatchParticipant],
-) -> Tuple[Dict[str, int], Dict[str, int]]:
+    participants: list[MatchParticipant],
+) -> tuple[dict[str, int], dict[str, int]]:
     blue_stats = {"wins": 0, "games": 0}
     red_stats = {"wins": 0, "games": 0}
     for p in participants:
@@ -483,9 +482,7 @@ def _side_win_stats(
     return blue_stats, red_stats
 
 
-def _favored_side_wr(
-    target_team: Any, blue_wr: float, red_wr: float
-) -> Optional[float]:
+def _favored_side_wr(target_team: Any, blue_wr: float, red_wr: float) -> float | None:
     diff = 5.0
     is_blue_favored = (blue_wr - red_wr) >= diff
     is_red_favored = (red_wr - blue_wr) >= diff
@@ -497,8 +494,8 @@ def _favored_side_wr(
 
 
 def _count_surrenders(
-    participants: List[MatchParticipant], matches: MatchesById
-) -> Tuple[int, int]:
+    participants: list[MatchParticipant], matches: MatchesById
+) -> tuple[int, int]:
     surrender_count = 0
     total_games = 0
     for p in participants:
@@ -512,8 +509,8 @@ def _count_surrenders(
 
 
 def _kill_greed_totals(
-    participants: List[MatchParticipant], matches: MatchesById, min_ratio: float
-) -> Tuple[int, float, int]:
+    participants: list[MatchParticipant], matches: MatchesById, min_ratio: float
+) -> tuple[int, float, int]:
     matching_games = 0
     total_ratio = 0
     valid_games = 0
@@ -534,7 +531,7 @@ def _kill_greed_totals(
 
 def _kill_greed_for_participant(
     p: MatchParticipant, min_ratio: float
-) -> Optional[Tuple[bool, float]]:
+) -> tuple[bool, float] | None:
     player_kills = p.kills or 0
     player_assists = p.assists or 0
     player_solo_kills = p.solo_kills or 0
@@ -548,8 +545,8 @@ def _kill_greed_for_participant(
 
 
 def _solo_kill_ratio_totals(
-    participants: List[MatchParticipant], min_ratio: float
-) -> Tuple[int, float, int]:
+    participants: list[MatchParticipant], min_ratio: float
+) -> tuple[int, float, int]:
     matching_games = 0
     total_ratio = 0
     valid_games = 0
@@ -566,7 +563,7 @@ def _solo_kill_ratio_totals(
 
 def _solo_kill_ratio_for_participant(
     p: MatchParticipant, min_ratio: float
-) -> Optional[Tuple[bool, float]]:
+) -> tuple[bool, float] | None:
     player_solo_kills = p.solo_kills or 0
     player_assists = p.assists or 0
     if player_solo_kills == 0:
@@ -578,8 +575,8 @@ def _solo_kill_ratio_for_participant(
 
 
 def _objective_participation_totals(
-    participants: List[MatchParticipant], matches: MatchesById, max_pct: float
-) -> Tuple[int, float, int]:
+    participants: list[MatchParticipant], matches: MatchesById, max_pct: float
+) -> tuple[int, float, int]:
     matching_games = 0
     total_pct = 0
     valid_games = 0
@@ -596,7 +593,7 @@ def _objective_participation_totals(
 
 def _objective_share_for_participant(
     p: MatchParticipant, matches: MatchesById
-) -> Optional[float]:
+) -> float | None:
     match = lookup_match(matches, p.match_id)
     if not match:
         return None
@@ -611,12 +608,12 @@ def _objective_share_for_participant(
 
 
 def _evaluate_champion_play_rate(
-    participants: List[MatchParticipant],
+    participants: list[MatchParticipant],
     game_count: int,
-    config: Dict[str, Any],
+    config: dict[str, Any],
     default_min_play_rate: float,
 ) -> TagResult:
-    champs: Dict[Any, int] = {}
+    champs: dict[Any, int] = {}
     for p in participants:
         champs[p.champion_name] = champs.get(p.champion_name, 0) + 1
 
@@ -640,8 +637,8 @@ def _evaluate_champion_play_rate(
 
 
 def _average_combat_stats(
-    participants: List[MatchParticipant], game_count: int
-) -> Tuple[float, float, float, float]:
+    participants: list[MatchParticipant], game_count: int
+) -> tuple[float, float, float, float]:
     total_kills = sum(p.kills for p in participants)
     total_deaths = sum(p.deaths for p in participants)
     total_assists = sum(p.assists for p in participants)
@@ -658,7 +655,7 @@ def _average_combat_stats(
     )
 
 
-def _recent_win_rate(participants: List[MatchParticipant]) -> float:
+def _recent_win_rate(participants: list[MatchParticipant]) -> float:
     recent_participants = participants[:10]
     recent_total = len(recent_participants)
     recent_win_rate = 0.0
@@ -669,11 +666,11 @@ def _recent_win_rate(participants: List[MatchParticipant]) -> float:
 
 
 def _count_roles_and_champs(
-    participants: List[MatchParticipant],
-) -> Tuple[Dict[str, int], Dict[str, int], Dict[Any, int]]:
-    roles: Dict[str, int] = {}
-    role_wins: Dict[str, int] = {}
-    champs: Dict[Any, int] = {}
+    participants: list[MatchParticipant],
+) -> tuple[dict[str, int], dict[str, int], dict[Any, int]]:
+    roles: dict[str, int] = {}
+    role_wins: dict[str, int] = {}
+    champs: dict[Any, int] = {}
     for p in participants:
         role = p.team_position or "UNKNOWN"
         if role != "UNKNOWN":
@@ -687,8 +684,8 @@ def _count_roles_and_champs(
 
 
 def _main_role_stats(
-    roles: Dict[str, int], role_wins: Dict[str, int], game_count: int
-) -> Tuple[str, float]:
+    roles: dict[str, int], role_wins: dict[str, int], game_count: int
+) -> tuple[str, float]:
     most_played_role = "None"
     main_role_win_rate = 0.0
     if roles:
@@ -706,13 +703,13 @@ def _main_role_stats(
 
 
 def _most_played_champion(
-    participants: List[MatchParticipant],
-    champs: Dict[Any, int],
+    participants: list[MatchParticipant],
+    champs: dict[Any, int],
     most_played_role: str,
 ) -> str:
     most_played_champion = "None"
     if most_played_role != "None" and most_played_role != "UNKNOWN":
-        role_champs: Dict[Any, int] = {}
+        role_champs: dict[Any, int] = {}
         for p in participants:
             if p.team_position == most_played_role and p.champion_name:
                 role_champs[p.champion_name] = role_champs.get(p.champion_name, 0) + 1
@@ -725,7 +722,7 @@ def _most_played_champion(
 
 
 def _champion_win_rate(
-    participants: List[MatchParticipant], most_played_champion: str
+    participants: list[MatchParticipant], most_played_champion: str
 ) -> float:
     most_played_champion_win_rate = 0.0
     if most_played_champion != "None":
@@ -738,7 +735,7 @@ def _champion_win_rate(
     return most_played_champion_win_rate
 
 
-_TYPE_EVALUATORS: Dict[Any, TagEvaluator] = {
+_TYPE_EVALUATORS: dict[Any, TagEvaluator] = {
     "damage_type": evaluate_damage_type,
     "side_preference": evaluate_side_preference,
     "surrender_check": evaluate_surrender,
@@ -748,7 +745,7 @@ _TYPE_EVALUATORS: Dict[Any, TagEvaluator] = {
     "objective_participation_check": evaluate_objective_participation,
 }
 
-_CODE_EVALUATORS: Dict[str, TagEvaluator] = {
+_CODE_EVALUATORS: dict[str, TagEvaluator] = {
     "nolifer": evaluate_nolifer,
     "otp": evaluate_otp,
     "main_champion": evaluate_main_champion,

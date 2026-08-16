@@ -2,7 +2,7 @@
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Annotated, Optional
+from typing import Annotated
 
 from sqlalchemy import (
     BigInteger,
@@ -38,12 +38,12 @@ type_annotation_map = {
     float: Numeric(),
     Decimal: Numeric(),
     datetime: SQLDateTime(),
-    Optional[str]: String(),
-    Optional[int]: Integer(),
-    Optional[bool]: Boolean(),
-    Optional[float]: Numeric(),
-    Optional[Decimal]: Numeric(),
-    Optional[datetime]: SQLDateTime(),
+    str | None: String(),
+    int | None: Integer(),
+    bool | None: Boolean(),
+    float | None: Numeric(),
+    Decimal | None: Numeric(),
+    datetime | None: SQLDateTime(),
 }
 
 
@@ -62,22 +62,22 @@ PrimaryKeyStr = Annotated[str, mapped_column(primary_key=True)]
 PrimaryKeyInt = Annotated[int, mapped_column(primary_key=True)]
 
 RequiredString = Annotated[str, mapped_column(nullable=False)]
-OptionalString = Annotated[Optional[str], mapped_column()]
+OptionalString = Annotated[str | None, mapped_column()]
 
 RequiredInt = Annotated[int, mapped_column(nullable=False)]
-OptionalInt = Annotated[Optional[int], mapped_column()]
+OptionalInt = Annotated[int | None, mapped_column()]
 
 RequiredBool = Annotated[bool, mapped_column(nullable=False)]
-OptionalBool = Annotated[Optional[bool], mapped_column()]
+OptionalBool = Annotated[bool | None, mapped_column()]
 
 RequiredDecimal = Annotated[Decimal, mapped_column(nullable=False)]
-OptionalDecimal = Annotated[Optional[Decimal], mapped_column()]
+OptionalDecimal = Annotated[Decimal | None, mapped_column()]
 
 RequiredBigInt = Annotated[int, mapped_column(BigInteger, nullable=False)]
-OptionalBigInt = Annotated[Optional[int], mapped_column(BigInteger)]
+OptionalBigInt = Annotated[int | None, mapped_column(BigInteger)]
 
 RequiredDateTime = Annotated[datetime, mapped_column(nullable=False)]
-OptionalDateTime = Annotated[Optional[datetime], mapped_column()]
+OptionalDateTime = Annotated[datetime | None, mapped_column()]
 
 # Common field patterns with specific constraints
 PUUIDField = Annotated[str, mapped_column(String(78), primary_key=True, index=True)]

@@ -1,6 +1,6 @@
 """Service layer custom exceptions."""
 
-from typing import Any, Dict, Optional
+from typing import Any, override
 
 import structlog
 
@@ -13,10 +13,10 @@ class ServiceException(Exception):
     def __init__(
         self,
         message: str,
-        service: Optional[str] = None,
-        operation: Optional[str] = None,
-        context: Optional[Dict[str, Any]] = None,
-        original_error: Optional[Exception] = None,
+        service: str | None = None,
+        operation: str | None = None,
+        context: dict[str, Any] | None = None,
+        original_error: Exception | None = None,
     ):
         super().__init__(message)
         self.message = message
@@ -25,6 +25,7 @@ class ServiceException(Exception):
         self.context = context or {}
         self.original_error = original_error
 
+    @override
     def __str__(self) -> str:
         if self.service and self.operation:
             return f"[{self.service}.{self.operation}] {self.message}"
@@ -37,9 +38,9 @@ class PlayerServiceError(ServiceException):
     def __init__(
         self,
         message: str,
-        operation: Optional[str] = None,
-        context: Optional[Dict[str, Any]] = None,
-        original_error: Optional[Exception] = None,
+        operation: str | None = None,
+        context: dict[str, Any] | None = None,
+        original_error: Exception | None = None,
     ):
         super().__init__(
             message=message,
@@ -56,10 +57,10 @@ class DatabaseError(ServiceException):
     def __init__(
         self,
         message: str,
-        service: Optional[str] = None,
-        operation: Optional[str] = None,
-        context: Optional[Dict[str, Any]] = None,
-        original_error: Optional[Exception] = None,
+        service: str | None = None,
+        operation: str | None = None,
+        context: dict[str, Any] | None = None,
+        original_error: Exception | None = None,
     ):
         super().__init__(
             message=f"Database error: {message}",
@@ -76,11 +77,11 @@ class ValidationError(ServiceException):
     def __init__(
         self,
         message: str,
-        service: Optional[str] = None,
-        operation: Optional[str] = None,
-        field: Optional[str] = None,
-        value: Optional[Any] = None,
-        context: Optional[Dict[str, Any]] = None,
+        service: str | None = None,
+        operation: str | None = None,
+        field: str | None = None,
+        value: Any | None = None,
+        context: dict[str, Any] | None = None,
     ):
         validation_context = context or {}
         if field:
@@ -102,12 +103,12 @@ class ExternalServiceError(ServiceException):
     def __init__(
         self,
         message: str,
-        service: Optional[str] = None,
-        operation: Optional[str] = None,
-        external_service: Optional[str] = None,
-        status_code: Optional[int] = None,
-        context: Optional[Dict[str, Any]] = None,
-        original_error: Optional[Exception] = None,
+        service: str | None = None,
+        operation: str | None = None,
+        external_service: str | None = None,
+        status_code: int | None = None,
+        context: dict[str, Any] | None = None,
+        original_error: Exception | None = None,
     ):
         external_context = context or {}
         if external_service:

@@ -45,7 +45,7 @@ async def analyze_playstyle(
             error=str(e),
             exc_info=True,
         )
-        raise HTTPException(status_code=500, detail="Playstyle analysis failed")
+        raise HTTPException(status_code=500, detail="Playstyle analysis failed") from e
 
 
 @router.get("/player/{puuid}", response_model=PlaystyleAnalysisResponse)

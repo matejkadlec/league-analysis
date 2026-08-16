@@ -2,7 +2,7 @@
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, Dict, Optional
+from typing import Any, Final, override
 
 from sqlalchemy import (
     Boolean,
@@ -28,7 +28,7 @@ class MatchParticipant(Base):
     """Match participant model storing individual player performance data."""
 
     __tablename__ = "match_participants"
-    __table_args__ = {"schema": "core"}
+    __table_args__: Final = {"schema": "core"}
 
     # Composite Primary Key
     match_id: Mapped[str] = mapped_column(
@@ -64,13 +64,13 @@ class MatchParticipant(Base):
         String(5), nullable=False, comment="Player's tag Line"
     )
 
-    summoner_id: Mapped[Optional[str]] = mapped_column(
+    summoner_id: Mapped[str | None] = mapped_column(
         String(63), nullable=True, comment="Legacy Summoner ID"
     )
 
-    profile_icon: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    profile_icon: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
-    summoner_level: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    summoner_level: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     # Team & Context
     team_id: Mapped[int] = mapped_column(
@@ -80,7 +80,7 @@ class MatchParticipant(Base):
         comment="100 (Blue) or 200 (Red)",
     )
 
-    team_position: Mapped[Optional[str]] = mapped_column(
+    team_position: Mapped[str | None] = mapped_column(
         String(16), nullable=True, comment="TOP, JUNGLE, MIDDLE, BOTTOM, UTILITY"
     )
 
@@ -91,7 +91,7 @@ class MatchParticipant(Base):
 
     champion_level: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
 
-    champion_transform: Mapped[Optional[int]] = mapped_column(
+    champion_transform: Mapped[int | None] = mapped_column(
         Integer, default=0, nullable=True
     )
 
@@ -103,27 +103,27 @@ class MatchParticipant(Base):
         default=False,
         comment="Inverted eligibleForProgression",
     )
-    lp_change: Mapped[Optional[int]] = mapped_column(
+    lp_change: Mapped[int | None] = mapped_column(
         Integer,
         nullable=True,
         comment="Observed Solo/Duo LP change; null when unavailable",
     )
-    lp_change_source: Mapped[Optional[str]] = mapped_column(
+    lp_change_source: Mapped[str | None] = mapped_column(
         String(32),
         nullable=True,
         comment="Provenance of the persisted LP value or unavailable state",
     )
-    lp_change_reason: Mapped[Optional[str]] = mapped_column(
+    lp_change_reason: Mapped[str | None] = mapped_column(
         String(64),
         nullable=True,
         comment="Stable reason for the LP observation result",
     )
-    lp_before_snapshot_at: Mapped[Optional[datetime]] = mapped_column(
+    lp_before_snapshot_at: Mapped[datetime | None] = mapped_column(
         SQLDateTime(timezone=True),
         nullable=True,
         comment="League snapshot preceding the LP observation window",
     )
-    lp_after_snapshot_at: Mapped[Optional[datetime]] = mapped_column(
+    lp_after_snapshot_at: Mapped[datetime | None] = mapped_column(
         SQLDateTime(timezone=True),
         nullable=True,
         comment="League snapshot closing the LP observation window",
@@ -135,7 +135,7 @@ class MatchParticipant(Base):
     assists: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     # Computed KDA column
-    kda: Mapped[Optional[Decimal]] = mapped_column(
+    kda: Mapped[Decimal | None] = mapped_column(
         SQLDecimal(5, 2),
         Computed(
             "CASE WHEN deaths = 0 THEN (kills + assists) ELSE ROUND((kills + assists)::numeric / deaths, 2) END",
@@ -144,10 +144,10 @@ class MatchParticipant(Base):
         nullable=True,
     )
 
-    largest_multi_kill: Mapped[Optional[int]] = mapped_column(Integer, default=0)
-    largest_killing_spree: Mapped[Optional[int]] = mapped_column(Integer, default=0)
-    first_blood_kill: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
-    first_tower_kill: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
+    largest_multi_kill: Mapped[int | None] = mapped_column(Integer, default=0)
+    largest_killing_spree: Mapped[int | None] = mapped_column(Integer, default=0)
+    first_blood_kill: Mapped[bool | None] = mapped_column(Boolean, default=False)
+    first_tower_kill: Mapped[bool | None] = mapped_column(Boolean, default=False)
 
     # Damage
     total_damage_dealt: Mapped[int] = mapped_column(Integer, default=0)
@@ -197,77 +197,75 @@ class MatchParticipant(Base):
     item5: Mapped[int] = mapped_column(Integer, default=0)
     trinket: Mapped[int] = mapped_column(Integer, default=0)
 
-    items_purchased: Mapped[Optional[int]] = mapped_column(Integer, default=0)
-    consumables_purchased: Mapped[Optional[int]] = mapped_column(Integer, default=0)
-    role_bound_item: Mapped[Optional[int]] = mapped_column(Integer, default=0)
+    items_purchased: Mapped[int | None] = mapped_column(Integer, default=0)
+    consumables_purchased: Mapped[int | None] = mapped_column(Integer, default=0)
+    role_bound_item: Mapped[int | None] = mapped_column(Integer, default=0)
 
     # Spells (Summoners)
-    summoner1_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    summoner1_casts: Mapped[Optional[int]] = mapped_column(Integer, default=0)
-    summoner2_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    summoner2_casts: Mapped[Optional[int]] = mapped_column(Integer, default=0)
+    summoner1_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    summoner1_casts: Mapped[int | None] = mapped_column(Integer, default=0)
+    summoner2_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    summoner2_casts: Mapped[int | None] = mapped_column(Integer, default=0)
 
     # Objectives (Kill/Stolen)
-    turret_kills: Mapped[Optional[int]] = mapped_column(Integer, default=0)
-    inhibitor_kills: Mapped[Optional[int]] = mapped_column(Integer, default=0)
-    objectives_stolen: Mapped[Optional[int]] = mapped_column(Integer, default=0)
+    turret_kills: Mapped[int | None] = mapped_column(Integer, default=0)
+    inhibitor_kills: Mapped[int | None] = mapped_column(Integer, default=0)
+    objectives_stolen: Mapped[int | None] = mapped_column(Integer, default=0)
 
     # Time
-    time_spent_dead: Mapped[Optional[int]] = mapped_column(Integer, default=0)
-    time_played: Mapped[Optional[int]] = mapped_column(Integer, default=0)
+    time_spent_dead: Mapped[int | None] = mapped_column(Integer, default=0)
+    time_played: Mapped[int | None] = mapped_column(Integer, default=0)
 
     # Advanced Stats (Challenges)
-    solo_kills: Mapped[Optional[int]] = mapped_column(Integer, default=0)
-    gold_per_minute: Mapped[Optional[Decimal]] = mapped_column(
+    solo_kills: Mapped[int | None] = mapped_column(Integer, default=0)
+    gold_per_minute: Mapped[Decimal | None] = mapped_column(
         SQLDecimal(10, 2), default=0
     )
-    vision_score_per_minute: Mapped[Optional[Decimal]] = mapped_column(
+    vision_score_per_minute: Mapped[Decimal | None] = mapped_column(
         SQLDecimal(10, 2), default=0
     )
-    kill_participation: Mapped[Optional[Decimal]] = mapped_column(
+    kill_participation: Mapped[Decimal | None] = mapped_column(
         SQLDecimal(5, 4), default=0
     )
-    max_kill_deficit: Mapped[Optional[int]] = mapped_column(Integer, default=0)
-    team_damage_percentage: Mapped[Optional[Decimal]] = mapped_column(
+    max_kill_deficit: Mapped[int | None] = mapped_column(Integer, default=0)
+    team_damage_percentage: Mapped[Decimal | None] = mapped_column(
         SQLDecimal(5, 4), default=0
     )
-    damage_taken_on_team_percentage: Mapped[Optional[Decimal]] = mapped_column(
+    damage_taken_on_team_percentage: Mapped[Decimal | None] = mapped_column(
         SQLDecimal(5, 4), default=0
     )
 
     # Specific Playstyle Metrics
-    roam_kills: Mapped[Optional[int]] = mapped_column(
+    roam_kills: Mapped[int | None] = mapped_column(
         Integer, default=0, comment="killsOnOtherLanesEarlyJungleAsLaner"
     )
-    enemy_jungle_monster_kills: Mapped[Optional[int]] = mapped_column(
-        Integer, default=0
-    )
-    turret_plates_taken: Mapped[Optional[int]] = mapped_column(Integer, default=0)
-    ally_saves: Mapped[Optional[int]] = mapped_column(
+    enemy_jungle_monster_kills: Mapped[int | None] = mapped_column(Integer, default=0)
+    turret_plates_taken: Mapped[int | None] = mapped_column(Integer, default=0)
+    ally_saves: Mapped[int | None] = mapped_column(
         Integer, default=0, comment="saveAllyFromDeath"
     )
-    survived_single_digit_hp_count: Mapped[Optional[int]] = mapped_column(
+    survived_single_digit_hp_count: Mapped[int | None] = mapped_column(
         Integer, default=0
     )
-    skillshots_hit: Mapped[Optional[int]] = mapped_column(Integer, default=0)
-    skillshots_dodged: Mapped[Optional[int]] = mapped_column(Integer, default=0)
-    enemy_immobilizations: Mapped[Optional[int]] = mapped_column(
+    skillshots_hit: Mapped[int | None] = mapped_column(Integer, default=0)
+    skillshots_dodged: Mapped[int | None] = mapped_column(Integer, default=0)
+    enemy_immobilizations: Mapped[int | None] = mapped_column(
         Integer, default=0, comment="enemyChampionImmobilizations"
     )
-    kills_near_enemy_turret: Mapped[Optional[int]] = mapped_column(Integer, default=0)
-    takedowns_first_x_minutes: Mapped[Optional[int]] = mapped_column(Integer, default=0)
-    buffs_stolen: Mapped[Optional[int]] = mapped_column(Integer, default=0)
-    epic_monster_steals: Mapped[Optional[int]] = mapped_column(Integer, default=0)
-    laning_phase_gold_exp_advantage: Mapped[Optional[int]] = mapped_column(
+    kills_near_enemy_turret: Mapped[int | None] = mapped_column(Integer, default=0)
+    takedowns_first_x_minutes: Mapped[int | None] = mapped_column(Integer, default=0)
+    buffs_stolen: Mapped[int | None] = mapped_column(Integer, default=0)
+    epic_monster_steals: Mapped[int | None] = mapped_column(Integer, default=0)
+    laning_phase_gold_exp_advantage: Mapped[int | None] = mapped_column(
         Integer, default=0
     )
-    max_cs_advantage: Mapped[Optional[int]] = mapped_column(Integer, default=0)
+    max_cs_advantage: Mapped[int | None] = mapped_column(Integer, default=0)
 
     # JSON Data
-    runes: Mapped[Optional[Dict[str, Any]]] = mapped_column(
+    runes: Mapped[dict[str, Any] | None] = mapped_column(
         JSONB, nullable=True, comment="Full Runes JSON"
     )
-    advanced_stats: Mapped[Optional[Dict[str, Any]]] = mapped_column(
+    advanced_stats: Mapped[dict[str, Any] | None] = mapped_column(
         JSONB, nullable=True, comment="Full Challenges JSON"
     )
 
@@ -275,6 +273,7 @@ class MatchParticipant(Base):
     match = relationship("Match", back_populates="participants")
     player = relationship("Player", back_populates="match_participations")
 
+    @override
     def __repr__(self) -> str:
         """Return string representation of the match participant."""
         return f"<MatchParticipant({self.match_id}, {self.participant_id}, {self.game_name})>"

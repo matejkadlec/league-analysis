@@ -1,7 +1,7 @@
 """Pydantic schemas for MatchParticipant model."""
 
 from decimal import Decimal
-from typing import Any, Dict, Optional
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -16,9 +16,9 @@ class MatchParticipantBase(BaseModel):
         ..., max_length=78, description="Reference to the player (Riot PUUID)"
     )
 
-    game_name: Optional[str] = Field(None, max_length=64, description="Riot ID Name")
-    tag_line: Optional[str] = Field(None, max_length=8, description="Riot ID Tag")
-    summoner_id: Optional[str] = Field(
+    game_name: str | None = Field(None, max_length=64, description="Riot ID Name")
+    tag_line: str | None = Field(None, max_length=8, description="Riot ID Tag")
+    summoner_id: str | None = Field(
         None, max_length=63, description="Legacy Summoner ID"
     )
     profile_icon: int = Field(0, description="Profile Icon ID")
@@ -26,7 +26,7 @@ class MatchParticipantBase(BaseModel):
 
     # Team & Context
     team_id: int = Field(..., description="100 (Blue) or 200 (Red)")
-    team_position: Optional[str] = Field(
+    team_position: str | None = Field(
         None, max_length=16, description="TOP, JUNGLE, MIDDLE, BOTTOM, UTILITY"
     )
 
@@ -46,7 +46,7 @@ class MatchParticipantBase(BaseModel):
     kills: int = Field(0, ge=0)
     deaths: int = Field(0, ge=0)
     assists: int = Field(0, ge=0)
-    kda: Optional[Decimal] = Field(
+    kda: Decimal | None = Field(
         None, max_digits=5, decimal_places=2, description="Calculated KDA"
     )
 
@@ -102,9 +102,9 @@ class MatchParticipantBase(BaseModel):
     role_bound_item: int = Field(0)
 
     # Spells
-    summoner1_id: Optional[int] = Field(None)
+    summoner1_id: int | None = Field(None)
     summoner1_casts: int = Field(0)
-    summoner2_id: Optional[int] = Field(None)
+    summoner2_id: int | None = Field(None)
     summoner2_casts: int = Field(0)
 
     # Objectives
@@ -117,8 +117,8 @@ class MatchParticipantBase(BaseModel):
     time_played: int = Field(0)
 
     # JSON Data
-    runes: Optional[Dict[str, Any]] = Field(None, description="Full Runes JSON")
-    advanced_stats: Optional[Dict[str, Any]] = Field(
+    runes: dict[str, Any] | None = Field(None, description="Full Runes JSON")
+    advanced_stats: dict[str, Any] | None = Field(
         None, description="Full Challenges JSON"
     )
 
@@ -132,8 +132,8 @@ class MatchParticipantCreate(MatchParticipantBase):
 class MatchParticipantUpdate(BaseModel):
     """Schema for updating a MatchParticipant."""
 
-    game_name: Optional[str] = None
-    tag_line: Optional[str] = None
+    game_name: str | None = None
+    tag_line: str | None = None
     # Add other updatable fields if necessary
 
 

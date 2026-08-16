@@ -2,7 +2,7 @@
 
 from datetime import datetime
 from enum import Enum as PyEnum
-from typing import Any, Literal, Optional
+from typing import Any, Literal, TypeGuard
 
 from pydantic import (
     BaseModel,
@@ -71,7 +71,7 @@ class TopChampionsMutableSettingsV1(_CardSettingsBase):
     minimum_games: int = Field(default=1, ge=1, le=999)
     minimum_win_rate: float = Field(default=0, ge=0, le=100)
     minimum_kda: float = Field(default=0, ge=0, le=50, multiple_of=0.1)
-    included_roles: list[CardRole] = Field(default_factory=list)
+    included_roles: list[CardRole] = Field(default_factory=list[CardRole])
 
     @field_validator("included_roles")
     @classmethod
@@ -128,7 +128,7 @@ class SmurfBoostDetectionMutableSettingsV1(_CardSettingsBase):
     b4_drop_threshold: float = Field(default=0.20, ge=0.10, le=0.45)
 
     @model_validator(mode="after")
-    def cross_field_rules_must_hold(self) -> "SmurfBoostDetectionMutableSettingsV1":
+    def cross_field_rules_must_hold(self) -> SmurfBoostDetectionMutableSettingsV1:
         """Reject a set whose signals could never be satisfiable together."""
         _validate_smurf_boost_cross_fields(
             self.a3_minimum_novel_games, self.recent_window_size
@@ -156,7 +156,7 @@ class TopChampionsMutableSettingsWriteV1(_CardSettingsWriteBase):
     minimum_games: int = Field(default=1, ge=1, le=999)
     minimum_win_rate: float = Field(default=0, ge=0, le=100)
     minimum_kda: float = Field(default=0, ge=0, le=50, multiple_of=0.1)
-    included_roles: list[CardRole] = Field(default_factory=list)
+    included_roles: list[CardRole] = Field(default_factory=list[CardRole])
 
     @field_validator("minimum_games", mode="before")
     @classmethod
@@ -254,7 +254,7 @@ class SmurfBoostDetectionMutableSettingsWriteV1(_CardSettingsWriteBase):
     @model_validator(mode="after")
     def cross_field_rules_must_hold(
         self,
-    ) -> "SmurfBoostDetectionMutableSettingsWriteV1":
+    ) -> SmurfBoostDetectionMutableSettingsWriteV1:
         """Reject a set whose signals could never be satisfiable together."""
         _validate_smurf_boost_cross_fields(
             self.a3_minimum_novel_games, self.recent_window_size
@@ -283,7 +283,7 @@ class CardPreferenceResponse(_CardSettingsBase):
     settings: dict[str, Any]
     is_default: bool
     requires_recovery: bool = False
-    updated_at: Optional[datetime] = None
+    updated_at: datetime | None = None
 
 
 class CardPreferencesResetRequest(_CardSettingsWriteBase):
@@ -367,16 +367,21 @@ def _is_compatible_legacy_setting_value(field_name: str, value: object) -> bool:
     silently become integer card settings on a legacy read.
     """
     if field_name in _LEGACY_INTEGER_SETTING_FIELDS:
-        return (
-            isinstance(value, int)
-            and not isinstance(value, bool)
-            or isinstance(value, str)
-            and value.isascii()
-            and value.isdecimal()
+        return (isinstance(value, int) and not isinstance(value, bool)) or (
+            isinstance(value, str) and value.isascii() and value.isdecimal()
         )
     if field_name in _LEGACY_NUMBER_SETTING_FIELDS:
         return isinstance(value, (int, float)) and not isinstance(value, bool)
     return True
+
+
+def _is_json_object(value: object) -> TypeGuard[dict[str, Any]]:
+    """Narrow a decoded JSONB column to the object shape its writers produce.
+
+    A JSONB object always decodes with string keys; its values are whatever an
+    older contract wrote, and each one is screened before it reaches a model.
+    """
+    return isinstance(value, dict)
 
 
 def validate_card_preference_update(
@@ -399,7 +404,7 @@ def normalize_stored_card_preference(
     model_type = _CARD_SETTINGS_MODELS[card_id]
     normalized = model_type().model_dump(mode="json")
     warnings: list[str] = []
-    if not isinstance(stored_settings, dict):
+    if not _is_json_object(stored_settings):
         return {**_CARD_FIXED_SETTINGS_V1[card_id], **normalized}, ("settings",)
 
     renames = _LEGACY_SETTING_RENAMES[card_id]
@@ -454,7 +459,7 @@ class SettingValidationResponse(BaseModel):
     valid: bool = Field(..., description="Whether the value is valid")
     status: Literal["valid", "invalid", "unavailable"]
     message: str = Field(..., description="Validation message")
-    details: Optional[str] = Field(None, description="Additional validation details")
+    details: str | None = Field(None, description="Additional validation details")
 
 
 class SettingTestResponse(BaseModel):
@@ -463,7 +468,7 @@ class SettingTestResponse(BaseModel):
     success: bool = Field(..., description="Whether the test was successful")
     status: Literal["valid", "invalid", "unavailable"]
     message: str = Field(..., description="Test result message")
-    details: Optional[dict] = Field(None, description="Additional test details")
+    details: dict[str, Any] | None = Field(None, description="Additional test details")
 
 
 class APIKeyStatusResponse(BaseModel):
@@ -496,7 +501,7 @@ class ServiceStatusResponse(BaseModel):
     has_recent_recovery: bool = Field(
         ..., description="Whether the current generation recovered from key failure"
     )
-    recovery_notice_key: Optional[str] = Field(
+    recovery_notice_key: str | None = Field(
         None,
         description=(
             "Unique key for the latest recovery event, used by frontend for dismiss persistence"
@@ -514,7 +519,7 @@ class UserSettingsResponse(BaseModel):
         ThemeEnum.DARK,
         description="Deprecated fixed compatibility value; not persisted",
     )
-    default_platform: Optional[str] = Field(
+    default_platform: str | None = Field(
         "eun1", description="Deprecated fixed compatibility value; not persisted"
     )
     created_at: datetime
@@ -526,8 +531,8 @@ class UserSettingsResponse(BaseModel):
 class UserSettingsUpdate(BaseModel):
     """Deprecated compatibility input; accepted values no longer affect behavior."""
 
-    theme: Optional[ThemeEnum] = Field(None, description="Theme preference")
-    default_platform: Optional[str] = Field(
+    theme: ThemeEnum | None = Field(None, description="Theme preference")
+    default_platform: str | None = Field(
         None, max_length=4, description="Default server/platform"
     )
 

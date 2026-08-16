@@ -57,7 +57,7 @@ async def get_service_status(
         raise HTTPException(
             status_code=500,
             detail="Internal server error retrieving service status",
-        )
+        ) from e
 
 
 @router.get("/riot_api_key", response_model=SettingResponse)
@@ -84,7 +84,7 @@ async def get_riot_api_key(
         raise HTTPException(
             status_code=500,
             detail="Internal server error retrieving Riot API key",
-        )
+        ) from e
 
 
 @router.put("/riot_api_key", response_model=SettingResponse)
@@ -127,14 +127,14 @@ async def update_riot_api_key(
     except ValueError as e:
         # Validation failed
         logger.warning("riot_api_key_validation_failed", error=str(e))
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
     except Exception as e:
         logger.error("failed_to_update_riot_api_key", error=str(e), exc_info=True)
         raise HTTPException(
             status_code=500,
             detail="Internal server error updating Riot API key",
-        )
+        ) from e
 
 
 @router.post("/riot_api_key/test", response_model=SettingTestResponse)
@@ -167,7 +167,7 @@ async def test_riot_api_key(
         raise HTTPException(
             status_code=500,
             detail="Internal server error testing Riot API key",
-        )
+        ) from e
 
 
 # ===== USER SETTINGS ENDPOINTS =====
@@ -296,7 +296,7 @@ async def get_user_settings(
         raise HTTPException(
             status_code=500,
             detail="Failed to get user settings",
-        )
+        ) from e
 
 
 @router.put("/user", response_model=UserSettingsResponse)
@@ -318,7 +318,7 @@ async def update_user_settings(
         raise HTTPException(
             status_code=500,
             detail="Failed to update user settings",
-        )
+        ) from e
 
 
 @router.get("/user/cookie-consent", response_model=UserCookieConsentResponse | None)
@@ -335,7 +335,7 @@ async def get_user_cookie_consent(
         raise HTTPException(
             status_code=500,
             detail="Failed to get user cookie consent",
-        )
+        ) from e
 
 
 @router.put("/user/cookie-consent", response_model=UserCookieConsentResponse)
@@ -359,4 +359,4 @@ async def update_user_cookie_consent(
         raise HTTPException(
             status_code=500,
             detail="Failed to update user cookie consent",
-        )
+        ) from e

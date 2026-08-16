@@ -22,4 +22,4 @@ PlaystyleAnalysisServiceDep = Annotated[
     PlaystyleAnalysisService, Depends(get_playstyle_analysis_service)
 ]
 
-__all__ = ["get_playstyle_analysis_service", "PlaystyleAnalysisServiceDep"]
+__all__ = ["PlaystyleAnalysisServiceDep", "get_playstyle_analysis_service"]

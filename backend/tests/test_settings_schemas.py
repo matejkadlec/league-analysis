@@ -1,6 +1,6 @@
 """Settings boundary validation tests."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from types import SimpleNamespace
 
 import pytest
@@ -37,7 +37,7 @@ def test_user_settings_rejects_oversized_values(field: str, value: str) -> None:
 
 
 def test_retired_user_settings_response_uses_inert_compatibility_defaults() -> None:
-    timestamp = datetime.now(timezone.utc)
+    timestamp = datetime.now(UTC)
     response = UserSettingsResponse.model_validate(
         SimpleNamespace(created_at=timestamp, updated_at=timestamp),
     )

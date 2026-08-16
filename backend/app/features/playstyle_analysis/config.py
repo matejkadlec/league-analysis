@@ -4,11 +4,11 @@ Configuration for playstyle analysis service.
 This module contains thresholds and parameters used to identify playstyle tags.
 """
 
-from typing import Any, Dict
+from typing import Any
 
 # Tag Configuration
 # Each tag has specific parameters used in its formula.
-TAG_CONFIG: Dict[str, Dict[str, Any]] = {
+TAG_CONFIG: dict[str, dict[str, Any]] = {
     # ----------------------------------------------------
     # Match-Based Condition Tags
     # ----------------------------------------------------

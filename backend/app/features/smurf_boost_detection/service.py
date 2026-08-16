@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import math
 from dataclasses import asdict
-from datetime import datetime, timedelta, timezone
-from typing import Any, Optional, cast
+from datetime import UTC, datetime, timedelta
+from typing import Any, cast
 
 import structlog
 from sqlalchemy import and_, func, select, update
@@ -152,7 +152,7 @@ class SmurfBoostDetectionService:
         )
         return result.scalar_one() or 0
 
-    async def _newest_eligible_match_id(self, puuid: str) -> Optional[str]:
+    async def _newest_eligible_match_id(self, puuid: str) -> str | None:
         """Identifier of the player's newest eligible game."""
         result = await self.db.execute(
             select(Match.match_id)
@@ -163,14 +163,14 @@ class SmurfBoostDetectionService:
         )
         return result.scalar_one_or_none()
 
-    async def _load_summoner_level(self, puuid: str) -> Optional[int]:
+    async def _load_summoner_level(self, puuid: str) -> int | None:
         """Stored account level, which is only a weak account-age proxy."""
         result = await self.db.execute(
             select(Player.summoner_level).where(Player.puuid == puuid)
         )
         return result.scalar_one_or_none()
 
-    async def _load_rank_span_days(self, puuid: str) -> Optional[float]:
+    async def _load_rank_span_days(self, puuid: str) -> float | None:
         """Span of stored ranked solo snapshots, in days."""
         result = await self.db.execute(
             select(
@@ -210,7 +210,7 @@ class SmurfBoostDetectionService:
             )
             .group_by(MatchParticipant.champion_id)
         )
-        return {champion_id: count for champion_id, count in result.all()}
+        return {row[0]: row[1] for row in result.all()}
 
     async def _build_request(
         self, puuid: str, thresholds: dict[str, float]
@@ -230,7 +230,7 @@ class SmurfBoostDetectionService:
             total_eligible_games=await self._count_eligible(puuid),
         )
 
-    async def _newest_run(self, puuid: str) -> Optional[SmurfBoostAnalysis]:
+    async def _newest_run(self, puuid: str) -> SmurfBoostAnalysis | None:
         """The most recently created run for a player, whatever its status."""
         result = await self.db.execute(
             select(SmurfBoostAnalysis)
@@ -240,7 +240,7 @@ class SmurfBoostDetectionService:
         )
         return result.scalar_one_or_none()
 
-    async def _active_run(self, puuid: str) -> Optional[SmurfBoostAnalysis]:
+    async def _active_run(self, puuid: str) -> SmurfBoostAnalysis | None:
         """The one active run for a player, if any."""
         result = await self.db.execute(
             select(SmurfBoostAnalysis)
@@ -260,7 +260,7 @@ class SmurfBoostDetectionService:
         lease cannot still be computing. Leaving it would let one interrupted
         request block the feature for that player permanently.
         """
-        cutoff = datetime.now(timezone.utc) - timedelta(seconds=ABANDONED_RUN_SECONDS)
+        cutoff = datetime.now(UTC) - timedelta(seconds=ABANDONED_RUN_SECONDS)
         result = await self.db.execute(
             update(SmurfBoostAnalysis)
             .where(
@@ -274,7 +274,7 @@ class SmurfBoostDetectionService:
                 status="failed",
                 error_code="analysis_abandoned",
                 error_message="The analysis did not finish. Please try again.",
-                completed_at=datetime.now(timezone.utc),
+                completed_at=datetime.now(UTC),
             )
         )
         expired = cast(CursorResult[Any], result).rowcount
@@ -303,7 +303,7 @@ class SmurfBoostDetectionService:
 
     async def _claim_run(
         self, puuid: str, thresholds: dict[str, float]
-    ) -> tuple[Optional[datetime], Optional[SmurfBoostAnalysis]]:
+    ) -> tuple[datetime | None, SmurfBoostAnalysis | None]:
         """Insert an active run, or return the concurrent one already present."""
         await self._expire_abandoned(puuid)
         existing = await self._active_run(puuid)
@@ -316,7 +316,7 @@ class SmurfBoostDetectionService:
                 )
             return None, existing
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         run = SmurfBoostAnalysis(
             puuid=puuid,
             created_at=now,
@@ -349,7 +349,7 @@ class SmurfBoostDetectionService:
         puuid: str,
         created_at: datetime,
         result: DetectionResult,
-        latest_match_id: Optional[str],
+        latest_match_id: str | None,
     ) -> None:
         """Write the completed run, guarded so a terminal row is never revived."""
         await self.db.execute(
@@ -366,7 +366,7 @@ class SmurfBoostDetectionService:
                 results=_serialize(result),
                 eligible_games=result.eligible_games,
                 latest_match_id=latest_match_id,
-                completed_at=datetime.now(timezone.utc),
+                completed_at=datetime.now(UTC),
                 error_code=None,
                 error_message=None,
             )
@@ -390,14 +390,14 @@ class SmurfBoostDetectionService:
                 status="failed",
                 error_code=code,
                 error_message=message,
-                completed_at=datetime.now(timezone.utc),
+                completed_at=datetime.now(UTC),
             )
         )
         await self.db.commit()
 
     async def _reload(
         self, puuid: str, created_at: datetime
-    ) -> Optional[SmurfBoostAnalysis]:
+    ) -> SmurfBoostAnalysis | None:
         """Re-read one run by its exact identity."""
         result = await self.db.execute(
             select(SmurfBoostAnalysis).where(
@@ -429,7 +429,7 @@ class SmurfBoostDetectionService:
         except SmurfBoostDetectionError as error:
             await self.db.rollback()
             await self._fail(puuid, created_at, error.code, error.client_message)
-        except Exception as error:  # noqa: BLE001 - terminal state must be recorded
+        except Exception as error:
             logger.error(
                 "smurf_boost_analysis_failed",
                 puuid=puuid,
@@ -454,7 +454,7 @@ class SmurfBoostDetectionService:
             )
         return self._to_response(run, is_stale=False)
 
-    async def get_latest(self, puuid: str) -> Optional[SmurfBoostAnalysisResponse]:
+    async def get_latest(self, puuid: str) -> SmurfBoostAnalysisResponse | None:
         """The newest run for a player, with a computed staleness flag.
 
         A client that polls after an interrupted request would otherwise be told
@@ -532,7 +532,7 @@ def _serialize(result: DetectionResult) -> dict[str, Any]:
     return payload.model_dump(mode="json")
 
 
-def resolve_thresholds(settings: Optional[dict[str, Any]]) -> dict[str, float]:
+def resolve_thresholds(settings: dict[str, Any] | None) -> dict[str, float]:
     """Recover a valid threshold set from whatever the viewer has stored.
 
     Delegating to the card catalog keeps one authority for ranges and

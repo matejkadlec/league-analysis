@@ -1,7 +1,7 @@
 """Player data model for storing player information."""
 
 from datetime import datetime
-from typing import Optional
+from typing import override
 
 from sqlalchemy import (
     Boolean,
@@ -51,11 +51,11 @@ class Player(Base):
     )
 
     # Player statistics
-    profile_icon_id: Mapped[Optional[int]] = mapped_column(
+    profile_icon_id: Mapped[int | None] = mapped_column(
         Integer, nullable=True, comment="Profile icon ID"
     )
 
-    summoner_level: Mapped[Optional[int]] = mapped_column(
+    summoner_level: Mapped[int | None] = mapped_column(
         Integer, nullable=True, comment="Summoner/Account level"
     )
 
@@ -69,13 +69,13 @@ class Player(Base):
     )
 
     # Timestamps
-    last_playstyle_analysis: Mapped[Optional[datetime]] = mapped_column(
+    last_playstyle_analysis: Mapped[datetime | None] = mapped_column(
         SQLDateTime(timezone=True),
         nullable=True,
         comment="Time of the last playstyle analysis",
     )
 
-    last_matchmaking_analysis: Mapped[Optional[datetime]] = mapped_column(
+    last_matchmaking_analysis: Mapped[datetime | None] = mapped_column(
         SQLDateTime(timezone=True),
         nullable=True,
         comment="Time of the last matchmaking analysis",
@@ -96,40 +96,41 @@ class Player(Base):
         comment="When this player record was last updated",
     )
 
-    profile_synced_at: Mapped[Optional[datetime]] = mapped_column(
+    profile_synced_at: Mapped[datetime | None] = mapped_column(
         SQLDateTime(timezone=True),
         nullable=True,
         comment="Last successful Player Updater profile check",
     )
 
-    league_synced_at: Mapped[Optional[datetime]] = mapped_column(
+    league_synced_at: Mapped[datetime | None] = mapped_column(
         SQLDateTime(timezone=True),
         nullable=True,
         comment="Last successful Match Fetcher rank check",
     )
 
-    match_synced_at: Mapped[Optional[datetime]] = mapped_column(
+    match_synced_at: Mapped[datetime | None] = mapped_column(
         SQLDateTime(timezone=True),
         nullable=True,
         comment="Last complete successful Match Fetcher match check",
     )
 
+    @override
     def __repr__(self) -> str:
         """Return string representation of the player."""
         return f"<Player(puuid='{self.puuid}', game_name='{self.game_name}#{self.tag_line}', platform='{self.platform}')>"
 
     # Database-only relationships - used by SQLAlchemy ORM but not directly referenced in Python code
     # These relationships enable database queries and cascade operations
-    match_participations = relationship(  # noqa: F841 - Used by SQLAlchemy ORM
+    match_participations = relationship(
         "MatchParticipant", back_populates="player", cascade="all, delete-orphan"
     )
-    playstyle_analysis = relationship(  # noqa: F841 - Used by SQLAlchemy ORM
+    playstyle_analysis = relationship(
         "PlaystyleAnalysis",
         back_populates="player",
         cascade="all, delete-orphan",
         uselist=False,
     )
-    leagues = relationship(  # noqa: F841 - Used by SQLAlchemy ORM
+    leagues = relationship(
         "PlayerLeague", back_populates="player", cascade="all, delete-orphan"
     )
 

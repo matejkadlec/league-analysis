@@ -1,6 +1,6 @@
 """Regression coverage for the versioned viewer card-preference boundary."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import Any
 
@@ -295,7 +295,7 @@ async def test_card_preference_read_signals_recovery_and_observes_future_version
         "warning",
         lambda event, **context: warnings.append((event, context)),
     )
-    timestamp = datetime(2026, 8, 6, tzinfo=timezone.utc)
+    timestamp = datetime(2026, 8, 6, tzinfo=UTC)
     service = SettingsService(
         _PreferencesSession(
             [
@@ -331,7 +331,7 @@ async def test_card_preference_read_signals_recovery_and_observes_future_version
 @pytest.mark.asyncio
 async def test_upsert_is_atomic_and_scoped_to_the_authenticated_user() -> None:
     """Concurrent writes use the composite-key upsert without a user-id input."""
-    timestamp = datetime(2026, 8, 6, tzinfo=timezone.utc)
+    timestamp = datetime(2026, 8, 6, tzinfo=UTC)
     session = _Session(
         SimpleNamespace(
             settings={

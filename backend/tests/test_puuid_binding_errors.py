@@ -1,6 +1,6 @@
 """Regressions for stale-PUUID classification and job completion bookkeeping."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import Any, cast
 from unittest.mock import AsyncMock, Mock
@@ -383,8 +383,8 @@ class _NoMergeSession:
         return None
 
     async def refresh(self, instance: Any) -> None:
-        instance.created_at = datetime.now(timezone.utc)
-        instance.updated_at = datetime.now(timezone.utc)
+        instance.created_at = datetime.now(UTC)
+        instance.updated_at = datetime.now(UTC)
 
     async def execute(self, *_args, **_kwargs):
         raise AssertionError("discovery must not run a statement against other rows")
@@ -585,7 +585,7 @@ async def test_task_cancellation_leaves_the_analysis_resumable(monkeypatch) -> N
     )
 
     with pytest.raises(asyncio.CancelledError):
-        await service._run_analysis_background("p" * 78, datetime.now(timezone.utc))
+        await service._run_analysis_background("p" * 78, datetime.now(UTC))
 
     # A terminal write would have opened a second session in the handler.
     assert len(opened) == 1, "cancellation must not persist a terminal row"
