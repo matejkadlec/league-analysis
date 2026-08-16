@@ -5,17 +5,22 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import Any
 
+import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.db_session import rollback_quietly
 from app.core.riot_api.constants import normalize_platform
-from app.core.riot_api.models import MatchDTO, ParticipantDTO
+from app.core.riot_api.models import MatchDTO, MatchTimelineDTO, ParticipantDTO
 from app.features.players.identity import resolve_player_display_fields
 from app.features.players.models import Player
 
 from .match_lp import initialize_participant_lp
 from .models import Match
 from .participants import MatchParticipant
+from .timeline import replace_match_timeline_rows
+
+logger = structlog.get_logger(__name__)
 
 
 def extract_store_participant_identity(participant: ParticipantDTO) -> dict[str, Any]:
@@ -153,3 +158,41 @@ async def merge_reprocess_participants(
             queue_id=match_dto.info.queue_id,
             remake=participant_data["remake"],
         )
+
+
+async def upsert_match(
+    db: AsyncSession,
+    match_dto: MatchDTO,
+    timeline_payload: MatchTimelineDTO | None = None,
+) -> None:
+    """Upsert a match and its participants with fully_analyzed=True.
+
+    Uses SQLAlchemy merge (upsert) to handle both insert and update cases.
+    Creates skeletal Player records for FK satisfaction if missing and stores
+    objective timeline aggregates when timeline payload is available.
+    """
+    platform_id = match_dto.info.platform or "EUN1"
+    match_id = match_dto.metadata.match_id
+
+    try:
+        early_surrender, surrender = match_end_flags(match_dto.info.participants)
+        await db.merge(
+            build_match_record(
+                match_dto,
+                platform_id,
+                early_surrender,
+                surrender,
+                fully_analyzed=True,
+            )
+        )
+        await merge_reprocess_participants(db, match_dto, match_id, platform_id)
+        await replace_match_timeline_rows(db, match_dto, timeline_payload)
+        await db.commit()
+    except Exception as e:
+        logger.error(
+            "Failed to upsert match",
+            match_id=match_id,
+            error=str(e),
+        )
+        await rollback_quietly(db)
+        raise
