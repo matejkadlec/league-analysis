@@ -25,7 +25,7 @@ from app.core.riot_api.constants import (
     get_region_by_platform,
     normalize_platform,
 )
-from app.core.riot_api.models import LeagueEntryDTO, MatchDTO
+from app.core.riot_api.models import LeagueEntryDTO
 from app.features.auth.models import User
 from app.features.auth.user_settings import UserSettings
 from app.features.auth.user_tracked_player import UserTrackedPlayer
@@ -115,69 +115,6 @@ class PlayerService:
         )
 
         return is_globally_tracked
-
-    async def get_player_by_name_and_tag(
-        self, game_name: str, tag_line: str, platform: str
-    ) -> PlayerResponse:
-        """
-        Get player by Game Name and Tag Line from database only.
-
-        This method searches only the local database for players already being tracked.
-        To add new players from Riot API, use a separate add/import feature.
-
-        Args:
-            game_name: Game name of the player
-            tag_line: Tag line of the player
-            platform: Riot API platform code (e.g., "NA1", "EUW1")
-
-        Returns:
-            Player response object with player data
-
-        Raises:
-            PlayerServiceError: If player is not found or database error occurs
-            ValueError: If input parameters are invalid
-        """
-        if not game_name or not game_name.strip():
-            raise ValueError("game_name cannot be empty")
-        if not platform or not platform.strip():
-            raise ValueError("platform cannot be empty")
-
-        # Normalize inputs
-        safe_game_name = game_name.strip()
-        safe_tag_line = tag_line.strip() if tag_line else None
-        normalized_platform = normalize_platform(platform)
-
-        # Query database only
-        result = await self.db.execute(
-            select(Player).where(
-                Player.game_name == safe_game_name,
-                Player.tag_line == safe_tag_line,
-                Player.platform == normalized_platform,
-            )
-        )
-        player = result.scalar_one_or_none()
-
-        if not player:
-            raise PlayerServiceError(
-                message=f"Player not found in database: {safe_game_name}#{safe_tag_line} on {normalized_platform}. "
-                f"Please track this player first.",
-                operation="get_player_by_name_and_tag",
-                context={
-                    "game_name": safe_game_name,
-                    "tag_line": safe_tag_line,
-                    "platform": normalized_platform,
-                },
-            )
-
-        logger.info(
-            "Player data retrieved from database",
-            game_name=safe_game_name,
-            tag_line=safe_tag_line,
-            platform=normalized_platform,
-            puuid=player.puuid,
-        )
-
-        return PlayerResponse.model_validate(player)
 
     def _find_exact_game_name_match(
         self, players: Sequence[Player], safe_game_name: str
@@ -1126,94 +1063,6 @@ class PlayerService:
             )
 
         return players
-
-    # ============================================
-    # Helper Methods for Jobs
-    # ============================================
-
-    async def discover_players_from_match(
-        self, match_dto: MatchDTO, platform: str
-    ) -> int:
-        """
-        Discover and create player records from match participants.
-
-        This method checks if players exist in the database and creates
-        minimal player records for any new players discovered in a match.
-        These discovered players are marked as not tracked and not analyzed.
-
-        The method handles its own transaction boundaries to ensure
-        data consistency without requiring external transaction management.
-
-        Args:
-            match_dto: Match DTO from Riot API
-            platform: Platform for the players
-
-        Returns:
-            Number of newly discovered players
-
-        Raises:
-            PlayerServiceError: If match processing fails
-            ValueError: If input parameters are invalid
-        """
-        if not platform or not platform.strip():
-            raise ValueError("platform cannot be empty")
-
-        from app.features.matches.transformers import PlayerDataSanitizer
-
-        await _ensure_riot_writer_maintenance_is_inactive(self.db)
-        normalized_platform = normalize_platform(platform)
-        discovered_count = 0
-
-        for participant in match_dto.info.participants:
-            # Check if player exists in database
-            result = await self.db.execute(
-                select(Player).where(Player.puuid == participant.puuid)
-            )
-            existing_player = result.scalar_one_or_none()
-
-            if not existing_player:
-                # Sanitize player data
-                player_data = {
-                    "game_name": participant.game_name,
-                    "tag_line": participant.tag_line,
-                }
-                player_data = PlayerDataSanitizer.sanitize_player_fields(player_data)
-
-                # Create new player record (discovered, not tracked)
-                new_player = Player(
-                    puuid=participant.puuid,
-                    game_name=player_data["game_name"],
-                    tag_line=player_data["tag_line"],
-                    platform=normalized_platform,
-                    summoner_level=participant.summoner_level,
-                    is_tracked=False,
-                )
-                self.db.add(new_player)
-                discovered_count += 1
-
-                logger.debug(
-                    "Marked new discovered player",
-                    puuid=participant.puuid,
-                    game_name=player_data["game_name"],
-                )
-
-        # Commit transaction for all discovered players
-        if discovered_count > 0:
-            await self.db.commit()
-            logger.info(
-                "Discovered players from match",
-                match_id=match_dto.metadata.match_id,
-                discovered_count=discovered_count,
-                platform=normalized_platform,
-            )
-        else:
-            logger.debug(
-                "No new players discovered in match",
-                match_id=match_dto.metadata.match_id,
-                platform=normalized_platform,
-            )
-
-        return discovered_count
 
     async def update_player_profile(
         self, player: Player, riot_api_client: RiotAPIClient
