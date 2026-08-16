@@ -112,3 +112,71 @@ test("the rewritten curated 404 detail reaches the viewer without a PUUID", asyn
   await expect(page.getByText("Could not load this data")).toBeVisible();
   await expect(page.getByText(PUUID)).toHaveCount(0);
 });
+
+test("an invalid Riot credential during player search shows the admin-contact toast", async ({
+  page,
+}) => {
+  await signIn(page);
+
+  await page.route("**/api/v1/**", async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname.endsWith("/auth/me")) {
+      return route.fallback();
+    }
+
+    if (url.pathname.endsWith("/players/discover")) {
+      // The structured body every credential-rejection site now sends
+      // (RIOT_API_KEY_INVALID_DETAIL).
+      await route.fulfill({
+        status: 503,
+        contentType: "application/json",
+        body: JSON.stringify({
+          detail: {
+            code: "RIOT_API_KEY_INVALID",
+            message:
+              "Riot data is temporarily unavailable. Please contact an administrator.",
+          },
+        }),
+      });
+      return;
+    }
+
+    if (url.pathname.endsWith("/players/suggestions")) {
+      await route.fulfill({ contentType: "application/json", body: "[]" });
+      return;
+    }
+
+    if (
+      url.pathname.endsWith("/players/context") ||
+      url.pathname.endsWith("/players/context/current")
+    ) {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          current_player: null,
+          tracked_players: [],
+        }),
+      });
+      return;
+    }
+
+    await route.fulfill({ contentType: "application/json", body: "[]" });
+  });
+
+  await page.goto("/player-overview");
+
+  const search = page.getByPlaceholder("Search for player").first();
+  await search.fill("SomeName#1234");
+  await search.press("Enter");
+
+  await page.getByRole("button", { name: "Select player" }).click();
+
+  await expect(
+    page.getByText("Player search is temporarily unavailable"),
+  ).toBeVisible();
+  await expect(
+    page.getByText(
+      "The Riot API key is invalid or expired. Please contact an administrator.",
+    ),
+  ).toBeVisible();
+});

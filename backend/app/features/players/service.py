@@ -812,7 +812,7 @@ class PlayerService:
         player = await self.db.get(Player, puuid)
 
         if not player:
-            raise ValueError(f"Player not found: {puuid}")
+            raise ValueError("Player not found.")
 
         existing = await self._is_player_tracked_by_user(puuid, user_id)
         if existing:
@@ -878,7 +878,7 @@ class PlayerService:
         player = await self.db.get(Player, puuid)
 
         if not player:
-            raise ValueError(f"Player not found: {puuid}")
+            raise ValueError("Player not found.")
 
         stmt = delete(UserTrackedPlayer).where(
             UserTrackedPlayer.user_id == user_id,
@@ -906,7 +906,7 @@ class PlayerService:
         """Get user-specific tracking status for a player."""
         player = await self.db.get(Player, puuid)
         if not player:
-            raise ValueError(f"Player not found: {puuid}")
+            raise ValueError("Player not found.")
 
         return await self._is_player_tracked_by_user(puuid, user_id)
 

@@ -20,6 +20,7 @@ from app.core.riot_api.credential_health import create_tracked_riot_api_client
 from app.core.riot_api.errors import (
     RIOT_API_KEY_INVALID_DETAIL,
     AuthenticationError,
+    ForbiddenError,
     NotFoundError,
     RateLimitError,
 )
@@ -280,7 +281,7 @@ async def discover_player(
         raise HTTPException(
             status_code=429, detail="Riot API rate limit reached"
         ) from error
-    except AuthenticationError as error:
+    except (AuthenticationError, ForbiddenError) as error:
         raise HTTPException(
             status_code=503,
             detail=RIOT_API_KEY_INVALID_DETAIL,
@@ -891,7 +892,7 @@ async def add_tracked_player(
         raise HTTPException(
             status_code=429, detail="Riot API rate limit reached"
         ) from e
-    except AuthenticationError as e:
+    except (AuthenticationError, ForbiddenError) as e:
         logger.error("riot_api_auth_error", error=str(e))
         raise HTTPException(
             status_code=503,
@@ -1001,7 +1002,7 @@ async def refresh_player_league(
             status_code=503,
             detail="Riot data maintenance is in progress. Try again after it completes.",
         ) from e
-    except AuthenticationError as e:
+    except (AuthenticationError, ForbiddenError) as e:
         logger.error(
             "refresh_player_league_failed",
             error=str(e),
