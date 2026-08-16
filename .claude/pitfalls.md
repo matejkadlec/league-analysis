@@ -72,21 +72,6 @@ the `pitfall-check` agent.
   `puuid` with `user_id`, and any new endpoint that resolves a player without
   saying which of the two it is scoped by.
 
-- **A Pydantic write model whose only valid spelling is a type error.** The
-  request models in `app/features/settings/schemas.py` set an
-  `alias_generator` with `populate_by_name=False`, so at runtime they accept
-  the camelCase alias and *only* the alias. Pyright cannot see an alias that a
-  generator produces, so it builds `__init__` from the field names instead, and
-  the two disagree in both directions: `CardPreferencesResetRequest(card_ids=…)`
-  type-checks clean and raises `ValidationError` when it runs, while
-  `cardIds=…` — the one spelling that works — is reported as an unknown
-  parameter. Verified both ways against `pydantic 2.13.4`. Nothing catches it:
-  the checker is confident and wrong, and there is no runtime import to fail
-  early. Construct these models with `model_validate({"cardIds": …})`, which is
-  the same path a request takes, rather than by keyword. Suspect this in any
-  model configured with `alias_generator`, and note that adding an explicit
-  `Field(alias=…)` would make the alias visible to the checker.
-
 - **A freshness timestamp advanced by a check that did not fully succeed.**
   `match_synced_at` / `league_synced_at` / `profile_synced_at` may only move
   after the owning provider check succeeds. A clean zero-change check is fresh;
