@@ -19,4 +19,4 @@ async def get_player_service(
 
 PlayerServiceDep = Annotated[PlayerService, Depends(get_player_service)]
 
-__all__ = ["get_player_service", "PlayerServiceDep"]
+__all__ = ["PlayerServiceDep", "get_player_service"]

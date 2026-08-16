@@ -1,10 +1,11 @@
 """Player data model for storing player information."""
 
 from datetime import datetime
-from typing import Optional
+from typing import override
 
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
     Index,
     Integer,
     String,
@@ -22,7 +23,20 @@ class Player(Base):
     """Player model storing Riot API player data."""
 
     __tablename__ = "players"
-    __table_args__ = ({"schema": "core"},)
+    __table_args__ = (
+        # Five write paths disagreed about this column's casing while two
+        # lookups compared it case-sensitively, so a player first seen through
+        # a match was stored lowercase and then could not be found by name and
+        # tag. Normalising in Python fixes the code; this makes the invariant
+        # the database's, so a future writer that forgets fails loudly instead
+        # of silently hiding rows. Canonical is lowercase — Riot's own spelling
+        # and the `Platform` enum's values. See `normalize_platform`.
+        CheckConstraint(
+            "platform = lower(platform)",
+            name="ck_players_platform_is_lowercase",
+        ),
+        {"schema": "core"},
+    )
 
     # Primary key - PUUID is the unique identifier from Riot API
     # Note: Riot PUUID is a base64-encoded string, not a standard UUID
@@ -47,15 +61,15 @@ class Player(Base):
         String(4),
         nullable=False,
         index=True,
-        comment="Platform (e.g. EUN1)",
+        comment="Platform, canonical lowercase (e.g. eun1)",
     )
 
     # Player statistics
-    profile_icon_id: Mapped[Optional[int]] = mapped_column(
+    profile_icon_id: Mapped[int | None] = mapped_column(
         Integer, nullable=True, comment="Profile icon ID"
     )
 
-    summoner_level: Mapped[Optional[int]] = mapped_column(
+    summoner_level: Mapped[int | None] = mapped_column(
         Integer, nullable=True, comment="Summoner/Account level"
     )
 
@@ -69,13 +83,13 @@ class Player(Base):
     )
 
     # Timestamps
-    last_playstyle_analysis: Mapped[Optional[datetime]] = mapped_column(
+    last_playstyle_analysis: Mapped[datetime | None] = mapped_column(
         SQLDateTime(timezone=True),
         nullable=True,
         comment="Time of the last playstyle analysis",
     )
 
-    last_matchmaking_analysis: Mapped[Optional[datetime]] = mapped_column(
+    last_matchmaking_analysis: Mapped[datetime | None] = mapped_column(
         SQLDateTime(timezone=True),
         nullable=True,
         comment="Time of the last matchmaking analysis",
@@ -96,40 +110,41 @@ class Player(Base):
         comment="When this player record was last updated",
     )
 
-    profile_synced_at: Mapped[Optional[datetime]] = mapped_column(
+    profile_synced_at: Mapped[datetime | None] = mapped_column(
         SQLDateTime(timezone=True),
         nullable=True,
         comment="Last successful Player Updater profile check",
     )
 
-    league_synced_at: Mapped[Optional[datetime]] = mapped_column(
+    league_synced_at: Mapped[datetime | None] = mapped_column(
         SQLDateTime(timezone=True),
         nullable=True,
         comment="Last successful Match Fetcher rank check",
     )
 
-    match_synced_at: Mapped[Optional[datetime]] = mapped_column(
+    match_synced_at: Mapped[datetime | None] = mapped_column(
         SQLDateTime(timezone=True),
         nullable=True,
         comment="Last complete successful Match Fetcher match check",
     )
 
+    @override
     def __repr__(self) -> str:
         """Return string representation of the player."""
         return f"<Player(puuid='{self.puuid}', game_name='{self.game_name}#{self.tag_line}', platform='{self.platform}')>"
 
     # Database-only relationships - used by SQLAlchemy ORM but not directly referenced in Python code
     # These relationships enable database queries and cascade operations
-    match_participations = relationship(  # noqa: F841 - Used by SQLAlchemy ORM
+    match_participations = relationship(
         "MatchParticipant", back_populates="player", cascade="all, delete-orphan"
     )
-    playstyle_analysis = relationship(  # noqa: F841 - Used by SQLAlchemy ORM
+    playstyle_analysis = relationship(
         "PlaystyleAnalysis",
         back_populates="player",
         cascade="all, delete-orphan",
         uselist=False,
     )
-    leagues = relationship(  # noqa: F841 - Used by SQLAlchemy ORM
+    leagues = relationship(
         "PlayerLeague", back_populates="player", cascade="all, delete-orphan"
     )
 

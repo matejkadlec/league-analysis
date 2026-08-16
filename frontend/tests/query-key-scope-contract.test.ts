@@ -55,7 +55,10 @@ function queryKeyUses(): QueryKeyUse[] {
     for (const match of source.matchAll(/queryKey:\s*\[([^\]]*)\]/g)) {
       // A comment inside the array must not be read as a key element — it
       // would let `["matches", otherId /* puuid */]` pass as scoped.
-      const body = match[1].replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*/g, "");
+      // The single capture group always participates in a successful match.
+      const body = (match[1] ?? "")
+        .replace(/\/\*[\s\S]*?\*\//g, "")
+        .replace(/\/\/.*/g, "");
       const namespace = /^\s*["']([^"']+)["']/.exec(body)?.[1];
       // A key built from a factory or spread is checked at the factory.
       if (!namespace) {

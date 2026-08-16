@@ -1,6 +1,7 @@
 """Revoked access token model for JWT blacklist support."""
 
 from datetime import datetime
+from typing import Final, override
 
 from sqlalchemy import BigInteger, ForeignKey, Index, String
 from sqlalchemy import DateTime as SQLDateTime
@@ -14,7 +15,7 @@ class RevokedAccessToken(Base):
     """Blacklist entry for access token revocation by token ID (jti)."""
 
     __tablename__ = "revoked_access_tokens"
-    __table_args__ = {"schema": "auth"}
+    __table_args__: Final = {"schema": "auth"}
 
     id: Mapped[int] = mapped_column(
         BigInteger,
@@ -55,6 +56,7 @@ class RevokedAccessToken(Base):
         comment="Reason for revocation (logout, admin, security, etc.)",
     )
 
+    @override
     def __repr__(self) -> str:
         """Return string representation of revoked token."""
         return f"<RevokedAccessToken(id={self.id}, token_id='{self.token_id}', user_id={self.user_id})>"

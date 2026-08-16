@@ -1,7 +1,8 @@
 """Matchmaking analysis API endpoints."""
 
+from collections.abc import Callable
 from datetime import datetime
-from typing import Union
+from typing import ParamSpec, Protocol, TypeVar
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -23,6 +24,30 @@ from .schemas import (
 
 limiter = Limiter(key_func=get_remote_address)
 logger = structlog.get_logger(__name__)
+
+_P = ParamSpec("_P")
+_R = TypeVar("_R")
+
+
+class _RateLimiter(Protocol):
+    """The one slowapi capability this module uses, with a usable signature.
+
+    slowapi annotates the decorator `limit` returns as a bare `Callable`, which
+    erases the parameter and return types of every endpoint underneath it.
+    """
+
+    def limit(
+        self, limit_value: str
+    ) -> Callable[[Callable[_P, _R]], Callable[_P, _R]]: ...
+
+
+def rate_limit(
+    rule: str, rate_limiter: _RateLimiter = limiter
+) -> Callable[[Callable[_P, _R]], Callable[_P, _R]]:
+    """Apply slowapi's rate limit while keeping the endpoint's own signature."""
+    return rate_limiter.limit(rule)
+
+
 router = APIRouter(
     prefix="/matchmaking-analysis",
     tags=["matchmaking-analysis"],
@@ -32,9 +57,9 @@ router = APIRouter(
 
 @router.post(
     "/check-matches",
-    response_model=Union[dict, NotEnoughMatchesResponse],
+    response_model=dict | NotEnoughMatchesResponse,
 )
-@limiter.limit("20/minute")
+@rate_limit("20/minute")
 async def check_player_matches(
     request: Request,
     payload: MatchmakingAnalysisRequest,
@@ -70,11 +95,11 @@ async def check_player_matches(
         raise HTTPException(
             status_code=502,
             detail="Match availability could not be checked. Please try again.",
-        )
+        ) from error
 
 
 @router.post("/start", response_model=MatchmakingAnalysisResponse)
-@limiter.limit("10/minute")
+@rate_limit("10/minute")
 async def start_analysis(
     request: Request,
     payload: MatchmakingAnalysisRequest,
@@ -91,11 +116,11 @@ async def start_analysis(
         return await service.start_analysis(payload.puuid)
     except HTTPException:
         raise
-    except RiotWriterMaintenanceActiveError:
+    except RiotWriterMaintenanceActiveError as error:
         raise HTTPException(
             status_code=503,
             detail="Riot data maintenance is in progress. Try again after it completes.",
-        )
+        ) from error
     except Exception as error:
         logger.error(
             "matchmaking_analysis_start_failed",
@@ -105,7 +130,7 @@ async def start_analysis(
         raise HTTPException(
             status_code=500,
             detail="The analysis could not be started. Please try again.",
-        )
+        ) from error
 
 
 @router.get("/player/{puuid}", response_model=MatchmakingAnalysisResponse)

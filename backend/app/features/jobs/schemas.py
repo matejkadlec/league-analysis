@@ -1,7 +1,7 @@
 """Pydantic schemas for Job models."""
 
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -15,8 +15,8 @@ class JobConfigurationBase(BaseModel):
     name: str = Field(
         ..., min_length=1, max_length=128, description="Unique name for this job"
     )
-    description: Optional[str] = Field(
-        None, description="Description of what the job does"
+    description: str | None = Field(
+        default=None, description="Description of what the job does"
     )
     schedule: str = Field(
         ..., min_length=1, max_length=256, description="Job schedule (cron or interval)"
@@ -26,8 +26,8 @@ class JobConfigurationBase(BaseModel):
         default=False,
         description="Whether the currently running execution is paused",
     )
-    config_json: Optional[Dict[str, Any]] = Field(
-        None,
+    config_json: dict[str, Any] | None = Field(
+        default=None,
         description="Job-specific configuration (for example interval_seconds)",
     )
 
@@ -41,12 +41,12 @@ class JobConfigurationCreate(JobConfigurationBase):
 class JobConfigurationUpdate(BaseModel):
     """Schema for updating an existing job configuration."""
 
-    name: Optional[str] = Field(None, min_length=1, max_length=128)
-    description: Optional[str] = Field(None)
-    schedule: Optional[str] = Field(None, min_length=1, max_length=256)
-    is_active: Optional[bool] = None
-    is_paused: Optional[bool] = None
-    config_json: Optional[Dict[str, Any]] = None
+    name: str | None = Field(default=None, min_length=1, max_length=128)
+    description: str | None = Field(default=None)
+    schedule: str | None = Field(default=None, min_length=1, max_length=256)
+    is_active: bool | None = None
+    is_paused: bool | None = None
+    config_json: dict[str, Any] | None = None
 
 
 class JobConfigurationResponse(JobConfigurationBase):
@@ -89,19 +89,21 @@ class JobExecutionResponse(BaseModel):
     id: int = Field(..., description="Unique identifier")
     job_config_id: int = Field(..., description="Reference to job configuration")
     started_at: datetime = Field(..., description="Execution start time")
-    completed_at: Optional[datetime] = Field(
-        None, description="Execution completion time"
+    completed_at: datetime | None = Field(
+        default=None, description="Execution completion time"
     )
     status: JobStatus = Field(..., description="Execution status")
     api_requests_made: int = Field(default=0, description="Number of API requests made")
     records_created: int = Field(default=0, description="Number of records created")
     records_updated: int = Field(default=0, description="Number of records updated")
-    error_message: Optional[str] = Field(None, description="Error message if failed")
-    execution_log: Optional[Dict[str, Any]] = Field(
-        None, description="Detailed execution log"
+    error_message: str | None = Field(
+        default=None, description="Error message if failed"
     )
-    detailed_logs: Optional[Dict[str, Any]] = Field(
-        None,
+    execution_log: dict[str, Any] | None = Field(
+        default=None, description="Detailed execution log"
+    )
+    detailed_logs: dict[str, Any] | None = Field(
+        default=None,
         description="All logs captured during execution (includes logs array and summary)",
     )
     triggered_by: str = Field(
@@ -126,11 +128,11 @@ class JobStatusResponse(BaseModel):
     running_executions: int = Field(
         ..., description="Number of currently running executions"
     )
-    last_execution: Optional[JobExecutionResponse] = Field(
-        None, description="Most recent job execution"
+    last_execution: JobExecutionResponse | None = Field(
+        default=None, description="Most recent job execution"
     )
-    next_run_time: Optional[datetime] = Field(
-        None, description="When the next job is scheduled"
+    next_run_time: datetime | None = Field(
+        default=None, description="When the next job is scheduled"
     )
 
 
@@ -139,8 +141,8 @@ class JobTriggerResponse(BaseModel):
 
     success: bool = Field(..., description="Whether the job was triggered successfully")
     message: str = Field(..., description="Result message")
-    execution_id: Optional[int] = Field(
-        None, description="ID of created execution record"
+    execution_id: int | None = Field(
+        default=None, description="ID of created execution record"
     )
 
 

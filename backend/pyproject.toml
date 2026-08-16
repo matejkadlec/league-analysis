@@ -38,11 +38,59 @@ packages = ["app"]
 
 [tool.pyright]
 pythonVersion = "3.14"
-typeCheckingMode = "standard"
-include = ["app"]
-exclude = ["**/__pycache__", "**/.pytest_cache", "**/tests", ".venv"]
+typeCheckingMode = "strict"
+# `alembic` is deliberately outside this list. Revisions are an append-only
+# record of what was already applied to a live database, so editing a merged
+# one to satisfy a type checker changes a historical document without changing
+# the schema it produced, and `env.py` is framework boilerplate. The schema
+# authority is the revision itself plus `scripts/validate_migrations.py`, which
+# is checked.
+include = ["app", "tests", "scripts"]
+exclude = ["**/__pycache__", "**/.pytest_cache", ".venv"]
+# Without these, Pyright resolves imports against whatever interpreter it finds
+# rather than this project's environment, and every third-party import becomes
+# `Unknown`. That inflates a strict-mode run from a few hundred real errors to
+# several thousand phantom ones, so the two settings are load-bearing for
+# anyone running Pyright outside `uv run`.
+venvPath = "."
+venv = ".venv"
 reportMissingImports = true
 reportMissingTypeStubs = "none"
+# The ORM models describe columns more confidently than the migrated schema
+# does — `alembic/metadata-drift.txt` records 321 places where the two already
+# disagree. Code therefore keeps `is None` and `isinstance` guards against
+# values the annotations claim are impossible. Enabling these two rules would
+# report those guards as unnecessary, and the only way to satisfy them is to
+# delete a runtime check on the word of an annotation that is known to drift.
+reportUnnecessaryIsInstance = "none"
+reportUnnecessaryComparison = "none"
+# Rules Pyright leaves off even in strict mode. These four are enabled because
+# they cost nothing to keep passing; the ones deliberately left off are:
+#   reportCallInDefaultInitializer (104)  fires on FastAPI's `Depends()`, the
+#     same false positive Ruff's B008 is ignored for
+#   reportUnusedCallResult (106)          flags every discarded return value
+#   reportImplicitStringConcatenation (37) style, and it fights the wrapped
+#     message strings this codebase uses throughout
+#   reportMissingSuperCall (16)           the ORM and Pydantic base classes do
+#     not want a chained __init__ in every subclass
+reportUninitializedInstanceVariable = "error"
+reportPropertyTypeMismatch = "error"
+reportUnnecessaryTypeIgnoreComment = "error"
+# Requires @override on every overriding method, so a renamed or mistyped base
+# method turns into a type error instead of a silently orphaned override.
+reportImplicitOverride = "error"
+
+# `tests` is checked at the same strictness as `app`, with one exception. A
+# test suite legitimately reaches for the private helper it is testing:
+# `_binding_signature`, `_upsert_match` and friends are exactly the units worth
+# covering directly. Leaving reportPrivateUsage on would force the choice
+# between widening a production interface for the test's benefit or not testing
+# the unit at all, and both are worse than the rule. Every other strict
+# diagnostic still applies here — notably reportArgumentType, which is what
+# catches a test asserting against a signature the application no longer has.
+[[tool.pyright.executionEnvironments]]
+root = "tests"
+reportPrivateUsage = "none"
 
 [tool.pytest.ini_options]
 # --disable-socket: the suite is offline by construction — it mocks Riot and
@@ -70,7 +118,44 @@ testpaths = ["tests"]
 target-version = "py314"
 
 [tool.ruff.lint]
-select = ["E4", "E7", "E9", "F", "I"]
+select = [
+    "E4",
+    "E7",
+    "E9",
+    "F",
+    "I",
+    # Blocking calls inside `async def`. The whole backend is async and a
+    # single synchronous call stalls the event loop for every request, which
+    # no test reproduces and no reviewer reliably spots.
+    "ASYNC",
+    "B",
+    "C4",
+    "LOG",
+    "N",
+    "PTH",
+    "RUF",
+    "SIM",
+    "TID",
+    "UP",
+]
+ignore = [
+    # FastAPI's whole dependency-injection contract is `Depends()` evaluated
+    # once in a parameter default. B008 exists to catch accidental shared
+    # mutable defaults; here it fires on the framework's intended usage.
+    "B008",
+    # Not every exception is an error. `JobStopSignal` and `RateLimitSignal`
+    # are control flow, and the `*Refusal` names in scripts/ are a deliberate
+    # vocabulary for "this tool declined to act". Renaming them to `*Error`
+    # would describe them less accurately than their current names do.
+    "N818",
+    # `StrEnum` is not a drop-in replacement for `str, Enum`: it changes what
+    # `str()` and f-strings produce, from `JobType.MATCH_FETCHER` to the bare
+    # value. These enums are exactly the ones that reach a PostgreSQL enum
+    # column (`JobType`, `JobStatus`, `ExecutionType`) or a Riot URL (`Region`,
+    # `Platform`), so the rewrite is a data-format change wearing a lint's
+    # clothing. Worth doing deliberately, with a migration; not as a lint fix.
+    "UP042",
+]
 
 [tool.ruff.lint.isort]
 # scripts is listed explicitly because implicit first-party detection depends
@@ -87,12 +172,31 @@ dev = [
     "pre-commit>=4.6.2",
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
-    "pyright>=1.1.411",
+    # Pinned exactly, like ruff: a Pyright release can add strict-mode
+    # diagnostics, and a gate that calls itself deterministic cannot have its
+    # type checker tighten underneath it on an unrelated commit.
+    "pyright==1.1.411",
     "ruff==0.16.2",
     "vulture>=2.16",
     "xenon>=0.9.3",
     "pytest-socket>=0.7.0",
+    "pytest-cov>=7.0.0",
 ]
+
+[tool.coverage.run]
+source = ["app"]
+branch = true
+
+[tool.coverage.report]
+# A floor, not a target. Measured 2026-08-16: 50.45% with branch coverage on
+# (10,276 statements, 2,170 branches). Statement-only coverage reads 55%; the
+# branch figure is the honest one, because a half-tested `if` is half-tested.
+# The floor sits three points under so the gate passes today and can be
+# ratcheted up as coverage grows, in the same spirit as
+# alembic/metadata-drift.txt. It is armed by the `--cov` flags in test.sh; a
+# bare `pytest` stays fast.
+fail_under = 47
+show_missing = true
 
 [tool.vulture]
 min_confidence = 80
@@ -100,6 +204,20 @@ paths = ["app"]
 ignore_decorators = ["@router.*", "@app.*"]
 ignore_names = [
     "model_config",
+    # Parameters of `Protocol` method stubs. The stubs exist to give types to
+    # untyped third-party libraries (passlib's hashing context, APScheduler's
+    # scheduler), so their bodies are `...` and Vulture cannot see that the
+    # names are consumed — but every one of these is passed at a real call
+    # site: `trigger="interval"` and `replace_existing=True` at
+    # scheduler.py:539, `run_date=now` at 700, `wait=False` at 822, and
+    # `secret` positionally by both password wrappers. Verified before adding;
+    # a genuinely dead parameter with one of these names would now be missed,
+    # which is the cost of Vulture having no notion of a protocol.
+    "secret",
+    "wait",
+    "trigger",
+    "replace_existing",
+    "run_date",
 ]
 
 [tool.deptry]

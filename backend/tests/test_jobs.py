@@ -1,11 +1,15 @@
 """Background-job configuration and error-boundary tests."""
 
+from collections.abc import AsyncGenerator, Callable, Mapping
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
+from typing import cast, override
 from unittest.mock import AsyncMock
 
 import pytest
+from sqlalchemy import Select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.riot_api.constants import PRODUCT_SUPPORTED_QUEUE_IDS
 from app.core.riot_api.errors import (
@@ -30,17 +34,41 @@ from app.features.jobs.maintenance import (
     preserve_riot_writer_maintenance_mode,
     riot_writer_maintenance_is_active,
 )
-from app.features.jobs.models import ExecutionType, JobStatus, JobType
+from app.features.jobs.models import (
+    ExecutionType,
+    JobConfiguration,
+    JobExecution,
+    JobStatus,
+    JobType,
+)
 from app.features.jobs.queue_config import (
     get_match_fetcher_queue_ids,
     normalize_match_fetcher_config,
 )
-from app.features.jobs.schemas import JobConfigurationUpdate
+from app.features.jobs.schemas import JobConfigurationResponse, JobConfigurationUpdate
 from app.features.jobs.service import JobService
 
 
+def _job_configuration_double(**attributes: object) -> JobConfiguration:
+    """Return a structural stand-in for a `job_configurations` row.
+
+    Constructing the mapped class would configure SQLAlchemy's entire mapper
+    registry, and this file imports only the jobs models, so a real instance
+    fails to initialize. The double carries exactly the columns the code under
+    test reads.
+    """
+    return cast(JobConfiguration, SimpleNamespace(**attributes))
+
+
+def _job_execution_double(**attributes: object) -> JobExecution:
+    """Return a structural stand-in for a `job_executions` row, as above."""
+    return cast(JobExecution, SimpleNamespace(**attributes))
+
+
 @pytest.mark.asyncio
-async def test_scheduler_shutdown_does_not_drain_running_jobs(monkeypatch) -> None:
+async def test_scheduler_shutdown_does_not_drain_running_jobs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Deploy shutdown must not wait for an ordinary long-running job."""
 
     class SchedulerDouble:
@@ -61,7 +89,7 @@ async def test_scheduler_shutdown_does_not_drain_running_jobs(monkeypatch) -> No
 
 @pytest.mark.asyncio
 async def test_overdue_startup_job_is_queued_without_awaiting_execution(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A Riot catch-up must not hold FastAPI startup or duplicate dispatch."""
 
@@ -73,33 +101,33 @@ async def test_overdue_startup_job_is_queued_without_awaiting_execution(
         schedule="interval:900",
     )
     last_execution = SimpleNamespace(
-        started_at=datetime.now(timezone.utc) - timedelta(minutes=16)
+        started_at=datetime.now(UTC) - timedelta(minutes=16)
     )
 
     class ResultDouble:
-        def __init__(self, value) -> None:
+        def __init__(self, value: object) -> None:
             self.value = value
 
-        def scalars(self):
+        def scalars(self) -> ResultDouble:
             return self
 
-        def all(self):
+        def all(self) -> object:
             return self.value
 
-        def scalar_one_or_none(self):
+        def scalar_one_or_none(self) -> object:
             return self.value
 
     class SessionDouble:
-        def __init__(self, result) -> None:
+        def __init__(self, result: object) -> None:
             self.result = result
 
-        async def execute(self, _statement):
+        async def execute(self, _statement: object) -> ResultDouble:
             return ResultDouble(self.result)
 
     sessions = iter([SessionDouble([job_config]), SessionDouble(last_execution)])
 
     @asynccontextmanager
-    async def get_session():
+    async def get_session() -> AsyncGenerator[SessionDouble]:
         yield next(sessions)
 
     constructed: list[tuple[int, str]] = []
@@ -114,7 +142,7 @@ async def test_overdue_startup_job_is_queued_without_awaiting_execution(
     scheduled: list[dict[str, object]] = []
 
     class SchedulerDouble:
-        def add_job(self, func, **kwargs) -> None:
+        def add_job(self, func: Callable[..., object], **kwargs: object) -> None:
             scheduled.append({"func": func, **kwargs})
 
     monkeypatch.setattr(scheduler_module.db_manager, "get_session", get_session)
@@ -192,7 +220,7 @@ async def test_noncritical_job_error_returns_none() -> None:
 
 def test_riot_maintenance_mode_blocks_only_regular_writer_jobs() -> None:
     """Cleanup cannot block non-writing tests or unrelated future job types."""
-    config = SimpleNamespace(
+    config = _job_configuration_double(
         job_type=JobType.MATCH_FETCHER,
         config_json={RIOT_MAINTENANCE_MODE_KEY: True},
     )
@@ -200,7 +228,7 @@ def test_riot_maintenance_mode_blocks_only_regular_writer_jobs() -> None:
     assert is_riot_writer_maintenance_active(config, ExecutionType.REGULAR)
     assert not is_riot_writer_maintenance_active(config, ExecutionType.TEST)
     assert not is_riot_writer_maintenance_active(
-        SimpleNamespace(
+        _job_configuration_double(
             job_type=JobType.PLAYER_UPDATER,
             config_json={RIOT_MAINTENANCE_MODE_KEY: False},
         ),
@@ -210,7 +238,7 @@ def test_riot_maintenance_mode_blocks_only_regular_writer_jobs() -> None:
     assert riot_writer_maintenance_is_active(
         {
             JobType.MATCH_FETCHER: config,
-            JobType.PLAYER_UPDATER: SimpleNamespace(
+            JobType.PLAYER_UPDATER: _job_configuration_double(
                 job_type=JobType.PLAYER_UPDATER,
                 config_json={RIOT_MAINTENANCE_MODE_KEY: False},
             ),
@@ -218,7 +246,7 @@ def test_riot_maintenance_mode_blocks_only_regular_writer_jobs() -> None:
     )
     assert not riot_writer_maintenance_is_active(
         {
-            JobType.MATCH_FETCHER: SimpleNamespace(
+            JobType.MATCH_FETCHER: _job_configuration_double(
                 job_type=JobType.MATCH_FETCHER,
                 config_json={RIOT_MAINTENANCE_MODE_KEY: False},
             )
@@ -260,10 +288,10 @@ def test_job_configuration_updates_preserve_an_active_maintenance_interlock() ->
 
 @pytest.mark.asyncio
 async def test_job_configuration_update_locks_cleanup_tables_before_its_row(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A stale queue field cannot overwrite cleanup's interlock or active state."""
-    job = SimpleNamespace(
+    job = _job_configuration_double(
         id=7,
         job_type=JobType.MATCH_FETCHER,
         config_json={RIOT_MAINTENANCE_MODE_KEY: True, "enabled_queue_ids": [420]},
@@ -273,7 +301,7 @@ async def test_job_configuration_update_locks_cleanup_tables_before_its_row(
     )
 
     class Result:
-        def scalar_one_or_none(self):
+        def scalar_one_or_none(self) -> JobConfiguration:
             return job
 
     class Session:
@@ -290,11 +318,17 @@ async def test_job_configuration_update_locks_cleanup_tables_before_its_row(
         async def refresh(self, _job: object) -> None:
             return None
 
+    def passthrough_response(
+        configuration: JobConfiguration,
+    ) -> JobConfigurationResponse:
+        """Assert against the row the service updated, not its serialized form."""
+        return cast(JobConfigurationResponse, configuration)
+
     monkeypatch.setattr(
-        JobService, "_to_job_response", staticmethod(lambda value: value)
+        JobService, "_to_job_response", staticmethod(passthrough_response)
     )
     session = Session()
-    service = JobService(session)  # type: ignore[arg-type]
+    service = JobService(cast(AsyncSession, session))
 
     updated = await service.update_job_configuration(
         7,
@@ -304,7 +338,10 @@ async def test_job_configuration_update_locks_cleanup_tables_before_its_row(
     assert str(session.statements[0]) == (
         f"LOCK TABLE {', '.join(RIOT_WRITER_TABLES)} IN ROW EXCLUSIVE MODE"
     )
-    assert getattr(session.statements[1], "_for_update_arg") is not None
+    row_statement = session.statements[1]
+    assert isinstance(row_statement, Select)
+    assert row_statement._for_update_arg is not None
+    assert updated is not None
     assert updated.config_json == {
         RIOT_MAINTENANCE_MODE_KEY: True,
     }
@@ -318,7 +355,8 @@ class _MaintenanceBlockedJob(BaseJob):
         super().__init__(job_config_id=7)
         self.executed = False
 
-    async def execute(self, _db) -> None:
+    @override
+    async def execute(self, db: AsyncSession) -> None:
         self.executed = True
 
 
@@ -330,19 +368,21 @@ async def test_base_job_cancels_a_maintained_regular_writer_before_execute() -> 
     job.log_completion = AsyncMock()
     job.check_control_state = AsyncMock()
 
-    async def fake_log_start(_db) -> None:
-        job.job_execution = SimpleNamespace(id=13)
+    async def fake_log_start(db: AsyncSession) -> None:
+        job.job_execution = _job_execution_double(id=13)
 
-    async def fake_refresh(_db) -> None:
-        job.job_config = SimpleNamespace(
+    async def fake_refresh(db: AsyncSession) -> None:
+        job.job_config = _job_configuration_double(
             name="match fetcher",
             job_type=JobType.MATCH_FETCHER,
             config_json={RIOT_MAINTENANCE_MODE_KEY: True},
         )
 
     @asynccontextmanager
-    async def fake_session():
-        yield object()
+    async def fake_session() -> AsyncGenerator[AsyncSession]:
+        # Every method that would touch the session is stubbed above, so the
+        # run never reaches a real query.
+        yield cast(AsyncSession, object())
 
     job.log_start = fake_log_start
     job._refresh_config = fake_refresh
@@ -354,7 +394,9 @@ async def test_base_job_cancels_a_maintained_regular_writer_before_execute() -> 
     job.check_control_state.assert_not_awaited()
     assert job.execution_log["riot_maintenance_blocked"] is True
     assert job.execution_log["stop_reason"] == "riot_maintenance"
-    assert job.log_completion.await_args.kwargs["status"] == JobStatus.CANCELLED
+    completion_call = job.log_completion.await_args
+    assert completion_call is not None
+    assert completion_call.kwargs["status"] == JobStatus.CANCELLED
 
 
 async def _run_job_with_recorded_error(
@@ -362,23 +404,23 @@ async def _run_job_with_recorded_error(
     error: Exception,
     *,
     is_api_key_error: bool,
-) -> dict[str, object]:
+) -> Mapping[str, object]:
     """Run a regular writer through BaseJob's real completion decision."""
-    job.is_already_running = AsyncMock(return_value=False)  # type: ignore[method-assign]
-    job.log_completion = AsyncMock()  # type: ignore[method-assign]
-    job.check_control_state = AsyncMock()  # type: ignore[method-assign]
+    job.is_already_running = AsyncMock(return_value=False)
+    job.log_completion = AsyncMock()
+    job.check_control_state = AsyncMock()
 
-    async def fake_log_start(_db: object) -> None:
-        job.job_execution = SimpleNamespace(id=13)
+    async def fake_log_start(db: AsyncSession) -> None:
+        job.job_execution = _job_execution_double(id=13)
 
-    async def fake_refresh(_db: object) -> None:
-        job.job_config = SimpleNamespace(
+    async def fake_refresh(db: AsyncSession) -> None:
+        job.job_config = _job_configuration_double(
             name="writer job",
             job_type=JobType.MATCH_FETCHER,
             config_json={},
         )
 
-    async def fake_execute(_db: object) -> None:
+    async def fake_execute(db: AsyncSession) -> None:
         job.record_error(
             error,
             operation="player synchronization",
@@ -387,16 +429,20 @@ async def _run_job_with_recorded_error(
         )
 
     @asynccontextmanager
-    async def fake_session():
-        yield object()
+    async def fake_session() -> AsyncGenerator[AsyncSession]:
+        # Every method that would touch the session is stubbed above, so the
+        # run never reaches a real query.
+        yield cast(AsyncSession, object())
 
-    job.log_start = fake_log_start  # type: ignore[method-assign]
-    job._refresh_config = fake_refresh  # type: ignore[method-assign]
-    job.execute = fake_execute  # type: ignore[method-assign]
-    job._db_session = fake_session  # type: ignore[method-assign]
+    job.log_start = fake_log_start
+    job._refresh_config = fake_refresh
+    job.execute = fake_execute
+    job._db_session = fake_session
 
     await job.run()
-    return job.log_completion.await_args.kwargs  # type: ignore[union-attr]
+    completion_call = job.log_completion.await_args
+    assert completion_call is not None
+    return completion_call.kwargs
 
 
 @pytest.mark.asyncio

@@ -1,12 +1,17 @@
+# passlib has no stubs; `PasswordHasher` below states the contract instead.
+# Mirrors `reportMissingTypeStubs = "none"` in pyproject.toml, which the
+# file-level `strict` pragma otherwise discards.
+# pyright: reportMissingTypeStubs=none
 """Authentication service for user management, JWT access tokens, and refresh sessions."""
 
 import asyncio
 import hashlib
 import secrets
 import smtplib
-from datetime import datetime, timedelta, timezone
+from collections.abc import Mapping
+from datetime import UTC, datetime, timedelta
 from email.message import EmailMessage
-from typing import Any, NoReturn, Optional
+from typing import NoReturn, Protocol
 from uuid import uuid4
 
 import httpx
@@ -30,8 +35,26 @@ from .revoked_access_token import RevokedAccessToken
 from .schemas import JoinUsSubject, TokenData, UserCreate
 from .subject_counts import SubjectCounts
 
+
+class PasswordHasher(Protocol):
+    """The slice of passlib's ``CryptContext`` this module depends on.
+
+    passlib ships no type information, so every hashing call would otherwise
+    be unchecked. Stating the contract here is what makes the two wrappers
+    below verifiable.
+    """
+
+    def verify(self, secret: str, hash: str) -> bool:
+        """Check a plaintext secret against a stored hash."""
+        ...
+
+    def hash(self, secret: str) -> str:
+        """Hash a plaintext secret with the configured scheme."""
+        ...
+
+
 # Password hashing context using Argon2id
-pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
+pwd_context: PasswordHasher = CryptContext(schemes=["argon2"], deprecated="auto")
 
 # OAuth2 scheme for token authentication
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
@@ -155,12 +178,12 @@ class AuthService:
         """Hash a password using Argon2id."""
         return pwd_context.hash(password)
 
-    async def get_user_by_email(self, email: str) -> Optional[User]:
+    async def get_user_by_email(self, email: str) -> User | None:
         """Get a user by email address."""
         result = await self.db.execute(select(User).where(User.email == email))
         return result.scalar_one_or_none()
 
-    async def get_user_by_email_case_insensitive(self, email: str) -> Optional[User]:
+    async def get_user_by_email_case_insensitive(self, email: str) -> User | None:
         """Get a user by email address using case-insensitive comparison."""
         normalized_email = email.strip().lower()
         result = await self.db.execute(
@@ -168,7 +191,7 @@ class AuthService:
         )
         return result.scalar_one_or_none()
 
-    async def get_user_by_id(self, user_id: int) -> Optional[User]:
+    async def get_user_by_id(self, user_id: int) -> User | None:
         """Get a user by ID."""
         result = await self.db.execute(select(User).where(User.id == user_id))
         return result.scalar_one_or_none()
@@ -331,7 +354,7 @@ class AuthService:
         if not remote_ip:
             return
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         window_start = now - timedelta(hours=1)
 
         recent_count_result = await self.db.execute(
@@ -425,7 +448,7 @@ class AuthService:
             "New Join Us submission\n\n"
             f"Position: {subject_label}\n"
             f"Sequence: {sequence_label}\n"
-            f"Submitted At (UTC): {datetime.now(timezone.utc).isoformat()}\n"
+            f"Submitted At (UTC): {datetime.now(UTC).isoformat()}\n"
             f"Remote IP: {remote_ip or 'unknown'}\n\n"
             "Message:\n"
             f"{body}\n"
@@ -504,7 +527,7 @@ class AuthService:
 
     async def cleanup_expired_token_state(self) -> None:
         """Delete expired refresh and revoked access tokens."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         await self.db.execute(
             delete(RevokedAccessToken).where(RevokedAccessToken.expires_at <= now)
         )
@@ -564,7 +587,7 @@ class AuthService:
 
     async def _record_failed_login(self, user: User) -> None:
         """Record a failed login and lock account when threshold is reached."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         user.failed_login_attempts += 1
         user.last_failed_login = now
         user.updated_at = now
@@ -587,7 +610,7 @@ class AuthService:
         if user.locked_until is None:
             return
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         if user.locked_until > now:
             return
 
@@ -599,11 +622,11 @@ class AuthService:
     def create_access_token(
         self,
         user: User,
-        expires_delta: Optional[timedelta] = None,
+        expires_delta: timedelta | None = None,
     ) -> tuple[str, datetime, str]:
         """Create a signed JWT access token with token ID for revocation checks."""
         token_id = self._generate_token_id()
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         if expires_delta:
             expire = now + expires_delta
@@ -633,10 +656,10 @@ class AuthService:
         user_id: int,
         remote_ip: str | None = None,
         user_agent: str | None = None,
-        expires_delta: Optional[timedelta] = None,
+        expires_delta: timedelta | None = None,
     ) -> tuple[str, datetime, str]:
         """Create and persist a refresh token, returning the raw token once."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         refresh_token = secrets.token_urlsafe(64)
         token_id = self._generate_token_id()
         token_hash = self._hash_refresh_token(refresh_token)
@@ -682,7 +705,7 @@ class AuthService:
         raw_refresh_token: str,
         remote_ip: str | None = None,
         user_agent: str | None = None,
-    ) -> Optional[tuple[User, str, datetime, str, datetime]]:
+    ) -> tuple[User, str, datetime, str, datetime] | None:
         """Rotate refresh token and return new access/refresh pair."""
         token_hash = self._hash_refresh_token(raw_refresh_token)
         result = await self.db.execute(
@@ -692,7 +715,7 @@ class AuthService:
         if token_record is None:
             return None
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         if token_record.revoked_at is not None:
             logger.warning(
                 "refresh_token_reuse_detected",
@@ -756,7 +779,7 @@ class AuthService:
         if not active_tokens:
             return
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         for token in active_tokens:
             token.revoked_at = now
 
@@ -791,8 +814,8 @@ class AuthService:
         ):
             return
 
-        expires_at = datetime.fromtimestamp(exp, tz=timezone.utc)
-        if expires_at <= datetime.now(timezone.utc):
+        expires_at = datetime.fromtimestamp(exp, tz=UTC)
+        if expires_at <= datetime.now(UTC):
             return
 
         existing = await self.db.execute(
@@ -824,7 +847,7 @@ class AuthService:
         password: str,
         captcha_token: str | None = None,
         remote_ip: str | None = None,
-    ) -> Optional[User]:
+    ) -> User | None:
         """Authenticate a user with email and password.
 
         Uses constant-time comparison to prevent timing attacks that could
@@ -841,7 +864,7 @@ class AuthService:
 
         await self._clear_expired_lock_if_needed(user)
 
-        if user.locked_until and user.locked_until > datetime.now(timezone.utc):
+        if user.locked_until and user.locked_until > datetime.now(UTC):
             raise AccountLockedError(user.locked_until)
 
         if self._is_captcha_required_for_user(user):
@@ -891,7 +914,7 @@ class AuthService:
         new_email: str,
     ) -> datetime:
         """Generate and send a verification code for changing user email."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         normalized_email = new_email.strip().lower()
 
         if normalized_email == current_user.email.strip().lower():
@@ -1042,7 +1065,7 @@ class AuthService:
         code: str,
     ) -> User:
         """Validate the code and update current user's email on success."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         email_change_request = await self._get_or_create_email_change_request(
             current_user.id
         )
@@ -1074,7 +1097,7 @@ class AuthService:
         if not self.verify_password(current_password, current_user.password_hash):
             raise InvalidCurrentPasswordError
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         current_user.password_hash = self.get_password_hash(new_password)
         current_user.updated_at = now
         await self.db.commit()
@@ -1085,7 +1108,7 @@ class AuthService:
         """Update successful-login metadata and clear lockout counters."""
         user = await self.get_user_by_id(user_id)
         if user:
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             user.last_login = now
             user.failed_login_attempts = 0
             user.locked_until = None
@@ -1102,7 +1125,9 @@ class AuthService:
         )
 
     @staticmethod
-    def _access_token_data_from_payload(payload: Any) -> TokenData | None:
+    def _access_token_data_from_payload(
+        payload: Mapping[str, object],
+    ) -> TokenData | None:
         """Return access-token claims when the payload has the required types."""
         email = payload.get("sub")
         user_id = payload.get("user_id")
@@ -1114,6 +1139,7 @@ class AuthService:
             not isinstance(email, str)
             or not isinstance(user_id, int)
             or not isinstance(token_id, str)
+            or not isinstance(token_type, str)
             or token_type != "access"
             or not isinstance(exp, int)
         ):
@@ -1138,8 +1164,8 @@ class AuthService:
                 algorithms=[self.settings.jwt_algorithm],
             )
             token_data = self._access_token_data_from_payload(payload)
-        except InvalidTokenError:
-            raise credentials_exception
+        except InvalidTokenError as e:
+            raise credentials_exception from e
 
         if (
             token_data is None

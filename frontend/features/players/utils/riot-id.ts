@@ -24,8 +24,10 @@ export function parseRiotId(input: string): RiotIdParts {
     throw new Error("Player Name must contain exactly one # separator.");
   }
 
-  const gameName = parts[0].trim();
-  const tagLine = parts[1].trim();
+  // Both indexes exist: the length check above proves the split produced
+  // exactly two parts. `?? ""` only satisfies the compiler.
+  const gameName = (parts[0] ?? "").trim();
+  const tagLine = (parts[1] ?? "").trim();
 
   if (!gameName) {
     throw new Error("Player Name cannot be empty.");

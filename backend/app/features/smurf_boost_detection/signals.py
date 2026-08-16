@@ -8,7 +8,6 @@ signal never triggers, never scores, and never counts as evidence.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
 
 from .composite import CompositeContext, EligibleMatch
 from .config import (
@@ -51,12 +50,12 @@ class SignalResult:
     sample_size: int
     reason: str
     notes: tuple[str, ...]
-    raw_value: Optional[float] = None
-    threshold: Optional[float] = None
-    saturation: Optional[float] = None
-    magnitude: Optional[float] = None
-    weight: Optional[float] = None
-    contribution: Optional[float] = None
+    raw_value: float | None = None
+    threshold: float | None = None
+    saturation: float | None = None
+    magnitude: float | None = None
+    weight: float | None = None
+    contribution: float | None = None
 
 
 @dataclass(frozen=True)
@@ -68,7 +67,7 @@ class SignalInputs:
     composite_recent: list[float]
     composite_baseline: list[float]
     prior_champion_games: dict[int, int]
-    summoner_level: Optional[int]
+    summoner_level: int | None
     context: CompositeContext
     thresholds: dict[str, float]
 
@@ -192,7 +191,7 @@ def _novel_scores(inputs: SignalInputs) -> list[float]:
     """Composite scores for recent games on rarely played champions."""
     return [
         score
-        for match, score in zip(inputs.recent, inputs.composite_recent)
+        for match, score in zip(inputs.recent, inputs.composite_recent, strict=True)
         if inputs.prior_champion_games.get(match.champion_id, 0)
         <= NOVEL_CHAMPION_MAX_PRIOR_GAMES
     ]
@@ -323,7 +322,7 @@ def evaluate_b2(inputs: SignalInputs) -> SignalResult:
     )
 
 
-def _b3_unavailable(inputs: SignalInputs) -> Optional[SignalResult]:
+def _b3_unavailable(inputs: SignalInputs) -> SignalResult | None:
     """Why the shape of the recent window cannot be measured, if it cannot."""
     if inputs.context.degenerate:
         return _unavailable(
@@ -381,7 +380,7 @@ def evaluate_b3(inputs: SignalInputs) -> SignalResult:
     )
 
 
-def _half_win_rates(inputs: SignalInputs) -> Optional[tuple[float, float]]:
+def _half_win_rates(inputs: SignalInputs) -> tuple[float, float] | None:
     """Win rate of the older and newer halves of the recent window.
 
     The window is ordered newest first, so the older half is the tail. An odd

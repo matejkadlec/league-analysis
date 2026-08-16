@@ -22,23 +22,19 @@ from .schemas import (
 from .service import SettingsService
 
 __all__ = [
-    # Router
-    "settings_router",
-    # Service
-    "SettingsService",
-    # Schemas
     "CardId",
     "CardPreferenceResponse",
-    "CardPreferencesResetRequest",
     "CardPreferenceUpdate",
-    "SettingResponse",
-    "SettingUpdate",
-    "SettingTestResponse",
-    "SettingValidationResponse",
+    "CardPreferencesResetRequest",
     "ServiceStatusResponse",
+    "SettingResponse",
+    "SettingTestResponse",
+    "SettingUpdate",
+    "SettingValidationResponse",
+    "SettingsService",
+    "SettingsServiceDep",
     "UserCookieConsentResponse",
     "UserCookieConsentUpdate",
-    # Dependencies
     "get_settings_service",
-    "SettingsServiceDep",
+    "settings_router",
 ]

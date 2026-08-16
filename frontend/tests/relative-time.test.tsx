@@ -33,7 +33,9 @@ describe("authoritative freshness presentation", () => {
     const { result } = renderHook(() => useRelativeTime(syncedAt));
 
     expect(result.current).toBe("just now");
-    act(() => vi.advanceTimersByTime(60_000));
+    act(() => {
+      vi.advanceTimersByTime(60_000);
+    });
     expect(result.current).toBe("1 minute ago");
   });
 

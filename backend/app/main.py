@@ -2,7 +2,7 @@
 
 import logging
 from contextlib import asynccontextmanager
-from typing import Any, Dict
+from typing import Any
 
 import structlog
 from fastapi import FastAPI, Response, status
@@ -199,7 +199,7 @@ app.include_router(jobs_router)
 
 
 @app.get("/health", tags=["health"])
-async def health_check() -> Dict[str, Any]:
+async def health_check() -> dict[str, Any]:
     """Health check endpoint for monitoring and load balancers."""
     return {
         "status": "healthy",
@@ -210,7 +210,7 @@ async def health_check() -> Dict[str, Any]:
 
 
 @app.get("/health/ready", tags=["health"], response_model=None)
-async def readiness_check(response: Response) -> Dict[str, str] | JSONResponse:
+async def readiness_check(response: Response) -> dict[str, str] | JSONResponse:
     """Report readiness only after a database round trip succeeds."""
     try:
         async with db_manager.get_session() as db:

@@ -144,7 +144,11 @@ def test_remote_source_accepts_matching_schema_without_legacy_authority_marker(
         "compose_service=postgres database=league_analysis "
         "postgres=18.4 (Debian) alembic=20260813_0010 host_ports=none"
     )
-    monkeypatch.setattr(mirror, "remote_identity", lambda _host: identity)
+
+    def remote_identity(_host: str) -> str:
+        return identity
+
+    monkeypatch.setattr(mirror, "remote_identity", remote_identity)
 
     assert (
         mirror.verify_remote_source(
@@ -162,7 +166,11 @@ def test_remote_source_refuses_schema_mismatch_before_mirroring(
         "compose_service=postgres database=league_analysis "
         "postgres=18.4 (Debian) alembic=20260814_0011 host_ports=none"
     )
-    monkeypatch.setattr(mirror, "remote_identity", lambda _host: identity)
+
+    def remote_identity(_host: str) -> str:
+        return identity
+
+    monkeypatch.setattr(mirror, "remote_identity", remote_identity)
 
     with pytest.raises(mirror.MirrorRefusal, match="Alembic heads differ"):
         mirror.verify_remote_source(
@@ -274,8 +282,12 @@ def test_matching_snapshot_skips_full_mirror(
         lock_file=tmp_path / "lock",
         snapshot_sql=tmp_path / "snapshot.sql",
     )
-    monkeypatch.setattr(mirror, "remote_snapshot", lambda *_args: "same")
-    monkeypatch.setattr(mirror, "psql_snapshot", lambda *_args: "same")
+
+    def identical_snapshot(*_args: object) -> str:
+        return "same"
+
+    monkeypatch.setattr(mirror, "remote_snapshot", identical_snapshot)
+    monkeypatch.setattr(mirror, "psql_snapshot", identical_snapshot)
 
     def unexpected_mirror(*_args: object) -> None:
         raise AssertionError("matching snapshots must not trigger a full mirror")
@@ -310,9 +322,19 @@ def test_changed_snapshot_runs_full_mirror(
         snapshot_sql=tmp_path / "snapshot.sql",
     )
     calls: list[tuple[object, ...]] = []
-    monkeypatch.setattr(mirror, "remote_snapshot", lambda *_args: "source")
-    monkeypatch.setattr(mirror, "psql_snapshot", lambda *_args: "local")
-    monkeypatch.setattr(mirror, "mirror", lambda *args: calls.append(args))
+
+    def source_snapshot(*_args: object) -> str:
+        return "source"
+
+    def local_snapshot(*_args: object) -> str:
+        return "local"
+
+    def record_mirror(*args: object) -> None:
+        calls.append(args)
+
+    monkeypatch.setattr(mirror, "remote_snapshot", source_snapshot)
+    monkeypatch.setattr(mirror, "psql_snapshot", local_snapshot)
+    monkeypatch.setattr(mirror, "mirror", record_mirror)
 
     assert mirror.refresh_if_changed(
         config,

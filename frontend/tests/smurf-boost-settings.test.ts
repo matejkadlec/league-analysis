@@ -91,17 +91,17 @@ function backendBounds(): Map<string, { min: number; max: number; integer: boole
   expect(block).not.toBeNull();
 
   const bounds = new Map<string, { min: number; max: number; integer: boolean }>();
+  // The backend declares the wire name explicitly, so read that rather than
+  // recomputing camelCase here — this compares the two contracts instead of
+  // comparing the frontend against its own guess at the rename. `\s*` spans
+  // newlines because `ruff format` wraps the longer declarations.
   const line =
-    /^ {4}(\w+): (int|float) = Field\(default=[\d.]+, ge=([\d.]+), le=([\d.]+)\)$/gm;
+    /^ {4}\w+: (int|float) = Field\(\s*alias="(\w+)",\s*default=[\d.]+,\s*ge=([\d.]+),\s*le=([\d.]+),?\s*\)/gm;
   for (const match of (block?.[1] ?? "").matchAll(line)) {
-    // The API renames every field to camelCase before it reaches a client.
-    const [head, ...tail] = match[1].split("_");
-    const name =
-      head + tail.map((part) => part[0].toUpperCase() + part.slice(1)).join("");
-    bounds.set(name, {
+    bounds.set(match[2] ?? "", {
       min: Number(match[3]),
       max: Number(match[4]),
-      integer: match[2] === "int",
+      integer: match[1] === "int",
     });
   }
   return bounds;
@@ -147,6 +147,9 @@ describe("smurf and boost threshold catalog", () => {
 
   it("rejects a value the server would reject", () => {
     const window = THRESHOLD_FIELDS[0];
+    if (!window) {
+      throw new Error("THRESHOLD_FIELDS is empty");
+    }
     expect(fieldError(window, 20)).toBeNull();
     expect(fieldError(window, 9)).toBe(
       "Recent games compared must be between 10 and 50.",

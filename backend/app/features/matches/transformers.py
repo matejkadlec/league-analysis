@@ -4,18 +4,35 @@ This module provides utility classes for transforming data from Riot API DTOs
 to formats suitable for database storage, validation, and processing.
 """
 
-from typing import Any, Dict, List, Optional
+from collections.abc import Sequence
+from typing import Any, Protocol, cast, runtime_checkable
 
 import structlog
 
+from app.core.riot_api.models import ParticipantDTO
+
 logger = structlog.get_logger(__name__)
+
+
+@runtime_checkable
+class _MatchIdCarrier(Protocol):
+    """The single member `extract_match_ids` reads off a match-list DTO.
+
+    `MatchListDTO` satisfies this, but the function is a shape probe that also
+    accepts `None`, a bare list, and objects carrying neither — so the DTO
+    itself cannot be the parameter type. The Protocol names the one attribute
+    the DTO branch actually needs.
+    """
+
+    @property
+    def match_ids(self) -> Sequence[str]: ...
 
 
 class MatchDTOTransformer:
     """Utility for transforming match DTOs from Riot API."""
 
     @staticmethod
-    def extract_match_ids(match_list_dto: Any) -> List[str]:
+    def extract_match_ids(match_list_dto: object) -> list[str]:
         """Extract match IDs from match list DTO.
 
         Handles different DTO formats from Riot API.
@@ -35,12 +52,13 @@ class MatchDTOTransformer:
             return []
 
         # Handle DTO with match_ids attribute
-        if hasattr(match_list_dto, "match_ids"):
+        if isinstance(match_list_dto, _MatchIdCarrier):
             return list(match_list_dto.match_ids)
 
-        # Handle direct list
+        # Handle direct list: element types are unchecked here exactly as the
+        # declared return type already assumes.
         if isinstance(match_list_dto, list):
-            return list(match_list_dto)
+            return list(cast("list[str]", match_list_dto))
 
         # Fallback to empty list
         logger.warning(
@@ -50,7 +68,7 @@ class MatchDTOTransformer:
         return []
 
     @staticmethod
-    def sanitize_participant_names(participant_data: Dict[str, Any]) -> Dict[str, Any]:
+    def sanitize_participant_names(participant_data: dict[str, Any]) -> dict[str, Any]:
         """Sanitize player name fields by converting empty strings to None.
 
         The Riot API sometimes returns empty strings for name fields instead of null.
@@ -70,14 +88,15 @@ class MatchDTOTransformer:
         name_fields = ["game_name", "tag_line"]
 
         for field in name_fields:
-            if field in participant_data:
-                if participant_data[field] == "" or participant_data[field] is None:
-                    participant_data[field] = None
+            if field in participant_data and (
+                participant_data[field] == "" or participant_data[field] is None
+            ):
+                participant_data[field] = None
 
         return participant_data
 
     @staticmethod
-    def extract_participant_data(participant_dto: Any) -> Dict[str, Any]:
+    def extract_participant_data(participant_dto: ParticipantDTO) -> dict[str, Any]:
         """Extract participant data from DTO for database storage.
 
         Args:
@@ -89,7 +108,7 @@ class MatchDTOTransformer:
         # Determine remake status (inverted logic)
         is_remake = not getattr(participant_dto, "eligible_for_progression", True)
 
-        data = {
+        data: dict[str, Any] = {
             # Identity
             "participant_id": participant_dto.participant_id,
             "puuid": participant_dto.puuid,
@@ -247,7 +266,7 @@ class PlayerDataSanitizer:
     """Utility for sanitizing player data."""
 
     @staticmethod
-    def ensure_game_name(game_name: Optional[str]) -> str:
+    def ensure_game_name(game_name: str | None) -> str:
         """Ensure game name is never null or empty string.
 
         Args:
@@ -269,7 +288,7 @@ class PlayerDataSanitizer:
         return game_name
 
     @staticmethod
-    def sanitize_player_fields(player_data: Dict[str, Any]) -> Dict[str, Any]:
+    def sanitize_player_fields(player_data: dict[str, Any]) -> dict[str, Any]:
         """Sanitize all player data fields.
 
         Ensures:
@@ -286,9 +305,8 @@ class PlayerDataSanitizer:
         # Convert empty strings to None
         name_fields = ["game_name", "tag_line"]
         for field in name_fields:
-            if field in player_data:
-                if player_data[field] == "":
-                    player_data[field] = None
+            if field in player_data and player_data[field] == "":
+                player_data[field] = None
 
         # Ensure game name has a value
         if "game_name" in player_data:
@@ -297,7 +315,7 @@ class PlayerDataSanitizer:
             )
 
         # Normalize platform to uppercase
-        if "platform" in player_data and player_data["platform"]:
+        if player_data.get("platform"):
             player_data["platform"] = player_data["platform"].upper()
 
         return player_data

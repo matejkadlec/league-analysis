@@ -1,5 +1,7 @@
 """Player Updater Job - Updates player profiles (name, tag, icon, level) for tracked players."""
 
+from typing import override
+
 import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -51,6 +53,7 @@ class PlayerUpdaterJob(BaseJob):
         """Store API call records from the RiotAPIClient."""
         self._api_call_records = api_calls
 
+    @override
     async def execute(self, db: AsyncSession) -> None:
         """Execute the player updater job."""
 

@@ -14,7 +14,7 @@ import getpass
 import ipaddress
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -168,7 +168,7 @@ async def reconcile_admin(
 
             created = not matches
             password_hash = AuthService.get_password_hash(password)
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             if created:
                 user = User(
                     email=normalized_email,

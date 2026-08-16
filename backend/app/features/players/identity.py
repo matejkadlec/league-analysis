@@ -1,11 +1,12 @@
 """Shared player identity fallbacks used by match upserts."""
 
-from typing import Any
+from typing import Any, Literal, overload
 
+from app.core.riot_api.models import ParticipantDTO
 from app.features.players.models import Player
 
 
-def first_present(*values: Any, default: Any) -> Any:
+def first_present[T](*values: T | None, default: T) -> T:
     """Return the first truthy value, otherwise ``default``."""
     for value in values:
         if value:
@@ -13,7 +14,21 @@ def first_present(*values: Any, default: Any) -> Any:
     return default
 
 
-def existing_player_attr(existing_player: Player | None, attr: str) -> Any:
+# ``attr`` is a literal at every call site, so the stored column type is known
+# statically even though the lookup itself is a ``getattr``.
+@overload
+def existing_player_attr(
+    existing_player: Player | None, attr: Literal["game_name", "tag_line"]
+) -> str | None: ...
+
+
+@overload
+def existing_player_attr(
+    existing_player: Player | None, attr: Literal["profile_icon_id", "summoner_level"]
+) -> int | None: ...
+
+
+def existing_player_attr(existing_player: Player | None, attr: str) -> str | int | None:
     """Read one stored player field, or None when the row is missing."""
     if existing_player is None:
         return None
@@ -21,7 +36,7 @@ def existing_player_attr(existing_player: Player | None, attr: str) -> Any:
 
 
 def resolve_player_display_fields(
-    participant: Any,
+    participant: ParticipantDTO,
     existing_player: Player | None,
     platform_id: str,
 ) -> dict[str, Any]:

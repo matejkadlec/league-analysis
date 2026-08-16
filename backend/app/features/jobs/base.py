@@ -3,19 +3,23 @@
 import asyncio
 from abc import ABC, abstractmethod
 from collections import defaultdict
+from collections.abc import Callable, Mapping, MutableMapping, Sequence
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
+from datetime import UTC, datetime
+from typing import Any, TypedDict, Unpack, cast
 
 import structlog
-from sqlalchemy import select, update
+from sqlalchemy import Update, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from structlog import contextvars as structlog_contextvars
 
 from app.core import db_manager
 
-if TYPE_CHECKING:
-    from app.core.riot_api.client import RiotAPIClient
+# Imported at runtime, not under TYPE_CHECKING: these names appear in
+# annotations, and anything that evaluates them (inspect.signature,
+# get_type_hints) would raise NameError under PEP 649 lazy annotations.
+from app.core.riot_api.client import APICallRecord, RiotAPIClient
+from app.core.riot_api.constants import Platform, Region
 
 from .control import (
     get_runtime_control_snapshot,
@@ -35,6 +39,19 @@ from .models import ExecutionType, JobConfiguration, JobExecution, JobStatus
 logger = structlog.get_logger(__name__)
 
 
+class RiotClientOptions(TypedDict, total=False):
+    """The keyword options `create_tracked_riot_api_client` accepts.
+
+    Declared here so the job helper forwards a checked set of options instead of
+    an untyped `**kwargs`, while the factory keeps owning the default values.
+    """
+
+    region: Region | None
+    platform: Platform | None
+    enable_logging: bool
+    request_callback: Callable[[str, int], None] | None
+
+
 class JobStopSignal(Exception):
     """Signal used for graceful/forced stops before a job writes data."""
 
@@ -44,12 +61,14 @@ class JobStopSignal(Exception):
         super().__init__(f"Job stopped: {reason}")
 
 
-def _format_api_calls_for_storage(api_calls: List[Any]) -> List[Dict[str, Any]]:
+def _format_api_calls_for_storage(
+    api_calls: list[APICallRecord],
+) -> list[dict[str, Any]]:
     """Format API call records for JSONB storage, grouping similar calls."""
     from collections import defaultdict
 
     # Group calls by endpoint
-    grouped: Dict[str, Dict[str, Any]] = defaultdict(
+    grouped: dict[str, dict[str, Any]] = defaultdict(
         lambda: {
             "count": 0,
             "region": None,
@@ -71,9 +90,9 @@ def _format_api_calls_for_storage(api_calls: List[Any]) -> List[Dict[str, Any]]:
         group["last_timestamp"] = call.timestamp
 
     # Convert to list format for storage
-    result = []
+    result: list[dict[str, Any]] = []
     for endpoint, data in grouped.items():
-        entry = {
+        entry: dict[str, Any] = {
             "endpoint": endpoint,
             "region": data["region"],
             "count": data["count"],
@@ -88,9 +107,7 @@ def _format_api_calls_for_storage(api_calls: List[Any]) -> List[Dict[str, Any]]:
             # For multiple calls, store first and last param values
             # Extract the key param (matchId, puuid, etc.)
             param_key = (
-                list(data["params_list"][0].keys())[0]
-                if data["params_list"][0]
-                else None
+                next(iter(data["params_list"][0])) if data["params_list"][0] else None
             )
             if param_key:
                 first_val = data["params_list"][0].get(param_key)
@@ -106,26 +123,27 @@ def _format_api_calls_for_storage(api_calls: List[Any]) -> List[Dict[str, Any]]:
 
 def _validation_field_locations(source_error: Exception | None) -> list[str]:
     """Return reviewed Pydantic location paths from a diagnostic exception."""
-    validation_errors = getattr(source_error, "errors", None)
+    validation_errors: object = getattr(source_error, "errors", None)
     if not callable(validation_errors):
         return []
     try:
-        reported_errors = validation_errors()
+        reported_errors: object = validation_errors()
     except Exception:
         return []
     if not isinstance(reported_errors, list):
         return []
     locations: list[str] = []
-    for item in reported_errors:
+    for item in cast(list[object], reported_errors):
         if not isinstance(item, dict):
             continue
-        location = item.get("loc")
+        location = cast(dict[object, object], item).get("loc")
         if isinstance(location, tuple):
-            locations.append(".".join(str(part) for part in location))
+            location_parts = cast(tuple[object, ...], location)
+            locations.append(".".join(str(part) for part in location_parts))
     return locations[:5]
 
 
-def _safe_error_context(context: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+def _safe_error_context(context: dict[str, Any] | None) -> dict[str, Any]:
     """Keep only short scalar identifiers for persisted diagnostics."""
     if not context:
         return {}
@@ -139,12 +157,12 @@ def _safe_error_context(context: Optional[Dict[str, Any]]) -> Dict[str, Any]:
 def _build_error_diagnostic(
     error: Exception | str,
     operation: str,
-    context: Optional[Dict[str, Any]],
-) -> Dict[str, Any]:
+    context: dict[str, Any] | None,
+) -> dict[str, Any]:
     """Build a secret-safe diagnostic without raw exception text or payloads."""
     source_error = diagnostic_error(error) if isinstance(error, Exception) else None
     error_type = type(source_error).__name__ if source_error else "RecordedError"
-    diagnostic: Dict[str, Any] = {
+    diagnostic: dict[str, Any] = {
         "operation": operation,
         "error_type": error_type,
     }
@@ -194,18 +212,18 @@ class BaseJob(ABC):
         self.job_config_id = job_config_id
         self.triggered_by = triggered_by
         self.execution_type = execution_type
-        self.job_config: Optional[JobConfiguration] = None
-        self.job_execution: Optional[JobExecution] = None
+        self.job_config: JobConfiguration | None = None
+        self.job_execution: JobExecution | None = None
         # Plain copies of the identity and start time. A rollback expires every
         # ORM attribute, and reloading one outside the async greenlet raises
         # MissingGreenlet, so completion paths must never read them off the
         # instance.
-        self.job_execution_id: Optional[int] = None
-        self.job_execution_started_at: Optional[datetime] = None
-        self.job_execution_status: Optional[JobStatus] = None
-        self.job_config_name: Optional[str] = None
-        self.job_config_type_value: Optional[str] = None
-        self.metrics = defaultdict(int)
+        self.job_execution_id: int | None = None
+        self.job_execution_started_at: datetime | None = None
+        self.job_execution_status: JobStatus | None = None
+        self.job_config_name: str | None = None
+        self.job_config_type_value: str | None = None
+        self.metrics: defaultdict[str, int] = defaultdict(int)
         self.metrics.update(
             {
                 "api_requests_made": 0,
@@ -213,9 +231,9 @@ class BaseJob(ABC):
                 "records_updated": 0,
             }
         )
-        self.execution_log: Dict[str, Any] = {}
+        self.execution_log: dict[str, Any] = {}
         # Track safe, structured diagnostics for errors encountered during execution.
-        self._errors_encountered: List[Dict[str, Any]] = []
+        self._errors_encountered: list[dict[str, Any]] = []
         self._has_api_key_error: bool = False
         self._has_puuid_binding_error: bool = False
         self._completion_logged: bool = False
@@ -224,7 +242,7 @@ class BaseJob(ABC):
         # failed, which also leaves no execution id but is a genuine failure.
         self.skipped_as_already_running: bool = False
         # Track API call records for detailed logging
-        self._api_call_records: List[Any] = []
+        self._api_call_records: list[APICallRecord] = []
 
     @property
     def runtime_key(self) -> int:
@@ -289,7 +307,7 @@ class BaseJob(ABC):
         try:
             self.job_execution = JobExecution(
                 job_config_id=self.job_config_id,
-                started_at=datetime.now(timezone.utc),
+                started_at=datetime.now(UTC),
                 status=JobStatus.RUNNING,
                 api_requests_made=0,
                 records_created=0,
@@ -326,9 +344,9 @@ class BaseJob(ABC):
         self,
         db: AsyncSession,
         success: bool = True,
-        error_message: Optional[str] = None,
-        logs: Optional[List[Dict[str, Any]]] = None,
-        status: Optional[JobStatus] = None,
+        error_message: str | None = None,
+        logs: Sequence[Mapping[str, Any]] | None = None,
+        status: JobStatus | None = None,
     ) -> None:
         """Log job execution completion and update JobExecution record.
 
@@ -347,14 +365,14 @@ class BaseJob(ABC):
             return
 
         try:
-            completed_at = datetime.now(timezone.utc)
+            completed_at = datetime.now(UTC)
             started_at = self.job_execution_started_at or completed_at
             duration = (completed_at - started_at).total_seconds()
 
             self._log_completion_details(success, duration)
 
             # Prepare detailed logs for database storage
-            detailed_logs: Dict[str, Any] | None = {}
+            detailed_logs: dict[str, Any] | None = {}
             if logs:
                 detailed_logs["logs"] = self._strip_redundant_fields(logs)
 
@@ -443,7 +461,7 @@ class BaseJob(ABC):
                 ),
             )
             running_job.status = JobStatus.FAILED
-            running_job.completed_at = datetime.now(timezone.utc)
+            running_job.completed_at = datetime.now(UTC)
             running_job.error_message = (
                 "Execution orphaned - no active runtime control found"
             )
@@ -453,7 +471,7 @@ class BaseJob(ABC):
 
     async def handle_error(self, db: AsyncSession, error: Exception) -> str:
         """Handle job execution error and return formatted error message."""
-        error_message = f"{type(error).__name__}: {str(error)}"
+        error_message = f"{type(error).__name__}: {error!s}"
 
         logger.error(
             "Job execution failed",
@@ -557,7 +575,7 @@ class BaseJob(ABC):
         db: AsyncSession,
         *,
         force: bool,
-        reason: Optional[str] = None,
+        reason: str | None = None,
     ) -> None:
         """Persist a cancelled completion for stop or task-cancellation paths."""
         self.add_log_entry("stopped_early", True)
@@ -651,7 +669,7 @@ class BaseJob(ABC):
                 .where(JobExecution.id == self.job_execution_id)
                 .values(
                     status=JobStatus.FAILED,
-                    completed_at=datetime.now(timezone.utc),
+                    completed_at=datetime.now(UTC),
                     error_message="Execution ended before completion was recorded",
                 )
             )
@@ -712,7 +730,7 @@ class BaseJob(ABC):
         self,
         db: AsyncSession,
         operation: str = "database operation",
-        on_success: Optional[Callable[[], None]] = None,
+        on_success: Callable[[], None] | None = None,
     ) -> bool:
         """Safely commit database changes with automatic rollback on failure.
 
@@ -742,7 +760,7 @@ class BaseJob(ABC):
         self.job_execution.status = status
         await self.safe_commit(db, f"set execution status to {status.value}")
 
-    def _get_job_logs(self) -> List[Dict[str, Any]]:
+    def _get_job_logs(self) -> list[MutableMapping[str, Any]]:
         """Extract logs for this job execution."""
         if self.job_execution is None:
             return []
@@ -754,8 +772,8 @@ class BaseJob(ABC):
         ]
 
     def _strip_redundant_fields(
-        self, logs: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
+        self, logs: Sequence[Mapping[str, Any]]
+    ) -> list[dict[str, Any]]:
         """Remove fields that are redundant in DB (already in job_execution table).
 
         Keep them in stdout for debugging, strip only before DB storage.
@@ -782,7 +800,7 @@ class BaseJob(ABC):
         error: Exception | str,
         *,
         operation: str = "job execution",
-        context: Optional[Dict[str, Any]] = None,
+        context: dict[str, Any] | None = None,
         is_api_key_error: bool = False,
     ) -> None:
         """Record a safe, structured diagnostic for an execution error.
@@ -797,7 +815,7 @@ class BaseJob(ABC):
         if isinstance(error, Exception) and is_riot_puuid_binding_error(error):
             self._has_puuid_binding_error = True
 
-    def _store_recorded_error(self, diagnostic: Dict[str, Any]) -> None:
+    def _store_recorded_error(self, diagnostic: dict[str, Any]) -> None:
         """Append a diagnostic and bound the persisted execution-log copy."""
         self._errors_encountered.append(diagnostic)
         persisted_errors = self.execution_log.setdefault("errors", [])
@@ -832,7 +850,7 @@ class BaseJob(ABC):
     async def get_job_riot_api_client(
         self,
         db: AsyncSession,
-        **client_options: Any,
+        **client_options: Unpack[RiotClientOptions],
     ) -> RiotAPIClient:
         """Build a tracked Riot client and classify missing configuration."""
         from app.core.riot_api.credential_health import (
@@ -862,7 +880,7 @@ class BaseJob(ABC):
         """Check whether Riot rejected a PUUID from another developer account."""
         return self._has_puuid_binding_error
 
-    def add_log_entry(self, key: str, value: Any) -> None:
+    def add_log_entry(self, key: str, value: object) -> None:
         """Add an entry to the execution log."""
         self.execution_log[key] = value
 
@@ -889,13 +907,13 @@ class BaseJob(ABC):
 
     def _build_completion_update_statement(
         self,
-        job_execution_model,
-        completed_at,
-        success,
-        error_message,
-        detailed_logs,
-        status=None,
-    ):
+        job_execution_model: type[JobExecution],
+        completed_at: datetime,
+        success: bool,
+        error_message: str | None,
+        detailed_logs: dict[str, Any] | None,
+        status: JobStatus | None = None,
+    ) -> Update:
         """Build SQLAlchemy update statement for job completion."""
         from sqlalchemy import update
 
@@ -925,7 +943,7 @@ class BaseJob(ABC):
             )
         )
 
-    async def _execute_completion_update(self, db: AsyncSession, stmt) -> bool:
+    async def _execute_completion_update(self, db: AsyncSession, stmt: Update) -> bool:
         """Execute the completion update with retry logic."""
         execution_id = self.job_execution_id
 
@@ -979,7 +997,7 @@ class BaseJob(ABC):
             execution_id=self.job_execution_id,
             error=str(error),
             error_type=type(error).__name__,
-            exc_info=True,
+            exc_info=error,
         )
         try:
             await db.rollback()

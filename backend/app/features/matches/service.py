@@ -1,14 +1,18 @@
 """Match service for handling match data operations."""
 
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Sequence
+from collections.abc import Callable, Sequence
+from typing import Any, Protocol
 
 import structlog
 from sqlalchemy import desc, exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.riot_api.client import RiotAPIClient
 from app.core.riot_api.constants import (
     PRODUCT_SUPPORTED_QUEUE_IDS,
+    Region,
     get_region_by_platform,
+    normalize_platform,
 )
 from app.core.riot_api.db_rate_limiter import DBRateLimiter
 from app.core.riot_api.errors import (
@@ -18,10 +22,13 @@ from app.core.riot_api.errors import (
     RateLimitError,
     RiotAPIError,
 )
+from app.core.riot_api.models import MatchDTO, MatchTimelineDTO
 from app.core.riot_api.transformers import MatchTransformer
 from app.features.players.models import Player
 
 from .match_analysis import (
+    CancelCheck,
+    ProgressCallback,
     collect_analysis_api_match_ids,
     load_analysis_process_sets,
     order_analysis_matches,
@@ -60,14 +67,27 @@ from .schemas import (
 )
 from .timeline import replace_match_timeline_rows
 
-if TYPE_CHECKING:
-    from app.core.riot_api.client import RiotAPIClient
-
 logger = structlog.get_logger(__name__)
 
 
+class SyncablePlayer(Protocol):
+    """The identity slice of a player that queue sync actually reads.
+
+    Callers hand this method several unrelated shapes -- a `PlayerResponse`
+    schema from the job layer, a throwaway holder from the background-sync
+    route -- and only `puuid` and `platform` are ever touched, so naming the
+    two fields is more honest than either concrete type would be.
+    """
+
+    @property
+    def puuid(self) -> str: ...
+
+    @property
+    def platform(self) -> str: ...
+
+
 def normalize_match_queue_ids(
-    queue: Optional[int], queue_ids: Optional[Sequence[int]]
+    queue: int | None, queue_ids: Sequence[int] | None
 ) -> tuple[int, ...] | None:
     """Return one stable queue union while preserving the legacy scalar filter."""
     if queue_ids is not None:
@@ -79,10 +99,10 @@ def normalize_match_queue_ids(
 
 def build_match_history_conditions(
     puuid: str,
-    queue_ids: Optional[Sequence[int]] = None,
-    search: Optional[str] = None,
-    start_time: Optional[int] = None,
-    end_time: Optional[int] = None,
+    queue_ids: Sequence[int] | None = None,
+    search: str | None = None,
+    start_time: int | None = None,
+    end_time: int | None = None,
     exclude_aram: bool = False,
 ) -> list[Any]:
     """Build shared filters so search and queue unions precede pagination."""
@@ -172,10 +192,10 @@ class MatchService:
         puuid: str,
         start: int = 0,
         count: int = 20,
-        queue: Optional[int] = None,
-        queue_ids: Optional[Sequence[int]] = None,
-        start_time: Optional[int] = None,
-        end_time: Optional[int] = None,
+        queue: int | None = None,
+        queue_ids: Sequence[int] | None = None,
+        start_time: int | None = None,
+        end_time: int | None = None,
         exclude_aram: bool = False,
     ) -> MatchListResponse:
         """
@@ -266,9 +286,9 @@ class MatchService:
         puuid: str,
         start: int = 0,
         count: int = 20,
-        queue: Optional[int] = None,
-        queue_ids: Optional[Sequence[int]] = None,
-        search: Optional[str] = None,
+        queue: int | None = None,
+        queue_ids: Sequence[int] | None = None,
+        search: str | None = None,
         exclude_aram: bool = False,
     ) -> MatchListWithPlayerDataResponse:
         """
@@ -325,7 +345,6 @@ class MatchService:
                 player_participants_by_match,
                 participants_by_match,
                 timelines_by_match_team,
-                player_leagues,
             ) = await load_match_player_data_context(
                 self.db,
                 puuid,
@@ -336,7 +355,6 @@ class MatchService:
                 player_participants_by_match,
                 participants_by_match,
                 timelines_by_match_team,
-                player_leagues,
                 puuid,
             )
             page, pages = page_window(start, count, total_count)
@@ -384,7 +402,8 @@ class MatchService:
 
     @staticmethod
     def _aggregate_participant_stats(
-        matches: list, participants_by_match: dict
+        matches: list[MatchResponse],
+        participants_by_match: dict[str, MatchParticipant],
     ) -> tuple[int, int, int, int, int, int]:
         """
         Aggregate statistics from match participants.
@@ -424,9 +443,9 @@ class MatchService:
     async def get_player_stats(
         self,
         puuid: str,
-        queue: Optional[int] = None,
-        queue_ids: Optional[Sequence[int]] = None,
-        limit: Optional[int] = None,
+        queue: int | None = None,
+        queue_ids: Sequence[int] | None = None,
+        limit: int | None = None,
         exclude_aram: bool = False,
     ) -> MatchStatsResponse:
         """
@@ -498,7 +517,7 @@ class MatchService:
     async def get_player_champion_stats(
         self,
         puuid: str,
-        queue: Optional[int] = None,
+        queue: int | None = None,
     ) -> ChampionStatsResponse:
         """
         Get player statistics grouped by champion.
@@ -541,7 +560,7 @@ class MatchService:
     async def get_player_lane_stats(
         self,
         puuid: str,
-        queue: Optional[int] = None,
+        queue: int | None = None,
     ) -> LaneStatsResponse:
         """
         Get player statistics grouped by lane/position.
@@ -583,10 +602,10 @@ class MatchService:
 
     async def fetch_player_matches(
         self,
-        riot_api_client: Any,
+        riot_api_client: RiotAPIClient,
         puuid: str,
         count: int = 20,
-        queue: Optional[int] = None,
+        queue: int | None = None,
     ) -> int:
         """
         Fetch new matches for a player from Riot API and store them.
@@ -648,7 +667,7 @@ class MatchService:
             return 0
 
     async def _fetch_match_ids_from_api(
-        self, riot_api_client, puuid: str, queue: Optional[int]
+        self, riot_api_client: RiotAPIClient, puuid: str, queue: int | None
     ) -> list[str]:
         """
         Fetch match IDs from Riot API with error handling.
@@ -711,7 +730,7 @@ class MatchService:
         return [mid for mid in all_match_ids if mid not in existing_match_ids]
 
     async def _fetch_and_store_single_match(
-        self, riot_api_client, match_id: str
+        self, riot_api_client: RiotAPIClient, match_id: str
     ) -> bool:
         """
         Fetch and store a single match.
@@ -725,7 +744,7 @@ class MatchService:
         try:
             match_dto = await riot_api_client.get_match(match_id)
             if match_dto:
-                timeline_payload: Optional[Dict[str, Any]] = None
+                timeline_payload: MatchTimelineDTO | None = None
                 try:
                     timeline_payload = await riot_api_client.get_match_timeline(
                         match_id
@@ -768,7 +787,7 @@ class MatchService:
             return False
 
     async def _fetch_new_match_ids_for_player(
-        self, riot_api_client: "RiotAPIClient", puuid: str, queue: int
+        self, riot_api_client: RiotAPIClient, puuid: str, queue: int
     ) -> list[str]:
         """Fetch and filter to only new match IDs."""
         all_match_ids = await self._fetch_match_ids_from_api(
@@ -797,7 +816,7 @@ class MatchService:
 
     async def fetch_and_store_matches_for_player(
         self,
-        riot_api_client: "RiotAPIClient",
+        riot_api_client: RiotAPIClient,
         puuid: str,
         count: int = 1,
         queue: int = 420,
@@ -863,13 +882,13 @@ class MatchService:
         puuid: str,
         start: int,
         count: int,
-        queue: Optional[int] = None,
-        queue_ids: Optional[Sequence[int]] = None,
-        search: Optional[str] = None,
-        start_time: Optional[int] = None,
-        end_time: Optional[int] = None,
+        queue: int | None = None,
+        queue_ids: Sequence[int] | None = None,
+        search: str | None = None,
+        start_time: int | None = None,
+        end_time: int | None = None,
         exclude_aram: bool = False,
-    ) -> List[Match]:
+    ) -> list[Match]:
         """Get matches from database."""
         effective_queue_ids = normalize_match_queue_ids(queue, queue_ids)
         query = (
@@ -895,11 +914,11 @@ class MatchService:
     async def _count_matches_from_db(
         self,
         puuid: str,
-        queue: Optional[int] = None,
-        queue_ids: Optional[Sequence[int]] = None,
-        search: Optional[str] = None,
-        start_time: Optional[int] = None,
-        end_time: Optional[int] = None,
+        queue: int | None = None,
+        queue_ids: Sequence[int] | None = None,
+        search: str | None = None,
+        start_time: int | None = None,
+        end_time: int | None = None,
         exclude_aram: bool = False,
     ) -> int:
         """Count total matches for a player from database."""
@@ -921,11 +940,11 @@ class MatchService:
     async def _count_analyzed_matches_from_db(
         self,
         puuid: str,
-        queue: Optional[int] = None,
-        queue_ids: Optional[Sequence[int]] = None,
-        search: Optional[str] = None,
-        start_time: Optional[int] = None,
-        end_time: Optional[int] = None,
+        queue: int | None = None,
+        queue_ids: Sequence[int] | None = None,
+        search: str | None = None,
+        start_time: int | None = None,
+        end_time: int | None = None,
         exclude_aram: bool = False,
     ) -> int:
         """Count total analyzed matches for a player from database."""
@@ -946,8 +965,8 @@ class MatchService:
         return result.scalar_one()
 
     def _get_player_info_for_puuid(
-        self, puuid: str, participants: List[Dict[str, Any]]
-    ) -> Dict[str, Any]:
+        self, puuid: str, participants: list[dict[str, Any]]
+    ) -> dict[str, Any]:
         """Extract player info for a PUUID from participant data."""
         participant = next(
             (p for p in participants if p["puuid"] == puuid),
@@ -970,7 +989,7 @@ class MatchService:
 
     async def _ensure_players_exist(
         self,
-        participants: List[Dict[str, Any]],
+        participants: list[dict[str, Any]],
         platform_id: str,
     ) -> None:
         """Ensure all participant players exist in database, creating if needed."""
@@ -986,7 +1005,7 @@ class MatchService:
         if not missing_puuids:
             return
 
-        new_players = []
+        new_players: list[Player] = []
         for puuid in missing_puuids:
             info = self._get_player_info_for_puuid(puuid, participants)
             new_players.append(
@@ -996,7 +1015,7 @@ class MatchService:
                     tag_line=info["tag_line"],
                     summoner_level=info["summoner_level"],
                     profile_icon_id=info["profile_icon_id"],
-                    platform=platform_id.upper(),
+                    platform=normalize_platform(platform_id),
                     is_tracked=False,
                 )
             )
@@ -1004,7 +1023,7 @@ class MatchService:
         self.db.add_all(new_players)
         logger.debug("Created minimal player records", count=len(new_players))
 
-    async def _store_match_detail(self, match_data: Dict[str, Any]) -> Match:
+    async def _store_match_detail(self, match_data: dict[str, Any]) -> Match:
         """Store match detail in database."""
         try:
             await _ensure_riot_writer_maintenance_is_inactive(self.db)
@@ -1025,6 +1044,14 @@ class MatchService:
             participants = [
                 MatchParticipant(**p_data) for p_data in transformed["participants"]
             ]
+            from .match_lp import initialize_participant_lp
+
+            for participant in participants:
+                initialize_participant_lp(
+                    participant,
+                    queue_id=transformed["match"]["queue_id"],
+                    remake=participant.remake,
+                )
             self.db.add_all(participants)
 
             await self.db.commit()
@@ -1047,9 +1074,9 @@ class MatchService:
 
     async def store_match_from_dto(
         self,
-        match_dto: Any,
+        match_dto: MatchDTO,
         default_platform: str = "EUN1",
-        timeline_payload: Optional[Dict[str, Any]] = None,
+        timeline_payload: MatchTimelineDTO | None = None,
     ) -> Match:
         """Store match and participants from Riot API DTO.
 
@@ -1129,7 +1156,7 @@ class MatchService:
         count_result = await self.db.execute(count_stmt)
         return count_result.scalar() or 0
 
-    async def get_player_last_match_time(self, puuid: str) -> Optional[int]:
+    async def get_player_last_match_time(self, puuid: str) -> int | None:
         """Get timestamp of player's most recent match in database.
 
         Args:
@@ -1148,7 +1175,7 @@ class MatchService:
         result = await self.db.execute(stmt)
         return result.scalar_one_or_none()
 
-    async def filter_existing_matches(self, match_ids: List[str]) -> List[str]:
+    async def filter_existing_matches(self, match_ids: list[str]) -> list[str]:
         """Filter out matches that already exist in database.
 
         Args:
@@ -1177,12 +1204,12 @@ class MatchService:
 
     async def analyze_match_history(
         self,
-        riot_api_client: Any,
+        riot_api_client: RiotAPIClient,
         puuid: str,
-        progress_callback: Optional[Any] = None,
-        should_cancel: Optional[Any] = None,
-        queue_ids: Optional[list[int]] = None,
-        rate_limiter: Optional[DBRateLimiter] = None,
+        progress_callback: ProgressCallback | None = None,
+        should_cancel: CancelCheck | None = None,
+        queue_ids: list[int] | None = None,
+        rate_limiter: DBRateLimiter | None = None,
     ) -> int:
         """
         Smart match history analysis: fetches only NEW matches and re-analyzes failed ones.
@@ -1289,8 +1316,8 @@ class MatchService:
 
     async def _reprocess_match(
         self,
-        match_dto: Any,
-        timeline_payload: Optional[Dict[str, Any]] = None,
+        match_dto: MatchDTO,
+        timeline_payload: MatchTimelineDTO | None = None,
     ) -> None:
         """Update existing match or insert new match using merge (upsert)."""
         await _ensure_riot_writer_maintenance_is_inactive(self.db)
@@ -1327,10 +1354,11 @@ class MatchService:
 
     async def sync_matches_for_player(
         self,
-        riot_client: "RiotAPIClient",
-        player: Any,
-        rate_limiter: Optional[DBRateLimiter] = None,
-        on_failure: Optional[Callable[[str, Exception, dict[str, Any]], None]] = None,
+        riot_client: RiotAPIClient,
+        player: SyncablePlayer,
+        rate_limiter: DBRateLimiter | None = None,
+        on_failure: Callable[[str, Exception, dict[str, Any]], None] | None = None,
+        on_match_stored: Callable[[int, str], None] | None = None,
     ) -> int:
         """
         Sync matches for a player from Riot API (Current Season).
@@ -1368,6 +1396,7 @@ class MatchService:
                     queue_id=queue_id,
                     rate_limiter=rate_limiter,
                     on_failure=on_failure,
+                    on_match_stored=on_match_stored,
                 )
                 total_stored += queue_stored
             except AuthenticationError, ForbiddenError, RateLimitError:
@@ -1391,7 +1420,7 @@ class MatchService:
 
         return total_stored
 
-    def _normalize_sync_queue_ids(self, queue_ids: Optional[list[int]]) -> list[int]:
+    def _normalize_sync_queue_ids(self, queue_ids: list[int] | None) -> list[int]:
         """Normalize an optional explicit queue subset for analysis operations."""
         if queue_ids is None:
             return list(self.SUPPORTED_SYNC_QUEUE_IDS)
@@ -1418,12 +1447,13 @@ class MatchService:
 
     async def _sync_single_queue_for_player(
         self,
-        riot_client: "RiotAPIClient",
+        riot_client: RiotAPIClient,
         puuid: str,
-        region: Any,
+        region: Region,
         queue_id: int,
-        rate_limiter: Optional[DBRateLimiter],
-        on_failure: Optional[Callable[[str, Exception, dict[str, Any]], None]],
+        rate_limiter: DBRateLimiter | None,
+        on_failure: Callable[[str, Exception, dict[str, Any]], None] | None,
+        on_match_stored: Callable[[int, str], None] | None = None,
     ) -> int:
         """Sync one queue for a single player."""
         return await sync_single_queue_for_player(
@@ -1437,4 +1467,5 @@ class MatchService:
             ensure_maintenance=_ensure_riot_writer_maintenance_is_inactive,
             is_current_game_version=self.is_current_game_version,
             reprocess_match=self._reprocess_match,
+            on_match_stored=on_match_stored,
         )

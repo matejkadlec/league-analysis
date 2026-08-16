@@ -6,7 +6,7 @@ execution record (with execution_type=TEST) is persisted.
 """
 
 import asyncio
-from typing import List, Optional
+from typing import override
 
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,7 +22,7 @@ from app.features.players.service import PlayerService
 logger = structlog.get_logger(__name__)
 
 # Test loop constants
-_MAX_ITERATIONS = 60  # 1 hour (60 × 1-minute intervals)
+_MAX_ITERATIONS = 60  # 1 hour (60 x 1-minute intervals)
 _WAIT_SECONDS = 60  # seconds between API call batches
 
 
@@ -56,6 +56,10 @@ class TestMatchFetcherJob(BaseJob):
       4. league entries by puuid
     """
 
+    # Set by the test-trigger endpoint to record whether it paused the regular
+    # schedule for the duration of this run.
+    suspend_regular: bool = False
+
     def __init__(self, job_config_id: int):
         super().__init__(
             job_config_id,
@@ -67,9 +71,10 @@ class TestMatchFetcherJob(BaseJob):
         if metric_name == "requests_made":
             self.metrics["api_requests_made"] += count
 
-    def _store_api_calls(self, api_calls: List[APICallRecord]) -> None:
+    def _store_api_calls(self, api_calls: list[APICallRecord]) -> None:
         self._api_call_records = api_calls
 
+    @override
     async def execute(self, db: AsyncSession) -> None:
         if not self.job_config:
             raise RuntimeError("Test Match Fetcher missing job configuration")
@@ -96,7 +101,7 @@ class TestMatchFetcherJob(BaseJob):
                         region=region,
                     )
 
-                    match_id: Optional[str] = None
+                    match_id: str | None = None
                     if match_list.match_ids:
                         match_id = match_list.match_ids[0]
 
@@ -150,6 +155,10 @@ class TestPlayerUpdaterJob(BaseJob):
       2. account by puuid
     """
 
+    # Set by the test-trigger endpoint to record whether it paused the regular
+    # schedule for the duration of this run.
+    suspend_regular: bool = False
+
     def __init__(self, job_config_id: int):
         super().__init__(
             job_config_id,
@@ -161,9 +170,10 @@ class TestPlayerUpdaterJob(BaseJob):
         if metric_name == "requests_made":
             self.metrics["api_requests_made"] += count
 
-    def _store_api_calls(self, api_calls: List[APICallRecord]) -> None:
+    def _store_api_calls(self, api_calls: list[APICallRecord]) -> None:
         self._api_call_records = api_calls
 
+    @override
     async def execute(self, db: AsyncSession) -> None:
         if not self.job_config:
             raise RuntimeError("Test Player Updater missing job configuration")

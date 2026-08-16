@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Literal, Optional
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -43,12 +43,12 @@ class SignalPayload(BaseModel):
     sample_size: int
     reason: str
     notes: list[str]
-    raw_value: Optional[float] = None
-    threshold: Optional[float] = None
-    saturation: Optional[float] = None
-    magnitude: Optional[float] = None
-    weight: Optional[float] = None
-    contribution: Optional[float] = None
+    raw_value: float | None = None
+    threshold: float | None = None
+    saturation: float | None = None
+    magnitude: float | None = None
+    weight: float | None = None
+    contribution: float | None = None
 
 
 class FamilyPayload(BaseModel):
@@ -91,12 +91,12 @@ class SmurfBoostAnalysisResponse(BaseModel):
     status: SmurfBoostStatus
     model_version: str
     thresholds: dict[str, Any]
-    results: Optional[dict[str, Any]] = None
+    results: dict[str, Any] | None = None
     eligible_games: int
-    latest_match_id: Optional[str] = None
-    error_code: Optional[str] = None
-    error_message: Optional[str] = None
-    completed_at: Optional[datetime] = None
+    latest_match_id: str | None = None
+    error_code: str | None = None
+    error_message: str | None = None
+    completed_at: datetime | None = None
     is_stale: bool = False
 
 

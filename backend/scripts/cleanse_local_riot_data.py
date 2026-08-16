@@ -18,10 +18,9 @@ import sys
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 from dotenv import load_dotenv
-from sqlalchemy import URL, Connection, Engine, create_engine, text
+from sqlalchemy import URL, Connection, Engine, RowMapping, create_engine, text
 
 from app.core.config import Settings, get_settings
 from app.features.auth.service import AuthService
@@ -221,7 +220,7 @@ def table_counts(
     }
 
 
-def account_rows(connection: Connection, email: str) -> list[Mapping[str, Any]]:
+def account_rows(connection: Connection, email: str) -> list[RowMapping]:
     """Find one account by normalized email without exposing its password hash."""
     return list(
         connection.execute(
@@ -347,7 +346,8 @@ def create_verified_backup(
 
 def lock_cleanup_tables(connection: Connection) -> None:
     """Block cleanup-table writers while allowing pg_dump's read lock to proceed."""
-    changed_tables = RIOT_DATA_TABLES + (
+    changed_tables = (
+        *RIOT_DATA_TABLES,
         ("auth", "users"),
         ("auth", "user_settings"),
         ("auth", "refresh_tokens"),

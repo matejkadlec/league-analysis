@@ -1,7 +1,10 @@
+# APScheduler 3.x ships neither stubs nor a `py.typed` marker. The rule is off
+# project-wide in `pyproject.toml`; the `strict` header above resets it to the
+# strict default, so restore the project setting here.
+# pyright: reportMissingTypeStubs=false
 """Job management API endpoints."""
 
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 import structlog
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
@@ -38,17 +41,19 @@ router = APIRouter(
 )
 
 
-def _create_job_instance(job, triggered_by: str = "system"):
+def _create_job_instance(
+    job: JobConfigurationResponse, triggered_by: str = "system"
+) -> BaseJob:
     """Create a job instance based on job type.
 
     Args:
-        job: Job configuration (JobConfiguration or JobConfigurationResponse)
+        job: Job configuration response to build the runner for.
         triggered_by: Who triggered the job: 'system' (scheduler) or 'user' (manual).
 
     Returns:
         Job instance based on job type
     """
-    job_type_mapping = {
+    job_type_mapping: dict[JobType, type[BaseJob]] = {
         JobType.MATCH_FETCHER: MatchFetcherJob,
         JobType.PLAYER_UPDATER: PlayerUpdaterJob,
     }
@@ -62,13 +67,17 @@ def _create_job_instance(job, triggered_by: str = "system"):
     return job_class(job.id, triggered_by=triggered_by)
 
 
-def _create_test_job_instance(job):
+def _create_test_job_instance(
+    job: JobConfigurationResponse,
+) -> TestMatchFetcherJob | TestPlayerUpdaterJob:
     """Create a test job instance based on job type.
 
     Returns:
         Test job instance that calls API endpoints without writing data.
     """
-    test_type_mapping = {
+    test_type_mapping: dict[
+        JobType, type[TestMatchFetcherJob] | type[TestPlayerUpdaterJob]
+    ] = {
         JobType.MATCH_FETCHER: TestMatchFetcherJob,
         JobType.PLAYER_UPDATER: TestPlayerUpdaterJob,
     }
@@ -99,7 +108,7 @@ async def list_job_configurations(
         raise HTTPException(
             status_code=500,
             detail="Internal server error retrieving job configurations",
-        )
+        ) from e
 
 
 @router.put("/{job_id}", response_model=JobConfigurationResponse)
@@ -125,7 +134,7 @@ async def update_job_configuration(
     except HTTPException:
         raise
     except RiotWriterMaintenanceConfigurationError as error:
-        raise HTTPException(status_code=400, detail=str(error))
+        raise HTTPException(status_code=400, detail=str(error)) from error
     except Exception as e:
         logger.error(
             "Failed to update job configuration",
@@ -136,7 +145,7 @@ async def update_job_configuration(
         raise HTTPException(
             status_code=500,
             detail="Internal server error updating job configuration",
-        )
+        ) from e
 
 
 # === Job Execution Endpoints ===
@@ -148,8 +157,8 @@ async def get_job_executions(
     job_service: JobServiceDep,
     page: int = Query(1, ge=1, description="Page number"),
     size: int = Query(20, ge=1, le=100, description="Page size"),
-    status: Optional[JobStatus] = Query(None, description="Filter by status"),
-    execution_type: Optional[ExecutionType] = Query(
+    status: JobStatus | None = Query(None, description="Filter by status"),
+    execution_type: ExecutionType | None = Query(
         None, description="Filter by execution type"
     ),
 ):
@@ -185,7 +194,7 @@ async def get_job_executions(
         raise HTTPException(
             status_code=500,
             detail="Internal server error retrieving job executions",
-        )
+        ) from e
 
 
 @router.get("/executions/all", response_model=JobExecutionListResponse)
@@ -193,8 +202,8 @@ async def list_all_executions(
     job_service: JobServiceDep,
     page: int = Query(1, ge=1, description="Page number"),
     size: int = Query(20, ge=1, le=100, description="Page size"),
-    status: Optional[JobStatus] = Query(None, description="Filter by status"),
-    execution_type: Optional[ExecutionType] = Query(
+    status: JobStatus | None = Query(None, description="Filter by status"),
+    execution_type: ExecutionType | None = Query(
         None, description="Filter by execution type"
     ),
 ):
@@ -223,7 +232,7 @@ async def list_all_executions(
         raise HTTPException(
             status_code=500,
             detail="Internal server error retrieving all job executions",
-        )
+        ) from e
 
 
 # === Job Control Endpoints ===
@@ -322,7 +331,7 @@ async def trigger_job(
         raise HTTPException(
             status_code=500,
             detail="Internal server error triggering job",
-        )
+        ) from e
 
 
 @router.get("/{job_id}/control-state", response_model=JobControlActionResponse)
@@ -351,7 +360,7 @@ async def get_job_control_state(
         raise HTTPException(
             status_code=500,
             detail="Internal server error retrieving job control state",
-        )
+        ) from e
 
 
 @router.post("/{job_id}/pause", response_model=JobControlActionResponse)
@@ -382,7 +391,7 @@ async def pause_job(
         raise HTTPException(
             status_code=500,
             detail="Internal server error pausing job",
-        )
+        ) from e
 
 
 @router.post("/{job_id}/resume", response_model=JobControlActionResponse)
@@ -413,7 +422,7 @@ async def resume_job(
         raise HTTPException(
             status_code=500,
             detail="Internal server error resuming job",
-        )
+        ) from e
 
 
 @router.post("/{job_id}/stop", response_model=JobControlActionResponse)
@@ -446,7 +455,7 @@ async def stop_job(
         raise HTTPException(
             status_code=500,
             detail="Internal server error stopping job",
-        )
+        ) from e
 
 
 # === Test Run Endpoints ===
@@ -516,7 +525,7 @@ async def trigger_test_run(
 
         test_instance = _create_test_job_instance(job)
         # Store suspend_regular flag so test completion can resume the scheduler
-        test_instance._suspend_regular = suspend_regular
+        test_instance.suspend_regular = suspend_regular
         background_tasks.add_task(
             _run_test_job_with_cleanup,
             test_instance,
@@ -549,7 +558,7 @@ async def trigger_test_run(
         raise HTTPException(
             status_code=500,
             detail="Internal server error triggering test run",
-        )
+        ) from e
 
 
 async def _run_test_job_with_cleanup(
@@ -633,7 +642,7 @@ async def stop_test_run(
         raise HTTPException(
             status_code=500,
             detail="Internal server error stopping test run",
-        )
+        ) from e
 
 
 @router.post("/{job_id}/test/pause", response_model=JobControlActionResponse)
@@ -662,7 +671,7 @@ async def pause_test_run(
             )
 
         job_model.is_paused = True
-        job_model.updated_at = datetime.now(timezone.utc)
+        job_model.updated_at = datetime.now(UTC)
         await job_service.db.commit()
         await job_service.db.refresh(job_model)
 
@@ -688,7 +697,7 @@ async def pause_test_run(
         raise HTTPException(
             status_code=500,
             detail="Internal server error pausing test run",
-        )
+        ) from e
 
 
 @router.post("/{job_id}/test/resume", response_model=JobControlActionResponse)
@@ -717,7 +726,7 @@ async def resume_test_run(
             )
 
         job_model.is_paused = False
-        job_model.updated_at = datetime.now(timezone.utc)
+        job_model.updated_at = datetime.now(UTC)
         await job_service.db.commit()
         await job_service.db.refresh(job_model)
 
@@ -743,7 +752,7 @@ async def resume_test_run(
         raise HTTPException(
             status_code=500,
             detail="Internal server error resuming test run",
-        )
+        ) from e
 
 
 @router.get("/status/overview", response_model=JobStatusResponse)
@@ -782,7 +791,7 @@ async def get_job_system_status(
         raise HTTPException(
             status_code=500,
             detail="Internal server error retrieving job system status",
-        )
+        ) from e
 
 
 @router.post("/sync-player/{puuid}", response_model=JobTriggerResponse)
@@ -815,7 +824,7 @@ async def sync_player_data(
         )
 
         if match_fetcher_running or player_updater_running:
-            running_jobs = []
+            running_jobs: list[str] = []
             if match_fetcher_running:
                 running_jobs.append("Match Fetcher")
             if player_updater_running:
@@ -886,7 +895,7 @@ async def sync_player_data(
         raise HTTPException(
             status_code=500,
             detail="Internal server error syncing player data",
-        )
+        ) from e
 
 
 @router.get("/running-status", response_model=dict)
@@ -916,4 +925,4 @@ async def get_running_jobs_status(
         raise HTTPException(
             status_code=500,
             detail="Internal server error checking job status",
-        )
+        ) from e

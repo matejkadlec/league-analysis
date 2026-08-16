@@ -99,10 +99,10 @@ export function MatchmakingAnalysisHistory({
       toast.success("Matchmaking analysis removed", {
         description: "The selected history record was deleted.",
       });
-      queryClient.invalidateQueries({
+      void queryClient.invalidateQueries({
         queryKey: ["matchmaking-analysis-history", puuid],
       });
-      queryClient.invalidateQueries({
+      void queryClient.invalidateQueries({
         queryKey: ["matchmaking-analysis-results", puuid],
       });
     },

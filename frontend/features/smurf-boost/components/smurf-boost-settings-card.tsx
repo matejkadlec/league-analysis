@@ -193,16 +193,15 @@ export function SmurfBoostSettingsCard() {
   // `Number("")` is 0, and one threshold legitimately allows 0, so a cleared
   // field would otherwise save as zero without ever looking wrong.
   const parsed: Record<string, number> = Object.fromEntries(
-    THRESHOLD_FIELDS.map((field) => [
-      field.name,
-      values[field.name].trim() === ""
-        ? Number.NaN
-        : Number(values[field.name]),
-    ]),
+    THRESHOLD_FIELDS.map((field) => {
+      const raw = values[field.name] ?? "";
+      return [field.name, raw.trim() === "" ? Number.NaN : Number(raw)];
+    }),
   );
   const errors: Record<string, string> = {};
   for (const field of THRESHOLD_FIELDS) {
-    const message = fieldError(field, parsed[field.name]);
+    // `parsed` was built from the same field list, so the lookup always hits.
+    const message = fieldError(field, parsed[field.name] ?? Number.NaN);
     if (message) {
       errors[field.name] = message;
     }

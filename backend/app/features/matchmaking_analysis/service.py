@@ -29,9 +29,10 @@ Rate Limiting:
 """
 
 import asyncio
+from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional, Sequence, Tuple, cast
+from datetime import UTC, datetime, timedelta
+from typing import Any, cast
 
 import structlog
 from sqlalchemy import and_, func, select, update
@@ -53,7 +54,7 @@ from app.core.riot_api.models import MatchDTO
 from app.features.matches.models import Match
 from app.features.matches.participants import MatchParticipant
 
-from .models import MatchmakingAnalysis
+from .models import MatchmakingAnalysis, MatchmakingAnalysisResultsJSON
 from .schemas import (
     MatchmakingAnalysisHistoryItem,
     MatchmakingAnalysisHistoryResponse,
@@ -76,7 +77,7 @@ class RunningAnalysis:
     task: asyncio.Task[None]
 
 
-_running_analyses: Dict[str, RunningAnalysis] = {}
+_running_analyses: dict[str, RunningAnalysis] = {}
 
 
 class MatchmakingAnalysisRuntimeError(Exception):
@@ -106,19 +107,19 @@ class MatchmakingAnalysisService:
     def __init__(self, db: AsyncSession, riot_client: RiotAPIClient):
         self.db = db
         self.riot_client = riot_client
-        self.rate_limiter: Optional[DBRateLimiter] = None
+        self.rate_limiter: DBRateLimiter | None = None
         self.requests_saved: int = 0
         self.api_calls_made: int = 0  # Track actual API calls for savings calculation
         self._is_waiting_for_rate_limit: bool = False
-        self._current_analysis_puuid: Optional[str] = None
-        self._current_analysis_created_at: Optional[datetime] = None
-        self._winrate_cache: Dict[str, Optional[float]] = {}
+        self._current_analysis_puuid: str | None = None
+        self._current_analysis_created_at: datetime | None = None
+        self._winrate_cache: dict[str, float | None] = {}
 
     # ================================================================
     # Public API
     # ================================================================
 
-    async def check_player_has_enough_matches(self, puuid: str) -> Tuple[bool, int]:
+    async def check_player_has_enough_matches(self, puuid: str) -> tuple[bool, int]:
         """Check if player has at least MIN_MATCHES_REQUIRED ranked matches."""
         try:
             match_list = await self.riot_client.get_match_list_by_puuid(
@@ -151,7 +152,7 @@ class MatchmakingAnalysisService:
             self._ensure_background_task(puuid, existing.created_at)
             return MatchmakingAnalysisResponse.model_validate(existing)
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         analysis = MatchmakingAnalysis(
             puuid=puuid,
             created_at=now,
@@ -200,7 +201,7 @@ class MatchmakingAnalysisService:
             )
             .values(
                 status="cancelled",
-                completed_at=datetime.now(timezone.utc),
+                completed_at=datetime.now(UTC),
                 error_code=None,
                 error_message=None,
                 rate_limit_reset_at=None,
@@ -222,7 +223,7 @@ class MatchmakingAnalysisService:
 
     async def get_latest_completed_analysis(
         self, puuid: str
-    ) -> Optional[MatchmakingAnalysisResponse]:
+    ) -> MatchmakingAnalysisResponse | None:
         """Get the latest completed analysis for a player (excluding errors)."""
         result = await self.db.execute(
             select(MatchmakingAnalysis)
@@ -243,7 +244,7 @@ class MatchmakingAnalysisService:
 
     async def get_latest_analysis(
         self, puuid: str
-    ) -> Optional[MatchmakingAnalysisResponse]:
+    ) -> MatchmakingAnalysisResponse | None:
         """Get the latest analysis for a player."""
         result = await self.db.execute(
             select(MatchmakingAnalysis)
@@ -258,7 +259,7 @@ class MatchmakingAnalysisService:
 
     async def get_analysis_status(
         self, puuid: str, created_at: datetime
-    ) -> Optional[MatchmakingAnalysisStatusResponse]:
+    ) -> MatchmakingAnalysisStatusResponse | None:
         """Get status of a specific analysis."""
         result = await self.db.execute(
             select(MatchmakingAnalysis).where(
@@ -318,7 +319,7 @@ class MatchmakingAnalysisService:
             .limit(limit)
         )
         analyses = result.scalars().all()
-        items = []
+        items: list[MatchmakingAnalysisHistoryItem] = []
         for a in analyses:
             if a.results:
                 items.append(
@@ -349,7 +350,7 @@ class MatchmakingAnalysisService:
         logger.info("analysis_deleted", puuid=puuid, created_at=str(created_at))
         return True
 
-    async def _get_active_analysis(self, puuid: str) -> Optional[MatchmakingAnalysis]:
+    async def _get_active_analysis(self, puuid: str) -> MatchmakingAnalysis | None:
         """Return the one persisted active analysis for a player, if present."""
         result = await self.db.execute(
             select(MatchmakingAnalysis)
@@ -435,7 +436,7 @@ class MatchmakingAnalysisService:
                         .values(
                             status="failed",
                             rate_limit_reset_at=None,
-                            completed_at=datetime.now(timezone.utc),
+                            completed_at=datetime.now(UTC),
                             error_code=error_code,
                             error_message=error_message,
                         )
@@ -541,7 +542,7 @@ class MatchmakingAnalysisService:
                 status="in_progress",
                 started_at=func.coalesce(
                     MatchmakingAnalysis.started_at,
-                    datetime.now(timezone.utc),
+                    datetime.now(UTC),
                 ),
                 error_code=None,
                 error_message=None,
@@ -551,7 +552,7 @@ class MatchmakingAnalysisService:
 
     async def _load_spine_match_ids(
         self, puuid: str, created_at: datetime
-    ) -> Optional[List[str]]:
+    ) -> list[str] | None:
         # No endTime — actual latest matches. This call cannot be skipped.
         spine_match_ids = await self._api_fetch_match_ids(
             puuid,
@@ -572,7 +573,7 @@ class MatchmakingAnalysisService:
         return spine_match_ids
 
     async def _ensure_spine_matches_ready(
-        self, puuid: str, created_at: datetime, spine_match_ids: List[str]
+        self, puuid: str, created_at: datetime, spine_match_ids: list[str]
     ) -> bool:
         spine_in_db_count = 0
         for mid in spine_match_ids:
@@ -599,9 +600,9 @@ class MatchmakingAnalysisService:
         return True
 
     async def _initialize_progress_keys(
-        self, puuid: str, created_at: datetime, spine_match_ids: List[str]
+        self, puuid: str, created_at: datetime, spine_match_ids: list[str]
     ) -> None:
-        all_keys = []
+        all_keys: list[str] = []
         for mid in spine_match_ids:
             participants = await self._get_match_participants(mid)
             for p_puuid, _ in participants:
@@ -616,10 +617,10 @@ class MatchmakingAnalysisService:
         logger.info("Progress initialized", puuid=puuid, total_keys=len(all_keys))
 
     async def _collect_match_averages(
-        self, puuid: str, created_at: datetime, spine_match_ids: List[str]
-    ) -> Tuple[List[float], List[float]]:
-        team_avgs: List[float] = []
-        enemy_avgs: List[float] = []
+        self, puuid: str, created_at: datetime, spine_match_ids: list[str]
+    ) -> tuple[list[float], list[float]]:
+        team_avgs: list[float] = []
+        enemy_avgs: list[float] = []
 
         for idx, match_id in enumerate(spine_match_ids):
             match_anchor = await self._get_game_start_timestamp(match_id)
@@ -645,9 +646,9 @@ class MatchmakingAnalysisService:
 
     @staticmethod
     def _append_match_side_averages(
-        team_avgs: List[float],
-        enemy_avgs: List[float],
-        result: Dict[str, List[float]],
+        team_avgs: list[float],
+        enemy_avgs: list[float],
+        result: dict[str, list[float]],
     ) -> None:
         if result["team"]:
             team_avgs.append(sum(result["team"]) / len(result["team"]))
@@ -655,8 +656,8 @@ class MatchmakingAnalysisService:
             enemy_avgs.append(sum(result["enemy"]) / len(result["enemy"]))
 
     def _build_completion_results(
-        self, team_avgs: List[float], enemy_avgs: List[float]
-    ) -> Dict[str, float | int]:
+        self, team_avgs: list[float], enemy_avgs: list[float]
+    ) -> MatchmakingAnalysisResultsJSON:
         team_avg = sum(team_avgs) / len(team_avgs) if team_avgs else 0.0
         enemy_avg = sum(enemy_avgs) / len(enemy_avgs) if enemy_avgs else 0.0
 
@@ -694,11 +695,11 @@ class MatchmakingAnalysisService:
         self,
         puuid: str,
         created_at: datetime,
-        team_avgs: List[float],
-        enemy_avgs: List[float],
+        team_avgs: list[float],
+        enemy_avgs: list[float],
     ) -> None:
         results = self._build_completion_results(team_avgs, enemy_avgs)
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         await _ensure_riot_writer_maintenance_is_inactive(self.db)
         await self.db.execute(
             update(MatchmakingAnalysis)
@@ -763,7 +764,7 @@ class MatchmakingAnalysisService:
         analysis_created_at: datetime,
         match_id: str,
         end_time_seconds: int,
-    ) -> Optional[Dict[str, List[float]]]:
+    ) -> dict[str, list[float]] | None:
         """Process a single spine match: compute winrates for all participants."""
         participants = await self._get_match_participants(match_id)
         if not participants:
@@ -774,8 +775,8 @@ class MatchmakingAnalysisService:
             logger.warning("Current player not in match", match_id=match_id)
             return None
 
-        team_wrs: List[float] = []
-        enemy_wrs: List[float] = []
+        team_wrs: list[float] = []
+        enemy_wrs: list[float] = []
 
         for p_puuid, team_id in participants:
             wr = await self._cached_player_winrate(
@@ -787,8 +788,8 @@ class MatchmakingAnalysisService:
 
     @staticmethod
     def _team_id_for_player(
-        participants: List[Tuple[str, int]], analysis_puuid: str
-    ) -> Optional[int]:
+        participants: list[tuple[str, int]], analysis_puuid: str
+    ) -> int | None:
         for p_puuid, team_id in participants:
             if p_puuid == analysis_puuid:
                 return team_id
@@ -800,7 +801,7 @@ class MatchmakingAnalysisService:
         end_time_seconds: int,
         analysis_puuid: str,
         analysis_created_at: datetime,
-    ) -> Optional[float]:
+    ) -> float | None:
         if p_puuid in self._winrate_cache:
             return self._winrate_cache[p_puuid]
         wr = await self._calculate_player_winrate(p_puuid, end_time_seconds)
@@ -823,9 +824,9 @@ class MatchmakingAnalysisService:
 
     @staticmethod
     def _append_side_winrate(
-        team_wrs: List[float],
-        enemy_wrs: List[float],
-        wr: Optional[float],
+        team_wrs: list[float],
+        enemy_wrs: list[float],
+        wr: float | None,
         team_id: int,
         target_team: int,
     ) -> None:
@@ -840,7 +841,7 @@ class MatchmakingAnalysisService:
         self,
         puuid: str,
         end_time_seconds: int,
-    ) -> Optional[float]:
+    ) -> float | None:
         """
         Calculate a player's winrate from their ranked matches
         ending before the anchor time.
@@ -875,15 +876,15 @@ class MatchmakingAnalysisService:
         return await self._winrate_from_match_ids(match_ids, puuid)
 
     @staticmethod
-    def _winrate_from_rows(db_wins: Sequence[Any]) -> Optional[float]:
+    def _winrate_from_rows(db_wins: Sequence[Any]) -> float | None:
         if not db_wins:
             return None
         win_count = sum(1 for (w,) in db_wins if w)
         return win_count / len(db_wins)
 
     async def _winrate_from_match_ids(
-        self, match_ids: List[str], puuid: str
-    ) -> Optional[float]:
+        self, match_ids: list[str], puuid: str
+    ) -> float | None:
         wins = 0
         total = 0
         for mid in match_ids:
@@ -900,7 +901,7 @@ class MatchmakingAnalysisService:
     # Data Access (DB-first)
     # ================================================================
 
-    async def _get_match_participants(self, match_id: str) -> List[Tuple[str, int]]:
+    async def _get_match_participants(self, match_id: str) -> list[tuple[str, int]]:
         """Get (puuid, team_id) for all participants. DB-first."""
         result = await self.db.execute(
             select(MatchParticipant.puuid, MatchParticipant.team_id).where(
@@ -918,7 +919,7 @@ class MatchmakingAnalysisService:
         await self._store_fetched_match(dto)
         return [(p.puuid, p.team_id) for p in dto.info.participants]
 
-    async def _get_win_status(self, match_id: str, puuid: str) -> Optional[bool]:
+    async def _get_win_status(self, match_id: str, puuid: str) -> bool | None:
         """Get win status for a player in a match. DB-first."""
         result = await self.db.execute(
             select(MatchParticipant.win).where(
@@ -971,14 +972,14 @@ class MatchmakingAnalysisService:
             await self._store_fetched_match(dto)
         return False
 
-    async def _store_fetched_match(self, match_dto: object) -> None:
+    async def _store_fetched_match(self, match_dto: MatchDTO) -> None:
         """Persist an API-fetched match only while cleanup is inactive."""
-        from app.core.match_utils import _upsert_match
+        from app.core.match_utils import upsert_match
 
         await _ensure_riot_writer_maintenance_is_inactive(self.db)
-        await _upsert_match(self.db, match_dto)
+        await upsert_match(self.db, match_dto)
 
-    async def _get_game_start_timestamp(self, match_id: str) -> Optional[int]:
+    async def _get_game_start_timestamp(self, match_id: str) -> int | None:
         """Get game_start_timestamp for a match from DB."""
         result = await self.db.execute(
             select(Match.game_start_timestamp).where(Match.match_id == match_id)
@@ -989,7 +990,7 @@ class MatchmakingAnalysisService:
         self,
         puuid: str,
         end_time_seconds: int,
-    ) -> List[str]:
+    ) -> list[str]:
         """Get a player's ranked match IDs with endTime from API."""
         return await self._api_fetch_match_ids(
             puuid,
@@ -1005,10 +1006,10 @@ class MatchmakingAnalysisService:
         self,
         puuid: str,
         count: int = 10,
-        end_time: Optional[int] = None,
+        end_time: int | None = None,
         *,
         required: bool = False,
-    ) -> List[str]:
+    ) -> list[str]:
         """Fetch match IDs from Riot API with rate limit handling."""
         max_retries = 10
         for attempt in range(max_retries):
@@ -1056,7 +1057,7 @@ class MatchmakingAnalysisService:
 
     async def _api_fetch_match(
         self, match_id: str, *, required: bool = False
-    ) -> Optional[MatchDTO]:
+    ) -> MatchDTO | None:
         """Fetch a single match from API. Returns MatchDTO or None."""
         max_retries = 10
         for attempt in range(max_retries):
@@ -1145,7 +1146,7 @@ class MatchmakingAnalysisService:
     # Rate Limit Waiting
     # ================================================================
 
-    async def _rate_limit_wait_callback(self, reset_at: Optional[datetime]) -> None:
+    async def _rate_limit_wait_callback(self, reset_at: datetime | None) -> None:
         """Callback from DBRateLimiter.acquire_with_wait_callback.
 
         Called with the absolute window_end datetime when rate limited,
@@ -1160,7 +1161,7 @@ class MatchmakingAnalysisService:
     async def _wait_for_rate_limit(self, retry_after: int) -> None:
         """Wait for rate limit reset while persisting lifecycle timing."""
         wait_time = min(retry_after, MAX_RATE_LIMIT_WAIT)
-        reset_at = datetime.now(timezone.utc) + timedelta(seconds=wait_time)
+        reset_at = datetime.now(UTC) + timedelta(seconds=wait_time)
 
         logger.info("Waiting for rate limit", wait_seconds=wait_time, reset_at=reset_at)
         self._is_waiting_for_rate_limit = True
@@ -1176,7 +1177,7 @@ class MatchmakingAnalysisService:
 
     async def _set_rate_limit_reset(
         self,
-        reset_at: Optional[datetime],
+        reset_at: datetime | None,
         force_clear: bool = False,
     ) -> None:
         """Update the persisted rate-limit lifecycle timing."""
@@ -1194,7 +1195,7 @@ class MatchmakingAnalysisService:
                 )
             )
             current_reset = result.scalar_one_or_none()
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             next_reset = self._next_rate_limit_reset(
                 reset_at, current_reset, now, force_clear
             )
@@ -1229,11 +1230,11 @@ class MatchmakingAnalysisService:
 
     @staticmethod
     def _next_rate_limit_reset(
-        reset_at: Optional[datetime],
-        current_reset: Optional[datetime],
+        reset_at: datetime | None,
+        current_reset: datetime | None,
         now: datetime,
         force_clear: bool,
-    ) -> Optional[datetime]:
+    ) -> datetime | None:
         if reset_at is None and not force_clear:
             if current_reset is not None and current_reset > now:
                 return current_reset
@@ -1247,7 +1248,7 @@ class MatchmakingAnalysisService:
         return reset_at
 
     @staticmethod
-    def _status_for_rate_limit(next_reset: Optional[datetime]) -> str:
+    def _status_for_rate_limit(next_reset: datetime | None) -> str:
         if next_reset is not None:
             return "waiting_rate_limit"
         return "in_progress"
@@ -1271,7 +1272,7 @@ class MatchmakingAnalysisService:
         return result.scalar_one()
 
     async def _update_progress(
-        self, puuid: str, created_at: datetime, progress: Dict[str, bool]
+        self, puuid: str, created_at: datetime, progress: dict[str, bool]
     ) -> None:
         await _ensure_riot_writer_maintenance_is_inactive(self.db)
         await self.db.execute(
@@ -1308,7 +1309,7 @@ class MatchmakingAnalysisService:
             )
             .values(
                 status="failed",
-                completed_at=datetime.now(timezone.utc),
+                completed_at=datetime.now(UTC),
                 results=None,
                 error_code=error_code,
                 error_message=msg,

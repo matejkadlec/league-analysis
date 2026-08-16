@@ -10,7 +10,7 @@ import { cn } from "@/lib/core/utils";
 
 interface TrackPlayerButtonProps {
   puuid: string;
-  playerName?: string;
+  playerName?: string | undefined;
   variant?: "default" | "outline" | "ghost";
   size?: "default" | "sm" | "lg" | "icon";
   className?: string;
@@ -53,12 +53,16 @@ export function TrackPlayerButton({
       return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({
+      void queryClient.invalidateQueries({
         queryKey: ["tracking-status", userId, puuid],
       });
-      queryClient.invalidateQueries({ queryKey: ["tracked-players", userId] });
-      queryClient.invalidateQueries({ queryKey: ["player-context", userId] });
-      queryClient.invalidateQueries({ queryKey: ["player", puuid] });
+      void queryClient.invalidateQueries({
+        queryKey: ["tracked-players", userId],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["player-context", userId],
+      });
+      void queryClient.invalidateQueries({ queryKey: ["player", puuid] });
       toast({
         title: "Player added for tracking",
         description: `${
@@ -85,12 +89,16 @@ export function TrackPlayerButton({
       return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({
+      void queryClient.invalidateQueries({
         queryKey: ["tracking-status", userId, puuid],
       });
-      queryClient.invalidateQueries({ queryKey: ["tracked-players", userId] });
-      queryClient.invalidateQueries({ queryKey: ["player-context", userId] });
-      queryClient.invalidateQueries({ queryKey: ["player", puuid] });
+      void queryClient.invalidateQueries({
+        queryKey: ["tracked-players", userId],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["player-context", userId],
+      });
+      void queryClient.invalidateQueries({ queryKey: ["player", puuid] });
       toast({
         title: "Player removed from tracking",
         description: `${playerName || "Player"} is no longer being tracked.`,

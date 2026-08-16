@@ -141,7 +141,7 @@ export function PlaystyleAnalysis({
       toast.success("Playstyle analysis finished", {
         description: "The latest playstyle results are ready.",
       });
-      queryClient.invalidateQueries({
+      void queryClient.invalidateQueries({
         queryKey: ["playstyle-analysis", puuid],
       });
     },

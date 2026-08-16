@@ -20,4 +20,4 @@ async def get_job_service(
 # Type aliases for cleaner dependency injection
 JobServiceDep = Annotated[JobService, Depends(get_job_service)]
 
-__all__ = ["get_job_service", "JobServiceDep"]
+__all__ = ["JobServiceDep", "get_job_service"]

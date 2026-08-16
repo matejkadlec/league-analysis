@@ -1,16 +1,17 @@
 """Riot API HTTP client with proper rate limiting, error handling, and authentication."""
 
 import asyncio
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Any, Awaitable, Callable, Dict, List, Optional, Union
+from typing import Any, Protocol
 
 import httpx
 import structlog
 
 from .constants import MatchType, Platform, QueueType, Region
-from .credential_health import RiotCredentialStatus
+from .credential_vocabulary import RiotCredentialStatus
 from .endpoints import RiotAPIEndpoints
 from .errors import (
     AuthenticationError,
@@ -28,11 +29,29 @@ from .models import (
     LegacyLeagueEntryDTO,
     MatchDTO,
     MatchListDTO,
+    MatchTimelineDTO,
     SummonerDTO,
 )
 from .rate_limiter import RateLimiter
 
 logger = structlog.get_logger(__name__)
+
+# Any value a Riot JSON response can hold. Declaring a local as `JSONValue`
+# before an `isinstance` chain keeps each narrowing step a *known* type, which
+# `Any` does not (narrowing `Any` yields `dict[Unknown, Unknown]`).
+type JSONValue = (
+    dict[str, JSONValue] | list[JSONValue] | str | int | float | bool | None
+)
+
+
+class JSONBody(Protocol):
+    """Anything that can decode itself as JSON, or raise trying.
+
+    `_extract_riot_status_message` needs nothing from a response but `.json()`,
+    and it is exercised with hand-rolled stubs as well as `httpx.Response`.
+    """
+
+    def json(self) -> JSONValue: ...
 
 
 @dataclass
@@ -41,8 +60,8 @@ class APICallRecord:
 
     endpoint: str  # Template like "/lol/match/v5/matches/{matchId}"
     region: str
-    params: Dict[str, Any] = field(
-        default_factory=dict
+    params: dict[str, Any] = field(
+        default_factory=dict[str, Any]
     )  # e.g., {"matchId": "EUN1_123"}
     timestamp: str = ""  # ISO timestamp
 
@@ -52,14 +71,15 @@ class RiotAPIClient:
 
     def __init__(
         self,
-        api_key: Optional[str] = None,
-        region: Optional[Region] = None,
-        platform: Optional[Platform] = None,
+        api_key: str | None = None,
+        region: Region | None = None,
+        platform: Platform | None = None,
         enable_logging: bool = True,
-        request_callback: Optional[Callable[[str, int], None]] = None,
-        credential_health_callback: Optional[
-            Callable[[RiotCredentialStatus, datetime], Awaitable[None]]
-        ] = None,
+        request_callback: Callable[[str, int], None] | None = None,
+        credential_health_callback: Callable[
+            [RiotCredentialStatus, datetime], Awaitable[None]
+        ]
+        | None = None,
     ):
         """
         Initialize Riot API client.
@@ -94,7 +114,7 @@ class RiotAPIClient:
         self._session_lock = asyncio.Lock()
 
         # Track individual API calls for job logging
-        self._api_calls: List[APICallRecord] = []
+        self._api_calls: list[APICallRecord] = []
 
     async def __aenter__(self):
         """Async context manager entry."""
@@ -145,28 +165,29 @@ class RiotAPIClient:
             await self.session.aclose()
             logger.info("Riot API client session closed")
 
-    def get_api_calls(self) -> List[APICallRecord]:
+    def get_api_calls(self) -> list[APICallRecord]:
         """Get all recorded API calls for this session."""
         return self._api_calls.copy()
 
     def _record_api_call(
-        self, endpoint_template: str, region: str, params: Dict[str, Any]
+        self, endpoint_template: str, region: str, params: dict[str, Any]
     ) -> None:
         """Record an API call for job logging."""
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         self._api_calls.append(
             APICallRecord(
                 endpoint=endpoint_template,
                 region=region.upper() if region else "UNKNOWN",
                 params=params,
-                timestamp=datetime.now(timezone.utc).isoformat(),
+                timestamp=datetime.now(UTC).isoformat(),
             )
         )
 
     @staticmethod
-    def _extract_riot_status_message(response: Any) -> Optional[str]:
+    def _extract_riot_status_message(response: JSONBody) -> str | None:
         """Return Riot's `status.message` for an error response, if present."""
+        payload: JSONValue
         try:
             payload = response.json()
         except Exception:
@@ -181,7 +202,7 @@ class RiotAPIClient:
         return message if isinstance(message, str) else None
 
     def _raise_client_error_if_needed(
-        self, status: int, riot_message: Optional[str] = None
+        self, status: int, riot_message: str | None = None
     ) -> None:
         """Raise specific RiotAPIError subclass for client errors."""
         if status == 400:
@@ -262,7 +283,7 @@ class RiotAPIClient:
         headers: dict[str, str],
         attempt: int,
         max_retries: int,
-        riot_message: Optional[str] = None,
+        riot_message: str | None = None,
     ) -> tuple[bool, int]:
         """
         Handle HTTP error status codes.
@@ -290,16 +311,20 @@ class RiotAPIClient:
         self,
         url: str,
         method: str,
-        params: Optional[Dict[str, Any]],
-        data: Optional[Dict[str, Any]],
+        params: dict[str, Any] | None,
+        data: dict[str, Any] | None,
         attempt: int,
         max_retries: int,
-    ) -> Any:
-        """Execute a single HTTP request with error handling."""
+    ) -> dict[str, Any] | list[Any] | None:
+        """Execute a single HTTP request with error handling.
+
+        Returns `None` to signal "retry this attempt"; every other return is
+        Riot's decoded body, which is always a JSON object or array.
+        """
         if self.session is None:
             raise RiotAPIError("Session not initialized")
 
-        evidence_at = datetime.now(timezone.utc)
+        evidence_at = datetime.now(UTC)
         response = await self.session.request(method, url, params=params, json=data)
         response_headers = self._normalize_headers(dict(response.headers))
 
@@ -347,10 +372,10 @@ class RiotAPIClient:
         self,
         url: str,
         method: str = "GET",
-        params: Optional[Dict[str, Any]] = None,
-        data: Optional[Dict[str, Any]] = None,
+        params: dict[str, Any] | None = None,
+        data: dict[str, Any] | None = None,
         retry_on_failure: bool = True,
-    ) -> Any:
+    ) -> dict[str, Any] | list[Any]:
         """
         Make HTTP request with rate limiting and retry logic.
 
@@ -386,12 +411,22 @@ class RiotAPIClient:
                 )
                 if result is not None:
                     return result
-            except (httpx.RequestError, asyncio.TimeoutError) as e:
+            except (TimeoutError, httpx.RequestError) as e:
                 last_error = e
                 if attempt < max_retries:
                     await asyncio.sleep(2**attempt)
 
-        raise RiotAPIError(f"Request failed: {str(last_error)}")
+        raise RiotAPIError(f"Request failed: {last_error!s}")
+
+    async def probe_credentials(self, url: str) -> object:
+        """Send one un-retried GET purely to observe whether Riot accepts the key.
+
+        Credential validation cares only about the status Riot answers with, so
+        retrying would turn an expired key into three pointless calls against a
+        limit the rest of the app is sharing. The response body is returned so
+        callers can log its shape, but nothing parses it.
+        """
+        return await self._make_request(url, method="GET", retry_on_failure=False)
 
     def _extract_endpoint_path(self, url: str) -> str:
         """Extract endpoint path from URL for rate limiting."""
@@ -402,7 +437,23 @@ class RiotAPIClient:
         return stripped
 
     @staticmethod
-    def _enum_str(value: Union[Region, Platform, str]) -> str:
+    def _require_object(
+        response: dict[str, Any] | list[Any], what: str
+    ) -> dict[str, Any]:
+        """Assert that a single-entity endpoint answered with a JSON object.
+
+        Riot returns an array only for list endpoints, so an array here is a
+        broken contract rather than data: fail with the client's own error
+        type instead of letting `Model(**response)` raise a bare `TypeError`.
+        """
+        if not isinstance(response, dict):
+            raise RiotAPIError(
+                f"Expected object response for {what}, got {type(response)}"
+            )
+        return response
+
+    @staticmethod
+    def _enum_str(value: Region | Platform | str) -> str:
         """Extract string value from enum or return as-is."""
         if isinstance(value, Enum):
             return str(value.value)
@@ -410,7 +461,7 @@ class RiotAPIClient:
 
     # Account endpoints
     async def get_account_by_riot_id(
-        self, game_name: str, tag_line: str, region: Optional[Region] = None
+        self, game_name: str, tag_line: str, region: Region | None = None
     ) -> AccountDTO:
         """Get account by Riot ID (gameName#tagLine)."""
         used_region = region or self.region
@@ -421,10 +472,10 @@ class RiotAPIClient:
         )
         url = self.endpoints.account_by_riot_id(game_name, tag_line, region)
         response = await self._make_request(url)
-        return AccountDTO(**response)
+        return AccountDTO(**self._require_object(response, "account"))
 
     async def get_account_by_puuid(
-        self, puuid: str, region: Optional[Region] = None
+        self, puuid: str, region: Region | None = None
     ) -> AccountDTO:
         """Get account by PUUID."""
         used_region = region or self.region
@@ -435,12 +486,12 @@ class RiotAPIClient:
         )
         url = self.endpoints.account_by_puuid(puuid, region)
         response = await self._make_request(url)
-        return AccountDTO(**response)
+        return AccountDTO(**self._require_object(response, "account"))
 
     # Summoner endpoints
 
     async def get_summoner_by_puuid(
-        self, puuid: str, platform: Optional[Platform] = None
+        self, puuid: str, platform: Platform | None = None
     ) -> SummonerDTO:
         """Get summoner by PUUID."""
         used_platform = platform or self.platform
@@ -451,7 +502,7 @@ class RiotAPIClient:
         )
         url = self.endpoints.summoner_by_puuid(puuid, platform)
         response = await self._make_request(url)
-        return SummonerDTO(**response)
+        return SummonerDTO(**self._require_object(response, "summoner"))
 
     # Match endpoints
     async def get_match_list_by_puuid(
@@ -459,11 +510,11 @@ class RiotAPIClient:
         puuid: str,
         start: int = 0,
         count: int = 20,
-        queue: Optional[Union[int, str, QueueType]] = None,
-        type: Optional[str | MatchType] = None,
-        start_time: Optional[int] = None,
-        end_time: Optional[int] = None,
-        region: Optional[Region] = None,
+        queue: int | str | QueueType | None = None,
+        type: str | MatchType | None = None,
+        start_time: int | None = None,
+        end_time: int | None = None,
+        region: Region | None = None,
     ) -> MatchListDTO:
         """Get match list by PUUID."""
         queue_type = self._normalize_queue_type(queue)
@@ -487,9 +538,10 @@ class RiotAPIClient:
             end_time,
             region,
         )
-        response_data = await self._make_request(url)
+        response_data: dict[str, Any] | list[str] = await self._make_request(url)
 
         # Extract match IDs from response
+        match_ids: list[str]
         if isinstance(response_data, list):
             match_ids = response_data
         else:
@@ -497,9 +549,7 @@ class RiotAPIClient:
 
         return MatchListDTO(matchIds=match_ids, start=start, count=count, puuid=puuid)
 
-    async def get_match(
-        self, match_id: str, region: Optional[Region] = None
-    ) -> MatchDTO:
+    async def get_match(self, match_id: str, region: Region | None = None) -> MatchDTO:
         """Get match details by match ID."""
         used_region = region or self.region
         self._record_api_call(
@@ -509,11 +559,11 @@ class RiotAPIClient:
         )
         url = self.endpoints.match_by_id(match_id, region)
         response = await self._make_request(url)
-        return MatchDTO(**response)
+        return MatchDTO(**self._require_object(response, "match"))
 
     async def get_match_timeline(
-        self, match_id: str, region: Optional[Region] = None
-    ) -> dict:
+        self, match_id: str, region: Region | None = None
+    ) -> MatchTimelineDTO:
         """Get match timeline by match ID."""
         used_region = region or self.region
         self._record_api_call(
@@ -523,16 +573,14 @@ class RiotAPIClient:
         )
         url = self.endpoints.match_timeline_by_id(match_id, region)
         response = await self._make_request(url)
-        if not isinstance(response, dict):
-            raise RiotAPIError(
-                f"Expected object response for match timeline, got {type(response)}"
-            )
-        return response
+        return MatchTimelineDTO.model_validate(
+            self._require_object(response, "match timeline")
+        )
 
     # League endpoints
     async def get_league_entries_by_summoner_id(
-        self, summoner_id: str, platform: Optional[Platform] = None
-    ) -> List[LegacyLeagueEntryDTO]:
+        self, summoner_id: str, platform: Platform | None = None
+    ) -> list[LegacyLeagueEntryDTO]:
         """Get league entries by encrypted Summoner ID."""
         used_platform = platform or self.platform
         self._record_api_call(
@@ -541,7 +589,7 @@ class RiotAPIClient:
             {"summonerId": summoner_id},
         )
         url = self.endpoints.league_entries_by_summoner_id(summoner_id, platform)
-        response = await self._make_request(url)
+        response: dict[str, Any] | list[dict[str, Any]] = await self._make_request(url)
 
         # API returns a list of league entries
         if not isinstance(response, list):
@@ -552,8 +600,8 @@ class RiotAPIClient:
         return [LegacyLeagueEntryDTO(**entry) for entry in response]
 
     async def get_league_entries_by_puuid(
-        self, puuid: str, platform: Optional[Platform] = None
-    ) -> List[LeagueEntryDTO]:
+        self, puuid: str, platform: Platform | None = None
+    ) -> list[LeagueEntryDTO]:
         """Get league entries by encrypted PUUID.
 
         This is the preferred method as it doesn't require getting Summoner ID first.
@@ -566,7 +614,7 @@ class RiotAPIClient:
             {"puuid": puuid},
         )
         url = self.endpoints.league_entries_by_puuid(puuid, platform)
-        response = await self._make_request(url)
+        response: dict[str, Any] | list[dict[str, Any]] = await self._make_request(url)
 
         # API returns a list of league entries (can be empty if unranked)
         if not isinstance(response, list):
@@ -580,8 +628,8 @@ class RiotAPIClient:
 
     @staticmethod
     def _normalize_queue_type(
-        queue: Optional[Union[int, str, QueueType]],
-    ) -> Optional[QueueType]:
+        queue: int | str | QueueType | None,
+    ) -> QueueType | None:
         """Normalize a queue filter and reject unknown IDs."""
         if queue is None or isinstance(queue, QueueType):
             return queue

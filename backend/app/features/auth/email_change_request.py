@@ -1,7 +1,7 @@
 """Email-change verification state model."""
 
 from datetime import datetime
-from typing import Optional
+from typing import Final, override
 
 from sqlalchemy import (
     BigInteger,
@@ -23,7 +23,7 @@ class EmailChangeRequest(Base):
     """Stores pending email-change verification state per user."""
 
     __tablename__ = "email_change_requests"
-    __table_args__ = {"schema": "auth"}
+    __table_args__: Final = {"schema": "auth"}
 
     user_id: Mapped[int] = mapped_column(
         BigInteger,
@@ -31,17 +31,17 @@ class EmailChangeRequest(Base):
         primary_key=True,
         comment="Reference to auth.users.id",
     )
-    pending_email: Mapped[Optional[str]] = mapped_column(
+    pending_email: Mapped[str | None] = mapped_column(
         String(255),
         nullable=True,
         comment="Unverified target email awaiting code confirmation",
     )
-    verification_code_hash: Mapped[Optional[str]] = mapped_column(
+    verification_code_hash: Mapped[str | None] = mapped_column(
         String(64),
         nullable=True,
         comment="SHA-256 hash of the 6-digit verification code",
     )
-    code_expires_at: Mapped[Optional[datetime]] = mapped_column(
+    code_expires_at: Mapped[datetime | None] = mapped_column(
         SQLDateTime(timezone=True),
         nullable=True,
         comment="Verification code expiration timestamp",
@@ -52,7 +52,7 @@ class EmailChangeRequest(Base):
         default=0,
         comment="Consecutive failed verification attempts for current code",
     )
-    locked_until: Mapped[Optional[datetime]] = mapped_column(
+    locked_until: Mapped[datetime | None] = mapped_column(
         SQLDateTime(timezone=True),
         nullable=True,
         index=True,
@@ -72,6 +72,7 @@ class EmailChangeRequest(Base):
         comment="When this request record was last updated",
     )
 
+    @override
     def __repr__(self) -> str:
         """Return string representation of email-change request."""
         return (

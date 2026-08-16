@@ -1,11 +1,12 @@
 """Match data model for storing League of Legends match information."""
 
 from datetime import datetime
-from typing import Literal, Optional
+from typing import Final, Literal, override
 
 from sqlalchemy import (
     BigInteger,
     Boolean,
+    CheckConstraint,
     Index,
     Integer,
     String,
@@ -23,7 +24,16 @@ class Match(Base):
     """Match model storing League of Legends match data."""
 
     __tablename__ = "matches"
-    __table_args__ = {"schema": "core"}
+    __table_args__: Final = (
+        # Same canonical spelling as `core.players.platform`. This column was
+        # internally consistent at uppercase, but two columns of the same name
+        # disagreeing is a comparison bug waiting to be written.
+        CheckConstraint(
+            "platform = lower(platform)",
+            name="ck_matches_platform_is_lowercase",
+        ),
+        {"schema": "core"},
+    )
 
     # Primary key - match ID from Riot API
     match_id: Mapped[str] = mapped_column(
@@ -38,7 +48,7 @@ class Match(Base):
         String(8),
         nullable=False,
         index=True,
-        comment="Platform where the match was played (e.g., EUW1, EUN1)",
+        comment="Platform where the match was played, canonical lowercase (e.g. euw1)",
     )
 
     # Game information
@@ -64,7 +74,7 @@ class Match(Base):
         comment="Source semantics for game_start_timestamp",
     )
 
-    game_end_timestamp: Mapped[Optional[int]] = mapped_column(
+    game_end_timestamp: Mapped[int | None] = mapped_column(
         BigInteger,
         nullable=True,
         comment="Game end timestamp in milliseconds since epoch",
@@ -93,14 +103,14 @@ class Match(Base):
     )
 
     # Game mode information
-    game_mode: Mapped[Optional[str]] = mapped_column(
+    game_mode: Mapped[str | None] = mapped_column(
         String(32),
         nullable=True,
         index=True,
         comment="Game mode (e.g., 'CLASSIC', 'ARAM')",
     )
 
-    game_type: Mapped[Optional[str]] = mapped_column(
+    game_type: Mapped[str | None] = mapped_column(
         String(32),
         nullable=True,
         index=True,
@@ -108,19 +118,19 @@ class Match(Base):
     )
 
     # Match result
-    early_surrender: Mapped[Optional[bool]] = mapped_column(
+    early_surrender: Mapped[bool | None] = mapped_column(
         Boolean,
         nullable=True,
         comment="Whether the game ended in early surrender",
     )
 
-    surrender: Mapped[Optional[bool]] = mapped_column(
+    surrender: Mapped[bool | None] = mapped_column(
         Boolean,
         nullable=True,
         comment="Whether the game ended in surrender",
     )
 
-    game_result: Mapped[Optional[str]] = mapped_column(
+    game_result: Mapped[str | None] = mapped_column(
         String(32),
         nullable=True,
         comment="End of game result",
@@ -156,6 +166,7 @@ class Match(Base):
         "MatchParticipant", back_populates="match", cascade="all, delete-orphan"
     )
 
+    @override
     def __repr__(self) -> str:
         """Return string representation of the match."""
         return f"<Match(match_id='{self.match_id}', queue_id={self.queue_id}, game_start_timestamp={self.game_start_timestamp})>"

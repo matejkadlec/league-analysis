@@ -1,5 +1,5 @@
-from datetime import datetime, timezone
-from typing import List
+from datetime import UTC, datetime
+from typing import override
 
 import structlog
 from sqlalchemy import select
@@ -16,7 +16,12 @@ from app.features.jobs.error_handling import (
 )
 from app.features.jobs.maintenance import RiotWriterMaintenanceActiveError
 from app.features.jobs.queue_config import get_match_fetcher_queue_ids
+from app.features.matches.match_lp import (
+    RANKED_SOLO_QUEUE_ID,
+    persist_match_lp_observations,
+)
 from app.features.matches.service import MatchService
+from app.features.players.leagues import PlayerLeague
 from app.features.players.models import Player
 from app.features.players.schemas import PlayerResponse
 from app.features.players.service import PlayerService
@@ -43,10 +48,11 @@ class MatchFetcherJob(BaseJob):
         if metric_name == "requests_made":
             self.metrics["api_requests_made"] += count
 
-    def _store_api_calls(self, api_calls: List[APICallRecord]) -> None:
+    def _store_api_calls(self, api_calls: list[APICallRecord]) -> None:
         """Store API call records from the RiotAPIClient."""
         self._api_call_records = api_calls
 
+    @override
     async def execute(self, db: AsyncSession) -> None:
         """Execute the match fetcher job."""
         if not self.job_config:
@@ -167,7 +173,7 @@ class MatchFetcherJob(BaseJob):
     async def _process_player(
         self,
         db: AsyncSession,
-        player: "PlayerResponse",
+        player: PlayerResponse,
         player_service: PlayerService,
         match_service: MatchService,
         riot_client: RiotAPIClient,
@@ -192,12 +198,20 @@ class MatchFetcherJob(BaseJob):
             )
 
         error_count_before = len(self._errors_encountered)
+        league_before = await player_service.get_player_league(player.puuid)
+        ranked_match_ids: set[str] = set()
+
+        def record_stored_match(queue_id: int, match_id: str) -> None:
+            if queue_id == RANKED_SOLO_QUEUE_ID:
+                ranked_match_ids.add(match_id)
+
         try:
             count = await match_service.sync_matches_for_player(
                 riot_client,
                 player,
                 rate_limiter,
                 on_failure=record_match_sync_failure,
+                on_match_stored=record_stored_match,
             )
         except RateLimitError as error:
             raise RateLimitSignal(
@@ -212,36 +226,26 @@ class MatchFetcherJob(BaseJob):
             return
 
         if len(self._errors_encountered) == error_count_before:
-            player_model.match_synced_at = datetime.now(timezone.utc)
+            player_model.match_synced_at = datetime.now(UTC)
             await db.commit()
 
         # Update player league (will only insert if league has changed)
         try:
-            # Acquire rate limit before league API call
-            can_proceed = await rate_limiter.acquire()
-            if not can_proceed:
-                raise RateLimitSignal(
-                    message="Local rate limiter capacity unavailable during league update"
-                )
-
-            league_updated = await player_service.update_player_league(
-                player_model, riot_client
+            league_updated, lp_observations = await self._refresh_league_and_lp(
+                db,
+                player,
+                player_model,
+                player_service,
+                riot_client,
+                rate_limiter,
+                ranked_match_ids,
+                league_before,
             )
-
-            player_model.league_synced_at = datetime.now(timezone.utc)
-
-            # Commit league updates
-            await db.commit()
-
-            # Record the request only after the domain transaction is durable.
-            await rate_limiter.record_request()
-            if league_updated:
-                self.metrics["records_updated"] += 1
-                logger.info(
-                    "Player league updated",
-                    puuid=player.puuid,
-                    game_name=player.game_name,
-                )
+            self._record_league_refresh_result(
+                player,
+                league_updated,
+                lp_observations,
+            )
         except RateLimitError, RateLimitSignal:
             raise
         except Exception as e:
@@ -263,3 +267,59 @@ class MatchFetcherJob(BaseJob):
             if is_api_key_err:
                 raise  # Re-raise to stop processing
             await db.rollback()
+
+    async def _refresh_league_and_lp(
+        self,
+        db: AsyncSession,
+        player: PlayerResponse,
+        player_model: Player,
+        player_service: PlayerService,
+        riot_client: RiotAPIClient,
+        rate_limiter: DBRateLimiter,
+        ranked_match_ids: set[str],
+        league_before: PlayerLeague | None,
+    ) -> tuple[bool, int]:
+        """Close one Match Fetcher observation window and commit its evidence."""
+        can_proceed = await rate_limiter.acquire()
+        if not can_proceed:
+            raise RateLimitSignal(
+                message="Local rate limiter capacity unavailable during league update"
+            )
+        league_updated = await player_service.update_player_league(
+            player_model, riot_client
+        )
+        if league_updated:
+            await db.flush()
+        league_after = await player_service.get_player_league(player.puuid)
+        lp_observations = await persist_match_lp_observations(
+            db,
+            player.puuid,
+            ranked_match_ids,
+            league_before,
+            league_after,
+        )
+        player_model.league_synced_at = datetime.now(UTC)
+        await db.commit()
+        await rate_limiter.record_request()
+        return league_updated, lp_observations
+
+    def _record_league_refresh_result(
+        self,
+        player: PlayerResponse,
+        league_updated: bool,
+        lp_observations: int,
+    ) -> None:
+        """Record metrics and reviewed identifiers for a completed observation."""
+        if league_updated:
+            self.metrics["records_updated"] += 1
+            logger.info(
+                "Player league updated",
+                puuid=player.puuid,
+                game_name=player.game_name,
+            )
+        if lp_observations:
+            logger.info(
+                "Persisted match LP observations",
+                puuid=player.puuid,
+                observations=lp_observations,
+            )

@@ -1,7 +1,8 @@
 """Match API endpoints for the Riot API application."""
 
 import uuid
-from typing import Any, Dict, Optional
+from collections.abc import Callable
+from typing import Any, ParamSpec, Protocol, TypeVar, cast
 
 from fastapi import (
     APIRouter,
@@ -36,8 +37,27 @@ router = APIRouter(prefix="/matches", tags=["matches"])
 router.get_match_service = get_match_service  # type: ignore[attr-defined]
 limiter = Limiter(key_func=get_remote_address)
 
+_P = ParamSpec("_P")
+_R = TypeVar("_R")
+
+
+class _SignaturePreservingLimiter(Protocol):
+    """The slice of `Limiter` this module uses, with its signature spelled out.
+
+    `slowapi` ships `Limiter.limit` with an unannotated inner decorator, which
+    erases the type of every endpoint it wraps. Viewing the same object through
+    this protocol keeps the decorated endpoints typed without changing what runs.
+    """
+
+    def limit(
+        self, limit_value: str
+    ) -> Callable[[Callable[_P, _R]], Callable[_P, _R]]: ...
+
+
+typed_limiter = cast(_SignaturePreservingLimiter, limiter)
+
 # In-memory job store for analysis tasks
-analysis_jobs: Dict[str, Dict[str, Any]] = {}
+analysis_jobs: dict[str, dict[str, Any]] = {}
 
 
 def _parse_match_queue_union(queues: str) -> tuple[int, ...]:
@@ -62,7 +82,7 @@ def _parse_match_queue_union(queues: str) -> tuple[int, ...]:
 
 
 def parse_match_queue_ids(
-    queue: Optional[int], queues: Optional[str]
+    queue: int | None, queues: str | None
 ) -> tuple[int, ...] | None:
     """Parse the legacy scalar or comma-separated queue union, never both."""
     if queue is not None and queues is not None:
@@ -79,8 +99,8 @@ def parse_match_queue_ids(
 async def get_player_matches(
     puuid: str,
     match_service: MatchServiceDep,
-    queue: Optional[int] = Query(None, description="Queue ID filter"),
-    queues: Optional[str] = Query(
+    queue: int | None = Query(None, description="Queue ID filter"),
+    queues: str | None = Query(
         None, max_length=200, description="Comma-separated queue ID filters"
     ),
     exclude_aram: bool = Query(False, description="Exclude queue 450 (ARAM)"),
@@ -104,11 +124,11 @@ async def get_player_matches(
 async def get_player_matches_detailed(
     puuid: str,
     match_service: MatchServiceDep,
-    queue: Optional[int] = Query(None, description="Queue ID filter"),
-    queues: Optional[str] = Query(
+    queue: int | None = Query(None, description="Queue ID filter"),
+    queues: str | None = Query(
         None, max_length=200, description="Comma-separated queue ID filters"
     ),
-    search: Optional[str] = Query(
+    search: str | None = Query(
         None,
         max_length=64,
         description="Champion or participant Riot ID search",
@@ -136,12 +156,12 @@ async def get_player_matches_detailed(
 async def get_player_stats(
     puuid: str,
     match_service: MatchServiceDep,
-    queue: Optional[int] = Query(None, description="Queue ID filter"),
-    queues: Optional[str] = Query(
+    queue: int | None = Query(None, description="Queue ID filter"),
+    queues: str | None = Query(
         None, max_length=200, description="Comma-separated queue ID filters"
     ),
     exclude_aram: bool = Query(False, description="Exclude queue 450 (ARAM)"),
-    limit: Optional[int] = Query(
+    limit: int | None = Query(
         None,
         ge=1,
         description="Number of matches to analyze. If not provided, uses all matches.",
@@ -164,7 +184,7 @@ async def get_player_stats(
 async def get_player_champion_stats(
     puuid: str,
     match_service: MatchServiceDep,
-    queue: Optional[int] = Query(
+    queue: int | None = Query(
         None, description="Queue ID filter (e.g., 420 for ranked solo/duo)"
     ),
 ):
@@ -182,7 +202,7 @@ async def get_player_champion_stats(
 async def get_player_lane_stats(
     puuid: str,
     match_service: MatchServiceDep,
-    queue: Optional[int] = Query(
+    queue: int | None = Query(
         None, description="Queue ID filter (e.g., 420 for ranked solo/duo)"
     ),
 ):
@@ -235,7 +255,7 @@ async def _run_analysis_task(
         analysis_jobs[job_id]["message"] = "Preparing analysis..."
 
         # Callback for progress updates
-        async def progress_callback(current, total):
+        async def progress_callback(current: int, total: int) -> None:
             if job_id in analysis_jobs:
                 # Check for cancellation during progress update
                 if analysis_jobs[job_id].get("cancelled", False):
@@ -339,7 +359,7 @@ async def _run_analysis_task(
 
 
 @router.post("/analyze/{puuid}")
-@limiter.limit("5/minute")
+@typed_limiter.limit("5/minute")
 async def analyze_match_history(
     request: Request,
     puuid: str,
@@ -358,11 +378,11 @@ async def analyze_match_history(
 
     try:
         await ensure_riot_writer_maintenance_is_inactive(db)
-    except RiotWriterMaintenanceActiveError:
+    except RiotWriterMaintenanceActiveError as error:
         raise HTTPException(
             status_code=503,
             detail="Riot data maintenance is in progress. Try again after it completes.",
-        )
+        ) from error
 
     try:
         credential, _health = await synchronize_riot_credential_health(db)

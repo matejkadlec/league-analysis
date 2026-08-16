@@ -6,11 +6,17 @@ import argparse
 import os
 import stat
 import subprocess
+from collections.abc import Callable
+from pathlib import Path
 from types import SimpleNamespace
+from typing import IO, cast
 from unittest.mock import Mock
 
 import pytest
+from sqlalchemy import Connection as SAConnection
+from sqlalchemy.sql import Executable
 
+from app.core.config import Settings
 from scripts import cleanse_local_riot_data as cleanup
 from scripts.cleanse_local_riot_data import (
     PRESERVED_TABLES,
@@ -82,7 +88,7 @@ def test_default_mode_is_read_only() -> None:
     assert arguments.backup_path is None
 
 
-def test_apply_requires_a_new_backup_path(tmp_path) -> None:
+def test_apply_requires_a_new_backup_path(tmp_path: Path) -> None:
     """The destructive mode requires an explicit backup destination."""
     with pytest.raises(SystemExit):
         parse_arguments(["--database", "league_analysis_local_dev", "--apply"])
@@ -100,7 +106,7 @@ def test_apply_requires_a_new_backup_path(tmp_path) -> None:
     assert validated_backup_path(arguments.backup_path) == backup_path
 
 
-def test_resume_writers_is_explicit_and_cannot_take_a_backup(tmp_path) -> None:
+def test_resume_writers_is_explicit_and_cannot_take_a_backup(tmp_path: Path) -> None:
     """Resuming ingestion is a separate, deliberately guarded operation."""
     arguments = parse_arguments(
         ["--database", "league_analysis_local_dev", "--resume-writers"]
@@ -120,7 +126,7 @@ def test_resume_writers_is_explicit_and_cannot_take_a_backup(tmp_path) -> None:
         )
 
 
-def test_validated_backup_path_resolves_an_external_symlink(tmp_path) -> None:
+def test_validated_backup_path_resolves_an_external_symlink(tmp_path: Path) -> None:
     """A canonical path outside the checkout remains a valid backup location."""
     external_backup_directory = tmp_path / "backups"
     external_backup_directory.mkdir()
@@ -132,7 +138,9 @@ def test_validated_backup_path_resolves_an_external_symlink(tmp_path) -> None:
     )
 
 
-def test_validated_backup_path_rejects_a_symlink_into_the_repository(tmp_path) -> None:
+def test_validated_backup_path_rejects_a_symlink_into_the_repository(
+    tmp_path: Path,
+) -> None:
     """A symlinked ancestor cannot disguise a repository-contained dump."""
     repository_alias = tmp_path / "repository-alias"
     repository_alias.symlink_to(cleanup.PROJECT_ROOT, target_is_directory=True)
@@ -162,7 +170,7 @@ def test_loopback_listener_configuration_rejects_shared_bind_addresses(
 
 
 def test_preflight_refuses_a_wildcard_postgresql_listener_before_table_access(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The server bind configuration, not just this connection, must be loopback."""
     monkeypatch.setenv("ENVIRONMENT", "dev")
@@ -180,7 +188,9 @@ def test_preflight_refuses_a_wildcard_postgresql_listener_before_table_access(
             return self.value
 
     class Connection:
-        def execute(self, statement, *_args, **_kwargs):
+        def execute(
+            self, statement: Executable, *_args: object, **_kwargs: object
+        ) -> Result:
             query = str(statement)
             if query == "SELECT current_database()":
                 return Result("league_analysis_local_dev")
@@ -189,11 +199,15 @@ def test_preflight_refuses_a_wildcard_postgresql_listener_before_table_access(
             raise AssertionError(f"unexpected query after unsafe listener: {query}")
 
     with pytest.raises(LocalCleanupRefusal, match="listen_addresses"):
-        preflight(Connection(), settings, "league_analysis_local_dev")
+        preflight(
+            cast(SAConnection, Connection()),
+            cast(Settings, settings),
+            "league_analysis_local_dev",
+        )
 
 
 def test_validate_configured_target_accepts_the_explicit_local_target(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The pre-connection guard permits only the documented local configuration."""
     monkeypatch.setenv("ENVIRONMENT", "dev")
@@ -203,10 +217,12 @@ def test_validate_configured_target_accepts_the_explicit_local_target(
         postgres_db="league_analysis_local_dev",
     )
 
-    validate_configured_target(settings, "league_analysis_local_dev")
+    validate_configured_target(cast(Settings, settings), "league_analysis_local_dev")
 
 
-def test_main_refuses_a_remote_target_before_creating_an_engine(monkeypatch) -> None:
+def test_main_refuses_a_remote_target_before_creating_an_engine(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """A dry run cannot connect when configuration names a shared host."""
     monkeypatch.setenv("ENVIRONMENT", "dev")
     settings = SimpleNamespace(
@@ -222,7 +238,9 @@ def test_main_refuses_a_remote_target_before_creating_an_engine(monkeypatch) -> 
     engine_factory.assert_not_called()
 
 
-def test_create_verified_backup_uses_private_permissions(tmp_path, monkeypatch) -> None:
+def test_create_verified_backup_uses_private_permissions(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """pg_dump receives a pre-created owner-only archive descriptor."""
     backup_path = tmp_path / "before.dump"
     settings = SimpleNamespace(
@@ -232,18 +250,25 @@ def test_create_verified_backup_uses_private_permissions(tmp_path, monkeypatch) 
         postgres_user="postgres",
     )
 
-    def fake_run(command, **_kwargs):
+    def fake_run(
+        command: list[str],
+        *,
+        stdout: IO[bytes] | None = None,
+        **_kwargs: object,
+    ) -> subprocess.CompletedProcess[bytes]:
         if command[0] == "pg_dump":
             assert not any(option.startswith("--file=") for option in command)
-            backup_output = _kwargs["stdout"]
-            assert stat.S_IMODE(os.fstat(backup_output.fileno()).st_mode) == 0o600
-            backup_output.write(b"backup")
-        return subprocess.CompletedProcess(command, 0)
+            assert stdout is not None
+            assert stat.S_IMODE(os.fstat(stdout.fileno()).st_mode) == 0o600
+            stdout.write(b"backup")
+        return subprocess.CompletedProcess[bytes](command, 0)
 
     original_umask = os.umask(0o022)
     try:
         monkeypatch.setattr(cleanup.subprocess, "run", fake_run)
-        create_verified_backup(settings, "league_analysis_local_dev", backup_path)
+        create_verified_backup(
+            cast(Settings, settings), "league_analysis_local_dev", backup_path
+        )
     finally:
         os.umask(original_umask)
 
@@ -260,13 +285,15 @@ def test_delete_riot_data_clears_current_player_context() -> None:
         def __init__(self) -> None:
             self.queries: list[str] = []
 
-        def execute(self, statement, *_args, **_kwargs) -> Result:
+        def execute(
+            self, statement: Executable, *_args: object, **_kwargs: object
+        ) -> Result:
             self.queries.append(str(statement))
             return Result()
 
     connection = Connection()
 
-    deleted = delete_riot_data(connection)
+    deleted = delete_riot_data(cast(SAConnection, connection))
 
     settings_update = next(
         query for query in connection.queries if "UPDATE auth.user_settings" in query
@@ -282,12 +309,14 @@ def test_lock_cleanup_tables_blocks_writers_and_allows_backup_reads() -> None:
         def __init__(self) -> None:
             self.query = ""
 
-        def execute(self, statement, *_args, **_kwargs) -> None:
+        def execute(
+            self, statement: Executable, *_args: object, **_kwargs: object
+        ) -> None:
             self.query = str(statement)
 
     connection = Connection()
 
-    lock_cleanup_tables(connection)
+    lock_cleanup_tables(cast(SAConnection, connection))
 
     assert "IN SHARE ROW EXCLUSIVE MODE" in connection.query
     assert '"auth"."user_settings"' in connection.query
@@ -310,13 +339,18 @@ def test_active_regular_riot_writer_query_excludes_test_runs() -> None:
         def __init__(self) -> None:
             self.query = ""
 
-        def execute(self, statement, *_args, **_kwargs) -> Result:
+        def execute(
+            self, statement: Executable, *_args: object, **_kwargs: object
+        ) -> Result:
             self.query = str(statement)
             return Result()
 
     connection = Connection()
 
-    assert active_regular_riot_writer_execution_ids(connection) == [7, 11]
+    assert active_regular_riot_writer_execution_ids(cast(SAConnection, connection)) == [
+        7,
+        11,
+    ]
     assert "MATCH_FETCHER" in connection.query
     assert "PLAYER_UPDATER" in connection.query
     assert "execution_type" in connection.query
@@ -325,16 +359,22 @@ def test_active_regular_riot_writer_query_excludes_test_runs() -> None:
     assert "'PAUSED'" in connection.query
 
 
-def test_active_regular_riot_writer_refuses_cleanup(monkeypatch) -> None:
+def test_active_regular_riot_writer_refuses_cleanup(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """The destructive transaction stops before backup when a writer is active."""
+
+    def fake_active_execution_ids(_connection: SAConnection) -> list[int]:
+        return [9]
+
     monkeypatch.setattr(
         cleanup,
         "active_regular_riot_writer_execution_ids",
-        lambda _connection: [9],
+        fake_active_execution_ids,
     )
 
     with pytest.raises(LocalCleanupRefusal, match="9"):
-        refuse_active_regular_riot_writers(object())
+        refuse_active_regular_riot_writers(cast(SAConnection, object()))
 
 
 def test_riot_writer_maintenance_queries_change_only_writer_configurations() -> None:
@@ -343,21 +383,23 @@ def test_riot_writer_maintenance_queries_change_only_writer_configurations() -> 
     class Result:
         rowcount = 2
 
-        def scalars(self):
+        def scalars(self) -> SimpleNamespace:
             return SimpleNamespace(all=lambda: ["MATCH_FETCHER", "PLAYER_UPDATER"])
 
     class Connection:
         def __init__(self) -> None:
             self.queries: list[str] = []
 
-        def execute(self, statement, *_args, **_kwargs) -> Result:
+        def execute(
+            self, statement: Executable, *_args: object, **_kwargs: object
+        ) -> Result:
             self.queries.append(str(statement))
             return Result()
 
     connection = Connection()
 
-    assert enable_riot_writer_maintenance_mode(connection) == 2
-    assert resume_riot_writers(connection) == 2
+    assert enable_riot_writer_maintenance_mode(cast(SAConnection, connection)) == 2
+    assert resume_riot_writers(cast(SAConnection, connection)) == 2
 
     enable_query, resume_query = connection.queries
     assert "jsonb_set" in enable_query
@@ -385,18 +427,20 @@ def test_riot_writer_maintenance_refuses_missing_or_duplicate_writer_types(
     """Cleanup requires exactly one configuration for each regular writer type."""
 
     class Result:
-        def scalars(self):
+        def scalars(self) -> SimpleNamespace:
             return SimpleNamespace(all=lambda: updated_job_types)
 
     class Connection:
-        def execute(self, *_args, **_kwargs) -> Result:
+        def execute(self, *_args: object, **_kwargs: object) -> Result:
             return Result()
 
     with pytest.raises(LocalCleanupRefusal, match="exactly one Match Fetcher"):
-        enable_riot_writer_maintenance_mode(Connection())
+        enable_riot_writer_maintenance_mode(cast(SAConnection, Connection()))
 
 
-def test_normalize_qa_accounts_preserves_revoked_access_tokens(monkeypatch) -> None:
+def test_normalize_qa_accounts_preserves_revoked_access_tokens(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Resetting fixture sessions must not reactivate an already revoked JWT."""
 
     class Result:
@@ -407,14 +451,19 @@ def test_normalize_qa_accounts_preserves_revoked_access_tokens(monkeypatch) -> N
         def __init__(self) -> None:
             self.queries: list[str] = []
 
-        def execute(self, statement, *_args, **_kwargs) -> Result:
+        def execute(
+            self, statement: Executable, *_args: object, **_kwargs: object
+        ) -> Result:
             self.queries.append(str(statement))
             return Result()
+
+    def fake_password_hash(_password: str) -> str:
+        return "test-password-hash"
 
     monkeypatch.setattr(
         cleanup.AuthService,
         "get_password_hash",
-        staticmethod(lambda _password: "test-password-hash"),
+        staticmethod(fake_password_hash),
     )
     connection = Connection()
     target = Preflight(
@@ -424,7 +473,7 @@ def test_normalize_qa_accounts_preserves_revoked_access_tokens(monkeypatch) -> N
         listen_addresses="localhost",
     )
 
-    assert not normalize_qa_accounts(connection, target)
+    assert not normalize_qa_accounts(cast(SAConnection, connection), target)
 
     cleanup_queries = "\n".join(connection.queries)
     assert 'DELETE FROM auth."refresh_tokens"' in cleanup_queries
@@ -432,7 +481,9 @@ def test_normalize_qa_accounts_preserves_revoked_access_tokens(monkeypatch) -> N
     assert "revoked_access_tokens" not in cleanup_queries
 
 
-def test_apply_locks_tables_before_creating_the_backup(tmp_path, monkeypatch) -> None:
+def test_apply_locks_tables_before_creating_the_backup(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Every cleanup mutation is protected by the same pre-backup write lock."""
     events: list[str] = []
     settings = SimpleNamespace()
@@ -447,7 +498,7 @@ def test_apply_locks_tables_before_creating_the_backup(tmp_path, monkeypatch) ->
         def __enter__(self) -> Context:
             return self
 
-        def __exit__(self, *_args) -> None:
+        def __exit__(self, *_args: object) -> None:
             return None
 
     class Engine:
@@ -460,36 +511,59 @@ def test_apply_locks_tables_before_creating_the_backup(tmp_path, monkeypatch) ->
         def dispose(self) -> None:
             events.append("dispose")
 
+    def ignore_arguments(*_args: object) -> None:
+        return None
+
+    def fake_connection_url(*_args: object) -> str:
+        return "test-url"
+
+    def fake_create_engine(_url: object) -> Engine:
+        return Engine()
+
+    def fake_preflight(*_args: object) -> Preflight:
+        return target
+
+    def empty_table_counts(*_args: object) -> dict[str, int]:
+        return {}
+
+    def record_event(name: str) -> Callable[[object], None]:
+        def record(_connection: object) -> None:
+            events.append(name)
+
+        return record
+
+    def record_backup(*_args: object) -> None:
+        events.append("backup")
+
+    def record_delete(_connection: object) -> dict[str, int]:
+        events.append("delete")
+        return {}
+
+    def fake_normalize_qa_accounts(*_args: object) -> bool:
+        return False
+
     monkeypatch.setattr(cleanup, "get_settings", lambda: settings)
-    monkeypatch.setattr(cleanup, "validate_configured_target", lambda *_args: None)
-    monkeypatch.setattr(cleanup, "connection_url", lambda *_args: "test-url")
-    monkeypatch.setattr(cleanup, "create_engine", lambda _url: Engine())
-    monkeypatch.setattr(cleanup, "preflight", lambda *_args: target)
-    monkeypatch.setattr(cleanup, "table_counts", lambda *_args: {})
-    monkeypatch.setattr(cleanup, "print_plan", lambda *_args: None)
-    monkeypatch.setattr(
-        cleanup, "lock_cleanup_tables", lambda _connection: events.append("lock")
-    )
+    monkeypatch.setattr(cleanup, "validate_configured_target", ignore_arguments)
+    monkeypatch.setattr(cleanup, "connection_url", fake_connection_url)
+    monkeypatch.setattr(cleanup, "create_engine", fake_create_engine)
+    monkeypatch.setattr(cleanup, "preflight", fake_preflight)
+    monkeypatch.setattr(cleanup, "table_counts", empty_table_counts)
+    monkeypatch.setattr(cleanup, "print_plan", ignore_arguments)
+    monkeypatch.setattr(cleanup, "lock_cleanup_tables", record_event("lock"))
     monkeypatch.setattr(
         cleanup,
         "refuse_active_regular_riot_writers",
-        lambda _connection: events.append("refuse-active-writers"),
+        record_event("refuse-active-writers"),
     )
     monkeypatch.setattr(
         cleanup,
         "enable_riot_writer_maintenance_mode",
-        lambda _connection: events.append("enable-maintenance"),
+        record_event("enable-maintenance"),
     )
-    monkeypatch.setattr(
-        cleanup,
-        "create_verified_backup",
-        lambda *_args: events.append("backup"),
-    )
-    monkeypatch.setattr(
-        cleanup, "delete_riot_data", lambda _connection: events.append("delete") or {}
-    )
-    monkeypatch.setattr(cleanup, "normalize_qa_accounts", lambda *_args: False)
-    monkeypatch.setattr(cleanup, "verify_after_cleanup", lambda *_args: None)
+    monkeypatch.setattr(cleanup, "create_verified_backup", record_backup)
+    monkeypatch.setattr(cleanup, "delete_riot_data", record_delete)
+    monkeypatch.setattr(cleanup, "normalize_qa_accounts", fake_normalize_qa_accounts)
+    monkeypatch.setattr(cleanup, "verify_after_cleanup", ignore_arguments)
 
     assert (
         cleanup.main(

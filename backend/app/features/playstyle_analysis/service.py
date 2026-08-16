@@ -1,7 +1,7 @@
 """Service for playstyle analysis."""
 
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 import structlog
 from sqlalchemy import select, update
@@ -24,7 +24,7 @@ logger = structlog.get_logger(__name__)
 class TagEngine:
     """Engine for processing match data and generating playstyle tags."""
 
-    def __init__(self, participants: List[MatchParticipant], matches: List[Match]):
+    def __init__(self, participants: list[MatchParticipant], matches: list[Match]):
         """
         Initialize the tag engine.
 
@@ -37,9 +37,9 @@ class TagEngine:
         self.matches = {m.match_id: m for m in matches}
         self.game_count = len(participants)
 
-    def generate_tags(self) -> Dict[str, Any]:
+    def generate_tags(self) -> dict[str, Any]:
         """Generate all applicable tags based on configuration."""
-        detected_tags = {}
+        detected_tags: dict[str, Any] = {}
 
         if self.game_count == 0:
             return {}
@@ -66,7 +66,7 @@ class TagEngine:
 
         return detected_tags
 
-    def generate_summary_stats(self) -> Dict[str, Any]:
+    def generate_summary_stats(self) -> dict[str, Any]:
         """Generate summary statistics for the player."""
         return generate_summary_stats(self.participants, self.game_count)
 
@@ -123,10 +123,10 @@ class PlaystyleAnalysisService:
         return await self._save_analysis(puuid, tags, stats)
 
     async def _save_analysis(
-        self, puuid: str, tags: dict, stats: dict
+        self, puuid: str, tags: dict[str, Any], stats: dict[str, Any]
     ) -> PlaystyleAnalysis:
         """Save or update analysis record."""
-        current_time = datetime.now(timezone.utc)
+        current_time = datetime.now(UTC)
 
         # Update Player's last_playstyle_analysis
         stmt_player = select(Player).where(Player.puuid == puuid)
@@ -188,7 +188,7 @@ class PlaystyleAnalysisService:
     async def _save_empty_analysis(self, puuid: str) -> PlaystyleAnalysis:
         return await self._save_analysis(puuid, {}, {"note": "No match data available"})
 
-    async def get_latest_analysis(self, puuid: str) -> Optional[PlaystyleAnalysis]:
+    async def get_latest_analysis(self, puuid: str) -> PlaystyleAnalysis | None:
         stmt = select(PlaystyleAnalysis).where(PlaystyleAnalysis.puuid == puuid)
         result = await self.db.execute(stmt)
         return result.scalar_one_or_none()

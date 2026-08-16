@@ -1,7 +1,6 @@
 """Service for managing system settings."""
 
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 import structlog
 from sqlalchemy import delete, select
@@ -31,6 +30,7 @@ from .schemas import (
     SettingUpdate,
     SettingValidationResponse,
     UserCookieConsentUpdate,
+    UserSettingsUpdate,
     normalize_stored_card_preference,
     serialize_card_preference_settings,
     validate_card_preference_update,
@@ -46,7 +46,7 @@ class SettingsService:
         """Initialize settings service."""
         self.db = db
 
-    async def get_setting(self, key: str) -> Optional[SettingResponse]:
+    async def get_setting(self, key: str) -> SettingResponse | None:
         """Get a setting by key."""
         if key == "riot_api_key":
             # Determine most recent added key, regardless of active status? Or just active?
@@ -149,7 +149,7 @@ class SettingsService:
 
         if existing_key_entry and existing_key_entry.is_active:
             # No-op: The key is already active and the same
-            evidence_at = datetime.now(timezone.utc)
+            evidence_at = datetime.now(UTC)
             existing_key_entry.last_used_at = evidence_at
             val = existing_key_entry.key_value
             masked = f"{val[:6]}...{val[-4:]}"
@@ -189,7 +189,7 @@ class SettingsService:
             self.db.add(new_key)
             target_key = new_key
 
-        evidence_at = datetime.now(timezone.utc)
+        evidence_at = datetime.now(UTC)
         target_key.last_used_at = evidence_at
         await mark_database_credential_valid(
             self.db,
@@ -247,9 +247,7 @@ class SettingsService:
             test_url = client.endpoints.account_by_riot_id("Jim Morioriarty", "EUN1")
             logger.info("riot_api_key_validation_attempt", test_url=test_url)
 
-            response = await client._make_request(
-                test_url, method="GET", retry_on_failure=False
-            )
+            response = await client.probe_credentials(test_url)
 
             logger.info(
                 "riot_api_key_validated",
@@ -534,7 +532,7 @@ class SettingsService:
 
         return settings
 
-    async def update_user_settings(self, user_id: int, update):
+    async def update_user_settings(self, user_id: int, update: UserSettingsUpdate):
         """Accept the retired compatibility payload without persisting it."""
         settings = await self.get_or_create_user_settings(user_id)
         update_data = update.model_dump(exclude_unset=True)
@@ -582,7 +580,7 @@ class SettingsService:
             consent.consent_level = consent_level
             consent.consent_version = update.consent_version
             consent.consent_source = update.consent_source
-            consent.consented_at = datetime.now(timezone.utc)
+            consent.consented_at = datetime.now(UTC)
 
         await self.db.commit()
         await self.db.refresh(consent)

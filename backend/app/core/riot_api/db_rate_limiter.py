@@ -17,9 +17,11 @@ Higher priority components can "bump" lower priority ones, causing them to wait.
 """
 
 import asyncio
-from datetime import datetime, timedelta, timezone
+import contextlib
+from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
 from enum import Enum
-from typing import Any, Callable, Optional
+from typing import Any, override
 
 import structlog
 from sqlalchemy import Boolean, Integer, String, select, update
@@ -119,6 +121,7 @@ class RateLimitState(Base):
 
     __table_args__ = ({"schema": "core"},)
 
+    @override
     def __repr__(self) -> str:
         return (
             f"<RateLimitState(component={self.component}, priority={self.priority}, "
@@ -190,7 +193,7 @@ class DBRateLimiter:
                 component=self.component.value,
                 priority=self.priority,
                 requests_made=0,
-                window_start=datetime.now(timezone.utc),
+                window_start=datetime.now(UTC),
                 window_size_seconds=self.window_size_seconds,
                 max_requests=self.max_requests,
                 is_waiting=False,
@@ -208,7 +211,7 @@ class DBRateLimiter:
 
     async def _get_total_requests_in_window(self) -> int:
         """Get total requests made by all components in the current window."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         window_start = now - timedelta(seconds=self.window_size_seconds)
 
         result = await self.db.execute(
@@ -278,7 +281,7 @@ class DBRateLimiter:
 
     async def _reset_window_if_expired(self, state: RateLimitState) -> RateLimitState:
         """Reset the window if it has expired."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         window_end = state.window_start + timedelta(seconds=state.window_size_seconds)
 
         if now >= window_end:
@@ -312,7 +315,7 @@ class DBRateLimiter:
 
     async def _check_higher_priority_active(self) -> bool:
         """Check if a higher priority component is actively using the API."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         recent_threshold = now - timedelta(
             seconds=5
         )  # Consider "active" if used in last 5s
@@ -374,7 +377,7 @@ class DBRateLimiter:
                     await self.db.execute(
                         update(RateLimitState)
                         .where(RateLimitState.component == self.component.value)
-                        .values(is_waiting=True, updated_at=datetime.now(timezone.utc))
+                        .values(is_waiting=True, updated_at=datetime.now(UTC))
                     )
                     await self.db.commit()
 
@@ -391,13 +394,13 @@ class DBRateLimiter:
                     await self.db.execute(
                         update(RateLimitState)
                         .where(RateLimitState.component == self.component.value)
-                        .values(is_waiting=False, updated_at=datetime.now(timezone.utc))
+                        .values(is_waiting=False, updated_at=datetime.now(UTC))
                     )
                     await self.db.commit()
 
                 return True
 
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             wait_time = await self._calculate_wait_time_until_capacity(now)
 
             if wait_time <= 0:
@@ -427,7 +430,7 @@ class DBRateLimiter:
             await self.db.execute(
                 update(RateLimitState)
                 .where(RateLimitState.component == self.component.value)
-                .values(is_waiting=True, updated_at=datetime.now(timezone.utc))
+                .values(is_waiting=True, updated_at=datetime.now(UTC))
             )
             await self.db.commit()
 
@@ -447,7 +450,7 @@ class DBRateLimiter:
 
         Call this after successfully making an API request.
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         await self.db.execute(
             update(RateLimitState)
@@ -469,29 +472,27 @@ class DBRateLimiter:
             .where(RateLimitState.component == self.component.value)
             .values(
                 is_waiting=False,
-                updated_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(UTC),
             )
         )
         await self.db.commit()
 
     @staticmethod
     async def _notify_wait_callback(
-        wait_callback: Optional[Callable[[datetime | None], Any]],
+        wait_callback: Callable[[datetime | None], Any] | None,
         reset_at: datetime | None,
     ) -> None:
         """Invoke the optional wait observer, ignoring callback failures."""
         if wait_callback is None:
             return
-        try:
+        with contextlib.suppress(Exception):
             await wait_callback(reset_at)
-        except Exception:
-            pass
 
     async def _try_acquire_when_capacity_available(
         self,
         total_requests: int,
         waiting_for_rate_limit: bool,
-        wait_callback: Optional[Callable[[datetime | None], Any]],
+        wait_callback: Callable[[datetime | None], Any] | None,
     ) -> bool | None:
         """Acquire now, yield for one second, or report that capacity is full.
 
@@ -529,7 +530,7 @@ class DBRateLimiter:
 
     async def acquire_with_wait_callback(
         self,
-        wait_callback: Optional[Callable[[datetime | None], Any]] = None,
+        wait_callback: Callable[[datetime | None], Any] | None = None,
     ) -> bool:
         """Try to acquire permission with callback for wait status updates.
 
@@ -558,7 +559,7 @@ class DBRateLimiter:
                 total_waited += 1
                 continue
 
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             wait_time = await self._calculate_wait_time_until_capacity(now)
 
             if wait_time <= 0:
@@ -592,7 +593,7 @@ class DBRateLimiter:
             await self._notify_wait_callback(wait_callback, None)
         return False
 
-    async def get_status(self) -> dict:
+    async def get_status(self) -> dict[str, Any]:
         """Get current rate limit status for this component."""
         state = await self._get_or_create_state()
         total_requests = await self._get_total_requests_in_window()
@@ -612,9 +613,9 @@ class DBRateLimiter:
         }
 
 
-async def get_global_rate_limit_status(db: AsyncSession) -> dict:
+async def get_global_rate_limit_status(db: AsyncSession) -> dict[str, Any]:
     """Get global rate limit status across all components."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     window_start = now - timedelta(seconds=120)
 
     result = await db.execute(

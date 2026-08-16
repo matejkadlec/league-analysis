@@ -23,6 +23,9 @@ and backend rules from [`../../AGENTS.md`](../../AGENTS.md).
   before totals and offset/limit pagination. Participant search covers every
   participant's champion name and Riot ID, while the requested player PUUID is
   enforced independently; this database-only read path never calls Riot.
+- Match History reads the LP value persisted on the requested player's match
+  participant. Never derive LP during reads from shared league snapshots or
+  invent a historical value; unknown and ambiguous observations stay null.
 - `discover_player` never merges two player rows. A row carrying the same Riot
   ID under a different PUUID is left alone, and a duplicate row is the accepted
   outcome. Discovery cannot distinguish a PUUID re-encrypted under a new

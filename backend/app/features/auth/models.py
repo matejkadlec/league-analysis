@@ -1,7 +1,7 @@
 """User model for authentication and authorization."""
 
 from datetime import datetime
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Final, override
 
 from sqlalchemy import (
     BigInteger,
@@ -28,7 +28,7 @@ class User(Base):
     """User model for authentication and authorization."""
 
     __tablename__ = "users"
-    __table_args__ = {"schema": "auth"}
+    __table_args__: Final = {"schema": "auth"}
 
     # Primary key
     id: Mapped[int] = mapped_column(
@@ -85,14 +85,14 @@ class User(Base):
         comment="Whether the email has been verified",
     )
 
-    email_verified_at: Mapped[Optional[datetime]] = mapped_column(
+    email_verified_at: Mapped[datetime | None] = mapped_column(
         SQLDateTime(timezone=True),
         nullable=True,
         comment="When the email was verified",
     )
 
     # Activity tracking
-    last_login: Mapped[Optional[datetime]] = mapped_column(
+    last_login: Mapped[datetime | None] = mapped_column(
         SQLDateTime(timezone=True),
         nullable=True,
         index=True,
@@ -105,13 +105,13 @@ class User(Base):
         comment="Consecutive failed login attempts since last successful login",
     )
 
-    last_failed_login: Mapped[Optional[datetime]] = mapped_column(
+    last_failed_login: Mapped[datetime | None] = mapped_column(
         SQLDateTime(timezone=True),
         nullable=True,
         comment="When the most recent failed login happened",
     )
 
-    locked_until: Mapped[Optional[datetime]] = mapped_column(
+    locked_until: Mapped[datetime | None] = mapped_column(
         SQLDateTime(timezone=True),
         nullable=True,
         index=True,
@@ -135,29 +135,30 @@ class User(Base):
     )
 
     # Relationships
-    settings: Mapped[Optional["UserSettings"]] = relationship(
+    settings: Mapped[UserSettings | None] = relationship(
         "UserSettings",
         back_populates="user",
         uselist=False,
         cascade="all, delete-orphan",
     )
-    cookie_consent: Mapped[Optional["UserCookieConsent"]] = relationship(
+    cookie_consent: Mapped[UserCookieConsent | None] = relationship(
         "UserCookieConsent",
         back_populates="user",
         uselist=False,
         cascade="all, delete-orphan",
     )
-    tracked_players: Mapped[list["UserTrackedPlayer"]] = relationship(
+    tracked_players: Mapped[list[UserTrackedPlayer]] = relationship(
         "UserTrackedPlayer",
         back_populates="user",
         cascade="all, delete-orphan",
     )
-    email_change_request: Mapped[Optional["EmailChangeRequest"]] = relationship(
+    email_change_request: Mapped[EmailChangeRequest | None] = relationship(
         "EmailChangeRequest",
         uselist=False,
         cascade="all, delete-orphan",
     )
 
+    @override
     def __repr__(self) -> str:
         """Return string representation of the user."""
         return f"<User(id={self.id}, email='{self.email}', display_name='{self.display_name}', is_admin={self.is_admin})>"
@@ -171,4 +172,5 @@ Index("idx_users_locked_until", User.locked_until)
 Index("idx_users_created_at", User.created_at)
 
 # Ensure consent mapper is registered even when this module is imported directly.
-from .user_cookie_consent import UserCookieConsent  # noqa: F401,E402
+
+from .user_cookie_consent import UserCookieConsent  # noqa: E402

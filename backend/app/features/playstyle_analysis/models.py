@@ -2,7 +2,7 @@
 
 from datetime import datetime
 from enum import Enum as PyEnum
-from typing import Any, Dict
+from typing import Any, Final
 
 from sqlalchemy import (
     DateTime as SQLDateTime,
@@ -34,7 +34,7 @@ class PlaystyleAnalysis(Base):
     """Playstyle analysis model storing tags and summary stats."""
 
     __tablename__ = "playstyle_analyses"
-    __table_args__ = {"schema": "core"}
+    __table_args__: Final = {"schema": "core"}
 
     # Primary key
     id: Mapped[int] = mapped_column(
@@ -65,7 +65,7 @@ class PlaystyleAnalysis(Base):
     )
 
     # Analysis Results
-    tags: Mapped[Dict[str, Any]] = mapped_column(
+    tags: Mapped[dict[str, Any]] = mapped_column(
         JSONB,
         nullable=False,
         default=dict,
@@ -73,7 +73,7 @@ class PlaystyleAnalysis(Base):
         comment="Detected playstyle tags (key=tag_code, value=details)",
     )
 
-    summary_stats: Mapped[Dict[str, Any]] = mapped_column(
+    summary_stats: Mapped[dict[str, Any]] = mapped_column(
         JSONB,
         nullable=False,
         default=dict,

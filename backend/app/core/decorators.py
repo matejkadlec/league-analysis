@@ -1,8 +1,10 @@
 """Service layer decorators for error handling and validation."""
 
+import annotationlib
 import functools
 import inspect
-from typing import Any, Callable, Dict, Optional, ParamSpec, Type, TypeVar
+from collections.abc import Awaitable, Callable
+from typing import Any, ParamSpec, TypeVar, cast
 
 import structlog
 
@@ -25,24 +27,44 @@ P = ParamSpec("P")
 R = TypeVar("R")
 
 
+def _binding_signature(func: Callable[..., Any]) -> inspect.Signature:
+    """Return a signature usable for binding arguments, without resolving annotations.
+
+    These decorators only ever read parameter *names* and the values bound to
+    them. Resolving annotations is therefore pure overhead — and worse, it is a
+    trap: under PEP 649 a plain `inspect.signature()` evaluates each annotation,
+    so decorating any method that annotates a `TYPE_CHECKING`-only import raises
+    `NameError` at call time. Nothing static catches that; the failure only
+    appears when the decorated method actually runs.
+
+    `Format.STRING` keeps every annotation as text, so binding can never depend
+    on a name being importable at runtime.
+    """
+    return inspect.signature(func, annotation_format=annotationlib.Format.STRING)
+
+
 def service_error_handler(
     service_name: str,
     reraise: bool = True,
     include_context: bool = True,
-    default_error_type: Type[ServiceException] = ServiceException,
+    default_error_type: type[ServiceException] = ServiceException,
 ) -> Callable[[Callable[P, R]], Callable[P, R]]:
     """Decorator for handling service errors with structured logging."""
 
     def decorator(func: Callable[P, R]) -> Callable[P, R]:
         operation_name = func.__name__
+        signature = _binding_signature(func)
+        # `async_wrapper` is only ever returned when `func` is a coroutine
+        # function (see the `iscoroutinefunction` check below), so inside the
+        # wrapper `func` really is awaitable.
+        awaitable_func = cast("Callable[P, Awaitable[R]]", func)
 
         @functools.wraps(func)
         async def async_wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
-            sig = inspect.signature(func)
-            bound_args = sig.bind(*args, **kwargs)
+            bound_args = signature.bind(*args, **kwargs)
             bound_args.apply_defaults()
 
-            context: Dict[str, Any] = {
+            context: dict[str, Any] = {
                 "service": service_name,
                 "operation": operation_name,
             }
@@ -59,7 +81,7 @@ def service_error_handler(
 
             try:
                 logger.debug("Service method called", **context)
-                result = await func(*args, **kwargs)  # type: ignore[misc]
+                result = await awaitable_func(*args, **kwargs)
                 logger.debug("Service method completed", **context)
                 return result
 
@@ -99,7 +121,7 @@ def service_error_handler(
                 )
                 logger.error("Validation error", error_message=str(e), **context)
                 if reraise:
-                    raise validation_error
+                    raise validation_error from e
                 return None  # type: ignore[return-value]
 
             except (ConnectionError, TimeoutError) as e:
@@ -117,12 +139,12 @@ def service_error_handler(
                     **context,
                 )
                 if reraise:
-                    raise external_error
+                    raise external_error from e
                 return None  # type: ignore[return-value]
 
             except Exception as e:
                 error_message = (
-                    f"Unexpected error in {service_name}.{operation_name}: {str(e)}"
+                    f"Unexpected error in {service_name}.{operation_name}: {e!s}"
                 )
 
                 if any(
@@ -153,29 +175,33 @@ def service_error_handler(
                 )
 
                 if reraise:
-                    raise error
+                    raise error from e
                 return None  # type: ignore[return-value]
 
         if inspect.iscoroutinefunction(func):
             return async_wrapper  # type: ignore
         else:
-            return func  # type: ignore
+            return func
 
     return decorator
 
 
 def input_validation(
-    validate_non_empty: Optional[list[str]] = None,
-    validate_positive: Optional[list[str]] = None,
-    custom_validators: Optional[Dict[str, Callable[[Any], None]]] = None,
+    validate_non_empty: list[str] | None = None,
+    validate_positive: list[str] | None = None,
+    custom_validators: dict[str, Callable[[Any], None]] | None = None,
 ) -> Callable[[Callable[P, R]], Callable[P, R]]:
     """Decorator for input validation in service methods."""
 
     def decorator(func: Callable[P, R]) -> Callable[P, R]:
+        signature = _binding_signature(func)
+        # Only returned for coroutine functions, exactly as in
+        # `service_error_handler`, so `func` is awaitable inside the wrapper.
+        awaitable_func = cast("Callable[P, Awaitable[R]]", func)
+
         @functools.wraps(func)
         async def async_wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
-            sig = inspect.signature(func)
-            bound_args = sig.bind(*args, **kwargs)
+            bound_args = signature.bind(*args, **kwargs)
             bound_args.apply_defaults()
 
             if validate_non_empty:
@@ -201,11 +227,11 @@ def input_validation(
                         if value is not None:
                             validator(value)
 
-            return await func(*args, **kwargs)  # type: ignore
+            return await awaitable_func(*args, **kwargs)
 
         if inspect.iscoroutinefunction(func):
             return async_wrapper  # type: ignore
         else:
-            return func  # type: ignore
+            return func
 
     return decorator

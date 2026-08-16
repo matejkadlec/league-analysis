@@ -1,6 +1,7 @@
 """Join Us contact submission log for anti-spam throttling."""
 
 from datetime import datetime
+from typing import Final, override
 
 from sqlalchemy import (
     BigInteger,
@@ -21,7 +22,7 @@ class JoinUsContactSubmission(Base):
     """Stores Join Us submission metadata used for anti-spam checks."""
 
     __tablename__ = "join_us_contact_submissions"
-    __table_args__ = {"schema": "auth"}
+    __table_args__: Final = {"schema": "auth"}
 
     id: Mapped[int] = mapped_column(
         BigInteger,
@@ -54,6 +55,7 @@ class JoinUsContactSubmission(Base):
         comment="When the submission was accepted",
     )
 
+    @override
     def __repr__(self) -> str:
         """Return string representation of join-us submission row."""
         return (

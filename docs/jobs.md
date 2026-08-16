@@ -13,7 +13,8 @@
 
 Two APScheduler-managed regular writer jobs exist
 (`backend/app/features/jobs/implementations/`): `MATCH_FETCHER` fetches new
-matches for tracked players and updates Solo/Duo rank snapshots;
+matches for tracked players, updates Solo/Duo rank snapshots, and persists
+per-match LP only when the surrounding snapshots prove one exact transition;
 `PLAYER_UPDATER` refreshes tracked player profile identity. Execution states:
 `PENDING` (queued) -> `RUNNING` (executing) <-> `PAUSED` (runtime checkpoint)
 -> terminal `SUCCESS`, `FAILED`, `CANCELLED`, or `RATE_LIMITED`. Jobs process

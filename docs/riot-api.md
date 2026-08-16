@@ -230,6 +230,16 @@ be "fixed" away:
   match-start filters. Newly stored or refetched matches persist the actual
   start and mark its source `riot_game_start`; existing rows are explicitly
   marked as legacy creation-time fallbacks rather than silently relabeled.
+- **Historical per-match LP boundary (verified 2026-08-15).** Riot's public
+  [API catalog](https://developer.riotgames.com/apis/) separates MATCH-V5 match
+  history from LEAGUE-V4 current ranked entries and documents no endpoint for
+  an arbitrary player's historical per-match LP delta. This absence is an
+  inference from the documented public surface, not a provider guarantee.
+  Riot's [League developer documentation](https://developer.riotgames.com/docs/lol)
+  also marks the local League Client API as unsupported for third-party
+  applications, so it is never an ingestion fallback. Match Fetcher therefore
+  persists only future deltas proven by one match between two league snapshots;
+  batches, gaps, rank boundaries, and existing history remain unavailable.
 - **Timeline event payload keys are undocumented by Riot.** The portal
   documents only a small generic event surface. Our timeline handling is
   verified only by the sanitized fixtures captured 2026-08-08 for queues 400,
@@ -257,7 +267,12 @@ Riot ID (`game_name`/`tag_line`) refresh via ACCOUNT-V1 by-PUUID is the
 **Player Updater** job's responsibility (`PlayerService.update_player_profile`
 driven by `PlayerUpdaterJob`), together with SUMMONER-V4 icon/level refresh.
 The Match Fetcher deliberately does not update player profiles; it syncs
-matches, timelines, and league snapshots.
+matches, timelines, league snapshots, and conservative per-match LP
+observations. A remake is authoritative zero because Match-V5 marks it
+ineligible for progression. A win or loss gets a value only when exactly one
+progression match lies between the before/after LEAGUE-V4 observations, the
+win/loss counters advance by that result, the rank label is unchanged, and the
+LP sign agrees with the result.
 
 ---
 
