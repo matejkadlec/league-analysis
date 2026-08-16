@@ -141,13 +141,14 @@ class MatchTimeline(Base):
             "participant_id",
             name="uq_match_timelines_match_participant",
         ),
+        # Bare names: the `ck` naming convention is
+        # `ck_%(table_name)s_%(constraint_name)s`, so it prefixes these itself.
+        # Spelling the prefix here too yields `ck_match_timelines_ck_match_...`.
         CheckConstraint(
             "participant_id BETWEEN 1 AND 10",
-            name="ck_match_timelines_participant_id_range",
+            name="participant_id_range",
         ),
-        CheckConstraint(
-            "team_id IN (100, 200)", name="ck_match_timelines_team_id_valid"
-        ),
+        CheckConstraint("team_id IN (100, 200)", name="team_id_valid"),
         {"schema": "core"},
     )
 

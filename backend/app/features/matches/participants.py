@@ -11,6 +11,7 @@ from sqlalchemy import (
     Index,
     Integer,
     String,
+    UniqueConstraint,
 )
 from sqlalchemy import (
     DateTime as SQLDateTime,
@@ -28,7 +29,12 @@ class MatchParticipant(Base):
     """Match participant model storing individual player performance data."""
 
     __tablename__ = "match_participants"
-    __table_args__: Final = {"schema": "core"}
+    __table_args__: Final = (
+        # The PK is (match_id, participant_id); this separately guarantees a
+        # player appears at most once per match, whichever slot they occupy.
+        UniqueConstraint("match_id", "puuid", name="uq_match_participants_puuid_match"),
+        {"schema": "core"},
+    )
 
     # Composite Primary Key
     match_id: Mapped[str] = mapped_column(

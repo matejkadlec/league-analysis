@@ -8,6 +8,7 @@ from sqlalchemy import (
     Boolean,
     Index,
     String,
+    Text,
 )
 from sqlalchemy import (
     DateTime as SQLDateTime,
@@ -48,7 +49,7 @@ class User(Base):
     )
 
     password_hash: Mapped[str] = mapped_column(
-        String,  # Text type in database, no length limit
+        Text,  # matches the `text` column the baseline actually creates
         nullable=False,
         comment="Hashed password using Argon2id",
     )

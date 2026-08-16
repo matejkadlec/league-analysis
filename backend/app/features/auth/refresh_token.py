@@ -8,6 +8,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     String,
+    Text,
 )
 from sqlalchemy import (
     DateTime as SQLDateTime,
@@ -45,7 +46,7 @@ class RefreshToken(Base):
         comment="Public token identifier (JWT-style jti equivalent)",
     )
     token_hash: Mapped[str] = mapped_column(
-        String,
+        Text,
         nullable=False,
         unique=True,
         comment="SHA-256 hash of the raw refresh token",

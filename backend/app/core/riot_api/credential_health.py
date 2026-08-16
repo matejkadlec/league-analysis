@@ -24,6 +24,7 @@ from sqlalchemy import DateTime as SQLDateTime
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.schema import conv
 from sqlalchemy.sql import func
 
 from app.core.models import Base
@@ -56,7 +57,18 @@ class RiotAPIKey(Base):
     """Database-stored Riot API credential."""
 
     __tablename__ = "riot_api_keys"
-    __table_args__ = ({"schema": "core"},)
+    __table_args__ = (
+        # `conv()` keeps the pre-convention name the baseline actually created;
+        # without it the `ck` convention would render
+        # `ck_riot_api_keys_check_riot_key_format` and drift from the database.
+        # A single `%` is correct here: SQLAlchemy escapes it for the DBAPI when
+        # it compiles the DDL, so spelling `%%` renders as `%%%%`.
+        CheckConstraint(
+            "key_value LIKE 'RGAPI-%' AND length(key_value) = 42",
+            name=conv("check_riot_key_format"),
+        ),
+        {"schema": "core"},
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     key_value: Mapped[str] = mapped_column(

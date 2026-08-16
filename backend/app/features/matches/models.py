@@ -32,12 +32,20 @@ class Match(Base):
             "platform = lower(platform)",
             name="ck_matches_platform_is_lowercase",
         ),
+        # Created by revision 20260808_0004 but never mirrored here, so
+        # autogenerate proposed dropping it.
+        CheckConstraint(
+            "game_start_timestamp_source IN "
+            "('riot_game_start', 'legacy_game_creation')",
+            name="start_timestamp_source",
+        ),
         {"schema": "core"},
     )
 
     # Primary key - match ID from Riot API
     match_id: Mapped[str] = mapped_column(
-        String(64),
+        # Same width as the two tables that reference it.
+        String(20),
         primary_key=True,
         index=True,
         comment="Unique match identifier from Riot API",
@@ -45,7 +53,7 @@ class Match(Base):
 
     # Platform and routing information
     platform: Mapped[str] = mapped_column(
-        String(8),
+        String(4),
         nullable=False,
         index=True,
         comment="Platform where the match was played, canonical lowercase (e.g. euw1)",
@@ -74,9 +82,9 @@ class Match(Base):
         comment="Source semantics for game_start_timestamp",
     )
 
-    game_end_timestamp: Mapped[int | None] = mapped_column(
+    game_end_timestamp: Mapped[int] = mapped_column(
         BigInteger,
-        nullable=True,
+        nullable=False,
         comment="Game end timestamp in milliseconds since epoch",
     )
 
@@ -103,30 +111,30 @@ class Match(Base):
     )
 
     # Game mode information
-    game_mode: Mapped[str | None] = mapped_column(
+    game_mode: Mapped[str] = mapped_column(
         String(32),
-        nullable=True,
+        nullable=False,
         index=True,
         comment="Game mode (e.g., 'CLASSIC', 'ARAM')",
     )
 
-    game_type: Mapped[str | None] = mapped_column(
+    game_type: Mapped[str] = mapped_column(
         String(32),
-        nullable=True,
+        nullable=False,
         index=True,
         comment="Game type (e.g., 'MATCHED_GAME')",
     )
 
     # Match result
-    early_surrender: Mapped[bool | None] = mapped_column(
+    early_surrender: Mapped[bool] = mapped_column(
         Boolean,
-        nullable=True,
+        nullable=False,
         comment="Whether the game ended in early surrender",
     )
 
-    surrender: Mapped[bool | None] = mapped_column(
+    surrender: Mapped[bool] = mapped_column(
         Boolean,
-        nullable=True,
+        nullable=False,
         comment="Whether the game ended in surrender",
     )
 
