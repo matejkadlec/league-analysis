@@ -4,40 +4,30 @@ from __future__ import annotations
 
 from logging.config import fileConfig
 
+# Imported for its side effect: it registers an enum comparator on Alembic's
+# `schema` dispatch hook. Without it, `alembic check` is blind to enum members
+# — the one schema change autogenerate does not look at.
+#
+# Its `drop_unused_enums` option is left at its default of True, so a PostgreSQL
+# enum type bound to no mapped column is reported as drift. That is the stricter
+# reading and matches how the rest of this file treats the models as the schema's
+# description. The cost to know about: such a type makes `alembic revision
+# --autogenerate` emit a destructive `DROP TYPE`, so an enum used only from
+# PL/pgSQL or a domain would need `set_configuration(Config(
+# drop_unused_enums=False))` here rather than a hand-edit of the revision.
+import alembic_postgresql_enum  # noqa: F401
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
 from app.core.config import get_settings
 from app.core.models import Base
-from app.features.auth import (
-    email_change_request,  # noqa: F401
-    join_us_contact_submission,  # noqa: F401
-    refresh_token,  # noqa: F401
-    revoked_access_token,  # noqa: F401
-    subject_counts,  # noqa: F401
-    user_cookie_consent,  # noqa: F401
-    user_settings,  # noqa: F401
-    user_tracked_player,  # noqa: F401
-)
+from app.model_registry import import_all_models
 
-# Import every mapped model before Alembic reads Base.metadata. The initial
-# baseline is SQL-backed because it also contains PostgreSQL-only objects that
-# SQLAlchemy cannot express, while this metadata supports future revisions.
-from app.features.auth import models as auth_models  # noqa: F401
-from app.features.jobs import models as job_models  # noqa: F401
-from app.features.matches import models as match_models  # noqa: F401
-from app.features.matches import (
-    participants,  # noqa: F401
-    timeline,  # noqa: F401
-)
-from app.features.matchmaking_analysis import models as matchmaking_models  # noqa: F401
-from app.features.players import leagues  # noqa: F401
-from app.features.players import models as player_models  # noqa: F401
-from app.features.playstyle_analysis import models as playstyle_models  # noqa: F401
-from app.features.settings import models as settings_models  # noqa: F401
-from app.features.smurf_boost_detection import (
-    models as smurf_boost_models,  # noqa: F401
-)
+# Every mapped model must be imported before Alembic reads `Base.metadata`, or
+# its table is invisible here and the migration silently omits it. The baseline
+# revision is SQL-backed because it also holds PostgreSQL-only objects that
+# SQLAlchemy cannot express; this metadata carries everything after it.
+import_all_models()
 
 config = context.config
 
@@ -49,6 +39,11 @@ target_metadata = Base.metadata
 # Tables created and owned by a runtime library rather than by a revision. They
 # are in the database and will never be in `Base.metadata`, so autogenerate and
 # `alembic check` would propose dropping them on every run.
+#
+# `alembic_version` needs the entry despite Alembic having its own exclusion for
+# it: that one only fires when the table's schema equals `version_table_schema`,
+# and `include_schemas=True` reports the default schema as None, so the
+# comparison is `None == "public"` and never matches.
 RUNTIME_OWNED_TABLES = {
     ("jobs", "apscheduler_jobs"),  # APScheduler creates its own job store
     (None, "alembic_version"),  # Alembic's own revision pointer
@@ -62,14 +57,13 @@ def include_object(
     _reflected: bool,
     _compare_to: object,
 ) -> bool:
-    """Keep runtime-owned tables out of the comparison."""
+    """Keep runtime-owned tables out of the comparison.
+
+    Filtering the table is enough; indexes and columns are only ever offered
+    here for a table that already passed, so they need no case of their own.
+    """
     if type_ == "table":
         return (getattr(target, "schema", None), name) not in RUNTIME_OWNED_TABLES
-    if type_ == "index":
-        parent = getattr(target, "table", None)
-        if parent is not None:
-            key = (parent.schema, parent.name)
-            return key not in RUNTIME_OWNED_TABLES
     return True
 
 
@@ -99,6 +93,7 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         include_schemas=True,
         compare_type=True,
+        include_object=include_object,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
         version_table_schema="public",

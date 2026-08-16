@@ -35,7 +35,6 @@ class RefreshToken(Base):
         BigInteger,
         ForeignKey("auth.users.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
         comment="Reference to auth.users.id",
     )
     token_id: Mapped[str] = mapped_column(
@@ -91,4 +90,6 @@ class RefreshToken(Base):
         return f"<RefreshToken(id={self.id}, user_id={self.user_id}, token_id='{self.token_id}')>"
 
 
+# `user_id` carries no `index=True`: this index leads with it, so it already
+# serves a lookup by user alone.
 Index("idx_refresh_tokens_user_active", RefreshToken.user_id, RefreshToken.revoked_at)

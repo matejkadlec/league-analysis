@@ -48,7 +48,8 @@ class PlayerLeague(Base):
     league_id: Mapped[str | None] = mapped_column(
         String(36),
         nullable=True,
-        index=True,
+        # Indexed by `idx_leagues_league_id` at the bottom of this module;
+        # `index=True` here would declare a second index on the same column.
         comment="Optional Riot league ID (omitted by current by-PUUID responses)",
     )
 

@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import ast
 import asyncio
 import os
 import re
@@ -17,6 +18,12 @@ from migration_contract import EXPECTED_ALEMBIC_HEAD
 from sqlalchemy import URL, create_engine, text
 
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
+RECONCILE_REVISION = (
+    BACKEND_ROOT
+    / "alembic"
+    / "versions"
+    / "20260816_0014_reconcile_models_and_schema.py"
+)
 PROJECT_ROOT = BACKEND_ROOT.parent
 SNAPSHOT_SQL = PROJECT_ROOT / "backup" / "postgres-snapshot.sql"
 EXPECTED_REVISION = EXPECTED_ALEMBIC_HEAD
@@ -275,6 +282,102 @@ def seed_legacy_matchmaking_analyses(database: str) -> None:
         engine.dispose()
 
 
+def tightened_participant_columns() -> tuple[str, ...]:
+    """Read the column list straight out of the revision that tightens them.
+
+    Parsed rather than imported: a revision file is not on the import path, and
+    copying the 24 names here would let the fixture and the revision drift into
+    agreeing about nothing.
+    """
+    module = ast.parse(RECONCILE_REVISION.read_text(encoding="utf-8"))
+    for node in module.body:
+        if not isinstance(node, ast.AnnAssign) or not isinstance(node.target, ast.Name):
+            continue
+        if node.target.id == "NOT_NULL_COLUMNS" and node.value is not None:
+            columns = ast.literal_eval(node.value)
+            if not columns:
+                raise RuntimeError("NOT_NULL_COLUMNS in revision 0014 is empty")
+            return columns
+    raise RuntimeError(f"no NOT_NULL_COLUMNS assignment in {RECONCILE_REVISION.name}")
+
+
+def seed_rows_revision_0014_must_repair(database: str) -> None:
+    """Seed the two shapes of legacy row that revision 0014 repairs.
+
+    Both operations 0014 performs on data are conditional on data nobody can
+    produce any more: the NULL counters predate the columns getting a default,
+    and the duplicate playstyle rows predate the unique index. Without a row of
+    each here, the revision's `UPDATE` and `DELETE` run against nothing and the
+    gate would pass just as happily if they were deleted.
+    """
+    url = administration_url().set(database=database)
+    engine = create_engine(url)
+    columns = tightened_participant_columns()
+    nulled = ", ".join(columns)
+    nulls = ", ".join(["NULL"] * len(columns))
+    try:
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "INSERT INTO core.match_participants "
+                    "(match_id, participant_id, puuid, game_name, tag_line, "
+                    "team_id, champion_id, champion_name, champion_level, win, "
+                    f"remake, kills, deaths, assists, item0, item1, item2, "
+                    f"item3, item4, item5, trinket, {nulled}) VALUES "
+                    "('EUN1_VALIDATION', 1, 'LIFECYCLE_VALIDATION', 'Validator', "
+                    "'TEST', 100, 1, 'Annie', 18, true, false, 0, 0, 0, 0, 0, 0, "
+                    f"0, 0, 0, 0, {nulls})"
+                )
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO core.playstyle_analyses "
+                    "(puuid, status, tags, summary_stats) VALUES "
+                    "('LIFECYCLE_VALIDATION', 'COMPLETED', '{}'::jsonb, "
+                    ' \'{"note": "older duplicate"}\'::jsonb), '
+                    "('LIFECYCLE_VALIDATION', 'COMPLETED', '{}'::jsonb, "
+                    ' \'{"note": "newest wins"}\'::jsonb)'
+                )
+            )
+    finally:
+        engine.dispose()
+
+
+def validate_revision_0014_repaired_the_seeded_rows(database: str) -> None:
+    """Assert 0014 backfilled the NULL counters and kept the newest analysis."""
+    url = administration_url().set(database=database)
+    engine = create_engine(url)
+    try:
+        with engine.connect() as connection:
+            vision_score = connection.execute(
+                text(
+                    "SELECT vision_score FROM core.match_participants "
+                    "WHERE match_id = 'EUN1_VALIDATION' AND participant_id = 1"
+                )
+            ).scalar_one()
+            surviving = (
+                connection.execute(
+                    text(
+                        "SELECT summary_stats->>'note' FROM core.playstyle_analyses "
+                        "WHERE puuid = 'LIFECYCLE_VALIDATION'"
+                    )
+                )
+                .scalars()
+                .all()
+            )
+    finally:
+        engine.dispose()
+    if vision_score != 0:
+        raise RuntimeError(
+            f"revision 0014 left a NULL counter unrepaired: vision_score={vision_score}"
+        )
+    if surviving != ["newest wins"]:
+        raise RuntimeError(
+            "revision 0014 did not reduce the duplicate playstyle analyses to "
+            f"the newest row: {surviving}"
+        )
+
+
 def validate_metadata_drift(database: str, restored_database: str) -> None:
     """Assert the ORM models describe the migrated schema exactly.
 
@@ -412,8 +515,10 @@ def main() -> int:
         run_upgrade(database, "20260808_0003")
         seed_legacy_match(database)
         seed_legacy_matchmaking_analyses(database)
+        seed_rows_revision_0014_must_repair(database)
         run_upgrade(database)
         validate_revision(database)
+        validate_revision_0014_repaired_the_seeded_rows(database)
         asyncio.run(verify_application_database_access(database))
         with tempfile.TemporaryDirectory(
             prefix="league-analysis-restore-validation-"

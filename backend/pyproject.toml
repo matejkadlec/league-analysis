@@ -8,6 +8,13 @@ authors = [
 ]
 dependencies = [
     "alembic>=1.19.1",
+    # Alembic's autogenerate does not diff enum MEMBERS at all, so adding a
+    # value to a Python enum without an `ALTER TYPE` passes `alembic check` and
+    # then fails at runtime with InvalidTextRepresentation. This registers an
+    # enum comparator on the standard hook. It is a runtime dependency, not a
+    # dev one: the ops it generates (`op.sync_enum_values`) live in revision
+    # files that production has to execute.
+    "alembic-postgresql-enum>=1.10.0",
     "apscheduler>=3.11.3",
     "asyncpg>=0.31.0",
     "email-validator>=2.3.0",
@@ -164,6 +171,12 @@ ignore = [
 # hook from the repository root, and they disagreed on where
 # `from scripts import ...` belongs until the classification was pinned.
 known-first-party = ["app", "scripts"]
+# `alembic` is the same problem with the opposite answer. Run from backend/,
+# Ruff sees the `alembic/` directory and calls it first-party; run from the
+# repository root it does not, and calls it third-party. `from alembic import
+# context` imports the library either way, so third-party is the true answer --
+# without this the gate and the pre-commit hook each rewrite `env.py` back.
+known-third-party = ["alembic"]
 
 [dependency-groups]
 dev = [
@@ -228,9 +241,12 @@ python-Levenshtein = "Levenshtein"
 
 [tool.deptry.per_rule_ignores]
 # Drivers and plugin extras are required at runtime but imported by
-# SQLAlchemy, Pydantic, or FastAPI rather than application code.
+# SQLAlchemy, Pydantic, or FastAPI rather than application code. The two
+# alembic entries are imported by `alembic/env.py`, which `extend_exclude`
+# keeps out of the scan.
 DEP002 = [
     "alembic",
+    "alembic-postgresql-enum",
     "asyncpg",
     "email-validator",
     "psycopg2-binary",

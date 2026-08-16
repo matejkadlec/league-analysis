@@ -48,7 +48,6 @@ class Match(Base):
         # Same width as the two tables that reference it.
         String(20),
         primary_key=True,
-        index=True,
         comment="Unique match identifier from Riot API",
     )
 
@@ -56,7 +55,6 @@ class Match(Base):
     platform: Mapped[str] = mapped_column(
         String(4),
         nullable=False,
-        index=True,
         comment="Platform where the match was played, canonical lowercase (e.g. euw1)",
     )
 
@@ -70,7 +68,6 @@ class Match(Base):
     game_start_timestamp: Mapped[int] = mapped_column(
         BigInteger,
         nullable=False,
-        index=True,
         comment="Actual game start, or creation time for explicitly marked legacy rows",
     )
 
@@ -96,14 +93,12 @@ class Match(Base):
     queue_id: Mapped[int] = mapped_column(
         Integer,
         nullable=False,
-        index=True,
         comment="Queue type ID (e.g., 420=Ranked Solo, 440=Ranked Flex)",
     )
 
     game_version: Mapped[str] = mapped_column(
         String(32),
         nullable=False,
-        index=True,
         comment="Game version (e.g., '14.20.555.5555')",
     )
 
@@ -166,7 +161,6 @@ class Match(Base):
         Boolean,
         nullable=False,
         default=False,
-        index=True,
         comment="Whether this match has been processed for playstyle analysis",
     )
 
@@ -181,7 +175,13 @@ class Match(Base):
         return f"<Match(match_id='{self.match_id}', queue_id={self.queue_id}, game_start_timestamp={self.game_start_timestamp})>"
 
 
-# Create indexes for common queries
+# Create indexes for common queries.
+#
+# None of the columns below also carries `index=True`. A btree on (a, b) already
+# serves every lookup a btree on (a) would, so a single-column index on the
+# leading column of one of these is pure write cost -- and `match_id` is the
+# primary key, whose own index covers it. `game_mode` and `game_type` do carry
+# `index=True`, because no composite here leads with either.
 Index("idx_matches_platform_timestamp", Match.platform, Match.game_start_timestamp)
 
 Index("idx_matches_queue_timestamp", Match.queue_id, Match.game_start_timestamp)

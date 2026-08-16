@@ -42,7 +42,6 @@ class MatchParticipant(Base):
         ForeignKey("core.matches.match_id", ondelete="CASCADE"),
         primary_key=True,
         nullable=False,
-        index=True,
         comment="Reference to the match",
     )
 
@@ -269,10 +268,26 @@ class MatchParticipant(Base):
 
     # JSON Data
     runes: Mapped[dict[str, Any] | None] = mapped_column(
-        JSONB, nullable=True, comment="Full Runes JSON"
+        JSONB,
+        nullable=True,
+        comment=(
+            "Full Perks/Runes JSON data structure.\n"
+            "Contains style selections, perks, var1-3 values.\n"
+            "Stored as JSONB to preserve the tree structure:\n"
+            '{ "primaryStyle": 8000, "subStyle": 8300, "statPerks": {...}, '
+            '"styles": [...] }'
+        ),
     )
     advanced_stats: Mapped[dict[str, Any] | None] = mapped_column(
-        JSONB, nullable=True, comment="Full Challenges JSON"
+        JSONB,
+        nullable=True,
+        comment=(
+            "Full Challenges JSON data structure from Riot API.\n"
+            "Contains granular stats like damagePerMinute, healFromMapSources, "
+            "skillshotsDodged, etc.\n"
+            "Kept as full JSON to avoid frequent schema migrations when Riot "
+            "adds new challenges."
+        ),
     )
 
     # Relationships
@@ -286,7 +301,11 @@ class MatchParticipant(Base):
 
 
 # Create composite indexes for common queries
-Index("idx_participants_match_puuid", MatchParticipant.match_id, MatchParticipant.puuid)
+# No `idx_participants_match_puuid`: `uq_match_participants_puuid_match` is a
+# unique constraint on the same two columns in the same order, and its backing
+# index already serves every lookup a plain one would. For the same reason
+# `match_id` carries no `index=True` -- it leads both the primary key and that
+# unique constraint.
 
 Index(
     "idx_participants_champion_win", MatchParticipant.champion_id, MatchParticipant.win

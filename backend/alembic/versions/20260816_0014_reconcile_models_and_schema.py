@@ -79,8 +79,11 @@ DROPPED_INDEXES: tuple[tuple[str, str, str, str], ...] = (
     ),
 )
 
-# Nullable in the database, non-optional in the models. Production holds zero
-# NULLs in all of these across 37,390 rows, so no backfill is needed.
+# Nullable in the database, non-optional in the models. Production held zero
+# NULLs in all of these across 37,390 rows when this was written, but the
+# upgrade coalesces anyway: a single legacy or hand-repaired row would
+# otherwise abort the whole revision, and every one of these columns already
+# means zero rather than unknown -- they are counters with `DEFAULT 0`.
 NOT_NULL_COLUMNS: tuple[str, ...] = (
     "damage_dealt_to_objectives",
     "damage_dealt_to_turrets",
@@ -387,13 +390,6 @@ COLUMN_COMMENTS: tuple[tuple[str, str, str, str, str | None], ...] = (
     ),
     ("auth", "users", "password_hash", "Hashed password using Argon2id", None),
     ("auth", "users", "updated_at", "When this user account was last updated", None),
-    (
-        "core",
-        "match_participants",
-        "advanced_stats",
-        "Full Challenges JSON",
-        "Full Challenges JSON data structure from Riot API.\nContains granular stats like damagePerMinute, healFromMapSources, skillshotsDodged, etc.\nKept as full JSON to avoid frequent schema migrations when Riot adds new challenges.",
-    ),
     ("core", "match_participants", "ally_saves", "saveAllyFromDeath", None),
     (
         "core",
@@ -420,13 +416,6 @@ COLUMN_COMMENTS: tuple[tuple[str, str, str, str, str | None], ...] = (
         "killsOnOtherLanesEarlyJungleAsLaner",
         None,
     ),
-    (
-        "core",
-        "match_participants",
-        "runes",
-        "Full Runes JSON",
-        'Full Perks/Runes JSON data structure.\nContains style selections, perks, var1-3 values.\nStored as JSONB to preserve the tree structure:\n{ "primaryStyle": 8000, "subStyle": 8300, "statPerks": {...}, "styles": [...] }',
-    ),
     ("core", "match_participants", "summoner_id", "Legacy Summoner ID", None),
     ("core", "match_participants", "tag_line", "Player's tag Line", None),
     ("core", "match_participants", "team_id", "100 (Blue) or 200 (Red)", None),
@@ -436,13 +425,6 @@ COLUMN_COMMENTS: tuple[tuple[str, str, str, str, str | None], ...] = (
         "team_position",
         "TOP, JUNGLE, MIDDLE, BOTTOM, UTILITY",
         None,
-    ),
-    (
-        "core",
-        "match_timelines",
-        "objective_events",
-        None,
-        "Compact objective event log.\nEach object uses short keys: t=timestamp, o=objective, r=role(K/A), optional l=lane, s=subtype, m=monsterType.",
     ),
     (
         "core",
@@ -687,13 +669,6 @@ COLUMN_COMMENTS: tuple[tuple[str, str, str, str, str | None], ...] = (
     ("core", "playstyle_analyses", "updated_at", "Last update time", None),
     (
         "core",
-        "rate_limit_state",
-        "priority",
-        "Priority level: 1=highest, 2=medium, 3=lowest",
-        "Priority level: 1=highest (PLAYER_UPDATER), 2=medium (MATCH_FETCHER), 3=lowest (MATCHMAKING_ANALYSIS)",
-    ),
-    (
-        "core",
         "riot_api_keys",
         "added_at",
         "When this key was added to the system",
@@ -915,6 +890,19 @@ def upgrade() -> None:
         "uq_riot_api_keys_value", "riot_api_keys", schema="core", type_="unique"
     )
 
+    # `ix_playstyle_analyses_puuid` is created UNIQUE below, and nothing has
+    # ever enforced that: the baseline built a plain index, and
+    # `PlaystyleAnalysisService._save_analysis` selects-then-inserts without a
+    # lock, so two concurrent first analyses of one player could both insert.
+    # Keep the newest row per player so the index builds on any database
+    # rather than only on one that happens to be clean. A duplicate here is a
+    # recomputable analysis result, not a fact -- the newest is the one the
+    # application would have served anyway.
+    op.execute(
+        "DELETE FROM core.playstyle_analyses a USING core.playstyle_analyses b "
+        "WHERE a.puuid = b.puuid AND a.id < b.id"
+    )
+
     op.create_index(
         "ix_refresh_tokens_token_id",
         "refresh_tokens",
@@ -923,31 +911,11 @@ def upgrade() -> None:
         schema="auth",
     )
     op.create_index(
-        "ix_refresh_tokens_user_id",
-        "refresh_tokens",
-        ["user_id"],
-        unique=False,
-        schema="auth",
-    )
-    op.create_index(
-        "ix_revoked_access_tokens_expires_at",
-        "revoked_access_tokens",
-        ["expires_at"],
-        unique=False,
-        schema="auth",
-    )
-    op.create_index(
         "ix_revoked_access_tokens_token_id",
         "revoked_access_tokens",
         ["token_id"],
         unique=True,
         schema="auth",
-    )
-    op.create_index(
-        "idx_users_last_login", "users", ["last_login"], unique=False, schema="auth"
-    )
-    op.create_index(
-        "idx_users_locked_until", "users", ["locked_until"], unique=False, schema="auth"
     )
     op.create_index("ix_users_email", "users", ["email"], unique=True, schema="auth")
     op.create_index(
@@ -965,13 +933,6 @@ def upgrade() -> None:
         schema="core",
     )
     op.create_index(
-        "idx_participants_match_puuid",
-        "match_participants",
-        ["match_id", "puuid"],
-        unique=False,
-        schema="core",
-    )
-    op.create_index(
         "idx_participants_position_champion",
         "match_participants",
         ["team_position", "champion_id"],
@@ -982,13 +943,6 @@ def upgrade() -> None:
         "idx_participants_team_win",
         "match_participants",
         ["team_id", "win"],
-        unique=False,
-        schema="core",
-    )
-    op.create_index(
-        "ix_match_participants_match_id",
-        "match_participants",
-        ["match_id"],
         unique=False,
         schema="core",
     )
@@ -1035,47 +989,10 @@ def upgrade() -> None:
         schema="core",
     )
     op.create_index(
-        "ix_matches_fully_analyzed",
-        "matches",
-        ["fully_analyzed"],
-        unique=False,
-        schema="core",
-    )
-    op.create_index(
         "ix_matches_game_mode", "matches", ["game_mode"], unique=False, schema="core"
     )
     op.create_index(
-        "ix_matches_game_start_timestamp",
-        "matches",
-        ["game_start_timestamp"],
-        unique=False,
-        schema="core",
-    )
-    op.create_index(
         "ix_matches_game_type", "matches", ["game_type"], unique=False, schema="core"
-    )
-    op.create_index(
-        "ix_matches_game_version",
-        "matches",
-        ["game_version"],
-        unique=False,
-        schema="core",
-    )
-    op.create_index(
-        "ix_matches_match_id", "matches", ["match_id"], unique=False, schema="core"
-    )
-    op.create_index(
-        "ix_matches_platform", "matches", ["platform"], unique=False, schema="core"
-    )
-    op.create_index(
-        "ix_matches_queue_id", "matches", ["queue_id"], unique=False, schema="core"
-    )
-    op.create_index(
-        "ix_player_leagues_league_id",
-        "player_leagues",
-        ["league_id"],
-        unique=False,
-        schema="core",
     )
     op.create_index(
         "ix_player_leagues_queue_type",
@@ -1106,16 +1023,10 @@ def upgrade() -> None:
         schema="core",
     )
     op.create_index(
-        "ix_players_game_name", "players", ["game_name"], unique=False, schema="core"
-    )
-    op.create_index(
         "ix_players_is_tracked", "players", ["is_tracked"], unique=False, schema="core"
     )
     op.create_index(
         "ix_players_platform", "players", ["platform"], unique=False, schema="core"
-    )
-    op.create_index(
-        "ix_players_puuid", "players", ["puuid"], unique=False, schema="core"
     )
     op.create_index(
         "ix_playstyle_analyses_puuid",
@@ -1136,6 +1047,9 @@ def upgrade() -> None:
     )
 
     for column in NOT_NULL_COLUMNS:
+        op.execute(
+            f"UPDATE core.match_participants SET {column} = 0 WHERE {column} IS NULL"
+        )
         op.alter_column("match_participants", column, nullable=False, schema="core")
 
     for schema, table, column, comment, existing in COLUMN_COMMENTS:
@@ -1167,29 +1081,16 @@ def downgrade() -> None:
         "ix_refresh_tokens_token_id", table_name="refresh_tokens", schema="auth"
     )
     op.drop_index(
-        "ix_refresh_tokens_user_id", table_name="refresh_tokens", schema="auth"
-    )
-    op.drop_index(
-        "ix_revoked_access_tokens_expires_at",
-        table_name="revoked_access_tokens",
-        schema="auth",
-    )
-    op.drop_index(
         "ix_revoked_access_tokens_token_id",
         table_name="revoked_access_tokens",
         schema="auth",
     )
-    op.drop_index("idx_users_last_login", table_name="users", schema="auth")
-    op.drop_index("idx_users_locked_until", table_name="users", schema="auth")
     op.drop_index("ix_users_email", table_name="users", schema="auth")
     op.drop_index(
         "idx_participants_champion_win", table_name="match_participants", schema="core"
     )
     op.drop_index(
         "idx_participants_kills_deaths", table_name="match_participants", schema="core"
-    )
-    op.drop_index(
-        "idx_participants_match_puuid", table_name="match_participants", schema="core"
     )
     op.drop_index(
         "idx_participants_position_champion",
@@ -1200,9 +1101,6 @@ def downgrade() -> None:
         "idx_participants_team_win", table_name="match_participants", schema="core"
     )
     op.drop_index(
-        "ix_match_participants_match_id", table_name="match_participants", schema="core"
-    )
-    op.drop_index(
         "ix_match_participants_team_id", table_name="match_participants", schema="core"
     )
     op.drop_index("idx_matches_analyzed_timestamp", table_name="matches", schema="core")
@@ -1210,29 +1108,16 @@ def downgrade() -> None:
     op.drop_index("idx_matches_queue_timestamp", table_name="matches", schema="core")
     op.drop_index("idx_matches_timestamp_queue", table_name="matches", schema="core")
     op.drop_index("idx_matches_version_timestamp", table_name="matches", schema="core")
-    op.drop_index("ix_matches_fully_analyzed", table_name="matches", schema="core")
     op.drop_index("ix_matches_game_mode", table_name="matches", schema="core")
-    op.drop_index(
-        "ix_matches_game_start_timestamp", table_name="matches", schema="core"
-    )
     op.drop_index("ix_matches_game_type", table_name="matches", schema="core")
-    op.drop_index("ix_matches_game_version", table_name="matches", schema="core")
-    op.drop_index("ix_matches_match_id", table_name="matches", schema="core")
-    op.drop_index("ix_matches_platform", table_name="matches", schema="core")
-    op.drop_index("ix_matches_queue_id", table_name="matches", schema="core")
-    op.drop_index(
-        "ix_player_leagues_league_id", table_name="player_leagues", schema="core"
-    )
     op.drop_index(
         "ix_player_leagues_queue_type", table_name="player_leagues", schema="core"
     )
     op.drop_index("ix_player_leagues_rank", table_name="player_leagues", schema="core")
     op.drop_index("ix_player_leagues_tier", table_name="player_leagues", schema="core")
     op.drop_index("idx_players_game_name_tag_line", table_name="players", schema="core")
-    op.drop_index("ix_players_game_name", table_name="players", schema="core")
     op.drop_index("ix_players_is_tracked", table_name="players", schema="core")
     op.drop_index("ix_players_platform", table_name="players", schema="core")
-    op.drop_index("ix_players_puuid", table_name="players", schema="core")
     op.drop_index(
         "ix_playstyle_analyses_puuid", table_name="playstyle_analyses", schema="core"
     )

@@ -75,7 +75,10 @@ class RateLimitState(Base):
         Integer,
         nullable=False,
         default=3,
-        comment="Priority level: 1=highest, 2=medium, 3=lowest",
+        comment=(
+            "Priority level: 1=highest (PLAYER_UPDATER), 2=medium "
+            "(MATCH_FETCHER), 3=lowest (MATCHMAKING_ANALYSIS)"
+        ),
     )
     requests_made: Mapped[int] = mapped_column(
         Integer,
