@@ -218,12 +218,6 @@ export async function validatedPatch<T>(
 }
 
 // Player API Functions
-export async function getPlayerByPuuid(
-  puuid: string,
-): Promise<ApiResponse<Player>> {
-  return validatedGet(PlayerSchema, `/players/${puuid}`);
-}
-
 // Player Tracking API Functions
 export async function trackPlayer(puuid: string): Promise<ApiResponse<Player>> {
   try {
@@ -263,23 +257,6 @@ export async function getTrackingStatus(
 ): Promise<ApiResponse<{ is_tracked: boolean }>> {
   try {
     const response = await api.get(`/players/${puuid}/tracking-status`);
-    return {
-      success: true,
-      data: response.data,
-    };
-  } catch (error) {
-    return {
-      success: false,
-      error: normalizeApiError(error),
-    };
-  }
-}
-
-export async function getTrackedPlayers(): Promise<
-  ApiResponse<{ players: unknown[] }>
-> {
-  try {
-    const response = await api.get(`/players/tracked/list`);
     return {
       success: true,
       data: response.data,
@@ -361,30 +338,6 @@ export async function discoverPlayer(
 }
 
 // Matchmaking Analysis API Functions
-export async function checkPlayerMatches(
-  puuid: string,
-): Promise<
-  ApiResponse<
-    | { success: boolean; matches_found: number }
-    | { message: string; matches_found: number; matches_required: number }
-  >
-> {
-  try {
-    const response = await api.post("/matchmaking-analysis/check-matches", {
-      puuid,
-    });
-    return {
-      success: true,
-      data: response.data,
-    };
-  } catch (error) {
-    return {
-      success: false,
-      error: normalizeApiError(error),
-    };
-  }
-}
-
 export async function startMatchmakingAnalysis(
   puuid: string,
 ): Promise<ApiResponse<MatchmakingAnalysisResponse>> {
