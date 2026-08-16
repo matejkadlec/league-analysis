@@ -149,7 +149,14 @@ class MatchTimeline(Base):
             name="participant_id_range",
         ),
         CheckConstraint("team_id IN (100, 200)", name="team_id_valid"),
-        {"schema": "core"},
+        {
+            "schema": "core",
+            "comment": (
+                "Objective-focused match timeline aggregates.\n"
+                "Stores one row per participant with objective takedowns and "
+                "team objective totals."
+            ),
+        },
     )
 
     # Composite PK requested by product requirements.

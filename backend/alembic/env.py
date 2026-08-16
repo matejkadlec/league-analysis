@@ -46,6 +46,32 @@ if config.config_file_name is not None:
 
 target_metadata = Base.metadata
 
+# Tables created and owned by a runtime library rather than by a revision. They
+# are in the database and will never be in `Base.metadata`, so autogenerate and
+# `alembic check` would propose dropping them on every run.
+RUNTIME_OWNED_TABLES = {
+    ("jobs", "apscheduler_jobs"),  # APScheduler creates its own job store
+    (None, "alembic_version"),  # Alembic's own revision pointer
+}
+
+
+def include_object(
+    target: object,
+    name: str | None,
+    type_: str,
+    _reflected: bool,
+    _compare_to: object,
+) -> bool:
+    """Keep runtime-owned tables out of the comparison."""
+    if type_ == "table":
+        return (getattr(target, "schema", None), name) not in RUNTIME_OWNED_TABLES
+    if type_ == "index":
+        parent = getattr(target, "table", None)
+        if parent is not None:
+            key = (parent.schema, parent.name)
+            return key not in RUNTIME_OWNED_TABLES
+    return True
+
 
 def migration_database_url() -> str:
     """Build Alembic's synchronous URL without logging credential values."""
@@ -61,6 +87,7 @@ def configure_context(connection: object) -> None:
         target_metadata=target_metadata,
         include_schemas=True,
         compare_type=True,
+        include_object=include_object,
         version_table_schema="public",
     )
 

@@ -10,6 +10,7 @@ from sqlalchemy import (
     Index,
     Integer,
     String,
+    text,
 )
 from sqlalchemy import (
     DateTime as SQLDateTime,
@@ -192,4 +193,13 @@ Index("idx_matches_timestamp_queue", Match.game_start_timestamp, Match.queue_id)
 
 Index(
     "idx_matches_analyzed_timestamp", Match.fully_analyzed, Match.game_start_timestamp
+)
+
+# Partial index the baseline created for the "what still needs analysing?" scan.
+# Narrower than the plain `fully_analyzed` index and cheap to keep, so it is
+# declared rather than dropped.
+Index(
+    "idx_matches_processed",
+    Match.fully_analyzed,
+    postgresql_where=text("fully_analyzed = false"),
 )

@@ -16,9 +16,12 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     ForeignKey,
+    Index,
     Integer,
     String,
+    desc,
     select,
+    text,
 )
 from sqlalchemy import DateTime as SQLDateTime
 from sqlalchemy.dialects.postgresql import insert
@@ -67,7 +70,16 @@ class RiotAPIKey(Base):
             "key_value LIKE 'RGAPI-%' AND length(key_value) = 42",
             name=conv("check_riot_key_format"),
         ),
-        {"schema": "core"},
+        # Present in the database since the baseline; declared here so the
+        # models stop proposing its removal.
+        # `added_at DESC` is part of the index the baseline created; declaring it
+        # ascending here would leave two different indexes under one name.
+        Index(
+            "idx_riot_api_keys_active_added",
+            "is_active",
+            desc(text("added_at")),
+        ),
+        {"schema": "core", "comment": "Storage for Riot API keys"},
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)

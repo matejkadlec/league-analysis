@@ -56,12 +56,13 @@ venvPath = "."
 venv = ".venv"
 reportMissingImports = true
 reportMissingTypeStubs = "none"
-# The ORM models describe columns more confidently than the migrated schema
-# does — `alembic/metadata-drift.txt` records 321 places where the two already
-# disagree. Code therefore keeps `is None` and `isinstance` guards against
-# values the annotations claim are impossible. Enabling these two rules would
-# report those guards as unnecessary, and the only way to satisfy them is to
-# delete a runtime check on the word of an annotation that is known to drift.
+# These were disabled because the ORM models used to describe columns more
+# confidently than the migrated schema did, so `is None` and `isinstance`
+# guards protected against values the annotations called impossible. Revision
+# 20260816_0014 closed that gap and `alembic check` now runs clean, so the
+# original justification is gone. They stay off only because re-enabling them
+# reports every such guard at once; each one now needs judging on whether it
+# defends against bad Riot data rather than against a lying annotation.
 reportUnnecessaryIsInstance = "none"
 reportUnnecessaryComparison = "none"
 # Rules Pyright leaves off even in strict mode. These four are enabled because
@@ -192,9 +193,8 @@ branch = true
 # (10,276 statements, 2,170 branches). Statement-only coverage reads 55%; the
 # branch figure is the honest one, because a half-tested `if` is half-tested.
 # The floor sits three points under so the gate passes today and can be
-# ratcheted up as coverage grows, in the same spirit as
-# alembic/metadata-drift.txt. It is armed by the `--cov` flags in test.sh; a
-# bare `pytest` stays fast.
+# ratcheted up as coverage grows. It is armed by the `--cov` flags in test.sh;
+# a bare `pytest` stays fast.
 fail_under = 47
 show_missing = true
 

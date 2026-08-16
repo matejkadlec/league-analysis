@@ -13,12 +13,6 @@ from pathlib import Path
 from uuid import uuid4
 
 from dotenv import load_dotenv
-from metadata_drift import (
-    BASELINE_PATH,
-    compare_against_baseline,
-    drift_signatures,
-    import_every_model_module,
-)
 from migration_contract import EXPECTED_ALEMBIC_HEAD
 from sqlalchemy import URL, create_engine, text
 
@@ -281,47 +275,34 @@ def seed_legacy_matchmaking_analyses(database: str) -> None:
         engine.dispose()
 
 
-def observed_drift(database: str) -> list[str]:
-    """Return one migrated database's divergence from the ORM metadata."""
-    from app.core.models import Base
-
-    import_every_model_module()
-    engine = create_engine(administration_url().set(database=database))
-    try:
-        with engine.connect() as connection:
-            return drift_signatures(connection, Base.metadata)
-    finally:
-        engine.dispose()
-
-
 def validate_metadata_drift(database: str, restored_database: str) -> None:
-    """Assert model/schema divergence matches the reviewed baseline exactly.
+    """Assert the ORM models describe the migrated schema exactly.
 
-    Compares both databases so the signatures are proven reproducible rather
-    than assumed: the restored copy is built by a different route (pg_dump and
-    pg_restore) than the migrated source, so agreement between them means the
-    baseline cannot drift with how the schema was produced.
+    `alembic check` autogenerates against the live database and fails if it
+    would emit any operation, so a model edited without a revision is caught
+    here. It runs through `alembic/env.py`, which is what keeps the runtime
+    owned tables (APScheduler's job store, `alembic_version`) out of the
+    comparison — reimplementing that filter here would let the two disagree.
+
+    Both databases are checked. The restored copy is built by a different route
+    (pg_dump and pg_restore) than the migrated source, so agreement between them
+    means the result cannot vary with how the schema was produced.
     """
-    observed = observed_drift(database)
-    if observed_drift(restored_database) != observed:
-        raise RuntimeError(
-            "metadata drift differs between the migrated and restored databases"
+    for target in (database, restored_database):
+        result = subprocess.run(
+            [sys.executable, "-m", "alembic", "check"],
+            cwd=BACKEND_ROOT,
+            env=migration_environment(target),
+            capture_output=True,
+            text=True,
+            check=False,
         )
-
-    unrecorded, resolved = compare_against_baseline(observed)
-    if unrecorded:
-        raise RuntimeError(
-            "the models diverge from the migrated schema in ways no reviewed "
-            "Alembic revision accounts for. Add the revision, or record a "
-            f"deliberate divergence in {BASELINE_PATH.name}:\n  "
-            + "\n  ".join(unrecorded)
-        )
-    if resolved:
-        raise RuntimeError(
-            f"{BASELINE_PATH.name} records divergences that no longer exist. "
-            "Delete these lines — the baseline is a todo list and may only "
-            "shrink:\n  " + "\n  ".join(resolved)
-        )
+        if result.returncode != 0:
+            raise RuntimeError(
+                "the models no longer describe the migrated schema. Add the "
+                "Alembic revision that closes the gap:\n"
+                + (result.stdout + result.stderr).strip()
+            )
 
 
 def validate_revision(database: str) -> None:

@@ -61,6 +61,7 @@ class PlaystyleAnalysis(Base):
         ),
         nullable=False,
         default=AnalysisStatus.PENDING,
+        index=True,
         comment="Current status of the analysis",
     )
 
