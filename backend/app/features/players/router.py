@@ -198,9 +198,9 @@ async def get_player_suggestions(
                               sorted by relevance (empty array if none found)
 
     Examples:
-        GET /players/suggestions?q=Danger&platform=eun1
-        GET /players/suggestions?q=John Doe#EUNE&platform=eun1&limit=3
-        GET /players/suggestions?q=#EUNE&platform=eun1&limit=10
+        GET /api/v1/players/suggestions?q=Danger&platform=eun1
+        GET /api/v1/players/suggestions?q=John Doe#EUNE&platform=eun1&limit=3
+        GET /api/v1/players/suggestions?q=#EUNE&platform=eun1&limit=10
     """
     try:
         results = await player_service.fuzzy_search_players(
@@ -1013,9 +1013,11 @@ async def refresh_player_league(
             status_code=503,
             detail=RIOT_API_KEY_INVALID_DETAIL,
         ) from e
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
+        # ValueError deliberately lands here too: nothing in this path raises
+        # it to mean "not found" (that case returns 404 explicitly above), and
+        # mapping it to 404 leaked raw platform/validation errors as missing
+        # players.
         logger.error(
             "refresh_player_league_failed",
             error=str(e),

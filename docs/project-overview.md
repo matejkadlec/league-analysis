@@ -38,8 +38,9 @@ routers. The API prefix is `/api/v1`; authentication lives below
 
 `backend/app/core/` owns shared configuration, database sessions, validation,
 errors, and Riot API infrastructure. Domain features may depend on core; core
-must not depend on features. Each feature owns its router, service/model/schema
-code where applicable and exposes public imports through `__init__.py`.
+must not depend on features. Each feature owns its router and
+service/model/schema code where applicable; feature `__init__.py` files stay
+minimal, and code imports directly from submodules.
 
 ### Frontend
 
