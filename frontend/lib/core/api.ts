@@ -217,7 +217,6 @@ export async function validatedPatch<T>(
   }
 }
 
-// Player API Functions
 // Player Tracking API Functions
 export async function trackPlayer(puuid: string): Promise<ApiResponse<Player>> {
   try {
