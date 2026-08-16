@@ -62,7 +62,7 @@ def _create_job_instance(
     if not job_class:
         raise HTTPException(
             status_code=501,
-            detail=f"Job type {job.job_type} implementation not found.",
+            detail="This job type is not supported.",
         )
     return job_class(job.id, triggered_by=triggered_by)
 
@@ -86,7 +86,7 @@ def _create_test_job_instance(
     if not test_class:
         raise HTTPException(
             status_code=501,
-            detail=f"Test runner for job type {job.job_type} not implemented.",
+            detail="Test runs are not supported for this job type.",
         )
     return test_class(job.id)
 
@@ -107,7 +107,7 @@ async def list_job_configurations(
         logger.error("Failed to list job configurations", error=str(e), exc_info=True)
         raise HTTPException(
             status_code=500,
-            detail="Internal server error retrieving job configurations",
+            detail="Job configurations could not be loaded. Please try again later.",
         ) from e
 
 
@@ -144,7 +144,7 @@ async def update_job_configuration(
         )
         raise HTTPException(
             status_code=500,
-            detail="Internal server error updating job configuration",
+            detail="The job configuration could not be updated. Please try again later.",
         ) from e
 
 
@@ -193,7 +193,7 @@ async def get_job_executions(
         )
         raise HTTPException(
             status_code=500,
-            detail="Internal server error retrieving job executions",
+            detail="Job executions could not be loaded. Please try again later.",
         ) from e
 
 
@@ -231,7 +231,7 @@ async def list_all_executions(
         logger.error("Failed to list all executions", error=str(e), exc_info=True)
         raise HTTPException(
             status_code=500,
-            detail="Internal server error retrieving all job executions",
+            detail="Job executions could not be loaded. Please try again later.",
         ) from e
 
 
@@ -330,7 +330,7 @@ async def trigger_job(
         )
         raise HTTPException(
             status_code=500,
-            detail="Internal server error triggering job",
+            detail="The job could not be triggered. Please try again later.",
         ) from e
 
 
@@ -359,7 +359,7 @@ async def get_job_control_state(
         )
         raise HTTPException(
             status_code=500,
-            detail="Internal server error retrieving job control state",
+            detail="The job status could not be loaded. Please try again later.",
         ) from e
 
 
@@ -390,7 +390,7 @@ async def pause_job(
         )
         raise HTTPException(
             status_code=500,
-            detail="Internal server error pausing job",
+            detail="The job could not be paused. Please try again later.",
         ) from e
 
 
@@ -421,7 +421,7 @@ async def resume_job(
         )
         raise HTTPException(
             status_code=500,
-            detail="Internal server error resuming job",
+            detail="The job could not be resumed. Please try again later.",
         ) from e
 
 
@@ -454,7 +454,7 @@ async def stop_job(
         )
         raise HTTPException(
             status_code=500,
-            detail="Internal server error stopping job",
+            detail="The job could not be stopped. Please try again later.",
         ) from e
 
 
@@ -557,7 +557,7 @@ async def trigger_test_run(
         )
         raise HTTPException(
             status_code=500,
-            detail="Internal server error triggering test run",
+            detail="The test run could not be started. Please try again later.",
         ) from e
 
 
@@ -641,7 +641,7 @@ async def stop_test_run(
         )
         raise HTTPException(
             status_code=500,
-            detail="Internal server error stopping test run",
+            detail="The test run could not be stopped. Please try again later.",
         ) from e
 
 
@@ -696,7 +696,7 @@ async def pause_test_run(
         )
         raise HTTPException(
             status_code=500,
-            detail="Internal server error pausing test run",
+            detail="The test run could not be paused. Please try again later.",
         ) from e
 
 
@@ -751,7 +751,7 @@ async def resume_test_run(
         )
         raise HTTPException(
             status_code=500,
-            detail="Internal server error resuming test run",
+            detail="The test run could not be resumed. Please try again later.",
         ) from e
 
 
@@ -790,7 +790,7 @@ async def get_job_system_status(
         logger.error("Failed to get job system status", error=str(e), exc_info=True)
         raise HTTPException(
             status_code=500,
-            detail="Internal server error retrieving job system status",
+            detail="The job system status could not be loaded. Please try again later.",
         ) from e
 
 
@@ -894,7 +894,7 @@ async def sync_player_data(
         )
         raise HTTPException(
             status_code=500,
-            detail="Internal server error syncing player data",
+            detail="Player data sync could not be started. Please try again later.",
         ) from e
 
 
@@ -924,5 +924,5 @@ async def get_running_jobs_status(
         logger.error("Failed to get running jobs status", error=str(e), exc_info=True)
         raise HTTPException(
             status_code=500,
-            detail="Internal server error checking job status",
+            detail="The job status could not be checked. Please try again later.",
         ) from e

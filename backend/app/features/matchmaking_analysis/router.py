@@ -9,7 +9,11 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
-from app.core.riot_api.errors import AuthenticationError, ForbiddenError
+from app.core.riot_api.errors import (
+    RIOT_API_KEY_INVALID_DETAIL,
+    AuthenticationError,
+    ForbiddenError,
+)
 from app.features.auth.dependencies import get_current_active_user
 from app.features.jobs.maintenance import RiotWriterMaintenanceActiveError
 
@@ -84,7 +88,7 @@ async def check_player_matches(
         )
         raise HTTPException(
             status_code=503,
-            detail="RIOT_API_KEY_INVALID",
+            detail=RIOT_API_KEY_INVALID_DETAIL,
         ) from error
     except Exception as error:
         logger.warning(

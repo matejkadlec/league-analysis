@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/features/auth";
 
@@ -23,10 +24,16 @@ export default function NotFound() {
   return (
     <div className="flex min-h-screen items-center justify-center">
       <div className="text-center">
-        <h2 className="text-2xl font-bold">404 - Page Not Found</h2>
+        <h2 className="text-2xl font-bold">This page does not exist</h2>
         <p className="mt-2 text-muted-foreground">
-          The page you are looking for does not exist.
+          Check the address, or head back to the home page.
         </p>
+        <Link
+          href="/"
+          className="mt-4 inline-block rounded-md bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
+        >
+          Go to home page
+        </Link>
       </div>
     </div>
   );

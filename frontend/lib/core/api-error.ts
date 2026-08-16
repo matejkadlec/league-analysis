@@ -37,8 +37,6 @@ interface ExtractedResponseError {
 }
 
 const SAFE_CODE_PATTERN = /^[A-Z][A-Z0-9_]{1,63}$/;
-const LEGACY_RIOT_API_KEY_INVALID_DETAIL =
-  "Riot API Key is invalid or expired. Please update it in Settings.";
 const TECHNICAL_MESSAGE_PATTERN =
   /(?:internal server|failed to fetch|network error|err_[a-z_]+|traceback|stack trace|sql(?:alchemy)?|postgres|axios|https?:\/\/|\/api\/|riotapierror|\bat\s+[A-Za-z_$][\w$]*\s*\(|rgapi-[A-Za-z0-9-]+)/i;
 
@@ -85,11 +83,9 @@ function extractResponseError(data: unknown): ExtractedResponseError {
   const stringDetail =
     typeof response.detail === "string" ? response.detail.trim() : undefined;
   const detailCode =
-    stringDetail === LEGACY_RIOT_API_KEY_INVALID_DETAIL
-      ? "RIOT_API_KEY_INVALID"
-      : stringDetail && SAFE_CODE_PATTERN.test(stringDetail)
-        ? stringDetail
-        : undefined;
+    stringDetail && SAFE_CODE_PATTERN.test(stringDetail)
+      ? stringDetail
+      : undefined;
   const responseMessage =
     typeof response.message === "string" ? response.message.trim() : undefined;
 
