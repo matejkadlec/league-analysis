@@ -194,7 +194,8 @@ def _handle_error(
     if isinstance(error, RateLimitError):
         retry_after = getattr(error, "retry_after", None)
         logger.warning(
-            f"Rate limit hit during {operation}",
+            "job_rate_limit_hit",
+            operation=operation,
             retry_after=retry_after,
             **context,
         )
@@ -205,7 +206,8 @@ def _handle_error(
 
     if isinstance(error, (AuthenticationError, ForbiddenError)):
         logger.error(
-            f"Authentication failure during {operation} - job cannot continue",
+            "job_authentication_failed",
+            operation=operation,
             error=str(error),
             error_type=type(error).__name__,
             **context,
@@ -213,7 +215,8 @@ def _handle_error(
         raise
 
     logger.error(
-        f"Failed to {operation}",
+        "job_operation_failed",
+        operation=operation,
         error=str(error),
         error_type=type(error).__name__,
         **context,

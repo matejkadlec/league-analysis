@@ -203,11 +203,14 @@ export function MatchmakingAnalysis({
     queryFn: async () => {
       const result = await getLatestMatchmakingAnalysis(puuid);
       if (!result.success) {
+        // A player who has never been analysed is an ordinary empty state,
+        // not a failure the card should report as an error. Every other
+        // failure must throw so the shared query handler can announce it
+        // and record it.
         if (result.error.status === 404) {
           return null;
         }
-        console.warn("Failed to fetch analysis:", result.error.message);
-        return null;
+        throw new Error(result.error.message);
       }
       return result.data;
     },

@@ -1232,8 +1232,6 @@ class MatchService:
         Returns:
             Number of matches processed
         """
-        import sys
-
         try:
             if should_cancel and should_cancel():
                 logger.info("Analysis cancelled before fetching list", puuid=puuid)
@@ -1250,9 +1248,11 @@ class MatchService:
                 target_queue_ids,
                 rate_limiter,
             )
-            print(
-                f"DEBUG: Riot API returned {len(api_match_ids)} matches for PUUID {puuid}",
-                file=sys.stderr,
+            logger.debug(
+                "analysis_match_ids_fetched",
+                puuid=puuid,
+                queue_ids=target_queue_ids,
+                api_matches=len(api_match_ids),
             )
             if not api_match_ids:
                 logger.info("No matches found in Riot API", puuid=puuid)
@@ -1280,12 +1280,6 @@ class MatchService:
                 needs_reanalysis=len(needs_reanalysis_ids),
                 missing_timeline=len(missing_timeline_ids),
                 to_process=len(ordered_to_process),
-            )
-            print(
-                f"DEBUG: Processing {len(ordered_to_process)} matches "
-                f"({len(new_match_ids)} new, {len(needs_reanalysis_ids)} re-analysis, "
-                f"{len(missing_timeline_ids)} missing timeline)",
-                file=sys.stderr,
             )
             if not ordered_to_process:
                 logger.info("No new or incomplete matches to process", puuid=puuid)
@@ -1348,7 +1342,12 @@ class MatchService:
                 timeline_payload,
             )
             await self.db.commit()
-        except Exception:
+        except Exception as error:
+            logger.error(
+                "match_timeline_persist_failed",
+                match_id=match_id,
+                error_type=type(error).__name__,
+            )
             await self.db.rollback()
             raise
 
@@ -1429,15 +1428,24 @@ class MatchService:
             return []
 
         requested: set[int] = set()
+        invalid_queue_ids: list[object] = []
 
         for raw_queue_id in queue_ids:
             try:
                 queue_id = int(raw_queue_id)
             except TypeError, ValueError:
+                invalid_queue_ids.append(raw_queue_id)
                 continue
 
             if queue_id in self.SUPPORTED_SYNC_QUEUE_IDS:
                 requested.add(queue_id)
+
+        if invalid_queue_ids:
+            logger.warning(
+                "invalid_queue_ids_skipped",
+                invalid_queue_ids=invalid_queue_ids,
+                count=len(invalid_queue_ids),
+            )
 
         return [
             queue_id

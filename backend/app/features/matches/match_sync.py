@@ -20,7 +20,7 @@ from .models import Match
 from .participants import MatchParticipant
 from .timeline import MatchTimeline, replace_match_timeline_rows
 
-logger = structlog.get_logger("app.features.matches.service")
+logger = structlog.get_logger(__name__)
 
 AnalysisMatchResult = str
 

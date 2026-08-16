@@ -328,13 +328,18 @@ class SmurfBoostDetectionService:
         self.db.add(run)
         try:
             await self.db.commit()
-        except IntegrityError:
+        except IntegrityError as error:
             await self.db.rollback()
             # The winner of the race may already have finished, in which case
             # there is no active row left to attach to and its completed result
             # is the honest answer to this identical request.
             concurrent = await self._active_run(puuid) or await self._newest_run(puuid)
             if not concurrent:
+                logger.error(
+                    "smurf_boost_detection_integrity_conflict",
+                    puuid=puuid,
+                    error_type=type(error).__name__,
+                )
                 raise
             if not self._matches_configuration(concurrent, thresholds):
                 raise SmurfBoostDetectionError(
@@ -428,6 +433,13 @@ class SmurfBoostDetectionService:
             latest = request.eligible[0].match_id if request.eligible else None
             await self._finalize(puuid, created_at, result, latest)
         except SmurfBoostDetectionError as error:
+            logger.warning(
+                "smurf_boost_detection_failed",
+                puuid=puuid,
+                created_at=created_at,
+                error_code=error.code,
+                error_type=type(error).__name__,
+            )
             await self.db.rollback()
             await self._fail(puuid, created_at, error.code, error.client_message)
         except Exception as error:

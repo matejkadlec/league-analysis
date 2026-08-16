@@ -91,7 +91,11 @@ async def test_inactive_user_is_forbidden() -> None:
 @pytest.mark.asyncio
 async def test_login_returns_a_dedicated_inactive_account_code() -> None:
     auth_service = SimpleNamespace(
-        authenticate_user=AsyncMock(return_value=SimpleNamespace(is_active=False))
+        authenticate_user=AsyncMock(
+            return_value=SimpleNamespace(
+                id=7, is_active=False, email="player@example.com"
+            )
+        )
     )
     form_data = OAuth2PasswordRequestForm(
         username="player@example.com", password="Password-1!"

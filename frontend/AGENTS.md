@@ -80,6 +80,13 @@ These are product design decisions, not suggestions:
   typed validation and business messages, but must replace unexpected,
   provider, transport, and infrastructure details with a contextual product
   message. Never render raw response bodies or unclassified exception text.
+- Unexpected API failures (`service`, `network`, `timeout`, `unexpected`
+  kinds) are recorded to the developer console by
+  `lib/core/api-error-logging.ts` through the shared `QueryCache` and
+  `MutationCache` handlers in `components/providers.tsx`; do not add
+  per-caller console calls. The `no-console` ESLint rule bans console usage
+  everywhere except a reviewed allowlist (api validation mismatch, Data
+  Dragon fallback, the error reporter, and dev-gated auth warns).
 
 ## Commands
 

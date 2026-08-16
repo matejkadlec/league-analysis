@@ -5,8 +5,12 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import Any, TypeIs
 
+import structlog
+
 from .participants import MatchParticipant
 from .schemas import ChampionStatsItem, LaneStatsItem
+
+logger = structlog.get_logger(__name__)
 
 LANE_DISPLAY_NAMES: dict[str, str] = {
     "TOP": "Top",
@@ -48,6 +52,11 @@ def advanced_int(advanced_stats: object, key: str) -> int:
     try:
         return int(raw_value)
     except TypeError, ValueError:
+        logger.debug(
+            "match_stat_coercion_failed",
+            key=key,
+            got_type=type(raw_value).__name__,
+        )
         return 0
 
 

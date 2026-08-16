@@ -18,7 +18,7 @@ from .models import Match
 from .participants import MatchParticipant
 from .timeline import MatchTimeline
 
-logger = structlog.get_logger("app.features.matches.service")
+logger = structlog.get_logger(__name__)
 
 # Reported as `(current, total)`; the loop awaits it for every queued match.
 ProgressCallback = Callable[[int, int], Awaitable[None]]

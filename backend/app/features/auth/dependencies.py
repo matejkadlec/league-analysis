@@ -1,9 +1,12 @@
 """Authentication dependencies for protecting routes."""
 
+import structlog
 from fastapi import Depends, HTTPException, status
 
 from .models import User
 from .service import AuthService, get_auth_service, oauth2_scheme
+
+logger = structlog.get_logger(__name__)
 
 
 async def get_current_user(
@@ -19,6 +22,10 @@ async def get_current_active_user(
 ) -> User:
     """Get the current active user (not disabled)."""
     if not current_user.is_active:
+        logger.warning(
+            "inactive_user_access_denied",
+            user_id=current_user.id,
+        )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Inactive user account",
@@ -31,6 +38,10 @@ async def get_current_admin_user(
 ) -> User:
     """Get the current admin user."""
     if not current_user.is_admin:
+        logger.warning(
+            "admin_access_denied",
+            user_id=current_user.id,
+        )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin privileges required",

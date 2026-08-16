@@ -16,6 +16,7 @@ from structlog import contextvars as structlog_contextvars
 from app.core import get_global_settings, get_riot_api_key
 from app.core.database import db_manager
 from app.core.rate_limiter import limiter
+from app.core.request_logging import RequestLoggingMiddleware
 from app.features.auth import auth_router
 from app.features.jobs import (
     StartupRecoveryError,
@@ -68,24 +69,28 @@ async def _validate_api_key_configuration() -> None:
             api_key = await get_riot_api_key(db)
             if not api_key or api_key == "your_riot_api_key_here":
                 logger.warning(
-                    "⚠️  Riot API key not configured! Set it via web UI at /settings.",
+                    "riot_api_key_not_configured",
                     hint="Get your key from https://developer.riotgames.com",
                 )
             elif api_key.startswith("RGAPI-"):
-                logger.info("✓ Riot API key configured (development key detected)")
+                logger.info("riot_api_key_configured", key_type="development")
                 logger.warning(
-                    "⚠️  Development API keys expire every 24 hours!",
+                    "riot_api_key_development_expiry_warning",
                     hint="Update via web UI at /settings",
                 )
             else:
-                logger.info("✓ Riot API key configured")
+                logger.info("riot_api_key_configured", key_type="production")
     except ValueError:
         logger.warning(
-            "⚠️  Riot API key not configured! Set it via web UI at /settings.",
+            "riot_api_key_not_configured",
             hint="Get your key from https://developer.riotgames.com",
         )
     except Exception as e:
-        logger.warning("Could not validate API key configuration", error=str(e))
+        logger.warning(
+            "riot_api_key_validation_failed",
+            error=str(e),
+            error_type=type(e).__name__,
+        )
 
 
 async def _start_scheduler_safely() -> None:
@@ -100,7 +105,12 @@ async def _start_scheduler_safely() -> None:
         scheduler = await start_scheduler()
         if scheduler:
             logger.info("Job scheduler started")
-    except StartupRecoveryError:
+    except StartupRecoveryError as e:
+        logger.error(
+            "startup_recovery_failed",
+            error=str(e),
+            error_type="StartupRecoveryError",
+        )
         raise
     except Exception as e:
         logger.error(
@@ -179,6 +189,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+# Added after CORS so it runs outermost of the user middlewares, just inside
+# Starlette's ServerErrorMiddleware, where it observes both response statuses
+# and unhandled exceptions.
+app.add_middleware(RequestLoggingMiddleware)
 
 app.include_router(auth_router, prefix="/api/v1/auth", tags=["authentication"])
 app.include_router(players_router, prefix="/api/v1", tags=["players"])
@@ -217,7 +231,7 @@ async def readiness_check(response: Response) -> dict[str, str] | JSONResponse:
             await db.execute(text("SELECT 1"))
     except Exception as error:
         logger.warning(
-            "Database readiness probe failed",
+            "readiness_probe_failed",
             error_type=type(error).__name__,
         )
         return JSONResponse(

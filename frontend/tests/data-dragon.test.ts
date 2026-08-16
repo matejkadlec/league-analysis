@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   DDRAGON_FALLBACK_VERSION,
   getChampionIconUrl,
@@ -31,6 +31,80 @@ describe("Data Dragon version resolution", () => {
     await expect(
       resolveDDragonVersion(malformed as typeof fetch),
     ).resolves.toBe(DDRAGON_FALLBACK_VERSION);
+  });
+});
+
+describe("Data Dragon version fallback reporting", () => {
+  let consoleError: ReturnType<typeof vi.spyOn>;
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    consoleError.mockRestore();
+  });
+
+  it("records every fallback branch with its stage and fallback version", async () => {
+    consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response("unavailable", { status: 503 })),
+    );
+    await expect(resolveDDragonVersion()).resolves.toBe(
+      DDRAGON_FALLBACK_VERSION,
+    );
+    expect(consoleError).toHaveBeenCalledTimes(1);
+    expect(consoleError).toHaveBeenCalledWith(
+      "Data Dragon version manifest unavailable; using fallback",
+      { stage: "http-error", status: 503, fallbackVersion: DDRAGON_FALLBACK_VERSION },
+    );
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response(JSON.stringify(["not-a-version"]))),
+    );
+    await expect(resolveDDragonVersion()).resolves.toBe(
+      DDRAGON_FALLBACK_VERSION,
+    );
+    expect(consoleError).toHaveBeenCalledTimes(2);
+    expect(consoleError).toHaveBeenLastCalledWith(
+      "Data Dragon version manifest invalid; using fallback",
+      { stage: "invalid-manifest", fallbackVersion: DDRAGON_FALLBACK_VERSION },
+    );
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockRejectedValue(new Error("getaddrinfo ENOTFOUND")),
+    );
+    await expect(resolveDDragonVersion()).resolves.toBe(
+      DDRAGON_FALLBACK_VERSION,
+    );
+    expect(consoleError).toHaveBeenCalledTimes(3);
+    expect(consoleError).toHaveBeenLastCalledWith(
+      "Data Dragon version manifest fetch failed; using fallback",
+      {
+        stage: "fetch-failed",
+        message: "getaddrinfo ENOTFOUND",
+        fallbackVersion: DDRAGON_FALLBACK_VERSION,
+      },
+    );
+  });
+
+  it("stays silent when the manifest resolves", async () => {
+    consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValue(new Response(JSON.stringify(["99.1.2", "99.1.1"]))),
+    );
+
+    await expect(resolveDDragonVersion()).resolves.toBe("99.1.2");
+
+    expect(consoleError).not.toHaveBeenCalled();
   });
 });
 

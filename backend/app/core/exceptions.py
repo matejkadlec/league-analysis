@@ -2,10 +2,6 @@
 
 from typing import Any, override
 
-import structlog
-
-logger = structlog.get_logger(__name__)
-
 
 class ServiceException(Exception):
     """Base exception for service layer errors."""

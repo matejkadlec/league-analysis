@@ -3,6 +3,7 @@
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
+import structlog
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,
@@ -10,6 +11,8 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from .config import get_global_settings
+
+logger = structlog.get_logger(__name__)
 
 
 class DatabaseManager:
@@ -43,8 +46,12 @@ class DatabaseManager:
         async with self.async_session_factory() as session:
             try:
                 yield session
-            except Exception:
+            except Exception as error:
                 await session.rollback()
+                logger.warning(
+                    "database_session_rollback",
+                    error_type=type(error).__name__,
+                )
                 raise
             finally:
                 await session.close()

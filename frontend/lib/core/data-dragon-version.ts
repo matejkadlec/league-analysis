@@ -13,15 +13,33 @@ export async function resolveDDragonVersion(
       signal: AbortSignal.timeout(3_000),
     });
     if (!response.ok) {
+      // Server-side module: a silent fallback here would leave every asset on
+      // a pinned version for weeks with no trace in the container log.
+      console.error("Data Dragon version manifest unavailable; using fallback", {
+        stage: "http-error",
+        status: response.status,
+        fallbackVersion: DDRAGON_FALLBACK_VERSION,
+      });
       return DDRAGON_FALLBACK_VERSION;
     }
 
     const versions: unknown = await response.json();
     const latest = Array.isArray(versions) ? versions[0] : null;
-    return typeof latest === "string" && VERSION_PATTERN.test(latest)
-      ? latest
-      : DDRAGON_FALLBACK_VERSION;
-  } catch {
+    if (typeof latest === "string" && VERSION_PATTERN.test(latest)) {
+      return latest;
+    }
+
+    console.error("Data Dragon version manifest invalid; using fallback", {
+      stage: "invalid-manifest",
+      fallbackVersion: DDRAGON_FALLBACK_VERSION,
+    });
+    return DDRAGON_FALLBACK_VERSION;
+  } catch (error) {
+    console.error("Data Dragon version manifest fetch failed; using fallback", {
+      stage: "fetch-failed",
+      message: error instanceof Error ? error.message : String(error),
+      fallbackVersion: DDRAGON_FALLBACK_VERSION,
+    });
     return DDRAGON_FALLBACK_VERSION;
   }
 }

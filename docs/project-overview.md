@@ -297,6 +297,21 @@ tail -50 logs/frontend.log
 Typical evidence includes Riot `429` throttling, expired/invalid API keys,
 import failures, and database connectivity errors.
 
+Backend logs are structured JSON from structlog with static snake_case event
+names. Every HTTP request produces one `http_request_completed` event
+(`method`, `path`, `status_code`, `duration_ms`, `request_id`) — warning on
+4xx, error on 5xx, debug for `/health` probes — and unhandled exceptions
+produce `http_request_exception` with the traceback. Security events
+(`login_failed`, `login_succeeded`, `access_token_rejected`,
+`admin_access_denied`) and Riot-client retry/failure events
+(`riot_api_retrying_server_error`, `riot_api_network_retry`,
+`riot_api_request_failed`) carry the same fields; the request-logging
+middleware binds `request_id` into every event emitted while serving a
+request. The browser records unexpected API failures (`service`, `network`,
+`timeout`, `unexpected` kinds) to the developer console through the shared
+query and mutation cache handlers, and a Data Dragon manifest failure logs
+its fallback stage server-side into the frontend log.
+
 Do not let SQLAlchemy auto-create application tables. Apply schema changes
 through `backend/scripts/migrate.py`, which holds one PostgreSQL advisory lock
 for the full Alembic operation. Every model/schema change needs a reviewed
