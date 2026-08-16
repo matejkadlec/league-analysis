@@ -11,7 +11,7 @@ import httpx
 import structlog
 
 from .constants import MatchType, Platform, QueueType, Region
-from .credential_health import RiotCredentialStatus
+from .credential_vocabulary import RiotCredentialStatus
 from .endpoints import RiotAPIEndpoints
 from .errors import (
     AuthenticationError,

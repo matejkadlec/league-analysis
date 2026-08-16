@@ -72,27 +72,6 @@ the `pitfall-check` agent.
   `puuid` with `user_id`, and any new endpoint that resolves a player without
   saying which of the two it is scoped by.
 
-- **`NameError` from an annotation nothing appears to evaluate.** A function
-  whose parameters are typed with a `TYPE_CHECKING`-only import raises
-  `NameError: name 'RiotAPIClient' is not defined` the first time it is
-  *called* — not imported — if anything evaluates its annotations at runtime.
-  Under PEP 649 annotations are lazy, so the definition is fine and the module
-  imports clean; `inspect.signature()`, `typing.get_type_hints()` and any
-  library reflecting over a signature evaluate them with the default
-  `Format.VALUE` and resolve the name in a module namespace that never
-  imported it. Ruff's `UP037` actively creates the condition by stripping the
-  quotes that used to make these annotations safe, so the gate does not merely
-  miss this — it introduces it, and pyright agrees the name is valid because
-  it honours `TYPE_CHECKING`. Existing guards, none of them general:
-  `app/core/decorators.py` builds its binding signature once via
-  `_binding_signature()` using `annotationlib.Format.STRING`; SQLAlchemy reads
-  mapped-class annotations with `Format.FORWARDREF`, so `Mapped[...]`
-  relationships degrade to a `ForwardRef` instead of raising; and the test
-  suite only covers call paths it already exercises. Check any new use of
-  `inspect.signature` or `get_type_hints` on a function that could carry a
-  `TYPE_CHECKING`-only annotation, and suspect this whenever a method fails on
-  first call while its module imports fine.
-
 - **A Pydantic write model whose only valid spelling is a type error.** The
   request models in `app/features/settings/schemas.py` set an
   `alias_generator` with `populate_by_name=False`, so at runtime they accept
