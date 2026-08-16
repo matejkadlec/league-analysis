@@ -50,7 +50,7 @@ class JSONBody(Protocol):
     and it is exercised with hand-rolled stubs as well as `httpx.Response`.
     """
 
-    def json(self) -> Any: ...
+    def json(self) -> JSONValue: ...
 
 
 @dataclass
@@ -314,8 +314,12 @@ class RiotAPIClient:
         data: dict[str, Any] | None,
         attempt: int,
         max_retries: int,
-    ) -> Any:
-        """Execute a single HTTP request with error handling."""
+    ) -> dict[str, Any] | list[Any] | None:
+        """Execute a single HTTP request with error handling.
+
+        Returns `None` to signal "retry this attempt"; every other return is
+        Riot's decoded body, which is always a JSON object or array.
+        """
         if self.session is None:
             raise RiotAPIError("Session not initialized")
 
@@ -370,7 +374,7 @@ class RiotAPIClient:
         params: dict[str, Any] | None = None,
         data: dict[str, Any] | None = None,
         retry_on_failure: bool = True,
-    ) -> Any:
+    ) -> dict[str, Any] | list[Any]:
         """
         Make HTTP request with rate limiting and retry logic.
 
@@ -432,6 +436,22 @@ class RiotAPIClient:
         return stripped
 
     @staticmethod
+    def _require_object(
+        response: dict[str, Any] | list[Any], what: str
+    ) -> dict[str, Any]:
+        """Assert that a single-entity endpoint answered with a JSON object.
+
+        Riot returns an array only for list endpoints, so an array here is a
+        broken contract rather than data: fail with the client's own error
+        type instead of letting `Model(**response)` raise a bare `TypeError`.
+        """
+        if not isinstance(response, dict):
+            raise RiotAPIError(
+                f"Expected object response for {what}, got {type(response)}"
+            )
+        return response
+
+    @staticmethod
     def _enum_str(value: Region | Platform | str) -> str:
         """Extract string value from enum or return as-is."""
         if isinstance(value, Enum):
@@ -451,7 +471,7 @@ class RiotAPIClient:
         )
         url = self.endpoints.account_by_riot_id(game_name, tag_line, region)
         response = await self._make_request(url)
-        return AccountDTO(**response)
+        return AccountDTO(**self._require_object(response, "account"))
 
     async def get_account_by_puuid(
         self, puuid: str, region: Region | None = None
@@ -465,7 +485,7 @@ class RiotAPIClient:
         )
         url = self.endpoints.account_by_puuid(puuid, region)
         response = await self._make_request(url)
-        return AccountDTO(**response)
+        return AccountDTO(**self._require_object(response, "account"))
 
     # Summoner endpoints
 
@@ -481,7 +501,7 @@ class RiotAPIClient:
         )
         url = self.endpoints.summoner_by_puuid(puuid, platform)
         response = await self._make_request(url)
-        return SummonerDTO(**response)
+        return SummonerDTO(**self._require_object(response, "summoner"))
 
     # Match endpoints
     async def get_match_list_by_puuid(
@@ -538,7 +558,7 @@ class RiotAPIClient:
         )
         url = self.endpoints.match_by_id(match_id, region)
         response = await self._make_request(url)
-        return MatchDTO(**response)
+        return MatchDTO(**self._require_object(response, "match"))
 
     async def get_match_timeline(
         self, match_id: str, region: Region | None = None
@@ -551,12 +571,8 @@ class RiotAPIClient:
             {"matchId": match_id},
         )
         url = self.endpoints.match_timeline_by_id(match_id, region)
-        response: dict[str, Any] | list[Any] = await self._make_request(url)
-        if not isinstance(response, dict):
-            raise RiotAPIError(
-                f"Expected object response for match timeline, got {type(response)}"
-            )
-        return response
+        response = await self._make_request(url)
+        return self._require_object(response, "match timeline")
 
     # League endpoints
     async def get_league_entries_by_summoner_id(

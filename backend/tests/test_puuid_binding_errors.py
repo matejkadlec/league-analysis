@@ -10,7 +10,7 @@ from sqlalchemy import Table, Update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.models import Base
-from app.core.riot_api.client import RiotAPIClient
+from app.core.riot_api.client import JSONValue, RiotAPIClient
 from app.core.riot_api.errors import BadRequestError, PuuidDecryptionError
 from app.features.jobs import player_sync as player_sync_module
 from app.features.jobs.base import BaseJob
@@ -115,7 +115,7 @@ def test_status_message_extraction_reads_riot_shape() -> None:
 
     class _Response:
         @staticmethod
-        def json() -> dict[str, dict[str, str]]:
+        def json() -> JSONValue:
             return {"status": {"message": "Bad Request - Exception decrypting X"}}
 
     assert (

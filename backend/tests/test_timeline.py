@@ -21,12 +21,14 @@ def test_synthetic_dto_includes_stored_game_version() -> None:
 
 
 def test_timeline_rows_tolerate_missing_game_version() -> None:
-    match_dto = SimpleNamespace(
-        metadata=SimpleNamespace(match_id="EUN1_1"),
-        info=SimpleNamespace(
-            participants=[SimpleNamespace(participant_id=1, team_id=100, puuid="p1")]
-        ),
+    # A stored match with no recorded version reaches timeline replacement as a
+    # synthetic DTO whose `game_version` defaults to "" — the backfill path in
+    # `backfill_timeline_only_match` does exactly this. The old hand-rolled
+    # namespace dropped the attribute entirely, a shape no caller can produce.
+    participant = cast(
+        MatchParticipant, SimpleNamespace(participant_id=1, team_id=100, puuid="p1")
     )
+    match_dto = build_synthetic_match_dto("EUN1_1", [participant])
     rows = build_match_timeline_rows(
         match_dto,
         {"info": {"frameInterval": 60000, "frames": [{"events": []}]}},

@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from typing import Any, TypeIs
 
+from .participants import MatchParticipant
 from .schemas import ChampionStatsItem, LaneStatsItem
 
 LANE_DISPLAY_NAMES: dict[str, str] = {
@@ -22,7 +24,7 @@ def calculate_kda(kills: int, deaths: int, assists: int) -> float:
     return (kills + assists) / deaths
 
 
-def or_zero(value: Any) -> int:
+def or_zero(value: int | None) -> int:
     """Coerce a missing or falsey numeric field to 0."""
     return value or 0
 
@@ -36,7 +38,7 @@ def _is_json_object(value: object) -> TypeIs[dict[str, Any]]:
     return isinstance(value, dict)
 
 
-def advanced_int(advanced_stats: Any, key: str) -> int:
+def advanced_int(advanced_stats: object, key: str) -> int:
     """Safely read integer-like advanced_stats values."""
     if not _is_json_object(advanced_stats):
         return 0
@@ -56,7 +58,9 @@ def page_window(start: int, count: int, total_count: int) -> tuple[int, int]:
     return 0, 0
 
 
-def accumulate_champion_stats(participants: Any) -> dict[str, dict[str, int]]:
+def accumulate_champion_stats(
+    participants: Iterable[MatchParticipant],
+) -> dict[str, dict[str, int]]:
     """Aggregate combat stats grouped by champion name."""
     champion_data: dict[str, dict[str, int]] = {}
     for participant in participants:
@@ -79,7 +83,9 @@ def accumulate_champion_stats(participants: Any) -> dict[str, dict[str, int]]:
     return champion_data
 
 
-def accumulate_lane_stats(participants: Any) -> dict[str, dict[str, int]]:
+def accumulate_lane_stats(
+    participants: Iterable[MatchParticipant],
+) -> dict[str, dict[str, int]]:
     """Aggregate combat stats grouped by assigned lane."""
     lane_data: dict[str, dict[str, int]] = {}
     for participant in participants:

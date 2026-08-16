@@ -1,7 +1,7 @@
 """Pydantic schemas for Match model."""
 
 from datetime import datetime
-from typing import Any, Literal
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -137,7 +137,7 @@ class PlayerMatchParticipant(BaseModel):
 
     @field_validator("runes", mode="before")
     @classmethod
-    def transform_runes(cls, v: Any) -> dict[str, Any] | None:
+    def transform_runes(cls, v: object) -> object:
         """Transform raw Riot API perks structure to flattened runes data."""
         return transform_runes_payload(v)
 
@@ -169,7 +169,7 @@ class EnemyLaneOpponent(BaseModel):
 
     @field_validator("runes", mode="before")
     @classmethod
-    def transform_runes(cls, v: Any) -> dict[str, Any] | None:
+    def transform_runes(cls, v: object) -> object:
         """Transform raw Riot API perks structure to flattened runes data."""
         return transform_runes_payload(v)
 

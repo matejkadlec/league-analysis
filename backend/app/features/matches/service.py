@@ -1,14 +1,16 @@
 """Match service for handling match data operations."""
 
 from collections.abc import Callable, Sequence
-from typing import TYPE_CHECKING, Any
+from typing import Any, Protocol
 
 import structlog
 from sqlalchemy import desc, exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.riot_api.client import RiotAPIClient
 from app.core.riot_api.constants import (
     PRODUCT_SUPPORTED_QUEUE_IDS,
+    Region,
     get_region_by_platform,
 )
 from app.core.riot_api.db_rate_limiter import DBRateLimiter
@@ -19,10 +21,13 @@ from app.core.riot_api.errors import (
     RateLimitError,
     RiotAPIError,
 )
+from app.core.riot_api.models import MatchDTO
 from app.core.riot_api.transformers import MatchTransformer
 from app.features.players.models import Player
 
 from .match_analysis import (
+    CancelCheck,
+    ProgressCallback,
     collect_analysis_api_match_ids,
     load_analysis_process_sets,
     order_analysis_matches,
@@ -61,10 +66,23 @@ from .schemas import (
 )
 from .timeline import replace_match_timeline_rows
 
-if TYPE_CHECKING:
-    from app.core.riot_api.client import RiotAPIClient
-
 logger = structlog.get_logger(__name__)
+
+
+class SyncablePlayer(Protocol):
+    """The identity slice of a player that queue sync actually reads.
+
+    Callers hand this method several unrelated shapes -- a `PlayerResponse`
+    schema from the job layer, a throwaway holder from the background-sync
+    route -- and only `puuid` and `platform` are ever touched, so naming the
+    two fields is more honest than either concrete type would be.
+    """
+
+    @property
+    def puuid(self) -> str: ...
+
+    @property
+    def platform(self) -> str: ...
 
 
 def normalize_match_queue_ids(
@@ -583,7 +601,7 @@ class MatchService:
 
     async def fetch_player_matches(
         self,
-        riot_api_client: Any,
+        riot_api_client: RiotAPIClient,
         puuid: str,
         count: int = 20,
         queue: int | None = None,
@@ -1055,7 +1073,7 @@ class MatchService:
 
     async def store_match_from_dto(
         self,
-        match_dto: Any,
+        match_dto: MatchDTO,
         default_platform: str = "EUN1",
         timeline_payload: dict[str, Any] | None = None,
     ) -> Match:
@@ -1185,10 +1203,10 @@ class MatchService:
 
     async def analyze_match_history(
         self,
-        riot_api_client: Any,
+        riot_api_client: RiotAPIClient,
         puuid: str,
-        progress_callback: Any | None = None,
-        should_cancel: Any | None = None,
+        progress_callback: ProgressCallback | None = None,
+        should_cancel: CancelCheck | None = None,
         queue_ids: list[int] | None = None,
         rate_limiter: DBRateLimiter | None = None,
     ) -> int:
@@ -1297,7 +1315,7 @@ class MatchService:
 
     async def _reprocess_match(
         self,
-        match_dto: Any,
+        match_dto: MatchDTO,
         timeline_payload: dict[str, Any] | None = None,
     ) -> None:
         """Update existing match or insert new match using merge (upsert)."""
@@ -1336,7 +1354,7 @@ class MatchService:
     async def sync_matches_for_player(
         self,
         riot_client: RiotAPIClient,
-        player: Any,
+        player: SyncablePlayer,
         rate_limiter: DBRateLimiter | None = None,
         on_failure: Callable[[str, Exception, dict[str, Any]], None] | None = None,
         on_match_stored: Callable[[int, str], None] | None = None,
@@ -1430,7 +1448,7 @@ class MatchService:
         self,
         riot_client: RiotAPIClient,
         puuid: str,
-        region: Any,
+        region: Region,
         queue_id: int,
         rate_limiter: DBRateLimiter | None,
         on_failure: Callable[[str, Exception, dict[str, Any]], None] | None,

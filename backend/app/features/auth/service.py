@@ -8,9 +8,10 @@ import asyncio
 import hashlib
 import secrets
 import smtplib
+from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
 from email.message import EmailMessage
-from typing import Any, NoReturn, Protocol
+from typing import NoReturn, Protocol
 from uuid import uuid4
 
 import httpx
@@ -1124,7 +1125,9 @@ class AuthService:
         )
 
     @staticmethod
-    def _access_token_data_from_payload(payload: Any) -> TokenData | None:
+    def _access_token_data_from_payload(
+        payload: Mapping[str, object],
+    ) -> TokenData | None:
         """Return access-token claims when the payload has the required types."""
         email = payload.get("sub")
         user_id = payload.get("user_id")
@@ -1136,6 +1139,7 @@ class AuthService:
             not isinstance(email, str)
             or not isinstance(user_id, int)
             or not isinstance(token_id, str)
+            or not isinstance(token_type, str)
             or token_type != "access"
             or not isinstance(exp, int)
         ):

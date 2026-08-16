@@ -7,7 +7,7 @@
 
 from collections.abc import Callable
 from datetime import UTC, datetime
-from typing import Any, Protocol
+from typing import Protocol
 
 import structlog
 from apscheduler.executors.asyncio import AsyncIOExecutor
@@ -127,7 +127,7 @@ def _resolve_interval_seconds(job_config: JobConfiguration) -> int:
     )
 
 
-def _parse_interval_from_config(custom_value: Any) -> int | None:
+def _parse_interval_from_config(custom_value: object) -> int | None:
     """Parse interval from config JSON value.
 
     :param custom_value: Value from config_json['interval_seconds'].

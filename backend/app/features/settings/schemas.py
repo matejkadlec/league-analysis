@@ -136,14 +136,14 @@ class SmurfBoostDetectionMutableSettingsV1(_CardSettingsBase):
         return self
 
 
-def _require_json_integer(value: Any) -> int:
+def _require_json_integer(value: object) -> int:
     """Reject coerced values while accepting only JSON integer settings writes."""
     if isinstance(value, bool) or not isinstance(value, int):
         raise ValueError("must be an integer")
     return value
 
 
-def _require_json_number(value: Any) -> float | int:
+def _require_json_number(value: object) -> float | int:
     """Reject boolean and string coercion for JSON numeric settings writes."""
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise ValueError("must be a number")
@@ -160,13 +160,13 @@ class TopChampionsMutableSettingsWriteV1(_CardSettingsWriteBase):
 
     @field_validator("minimum_games", mode="before")
     @classmethod
-    def minimum_games_must_be_an_integer(cls, value: Any) -> int:
+    def minimum_games_must_be_an_integer(cls, value: object) -> int:
         """Reject strings, booleans, and decimal values before coercion."""
         return _require_json_integer(value)
 
     @field_validator("minimum_win_rate", "minimum_kda", mode="before")
     @classmethod
-    def threshold_must_be_a_number(cls, value: Any) -> float | int:
+    def threshold_must_be_a_number(cls, value: object) -> float | int:
         """Reject strings and booleans before normal numeric validation."""
         return _require_json_number(value)
 
@@ -188,7 +188,7 @@ class RecentPerformanceMutableSettingsWriteV1(_CardSettingsWriteBase):
 
     @field_validator("recent_match_count", mode="before")
     @classmethod
-    def match_count_must_be_an_integer(cls, value: Any) -> int:
+    def match_count_must_be_an_integer(cls, value: object) -> int:
         """Reject strings, booleans, and decimal values before coercion."""
         return _require_json_integer(value)
 
@@ -196,7 +196,7 @@ class RecentPerformanceMutableSettingsWriteV1(_CardSettingsWriteBase):
         "win_rate_trend_delta", "relative_metric_trend_delta", mode="before"
     )
     @classmethod
-    def threshold_must_be_a_number(cls, value: Any) -> float | int:
+    def threshold_must_be_a_number(cls, value: object) -> float | int:
         """Reject strings and booleans before normal numeric validation."""
         return _require_json_number(value)
 
@@ -228,7 +228,7 @@ class SmurfBoostDetectionMutableSettingsWriteV1(_CardSettingsWriteBase):
         mode="before",
     )
     @classmethod
-    def window_setting_must_be_an_integer(cls, value: Any) -> int:
+    def window_setting_must_be_an_integer(cls, value: object) -> int:
         """Reject strings, booleans, and decimal values before coercion."""
         return _require_json_integer(value)
 
@@ -247,7 +247,7 @@ class SmurfBoostDetectionMutableSettingsWriteV1(_CardSettingsWriteBase):
         mode="before",
     )
     @classmethod
-    def detection_threshold_must_be_a_number(cls, value: Any) -> float | int:
+    def detection_threshold_must_be_a_number(cls, value: object) -> float | int:
         """Reject strings and booleans before normal numeric validation."""
         return _require_json_number(value)
 
@@ -270,7 +270,7 @@ class CardPreferenceUpdate(_CardSettingsWriteBase):
 
     @field_validator("version", mode="before")
     @classmethod
-    def version_must_be_an_integer(cls, value: Any) -> int:
+    def version_must_be_an_integer(cls, value: object) -> int:
         """Reject coercion before the supported-version literal is checked."""
         return _require_json_integer(value)
 

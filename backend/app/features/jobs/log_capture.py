@@ -20,7 +20,7 @@ class BoundedLogCapture:
         self.entries: deque[MutableMapping[str, Any]] = deque(maxlen=maxlen)
 
     def __call__(
-        self, _: Any, _method_name: str, event_dict: MutableMapping[str, Any]
+        self, _: object, _method_name: str, event_dict: MutableMapping[str, Any]
     ) -> MutableMapping[str, Any]:
         """Capture log entry (structlog processor interface) and return unchanged."""
         self.entries.append(event_dict)

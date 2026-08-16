@@ -6,7 +6,7 @@ from collections import defaultdict
 from collections.abc import Callable, Mapping, MutableMapping, Sequence
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any, cast
+from typing import Any, TypedDict, Unpack, cast
 
 import structlog
 from sqlalchemy import Update, select, update
@@ -15,8 +15,11 @@ from structlog import contextvars as structlog_contextvars
 
 from app.core import db_manager
 
-if TYPE_CHECKING:
-    from app.core.riot_api.client import APICallRecord, RiotAPIClient
+# Imported at runtime, not under TYPE_CHECKING: these names appear in
+# annotations, and anything that evaluates them (inspect.signature,
+# get_type_hints) would raise NameError under PEP 649 lazy annotations.
+from app.core.riot_api.client import APICallRecord, RiotAPIClient
+from app.core.riot_api.constants import Platform, Region
 
 from .control import (
     get_runtime_control_snapshot,
@@ -34,6 +37,19 @@ from .maintenance import is_riot_writer_maintenance_active
 from .models import ExecutionType, JobConfiguration, JobExecution, JobStatus
 
 logger = structlog.get_logger(__name__)
+
+
+class RiotClientOptions(TypedDict, total=False):
+    """The keyword options `create_tracked_riot_api_client` accepts.
+
+    Declared here so the job helper forwards a checked set of options instead of
+    an untyped `**kwargs`, while the factory keeps owning the default values.
+    """
+
+    region: Region | None
+    platform: Platform | None
+    enable_logging: bool
+    request_callback: Callable[[str, int], None] | None
 
 
 class JobStopSignal(Exception):
@@ -834,7 +850,7 @@ class BaseJob(ABC):
     async def get_job_riot_api_client(
         self,
         db: AsyncSession,
-        **client_options: Any,
+        **client_options: Unpack[RiotClientOptions],
     ) -> RiotAPIClient:
         """Build a tracked Riot client and classify missing configuration."""
         from app.core.riot_api.credential_health import (
@@ -864,7 +880,7 @@ class BaseJob(ABC):
         """Check whether Riot rejected a PUUID from another developer account."""
         return self._has_puuid_binding_error
 
-    def add_log_entry(self, key: str, value: Any) -> None:
+    def add_log_entry(self, key: str, value: object) -> None:
         """Add an entry to the execution log."""
         self.execution_log[key] = value
 

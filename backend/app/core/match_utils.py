@@ -15,21 +15,19 @@ instead of implementing its own storage logic. This handles:
 - Timeline objective aggregates are fetched and stored when available
 """
 
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import Any, Protocol
 
 import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db_session import rollback_quietly
+from app.core.riot_api.models import MatchDTO, ParticipantDTO
 from app.features.matches.models import Match
 from app.features.matches.participants import MatchParticipant
 from app.features.matches.timeline import replace_match_timeline_rows
 from app.features.players.identity import resolve_player_display_fields
 from app.features.players.models import Player
-
-if TYPE_CHECKING:
-    from app.core.riot_api.models import MatchDTO
 
 logger = structlog.get_logger(__name__)
 
@@ -94,7 +92,7 @@ async def ensure_match_fully_analyzed(
     return True
 
 
-def _build_fully_analyzed_match(match_dto: Any) -> Match:
+def _build_fully_analyzed_match(match_dto: MatchDTO) -> Match:
     """Build a fully-analyzed match row from a Riot match DTO."""
     from app.features.matches.match_persistence import (
         build_match_record,
@@ -115,7 +113,7 @@ def _build_fully_analyzed_match(match_dto: Any) -> Match:
 async def _upsert_match_participant(
     db: AsyncSession,
     match_id: str,
-    participant: Any,
+    participant: ParticipantDTO,
     platform_id: str,
     queue_id: int,
 ) -> None:
@@ -152,7 +150,7 @@ async def _upsert_match_participant(
 
 async def upsert_match(
     db: AsyncSession,
-    match_dto: Any,
+    match_dto: MatchDTO,
     timeline_payload: dict[str, Any] | None = None,
 ) -> None:
     """Upsert a match and its participants with fully_analyzed=True.

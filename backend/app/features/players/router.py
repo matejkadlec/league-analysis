@@ -1,6 +1,7 @@
 """Player API endpoints for the Riot API application."""
 
 import re
+from dataclasses import dataclass
 from datetime import UTC
 from typing import Annotated, Any
 
@@ -23,7 +24,12 @@ from app.core.riot_api.errors import (
 )
 from app.features.auth.dependencies import get_current_active_user
 from app.features.auth.models import User
-from app.features.jobs.models import JobConfiguration, JobType, PlayerSyncRun
+from app.features.jobs.models import (
+    JobConfiguration,
+    JobExecution,
+    JobType,
+    PlayerSyncRun,
+)
 from app.features.jobs.player_sync import (
     create_or_get_player_sync,
     get_active_player_sync,
@@ -509,7 +515,7 @@ async def _riot_writer_maintenance_is_active(session: AsyncSession) -> bool:
 
 async def _maybe_start_background_writer_job(
     session: AsyncSession, job_type: JobType, puuid: str, skip_message: str
-) -> tuple[Any, bool]:
+) -> tuple[JobExecution | None, bool]:
     """Create a running JobExecution unless local writer maintenance is active."""
     from sqlalchemy import func
 
@@ -542,7 +548,7 @@ async def _maybe_start_background_writer_job(
 
 async def _mark_background_job_success(
     session: AsyncSession,
-    job_execution: Any,
+    job_execution: JobExecution | None,
     *,
     records_created: int | None = None,
     records_updated: int | None = None,
@@ -566,7 +572,7 @@ async def _mark_background_job_success(
 
 
 async def _mark_background_job_failed(
-    session: AsyncSession, job_execution: Any, error_message: str
+    session: AsyncSession, job_execution: JobExecution | None, error_message: str
 ) -> None:
     """Persist a failed background writer execution."""
     from sqlalchemy import func
@@ -582,7 +588,7 @@ async def _mark_background_job_failed(
 
 
 async def _mark_background_job_rate_limited(
-    session: AsyncSession, job_execution: Any, retry_after: float | None
+    session: AsyncSession, job_execution: JobExecution | None, retry_after: float | None
 ) -> None:
     """Persist a retryable rate-limited background match-sync execution."""
     from sqlalchemy import func
@@ -602,6 +608,19 @@ async def _mark_background_job_rate_limited(
         "retry_after": retry_after,
     }
     await session.commit()
+
+
+@dataclass(frozen=True)
+class _BackgroundSyncPlayer:
+    """The two identity fields `sync_matches_for_player` reads.
+
+    The background route has only the PUUID and platform from the request, not
+    a loaded `Player` row, so it carries them in the smallest object that
+    satisfies the service's `SyncablePlayer` contract.
+    """
+
+    puuid: str
+    platform: str
 
 
 async def _close_riot_client(riot_client: RiotAPIClient | None) -> None:
@@ -649,7 +668,7 @@ async def run_background_match_sync(puuid: str, platform: str) -> None:
         try:
             riot_client = await create_tracked_riot_api_client(session)
             match_service = MatchService(session)
-            player_obj = type("PlayerObj", (), {"puuid": puuid, "platform": platform})
+            player_obj = _BackgroundSyncPlayer(puuid=puuid, platform=platform)
 
             logger.info("Starting background match sync", puuid=puuid)
             count = await match_service.sync_matches_for_player(riot_client, player_obj)

@@ -1,14 +1,12 @@
 """Shared match lookups used by playstyle evaluators and aggregates."""
 
-from typing import Any
-
 from app.features.matches.models import Match
 from app.features.matches.participants import MatchParticipant
 
-MatchesById = dict[Any, Match]
+MatchesById = dict[str, Match]
 
 
-def lookup_match(matches: MatchesById, match_id: Any) -> Match | None:
+def lookup_match(matches: MatchesById, match_id: str) -> Match | None:
     return matches.get(str(match_id)) or matches.get(match_id)
 
 

@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.riot_api.models import MatchDTO, ParticipantDTO
 from app.features.players.identity import resolve_player_display_fields
 from app.features.players.models import Player
 
@@ -15,7 +17,7 @@ from .models import Match
 from .participants import MatchParticipant
 
 
-def extract_store_participant_identity(participant: Any) -> dict[str, Any]:
+def extract_store_participant_identity(participant: ParticipantDTO) -> dict[str, Any]:
     """Normalize a match DTO participant into the player-row identity fields."""
     game_name = participant.game_name or participant.summoner_name or "Unknown"
     tag_line = participant.tag_line
@@ -30,7 +32,7 @@ def extract_store_participant_identity(participant: Any) -> dict[str, Any]:
     }
 
 
-def match_end_flags(participants: Any) -> tuple[bool, bool]:
+def match_end_flags(participants: Iterable[ParticipantDTO]) -> tuple[bool, bool]:
     """Derive early-surrender and surrender flags from participant DTOs."""
     early_surrender = any(
         participant.game_ended_in_early_surrender for participant in participants
@@ -39,14 +41,14 @@ def match_end_flags(participants: Any) -> tuple[bool, bool]:
     return early_surrender, surrender
 
 
-def match_dto_id(match_dto: Any) -> str:
+def match_dto_id(match_dto: MatchDTO) -> str:
     if hasattr(match_dto, "metadata"):
         return match_dto.metadata.match_id
     return "unknown"
 
 
 def build_match_record(
-    match_dto: Any,
+    match_dto: MatchDTO,
     platform_id: str,
     early_surrender: bool,
     surrender: bool,
@@ -76,7 +78,7 @@ def build_match_record(
     return match
 
 
-def add_participants_from_dto(session: AsyncSession, match_dto: Any) -> None:
+def add_participants_from_dto(session: AsyncSession, match_dto: MatchDTO) -> None:
     """Stage MatchParticipant rows from a Riot match DTO."""
     from .transformers import MatchDTOTransformer
 
@@ -95,7 +97,7 @@ def add_participants_from_dto(session: AsyncSession, match_dto: Any) -> None:
 
 
 def resolve_reprocess_player_fields(
-    participant: Any,
+    participant: ParticipantDTO,
     existing_player: Player | None,
     platform_id: str,
 ) -> dict[str, Any]:
@@ -105,7 +107,7 @@ def resolve_reprocess_player_fields(
 
 async def merge_reprocess_player(
     session: AsyncSession,
-    participant: Any,
+    participant: ParticipantDTO,
     platform_id: str,
 ) -> None:
     """Upsert the skeletal player row required by the match-participant FK."""
@@ -129,7 +131,7 @@ async def merge_reprocess_player(
 
 async def merge_reprocess_participants(
     session: AsyncSession,
-    match_dto: Any,
+    match_dto: MatchDTO,
     match_id: str,
     platform_id: str,
 ) -> None:

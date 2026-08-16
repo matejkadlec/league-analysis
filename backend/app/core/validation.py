@@ -93,7 +93,7 @@ def validate_list_items(
     return True
 
 
-def is_empty_or_none(value: Any) -> bool:
+def is_empty_or_none(value: object) -> bool:
     """Check if value is None or empty (empty string, list, dict, etc.)."""
     if value is None:
         return True

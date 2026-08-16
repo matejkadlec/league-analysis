@@ -3,15 +3,18 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from types import SimpleNamespace
+from dataclasses import dataclass
 from typing import Any, Protocol
 
 import structlog
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.riot_api.client import RiotAPIClient
+from app.core.riot_api.constants import Region
 from app.core.riot_api.db_rate_limiter import DBRateLimiter
 from app.core.riot_api.errors import AuthenticationError, ForbiddenError, RateLimitError
+from app.core.riot_api.models import MatchDTO, MatchListDTO
 
 from .models import Match
 from .participants import MatchParticipant
@@ -32,7 +35,7 @@ class EnsureMaintenance(Protocol):
 class ReprocessMatch(Protocol):
     async def __call__(
         self,
-        match_dto: Any,
+        match_dto: MatchDTO,
         timeline_payload: dict[str, Any] | None = None,
     ) -> None: ...
 
@@ -69,14 +72,14 @@ async def record_rate_limiter_request(
 
 
 async def fetch_queue_match_list(
-    riot_client: Any,
+    riot_client: RiotAPIClient,
     puuid: str,
-    region: Any,
+    region: Region,
     queue_id: int,
     start: int,
     count: int,
     rate_limiter: DBRateLimiter | None,
-) -> Any:
+) -> MatchListDTO:
     """Fetch one page of match IDs for a supported queue."""
     try:
         await acquire_rate_limiter_or_raise(rate_limiter)
@@ -145,18 +148,50 @@ def classify_queue_match_ids(
     return ids_to_process, timeline_only_ids
 
 
+@dataclass(frozen=True)
+class SyntheticParticipant:
+    """A stored participant reduced to what timeline aggregation reads."""
+
+    participant_id: int
+    team_id: int
+    puuid: str
+
+
+@dataclass(frozen=True)
+class SyntheticMatchInfo:
+    """The `info` half of a match rebuilt from stored rows."""
+
+    game_version: str
+    participants: list[SyntheticParticipant]
+
+
+@dataclass(frozen=True)
+class SyntheticMatchMetadata:
+    """The `metadata` half of a match rebuilt from stored rows."""
+
+    match_id: str
+
+
+@dataclass(frozen=True)
+class SyntheticMatchDTO:
+    """A stored match in the shape `TimelineMatch` describes."""
+
+    metadata: SyntheticMatchMetadata
+    info: SyntheticMatchInfo
+
+
 def build_synthetic_match_dto(
     match_id: str,
     participants: list[MatchParticipant],
     game_version: str = "",
-) -> SimpleNamespace:
+) -> SyntheticMatchDTO:
     """Build the minimal DTO shape timeline replacement needs for a stored match."""
-    return SimpleNamespace(
-        metadata=SimpleNamespace(match_id=match_id),
-        info=SimpleNamespace(
+    return SyntheticMatchDTO(
+        metadata=SyntheticMatchMetadata(match_id=match_id),
+        info=SyntheticMatchInfo(
             game_version=game_version,
             participants=[
-                SimpleNamespace(
+                SyntheticParticipant(
                     participant_id=participant.participant_id,
                     team_id=participant.team_id,
                     puuid=participant.puuid,
@@ -168,9 +203,9 @@ def build_synthetic_match_dto(
 
 
 async def fetch_sync_timeline(
-    riot_client: Any,
+    riot_client: RiotAPIClient,
     puuid: str,
-    region: Any,
+    region: Region,
     queue_id: int,
     match_id: str,
     rate_limiter: DBRateLimiter | None,
@@ -216,9 +251,9 @@ async def fetch_sync_timeline(
 
 async def backfill_timeline_only_match(
     session: AsyncSession,
-    riot_client: Any,
+    riot_client: RiotAPIClient,
     puuid: str,
-    region: Any,
+    region: Region,
     queue_id: int,
     match_id: str,
     rate_limiter: DBRateLimiter | None,
@@ -270,9 +305,9 @@ async def backfill_timeline_only_match(
 
 
 async def sync_full_queue_match(
-    riot_client: Any,
+    riot_client: RiotAPIClient,
     puuid: str,
-    region: Any,
+    region: Region,
     queue_id: int,
     match_id: str,
     rate_limiter: DBRateLimiter | None,
@@ -310,9 +345,9 @@ async def sync_full_queue_match(
 
 async def process_queue_sync_match(
     session: AsyncSession,
-    riot_client: Any,
+    riot_client: RiotAPIClient,
     puuid: str,
-    region: Any,
+    region: Region,
     queue_id: int,
     match_id: str,
     timeline_only_ids: set[str],
@@ -373,9 +408,9 @@ async def process_queue_sync_match(
 
 async def process_queue_sync_batch(
     session: AsyncSession,
-    riot_client: Any,
+    riot_client: RiotAPIClient,
     puuid: str,
-    region: Any,
+    region: Region,
     queue_id: int,
     ids_to_process: list[str],
     timeline_only_ids: set[str],
@@ -413,9 +448,9 @@ async def process_queue_sync_batch(
 
 async def sync_single_queue_for_player(
     session: AsyncSession,
-    riot_client: Any,
+    riot_client: RiotAPIClient,
     puuid: str,
-    region: Any,
+    region: Region,
     queue_id: int,
     rate_limiter: DBRateLimiter | None,
     on_failure: OnFailure,

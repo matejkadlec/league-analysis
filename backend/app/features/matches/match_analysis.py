@@ -4,13 +4,15 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Awaitable, Callable
-from typing import Any, cast
+from typing import Any
 
 import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.riot_api.client import RiotAPIClient
 from app.core.riot_api.db_rate_limiter import DBRateLimiter
+from app.core.riot_api.models import MatchListDTO
 
 from .match_sync import AnalysisMatchResult, ReprocessMatch
 from .models import Match
@@ -25,16 +27,14 @@ ProgressCallback = Callable[[int, int], Awaitable[None]]
 CancelCheck = Callable[[], bool]
 
 
-def extract_queue_match_ids(match_list: Any) -> list[str]:
+def extract_queue_match_ids(match_list: MatchListDTO | list[str] | None) -> list[str]:
     """Accept both DTO objects and bare match-id lists from the Riot client."""
     if not match_list:
         return []
+    if isinstance(match_list, list):
+        return match_list
     if hasattr(match_list, "match_ids"):
         return list(match_list.match_ids)
-    if isinstance(match_list, list):
-        # The bare-list form is Riot's match-id array; element types are
-        # unchecked here exactly as the declared return type already assumes.
-        return cast("list[str]", match_list)
     return []
 
 
@@ -52,7 +52,7 @@ def append_unique_match_ids(
 
 
 async def collect_analysis_api_match_ids(
-    riot_api_client: Any,
+    riot_api_client: RiotAPIClient,
     puuid: str,
     target_queue_ids: list[int],
     rate_limiter: DBRateLimiter | None,
@@ -150,7 +150,7 @@ def order_analysis_matches(
 
 
 async def fetch_analysis_timeline(
-    riot_api_client: Any,
+    riot_api_client: RiotAPIClient,
     puuid: str,
     match_id: str,
     rate_limiter: DBRateLimiter | None,
@@ -182,7 +182,7 @@ async def fetch_analysis_timeline(
 
 
 async def process_analysis_match(
-    riot_api_client: Any,
+    riot_api_client: RiotAPIClient,
     puuid: str,
     match_id: str,
     rate_limiter: DBRateLimiter | None,
@@ -248,7 +248,7 @@ async def run_analysis_processing_loop(
     puuid: str,
     should_cancel: CancelCheck | None,
     progress_callback: ProgressCallback | None,
-    riot_api_client: Any,
+    riot_api_client: RiotAPIClient,
     rate_limiter: DBRateLimiter | None,
     is_current_game_version: Callable[[str], bool],
     reprocess_match: ReprocessMatch,

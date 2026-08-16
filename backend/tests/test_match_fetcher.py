@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ServiceException
 from app.core.riot_api.client import RiotAPIClient
-from app.core.riot_api.constants import PRODUCT_SUPPORTED_QUEUE_IDS
+from app.core.riot_api.constants import PRODUCT_SUPPORTED_QUEUE_IDS, Region
 from app.core.riot_api.db_rate_limiter import DBRateLimiter
 from app.core.riot_api.errors import RateLimitError
 from app.core.riot_api.models import LeagueEntryDTO
@@ -22,7 +22,7 @@ from app.features.jobs.implementations import match_fetcher as match_fetcher_mod
 from app.features.jobs.implementations.match_fetcher import MatchFetcherJob
 from app.features.jobs.maintenance import RiotWriterMaintenanceActiveError
 from app.features.jobs.models import JobConfiguration
-from app.features.matches.service import MatchService
+from app.features.matches.service import MatchService, SyncablePlayer
 from app.features.players.schemas import PlayerResponse
 from app.features.players.service import PlayerService
 
@@ -77,7 +77,9 @@ async def test_match_sync_always_processes_the_complete_supported_queue_set() ->
 
     await service.sync_matches_for_player(
         riot_client=cast(RiotAPIClient, object()),
-        player=SimpleNamespace(puuid="test-puuid", platform="eun1"),
+        player=cast(
+            SyncablePlayer, SimpleNamespace(puuid="test-puuid", platform="eun1")
+        ),
     )
 
     assert [
@@ -95,7 +97,7 @@ async def test_ranked_queue_reports_each_stored_match_for_lp_observation() -> No
     await service._sync_single_queue_for_player(
         riot_client=cast(RiotAPIClient, _QueueSyncClient("16.15.1")),
         puuid="test-puuid",
-        region="EUROPE",
+        region=Region.EUROPE,
         queue_id=420,
         rate_limiter=None,
         on_failure=None,
@@ -132,7 +134,7 @@ async def test_queue_sync_accepts_current_release_and_stops_at_historical_match(
     stored = await service._sync_single_queue_for_player(
         riot_client=cast(RiotAPIClient, _QueueSyncClient(game_version)),
         puuid="test-puuid",
-        region="EUROPE",
+        region=Region.EUROPE,
         queue_id=420,
         rate_limiter=None,
         on_failure=None,
@@ -151,7 +153,7 @@ async def test_queue_sync_records_recoverable_match_failure_with_safe_context() 
     stored = await service._sync_single_queue_for_player(
         riot_client=cast(RiotAPIClient, _QueueSyncClient("16.15.1")),
         puuid="test-puuid",
-        region="EUROPE",
+        region=Region.EUROPE,
         queue_id=420,
         rate_limiter=None,
         on_failure=lambda operation, error, context: failures.append(
@@ -174,7 +176,9 @@ async def test_match_sync_propagates_rate_limit_to_the_job_layer() -> None:
     with pytest.raises(RateLimitError):
         await service.sync_matches_for_player(
             riot_client=cast(RiotAPIClient, object()),
-            player=SimpleNamespace(puuid="test-puuid", platform="eun1"),
+            player=cast(
+                SyncablePlayer, SimpleNamespace(puuid="test-puuid", platform="eun1")
+            ),
         )
 
 
@@ -192,7 +196,9 @@ async def test_match_sync_propagates_fatal_writer_errors_to_the_job_layer(
     with pytest.raises(type(fatal_error)):
         await service.sync_matches_for_player(
             riot_client=cast(RiotAPIClient, object()),
-            player=SimpleNamespace(puuid="test-puuid", platform="eun1"),
+            player=cast(
+                SyncablePlayer, SimpleNamespace(puuid="test-puuid", platform="eun1")
+            ),
         )
 
 

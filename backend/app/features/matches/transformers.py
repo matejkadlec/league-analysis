@@ -4,18 +4,35 @@ This module provides utility classes for transforming data from Riot API DTOs
 to formats suitable for database storage, validation, and processing.
 """
 
-from typing import Any, cast
+from collections.abc import Sequence
+from typing import Any, Protocol, cast, runtime_checkable
 
 import structlog
 
+from app.core.riot_api.models import ParticipantDTO
+
 logger = structlog.get_logger(__name__)
+
+
+@runtime_checkable
+class _MatchIdCarrier(Protocol):
+    """The single member `extract_match_ids` reads off a match-list DTO.
+
+    `MatchListDTO` satisfies this, but the function is a shape probe that also
+    accepts `None`, a bare list, and objects carrying neither — so the DTO
+    itself cannot be the parameter type. The Protocol names the one attribute
+    the DTO branch actually needs.
+    """
+
+    @property
+    def match_ids(self) -> Sequence[str]: ...
 
 
 class MatchDTOTransformer:
     """Utility for transforming match DTOs from Riot API."""
 
     @staticmethod
-    def extract_match_ids(match_list_dto: Any) -> list[str]:
+    def extract_match_ids(match_list_dto: object) -> list[str]:
         """Extract match IDs from match list DTO.
 
         Handles different DTO formats from Riot API.
@@ -35,7 +52,7 @@ class MatchDTOTransformer:
             return []
 
         # Handle DTO with match_ids attribute
-        if hasattr(match_list_dto, "match_ids"):
+        if isinstance(match_list_dto, _MatchIdCarrier):
             return list(match_list_dto.match_ids)
 
         # Handle direct list: element types are unchecked here exactly as the
@@ -79,7 +96,7 @@ class MatchDTOTransformer:
         return participant_data
 
     @staticmethod
-    def extract_participant_data(participant_dto: Any) -> dict[str, Any]:
+    def extract_participant_data(participant_dto: ParticipantDTO) -> dict[str, Any]:
         """Extract participant data from DTO for database storage.
 
         Args:
@@ -91,7 +108,7 @@ class MatchDTOTransformer:
         # Determine remake status (inverted logic)
         is_remake = not getattr(participant_dto, "eligible_for_progression", True)
 
-        data = {
+        data: dict[str, Any] = {
             # Identity
             "participant_id": participant_dto.participant_id,
             "puuid": participant_dto.puuid,

@@ -80,7 +80,7 @@ class ValidationError(ServiceException):
         service: str | None = None,
         operation: str | None = None,
         field: str | None = None,
-        value: Any | None = None,
+        value: object | None = None,
         context: dict[str, Any] | None = None,
     ):
         validation_context = context or {}

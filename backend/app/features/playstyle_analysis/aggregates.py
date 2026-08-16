@@ -3,6 +3,7 @@
 from collections.abc import Callable
 from typing import Any
 
+from app.features.matches.models import Match
 from app.features.matches.participants import MatchParticipant
 from app.features.playstyle_analysis.tag_checks import (
     MatchesById,
@@ -178,7 +179,7 @@ def _epic_steal_count(
 def _collect_match_shares(
     participants: list[MatchParticipant],
     matches: MatchesById,
-    share_fn: Callable[[MatchParticipant, Any], float | None],
+    share_fn: Callable[[MatchParticipant, Match], float | None],
 ) -> list[float]:
     values: list[float] = []
     for p in participants:
@@ -201,7 +202,7 @@ def _average_team_damage_pct(
     game_count: int,
 ) -> float:
 
-    def share(p: MatchParticipant, match: Any) -> float | None:
+    def share(p: MatchParticipant, match: Match) -> float | None:
         return team_attribute_share(p, match, "total_damage_dealt_to_champions")
 
     return _average_or_zero(_collect_match_shares(participants, matches, share))
@@ -214,7 +215,7 @@ def _average_team_damage_taken_pct(
     game_count: int,
 ) -> float:
 
-    def share(p: MatchParticipant, match: Any) -> float | None:
+    def share(p: MatchParticipant, match: Match) -> float | None:
         return team_attribute_share(p, match, "total_damage_taken")
 
     return _average_or_zero(_collect_match_shares(participants, matches, share))

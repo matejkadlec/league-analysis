@@ -38,7 +38,9 @@ def evaluate_tag(
 ) -> TagResult:
     """Evaluate a single tag configuration."""
     tag_type = config.get("type")
-    type_evaluator = _TYPE_EVALUATORS.get(tag_type)
+    type_evaluator = (
+        _TYPE_EVALUATORS.get(tag_type) if isinstance(tag_type, str) else None
+    )
     if type_evaluator is not None:
         return type_evaluator(participants, matches, game_count, tag_code, config)
 
@@ -436,7 +438,7 @@ def _sum_lane_gold_diffs(
 
 
 def _accumulate_damage(
-    participants: list[MatchParticipant], target_type: Any
+    participants: list[MatchParticipant], target_type: str | None
 ) -> tuple[int, int, int, int]:
     matching_games = 0
     total_phys_damage = 0
@@ -456,7 +458,10 @@ def _accumulate_damage(
 
 
 def _typed_damage_percentage(
-    target_type: Any, total_phys: float, total_magic: float, total_damage: float
+    target_type: str | None,
+    total_phys: float,
+    total_magic: float,
+    total_damage: float,
 ) -> float:
     if total_damage > 0:
         if target_type == "physical":
@@ -482,7 +487,9 @@ def _side_win_stats(
     return blue_stats, red_stats
 
 
-def _favored_side_wr(target_team: Any, blue_wr: float, red_wr: float) -> float | None:
+def _favored_side_wr(
+    target_team: int | None, blue_wr: float, red_wr: float
+) -> float | None:
     diff = 5.0
     is_blue_favored = (blue_wr - red_wr) >= diff
     is_red_favored = (red_wr - blue_wr) >= diff
@@ -613,7 +620,7 @@ def _evaluate_champion_play_rate(
     config: dict[str, Any],
     default_min_play_rate: float,
 ) -> TagResult:
-    champs: dict[Any, int] = {}
+    champs: dict[str, int] = {}
     for p in participants:
         champs[p.champion_name] = champs.get(p.champion_name, 0) + 1
 
@@ -667,10 +674,10 @@ def _recent_win_rate(participants: list[MatchParticipant]) -> float:
 
 def _count_roles_and_champs(
     participants: list[MatchParticipant],
-) -> tuple[dict[str, int], dict[str, int], dict[Any, int]]:
+) -> tuple[dict[str, int], dict[str, int], dict[str, int]]:
     roles: dict[str, int] = {}
     role_wins: dict[str, int] = {}
-    champs: dict[Any, int] = {}
+    champs: dict[str, int] = {}
     for p in participants:
         role = p.team_position or "UNKNOWN"
         if role != "UNKNOWN":
@@ -704,12 +711,12 @@ def _main_role_stats(
 
 def _most_played_champion(
     participants: list[MatchParticipant],
-    champs: dict[Any, int],
+    champs: dict[str, int],
     most_played_role: str,
 ) -> str:
     most_played_champion = "None"
     if most_played_role != "None" and most_played_role != "UNKNOWN":
-        role_champs: dict[Any, int] = {}
+        role_champs: dict[str, int] = {}
         for p in participants:
             if p.team_position == most_played_role and p.champion_name:
                 role_champs[p.champion_name] = role_champs.get(p.champion_name, 0) + 1
@@ -735,7 +742,7 @@ def _champion_win_rate(
     return most_played_champion_win_rate
 
 
-_TYPE_EVALUATORS: dict[Any, TagEvaluator] = {
+_TYPE_EVALUATORS: dict[str, TagEvaluator] = {
     "damage_type": evaluate_damage_type,
     "side_preference": evaluate_side_preference,
     "surrender_check": evaluate_surrender,

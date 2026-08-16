@@ -9,10 +9,11 @@ from __future__ import annotations
 import math
 from dataclasses import asdict
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from typing import Any, cast
 
 import structlog
-from sqlalchemy import and_, func, select, update
+from sqlalchemy import ColumnElement, and_, func, select, update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -58,7 +59,7 @@ MAX_WINDOW_MATCHES = 250
 ABANDONED_RUN_SECONDS = 600
 
 
-def _to_float(value: Any) -> float:
+def _to_float(value: Decimal | None) -> float:
     """Coerce a nullable numeric column into a plain float."""
     return float(value) if value is not None else 0.0
 
@@ -132,7 +133,7 @@ class SmurfBoostDetectionService:
             )
         return scorable
 
-    def _eligibility_filter(self, puuid: str) -> list[Any]:
+    def _eligibility_filter(self, puuid: str) -> list[ColumnElement[bool]]:
         """The one eligibility predicate every query in this feature shares."""
         return [
             MatchParticipant.puuid == puuid,

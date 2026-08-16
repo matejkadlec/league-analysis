@@ -7,7 +7,7 @@
 
 from collections.abc import Sequence
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any, TypedDict
+from typing import TYPE_CHECKING, TypedDict
 
 import structlog
 from Levenshtein import distance as levenshtein_distance
@@ -20,17 +20,17 @@ from app.core.exceptions import (
     PlayerServiceError,
 )
 from app.core.riot_api.constants import Platform, get_region_by_platform
+from app.core.riot_api.models import LeagueEntryDTO, MatchDTO
 from app.features.auth.models import User
 from app.features.auth.user_settings import UserSettings
 from app.features.auth.user_tracked_player import UserTrackedPlayer
 
+from .leagues import PlayerLeague
 from .models import Player
 from .schemas import PlayerResponse
 
 if TYPE_CHECKING:
     from app.core.riot_api.client import RiotAPIClient
-
-    from .leagues import PlayerLeague
 
 logger = structlog.get_logger(__name__)
 
@@ -1124,7 +1124,9 @@ class PlayerService:
     @input_validation(
         validate_non_empty=["platform"],
     )
-    async def discover_players_from_match(self, match_dto: Any, platform: str) -> int:
+    async def discover_players_from_match(
+        self, match_dto: MatchDTO, platform: str
+    ) -> int:
         """
         Discover and create player records from match participants.
 
@@ -1273,7 +1275,9 @@ class PlayerService:
         return False
 
     @staticmethod
-    def _solo_duo_league_entry(league_entries: Sequence[Any]) -> Any | None:
+    def _solo_duo_league_entry(
+        league_entries: Sequence[LeagueEntryDTO],
+    ) -> LeagueEntryDTO | None:
         """Return the Solo/Duo league entry from a LEAGUE-V4 payload."""
         return next(
             (
@@ -1285,7 +1289,9 @@ class PlayerService:
         )
 
     @staticmethod
-    def _league_snapshot_matches(current_league: Any, solo_entry: Any) -> bool:
+    def _league_snapshot_matches(
+        current_league: PlayerLeague, solo_entry: LeagueEntryDTO
+    ) -> bool:
         """Return True when the stored snapshot matches the live Solo/Duo entry."""
         return (
             current_league.tier == solo_entry.tier
@@ -1296,10 +1302,10 @@ class PlayerService:
         )
 
     @staticmethod
-    def _player_league_from_entry(puuid: str, solo_entry: Any) -> PlayerLeague:
+    def _player_league_from_entry(
+        puuid: str, solo_entry: LeagueEntryDTO
+    ) -> PlayerLeague:
         """Build an immutable league snapshot from a live Solo/Duo entry."""
-        from .leagues import PlayerLeague
-
         return PlayerLeague(
             puuid=puuid,
             league_id=solo_entry.league_id,
@@ -1386,8 +1392,6 @@ class PlayerService:
             Most recent PlayerLeague or None if no league data exists
         """
         from sqlalchemy import select
-
-        from .leagues import PlayerLeague
 
         stmt = (
             select(PlayerLeague)

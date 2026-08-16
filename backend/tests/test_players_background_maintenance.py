@@ -15,6 +15,7 @@ from starlette.requests import Request
 
 from app.core.riot_api.client import RiotAPIClient
 from app.core.riot_api.errors import NotFoundError, RateLimitError
+from app.core.riot_api.models import MatchDTO
 from app.features.auth.models import User
 from app.features.jobs import models as job_models
 from app.features.jobs.maintenance import (
@@ -390,6 +391,6 @@ async def test_match_storage_rechecks_maintenance_before_each_write(
     service = MatchService(cast(AsyncSession, object()))
 
     with pytest.raises(RiotWriterMaintenanceActiveError):
-        await service.store_match_from_dto(SimpleNamespace())
+        await service.store_match_from_dto(cast(MatchDTO, SimpleNamespace()))
 
     guard.assert_awaited_once()

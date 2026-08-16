@@ -5,7 +5,6 @@ from __future__ import annotations
 from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -30,7 +29,7 @@ class LPAttribution:
     reason: str
 
 
-def league_snapshot_datetime(snapshot: Any) -> datetime:
+def league_snapshot_datetime(snapshot: PlayerLeague) -> datetime:
     """Normalize stored league timestamps to an aware UTC datetime."""
     value = snapshot.created_at
     if value.tzinfo is None:

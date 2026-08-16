@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import datetime
-from typing import Any, TypeIs
+from typing import Any, Protocol, TypeIs
 
 import structlog
 from sqlalchemy import (
@@ -27,6 +28,52 @@ from sqlalchemy.sql import func
 from app.core.models import Base
 
 logger = structlog.get_logger(__name__)
+
+
+class TimelineParticipant(Protocol):
+    """The participant fields timeline aggregation reads."""
+
+    @property
+    def participant_id(self) -> int: ...
+
+    @property
+    def team_id(self) -> int: ...
+
+    @property
+    def puuid(self) -> str: ...
+
+
+class TimelineMatchInfo(Protocol):
+    """The match-info fields timeline aggregation reads."""
+
+    @property
+    def game_version(self) -> str: ...
+
+    @property
+    def participants(self) -> Sequence[TimelineParticipant]: ...
+
+
+class TimelineMatchMetadata(Protocol):
+    """The match-metadata fields timeline aggregation reads."""
+
+    @property
+    def match_id(self) -> str: ...
+
+
+class TimelineMatch(Protocol):
+    """A match seen through the small window timeline aggregation needs.
+
+    Both a full `MatchDTO` off the wire and the synthetic DTO rebuilt from
+    stored participants (`build_synthetic_match_dto`) are accepted here, so the
+    parameter names the members actually read rather than either concrete type.
+    """
+
+    @property
+    def metadata(self) -> TimelineMatchMetadata: ...
+
+    @property
+    def info(self) -> TimelineMatchInfo: ...
+
 
 VALID_TEAM_IDS = {100, 200}
 OBJECTIVE_KINDS = {
@@ -220,7 +267,7 @@ def _is_json_array(value: object) -> TypeIs[list[Any]]:
     return isinstance(value, list)
 
 
-def _normalize_int(value: Any) -> int | None:
+def _normalize_int(value: object) -> int | None:
     """Normalize values to int where possible."""
     if isinstance(value, bool):
         return None
@@ -233,7 +280,7 @@ def _normalize_int(value: Any) -> int | None:
     return None
 
 
-def _normalize_text(value: Any) -> str | None:
+def _normalize_text(value: object) -> str | None:
     """Normalize values to uppercase non-empty text."""
     if not isinstance(value, str):
         return None
@@ -417,7 +464,7 @@ def _extract_timeline_frames(
 
 
 def _collect_participant_rows(
-    match_dto: Any,
+    match_dto: TimelineMatch,
     frame_interval_ms: int | None,
     frame_count: int,
 ) -> tuple[dict[int, int], dict[int, dict[str, Any]]]:
@@ -706,7 +753,7 @@ def _apply_elite_monster_kill(
 
 
 def _process_timeline_event(
-    event: Any,
+    event: object,
     match_id: str,
     game_version: str,
     historical_atakhan: bool,
@@ -812,7 +859,7 @@ def _finalize_timeline_rows(
 
 
 def build_match_timeline_rows(
-    match_dto: Any,
+    match_dto: TimelineMatch,
     timeline_payload: dict[str, Any] | None,
 ) -> list[dict[str, Any]]:
     """Build participant timeline aggregates for objective-focused analytics."""
@@ -845,7 +892,7 @@ def build_match_timeline_rows(
 
 async def replace_match_timeline_rows(
     db: AsyncSession,
-    match_dto: Any,
+    match_dto: TimelineMatch,
     timeline_payload: dict[str, Any] | None,
 ) -> int:
     """Replace timeline rows for one match when timeline payload is available."""
