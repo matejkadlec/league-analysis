@@ -16,6 +16,21 @@ describe("SectionQuickNavigation", () => {
 
   afterEach(() => cleanup());
 
+  it("stays off viewports too narrow to spare its fixed 40px", () => {
+    render(
+      <SectionQuickNavigation
+        items={[{ label: "Player Summary", anchor: "#player-summary" }]}
+      />,
+    );
+
+    // The tab is `fixed right-0`, so without this it overlays ~10% of a 390px
+    // phone on every page that mounts it, permanently and on both sides of a
+    // scroll.
+    const className = screen.getByTestId("section-quick-navigation").className;
+    expect(className).toContain("hidden");
+    expect(className).toContain("sm:block");
+  });
+
   it("restores the hover expansion and smoothly scrolls to a section", async () => {
     const user = userEvent.setup();
     render(
