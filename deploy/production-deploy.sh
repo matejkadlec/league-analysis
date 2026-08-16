@@ -44,7 +44,7 @@ if [[ ! "$commit" =~ ^[0-9a-f]{40}$ ]]; then
   exit 2
 fi
 
-for command_name in docker flock git tar; do
+for command_name in curl docker flock git tar; do
   if ! command -v "$command_name" >/dev/null 2>&1; then
     printf '%s is required for production deployment.\n' "$command_name" >&2
     exit 1
@@ -176,6 +176,55 @@ fi
 postgres_ports="$(docker inspect --format '{{json .HostConfig.PortBindings}}' "$postgres_container")"
 if [[ "$postgres_ports" != "null" && "$postgres_ports" != "{}" ]]; then
   printf 'PostgreSQL must not publish a host port.\n' >&2
+  exit 1
+fi
+
+# Container health checks answer from inside the container, so they say nothing
+# about the ports this host published. Probe those ports directly, and only
+# those: the public hostnames are served by a Cloudflare Worker, so a request
+# there would report on Cloudflare rather than on this deployment. The release
+# is blessed below only once both services have answered.
+verify_published_service() {
+  local name="$1" service="$2" container_port="$3" request_path="$4"
+  local endpoint address port url attempt=1
+  if ! endpoint="$(compose port "$service" "$container_port")" || [[ -z "$endpoint" ]]; then
+    printf 'The %s service published no host port for %s.\n' "$service" "$container_port" >&2
+    return 1
+  fi
+  if [[ ! "$endpoint" =~ ^([^[:space:]]+):([0-9]+)$ ]]; then
+    printf 'The %s service published an unreadable endpoint: %s\n' "$service" "$endpoint" >&2
+    return 1
+  fi
+  address="${BASH_REMATCH[1]}"
+  port="${BASH_REMATCH[2]}"
+  # A wildcard bind is not an address a client can ask for; a bind to one
+  # address is, and is used as published.
+  case "$address" in
+    0.0.0.0) address='127.0.0.1' ;;
+    '[::]') address='[::1]' ;;
+  esac
+  url="http://$address:$port$request_path"
+  # Deliberately without --location: a redirect here would most likely point at
+  # the public site, and following it would test Cloudflare instead of this
+  # host. The answer has to come from the port this deployment published.
+  while true; do
+    if curl --fail --silent --show-error --max-time 10 --output /dev/null "$url"; then
+      printf 'Post-deployment check passed: %s (%s).\n' "$name" "$url"
+      return 0
+    fi
+    if [[ "$attempt" -ge 5 ]]; then
+      printf 'Post-deployment check failed: %s (%s).\n' "$name" "$url" >&2
+      return 1
+    fi
+    attempt=$((attempt + 1))
+    sleep 3
+  done
+}
+
+if ! verify_published_service 'backend readiness' backend 8000 /health/ready || \
+  ! verify_published_service 'frontend root' frontend 3000 /; then
+  compose ps --all >&2 || true
+  compose logs --no-color --tail 100 backend frontend >&2 || true
   exit 1
 fi
 

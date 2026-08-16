@@ -14,3 +14,12 @@ id = "riot-api-key"
 description = "Riot Games API key"
 regex = '''RGAPI-[0-9A-Za-z]{8}-[0-9A-Za-z]{4}-[0-9A-Za-z]{4}-[0-9A-Za-z]{4}-[0-9A-Za-z]{12}'''
 keywords = ["RGAPI-"]
+
+  # The settings-page placeholder and the docs spell the shape out in x's,
+  # which the rule above matches character for character. Allowing that one
+  # literal keeps the rule firing on every string that could be a real key —
+  # an `x` is a legal key character, so only the fully-degenerate form is
+  # exempt. Without this the gate reports the placeholder on every run.
+  [rules.allowlist]
+  regexTarget = "match"
+  regexes = ['''RGAPI-x{8}-x{4}-x{4}-x{4}-x{12}''']

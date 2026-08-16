@@ -26,6 +26,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          # The gate's secret scan reads the commit history, so the default
+          # single-commit checkout would quietly cover less here than locally.
+          fetch-depth: 0
           persist-credentials: false
 
       # compose.gate.yml carries the toolchain, the disposable PostgreSQL 18 and
