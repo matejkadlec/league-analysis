@@ -81,8 +81,7 @@ export function MatchmakingAnalysisResults({
     isLoading ||
     error ||
     !latestAnalysis ||
-    latestAnalysis.status !== "completed" ||
-    !latestAnalysis.results
+    latestAnalysis.status !== "completed"
   ) {
     return (
       <Card>
