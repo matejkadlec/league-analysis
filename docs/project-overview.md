@@ -46,9 +46,9 @@ code where applicable and exposes public imports through `__init__.py`.
 
 `frontend/app/` uses the Next.js App Router. `frontend/features/` groups domain
 UI for authentication, consent, jobs, matches, matchmaking, players,
-playstyle analysis, and profile statistics. `frontend/components/` contains
+and profile statistics. `frontend/components/` contains
 shared application components and shadcn/ui primitives; `frontend/lib/core/`
-contains shared API, schema, validation, and utility code.
+contains shared API, schema, and utility code.
 
 TanStack Query owns server-data fetching and cache state. Zod validates API
 payloads at the frontend boundary.
