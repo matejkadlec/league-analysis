@@ -29,6 +29,10 @@ import type { Player } from "@/lib/core/schemas";
 import { cn } from "@/lib/core/utils";
 
 import { parseRiotId, type RiotIdParts } from "../utils/riot-id";
+import {
+  PlayerTrackingError,
+  toPlayerTrackingError,
+} from "../utils/tracking-feedback";
 
 const PLATFORM_OPTIONS = [
   ["eun1", "EUNE"],
@@ -144,14 +148,44 @@ export function PlayerSelector({
         tag_line: pendingRiotId.tagLine,
         platform,
       });
-      if (!result.success) throw new Error(result.error.message);
+      if (!result.success) {
+        throw toPlayerTrackingError(result.error, pendingRiotId, platform);
+      }
       return result.data;
     },
     onSuccess: async (player) => {
       setPendingRiotId(null);
       await choosePlayer(player);
     },
-    onError: () => {
+    onError: (error) => {
+      if (error instanceof PlayerTrackingError && error.kind === "api-key") {
+        toast({
+          title: "Player search is temporarily unavailable",
+          description:
+            "The Riot API key is invalid or expired. Please contact an administrator.",
+          variant: "error",
+        });
+        return;
+      }
+      if (
+        error instanceof PlayerTrackingError &&
+        error.kind === "rate-limited"
+      ) {
+        toast({
+          title: "Player search could not finish",
+          description: "Riot temporarily limited requests. Try again later.",
+          variant: "warning",
+        });
+        return;
+      }
+      if (error instanceof PlayerTrackingError && error.kind === "not-found") {
+        toast({
+          title: "Player search could not finish",
+          description: error.message,
+          variant: "error",
+        });
+        return;
+      }
       toast({
         title: "Player search could not finish",
         description: "Check the Riot ID and server, then try again.",

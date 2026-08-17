@@ -753,11 +753,11 @@ class PlayerService:
         region = get_region_by_platform(platform_enum)
         account = await riot_client.get_account_by_riot_id(game_name, tag_line, region)
         if not account:
-            raise ValueError(f"Player not found: {game_name}#{tag_line}")
+            raise ValueError(f"Player {game_name}#{tag_line} was not found.")
 
         summoner = await riot_client.get_summoner_by_puuid(account.puuid, platform_enum)
         if not summoner:
-            raise ValueError(f"Summoner not found for PUUID: {account.puuid}")
+            raise ValueError("Player details were not found on this server.")
 
         now = datetime.now(UTC)
         # A Riot ID whose stored row carries a different PUUID is left alone.
@@ -812,7 +812,7 @@ class PlayerService:
         player = await self.db.get(Player, puuid)
 
         if not player:
-            raise ValueError(f"Player not found: {puuid}")
+            raise ValueError("Player not found.")
 
         existing = await self._is_player_tracked_by_user(puuid, user_id)
         if existing:
@@ -824,7 +824,7 @@ class PlayerService:
             select(User).where(User.id == user_id).with_for_update()
         )
         if user is None:
-            raise ValueError("Application user not found")
+            raise ValueError("Your account was not found. Please sign in again.")
 
         tracked_count = await self.db.scalar(
             select(func.count())
@@ -878,7 +878,7 @@ class PlayerService:
         player = await self.db.get(Player, puuid)
 
         if not player:
-            raise ValueError(f"Player not found: {puuid}")
+            raise ValueError("Player not found.")
 
         stmt = delete(UserTrackedPlayer).where(
             UserTrackedPlayer.user_id == user_id,
@@ -906,7 +906,7 @@ class PlayerService:
         """Get user-specific tracking status for a player."""
         player = await self.db.get(Player, puuid)
         if not player:
-            raise ValueError(f"Player not found: {puuid}")
+            raise ValueError("Player not found.")
 
         return await self._is_player_tracked_by_user(puuid, user_id)
 

@@ -56,7 +56,7 @@ async def get_service_status(
         logger.error("failed_to_get_service_status", error=str(e), exc_info=True)
         raise HTTPException(
             status_code=500,
-            detail="Internal server error retrieving service status",
+            detail="The service status could not be loaded. Please try again later.",
         ) from e
 
 
@@ -72,7 +72,7 @@ async def get_riot_api_key(
         if not setting:
             raise HTTPException(
                 status_code=404,
-                detail="Riot API key setting not found. Using environment variable.",
+                detail="No Riot API key has been saved here yet. The key from the server configuration is in use.",
             )
 
         return setting
@@ -83,7 +83,7 @@ async def get_riot_api_key(
         logger.error("failed_to_get_riot_api_key", error=str(e), exc_info=True)
         raise HTTPException(
             status_code=500,
-            detail="Internal server error retrieving Riot API key",
+            detail="The Riot API key could not be loaded. Please try again later.",
         ) from e
 
 
@@ -133,7 +133,7 @@ async def update_riot_api_key(
         logger.error("failed_to_update_riot_api_key", error=str(e), exc_info=True)
         raise HTTPException(
             status_code=500,
-            detail="Internal server error updating Riot API key",
+            detail="The Riot API key could not be updated. Please try again later.",
         ) from e
 
 
@@ -166,7 +166,7 @@ async def test_riot_api_key(
         logger.error("failed_to_test_riot_api_key", error=str(e), exc_info=True)
         raise HTTPException(
             status_code=500,
-            detail="Internal server error testing Riot API key",
+            detail="The Riot API key could not be tested. Please try again later.",
         ) from e
 
 
@@ -195,7 +195,7 @@ async def get_card_preferences(
         )
         raise HTTPException(
             status_code=500,
-            detail="Failed to get card preferences",
+            detail="Card preferences could not be loaded. Please try again later.",
         ) from error
 
 
@@ -224,7 +224,7 @@ async def update_card_preference(
         )
         raise HTTPException(
             status_code=500,
-            detail="Failed to update card preference",
+            detail="The card preference could not be updated. Please try again later.",
         ) from error
 
 
@@ -248,7 +248,7 @@ async def reset_card_preference(
         )
         raise HTTPException(
             status_code=500,
-            detail="Failed to reset card preference",
+            detail="The card preference could not be reset. Please try again later.",
         ) from error
 
 
@@ -273,7 +273,7 @@ async def reset_all_card_preferences(
         )
         raise HTTPException(
             status_code=500,
-            detail="Failed to reset card preferences",
+            detail="Card preferences could not be reset. Please try again later.",
         ) from error
 
 
@@ -295,7 +295,7 @@ async def get_user_settings(
         logger.error("failed_to_get_user_settings", error=str(e), exc_info=True)
         raise HTTPException(
             status_code=500,
-            detail="Failed to get user settings",
+            detail="Your settings could not be loaded. Please try again later.",
         ) from e
 
 
@@ -317,7 +317,7 @@ async def update_user_settings(
         logger.error("failed_to_update_user_settings", error=str(e), exc_info=True)
         raise HTTPException(
             status_code=500,
-            detail="Failed to update user settings",
+            detail="Your settings could not be saved. Please try again later.",
         ) from e
 
 
@@ -334,7 +334,7 @@ async def get_user_cookie_consent(
         logger.error("failed_to_get_user_cookie_consent", error=str(e), exc_info=True)
         raise HTTPException(
             status_code=500,
-            detail="Failed to get user cookie consent",
+            detail="Your cookie preferences could not be loaded. Please try again later.",
         ) from e
 
 
@@ -358,5 +358,5 @@ async def update_user_cookie_consent(
         )
         raise HTTPException(
             status_code=500,
-            detail="Failed to update user cookie consent",
+            detail="Your cookie preferences could not be saved. Please try again later.",
         ) from e

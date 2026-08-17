@@ -294,7 +294,7 @@ async def submit_join_us_contact(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail={
                 "code": "CONTACT_EMAIL_DELIVERY_FAILED",
-                "message": "Failed to send your message. Please try again later.",
+                "message": "Your message could not be sent. Please try again later.",
             },
         ) from e
 
@@ -377,7 +377,7 @@ async def request_email_change_code(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to send verification code: {e!s}",
+            detail="The verification code could not be sent. Please try again later.",
         ) from e
 
 

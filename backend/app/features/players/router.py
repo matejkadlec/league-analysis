@@ -18,7 +18,9 @@ from app.core.riot_api.client import RiotAPIClient
 from app.core.riot_api.constants import Platform
 from app.core.riot_api.credential_health import create_tracked_riot_api_client
 from app.core.riot_api.errors import (
+    RIOT_API_KEY_INVALID_DETAIL,
     AuthenticationError,
+    ForbiddenError,
     NotFoundError,
     RateLimitError,
 )
@@ -70,10 +72,16 @@ def _validate_game_name(game_name: str) -> None:
         raise HTTPException(status_code=400, detail="Game name cannot be empty")
 
     if len(game_name) > GAME_NAME_MAX_LENGTH:
-        raise HTTPException(status_code=400, detail="Game name too long")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Game name is too long ({GAME_NAME_MAX_LENGTH} characters max).",
+        )
 
     if not re.match(r"^[a-zA-Z0-9\s\.\-_]+$", game_name):
-        raise HTTPException(status_code=400, detail="Invalid characters in game name")
+        raise HTTPException(
+            status_code=400,
+            detail="Game name contains unsupported characters. Use letters, numbers, spaces, and ._-.",
+        )
 
 
 def _validate_tag_line(tag_line: str) -> None:
@@ -82,10 +90,16 @@ def _validate_tag_line(tag_line: str) -> None:
         raise HTTPException(status_code=400, detail="Tag line cannot be empty")
 
     if len(tag_line) > TAG_LINE_MAX_LENGTH:
-        raise HTTPException(status_code=400, detail="Tag line too long")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Tag line is too long ({TAG_LINE_MAX_LENGTH} characters max).",
+        )
 
     if not re.match(r"^[a-zA-Z0-9]+$", tag_line):
-        raise HTTPException(status_code=400, detail="Invalid characters in tag line")
+        raise HTTPException(
+            status_code=400,
+            detail="Tag line contains unsupported characters. Use only letters and numbers.",
+        )
 
 
 @router.get("/search", response_model=list[PlayerResponse])
@@ -138,7 +152,7 @@ async def search_player(
         )
         raise HTTPException(
             status_code=500,
-            detail="Internal server error during player search",
+            detail="Player search could not be completed. Please try again later.",
         ) from e
 
 
@@ -213,7 +227,7 @@ async def get_player_suggestions(
         )
         raise HTTPException(
             status_code=500,
-            detail="Internal server error retrieving player suggestions",
+            detail="Player suggestions could not be loaded. Please try again later.",
         ) from e
 
 
@@ -267,10 +281,10 @@ async def discover_player(
         raise HTTPException(
             status_code=429, detail="Riot API rate limit reached"
         ) from error
-    except AuthenticationError as error:
+    except (AuthenticationError, ForbiddenError) as error:
         raise HTTPException(
             status_code=503,
-            detail="RIOT_API_KEY_INVALID",
+            detail=RIOT_API_KEY_INVALID_DETAIL,
         ) from error
     except ValueError as error:
         _handle_tracking_value_error(error)
@@ -403,7 +417,7 @@ async def track_player(
         logger.error("track_player_failed", error=str(e), puuid=puuid, exc_info=True)
         raise HTTPException(
             status_code=500,
-            detail="Internal server error tracking player",
+            detail="The player could not be tracked. Please try again later.",
         ) from e
 
 
@@ -434,7 +448,7 @@ async def untrack_player(
         logger.error("untrack_player_failed", error=str(e), puuid=puuid, exc_info=True)
         raise HTTPException(
             status_code=500,
-            detail="Internal server error untracking player",
+            detail="The player could not be untracked. Please try again later.",
         ) from e
 
 
@@ -466,7 +480,7 @@ async def get_tracking_status(
         )
         raise HTTPException(
             status_code=500,
-            detail="Internal server error retrieving tracking status",
+            detail="The tracking status could not be loaded. Please try again later.",
         ) from e
 
 
@@ -488,7 +502,7 @@ async def get_tracked_players(
         logger.error("get_tracked_players_failed", error=str(e), exc_info=True)
         raise HTTPException(
             status_code=500,
-            detail="Internal server error retrieving tracked players",
+            detail="Tracked players could not be loaded. Please try again later.",
         ) from e
 
 
@@ -878,11 +892,11 @@ async def add_tracked_player(
         raise HTTPException(
             status_code=429, detail="Riot API rate limit reached"
         ) from e
-    except AuthenticationError as e:
+    except (AuthenticationError, ForbiddenError) as e:
         logger.error("riot_api_auth_error", error=str(e))
         raise HTTPException(
             status_code=503,
-            detail="Riot API Key is invalid or expired. Please update it in Settings.",
+            detail=RIOT_API_KEY_INVALID_DETAIL,
         ) from e
     except HTTPException:
         raise
@@ -890,7 +904,8 @@ async def add_tracked_player(
         full_id = f"{game_name}#{tag_line}"
         _handle_tracking_unexpected_error(e, full_id, game_name, platform)
         raise HTTPException(
-            status_code=500, detail="Internal server error adding tracked player"
+            status_code=500,
+            detail="The player could not be added to tracking. Please try again later.",
         ) from e
 
 
@@ -917,7 +932,7 @@ def _handle_tracking_unexpected_error(
     )
     raise HTTPException(
         status_code=500,
-        detail="Internal server error adding tracked player",
+        detail="The player could not be added to tracking. Please try again later.",
     )
 
 
@@ -987,7 +1002,7 @@ async def refresh_player_league(
             status_code=503,
             detail="Riot data maintenance is in progress. Try again after it completes.",
         ) from e
-    except AuthenticationError as e:
+    except (AuthenticationError, ForbiddenError) as e:
         logger.error(
             "refresh_player_league_failed",
             error=str(e),
@@ -996,7 +1011,7 @@ async def refresh_player_league(
         )
         raise HTTPException(
             status_code=503,
-            detail="Riot API Key is invalid or expired. Please update it in Settings.",
+            detail=RIOT_API_KEY_INVALID_DETAIL,
         ) from e
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
@@ -1009,7 +1024,7 @@ async def refresh_player_league(
         )
         raise HTTPException(
             status_code=500,
-            detail="Internal server error refreshing player league",
+            detail="The player's rank could not be refreshed. Please try again later.",
         ) from e
 
 
@@ -1050,5 +1065,5 @@ async def get_player_current_league(
         )
         raise HTTPException(
             status_code=500,
-            detail="Internal server error retrieving player league",
+            detail="The player's rank could not be loaded. Please try again later.",
         ) from e
