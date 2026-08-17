@@ -68,7 +68,9 @@ const RUN_TIMESTAMPS = {
 function syncPaths(): string[] {
   return validatedGet.mock.calls
     .map((call) => String(call[1]))
-    .filter((path) => path.includes("/sync/"));
+    .filter(
+      (path) => path.includes("/sync/") && !path.endsWith("/sync/active"),
+    );
 }
 
 describe("Match History update", () => {
@@ -77,6 +79,9 @@ describe("Match History update", () => {
     validatedGet.mockReset();
     post.mockReset();
     validatedGet.mockImplementation(async (_schema: unknown, path: string) => {
+      if (path.endsWith("/sync/active")) {
+        return { success: true, data: null };
+      }
       if (path.includes("/sync/")) {
         return {
           success: true,
@@ -131,5 +136,36 @@ describe("Match History update", () => {
 
     await waitFor(() => expect(syncPaths().length).toBeGreaterThan(0));
     expect((button as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("adopts an in-flight run after a reload instead of losing it", async () => {
+    // Before the shared usePlayerSyncRun hook, this surface kept the run id
+    // in local state only, so a reload mid-sync re-enabled the button with
+    // the run still going.
+    validatedGet.mockImplementation(async (_schema: unknown, path: string) => {
+      if (path.endsWith("/sync/active")) {
+        return {
+          success: true,
+          data: { id: 9, puuid: "p", status: "running", ...RUN_TIMESTAMPS },
+        };
+      }
+      if (path.includes("/sync/")) {
+        return {
+          success: true,
+          data: { id: 9, puuid: "p", status: "running", ...RUN_TIMESTAMPS },
+        };
+      }
+      return { success: true, data: EMPTY_HISTORY };
+    });
+    renderHistory();
+
+    const button = await screen.findByRole("button", { name: /update/i });
+    await waitFor(() =>
+      expect((button as HTMLButtonElement).disabled).toBe(true),
+    );
+    await waitFor(() =>
+      expect(syncPaths()).toContain("/players/player-puuid/sync/9"),
+    );
+    expect(post).not.toHaveBeenCalled();
   });
 });

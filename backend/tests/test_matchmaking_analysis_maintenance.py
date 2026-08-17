@@ -88,9 +88,9 @@ async def test_matchmaking_fetched_match_honors_the_maintenance_interlock(
         "_ensure_riot_writer_maintenance_is_inactive",
         guard,
     )
-    from app.core import match_utils
+    from app.features.matches import match_persistence
 
-    monkeypatch.setattr(match_utils, "upsert_match", upsert)
+    monkeypatch.setattr(match_persistence, "upsert_match", upsert)
     database = object()
     service = MatchmakingAnalysisService(
         cast(AsyncSession, database), cast(RiotAPIClient, object())

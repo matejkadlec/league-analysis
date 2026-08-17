@@ -14,8 +14,8 @@ and backend rules from [`../../AGENTS.md`](../../AGENTS.md).
 ## Rules
 
 - Features depend on `core/`, optionally on other features; minimize
-  cross-feature dependencies. Features expose public APIs via `__init__.py`.
-  Keep routes thin, logic in services.
+  cross-feature dependencies. Feature `__init__.py` files stay minimal; import
+  from submodules directly. Keep routes thin, logic in services.
 - Player records, matches, and freshness timestamps remain shared by PUUID.
   Current selection, tracked mappings, and recent ordering are always scoped by
   authenticated application user ID. Never infer one from the other.

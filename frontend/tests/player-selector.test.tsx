@@ -11,7 +11,7 @@ const { discoverPlayer, searchPlayerSuggestions, toast } = vi.hoisted(() => ({
   toast: vi.fn(),
 }));
 
-vi.mock("@/lib/core/api", () => ({
+vi.mock("@/features/players/player-api", () => ({
   discoverPlayer,
   searchPlayerSuggestions,
 }));

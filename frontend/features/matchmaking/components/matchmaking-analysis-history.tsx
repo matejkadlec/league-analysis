@@ -8,7 +8,7 @@ import { useToast } from "@/lib/core/hooks";
 import {
   getMatchmakingAnalysisHistory,
   deleteMatchmakingAnalysisRecord,
-} from "@/lib/core/api";
+} from "../matchmaking-api";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {

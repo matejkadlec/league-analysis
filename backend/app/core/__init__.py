@@ -9,10 +9,8 @@ from .database import db_manager, get_db, get_session
 from .enums import Tier
 from .exceptions import (
     DatabaseError,
-    ExternalServiceError,
     PlayerServiceError,
     ServiceException,
-    ValidationError,
 )
 from .models import (
     AutoIncrementPK,
@@ -47,7 +45,6 @@ __all__ = [
     "AutoIncrementPK",
     "Base",
     "DatabaseError",
-    "ExternalServiceError",
     "MatchIDField",
     "MatchIDForeignKey",
     "OptionalBigInt",
@@ -70,7 +67,6 @@ __all__ = [
     "ServiceException",
     "Settings",
     "Tier",
-    "ValidationError",
     "db_manager",
     "get_db",
     "get_global_settings",

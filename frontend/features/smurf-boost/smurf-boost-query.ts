@@ -1,6 +1,6 @@
 import { queryOptions } from "@tanstack/react-query";
 
-import { getLatestSmurfBoostDetection } from "@/lib/core/api";
+import { getLatestSmurfBoostDetection } from "./smurf-boost-api";
 
 export function smurfBoostQueryKey(puuid: string | null) {
   return ["smurf-boost-detection", puuid] as const;

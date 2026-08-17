@@ -62,7 +62,7 @@ def _create_job_instance(
     if not job_class:
         raise HTTPException(
             status_code=501,
-            detail="This job type is not supported.",
+            detail=f"Job type {job.job_type} implementation not found.",
         )
     return job_class(job.id, triggered_by=triggered_by)
 
@@ -86,7 +86,7 @@ def _create_test_job_instance(
     if not test_class:
         raise HTTPException(
             status_code=501,
-            detail="Test runs are not supported for this job type.",
+            detail=f"Test runner for job type {job.job_type} not implemented.",
         )
     return test_class(job.id)
 
@@ -107,7 +107,7 @@ async def list_job_configurations(
         logger.error("Failed to list job configurations", error=str(e), exc_info=True)
         raise HTTPException(
             status_code=500,
-            detail="Job configurations could not be loaded. Please try again later.",
+            detail="Internal server error retrieving job configurations",
         ) from e
 
 
@@ -144,7 +144,7 @@ async def update_job_configuration(
         )
         raise HTTPException(
             status_code=500,
-            detail="The job configuration could not be updated. Please try again later.",
+            detail="Internal server error updating job configuration",
         ) from e
 
 
@@ -193,7 +193,7 @@ async def get_job_executions(
         )
         raise HTTPException(
             status_code=500,
-            detail="Job executions could not be loaded. Please try again later.",
+            detail="Internal server error retrieving job executions",
         ) from e
 
 
@@ -231,7 +231,7 @@ async def list_all_executions(
         logger.error("Failed to list all executions", error=str(e), exc_info=True)
         raise HTTPException(
             status_code=500,
-            detail="Job executions could not be loaded. Please try again later.",
+            detail="Internal server error retrieving all job executions",
         ) from e
 
 
@@ -330,7 +330,7 @@ async def trigger_job(
         )
         raise HTTPException(
             status_code=500,
-            detail="The job could not be triggered. Please try again later.",
+            detail="Internal server error triggering job",
         ) from e
 
 
@@ -359,7 +359,7 @@ async def get_job_control_state(
         )
         raise HTTPException(
             status_code=500,
-            detail="The job status could not be loaded. Please try again later.",
+            detail="Internal server error retrieving job control state",
         ) from e
 
 
@@ -390,7 +390,7 @@ async def pause_job(
         )
         raise HTTPException(
             status_code=500,
-            detail="The job could not be paused. Please try again later.",
+            detail="Internal server error pausing job",
         ) from e
 
 
@@ -421,7 +421,7 @@ async def resume_job(
         )
         raise HTTPException(
             status_code=500,
-            detail="The job could not be resumed. Please try again later.",
+            detail="Internal server error resuming job",
         ) from e
 
 
@@ -454,7 +454,7 @@ async def stop_job(
         )
         raise HTTPException(
             status_code=500,
-            detail="The job could not be stopped. Please try again later.",
+            detail="Internal server error stopping job",
         ) from e
 
 
@@ -557,7 +557,7 @@ async def trigger_test_run(
         )
         raise HTTPException(
             status_code=500,
-            detail="The test run could not be started. Please try again later.",
+            detail="Internal server error triggering test run",
         ) from e
 
 
@@ -641,7 +641,7 @@ async def stop_test_run(
         )
         raise HTTPException(
             status_code=500,
-            detail="The test run could not be stopped. Please try again later.",
+            detail="Internal server error stopping test run",
         ) from e
 
 
@@ -696,7 +696,7 @@ async def pause_test_run(
         )
         raise HTTPException(
             status_code=500,
-            detail="The test run could not be paused. Please try again later.",
+            detail="Internal server error pausing test run",
         ) from e
 
 
@@ -751,7 +751,7 @@ async def resume_test_run(
         )
         raise HTTPException(
             status_code=500,
-            detail="The test run could not be resumed. Please try again later.",
+            detail="Internal server error resuming test run",
         ) from e
 
 
@@ -790,111 +790,7 @@ async def get_job_system_status(
         logger.error("Failed to get job system status", error=str(e), exc_info=True)
         raise HTTPException(
             status_code=500,
-            detail="The job system status could not be loaded. Please try again later.",
-        ) from e
-
-
-@router.post("/sync-player/{puuid}", response_model=JobTriggerResponse)
-async def sync_player_data(
-    puuid: str,
-    background_tasks: BackgroundTasks,
-    job_service: JobServiceDep,
-):
-    """
-    Trigger a full sync for a specific player (matches + profile).
-
-    This runs the Match Fetcher job followed by the Player Updater job
-    for the specified player. Used by Update buttons on player cards.
-
-    Includes job locking to prevent concurrent runs - if either job
-    is already running, returns a message instead of running again.
-
-    Args:
-        puuid: Player's PUUID to sync.
-        background_tasks: FastAPI background tasks for async execution.
-
-    Returns:
-        Job trigger response indicating success or if job is already running.
-    """
-    try:
-        # Check if either job is already running
-        match_fetcher_running = await job_service.is_job_running(JobType.MATCH_FETCHER)
-        player_updater_running = await job_service.is_job_running(
-            JobType.PLAYER_UPDATER
-        )
-
-        if match_fetcher_running or player_updater_running:
-            running_jobs: list[str] = []
-            if match_fetcher_running:
-                running_jobs.append("Match Fetcher")
-            if player_updater_running:
-                running_jobs.append("Player Updater")
-
-            logger.info(
-                "Sync requested but job already running",
-                puuid=puuid,
-                running_jobs=running_jobs,
-            )
-            return JobTriggerResponse(
-                success=False,
-                message=f"Update already in progress ({', '.join(running_jobs)} running). Please wait.",
-                execution_id=None,
-            )
-
-        # Get job configurations
-        match_fetcher_config = await job_service.get_job_config_by_type(
-            JobType.MATCH_FETCHER
-        )
-        player_updater_config = await job_service.get_job_config_by_type(
-            JobType.PLAYER_UPDATER
-        )
-
-        if not match_fetcher_config:
-            raise HTTPException(
-                status_code=500,
-                detail="Match Fetcher job configuration not found",
-            )
-
-        # Trigger Match Fetcher job
-        match_fetcher_job = MatchFetcherJob(
-            match_fetcher_config.id, triggered_by="user"
-        )
-        background_tasks.add_task(match_fetcher_job.run)
-
-        # Trigger Player Updater job (if config exists)
-        if player_updater_config:
-            player_updater_job = PlayerUpdaterJob(
-                player_updater_config.id, triggered_by="user"
-            )
-            background_tasks.add_task(player_updater_job.run)
-
-        logger.info(
-            "Player sync triggered",
-            puuid=puuid,
-            match_fetcher_id=match_fetcher_config.id,
-            player_updater_id=(
-                player_updater_config.id if player_updater_config else None
-            ),
-        )
-
-        return JobTriggerResponse(
-            success=True,
-            message="Player sync started. Match history and profile will be updated.",
-            execution_id=None,
-        )
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(
-            "Failed to sync player data",
-            puuid=puuid,
-            error=str(e),
-            exc_info=True,
-        )
-        raise HTTPException(
-            status_code=500,
-            detail="Player data sync could not be started. Please try again later.",
+            detail="Internal server error retrieving job system status",
         ) from e
 
 
@@ -924,5 +820,5 @@ async def get_running_jobs_status(
         logger.error("Failed to get running jobs status", error=str(e), exc_info=True)
         raise HTTPException(
             status_code=500,
-            detail="The job status could not be checked. Please try again later.",
+            detail="Internal server error checking job status",
         ) from e

@@ -33,14 +33,14 @@ that constrain changes.
 ### Backend
 
 `backend/app/main.py` creates the FastAPI application and registers feature
-routers. The normal API prefix is `/api/v1`; authentication lives below
-`/api/v1/auth`. The application retains unversioned compatibility routes for
-players, matches, playstyle analysis, and jobs.
+routers. The API prefix is `/api/v1`; authentication lives below
+`/api/v1/auth`.
 
 `backend/app/core/` owns shared configuration, database sessions, validation,
 errors, and Riot API infrastructure. Domain features may depend on core; core
-must not depend on features. Each feature owns its router, service/model/schema
-code where applicable and exposes public imports through `__init__.py`.
+must not depend on features. Each feature owns its router and
+service/model/schema code where applicable; feature `__init__.py` files stay
+minimal, and code imports directly from submodules.
 
 ### Frontend
 
