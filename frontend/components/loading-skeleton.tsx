@@ -57,35 +57,3 @@ export function MatchHistorySkeleton() {
     </Card>
   );
 }
-
-export function PlaystyleAnalysisSkeleton() {
-  return (
-    <Card>
-      <CardHeader>
-        <Skeleton className="h-6 w-48" />
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="space-y-2">
-          <Skeleton className="h-4 w-32" />
-          <Skeleton className="h-8 w-full" />
-        </div>
-        <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Skeleton className="h-4 w-28" />
-            <Skeleton className="h-10 w-full" />
-          </div>
-          <div className="space-y-2">
-            <Skeleton className="h-4 w-28" />
-            <Skeleton className="h-10 w-full" />
-          </div>
-        </div>
-        <div className="space-y-2">
-          <Skeleton className="h-4 w-24" />
-          {[...Array(3)].map((_, i) => (
-            <Skeleton key={i} className="h-12 w-full" />
-          ))}
-        </div>
-      </CardContent>
-    </Card>
-  );
-}

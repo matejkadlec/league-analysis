@@ -169,6 +169,14 @@ run_frontend_typecheck() {
   npm run typecheck
 }
 
+run_frontend_deadcode() {
+  cd "$repository_root/frontend"
+  # Files, dependencies and unlisted imports only: the exports issue type is
+  # deliberately excluded because internally-used exports and shadcn/ui
+  # primitives would drown the signal.
+  npm run deadcode
+}
+
 run_frontend_tests() {
   cd "$repository_root/frontend"
   # --coverage is what arms the thresholds in vitest.config.mts. Without it
@@ -210,6 +218,7 @@ if [[ "$run_frontend" == true ]]; then
   run_step 'Frontend deterministic install' run_frontend_install
   run_step 'Frontend lint' run_frontend_lint
   run_step 'Frontend typecheck' run_frontend_typecheck
+  run_step 'Frontend knip dead-code scan' run_frontend_deadcode
   run_step 'Frontend regression tests' run_frontend_tests
   run_step 'Frontend production build' run_frontend_build
 fi
