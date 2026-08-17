@@ -23,9 +23,10 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
+from sqlalchemy import Connection, text
+
 from alembic.autogenerate import compare_metadata
 from alembic.migration import MigrationContext
-from sqlalchemy import Connection, text
 
 BASELINE_PATH = Path(__file__).resolve().parents[1] / "alembic" / "metadata-drift.txt"
 
