@@ -190,6 +190,15 @@ run_frontend_build() {
   npm run build
 }
 
+run_frontend_e2e() {
+  cd "$repository_root/frontend"
+  # Every request is mocked in the specs, so this needs no database and no
+  # backend — only the Next.js dev server playwright.config.ts starts itself.
+  # It runs after the production build because that build is the step that
+  # would break on artefacts a dev server leaves in .next.
+  npm run test:e2e
+}
+
 cd "$repository_root"
 printf 'League Analysis quality gate\n'
 if [[ "$run_frontend" == true && "$run_backend" == true ]]; then
@@ -221,6 +230,7 @@ if [[ "$run_frontend" == true ]]; then
   run_step 'Frontend knip dead-code scan' run_frontend_deadcode
   run_step 'Frontend regression tests' run_frontend_tests
   run_step 'Frontend production build' run_frontend_build
+  run_step 'Frontend end-to-end tests' run_frontend_e2e
 fi
 
 if [[ "$run_backend" == true ]]; then

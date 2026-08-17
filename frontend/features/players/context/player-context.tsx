@@ -79,7 +79,11 @@ export function PlayerContextProvider({
       new URLSearchParams(searchParams),
       savedPlayer.puuid,
     );
-    window.history.replaceState(window.history.state, "", nextUrl);
+    // `window.history.replaceState` would put the PUUID in the address bar
+    // without telling the router, so `useSearchParams` elsewhere keeps
+    // returning nothing and the sidebar builds every link without the player.
+    // This cannot loop: the effect returns early once `urlPuuid` is set.
+    router.replace(nextUrl, { scroll: false });
   }, [
     contextQuery.data,
     isPlayerRoute,

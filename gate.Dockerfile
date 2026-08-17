@@ -60,6 +60,20 @@ RUN set -eux; \
     chmod -R a+rX /opt/pre-commit; \
     pre-commit --version
 
+# Chromium plus its system libraries, for the Playwright suite in frontend/e2e.
+# The version must match the `@playwright/test` pin in frontend/package.json —
+# Playwright refuses browsers built for another release, so a bump there needs
+# the same bump here. It fails loudly rather than silently, at least.
+#
+# The download lands outside the repository because compose.gate.yml mounts an
+# anonymous volume over frontend/node_modules, so anything installed under it
+# at build time is hidden at run time.
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/playwright
+RUN set -eux; \
+    npx --yes playwright@1.62.1 install --with-deps chromium; \
+    rm -rf /var/lib/apt/lists/*; \
+    chmod -R a+rX /opt/playwright
+
 # npm and uv write here when the container runs as the invoking user rather
 # than root. compose.gate.yml mounts persistent volumes at both cache paths so
 # repeated runs do not re-download every package.
