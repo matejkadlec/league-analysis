@@ -106,7 +106,7 @@ async def test_match_check_preserves_the_shared_invalid_key_signal() -> None:
         )
 
     assert error.value.status_code == 503
-    assert error.value.detail == "RIOT_API_KEY_INVALID"
+    assert cast(dict[str, str], error.value.detail)["code"] == "RIOT_API_KEY_INVALID"
 
 
 @pytest.mark.asyncio

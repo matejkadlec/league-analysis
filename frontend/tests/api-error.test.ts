@@ -77,11 +77,15 @@ describe("API error presentation", () => {
     });
   });
 
-  it("classifies the legacy credential message without exposing it", () => {
-    const legacyDetail =
-      "Riot API Key is invalid or expired. Please update it in Settings.";
+  it("classifies the structured credential detail without exposing it", () => {
     const normalized = normalizeApiError(
-      axiosError(503, { detail: legacyDetail }),
+      axiosError(503, {
+        detail: {
+          code: "RIOT_API_KEY_INVALID",
+          message:
+            "Riot data is temporarily unavailable. Please contact an administrator.",
+        },
+      }),
     );
 
     expect(normalized).toMatchObject({
@@ -90,7 +94,6 @@ describe("API error presentation", () => {
       message:
         "Riot data is temporarily unavailable. Please contact an administrator.",
     });
-    expect(normalized.message).not.toBe(legacyDetail);
     expect(
       toPlayerTrackingError(
         normalized,

@@ -4,7 +4,7 @@ import { useEffect, useEffectEvent, useReducer, useState } from "react";
 import type { ReactNode } from "react";
 import { useQuery, type QueryObserverResult } from "@tanstack/react-query";
 
-import { getMatchmakingAnalysisStatus } from "@/lib/core/api";
+import { getMatchmakingAnalysisStatus } from "../matchmaking-api";
 import type { MatchmakingAnalysisResponse } from "@/lib/core/schemas";
 
 import { MatchmakingAnalysisActiveCard } from "./matchmaking-analysis-active-card";

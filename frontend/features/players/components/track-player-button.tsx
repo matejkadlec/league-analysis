@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Star, StarOff, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/lib/core/hooks";
-import { trackPlayer, untrackPlayer, getTrackingStatus } from "@/lib/core/api";
+import { trackPlayer, untrackPlayer, getTrackingStatus } from "../player-api";
 import { useAuth } from "@/features/auth";
 import { cn } from "@/lib/core/utils";
 

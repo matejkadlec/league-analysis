@@ -25,7 +25,7 @@ async def get_riot_client(
     except ValueError as error:
         raise HTTPException(
             status_code=503,
-            detail="Riot API key not configured. Please add it via Settings page or .env file.",
+            detail="Riot data is unavailable because no Riot API key is configured. An administrator can add one on the Settings page.",
         ) from error
 
     await client.start_session()

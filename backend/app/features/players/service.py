@@ -17,7 +17,6 @@ from sqlalchemy import and_, delete, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.decorators import input_validation, service_error_handler
 from app.core.exceptions import (
     PlayerServiceError,
 )
@@ -26,7 +25,7 @@ from app.core.riot_api.constants import (
     get_region_by_platform,
     normalize_platform,
 )
-from app.core.riot_api.models import LeagueEntryDTO, MatchDTO
+from app.core.riot_api.models import LeagueEntryDTO
 from app.features.auth.models import User
 from app.features.auth.user_settings import UserSettings
 from app.features.auth.user_tracked_player import UserTrackedPlayer
@@ -117,68 +116,6 @@ class PlayerService:
 
         return is_globally_tracked
 
-    @service_error_handler("PlayerService")
-    @input_validation(
-        validate_non_empty=["game_name", "platform"],
-    )
-    async def get_player_by_name_and_tag(
-        self, game_name: str, tag_line: str, platform: str
-    ) -> PlayerResponse:
-        """
-        Get player by Game Name and Tag Line from database only.
-
-        This method searches only the local database for players already being tracked.
-        To add new players from Riot API, use a separate add/import feature.
-
-        Args:
-            game_name: Game name of the player
-            tag_line: Tag line of the player
-            platform: Riot API platform code (e.g., "NA1", "EUW1")
-
-        Returns:
-            Player response object with player data
-
-        Raises:
-            PlayerServiceError: If player is not found or database error occurs
-            ValidationError: If input parameters are invalid
-        """
-        # Normalize inputs
-        safe_game_name = game_name.strip()
-        safe_tag_line = tag_line.strip() if tag_line else None
-        normalized_platform = normalize_platform(platform)
-
-        # Query database only
-        result = await self.db.execute(
-            select(Player).where(
-                Player.game_name == safe_game_name,
-                Player.tag_line == safe_tag_line,
-                Player.platform == normalized_platform,
-            )
-        )
-        player = result.scalar_one_or_none()
-
-        if not player:
-            raise PlayerServiceError(
-                message=f"Player not found in database: {safe_game_name}#{safe_tag_line} on {normalized_platform}. "
-                f"Please track this player first.",
-                operation="get_player_by_name_and_tag",
-                context={
-                    "game_name": safe_game_name,
-                    "tag_line": safe_tag_line,
-                    "platform": normalized_platform,
-                },
-            )
-
-        logger.info(
-            "Player data retrieved from database",
-            game_name=safe_game_name,
-            tag_line=safe_tag_line,
-            platform=normalized_platform,
-            puuid=player.puuid,
-        )
-
-        return PlayerResponse.model_validate(player)
-
     def _find_exact_game_name_match(
         self, players: Sequence[Player], safe_game_name: str
     ) -> Player | None:
@@ -225,7 +162,6 @@ class PlayerService:
 
         Raises:
             PlayerServiceError: If player is not found
-            ValidationError: If input parameters are invalid
         """
         # Normalize inputs
         safe_game_name = game_name.strip()
@@ -639,8 +575,6 @@ class PlayerService:
 
         return responses
 
-    @service_error_handler("PlayerService")
-    @input_validation(validate_non_empty=["puuid"], validate_positive=["limit"])
     async def get_recent_opponents_with_details(
         self, puuid: str, limit: int
     ) -> list[PlayerResponse]:
@@ -656,7 +590,15 @@ class PlayerService:
 
         Returns:
             List of PlayerResponse objects for opponents found in database
+
+        Raises:
+            ValueError: If puuid is empty or limit is not positive
         """
+        if not puuid or not puuid.strip():
+            raise ValueError("puuid cannot be empty")
+        if limit <= 0:
+            raise ValueError("limit must be positive")
+
         from app.features.matches.participants import MatchParticipant
 
         # Use a single JOIN query to get opponent player data efficiently (fixes N+1 query problem)
@@ -753,11 +695,11 @@ class PlayerService:
         region = get_region_by_platform(platform_enum)
         account = await riot_client.get_account_by_riot_id(game_name, tag_line, region)
         if not account:
-            raise ValueError(f"Player not found: {game_name}#{tag_line}")
+            raise ValueError(f"Player {game_name}#{tag_line} was not found.")
 
         summoner = await riot_client.get_summoner_by_puuid(account.puuid, platform_enum)
         if not summoner:
-            raise ValueError(f"Summoner not found for PUUID: {account.puuid}")
+            raise ValueError("Player details were not found on this server.")
 
         now = datetime.now(UTC)
         # A Riot ID whose stored row carries a different PUUID is left alone.
@@ -812,7 +754,7 @@ class PlayerService:
         player = await self.db.get(Player, puuid)
 
         if not player:
-            raise ValueError(f"Player not found: {puuid}")
+            raise ValueError("Player not found.")
 
         existing = await self._is_player_tracked_by_user(puuid, user_id)
         if existing:
@@ -824,7 +766,7 @@ class PlayerService:
             select(User).where(User.id == user_id).with_for_update()
         )
         if user is None:
-            raise ValueError("Application user not found")
+            raise ValueError("Your account was not found. Please sign in again.")
 
         tracked_count = await self.db.scalar(
             select(func.count())
@@ -878,7 +820,7 @@ class PlayerService:
         player = await self.db.get(Player, puuid)
 
         if not player:
-            raise ValueError(f"Player not found: {puuid}")
+            raise ValueError("Player not found.")
 
         stmt = delete(UserTrackedPlayer).where(
             UserTrackedPlayer.user_id == user_id,
@@ -906,7 +848,7 @@ class PlayerService:
         """Get user-specific tracking status for a player."""
         player = await self.db.get(Player, puuid)
         if not player:
-            raise ValueError(f"Player not found: {puuid}")
+            raise ValueError("Player not found.")
 
         return await self._is_player_tracked_by_user(puuid, user_id)
 
@@ -1122,97 +1064,6 @@ class PlayerService:
 
         return players
 
-    # ============================================
-    # Helper Methods for Jobs
-    # ============================================
-
-    @service_error_handler("PlayerService")
-    @input_validation(
-        validate_non_empty=["platform"],
-    )
-    async def discover_players_from_match(
-        self, match_dto: MatchDTO, platform: str
-    ) -> int:
-        """
-        Discover and create player records from match participants.
-
-        This method checks if players exist in the database and creates
-        minimal player records for any new players discovered in a match.
-        These discovered players are marked as not tracked and not analyzed.
-
-        The method handles its own transaction boundaries to ensure
-        data consistency without requiring external transaction management.
-
-        Args:
-            match_dto: Match DTO from Riot API
-            platform: Platform for the players
-
-        Returns:
-            Number of newly discovered players
-
-        Raises:
-            PlayerServiceError: If match processing fails
-            ValidationError: If input parameters are invalid
-            DatabaseError: If database operations fail
-        """
-        from app.features.matches.transformers import PlayerDataSanitizer
-
-        await _ensure_riot_writer_maintenance_is_inactive(self.db)
-        normalized_platform = normalize_platform(platform)
-        discovered_count = 0
-
-        for participant in match_dto.info.participants:
-            # Check if player exists in database
-            result = await self.db.execute(
-                select(Player).where(Player.puuid == participant.puuid)
-            )
-            existing_player = result.scalar_one_or_none()
-
-            if not existing_player:
-                # Sanitize player data
-                player_data = {
-                    "game_name": participant.game_name,
-                    "tag_line": participant.tag_line,
-                }
-                player_data = PlayerDataSanitizer.sanitize_player_fields(player_data)
-
-                # Create new player record (discovered, not tracked)
-                new_player = Player(
-                    puuid=participant.puuid,
-                    game_name=player_data["game_name"],
-                    tag_line=player_data["tag_line"],
-                    platform=normalized_platform,
-                    summoner_level=participant.summoner_level,
-                    is_tracked=False,
-                )
-                self.db.add(new_player)
-                discovered_count += 1
-
-                logger.debug(
-                    "Marked new discovered player",
-                    puuid=participant.puuid,
-                    game_name=player_data["game_name"],
-                )
-
-        # Commit transaction for all discovered players
-        if discovered_count > 0:
-            await self.db.commit()
-            logger.info(
-                "Discovered players from match",
-                match_id=match_dto.metadata.match_id,
-                discovered_count=discovered_count,
-                platform=normalized_platform,
-            )
-        else:
-            logger.debug(
-                "No new players discovered in match",
-                match_id=match_dto.metadata.match_id,
-                platform=normalized_platform,
-            )
-
-        return discovered_count
-
-    @service_error_handler("PlayerService")
     async def update_player_profile(
         self, player: Player, riot_api_client: RiotAPIClient
     ) -> bool:
@@ -1327,7 +1178,6 @@ class PlayerService:
             hot_streak=solo_entry.hot_streak,
         )
 
-    @service_error_handler("PlayerService")
     async def update_player_league(
         self, player: Player, riot_api_client: RiotAPIClient
     ) -> bool:

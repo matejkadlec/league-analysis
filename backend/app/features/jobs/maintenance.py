@@ -41,7 +41,7 @@ class RiotWriterMaintenanceConfigurationError(ServiceException):
 
     def __init__(self) -> None:
         super().__init__(
-            "riot_maintenance_mode is managed only by the local cleanup command"
+            "This setting is managed by the maintenance process and cannot be changed here."
         )
 
 

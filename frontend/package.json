@@ -21,6 +21,7 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
+    "deadcode": "knip --include files,dependencies,devDependencies,unlisted --no-progress",
     "test": "vitest run",
     "test:e2e": "playwright test"
   },
@@ -65,14 +66,12 @@
     "@types/react-dom": "^19.2.4",
     "@typescript/native": "npm:typescript@^7.0.2",
     "@vitest/coverage-v8": "^4.1.10",
-    "baseline-browser-mapping": "^2.11.13",
     "eslint": "^10.8.1",
     "eslint-config-next": "16.3.0",
-    "eslint-plugin-react-hooks": "^7.1.1",
     "jsdom": "30.0.1",
+    "knip": "^6.32.2",
     "tailwindcss": "^4.3.3",
     "typescript": "npm:@typescript/typescript6@^6.0.2",
-    "typescript-eslint": "^8.67.0",
     "vitest": "^4.1.10"
   },
   "overrides": {

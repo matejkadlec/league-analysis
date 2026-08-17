@@ -4,7 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   cancelMatchmakingAnalysis,
   startMatchmakingAnalysis,
-} from "@/lib/core/api";
+} from "../matchmaking-api";
 import { useToast } from "@/lib/core/hooks";
 
 import type { AnalysisUiAction } from "./matchmaking-analysis-state";

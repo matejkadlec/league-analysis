@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 
 import {
@@ -8,6 +9,7 @@ import {
   MatchStatsResponseSchema,
 } from "@/lib/core/schemas";
 import { validatedGet } from "@/lib/core/api";
+import { usePlayerSyncRun } from "@/features/players";
 import { getMatchHistoryErrorMessage } from "../utils/match-history-error";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -35,7 +37,6 @@ import {
   MatchHistoryPaginationBar,
 } from "./match-history-controls";
 import { MatchRow } from "./match-row";
-import { useMatchHistorySync } from "./use-match-history-sync";
 
 interface MatchHistoryProps {
   puuid: string;
@@ -45,7 +46,12 @@ interface MatchHistoryProps {
 const MATCH_HISTORY_SEARCH_DEBOUNCE_MS = 300;
 
 export function MatchHistory({ puuid, lastUpdated }: MatchHistoryProps) {
-  const { isUpdating, handleUpdate } = useMatchHistorySync(puuid);
+  const router = useRouter();
+  const { isUpdating, startSync } = usePlayerSyncRun(puuid, {
+    // Queries keyed by the PUUID are refreshed by the hook; the server
+    // components behind this page need their own refresh.
+    onCompleted: () => router.refresh(),
+  });
 
   const [activeQueueFilters, setActiveQueueFilters] = useState<
     MatchHistoryQueueFilter[]
@@ -232,7 +238,7 @@ export function MatchHistory({ puuid, lastUpdated }: MatchHistoryProps) {
       <MatchHistoryHeader
         lastUpdated={lastUpdated}
         isUpdating={isUpdating}
-        onUpdate={() => void handleUpdate()}
+        onUpdate={() => startSync()}
         activeQueueFilters={activeQueueFilters}
         onQueueFilterSelect={handleQueueFilterSelect}
         matchSearch={matchSearch}

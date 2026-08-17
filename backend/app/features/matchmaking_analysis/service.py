@@ -949,7 +949,6 @@ class MatchmakingAnalysisService:
     async def _ensure_match_in_db(self, match_id: str) -> bool:
         """Ensure match exists in DB with fully_analyzed=True.
 
-        Uses global ensure_match_fully_analyzed utility which handles:
         - Already fully analyzed → skip (no API call)
         - Exists but not fully analyzed → re-fetch and update
         - Not in DB → fetch and insert
@@ -974,7 +973,7 @@ class MatchmakingAnalysisService:
 
     async def _store_fetched_match(self, match_dto: MatchDTO) -> None:
         """Persist an API-fetched match only while cleanup is inactive."""
-        from app.core.match_utils import upsert_match
+        from app.features.matches.match_persistence import upsert_match
 
         await _ensure_riot_writer_maintenance_is_inactive(self.db)
         await upsert_match(self.db, match_dto)

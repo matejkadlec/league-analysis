@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 
-import { getLatestMatchmakingAnalysis } from "@/lib/core/api";
+import { getLatestMatchmakingAnalysis } from "../matchmaking-api";
 
 import { MatchmakingAnalysisLoadingCard } from "./matchmaking-analysis-start-card";
 import { MatchmakingAnalysisSession } from "./matchmaking-analysis-session";

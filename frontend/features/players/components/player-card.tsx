@@ -24,10 +24,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getRankColors } from "@/features/players/utils/rank-colors";
 import { TrackPlayerButton } from "@/features/players/components/track-player-button";
+import { usePlayerSyncRun } from "@/features/players/use-player-sync-run";
 
 import { PlayerCardStats } from "./player-card-stats";
 import { PlayerCardWinRate } from "./player-card-win-rate";
-import { usePlayerCardSync } from "./use-player-card-sync";
 
 interface PlayerCardProps {
   player: Player;
@@ -52,10 +52,9 @@ export function PlayerCard({ player, onRefreshAll }: PlayerCardProps) {
   const profileIconSrc = hasFailedProfileIcon
     ? getProfileIconFallbackUrl(profileIconId, ddragonVersion)
     : getProfileIconUrl(profileIconId, ddragonVersion);
-  const { isUpdating, startSync } = usePlayerCardSync(
-    player.puuid,
-    onRefreshAll,
-  );
+  const { isUpdating, startSync } = usePlayerSyncRun(player.puuid, {
+    onCompleted: onRefreshAll,
+  });
 
   const { data: league } = useQuery({
     queryKey: ["player-league", player.puuid],

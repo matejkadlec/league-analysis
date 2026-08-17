@@ -25,7 +25,7 @@ const {
   },
 }));
 
-vi.mock("@/lib/core/api", () => ({
+vi.mock("@/features/matchmaking/matchmaking-api", () => ({
   cancelMatchmakingAnalysis,
   getLatestMatchmakingAnalysis,
   getMatchmakingAnalysisStatus,

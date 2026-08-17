@@ -1,37 +1,25 @@
 """Direct player-add background task regressions."""
 
-from collections.abc import AsyncGenerator, Awaitable, Callable
-from contextlib import asynccontextmanager
 from types import SimpleNamespace
 from typing import cast
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock
 
 import pytest
 from fastapi import BackgroundTasks, HTTPException
-from sqlalchemy import Select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.sql.expression import Executable
 from starlette.requests import Request
 
 from app.core.riot_api.client import RiotAPIClient
 from app.core.riot_api.errors import NotFoundError, RateLimitError
 from app.core.riot_api.models import MatchDTO
 from app.features.auth.models import User
-from app.features.jobs import models as job_models
-from app.features.jobs.maintenance import (
-    RIOT_MAINTENANCE_MODE_KEY,
-    RIOT_WRITER_TABLES,
-    RiotWriterMaintenanceActiveError,
-)
-from app.features.jobs.models import JobStatus, JobType
+from app.features.jobs.maintenance import RiotWriterMaintenanceActiveError
 from app.features.matches import router as matches_router
 from app.features.matches import service as matches_service_module
 from app.features.matches.service import MatchService
 from app.features.players import router as players_router
 from app.features.players import service as players_service_module
 from app.features.players.service import PlayerService
-
-BackgroundWriter = Callable[[str, str], Awaitable[None]]
 
 
 def _request() -> Request:
@@ -45,150 +33,6 @@ def _request() -> Request:
             "client": ("127.0.0.1", 12345),
         }
     )
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize(
-    ("runner", "job_type"),
-    [
-        (players_router.run_background_match_sync, JobType.MATCH_FETCHER),
-        (players_router.run_background_player_update, JobType.PLAYER_UPDATER),
-    ],
-)
-async def test_player_add_writers_lock_and_honor_the_cleanup_interlock(
-    monkeypatch: pytest.MonkeyPatch, runner: BackgroundWriter, job_type: JobType
-) -> None:
-    """Direct writers wait for cleanup's configuration update before Riot writes."""
-    job_config = SimpleNamespace(
-        job_type=job_type,
-        config_json={RIOT_MAINTENANCE_MODE_KEY: True},
-    )
-
-    class Scalars:
-        def all(self) -> list[SimpleNamespace]:
-            return [job_config]
-
-    class Result:
-        def scalars(self) -> Scalars:
-            return Scalars()
-
-    class Session:
-        def __init__(self) -> None:
-            self.statements: list[Executable] = []
-
-        async def execute(self, statement: Executable) -> Result:
-            self.statements.append(statement)
-            return Result()
-
-    session = Session()
-
-    @asynccontextmanager
-    async def fake_get_session() -> AsyncGenerator[Session]:
-        yield session
-
-    riot_client_factory = AsyncMock()
-    monkeypatch.setattr(players_router.db_manager, "get_session", fake_get_session)
-    monkeypatch.setattr(
-        players_router, "create_tracked_riot_api_client", riot_client_factory
-    )
-
-    await runner("test-puuid", "eun1")
-
-    assert str(session.statements[0]) == (
-        f"LOCK TABLE {', '.join(RIOT_WRITER_TABLES)} IN ROW EXCLUSIVE MODE"
-    )
-    configuration_statement = session.statements[1]
-    assert isinstance(configuration_statement, Select)
-    assert configuration_statement._for_update_arg is not None
-    riot_client_factory.assert_not_called()
-
-
-class _FakeJobExecution:
-    """Lightweight execution record for background-task outcome tests."""
-
-    status: JobStatus | None = None
-    # Production stamps this with `func.now()`, a SQL function rather than a
-    # datetime, so the fake keeps the widest honest type.
-    completed_at: object | None = None
-    execution_log: dict[str, object] | None = None
-    error_message: str | None = None
-    detailed_logs: dict[str, object] | None = None
-
-    def __init__(self, **values: object) -> None:
-        self.__dict__.update(values)
-        self.error_message = None
-        self.detailed_logs = None
-
-
-class _RecordingSession:
-    """Session stand-in that keeps every persisted execution record."""
-
-    def __init__(self) -> None:
-        self.added: list[_FakeJobExecution] = []
-        self.commit = AsyncMock()
-        self.refresh = AsyncMock()
-
-    def add(self, instance: _FakeJobExecution) -> None:
-        self.added.append(instance)
-
-
-@pytest.mark.asyncio
-async def test_background_match_sync_records_rate_limit_retry_after(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A propagated Riot 429 remains retryable in the direct-sync execution."""
-    job_config = SimpleNamespace(
-        id=7,
-        job_type=JobType.MATCH_FETCHER,
-        config_json={},
-    )
-    session = _RecordingSession()
-
-    @asynccontextmanager
-    async def fake_get_session() -> AsyncGenerator[_RecordingSession]:
-        yield session
-
-    close_riot_client = AsyncMock()
-    riot_client = SimpleNamespace(close=close_riot_client)
-    match_service = SimpleNamespace(
-        sync_matches_for_player=AsyncMock(
-            side_effect=RateLimitError("limited", status_code=429, retry_after=17)
-        )
-    )
-
-    monkeypatch.setattr(players_router.db_manager, "get_session", fake_get_session)
-    monkeypatch.setattr(
-        players_router,
-        "_locked_background_writer_configuration",
-        AsyncMock(return_value=job_config),
-    )
-    monkeypatch.setattr(job_models, "JobExecution", _FakeJobExecution)
-    monkeypatch.setattr(
-        players_router,
-        "create_tracked_riot_api_client",
-        AsyncMock(return_value=riot_client),
-    )
-    monkeypatch.setattr(
-        players_router, "MatchService", Mock(return_value=match_service)
-    )
-
-    await players_router.run_background_match_sync("test-puuid", "eun1")
-
-    execution = session.added[0]
-    assert execution.status is JobStatus.RATE_LIMITED
-    assert execution.completed_at is not None
-    assert execution.error_message is None
-    assert execution.execution_log == {
-        "trigger": "new_player_added",
-        "puuid": "test-puuid",
-        "retry_after": 17,
-    }
-    assert execution.detailed_logs == {
-        "message": "Rate limit reached while synchronizing matches",
-        "retry_after": 17,
-    }
-    assert session.commit.await_count == 2
-    close_riot_client.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -225,7 +69,11 @@ async def test_player_add_blocks_core_and_auth_writes_during_maintenance(
 async def test_player_add_continues_when_maintenance_is_inactive(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The maintenance guard does not block normal tracked-player creation."""
+    """The maintenance guard does not block normal tracked-player creation.
+
+    Onboarding claims the same PlayerSyncRun lifecycle as the Update button,
+    so a freshly created run schedules exactly one orchestrator task.
+    """
     response = SimpleNamespace(puuid="test-puuid", platform="eun1")
     add_and_track_player = AsyncMock(return_value=response)
     player_service = SimpleNamespace(
@@ -237,6 +85,8 @@ async def test_player_add_continues_when_maintenance_is_inactive(
         "_riot_writer_maintenance_is_active",
         AsyncMock(return_value=False),
     )
+    claim = AsyncMock(return_value=(SimpleNamespace(id=11), True))
+    monkeypatch.setattr(players_router, "create_or_get_player_sync", claim)
     background_tasks = BackgroundTasks()
 
     result = await players_router.add_tracked_player(
@@ -251,7 +101,9 @@ async def test_player_add_continues_when_maintenance_is_inactive(
 
     assert result is response
     add_and_track_player.assert_awaited_once()
-    assert len(background_tasks.tasks) == 2
+    claim.assert_awaited_once_with(player_service.db, user_id=7, puuid="test-puuid")
+    assert len(background_tasks.tasks) == 1
+    assert background_tasks.tasks[0].args == (11,)
 
 
 @pytest.mark.asyncio
@@ -394,105 +246,3 @@ async def test_match_storage_rechecks_maintenance_before_each_write(
         await service.store_match_from_dto(cast(MatchDTO, SimpleNamespace()))
 
     guard.assert_awaited_once()
-
-
-async def _run_background_sync_with(
-    monkeypatch: pytest.MonkeyPatch,
-    sync_matches_for_player: AsyncMock,
-) -> list[str]:
-    """Run the background match sync and report which PUUIDs got stamped.
-
-    Returns the arguments `_stamp_player_match_synced` was called with, so a
-    test can assert on freshness without needing a database.
-    """
-    job_config = SimpleNamespace(id=7, job_type=JobType.MATCH_FETCHER, config_json={})
-    session = _RecordingSession()
-
-    @asynccontextmanager
-    async def fake_get_session() -> AsyncGenerator[_RecordingSession]:
-        yield session
-
-    stamped: list[str] = []
-
-    async def fake_stamp(_session: object, puuid: str) -> None:
-        stamped.append(puuid)
-
-    monkeypatch.setattr(players_router.db_manager, "get_session", fake_get_session)
-    monkeypatch.setattr(
-        players_router,
-        "_locked_background_writer_configuration",
-        AsyncMock(return_value=job_config),
-    )
-    monkeypatch.setattr(job_models, "JobExecution", _FakeJobExecution)
-    monkeypatch.setattr(
-        players_router,
-        "create_tracked_riot_api_client",
-        AsyncMock(return_value=SimpleNamespace(close=AsyncMock())),
-    )
-    monkeypatch.setattr(
-        players_router,
-        "MatchService",
-        Mock(
-            return_value=SimpleNamespace(
-                sync_matches_for_player=sync_matches_for_player
-            )
-        ),
-    )
-    monkeypatch.setattr(players_router, "_stamp_player_match_synced", fake_stamp)
-
-    await players_router.run_background_match_sync("test-puuid", "eun1")
-    return stamped
-
-
-@pytest.mark.asyncio
-async def test_background_sync_does_not_advance_freshness_after_a_failed_match(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A swallowed per-match failure must not look like a complete sync.
-
-    `sync_matches_for_player` reports anything `must_abort_writer_sync` does not
-    classify as fatal through `on_failure` and keeps going, so the call returns
-    normally with a partial result. Stamping `match_synced_at` on that outcome
-    is unrecoverable: afterwards it is indistinguishable from a full sync, and
-    every reader treats the missing matches as genuinely absent.
-    """
-
-    async def sync_with_one_failure(
-        _riot_client: object,
-        _player: object,
-        on_failure: Callable[[str, Exception, dict[str, object]], None] | None = None,
-        **_kwargs: object,
-    ) -> int:
-        assert on_failure is not None, (
-            "the background route must pass on_failure, or per-match failures "
-            "leave no trace at all"
-        )
-        on_failure("get_match_timeline", ValueError("malformed timeline"), {})
-        return 4
-
-    stamped = await _run_background_sync_with(
-        monkeypatch, AsyncMock(side_effect=sync_with_one_failure)
-    )
-
-    assert stamped == []
-
-
-@pytest.mark.asyncio
-async def test_background_sync_advances_freshness_when_every_match_succeeds(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """The gate must not be so strict that a clean sync stops counting."""
-
-    async def clean_sync(
-        _riot_client: object,
-        _player: object,
-        on_failure: Callable[[str, Exception, dict[str, object]], None] | None = None,
-        **_kwargs: object,
-    ) -> int:
-        return 4
-
-    stamped = await _run_background_sync_with(
-        monkeypatch, AsyncMock(side_effect=clean_sync)
-    )
-
-    assert stamped == ["test-puuid"]

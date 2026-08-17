@@ -14,7 +14,7 @@ import {
   getSmurfBoostPresets,
   resetCardPreference,
   updateCardPreference,
-} from "@/lib/core/api";
+} from "../smurf-boost-api";
 import { apiErrorMessage } from "@/lib/core/api-error";
 import { useToast } from "@/lib/core/hooks";
 import type { CardPreference, SmurfBoostPreset } from "@/lib/core/schemas";
