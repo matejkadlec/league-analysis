@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import {
   AlertCircle,
   Check,
@@ -16,7 +16,6 @@ import {
   Search,
   Swords,
 } from "lucide-react";
-import { useToast } from "@/lib/core/hooks";
 import Image from "next/image";
 
 import {
@@ -24,10 +23,9 @@ import {
   MatchWithPlayerData,
   TeamChampion,
   MatchStatsResponseSchema,
-  PlayerSyncRunSchema,
   TeamStats,
 } from "@/lib/core/schemas";
-import { validatedGet, api } from "@/lib/core/api";
+import { validatedGet } from "@/lib/core/api";
 import {
   getChampionIconUrl,
   getChampionDisplayName,
@@ -37,7 +35,7 @@ import {
   getRuneStyleName,
 } from "@/lib/core/data-dragon";
 import { useDDragonVersion } from "@/lib/core/data-dragon-context";
-import { playerQueryKey } from "@/features/players";
+import { usePlayerSyncRun } from "@/features/players";
 import { getMatchHistoryErrorMessage } from "../utils/match-history-error";
 import { formatMatchLpChange } from "../utils/lp-change";
 import {
@@ -643,14 +641,14 @@ function MatchRow({
 }
 
 export function MatchHistory({ puuid, lastUpdated }: MatchHistoryProps) {
-  const toast = useToast();
-  const queryClient = useQueryClient();
   const router = useRouter();
   const relativeUpdatedAt = useRelativeTime(lastUpdated);
 
-  const [isUpdating, setIsUpdating] = useState(false);
-  const [syncRunId, setSyncRunId] = useState<number | null>(null);
-  const handledSyncRunIds = useRef<Set<number>>(new Set());
+  const { isUpdating, startSync } = usePlayerSyncRun(puuid, {
+    // Queries keyed by the PUUID are refreshed by the hook; the server
+    // components behind this page need their own refresh.
+    onCompleted: () => router.refresh(),
+  });
   const [activeQueueFilters, setActiveQueueFilters] = useState<
     MatchHistoryQueueFilter[]
   >([...DEFAULT_MATCH_HISTORY_QUEUE_SELECTION]);
@@ -746,105 +744,6 @@ export function MatchHistory({ puuid, lastUpdated }: MatchHistoryProps) {
       return false;
     },
   });
-
-  // The update used to refetch behind `setTimeout(..., 5000)`, which was a
-  // guess at how long the backend takes. Under a slow sync it refetched into
-  // half-written data and stopped; over a fast one it idled. The run says when
-  // it is done, so ask it.
-  //
-  // ponytail: this repeats the run tracking in player-card.tsx. Worth
-  // extracting a shared `usePlayerSyncRun` hook once a third surface needs it.
-  const syncRunQuery = useQuery({
-    queryKey: ["player-sync", puuid, syncRunId],
-    queryFn: async () => {
-      const result = await validatedGet(
-        PlayerSyncRunSchema,
-        `/players/${puuid}/sync/${syncRunId}`,
-      );
-      if (!result.success) throw new Error(result.error.message);
-      return result.data;
-    },
-    enabled: syncRunId !== null,
-    refetchInterval: (query) =>
-      query.state.data?.status === "pending" ||
-      query.state.data?.status === "running"
-        ? 1_000
-        : false,
-  });
-
-  useEffect(() => {
-    const syncRun = syncRunQuery.data;
-    if (
-      !syncRun ||
-      syncRun.status === "pending" ||
-      syncRun.status === "running" ||
-      // The run keeps returning its terminal status until the id is cleared,
-      // so without this the effect re-enters and refetches on every poll.
-      handledSyncRunIds.current.has(syncRun.id)
-    ) {
-      return;
-    }
-    handledSyncRunIds.current.add(syncRun.id);
-
-    const finish = async () => {
-      if (syncRun.status !== "completed") {
-        toast.error("Player profile update did not finish", {
-          description:
-            syncRun.status === "rate_limited"
-              ? "Riot temporarily limited requests. Please try again later."
-              : "Please try the update again later.",
-        });
-        setIsUpdating(false);
-        setSyncRunId(null);
-        return;
-      }
-
-      await Promise.all([
-        refetch(),
-        // Scoped to this player. Without the PUUID these are prefix
-        // matches that invalidate every cached player, so switching to
-        // someone else afterwards refetches their data too.
-        queryClient.invalidateQueries({ queryKey: playerQueryKey(puuid) }),
-        queryClient.invalidateQueries({
-          queryKey: ["player-league", puuid],
-        }),
-        queryClient.invalidateQueries({
-          queryKey: ["player-stats", puuid],
-        }),
-      ]);
-      router.refresh();
-      setIsUpdating(false);
-      setSyncRunId(null);
-    };
-    void finish();
-    // `refetch` identity changes on every render of the underlying query, so
-    // depending on it here would re-run this effect mid-refetch.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [syncRunQuery.data, puuid, queryClient, router, toast]);
-
-  // Handle update button click - triggers match fetcher job
-  const handleUpdate = async () => {
-    setIsUpdating(true);
-    try {
-      // `/players/{puuid}/sync` runs the Match Fetcher then Player Updater
-      // pair and returns a run this component can watch to completion.
-      const response = await api.post(`/players/${puuid}/sync`);
-      const parsed = PlayerSyncRunSchema.safeParse(response.data);
-      if (!parsed.success) {
-        throw new Error("The update response was invalid.");
-      }
-
-      toast.info("Player profile update started", {
-        description: "Match and rank data are refreshing in the background.",
-      });
-      setSyncRunId(parsed.data.id);
-    } catch {
-      toast.error("Player profile update could not start", {
-        description: "Please try again later.",
-      });
-      setIsUpdating(false);
-    }
-  };
 
   const handleQueueFilterSelect = (
     queueId: MatchHistoryQueueFilter,
@@ -1029,7 +928,7 @@ export function MatchHistory({ puuid, lastUpdated }: MatchHistoryProps) {
           </div>
 
           <Button
-            onClick={() => void handleUpdate()}
+            onClick={startSync}
             disabled={isUpdating}
             variant="outline"
             size="sm"

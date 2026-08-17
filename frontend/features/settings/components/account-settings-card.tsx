@@ -30,7 +30,6 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { cn } from "@/lib/core/utils";
 import { useToast } from "@/lib/core/hooks";
 import {
-  Check,
   CircleCheck,
   CircleX,
   Eye,
