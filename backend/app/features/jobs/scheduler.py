@@ -1,8 +1,7 @@
-# APScheduler 3.x ships neither stubs nor a `py.typed` marker, and the
-# `JobConfiguration.job_type` column drifts from its ORM annotation. Both rules
-# are off project-wide in `pyproject.toml`; the `strict` header above resets
-# them to the strict defaults, so restore the project setting here.
-# pyright: reportMissingTypeStubs=false, reportUnnecessaryIsInstance=false
+# APScheduler 3.x ships neither stubs nor a `py.typed` marker, and the rule is
+# "none" project-wide in `pyproject.toml`; the `strict` header above resets it
+# to the strict default, so restore the project setting here.
+# pyright: reportMissingTypeStubs=false
 """Scheduler module for managing automated background jobs."""
 
 from collections.abc import Callable
@@ -477,26 +476,6 @@ async def start_scheduler() -> SchedulerLike:
         raise
 
 
-def _convert_job_type(job_config: JobConfiguration) -> JobType | None:
-    """Convert job configuration type to JobType enum.
-
-    :param job_config: Job configuration to convert.
-    :returns: JobType enum, or None if invalid.
-    """
-    job_type = job_config.job_type
-    if isinstance(job_type, str):
-        try:
-            return JobType(job_type)
-        except ValueError:
-            logger.warning(
-                "Invalid job type, skipping",
-                job_type=job_config.job_type,
-                job_name=job_config.name,
-            )
-            return None
-    return job_type
-
-
 def _get_job_class(
     job_type: JobType,
     job_config: JobConfiguration,
@@ -513,7 +492,7 @@ def _get_job_class(
     if not job_class:
         logger.warning(
             "Unknown job type, skipping",
-            job_type=job_type.value if isinstance(job_type, JobType) else str(job_type),
+            job_type=job_type.value,
             job_name=job_config.name,
         )
     return job_class
@@ -529,7 +508,6 @@ def _schedule_job(
     :param interval_seconds: Interval in seconds.
     """
     job_instance = job_class(job_config.id)
-    job_type = job_config.job_type
 
     if _scheduler is None:
         raise RuntimeError("Scheduler is not initialized")
@@ -547,7 +525,7 @@ def _schedule_job(
         "Scheduled job",
         job_id=job_config.id,
         job_name=job_config.name,
-        job_type=job_type.value if isinstance(job_type, JobType) else str(job_type),
+        job_type=job_config.job_type.value,
         interval_seconds=interval_seconds,
     )
 
@@ -591,11 +569,7 @@ async def sync_job_configuration(job_config_id: int) -> None:
             return
 
         registry = _get_job_registry()
-        job_type = _convert_job_type(job_config)
-        if not job_type:
-            return
-
-        job_class = _get_job_class(job_type, job_config, registry)
+        job_class = _get_job_class(job_config.job_type, job_config, registry)
         if not job_class:
             return
 
@@ -652,11 +626,7 @@ async def _collect_overdue_jobs(
     overdue_jobs: list[tuple[JobConfiguration, type[BaseJob]]] = []
     for job_config in job_configs:
         try:
-            job_type = _convert_job_type(job_config)
-            if not job_type:
-                continue
-
-            job_class = _get_job_class(job_type, job_config, registry)
+            job_class = _get_job_class(job_config.job_type, job_config, registry)
             if not job_class:
                 continue
 
@@ -776,11 +746,7 @@ async def _load_and_schedule_jobs() -> None:
         registry = _get_job_registry()
 
         for job_config in job_configs:
-            job_type = _convert_job_type(job_config)
-            if not job_type:
-                continue
-
-            job_class = _get_job_class(job_type, job_config, registry)
+            job_class = _get_job_class(job_config.job_type, job_config, registry)
             if not job_class:
                 continue
 

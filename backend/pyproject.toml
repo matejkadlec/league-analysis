@@ -64,15 +64,13 @@ venvPath = "."
 venv = ".venv"
 reportMissingImports = true
 reportMissingTypeStubs = "none"
-# These were disabled because the ORM models used to describe columns more
-# confidently than the migrated schema did, so `is None` and `isinstance`
-# guards protected against values the annotations called impossible. Revision
-# 20260816_0014 closed that gap and `alembic check` now runs clean, so the
-# original justification is gone. They stay off only because re-enabling them
-# reports every such guard at once; each one now needs judging on whether it
-# defends against bad Riot data rather than against a lying annotation.
-reportUnnecessaryIsInstance = "none"
-reportUnnecessaryComparison = "none"
+# `reportUnnecessaryIsInstance` and `reportUnnecessaryComparison` are back at
+# their strict-mode default of "error" since 2026-08-17. They were off while
+# the ORM models described columns more confidently than the migrated schema
+# did, so `is None` and `isinstance` guards protected against values the
+# annotations called impossible. Revision 20260816_0014 closed that gap;
+# turning them back on reported exactly one dead guard repo-wide, not the
+# sweep the disabling comment feared.
 # Rules Pyright leaves off even in strict mode. These four are enabled because
 # they cost nothing to keep passing; the ones deliberately left off are:
 #   reportCallInDefaultInitializer (104)  fires on FastAPI's `Depends()`, the

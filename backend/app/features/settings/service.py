@@ -150,7 +150,6 @@ class SettingsService:
         if existing_key_entry and existing_key_entry.is_active:
             # No-op: The key is already active and the same
             evidence_at = datetime.now(UTC)
-            existing_key_entry.last_used_at = evidence_at
             val = existing_key_entry.key_value
             masked = f"{val[:6]}...{val[-4:]}"
             await mark_database_credential_valid(
@@ -190,7 +189,6 @@ class SettingsService:
             target_key = new_key
 
         evidence_at = datetime.now(UTC)
-        target_key.last_used_at = evidence_at
         await mark_database_credential_valid(
             self.db,
             target_key,

@@ -31,9 +31,10 @@ class Player(Base):
         # the database's, so a future writer that forgets fails loudly instead
         # of silently hiding rows. Canonical is lowercase — Riot's own spelling
         # and the `Platform` enum's values. See `normalize_platform`.
+        # Spelled bare: the `ck` convention prefixes `ck_<table>_` itself.
         CheckConstraint(
             "platform = lower(platform)",
-            name="ck_players_platform_is_lowercase",
+            name="platform_is_lowercase",
         ),
         {"schema": "core"},
     )
