@@ -1,21 +1,10 @@
 "use client";
 
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
 import { useAuth } from "@/features/auth";
 
 export default function NotFound() {
   const { isAuthenticated, isLoading } = useAuth();
-  const router = useRouter();
 
-  // Redirect to sign-in if not authenticated
-  useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
-      router.replace("/sign-in");
-    }
-  }, [isLoading, isAuthenticated, router]);
-
-  // Don't show anything while loading or if not authenticated
   if (isLoading || !isAuthenticated) {
     return null;
   }

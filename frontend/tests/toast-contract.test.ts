@@ -68,12 +68,13 @@ describe("toast source contract", () => {
   });
 
   it("uses warnings for local guidance and success for completed operations", () => {
-    const settings = readFileSync(
-      join(process.cwd(), "app/settings/page.tsx"),
-      "utf8",
-    );
+    const settingsDir = join(process.cwd(), "app/settings");
+    const settings = readdirSync(settingsDir)
+      .filter((name) => name.endsWith(".ts") || name.endsWith(".tsx"))
+      .map((name) => readFileSync(join(settingsDir, name), "utf8"))
+      .join("\n");
     const playerCard = readFileSync(
-      join(process.cwd(), "features/players/components/player-card.tsx"),
+      join(process.cwd(), "features/players/components/use-player-card-sync.ts"),
       "utf8",
     );
 

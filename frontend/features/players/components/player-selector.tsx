@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Search, StopCircle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -83,6 +83,7 @@ export function PlayerSelector({
   inputClassName,
 }: PlayerSelectorProps) {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [searchValue, setSearchValue] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [activeSuggestion, setActiveSuggestion] = useState(0);
@@ -149,6 +150,8 @@ export function PlayerSelector({
     },
     onSuccess: async (player) => {
       setPendingRiotId(null);
+      void queryClient.invalidateQueries({ queryKey: ["player-suggestions"] });
+      void queryClient.invalidateQueries({ queryKey: ["player", player.puuid] });
       await choosePlayer(player);
     },
     onError: () => {

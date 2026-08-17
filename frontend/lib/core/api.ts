@@ -30,26 +30,22 @@ import {
 } from "./schemas";
 import { notifyRiotCredentialHealthUpdated } from "./riot-credential-health-events";
 import {
-  getAccessToken,
   refreshAccessToken,
   removeAuthTokens,
 } from "@/features/auth/utils/token-manager";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
+const API_BASE_URL =
+  typeof window === "undefined"
+    ? process.env.API_INTERNAL_URL ||
+      process.env.NEXT_PUBLIC_API_URL ||
+      "http://localhost:8000"
+    : "";
 
 export const api = axios.create({
   baseURL: `${API_BASE_URL}/api/v1`,
   headers: { "Content-Type": "application/json" },
   timeout: 30000,
-});
-
-// Add auth token to all requests if available
-api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
-  const token = getAccessToken();
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
+  withCredentials: true,
 });
 
 export type ApiResponse<T> =
@@ -111,19 +107,12 @@ api.interceptors.response.use(
     }
 
     originalRequest._retry = true;
-    const refreshedToken = await refreshAccessToken();
-    if (!refreshedToken) {
+    const refreshed = await refreshAccessToken();
+    if (!refreshed) {
       removeAuthTokens();
       return Promise.reject(error);
     }
 
-    if (typeof originalRequest.headers.set === "function") {
-      originalRequest.headers.set("Authorization", `Bearer ${refreshedToken}`);
-    } else {
-      (
-        originalRequest.headers as unknown as Record<string, string>
-      ).Authorization = `Bearer ${refreshedToken}`;
-    }
     return api(originalRequest);
   },
 );

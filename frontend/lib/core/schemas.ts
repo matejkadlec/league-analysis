@@ -84,16 +84,6 @@ export const MatchSchema = z.object({
   is_normal_match: z.boolean().optional(),
 });
 
-// Match List Response Schema
-export const MatchListResponseSchema = z.object({
-  matches: z.array(MatchSchema),
-  total: z.number(),
-  total_analyzed: z.number().optional().default(0),
-  page: z.number(),
-  size: z.number(),
-  pages: z.number(),
-});
-
 // Runes Schema for participant data
 export const ParticipantRunesSchema = z.object({
   primary_style: z.number().optional().nullable(),
@@ -271,107 +261,9 @@ export const LaneStatsResponseSchema = z.object({
 
 export type LaneStatsResponse = z.infer<typeof LaneStatsResponseSchema>;
 
-// Match Participant Schema
-export const MatchParticipantSchema = z.object({
-  match_id: z.string(),
-  participant_id: z.number(),
-  puuid: z.string(),
-  game_name: z.string().optional().nullable(),
-  tag_line: z.string().optional().nullable(),
-  summoner_id: z.string().optional().nullable(),
-  profile_icon: z.number().default(0),
-  summoner_level: z.number().default(1),
-
-  // Team
-  team_id: z.number(),
-  team_position: z.string().optional().nullable(),
-
-  // Champion
-  champion_id: z.number(),
-  champion_name: z.string(),
-  champion_level: z.number().default(1),
-  champion_transform: z.number().default(0),
-
-  // Results
-  win: z.boolean(),
-  remake: z.boolean().default(false),
-
-  // KDA
-  kills: z.number().default(0),
-  deaths: z.number().default(0),
-  assists: z.number().default(0),
-  kda: z.coerce.number().optional().nullable(),
-  largest_multi_kill: z.number().default(0),
-  largest_killing_spree: z.number().default(0),
-
-  // Damage
-  total_damage_dealt_to_champions: z.number().default(0),
-  total_damage_taken: z.number().default(0),
-
-  // Vision
-  vision_score: z.number().default(0),
-  wards_placed: z.number().default(0),
-  wards_killed: z.number().default(0),
-
-  // Farming
-  total_minions_killed: z.number().default(0),
-  neutral_minions_killed: z.number().default(0),
-  gold_earned: z.number().default(0),
-  gold_spent: z.number().default(0),
-
-  // Items
-  item0: z.number().default(0),
-  item1: z.number().default(0),
-  item2: z.number().default(0),
-  item3: z.number().default(0),
-  item4: z.number().default(0),
-  item5: z.number().default(0),
-  trinket: z.number().default(0),
-
-  // JSON
-  runes: z.record(z.string(), z.any()).nullable().optional(),
-  advanced_stats: z.record(z.string(), z.any()).nullable().optional(),
-});
-
-// Playstyle Tag Schema
-// Allowing the struct to be flexible because the backend returns a flexible dictionary
-export const PlaystyleTagSchema = z
-  .object({
-    value: z.number().optional().default(0),
-    threshold_met: z.boolean().optional().default(false),
-    description: z.string().optional(),
-    details: z.string().optional(),
-  })
-  .passthrough();
-
-// Playstyle Analysis Response Schema
-export const PlaystyleAnalysisResponseSchema = z.object({
-  id: z.number().optional(),
-  puuid: z.string(),
-  status: z.enum([
-    "PENDING",
-    "IN_PROGRESS",
-    "COMPLETED",
-    "FAILED",
-    "CANCELLED",
-  ]),
-  tags: z.record(z.string(), PlaystyleTagSchema),
-  summary_stats: z.record(z.string(), z.any()),
-  created_at: z.string().optional(),
-  updated_at: z.string().optional(),
-});
-
-// Playstyle Analysis Request Schema
-export const PlaystyleAnalysisRequestSchema = z.object({
-  puuid: z.string(),
-  force_reanalyze: z.boolean().optional().default(true),
-});
-
 // Infer TypeScript types from schemas
 export type Match = z.infer<typeof MatchSchema>;
-export type MatchListResponse = z.infer<typeof MatchListResponseSchema>;
 export type MatchStatsResponse = z.infer<typeof MatchStatsResponseSchema>;
-export type MatchParticipant = z.infer<typeof MatchParticipantSchema>;
 export type PlayerMatchParticipant = z.infer<
   typeof PlayerMatchParticipantSchema
 >;
@@ -381,13 +273,6 @@ export type TeamComposition = z.infer<typeof TeamCompositionSchema>;
 export type MatchWithPlayerData = z.infer<typeof MatchWithPlayerDataSchema>;
 export type MatchListWithPlayerDataResponse = z.infer<
   typeof MatchListWithPlayerDataResponseSchema
->;
-export type PlaystyleTag = z.infer<typeof PlaystyleTagSchema>;
-export type PlaystyleAnalysisResponse = z.infer<
-  typeof PlaystyleAnalysisResponseSchema
->;
-export type PlaystyleAnalysisRequest = z.infer<
-  typeof PlaystyleAnalysisRequestSchema
 >;
 
 // ===== JOB SCHEMAS =====
@@ -530,47 +415,20 @@ export const SettingSchema = z.object({
   updated_at: z.string(),
 });
 
-export const SettingUpdateSchema = z.object({
-  value: z.string().min(1, "Value is required"),
-});
-
 export const SettingTestResponseSchema = z.object({
   success: z.boolean(),
   status: z.enum(["valid", "invalid", "unavailable"]),
   message: z.string(),
-  details: z.record(z.string(), z.any()).nullable().optional(),
+  details: z.record(z.string(), z.unknown()).nullable().optional(),
 });
 
 export type Setting = z.infer<typeof SettingSchema>;
-export type SettingUpdate = z.infer<typeof SettingUpdateSchema>;
 export type SettingTestResponse = z.infer<typeof SettingTestResponseSchema>;
-
-export const CookieConsentLevelSchema = z.enum(["necessary", "all"]);
-export type CookieConsentLevel = z.infer<typeof CookieConsentLevelSchema>;
-
-export const UserCookieConsentSchema = z.object({
-  consent_level: CookieConsentLevelSchema,
-  consent_version: z.string().min(1).max(16),
-  consent_source: z.string().min(1).max(32),
-  consented_at: z.string(),
-  updated_at: z.string(),
-});
-
-export const UserCookieConsentUpdateSchema = z.object({
-  consent_level: CookieConsentLevelSchema,
-  consent_version: z.string().min(1).max(16).default("v1"),
-  consent_source: z.string().min(1).max(32).default("banner"),
-});
-
-export type UserCookieConsent = z.infer<typeof UserCookieConsentSchema>;
-export type UserCookieConsentUpdate = z.infer<
-  typeof UserCookieConsentUpdateSchema
->;
 
 // ===== USER PROFILE SCHEMAS =====
 export const UserResponseSchema = z.object({
   id: z.number(),
-  email: z.string().email(),
+  email: z.email(),
   display_name: z.string(),
   is_active: z.boolean(),
   is_admin: z.boolean(),
@@ -583,11 +441,9 @@ export const UserResponseSchema = z.object({
 
 export type UserResponse = z.infer<typeof UserResponseSchema>;
 
-export const UserProfileUpdateSchema = z.object({
-  display_name: z.string().min(1).max(128).optional(),
-});
-
-export type UserProfileUpdate = z.infer<typeof UserProfileUpdateSchema>;
+export type UserProfileUpdate = {
+  display_name?: string;
+};
 
 export const MessageResponseSchema = z.object({
   message: z.string(),
@@ -733,12 +589,6 @@ export const MatchmakingAnalysisHistoryResponseSchema = z.object({
   items: z.array(MatchmakingAnalysisHistoryItemSchema),
 });
 
-export const NotEnoughMatchesResponseSchema = z.object({
-  message: z.string(),
-  matches_found: z.number(),
-  matches_required: z.number(),
-});
-
 export type MatchmakingAnalysisResults = z.infer<
   typeof MatchmakingAnalysisResultsSchema
 >;
@@ -775,11 +625,6 @@ export const SmurfBoostConfidenceBandSchema = z.enum(["low", "medium", "high"]);
 // response and hide a valid result, so an unknown id is carried through and
 // rendered as itself, the same way an unknown data-quality note is.
 export const SmurfBoostFamilyIdSchema = z.string();
-
-export const SMURF_BOOST_FAMILY_IDS = [
-  "rapid_improvement",
-  "playing_pattern_change",
-] as const;
 
 export const SmurfBoostStatusSchema = z.enum([
   "pending",

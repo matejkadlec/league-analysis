@@ -7,7 +7,7 @@ from typing import cast
 from unittest.mock import AsyncMock
 
 import pytest
-from fastapi import HTTPException, Request
+from fastapi import HTTPException, Request, Response
 from fastapi.security import OAuth2PasswordRequestForm
 
 from app.features.auth.dependencies import (
@@ -100,6 +100,7 @@ async def test_login_returns_a_dedicated_inactive_account_code() -> None:
     with pytest.raises(HTTPException) as error:
         await _undecorated(login)(
             request=_loopback_request(),
+            response=Response(),
             form_data=form_data,
             auth_service=cast(AuthService, auth_service),
         )
@@ -123,6 +124,7 @@ async def test_refresh_returns_the_same_inactive_account_code() -> None:
     with pytest.raises(HTTPException) as error:
         await _undecorated(refresh_access_token)(
             request=_loopback_request(),
+            response=Response(),
             refresh_request=RefreshTokenRequest(
                 refresh_token="refresh-token-value-1234"
             ),

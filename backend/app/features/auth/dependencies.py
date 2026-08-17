@@ -1,13 +1,31 @@
 """Authentication dependencies for protecting routes."""
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 
+from .cookies import ACCESS_TOKEN_COOKIE_NAME
 from .models import User
 from .service import AuthService, get_auth_service, oauth2_scheme
 
 
+def get_request_access_token(
+    request: Request,
+    bearer_token: str | None = Depends(oauth2_scheme),
+) -> str:
+    """Prefer the Authorization header, then the HttpOnly access cookie."""
+    if bearer_token:
+        return bearer_token
+    cookie_token = request.cookies.get(ACCESS_TOKEN_COOKIE_NAME)
+    if cookie_token:
+        return cookie_token
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+
 async def get_current_user(
-    token: str = Depends(oauth2_scheme),
+    token: str = Depends(get_request_access_token),
     auth_service: AuthService = Depends(get_auth_service),
 ) -> User:
     """Get the current authenticated user."""

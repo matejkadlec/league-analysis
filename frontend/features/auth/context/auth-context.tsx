@@ -6,12 +6,12 @@ import {
   useState,
   useEffect,
   useCallback,
+  useMemo,
   ReactNode,
 } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import {
-  getAccessToken,
   refreshAccessToken,
   removeAuthTokens,
   setAuthTokens,
@@ -21,16 +21,11 @@ import {
   getLoginRequestError,
   LOGIN_REQUEST_TIMEOUT_MS,
 } from "../utils/login-error";
-import type {
-  AuthResponse,
-  User,
-  LoginRequest,
-  AuthContextType,
-} from "../types";
+import type { User, LoginRequest, AuthContextType } from "../types";
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_BASE_URL = typeof window === "undefined" ? "" : "";
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -41,24 +36,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Check authentication status on mount and after login
   const checkAuth = useCallback(async () => {
-    let accessToken = getAccessToken();
-    if (!accessToken) {
-      accessToken = await refreshAccessToken();
-    }
-
-    if (!accessToken) {
-      setUser(null);
-      setIsLoading(false);
-      removeAuthTokens();
-      queryClient.clear();
-      return;
-    }
-
-    const fetchCurrentUser = async (token: string) =>
+    const fetchCurrentUser = async () =>
       fetch(`${API_BASE_URL}/api/v1/auth/me`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        credentials: "include",
       }).catch((fetchError) => {
         if (process.env.NODE_ENV === "development") {
           console.warn(
@@ -70,7 +50,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
 
     try {
-      let response = await fetchCurrentUser(accessToken);
+      let response = await fetchCurrentUser();
 
       // If fetch failed (network error), don't remove token - backend may be down
       if (!response) {
@@ -80,6 +60,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (response.ok) {
         const userData = await response.json();
+        setAuthTokens();
         setUser(userData);
       } else if (response.status === 401) {
         const refreshedToken = await refreshAccessToken();
@@ -90,7 +71,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        response = await fetchCurrentUser(refreshedToken);
+        response = await fetchCurrentUser();
         if (response && response.ok) {
           const userData = await response.json();
           setUser(userData);
@@ -128,7 +109,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     void checkAuth();
   }, [checkAuth]);
 
-  const login = async (credentials: LoginRequest) => {
+  const login = useCallback(async (credentials: LoginRequest) => {
     setIsLoading(true);
     try {
       // OAuth2 password flow requires form-data format
@@ -146,10 +127,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         abortController.abort();
       }, LOGIN_REQUEST_TIMEOUT_MS);
 
-      let data: AuthResponse;
       try {
         const response = await fetch(`${API_BASE_URL}/api/v1/auth/login`, {
           method: "POST",
+          credentials: "include",
           headers: {
             "Content-Type": "application/x-www-form-urlencoded",
           },
@@ -169,14 +150,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           throw createAuthLoginError(payload, response.status);
         }
 
-        data = (await response.json()) as AuthResponse;
+        await response.json();
       } catch (error) {
         throw getLoginRequestError(error, didTimeout);
       } finally {
         clearTimeout(timeoutId);
       }
 
-      setAuthTokens(data.access_token, data.refresh_token);
+      setAuthTokens();
       queryClient.clear();
 
       // Fetch user data
@@ -188,40 +169,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsLoading(false);
       throw error;
     }
-  };
+  }, [checkAuth, queryClient, router]);
 
-  const logout = () => {
-    const accessToken = getAccessToken();
-    if (accessToken) {
-      void fetch(`${API_BASE_URL}/api/v1/auth/logout`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      }).catch(() => {
-        // Best effort logout revocation.
-      });
-    }
+  const logout = useCallback(() => {
+    void fetch(`${API_BASE_URL}/api/v1/auth/logout`, {
+      method: "POST",
+      credentials: "include",
+    }).catch(() => {
+      // Best effort logout revocation.
+    });
 
     removeAuthTokens();
     queryClient.clear();
     setUser(null);
     router.push("/sign-in");
-  };
+  }, [queryClient, router]);
+
+  const value = useMemo(
+    () => ({
+      user,
+      isAuthenticated: !!user,
+      isLoading,
+      login,
+      logout,
+      checkAuth,
+    }),
+    [user, isLoading, login, logout, checkAuth],
+  );
 
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        isAuthenticated: !!user,
-        isLoading,
-        login,
-        logout,
-        checkAuth,
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
+    <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
   );
 }
 

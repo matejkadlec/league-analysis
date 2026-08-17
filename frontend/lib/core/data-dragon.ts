@@ -37,21 +37,6 @@ export function getChampionIconUrl(
 }
 
 /**
- * Get the URL for a champion's loading screen splash art.
- *
- * @param championName - The champion name
- * @param skinNum - The skin number (0 = base skin)
- * @returns URL to the champion's loading screen art
- */
-export function getChampionLoadingUrl(
-  championName: string,
-  skinNum: number = 0,
-  version: string = DDRAGON_FALLBACK_VERSION,
-): string {
-  return `${getVersionedBaseUrl(version)}/img/champion/loading/${championName}_${skinNum}.jpg`;
-}
-
-/**
  * Get the URL for a summoner profile icon.
  *
  * @param profileIconId - The profile icon ID from player data
@@ -75,60 +60,6 @@ export function getProfileIconFallbackUrl(
   void profileIconId;
   return `${getVersionedBaseUrl(version)}/img/profileicon/29.png`;
 }
-
-/**
- * Get the URL for an item icon.
- *
- * @param itemId - The item ID
- * @returns URL to the item icon image
- */
-export function getItemIconUrl(
-  itemId: number,
-  version: string = DDRAGON_FALLBACK_VERSION,
-): string {
-  return `${getVersionedBaseUrl(version)}/img/item/${itemId}.png`;
-}
-
-/**
- * Get the URL for a summoner spell icon.
- *
- * @param spellName - The spell name (e.g., "SummonerFlash", "SummonerTeleport")
- * @returns URL to the summoner spell icon
- */
-export function getSummonerSpellIconUrl(
-  spellName: string,
-  version: string = DDRAGON_FALLBACK_VERSION,
-): string {
-  return `${getVersionedBaseUrl(version)}/img/spell/${spellName}.png`;
-}
-
-/**
- * Champion name normalization map for special cases.
- * Data Dragon uses specific internal names that differ from display names.
- */
-export const CHAMPION_NAME_MAP: Record<string, string> = {
-  // Champions with apostrophes
-  "Kai'Sa": "Kaisa",
-  "Kha'Zix": "Khazix",
-  "Cho'Gath": "Chogath",
-  "Vel'Koz": "Velkoz",
-  "Kog'Maw": "KogMaw",
-  "Rek'Sai": "RekSai",
-  "Bel'Veth": "Belveth",
-  "K'Sante": "KSante",
-  // Champions with spaces (though backend should handle this)
-  "Aurelion Sol": "AurelionSol",
-  "Dr. Mundo": "DrMundo",
-  "Jarvan IV": "JarvanIV",
-  "Lee Sin": "LeeSin",
-  "Master Yi": "MasterYi",
-  "Miss Fortune": "MissFortune",
-  "Nunu & Willump": "Nunu",
-  "Renata Glasc": "Renata",
-  "Tahm Kench": "TahmKench",
-  "Twisted Fate": "TwistedFate",
-  "Xin Zhao": "XinZhao",
-};
 
 /**
  * Reverse mapping from Data Dragon format to display name.
@@ -167,22 +98,6 @@ export const CHAMPION_DISPLAY_NAME_MAP: Record<string, string> = {
  */
 export function getChampionDisplayName(championName: string): string {
   return CHAMPION_DISPLAY_NAME_MAP[championName] || championName;
-}
-
-/**
- * Normalize a champion display name to its Data Dragon format.
- *
- * @param displayName - The champion display name
- * @returns The normalized name for Data Dragon URLs
- */
-export function normalizeChampionName(displayName: string): string {
-  // Check if there's a specific mapping
-  if (CHAMPION_NAME_MAP[displayName]) {
-    return CHAMPION_NAME_MAP[displayName];
-  }
-
-  // Otherwise, remove spaces and special characters
-  return displayName.replace(/['\s.]/g, "");
 }
 
 /**

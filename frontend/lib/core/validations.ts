@@ -58,10 +58,3 @@ export const playerSearchSchema = z.object({
 });
 
 export type PlayerSearchForm = z.infer<typeof playerSearchSchema>;
-
-export const addTrackedPlayerSchema = z.object({
-  searchValue: playerNameValidation,
-  platform: platformEnum,
-});
-
-export type AddTrackedPlayerForm = z.infer<typeof addTrackedPlayerSchema>;

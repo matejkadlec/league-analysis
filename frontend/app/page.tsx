@@ -22,6 +22,7 @@ export default function Home() {
                     src="/magnifier.png"
                     alt="Magnifier"
                     fill
+                    sizes="56px"
                     className="object-contain"
                   />
                 </div>

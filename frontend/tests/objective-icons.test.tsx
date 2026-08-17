@@ -3,10 +3,8 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
-import {
-  OBJECTIVE_DEFINITIONS,
-  TeamObjectiveStats,
-} from "../features/matches/components/objective-icons";
+import { OBJECTIVE_DEFINITIONS } from "../features/matches/components/objective-definitions";
+import { TeamObjectiveStats } from "../features/matches/components/objective-icons";
 
 const stats = {
   kills: 25,

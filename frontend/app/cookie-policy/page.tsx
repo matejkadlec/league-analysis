@@ -61,22 +61,27 @@ export default async function CookiePolicyPage() {
               <td className="px-3 py-2">First-party (League Analysis)</td>
             </tr>
             <tr className="border-t border-white/10">
-              <td className="px-3 py-2 font-mono">auth_access_token</td>
-              <td className="px-3 py-2">Local storage</td>
+              <td className="px-3 py-2 font-mono">
+                league_analysis_access_token
+              </td>
+              <td className="px-3 py-2">Cookie (HttpOnly)</td>
               <td className="px-3 py-2">Strictly necessary</td>
               <td className="px-3 py-2">
-                Stores short-lived access token for authenticated API requests.
+                Stores the short-lived access token for authenticated API
+                requests. JavaScript cannot read it.
               </td>
               <td className="px-3 py-2">Until logout or expiration</td>
               <td className="px-3 py-2">First-party (League Analysis)</td>
             </tr>
             <tr className="border-t border-white/10">
-              <td className="px-3 py-2 font-mono">auth_refresh_token</td>
-              <td className="px-3 py-2">Local storage</td>
+              <td className="px-3 py-2 font-mono">
+                league_analysis_refresh_token
+              </td>
+              <td className="px-3 py-2">Cookie (HttpOnly)</td>
               <td className="px-3 py-2">Strictly necessary</td>
               <td className="px-3 py-2">
-                Stores refresh token for session continuity and secure token
-                rotation.
+                Stores the refresh token for session continuity and rotation.
+                JavaScript cannot read it.
               </td>
               <td className="px-3 py-2">Until logout or expiration</td>
               <td className="px-3 py-2">First-party (League Analysis)</td>
@@ -94,7 +99,7 @@ export default async function CookiePolicyPage() {
               <td className="px-3 py-2">First-party (League Analysis)</td>
             </tr>
             <tr className="border-t border-white/10">
-              <td className="px-3 py-2 font-mono">header_messages_closed</td>
+              <td className="px-3 py-2 font-mono">header_messages_closed:v1</td>
               <td className="px-3 py-2">Local storage</td>
               <td className="px-3 py-2">Optional preference</td>
               <td className="px-3 py-2">

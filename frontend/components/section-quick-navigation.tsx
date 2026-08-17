@@ -14,6 +14,15 @@ interface SectionQuickNavigationProps {
   items: SectionQuickNavigationItem[];
 }
 
+function scrollToAnchor(anchor: string) {
+  const element = document.querySelector(anchor);
+  if (!element) {
+    return;
+  }
+
+  element.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
 export function SectionQuickNavigation({
   items,
 }: SectionQuickNavigationProps) {
@@ -21,15 +30,6 @@ export function SectionQuickNavigation({
   const [isPinned, setIsPinned] = useState(false);
   const navigationId = useId();
   const isExpanded = isHovered || isPinned;
-
-  const scrollToAnchor = (anchor: string) => {
-    const element = document.querySelector(anchor);
-    if (!element) {
-      return;
-    }
-
-    element.scrollIntoView({ behavior: "smooth", block: "start" });
-  };
 
   const handleBlur = (event: FocusEvent<HTMLDivElement>) => {
     if (!event.currentTarget.contains(event.relatedTarget)) {
@@ -86,7 +86,7 @@ export function SectionQuickNavigation({
                   <button
                     type="button"
                     tabIndex={isExpanded ? 0 : -1}
-                    className="w-full px-4 py-1.5 text-left text-sm transition-all duration-300 hover:bg-accent/35 hover:text-[#cfa93a]"
+                    className="w-full px-4 py-1.5 text-left text-sm transition-colors duration-300 hover:bg-accent/35 hover:text-[#cfa93a]"
                     onClick={() => scrollToAnchor(item.anchor)}
                   >
                     {item.label}

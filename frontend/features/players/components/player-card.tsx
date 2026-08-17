@@ -1,85 +1,41 @@
 "use client";
 
 import Image from "next/image";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { Clock, Loader2, RefreshCw, User } from "lucide-react";
+
+import { validatedGet } from "@/lib/core/api";
+import { useDDragonVersion } from "@/lib/core/data-dragon-context";
 import {
+  getProfileIconFallbackUrl,
+  getProfileIconUrl,
+} from "@/lib/core/data-dragon";
+import { getPlatformDisplayName } from "@/lib/core/platform-utils";
+import { oldestCompleteFreshness } from "@/lib/core/relative-time";
+import {
+  MatchStatsResponseSchema,
   Player,
   PlayerLeagueSchema,
-  MatchStatsResponseSchema,
-  PlayerSyncRunSchema,
 } from "@/lib/core/schemas";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useRelativeTime } from "@/lib/core/use-relative-time";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { User, Trophy, RefreshCw, Loader2, Clock } from "lucide-react";
-import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
-import { validatedGet, api } from "@/lib/core/api";
-import { getPlatformDisplayName } from "@/lib/core/platform-utils";
-import {
-  getProfileIconUrl,
-  getProfileIconFallbackUrl,
-} from "@/lib/core/data-dragon";
-import { useDDragonVersion } from "@/lib/core/data-dragon-context";
-import { useEffect, useRef, useState } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getRankColors } from "@/features/players/utils/rank-colors";
 import { TrackPlayerButton } from "@/features/players/components/track-player-button";
-import { useToast } from "@/lib/core/hooks";
-import { oldestCompleteFreshness } from "@/lib/core/relative-time";
-import { useRelativeTime } from "@/lib/core/use-relative-time";
+
+import { PlayerCardStats } from "./player-card-stats";
+import { PlayerCardWinRate } from "./player-card-win-rate";
+import { usePlayerCardSync } from "./use-player-card-sync";
 
 interface PlayerCardProps {
   player: Player;
   onRefreshAll?: () => void;
 }
 
-// Helper function to get win rate color based on percentage
-function getWinRateColor(winRate: number): string {
-  if (winRate >= 51) {
-    return "text-green-500";
-  } else if (winRate > 49) {
-    return "text-yellow-500";
-  } else {
-    return "text-rose-500";
-  }
-}
-
-// Helper function to get win rate bar color based on percentage
-function getWinRateBarColor(winRate: number): string {
-  if (winRate >= 51) {
-    return "bg-green-500";
-  } else if (winRate > 49) {
-    return "bg-yellow-500";
-  } else {
-    return "bg-rose-500";
-  }
-}
-
-// Format win rate - remove .0 if whole number
-// Handles both decimal (0-1) and percentage (0-100) formats
-function formatWinRate(winRate: number): string {
-  // Convert to percentage if it's in decimal format (0-1)
-  const percent = winRate <= 1 ? winRate * 100 : winRate;
-  const formatted = percent.toFixed(1);
-  return formatted.endsWith(".0") ? Math.round(percent).toString() : formatted;
-}
-
-// Format date for display
-function formatDate(dateString: string | null | undefined): string {
-  if (!dateString) return "Never";
-  return new Date(dateString).toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
 export function PlayerCard({ player, onRefreshAll }: PlayerCardProps) {
   const ddragonVersion = useDDragonVersion();
-  const queryClient = useQueryClient();
-  const { toast } = useToast();
-  const [observedSyncId, setObservedSyncId] = useState<number | null>(null);
-  const handledTerminalSyncIds = useRef(new Set<number>());
   const [failedProfileIconKey, setFailedProfileIconKey] = useState<
     string | null
   >(null);
@@ -96,8 +52,11 @@ export function PlayerCard({ player, onRefreshAll }: PlayerCardProps) {
   const profileIconSrc = hasFailedProfileIcon
     ? getProfileIconFallbackUrl(profileIconId, ddragonVersion)
     : getProfileIconUrl(profileIconId, ddragonVersion);
+  const { isUpdating, startSync } = usePlayerCardSync(
+    player.puuid,
+    onRefreshAll,
+  );
 
-  // Fetch player league
   const { data: league } = useQuery({
     queryKey: ["player-league", player.puuid],
     queryFn: async () => {
@@ -113,7 +72,6 @@ export function PlayerCard({ player, onRefreshAll }: PlayerCardProps) {
     retry: false,
   });
 
-  // Fetch player stats (all matches)
   const { data: stats } = useQuery({
     queryKey: ["player-stats", player.puuid, 420],
     queryFn: async () => {
@@ -130,146 +88,12 @@ export function PlayerCard({ player, onRefreshAll }: PlayerCardProps) {
     retry: false,
   });
 
-  const activeSyncQuery = useQuery({
-    queryKey: ["player-sync-active", player.puuid],
-    queryFn: async () => {
-      const result = await validatedGet(
-        PlayerSyncRunSchema.nullable(),
-        `/players/${player.puuid}/sync/active`,
-      );
-      if (!result.success) throw new Error(result.error.message);
-      return result.data;
-    },
-    refetchInterval: (query) => (query.state.data ? 1_000 : false),
-  });
-
-  useEffect(() => {
-    const activeSyncId = activeSyncQuery.data?.id;
-    if (!activeSyncId || activeSyncId === observedSyncId) return;
-    const timeout = window.setTimeout(() => setObservedSyncId(activeSyncId), 0);
-    return () => window.clearTimeout(timeout);
-  }, [activeSyncQuery.data?.id, observedSyncId]);
-
-  const exactSyncQuery = useQuery({
-    queryKey: ["player-sync", player.puuid, observedSyncId],
-    queryFn: async () => {
-      const result = await validatedGet(
-        PlayerSyncRunSchema,
-        `/players/${player.puuid}/sync/${observedSyncId}`,
-      );
-      if (!result.success) throw new Error(result.error.message);
-      return result.data;
-    },
-    enabled: observedSyncId !== null,
-    refetchInterval: (query) =>
-      query.state.data?.status === "pending" ||
-      query.state.data?.status === "running"
-        ? 1_000
-        : false,
-  });
-
-  const startSyncMutation = useMutation({
-    mutationFn: async () => {
-      const response = await api.post(`/players/${player.puuid}/sync`);
-      const parsed = PlayerSyncRunSchema.safeParse(response.data);
-      if (!parsed.success) throw new Error("The update response was invalid.");
-      return parsed.data;
-    },
-    onSuccess: (syncRun) => {
-      setObservedSyncId(syncRun.id);
-      queryClient.setQueryData(["player-sync-active", player.puuid], syncRun);
-      toast({
-        title: "Player profile update started",
-        description: "Player data is refreshing in the background.",
-        variant: "info",
-      });
-    },
-    onError: () => {
-      toast({
-        title: "Player profile update could not start",
-        description: "Please try again later.",
-        variant: "error",
-      });
-    },
-  });
-
-  useEffect(() => {
-    const syncRun = exactSyncQuery.data;
-    if (
-      !syncRun ||
-      syncRun.status === "pending" ||
-      syncRun.status === "running" ||
-      handledTerminalSyncIds.current.has(syncRun.id)
-    ) {
-      return;
-    }
-    handledTerminalSyncIds.current.add(syncRun.id);
-
-    const finish = async () => {
-      if (syncRun.status !== "completed") {
-        toast({
-          title: "Player update did not finish",
-          description:
-            syncRun.status === "rate_limited"
-              ? "Riot temporarily limited requests. Please try the update again later."
-              : "Please try the update again later.",
-          variant: syncRun.status === "rate_limited" ? "warning" : "error",
-        });
-        await activeSyncQuery.refetch();
-        return;
-      }
-
-      const exactPlayerQuery = (query: { queryKey: readonly unknown[] }) =>
-        query.queryKey.includes(player.puuid);
-      try {
-        await queryClient.invalidateQueries({
-          predicate: exactPlayerQuery,
-          refetchType: "none",
-        });
-        onRefreshAll?.();
-        await queryClient.refetchQueries(
-          { predicate: exactPlayerQuery, type: "active" },
-          { throwOnError: true },
-        );
-        toast({
-          title: "Update finished",
-          description: "All cards were successfully updated.",
-          variant: "success",
-        });
-      } catch {
-        toast({
-          title: "Player data could not refresh",
-          description: "Please try again before relying on the card data.",
-          variant: "error",
-        });
-      }
-      await activeSyncQuery.refetch();
-    };
-    void finish();
-  }, [
-    activeSyncQuery,
-    exactSyncQuery.data,
-    onRefreshAll,
-    player.puuid,
-    queryClient,
-    toast,
-  ]);
-
-  const syncStatus =
-    exactSyncQuery.data?.status ?? activeSyncQuery.data?.status;
-  const isUpdating =
-    startSyncMutation.isPending ||
-    syncStatus === "pending" ||
-    syncStatus === "running";
-
   const leagueColors = league ? getRankColors(league.tier) : null;
 
   return (
     <Card id="player-summary">
       <CardHeader className="pb-3">
-        {/* First Part: Header Row */}
         <div className="flex items-center space-x-3">
-          {/* Profile Icon */}
           <div
             className="relative h-18 w-18 rounded-full overflow-hidden bg-primary/10"
             style={{ height: "72px", width: "72px" }}
@@ -317,7 +141,7 @@ export function PlayerCard({ player, onRefreshAll }: PlayerCardProps) {
                   variant="outline"
                   size="sm"
                   className="button-small"
-                  onClick={() => startSyncMutation.mutate()}
+                  onClick={startSync}
                   disabled={isUpdating}
                 >
                   {isUpdating ? (
@@ -360,117 +184,8 @@ export function PlayerCard({ player, onRefreshAll }: PlayerCardProps) {
       </CardHeader>
 
       <CardContent className="space-y-3">
-        {/* Win Rate Section (from league data, or from stats if no league) */}
-        {league ? (
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Trophy className="h-4 w-4 text-yellow-500" />
-                <span className="text-sm font-medium">Win Rate</span>
-              </div>
-              <span
-                className={`text-lg font-bold ${getWinRateColor(league.win_rate)}`}
-              >
-                {formatWinRate(league.win_rate)}%
-              </span>
-            </div>
-            <div className="relative h-2 w-full bg-muted rounded-full overflow-hidden">
-              <div
-                className={`absolute left-0 top-0 h-full duration-300 ${getWinRateBarColor(league.win_rate)}`}
-                style={{ width: `${Math.min(league.win_rate, 100)}%` }}
-              />
-            </div>
-            <div className="flex justify-between text-xs text-muted-foreground">
-              <span>{league.wins}W</span>
-              <span>{league.losses}L</span>
-            </div>
-          </div>
-        ) : stats && stats.total_matches > 0 ? (
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Trophy className="h-4 w-4 text-yellow-500" />
-                <span className="text-sm font-medium">Win Rate</span>
-                <span className="text-xs text-muted-foreground">
-                  (unranked)
-                </span>
-              </div>
-              <span
-                className={`text-lg font-bold ${getWinRateColor(stats.win_rate * 100)}`}
-              >
-                {formatWinRate(stats.win_rate)}%
-              </span>
-            </div>
-            <div className="relative h-2 w-full bg-muted rounded-full overflow-hidden">
-              <div
-                className={`absolute left-0 top-0 h-full duration-300 ${getWinRateBarColor(stats.win_rate * 100)}`}
-                style={{ width: `${Math.min(stats.win_rate * 100, 100)}%` }}
-              />
-            </div>
-            <div className="flex justify-between text-xs text-muted-foreground">
-              <span>{stats.wins}W</span>
-              <span>{stats.losses}L</span>
-            </div>
-          </div>
-        ) : null}
-
-        {/* Analysis Timestamps */}
-        <div className="grid grid-cols-2 gap-3 pt-1 text-sm">
-          <div>
-            <p className="font-medium text-muted-foreground">
-              Last Matchmaking Analysis
-            </p>
-            <p>{formatDate(player.last_matchmaking_analysis)}</p>
-          </div>
-          <div>
-            <p className="font-medium text-muted-foreground">
-              Match History Updated
-            </p>
-            <p>{formatDate(player.match_synced_at)}</p>
-          </div>
-        </div>
-
-        {/* Sample Statistics */}
-        {stats && stats.total_matches > 0 && (
-          <div className="space-y-3">
-            <div className="grid grid-cols-3 gap-3">
-              <div className="text-center p-2 rounded-lg bg-muted/50">
-                <p className="text-lg font-bold text-blue-500">
-                  {stats.avg_kills.toFixed(1)}
-                </p>
-                <p className="text-xs text-muted-foreground">Avg Kills</p>
-              </div>
-              <div className="text-center p-2 rounded-lg bg-muted/50">
-                <p className="text-lg font-bold text-red-500">
-                  {stats.avg_deaths.toFixed(1)}
-                </p>
-                <p className="text-xs text-muted-foreground">Avg Deaths</p>
-              </div>
-              <div className="text-center p-2 rounded-lg bg-muted/50">
-                <p className="text-lg font-bold text-green-500">
-                  {stats.avg_assists.toFixed(1)}
-                </p>
-                <p className="text-xs text-muted-foreground">Avg Assists</p>
-              </div>
-            </div>
-            <div className="grid grid-cols-3 gap-3">
-              <div className="text-center p-2 rounded-lg bg-muted/50">
-                <p className="text-lg font-bold">{stats.avg_kda.toFixed(2)}</p>
-                <p className="text-xs text-muted-foreground">Avg KDA</p>
-              </div>
-              <div className="text-center p-2 rounded-lg bg-muted/50">
-                <p className="text-lg font-bold">{stats.avg_cs.toFixed(0)}</p>
-                <p className="text-xs text-muted-foreground">Avg CS</p>
-              </div>
-              <div className="text-center p-2 rounded-lg bg-muted/50">
-                <p className="text-lg font-bold">
-                  {stats.avg_vision_score.toFixed(0)}
-                </p>
-                <p className="text-xs text-muted-foreground">Avg Vision</p>
-              </div>
-            </div>
-          </div>
-        )}
+        <PlayerCardWinRate league={league} stats={stats} />
+        <PlayerCardStats player={player} stats={stats} />
       </CardContent>
     </Card>
   );

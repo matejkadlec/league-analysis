@@ -1,5 +1,7 @@
 import type { Page } from "@playwright/test";
 
+import { seedAuthenticatedSession } from "./auth";
+
 /**
  * The mocked API surface the smurf-and-boost page needs, shared by the
  * behavioural spec and the mobile-layout spec.
@@ -192,9 +194,8 @@ export async function installSmurfBoostMocks(page: Page): Promise<HarnessState> 
     stored: null,
   };
 
+  await seedAuthenticatedSession(page);
   await page.addInitScript(() => {
-    localStorage.setItem("auth_access_token", "test-access-token");
-    localStorage.setItem("auth_refresh_token", "test-refresh-token");
     localStorage.setItem("theme", "dark");
   });
 
