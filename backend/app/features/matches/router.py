@@ -4,6 +4,7 @@ import uuid
 from collections.abc import Callable
 from typing import Any, ParamSpec, Protocol, TypeVar, cast
 
+import structlog
 from fastapi import (
     APIRouter,
     BackgroundTasks,
@@ -32,6 +33,8 @@ from .schemas import (
     MatchListWithPlayerDataResponse,
     MatchStatsResponse,
 )
+
+logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix="/matches", tags=["matches"])
 router.get_match_service = get_match_service  # type: ignore[attr-defined]
@@ -235,15 +238,7 @@ async def _run_analysis_task(
         analysis_jobs[job_id]["status"] = "in_progress"
         analysis_jobs[job_id]["message"] = "Task started..."
 
-    import sys
-
-    # Print to stderr to ensure visibility even if logging is misconfigured
-    print(f"DEBUG: Starting analysis task for job {job_id}", file=sys.stderr)
-
-    import logging
-    import traceback
-
-    logger = logging.getLogger(__name__)
+    logger.debug("analysis_task_started", job_id=job_id, puuid=puuid)
 
     rate_limiter: DBRateLimiter | None = None
 
@@ -293,9 +288,8 @@ async def _run_analysis_task(
                 analysis_jobs[job_id]["message"] = (
                     "Fetching match list from Riot API..."
                 )
-                print(
-                    f"DEBUG: Client initialized, fetching matches for {puuid}",
-                    file=sys.stderr,
+                logger.debug(
+                    "analysis_task_fetching_matches", job_id=job_id, puuid=puuid
                 )
 
                 # Analyze the complete canonical product-supported queue set.
@@ -313,15 +307,19 @@ async def _run_analysis_task(
                     analysis_jobs[job_id]["message"] = (
                         f"Analysis cancelled. Processed {count} matches."
                     )
-                    print(
-                        f"DEBUG: Analysis cancelled. Processed {count} matches.",
-                        file=sys.stderr,
+                    logger.info(
+                        "analysis_task_cancelled",
+                        job_id=job_id,
+                        puuid=puuid,
+                        matches_processed=count,
                     )
                     return
 
-                print(
-                    f"DEBUG: Analysis finished. Processed {count} matches.",
-                    file=sys.stderr,
+                logger.info(
+                    "analysis_task_completed",
+                    job_id=job_id,
+                    puuid=puuid,
+                    matches_processed=count,
                 )
 
                 analysis_jobs[job_id]["status"] = "completed"
@@ -330,13 +328,14 @@ async def _run_analysis_task(
 
     except Exception as e:
         error_msg = str(e)
-        stack_trace = traceback.format_exc()
 
-        logger.error(f"Analysis failed for job {job_id}: {error_msg}")
-        logger.error(stack_trace)
-        print(
-            f"ERROR: Analysis job {job_id} failed: {error_msg}\n{stack_trace}",
-            file=sys.stderr,
+        logger.error(
+            "analysis_task_failed",
+            job_id=job_id,
+            puuid=puuid,
+            error=error_msg,
+            error_type=type(e).__name__,
+            exc_info=True,
         )
 
         # Check for Rate Limit specific error string
@@ -353,8 +352,10 @@ async def _run_analysis_task(
                 await rate_limiter.release()
             except Exception as release_error:
                 logger.warning(
-                    "Failed to release DB rate limiter after analysis task: %s",
-                    release_error,
+                    "analysis_task_rate_limiter_release_failed",
+                    job_id=job_id,
+                    error_type=type(release_error).__name__,
+                    error=str(release_error),
                 )
 
 

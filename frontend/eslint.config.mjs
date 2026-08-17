@@ -20,6 +20,33 @@ const eslintConfig = [
       "@typescript-eslint/no-misused-promises": "error",
     },
   },
+  // Console statements are this app's developer-observability channel, and
+  // each remaining surface is reviewed: API validation mismatches, Data
+  // Dragon fallbacks, the API error reporter, and dev-gated auth warns.
+  // Everything else must go through the toast adapter in `lib/core/hooks`.
+  {
+    files: ["**/*.{js,cjs,mjs,cts,mts,ts,tsx}"],
+    rules: {
+      "no-console": "error",
+    },
+  },
+  {
+    files: [
+      "features/auth/context/auth-context.tsx",
+      "lib/core/api-error-logging.ts",
+      "lib/core/api.ts",
+      "lib/core/data-dragon-version.ts",
+    ],
+    rules: {
+      "no-console": "off",
+    },
+  },
+  {
+    files: ["tests/**"],
+    rules: {
+      "no-console": "off",
+    },
+  },
 ];
 
 export default eslintConfig;

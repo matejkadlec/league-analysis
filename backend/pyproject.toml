@@ -32,6 +32,7 @@ dependencies = [
     "sqlalchemy>=2.0.51",
     "structlog>=26.1.0",
     "uvicorn[standard]>=0.52.1",
+    "starlette>=1.6.0",
 ]
 requires-python = ">=3.14,<3.15"
 license = { text = "All Rights Reserved" }

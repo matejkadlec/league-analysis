@@ -102,6 +102,7 @@ class PlaystyleAnalysisService:
         participants = list(result.scalars().all())
 
         if not participants:
+            logger.info("playstyle_analysis_no_match_data", puuid=puuid)
             # Handle no data
             return await self._save_empty_analysis(puuid)
 
@@ -138,6 +139,8 @@ class PlaystyleAnalysisService:
             # Also set fully_analyzed if matches_analyzed condition met?
             # For now, we trust the caller/logic elsewhere or just set playstyle time
             self.db.add(player)
+        else:
+            logger.warning("playstyle_analysis_player_row_missing", puuid=puuid)
 
         # Update matches attached to analysis to be fully_analyzed
         # Logic: We just analyzed specific matches. But here we don't have the list of match_ids easily available

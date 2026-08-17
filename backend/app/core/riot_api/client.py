@@ -190,7 +190,11 @@ class RiotAPIClient:
         payload: JSONValue
         try:
             payload = response.json()
-        except Exception:
+        except Exception as error:
+            logger.debug(
+                "riot_status_message_parse_failed",
+                error_type=type(error).__name__,
+            )
             return None
 
         if not isinstance(payload, dict):
@@ -207,6 +211,11 @@ class RiotAPIClient:
         """Raise specific RiotAPIError subclass for client errors."""
         if status == 400:
             if riot_message and "exception decrypting" in riot_message.lower():
+                logger.error(
+                    "riot_puuid_decryption_failed",
+                    error_type="PuuidDecryptionError",
+                    status_code=status,
+                )
                 raise PuuidDecryptionError(
                     "Stored PUUID was issued to a different developer account",
                     status_code=status,
@@ -234,6 +243,10 @@ class RiotAPIClient:
         try:
             retry_after = int(float(raw_retry_after))
         except TypeError, ValueError:
+            logger.debug(
+                "riot_retry_after_parse_failed",
+                raw_retry_after=raw_retry_after,
+            )
             return default_seconds
 
         return max(retry_after, 1)
@@ -271,11 +284,26 @@ class RiotAPIClient:
     ) -> tuple[bool, int]:
         """Handle server errors (5xx) with exponential backoff."""
         if attempt < max_retries:
-            return (True, 2**attempt)
-        if status == 503:
-            raise ServiceUnavailableError("Service unavailable", status_code=status)
-        else:
-            raise RiotAPIError(f"Server error {status}", status_code=status)
+            retry_after = 2**attempt
+            logger.warning(
+                "riot_api_retrying_server_error",
+                status_code=status,
+                attempt=attempt,
+                retry_after=retry_after,
+            )
+            return (True, retry_after)
+        exhausted_error = (
+            ServiceUnavailableError("Service unavailable", status_code=status)
+            if status == 503
+            else RiotAPIError(f"Server error {status}", status_code=status)
+        )
+        logger.error(
+            "riot_api_request_failed",
+            status_code=status,
+            attempts=max_retries + 1,
+            error_type=type(exhausted_error).__name__,
+        )
+        raise exhausted_error
 
     async def _handle_http_error_status(
         self,
@@ -414,8 +442,22 @@ class RiotAPIClient:
             except (TimeoutError, httpx.RequestError) as e:
                 last_error = e
                 if attempt < max_retries:
+                    logger.warning(
+                        "riot_api_network_retry",
+                        endpoint=self._extract_endpoint_path(url),
+                        attempt=attempt,
+                        error_type=type(e).__name__,
+                        error=str(e),
+                    )
                     await asyncio.sleep(2**attempt)
 
+        logger.error(
+            "riot_api_request_failed",
+            endpoint=self._extract_endpoint_path(url),
+            attempts=max_retries + 1,
+            error_type=type(last_error).__name__ if last_error else None,
+            error=str(last_error) if last_error else None,
+        )
         raise RiotAPIError(f"Request failed: {last_error!s}")
 
     async def probe_credentials(self, url: str) -> object:

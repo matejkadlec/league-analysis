@@ -2,6 +2,7 @@
 
 from datetime import UTC, datetime
 
+import structlog
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, Response, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import select
@@ -55,6 +56,8 @@ from .service import (
 
 router = APIRouter()
 
+logger = structlog.get_logger(__name__)
+
 
 @router.post("/login", response_model=Token)
 @rate_limit("5/minute")
@@ -79,6 +82,11 @@ async def login(
             remote_ip=request.client.host if request.client else None,
         )
     except AccountLockedError as e:
+        logger.warning(
+            "login_failed",
+            reason="account_locked",
+            email=form_data.username,
+        )
         raise HTTPException(
             status_code=status.HTTP_423_LOCKED,
             detail={
@@ -88,6 +96,11 @@ async def login(
             },
         ) from e
     except CaptchaRequiredError as e:
+        logger.warning(
+            "login_failed",
+            reason="captcha_required",
+            email=form_data.username,
+        )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={
@@ -96,6 +109,11 @@ async def login(
             },
         ) from e
     except CaptchaVerificationError as e:
+        logger.warning(
+            "login_failed",
+            reason="captcha_verification_failed",
+            email=form_data.username,
+        )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={
@@ -112,6 +130,12 @@ async def login(
         )
 
     if not user.is_active:
+        logger.warning(
+            "login_failed",
+            reason="inactive_account",
+            user_id=user.id,
+            email=user.email,
+        )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={
@@ -133,6 +157,11 @@ async def login(
 
     await auth_service.update_last_login(user.id)
     await auth_service.cleanup_expired_token_state()
+    logger.info(
+        "login_succeeded",
+        user_id=user.id,
+        email=user.email,
+    )
 
     now = datetime.now(UTC)
     set_auth_cookies(
@@ -232,6 +261,11 @@ async def logout(
     await auth_service.revoke_access_token(token, reason="logout")
     await auth_service.revoke_all_refresh_tokens_for_user(current_user.id)
     await auth_service.cleanup_expired_token_state()
+    logger.info(
+        "logout_succeeded",
+        user_id=current_user.id,
+        email=current_user.email,
+    )
     clear_auth_cookies(response)
     return {"message": "Successfully logged out"}
 

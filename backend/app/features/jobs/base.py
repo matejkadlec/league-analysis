@@ -128,7 +128,11 @@ def _validation_field_locations(source_error: Exception | None) -> list[str]:
         return []
     try:
         reported_errors: object = validation_errors()
-    except Exception:
+    except Exception as error:
+        logger.debug(
+            "job_validation_field_locations_failed",
+            error_type=type(error).__name__,
+        )
         return []
     if not isinstance(reported_errors, list):
         return []
@@ -745,7 +749,8 @@ class BaseJob(ABC):
         except Exception as e:
             await db.rollback()
             logger.error(
-                f"Failed to commit {operation}",
+                "job_commit_failed",
+                operation=operation,
                 error=str(e),
                 error_type=type(e).__name__,
                 job_config_id=self.job_config_id,

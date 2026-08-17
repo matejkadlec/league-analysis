@@ -9,7 +9,9 @@ from pathlib import Path
 
 from alembic import command
 from alembic.config import Config
+from alembic.runtime.migration import MigrationContext
 from sqlalchemy import create_engine, text
+from sqlalchemy.engine import Connection
 
 from app.core.config import get_settings
 
@@ -29,6 +31,18 @@ def alembic_config() -> Config:
     return Config(str(BACKEND_ROOT / "alembic.ini"))
 
 
+def _applied_revision(connection: Connection) -> str | None:
+    """Read the revision the database currently records, if any."""
+    return MigrationContext.configure(connection).get_current_revision()
+
+
+def _outcome_line(command_name: str, before: str | None, after: str | None) -> str:
+    """One bounded line describing what the command achieved."""
+    if before == after:
+        return f"Migration {command_name}: already at revision {after}"
+    return f"Migration {command_name}: revision {before} -> {after}"
+
+
 def run_migration_command(command_name: str, revision: str) -> None:
     """Hold an advisory lock for the full Alembic operation."""
     engine = create_engine(synchronous_database_url(), pool_pre_ping=True)
@@ -38,6 +52,7 @@ def run_migration_command(command_name: str, revision: str) -> None:
                 text("SELECT pg_advisory_lock(:key)"), {"key": MIGRATION_LOCK_KEY}
             )
             try:
+                before = _applied_revision(connection)
                 config = alembic_config()
                 config.attributes["connection"] = connection
                 if command_name == "upgrade":
@@ -48,12 +63,20 @@ def run_migration_command(command_name: str, revision: str) -> None:
                     command.current(config)
                 connection.commit()
             except Exception:
+                print(
+                    "Migration command failed: rolling back the migration transaction.",
+                    file=sys.stderr,
+                )
                 connection.rollback()
                 raise
             finally:
                 connection.execute(
                     text("SELECT pg_advisory_unlock(:key)"), {"key": MIGRATION_LOCK_KEY}
                 )
+            after = _applied_revision(connection)
+            # Alembic's `current` already prints the revision line itself.
+            if command_name != "current":
+                print(_outcome_line(command_name, before, after))
     finally:
         engine.dispose()
 
@@ -71,12 +94,22 @@ def parse_arguments() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def _single_line_bounded(text: str, limit: int = 200) -> str:
+    """Reduce a message to its first line, bounded for operator output."""
+    first_line = text.strip().splitlines()[0] if text.strip() else ""
+    return first_line[:limit]
+
+
 def main() -> int:
     arguments = parse_arguments()
     try:
         run_migration_command(arguments.command, arguments.revision)
     except Exception as error:
-        print(f"Migration command failed: {type(error).__name__}", file=sys.stderr)
+        message = _single_line_bounded(str(error)) or type(error).__name__
+        print(
+            f"Migration command failed: {type(error).__name__}: {message}",
+            file=sys.stderr,
+        )
         return 1
     return 0
 

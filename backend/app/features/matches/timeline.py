@@ -317,6 +317,10 @@ def _uses_historical_atakhan_contract(game_version: str) -> bool:
     try:
         return int(game_version.split(".", 1)[0]) < 16
     except AttributeError, TypeError, ValueError:
+        logger.debug(
+            "timeline_version_parse_failed",
+            game_version=game_version,
+        )
         return False
 
 

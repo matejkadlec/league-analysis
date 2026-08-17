@@ -22,7 +22,9 @@ Alembic, Pydantic v2, structlog, APScheduler, httpx. Features live under
   minimal; import from submodules directly. Keep routes thin and logic in
   services.
 - Log through `structlog.get_logger(__name__)` with structured key-value
-  fields.
+  fields. Event names are static snake_case identifiers — never interpolate
+  values into the event string — and logs must never carry tokens,
+  passwords, codes, or API keys.
 
 ## Commands
 

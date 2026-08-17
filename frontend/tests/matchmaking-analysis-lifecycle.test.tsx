@@ -358,4 +358,49 @@ describe("MatchmakingAnalysis lifecycle", () => {
       { description: "The latest results and history are ready." },
     );
   });
+
+  it("resolves a missing analysis to an empty state instead of an error", async () => {
+    getLatestMatchmakingAnalysis.mockResolvedValue({
+      success: false,
+      error: { status: 404, message: "The requested item could not be found." },
+    });
+    const queryClient = renderComponent();
+
+    expect(
+      await screen.findByRole("button", { name: "Start Analysis" }),
+    ).not.toBeNull();
+    expect(screen.queryByText("Loading analysis...")).toBeNull();
+
+    const state = queryClient.getQueryState([
+      "matchmaking-analysis",
+      "test-puuid",
+    ]);
+    expect(state?.status).toBe("success");
+    expect(state?.data).toBeNull();
+  });
+
+  it("fails the query on other errors while the card stays usable", async () => {
+    getLatestMatchmakingAnalysis.mockResolvedValue({
+      success: false,
+      error: {
+        status: 500,
+        message:
+          "The League Analysis service could not complete the request. Please try again later.",
+      },
+    });
+    const queryClient = renderComponent();
+
+    expect(
+      await screen.findByRole("button", { name: "Start Analysis" }),
+    ).not.toBeNull();
+    expect(screen.queryByText("Loading analysis...")).toBeNull();
+
+    await waitFor(() => {
+      const state = queryClient.getQueryState([
+        "matchmaking-analysis",
+        "test-puuid",
+      ]);
+      expect(state?.status).toBe("error");
+    });
+  });
 });

@@ -81,7 +81,8 @@ def validate_list_items(
     for i, item in enumerate(items):
         if not _is_json_object(item):
             logger.warning(
-                f"Invalid {context_name} type",
+                "invalid_item_type",
+                context=context_name,
                 index=i,
                 got_type=type(item).__name__,
             )

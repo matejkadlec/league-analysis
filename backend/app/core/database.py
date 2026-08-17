@@ -3,6 +3,8 @@
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
+import structlog
+from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,
@@ -10,6 +12,8 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from .config import get_global_settings
+
+logger = structlog.get_logger(__name__)
 
 
 class DatabaseManager:
@@ -43,8 +47,16 @@ class DatabaseManager:
         async with self.async_session_factory() as session:
             try:
                 yield session
-            except Exception:
+            except Exception as error:
                 await session.rollback()
+                # FastAPI throws route HTTPExceptions into yield-dependencies,
+                # so ordinary 4xx responses unwind through here; they are
+                # already recorded by the request completion event and must
+                # not warn like a real database failure.
+                log = (
+                    logger.debug if isinstance(error, HTTPException) else logger.warning
+                )
+                log("database_session_rollback", error_type=type(error).__name__)
                 raise
             finally:
                 await session.close()

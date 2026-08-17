@@ -216,8 +216,12 @@ class MatchmakingAnalysisService:
                 await running.task
             except asyncio.CancelledError:
                 pass
-            except Exception:
-                pass
+            except Exception as await_error:
+                logger.warning(
+                    "matchmaking_analysis_cancel_await_failed",
+                    puuid=puuid,
+                    error_type=type(await_error).__name__,
+                )
         logger.info("Analysis cancelled", puuid=puuid, created_at=created_at)
         return True
 
@@ -442,8 +446,14 @@ class MatchmakingAnalysisService:
                         )
                     )
                     await db.commit()
-            except Exception:
-                pass
+            except Exception as persist_error:
+                logger.error(
+                    "matchmaking_failure_state_persist_failed",
+                    puuid=puuid,
+                    created_at=created_at,
+                    error_code=error_code,
+                    error_type=type(persist_error).__name__,
+                )
         finally:
             running = _running_analyses.get(puuid)
             if running and running.task is asyncio.current_task():
@@ -453,8 +463,12 @@ class MatchmakingAnalysisService:
                     async with db_manager.get_session() as db:
                         rate_limiter.db = db
                         await rate_limiter.release()
-                except Exception:
-                    pass
+                except Exception as release_error:
+                    logger.warning(
+                        "riot_rate_limiter_release_failed",
+                        puuid=puuid,
+                        error_type=type(release_error).__name__,
+                    )
 
     @staticmethod
     def _safe_failure_details(error: Exception) -> tuple[str, str]:
@@ -626,13 +640,18 @@ class MatchmakingAnalysisService:
             match_anchor = await self._get_game_start_timestamp(match_id)
             if match_anchor is None:
                 logger.warning(
-                    f"Could not get timestamp for match {match_id}, skipping"
+                    "matchmaking_anchor_timestamp_missing",
+                    puuid=puuid,
+                    match_id=match_id,
                 )
                 continue
 
             match_anchor_seconds = match_anchor // 1000 + 1
             logger.info(
-                f"Processing match {idx + 1}/{len(spine_match_ids)}",
+                "matchmaking_processing_match",
+                puuid=puuid,
+                match_index=idx + 1,
+                match_total=len(spine_match_ids),
                 match_id=match_id,
                 anchor=match_anchor,
             )

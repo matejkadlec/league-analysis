@@ -19,7 +19,7 @@ import jwt
 import structlog
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from jwt import InvalidTokenError
+from jwt import ExpiredSignatureError, InvalidTokenError
 from passlib.context import CryptContext
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -729,12 +729,24 @@ class AuthService:
             return None
 
         if token_record.expires_at <= now:
+            logger.warning(
+                "refresh_token_rotation_rejected",
+                reason="expired_token",
+                user_id=token_record.user_id,
+                token_id=token_record.token_id,
+            )
             token_record.revoked_at = now
             await self.db.commit()
             return None
 
         user = await self.get_user_by_id(token_record.user_id)
         if user is None:
+            logger.warning(
+                "refresh_token_rotation_rejected",
+                reason="unknown_user",
+                user_id=token_record.user_id,
+                token_id=token_record.token_id,
+            )
             token_record.revoked_at = now
             await self.db.commit()
             return None
@@ -802,6 +814,7 @@ class AuthService:
                 options={"verify_exp": False},
             )
         except InvalidTokenError:
+            logger.debug("access_token_revocation_skipped", reason="invalid_token")
             return
 
         token_id = payload.get("jti")
@@ -863,6 +876,7 @@ class AuthService:
         # If user doesn't exist, hash against a dummy value
         if not user:
             self.verify_password(password, DUMMY_PASSWORD_HASH)
+            logger.warning("login_failed", reason="unknown_email", email=email)
             return None
 
         await self._clear_expired_lock_if_needed(user)
@@ -879,6 +893,12 @@ class AuthService:
 
         if not self.verify_password(password, user.password_hash):
             await self._record_failed_login(user)
+            logger.warning(
+                "login_failed",
+                reason="invalid_password",
+                user_id=user.id,
+                email=user.email,
+            )
             return None
 
         return user
@@ -911,6 +931,7 @@ class AuthService:
         await self.db.commit()
         await self.db.refresh(user)
 
+        logger.info("user_registered", user_id=user.id, email=user.email)
         return user
 
     async def request_email_change_code(
@@ -1170,7 +1191,11 @@ class AuthService:
                 algorithms=[self.settings.jwt_algorithm],
             )
             token_data = self._access_token_data_from_payload(payload)
+        except ExpiredSignatureError as e:
+            logger.warning("access_token_rejected", reason="expired_token")
+            raise credentials_exception from e
         except InvalidTokenError as e:
+            logger.warning("access_token_rejected", reason="invalid_token")
             raise credentials_exception from e
 
         if (
@@ -1178,14 +1203,25 @@ class AuthService:
             or token_data.user_id is None
             or token_data.token_id is None
         ):
+            logger.warning("access_token_rejected", reason="invalid_token")
             raise credentials_exception
 
         is_revoked = await self.is_access_token_revoked(token_data.token_id)
         if is_revoked:
+            logger.warning(
+                "access_token_rejected",
+                reason="revoked_token",
+                token_id=token_data.token_id,
+            )
             raise credentials_exception
 
         user = await self.get_user_by_id(token_data.user_id)
         if user is None:
+            logger.warning(
+                "access_token_rejected",
+                reason="unknown_user",
+                user_id=token_data.user_id,
+            )
             raise credentials_exception
 
         return user
