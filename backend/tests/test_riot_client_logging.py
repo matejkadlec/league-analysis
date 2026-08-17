@@ -40,14 +40,30 @@ def test_server_error_retry_decision_logs_warning() -> None:
     assert entries[0]["log_level"] == "warning"
 
 
-def test_exhausted_server_error_retries_stay_quiet() -> None:
-    """The terminal 5xx raise is the caller's error; no retry is decided."""
+@pytest.mark.parametrize(
+    ("status_code", "expected_error"),
+    [(503, ServiceUnavailableError), (500, RiotAPIError)],
+)
+def test_exhausted_server_error_logs_final_failure(
+    status_code: int, expected_error: type[Exception]
+) -> None:
+    """The terminal 5xx raise emits the shared final-failure event so 5xx
+    exhaustion is not invisible to riot_api_request_failed consumers."""
     client = _client()
 
-    with capture_logs() as logs, pytest.raises(ServiceUnavailableError):
-        client._handle_server_error(503, 3, 3)
+    with (
+        capture_logs() as logs,
+        pytest.raises(expected_error),
+    ):
+        client._handle_server_error(status_code, 3, 3)
 
     assert _events(logs, "riot_api_retrying_server_error") == []
+    failures = _events(logs, "riot_api_request_failed")
+    assert len(failures) == 1
+    assert failures[0]["status_code"] == status_code
+    assert failures[0]["attempts"] == 4
+    assert failures[0]["error_type"] == expected_error.__name__
+    assert failures[0]["log_level"] == "error"
 
 
 @pytest.mark.asyncio

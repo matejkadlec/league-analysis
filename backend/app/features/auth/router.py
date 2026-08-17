@@ -73,6 +73,11 @@ async def login(
             remote_ip=request.client.host if request.client else None,
         )
     except AccountLockedError as e:
+        logger.warning(
+            "login_failed",
+            reason="account_locked",
+            email=form_data.username,
+        )
         raise HTTPException(
             status_code=status.HTTP_423_LOCKED,
             detail={
@@ -82,6 +87,11 @@ async def login(
             },
         ) from e
     except CaptchaRequiredError as e:
+        logger.warning(
+            "login_failed",
+            reason="captcha_required",
+            email=form_data.username,
+        )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={
@@ -90,6 +100,11 @@ async def login(
             },
         ) from e
     except CaptchaVerificationError as e:
+        logger.warning(
+            "login_failed",
+            reason="captcha_verification_failed",
+            email=form_data.username,
+        )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={

@@ -24,7 +24,13 @@ from app.features.auth.dependencies import (
 )
 from app.features.auth.models import User
 from app.features.auth.router import login
-from app.features.auth.service import DUMMY_PASSWORD_HASH, AuthService
+from app.features.auth.service import (
+    DUMMY_PASSWORD_HASH,
+    AccountLockedError,
+    AuthService,
+    CaptchaRequiredError,
+    CaptchaVerificationError,
+)
 
 
 def _undecorated[**P, R](endpoint: Callable[P, R]) -> Callable[P, R]:
@@ -165,6 +171,79 @@ async def test_inactive_account_login_failure_is_logged() -> None:
     assert len(failures) == 1
     assert failures[0]["reason"] == "inactive_account"
     assert failures[0]["user_id"] == 7
+
+
+@pytest.mark.asyncio
+async def test_locked_account_login_failure_is_logged() -> None:
+    auth_service = SimpleNamespace(
+        authenticate_user=AsyncMock(
+            side_effect=AccountLockedError(
+                locked_until=datetime.now(UTC) + timedelta(minutes=5)
+            )
+        )
+    )
+    form_data = OAuth2PasswordRequestForm(
+        username="player@example.com", password="Password-1!"
+    )
+
+    with capture_logs() as records, pytest.raises(HTTPException) as error:
+        await _undecorated(login)(
+            request=_loopback_request(),
+            form_data=form_data,
+            auth_service=cast(AuthService, auth_service),
+        )
+
+    assert error.value.status_code == 423
+    failures = _events(records, "login_failed")
+    assert len(failures) == 1
+    assert failures[0]["reason"] == "account_locked"
+    assert failures[0]["email"] == "player@example.com"
+
+
+@pytest.mark.asyncio
+async def test_captcha_required_login_failure_is_logged() -> None:
+    auth_service = SimpleNamespace(
+        authenticate_user=AsyncMock(side_effect=CaptchaRequiredError())
+    )
+    form_data = OAuth2PasswordRequestForm(
+        username="player@example.com", password="Password-1!"
+    )
+
+    with capture_logs() as records, pytest.raises(HTTPException) as error:
+        await _undecorated(login)(
+            request=_loopback_request(),
+            form_data=form_data,
+            auth_service=cast(AuthService, auth_service),
+        )
+
+    assert error.value.status_code == 403
+    failures = _events(records, "login_failed")
+    assert len(failures) == 1
+    assert failures[0]["reason"] == "captcha_required"
+    assert failures[0]["email"] == "player@example.com"
+
+
+@pytest.mark.asyncio
+async def test_captcha_verification_failure_is_logged() -> None:
+    auth_service = SimpleNamespace(
+        authenticate_user=AsyncMock(side_effect=CaptchaVerificationError())
+    )
+    form_data = OAuth2PasswordRequestForm(
+        username="player@example.com", password="Password-1!"
+    )
+
+    with capture_logs() as records, pytest.raises(HTTPException) as error:
+        await _undecorated(login)(
+            request=_loopback_request(),
+            form_data=form_data,
+            auth_service=cast(AuthService, auth_service),
+        )
+
+    assert error.value.status_code == 403
+    failures = _events(records, "login_failed")
+    assert len(failures) == 1
+    assert failures[0]["reason"] == "captcha_verification_failed"
+    assert failures[0]["email"] == "player@example.com"
 
 
 @pytest.mark.asyncio

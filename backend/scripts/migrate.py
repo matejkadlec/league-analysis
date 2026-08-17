@@ -38,8 +38,6 @@ def _applied_revision(connection: Connection) -> str | None:
 
 def _outcome_line(command_name: str, before: str | None, after: str | None) -> str:
     """One bounded line describing what the command achieved."""
-    if command_name == "current":
-        return f"Migration current: revision {after}"
     if before == after:
         return f"Migration {command_name}: already at revision {after}"
     return f"Migration {command_name}: revision {before} -> {after}"
@@ -76,7 +74,9 @@ def run_migration_command(command_name: str, revision: str) -> None:
                     text("SELECT pg_advisory_unlock(:key)"), {"key": MIGRATION_LOCK_KEY}
                 )
             after = _applied_revision(connection)
-            print(_outcome_line(command_name, before, after))
+            # Alembic's `current` already prints the revision line itself.
+            if command_name != "current":
+                print(_outcome_line(command_name, before, after))
     finally:
         engine.dispose()
 

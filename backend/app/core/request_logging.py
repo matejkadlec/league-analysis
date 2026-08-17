@@ -46,8 +46,13 @@ class RequestLoggingMiddleware:
     """Bind request contextvars and log exactly one event per HTTP request.
 
     The contextvars are bound before the inner app runs so every downstream
-    log event carries the request context, and cleared after the completion
-    log. Query strings, headers, and bodies are deliberately never read.
+    log event carries the request context, and cleared after the inner app
+    returns. The completion event is logged when the terminal response body
+    message passes through, not after the inner app returns: Starlette awaits
+    background tasks inside the response call, so waiting would attribute
+    background-work time to ``duration_ms`` and delay the event by the whole
+    task runtime. Query strings, headers, and bodies are deliberately never
+    read.
     """
 
     def __init__(self, app: ASGIApp) -> None:
@@ -70,11 +75,25 @@ class RequestLoggingMiddleware:
         )
 
         status_code = 0
+        completion_logged = False
 
         async def send_with_status(message: Message) -> None:
-            nonlocal status_code
+            nonlocal status_code, completion_logged
             if message["type"] == "http.response.start":
                 status_code = message["status"]
+            elif (
+                message["type"] == "http.response.body"
+                and not message.get("more_body", False)
+                and not completion_logged
+            ):
+                completion_logged = True
+                _log_http_request_completed(
+                    method=method,
+                    path=path,
+                    status_code=status_code,
+                    duration_ms=_elapsed_ms(started_at),
+                    request_id=request_id,
+                )
             await send(message)
 
         started_at = time.perf_counter()
@@ -91,12 +110,16 @@ class RequestLoggingMiddleware:
                     exc_info=True,
                 )
                 raise
-            _log_http_request_completed(
-                method=method,
-                path=path,
-                status_code=status_code,
-                duration_ms=_elapsed_ms(started_at),
-                request_id=request_id,
-            )
+            if not completion_logged:
+                # Safety net: the inner app finished without a terminal body
+                # message, so the wrapper never fired; keep the one-event
+                # guarantee.
+                _log_http_request_completed(
+                    method=method,
+                    path=path,
+                    status_code=status_code,
+                    duration_ms=_elapsed_ms(started_at),
+                    request_id=request_id,
+                )
         finally:
             structlog.contextvars.clear_contextvars()

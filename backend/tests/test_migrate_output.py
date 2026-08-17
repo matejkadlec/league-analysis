@@ -125,6 +125,28 @@ def test_upgrade_at_head_reports_no_change(
     assert "already at revision rev-head" in captured.out
 
 
+def test_current_does_not_duplicate_alembics_own_output(
+    fake_engine: _FakeEngine,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """`current` already prints the revision through Alembic itself; the
+    runner must not add a second line for the same fact."""
+
+    def fake_current(config: object, *_args: object) -> None:
+        print("rev-head (head)")
+
+    monkeypatch.setattr(migrate.command, "current", fake_current)
+    _install_revisions(monkeypatch, ["rev-head", "rev-head"])
+    _argv(monkeypatch, "current")
+
+    assert migrate.main() == 0
+
+    captured = capsys.readouterr()
+    assert captured.out == "rev-head (head)\n"
+    assert "Migration current:" not in captured.out
+
+
 def test_failure_includes_error_message_on_one_bounded_line(
     fake_engine: _FakeEngine,
     monkeypatch: pytest.MonkeyPatch,

@@ -6,15 +6,18 @@ from typing import Any, cast, override
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from fastapi import HTTPException
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from structlog.testing import capture_logs
 from structlog.typing import EventDict
 
+from app.core.database import DatabaseManager
 from app.core.riot_api.errors import AuthenticationError, RateLimitError
 from app.core.validation import validate_list_items
 from app.features.jobs.base import BaseJob, _validation_field_locations
 from app.features.jobs.error_handling import RateLimitSignal, _handle_error
+from app.features.jobs.log_capture import BoundedLogCapture
 from app.features.matches import router as matches_router
 from app.features.matches import service as matches_service_module
 from app.features.matches.match_stats import advanced_int
@@ -32,6 +35,84 @@ CONSERVATIVE = {key: float(value) for key, value in PRESETS["conservative"].item
 
 def _events(logs: list[EventDict], event_name: str) -> list[EventDict]:
     return [entry for entry in logs if entry.get("event") == event_name]
+
+
+def test_job_log_capture_only_captures_job_tagged_entries() -> None:
+    """Request-scoped traffic must not evict job entries from the deque."""
+    capture = BoundedLogCapture(maxlen=3)
+
+    def _run(event_dict: dict[str, Any]) -> None:
+        returned = capture(None, "info", event_dict)
+        assert returned is event_dict
+
+    _run({"event": "http_request_completed", "path": "/api/v1/players"})
+    _run({"event": "job_started", "job_execution_id": 42})
+    _run({"event": "login_failed", "reason": "unknown_email"})
+    _run({"event": "job_progress", "job_execution_id": 42})
+
+    assert [entry["event"] for entry in capture.entries] == [
+        "job_started",
+        "job_progress",
+    ]
+
+
+class _FakeSession:
+    """Async session stand-in recording rollbacks."""
+
+    def __init__(self) -> None:
+        self.rollbacks = 0
+
+    async def __aenter__(self) -> _FakeSession:
+        return self
+
+    async def __aexit__(self, *_args: object) -> None:
+        return None
+
+    async def rollback(self) -> None:
+        self.rollbacks += 1
+
+    async def close(self) -> None:
+        return None
+
+
+def _session_with_fake_factory() -> tuple[DatabaseManager, _FakeSession]:
+    manager = DatabaseManager.__new__(DatabaseManager)
+    session = _FakeSession()
+    # __new__ skips engine construction; the session factory is swapped for
+    # the recording stand-in get_session actually exercises.
+    cast("Any", manager).async_session_factory = lambda: session
+    return manager, session
+
+
+@pytest.mark.asyncio
+async def test_http_exception_rollback_logs_debug_not_warning() -> None:
+    """Route HTTPExceptions unwind through get_session; they are ordinary
+    4xx traffic already recorded by the completion event, not DB failures."""
+    manager, session = _session_with_fake_factory()
+
+    with capture_logs() as logs, pytest.raises(HTTPException):
+        async with manager.get_session():
+            raise HTTPException(status_code=404, detail="missing")
+
+    assert session.rollbacks == 1
+    entries = _events(logs, "database_session_rollback")
+    assert len(entries) == 1
+    assert entries[0]["log_level"] == "debug"
+    assert entries[0]["error_type"] == "HTTPException"
+
+
+@pytest.mark.asyncio
+async def test_unexpected_rollback_still_logs_warning() -> None:
+    manager, _session = _session_with_fake_factory()
+
+    with capture_logs() as logs, pytest.raises(ValueError):
+        async with manager.get_session():
+            raise ValueError("connection gone")
+
+    entries = _events(logs, "database_session_rollback")
+    assert len(entries) == 1
+    assert entries[0]["log_level"] == "warning"
+    assert entries[0]["error_type"] == "ValueError"
 
 
 def test_invalid_list_item_logs_static_event() -> None:
@@ -163,7 +244,6 @@ def test_invalid_sync_queue_ids_are_reported() -> None:
     assert entries[0]["count"] == 1
 
 
-@pytest.mark.asyncio
 def _fake_record(*_args: object, **_kwargs: object) -> object:
     return object()
 

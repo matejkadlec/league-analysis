@@ -6,8 +6,9 @@ from typing import cast
 
 import httpx
 import pytest
-from fastapi import FastAPI, HTTPException
+from fastapi import BackgroundTasks, FastAPI, HTTPException
 from starlette.exceptions import StarletteDeprecationWarning
+from starlette.types import Message, Receive, Scope, Send
 from structlog import get_logger
 from structlog.contextvars import merge_contextvars
 from structlog.testing import capture_logs
@@ -51,13 +52,23 @@ async def _context() -> dict[str, str]:
     return _OK
 
 
-_ROUTES: list[tuple[str, Callable[[], object]]] = [
+async def _background_task() -> None:
+    route_logger.info("bg_task_marker")
+
+
+async def _background(background_tasks: BackgroundTasks) -> dict[str, str]:
+    background_tasks.add_task(_background_task)
+    return _OK
+
+
+_ROUTES: list[tuple[str, Callable[..., object]]] = [
     ("/ok", _ok),
     ("/health/ping", _health_ping),
     ("/missing", _missing),
     ("/failing", _failing),
     ("/boom", _boom),
     ("/context", _context),
+    ("/background", _background),
 ]
 
 
@@ -192,3 +203,56 @@ def test_non_http_scope_passes_through_without_request_logging() -> None:
     assert response.status_code == 200
     assert len(_events(records, "http_request_completed")) == 1
     assert _events(records, "http_request_exception") == []
+
+
+def test_background_task_completion_is_logged_before_the_task_runs() -> None:
+    """Starlette awaits background tasks inside the response call, so the
+    completion event must fire when the response body is sent, not when the
+    inner app returns — otherwise duration_ms covers the task runtime."""
+    client = TestClient(_build_app())
+
+    with capture_logs(processors=[merge_contextvars]) as records:
+        response = _get(client, "/background")
+
+    assert response.status_code == 200
+    completion_index = next(
+        i
+        for i, record in enumerate(records)
+        if record["event"] == "http_request_completed"
+    )
+    marker_index = next(
+        i for i, record in enumerate(records) if record["event"] == "bg_task_marker"
+    )
+    assert completion_index < marker_index
+    # The task still runs inside the bound request context.
+    assert (
+        records[marker_index]["request_id"] == (records[completion_index]["request_id"])
+    )
+
+
+async def _silent_app(scope: Scope, receive: Receive, send: Send) -> None:
+    """An ASGI app that finishes without ever sending a response."""
+
+
+async def _no_receive() -> Message:
+    return {"type": "http.request", "body": b"", "more_body": False}
+
+
+async def _no_send(_message: Message) -> None:
+    return None
+
+
+async def test_app_without_response_still_logs_one_completion() -> None:
+    middleware = RequestLoggingMiddleware(_silent_app)
+
+    with capture_logs() as records:
+        await middleware(
+            {"type": "http", "method": "GET", "path": "/silent"},
+            _no_receive,
+            _no_send,
+        )
+
+    completions = _events(records, "http_request_completed")
+    assert len(completions) == 1
+    assert completions[0]["status_code"] == 0
+    assert completions[0]["log_level"] == "info"

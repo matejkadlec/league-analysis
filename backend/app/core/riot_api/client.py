@@ -292,10 +292,18 @@ class RiotAPIClient:
                 retry_after=retry_after,
             )
             return (True, retry_after)
-        if status == 503:
-            raise ServiceUnavailableError("Service unavailable", status_code=status)
-        else:
-            raise RiotAPIError(f"Server error {status}", status_code=status)
+        exhausted_error = (
+            ServiceUnavailableError("Service unavailable", status_code=status)
+            if status == 503
+            else RiotAPIError(f"Server error {status}", status_code=status)
+        )
+        logger.error(
+            "riot_api_request_failed",
+            status_code=status,
+            attempts=max_retries + 1,
+            error_type=type(exhausted_error).__name__,
+        )
+        raise exhausted_error
 
     async def _handle_http_error_status(
         self,
