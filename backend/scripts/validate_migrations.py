@@ -5,17 +5,20 @@ from __future__ import annotations
 
 import ast
 import asyncio
+import importlib
 import os
+import pkgutil
 import re
 import subprocess
 import sys
 import tempfile
+from enum import Enum
 from pathlib import Path
 from uuid import uuid4
 
 from dotenv import load_dotenv
 from migration_contract import EXPECTED_ALEMBIC_HEAD
-from sqlalchemy import URL, create_engine, text
+from sqlalchemy import URL, create_engine, inspect, text
 
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
 RECONCILE_REVISION = (
@@ -378,6 +381,92 @@ def validate_revision_0014_repaired_the_seeded_rows(database: str) -> None:
         )
 
 
+def load_application_models() -> None:
+    """Import every model module, so `Base.metadata` holds every table.
+
+    `alembic/env.py` gets this for free by importing the app package the way
+    the application does; this script talks to the database directly, so the
+    registrations have to be triggered here.
+    """
+    importlib.import_module("app.core.riot_api.credential_health")
+
+    import app.features as features
+
+    for module in pkgutil.walk_packages(features.__path__, "app.features."):
+        if module.name.endswith(".models"):
+            importlib.import_module(module.name)
+
+
+def _python_default_literal(column: object) -> object | None:
+    """Render a column's Python-side default, or None when it has none."""
+    default = getattr(column, "default", None)
+    if default is None or default.is_callable or default.is_sequence:
+        return None
+    return default.arg
+
+
+def _rendered_default(value: object) -> str:
+    """Spell a Python default the way PostgreSQL prints the same constant."""
+    # `{True: ...}[0]` would hit the True key, because bool and int share a
+    # hash. Booleans therefore have to be tested before anything numeric.
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, Enum):
+        return str(value.value)
+    return str(value)
+
+
+def validate_column_defaults(database: str) -> None:
+    """Assert no column's DEFAULT disagrees with the model's own default.
+
+    `alembic/env.py` leaves `compare_server_default` off, because turning it on
+    reports 127 columns where the database carries a `DEFAULT` and the model
+    declares only a client-side `default=`. That is a difference in where the
+    value is written, not in what it is, and closing it would mean restating
+    every one of those defaults in the models.
+
+    The failure that difference could hide is the one checked here: the two
+    sides naming *different* values, so a row written by hand in psql and a row
+    written through the ORM disagree. All 128 comparable columns agreed when
+    this check was added.
+    """
+    from app.core.models import Base
+
+    load_application_models()
+    url = administration_url().set(database=database)
+    engine = create_engine(url)
+    try:
+        inspector = inspect(engine)
+        disagreements: list[str] = []
+        for table in Base.metadata.sorted_tables:
+            reflected = {
+                column["name"]: column
+                for column in inspector.get_columns(table.name, schema=table.schema)
+            }
+            for column in table.columns:
+                info = reflected.get(column.name)
+                if info is None or info.get("default") is None:
+                    continue
+                python_default = _python_default_literal(column)
+                if python_default is None:
+                    continue
+                database_default = str(info["default"]).split("::")[0].strip("'")
+                if database_default != _rendered_default(python_default):
+                    disagreements.append(
+                        f"{table.schema}.{table.name}.{column.name}: "
+                        f"database {info['default']!r}, model {python_default!r}"
+                    )
+    finally:
+        engine.dispose()
+
+    if disagreements:
+        raise RuntimeError(
+            "a column's DEFAULT disagrees with the model's own default, so a "
+            "hand-written INSERT and an ORM INSERT would store different "
+            "values:\n  " + "\n  ".join(disagreements)
+        )
+
+
 def validate_metadata_drift(database: str, restored_database: str) -> None:
     """Assert the ORM models describe the migrated schema exactly.
 
@@ -530,6 +619,7 @@ def main() -> int:
             restore_validation_archive(restored_database, archive)
             validate_revision(restored_database)
             validate_metadata_drift(database, restored_database)
+            validate_column_defaults(database)
             if deterministic_snapshot(restored_database) != deterministic_snapshot(
                 database
             ):
