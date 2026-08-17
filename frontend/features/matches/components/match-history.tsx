@@ -826,9 +826,8 @@ export function MatchHistory({ puuid, lastUpdated }: MatchHistoryProps) {
   const handleUpdate = async () => {
     setIsUpdating(true);
     try {
-      // `/players/{puuid}/sync` runs the same Match Fetcher then Player
-      // Updater pair as the older `/jobs/sync-player/{puuid}` route, but
-      // returns a run this component can actually watch to completion.
+      // `/players/{puuid}/sync` runs the Match Fetcher then Player Updater
+      // pair and returns a run this component can watch to completion.
       const response = await api.post(`/players/${puuid}/sync`);
       const parsed = PlayerSyncRunSchema.safeParse(response.data);
       if (!parsed.success) {

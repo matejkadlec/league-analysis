@@ -29,10 +29,7 @@ from app.features.jobs.player_sync import (
     get_active_player_sync,
     run_player_sync,
 )
-from .background_sync import (
-    run_background_match_sync,
-    run_background_player_update,
-)
+
 from .dependencies import (
     PlayerServiceDep,
     get_player_service,
@@ -510,7 +507,6 @@ async def _riot_writer_maintenance_is_active(session: AsyncSession) -> bool:
     return riot_writer_maintenance_is_active(configurations)
 
 
-
 @router.post("/add-tracked", response_model=PlayerResponse)
 async def add_tracked_player(
     player_service: PlayerServiceDep,
@@ -558,15 +554,17 @@ async def add_tracked_player(
             user_id=current_user.id,
         )
 
-        # Trigger background match fetch
-        background_tasks.add_task(
-            run_background_match_sync, result.puuid, result.platform
+        # Onboarding runs the same explicit Player Sync lifecycle as the
+        # Update button: one claimed PlayerSyncRun, writers via BaseJob.
+        # If a fleet-wide writer is already running the run reports SYNC_BUSY
+        # and the scheduler picks the new tracked player up on its next pass.
+        sync_run, created = await create_or_get_player_sync(
+            player_service.db,
+            user_id=current_user.id,
+            puuid=result.puuid,
         )
-
-        # Trigger background player profile update (name, tag, icon, level, league)
-        background_tasks.add_task(
-            run_background_player_update, result.puuid, result.platform
-        )
+        if created:
+            background_tasks.add_task(run_player_sync, sync_run.id)
 
         return result
 
