@@ -30,6 +30,11 @@ import type { Player } from "@/lib/core/schemas";
 import { cn } from "@/lib/core/utils";
 
 import { parseRiotId, type RiotIdParts } from "../utils/riot-id";
+
+interface DiscoverAttempt {
+  riotId: RiotIdParts;
+  platform: string;
+}
 import {
   playerNotFoundMessage,
   playerTrackingFailureKind,
@@ -140,14 +145,15 @@ export function PlayerSelector({
     }
   };
 
+  // The Riot ID and server travel as mutation variables rather than being read
+  // from state in `onError`: cancelling or switching server while the request
+  // is in flight would otherwise name a server that was never queried, or drop
+  // the specific "wasn't found on <server>" wording for the generic message.
   const discoverMutation = useMutation({
-    mutationFn: async () => {
-      if (!pendingRiotId) {
-        throw new Error("Enter a Riot ID in Name#Tag format.");
-      }
+    mutationFn: async ({ riotId, platform }: DiscoverAttempt) => {
       const result = await discoverPlayer({
-        game_name: pendingRiotId.gameName,
-        tag_line: pendingRiotId.tagLine,
+        game_name: riotId.gameName,
+        tag_line: riotId.tagLine,
         platform,
       });
       if (!result.success) {
@@ -163,7 +169,7 @@ export function PlayerSelector({
       });
       await choosePlayer(player);
     },
-    onError: (error) => {
+    onError: (error, attempt) => {
       const kind = playerTrackingFailureKind(normalizeApiError(error));
       if (kind === "api-key") {
         toast({
@@ -182,10 +188,10 @@ export function PlayerSelector({
         });
         return;
       }
-      if (kind === "not-found" && pendingRiotId) {
+      if (kind === "not-found") {
         toast({
           title: "Player search could not finish",
-          description: playerNotFoundMessage(pendingRiotId, platform),
+          description: playerNotFoundMessage(attempt.riotId, attempt.platform),
           variant: "error",
         });
         return;
@@ -351,7 +357,11 @@ export function PlayerSelector({
               type="button"
               className="button-medium no-rotation py-2 px-4"
               disabled={discoverMutation.isPending}
-              onClick={() => discoverMutation.mutate()}
+              onClick={() => {
+                if (pendingRiotId) {
+                  discoverMutation.mutate({ riotId: pendingRiotId, platform });
+                }
+              }}
             >
               {discoverMutation.isPending && (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />

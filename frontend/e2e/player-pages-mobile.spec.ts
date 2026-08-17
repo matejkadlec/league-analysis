@@ -18,16 +18,19 @@ import {
 
 const PHONE = { width: 390, height: 844 };
 
+// The third field says whether the route renders the match list, so a fixture
+// that stopped producing matches fails here instead of quietly skipping the
+// assertion that list exists for.
 const ROUTES = [
-  ["player overview", `/player-overview?puuid=${PUUID}`],
-  ["match history", `/match-history?puuid=${PUUID}`],
-  ["matchmaking analysis", `/matchmaking-analysis?puuid=${PUUID}`],
+  ["player overview", `/player-overview?puuid=${PUUID}`, false],
+  ["match history", `/match-history?puuid=${PUUID}`, true],
+  ["matchmaking analysis", `/matchmaking-analysis?puuid=${PUUID}`, false],
 ] as const;
 
 test.describe("player pages on a phone", () => {
   test.use({ viewport: PHONE });
 
-  for (const [name, route] of ROUTES) {
+  for (const [name, route, hasMatchList] of ROUTES) {
     test(`${name} never scrolls the page sideways`, async ({ page }) => {
       test.setTimeout(60_000);
       await installPopulatedPlayerMocks(page);
@@ -70,7 +73,11 @@ test.describe("player pages on a phone", () => {
       expect(scrollWidth, `widest overflowing element: ${widest}`).toBe(
         clientWidth,
       );
-      if (matchListOverflow !== null) {
+      if (hasMatchList) {
+        expect(
+          matchListOverflow,
+          "the match list should be on this page for the reflow to be measured",
+        ).not.toBeNull();
         expect(
           matchListOverflow,
           "match rows should reflow on a phone, not scroll sideways",
