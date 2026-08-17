@@ -36,7 +36,14 @@ export function usePlayerSyncRun(
 ) {
   const queryClient = useQueryClient();
   const toast = useToast();
-  const [observedSyncId, setObservedSyncId] = useState<number | null>(null);
+  // The run id is stored with its PUUID so a surface that re-renders with a
+  // different player (an unkeyed PlayerCard after a switch) cannot poll the
+  // previous player's run and 404.
+  const [observedSync, setObservedSync] = useState<{
+    puuid: string;
+    id: number;
+  } | null>(null);
+  const observedSyncId = observedSync?.puuid === puuid ? observedSync.id : null;
   const handledTerminalSyncIds = useRef(new Set<number>());
 
   const activeSyncQuery = useQuery({
@@ -55,9 +62,12 @@ export function usePlayerSyncRun(
   useEffect(() => {
     const activeSyncId = activeSyncQuery.data?.id;
     if (!activeSyncId || activeSyncId === observedSyncId) return;
-    const timeout = window.setTimeout(() => setObservedSyncId(activeSyncId), 0);
+    const timeout = window.setTimeout(
+      () => setObservedSync({ puuid, id: activeSyncId }),
+      0,
+    );
     return () => window.clearTimeout(timeout);
-  }, [activeSyncQuery.data?.id, observedSyncId]);
+  }, [activeSyncQuery.data?.id, observedSyncId, puuid]);
 
   const exactSyncQuery = useQuery({
     queryKey: ["player-sync", puuid, observedSyncId],
@@ -85,11 +95,24 @@ export function usePlayerSyncRun(
       return parsed.data;
     },
     onSuccess: (syncRun) => {
-      setObservedSyncId(syncRun.id);
+      // The start endpoint attaches to an existing active run rather than
+      // erroring, so a second click (or a run started on another surface)
+      // returns a run this hook did not start — say so instead of claiming
+      // a new update began.
+      const attached =
+        observedSyncId === syncRun.id ||
+        activeSyncQuery.data?.id === syncRun.id;
+      setObservedSync({ puuid, id: syncRun.id });
       queryClient.setQueryData(["player-sync-active", puuid], syncRun);
-      toast.info("Player profile update started", {
-        description: "Player data is refreshing in the background.",
-      });
+      if (attached) {
+        toast.info("Player update already in progress", {
+          description: "Watching the update that is already running.",
+        });
+      } else {
+        toast.info("Player profile update started", {
+          description: "Player data is refreshing in the background.",
+        });
+      }
     },
     onError: () => {
       toast.error("Player profile update could not start", {
