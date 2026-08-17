@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  CheckCircle,
-  Clock,
-  Loader2,
-  Scale,
-  StopCircle,
-} from "lucide-react";
+import { CheckCircle, Clock, Loader2, Scale, StopCircle } from "lucide-react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -85,11 +79,11 @@ export function MatchmakingAnalysisActiveCard({
   return (
     <Card className={ANALYSIS_CARD_TRANSITION}>
       <CardHeader>
-        <CardTitle className="flex items-center justify-between">
-          <span className="flex items-center gap-2">
+        <div className="flex items-center justify-between">
+          <CardTitle className="flex items-center gap-2">
             <Scale className="h-5 w-5 text-primary" />
             Matchmaking Analysis
-          </span>
+          </CardTitle>
           {(phase === "running" || phase === "starting") && (
             <div className="flex items-center gap-2 text-sm font-normal text-muted-foreground">
               <Clock className="h-4 w-4" />
@@ -98,7 +92,7 @@ export function MatchmakingAnalysisActiveCard({
               </span>
             </div>
           )}
-        </CardTitle>
+        </div>
       </CardHeader>
       <CardContent className="space-y-4">
         <p className="text-sm text-muted-foreground">

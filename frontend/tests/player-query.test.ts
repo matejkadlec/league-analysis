@@ -5,7 +5,10 @@ const { validatedGet } = vi.hoisted(() => ({
   validatedGet: vi.fn(),
 }));
 
-vi.mock("@/lib/core/api", () => ({ validatedGet }));
+vi.mock("@/lib/core/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/core/api")>()),
+  validatedGet,
+}));
 
 import {
   playerQueryKey,

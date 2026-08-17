@@ -2,17 +2,15 @@
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { z } from "zod";
 import {
   apiErrorMessage,
-  api,
+  unwrap,
   validatedGet,
   validatedPost,
   validatedPut,
 } from "@/lib/core/api";
-import {
-  SettingSchema,
-  SettingTestResponseSchema,
-} from "@/lib/core/schemas";
+import { SettingSchema, SettingTestResponseSchema } from "@/lib/core/schemas";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,20 +20,21 @@ import { useToast } from "@/lib/core/hooks";
 import { notifyRiotCredentialHealthUpdated } from "@/lib/core/riot-credential-health-events";
 import { Check, FlaskConical, Loader2, Save, ShieldCheck, X } from "lucide-react";
 
-interface APIKeyStatus {
-  has_db_key: boolean;
-  has_env_key: boolean;
-  active_source: "db" | "env" | "none";
-  credential_status: "missing" | "unknown" | "valid" | "invalid";
-  evidence:
-    | "missing"
-    | "configured"
-    | "settings_validation"
-    | "provider_success"
-    | "credential_rejected";
-  observed_at: string;
-  health_revision: number;
-}
+const APIKeyStatusSchema = z.object({
+  has_db_key: z.boolean(),
+  has_env_key: z.boolean(),
+  active_source: z.enum(["db", "env", "none"]),
+  credential_status: z.enum(["missing", "unknown", "valid", "invalid"]),
+  evidence: z.enum([
+    "missing",
+    "configured",
+    "settings_validation",
+    "provider_success",
+    "credential_rejected",
+  ]),
+  observed_at: z.string(),
+  health_revision: z.number(),
+});
 
 export function RiotApiSettingsCard() {
   const toast = useToast();
@@ -48,21 +47,18 @@ export function RiotApiSettingsCard() {
 
   const queryClient = useQueryClient();
 
-  const { data: settingResult, isLoading } = useQuery({
+  const { data: setting = null, isLoading } = useQuery({
     queryKey: ["settings", "riot_api_key"],
-    queryFn: () => validatedGet(SettingSchema, "/settings/riot_api_key"),
+    queryFn: async () =>
+      unwrap(await validatedGet(SettingSchema, "/settings/riot_api_key")),
   });
-
-  const setting = settingResult?.success ? settingResult.data : null;
 
   const { data: keyStatus, isLoading: isApiKeyStatusLoading } = useQuery({
     queryKey: ["apiKeyStatus"],
-    queryFn: async () => {
-      const response = await api.get<APIKeyStatus>(
-        "/settings/riot_api_key/status",
-      );
-      return response.data;
-    },
+    queryFn: async () =>
+      unwrap(
+        await validatedGet(APIKeyStatusSchema, "/settings/riot_api_key/status"),
+      ),
     staleTime: 60 * 1000,
     refetchOnWindowFocus: false,
   });
@@ -309,8 +305,8 @@ export function RiotApiSettingsCard() {
             <p className="text-sm">
               <strong>Note:</strong> The API key will be validated before
               saving. Newly generated keys usually <b>need a minute or two</b>{" "}
-              before they start working. Development keys (starting with
-              RGAPI-) expire every 24 hours and need to be renewed.
+              before they start working. Development keys (starting with RGAPI-)
+              expire every 24 hours and need to be renewed.
             </p>
           </Alert>
         </div>

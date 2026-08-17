@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { MatchStatsResponseSchema } from "@/lib/core/schemas";
-import { validatedGet } from "@/lib/core/api";
+import { unwrap, validatedGet } from "@/lib/core/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -165,27 +165,32 @@ export function RecentPerformanceCard({
 }: RecentPerformanceCardProps) {
   const relativeUpdatedAt = useRelativeTime(lastUpdated);
   // Fetch recent stats (last 10 games for comparison)
-  const { data: recentResult, isLoading: isRecentLoading } = useQuery({
+  const { data: recent = null, isLoading: isRecentLoading } = useQuery({
     queryKey: ["recent-stats", puuid, 10],
-    queryFn: () =>
-      validatedGet(MatchStatsResponseSchema, `/matches/player/${puuid}/stats`, {
-        queue: 420,
-        limit: 10,
-      }),
+    queryFn: async () =>
+      unwrap(
+        await validatedGet(
+          MatchStatsResponseSchema,
+          `/matches/player/${puuid}/stats`,
+          { queue: 420, limit: 10 },
+        ),
+      ),
   });
 
   // Fetch overall stats (all games)
-  const { data: overallResult, isLoading: isOverallLoading } = useQuery({
+  const { data: overall = null, isLoading: isOverallLoading } = useQuery({
     queryKey: ["overall-stats", puuid],
-    queryFn: () =>
-      validatedGet(MatchStatsResponseSchema, `/matches/player/${puuid}/stats`, {
-        queue: 420,
-      }),
+    queryFn: async () =>
+      unwrap(
+        await validatedGet(
+          MatchStatsResponseSchema,
+          `/matches/player/${puuid}/stats`,
+          { queue: 420 },
+        ),
+      ),
   });
 
   const isLoading = isRecentLoading || isOverallLoading;
-  const recent = recentResult?.success ? recentResult.data : null;
-  const overall = overallResult?.success ? overallResult.data : null;
 
   if (isLoading) {
     return (
@@ -249,14 +254,16 @@ export function RecentPerformanceCard({
   return (
     <Card id="recent-performance">
       <CardHeader className="pb-3">
-        <CardTitle className="flex gap-2">
-          <Activity className="h-5 w-5 text-primary" />
-          Recent Performance
+        <div className="flex gap-2">
+          <CardTitle className="flex items-center gap-2">
+            <Activity className="h-5 w-5 text-primary" />
+            Recent Performance
+          </CardTitle>
           <Badge variant="secondary" className="ml-auto">
             Recent 10 games in comparison with overall performance (
             {overall.total_matches} games)
           </Badge>
-        </CardTitle>
+        </div>
         {lastUpdated && (
           <div className="flex items-center gap-1 text-xs text-muted-foreground mt-2">
             <Clock className="h-3 w-3" />

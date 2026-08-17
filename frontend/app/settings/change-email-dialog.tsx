@@ -51,7 +51,7 @@ export function ChangeEmailDialog({
 }: ChangeEmailDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[540px] dialog-white-border">
+      <DialogContent className="sm:max-w-[540px]">
         <DialogHeader className="text-left">
           <DialogTitle className="flex items-center gap-2">
             <Mail className="h-5 w-5 text-[#cfa93a]" />

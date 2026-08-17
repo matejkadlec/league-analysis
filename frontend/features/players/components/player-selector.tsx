@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { unwrap } from "@/lib/core/api";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Search, StopCircle } from "lucide-react";
 
@@ -107,12 +108,12 @@ export function PlayerSelector({
   const suggestionsQuery = useQuery({
     queryKey: ["player-suggestions", debouncedSearch, "all-platforms"],
     queryFn: async () => {
-      const result = await searchPlayerSuggestions({
-        q: debouncedSearch,
-        limit: 5,
-      });
-      if (!result.success) throw new Error(result.error.message);
-      return result.data;
+      return unwrap(
+        await searchPlayerSuggestions({
+          q: debouncedSearch,
+          limit: 5,
+        }),
+      );
     },
     enabled: debouncedSearch.length >= 2,
     staleTime: 30_000,
@@ -157,7 +158,9 @@ export function PlayerSelector({
     onSuccess: async (player) => {
       setPendingRiotId(null);
       void queryClient.invalidateQueries({ queryKey: ["player-suggestions"] });
-      void queryClient.invalidateQueries({ queryKey: ["player", player.puuid] });
+      void queryClient.invalidateQueries({
+        queryKey: ["player", player.puuid],
+      });
       await choosePlayer(player);
     },
     onError: (error) => {
@@ -296,15 +299,15 @@ export function PlayerSelector({
           ))}
           {!suggestionsQuery.isFetching &&
             (suggestions.length === 0 || isValidRiotId(searchValue)) && (
-            <button
-              type="button"
-              className="w-full rounded px-2 py-2 text-left text-xs text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={submitUnknownPlayer}
-            >
-              Search Riot for this Name#Tag
-            </button>
-          )}
+              <button
+                type="button"
+                className="w-full rounded px-2 py-2 text-left text-xs text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={submitUnknownPlayer}
+              >
+                Search Riot for this Name#Tag
+              </button>
+            )}
         </div>
       )}
 
@@ -312,7 +315,7 @@ export function PlayerSelector({
         open={pendingRiotId !== null}
         onOpenChange={(open) => !open && setPendingRiotId(null)}
       >
-        <DialogContent className="dialog-white-border">
+        <DialogContent>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Search className="h-5 w-5 text-[#cfa93a]" /> Select player server

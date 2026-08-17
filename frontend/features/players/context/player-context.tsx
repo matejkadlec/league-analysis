@@ -12,7 +12,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { useAuth } from "@/features/auth";
-import { validatedGet, validatedPut } from "@/lib/core/api";
+import { unwrap, validatedGet, validatedPut } from "@/lib/core/api";
 import { PlayerContextSchema, type Player } from "@/lib/core/schemas";
 import { playerQueryKey, playerQueryOptions } from "../player-query";
 import { isPlayerCentricPath, playerRoute } from "../player-routes";
@@ -46,12 +46,9 @@ export function PlayerContextProvider({
   const contextQuery = useQuery({
     queryKey: [...PLAYER_CONTEXT_QUERY_KEY, user?.id],
     queryFn: async () => {
-      const result = await validatedGet(
-        PlayerContextSchema,
-        "/players/context",
+      return unwrap(
+        await validatedGet(PlayerContextSchema, "/players/context"),
       );
-      if (!result.success) throw new Error(result.error.message);
-      return result.data;
     },
     enabled: isAuthenticated && !!user?.id,
   });
@@ -63,13 +60,11 @@ export function PlayerContextProvider({
 
   const updateCurrentMutation = useMutation({
     mutationFn: async (puuid: string) => {
-      const result = await validatedPut(
-        PlayerContextSchema,
-        "/players/context/current",
-        { puuid },
+      return unwrap(
+        await validatedPut(PlayerContextSchema, "/players/context/current", {
+          puuid,
+        }),
       );
-      if (!result.success) throw new Error(result.error.message);
-      return result.data;
     },
     onSuccess: (data) => {
       queryClient.setQueryData([...PLAYER_CONTEXT_QUERY_KEY, user?.id], data);

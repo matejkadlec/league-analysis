@@ -93,10 +93,10 @@ export function JobCard({ job, onExecutionClick }: JobCardProps) {
   return (
     <Card className="transition-shadow hover:shadow-md">
       <CardHeader>
-        <CardTitle className="flex items-start justify-between gap-2">
+        <div className="flex items-start justify-between gap-2">
           <div className="flex-1">
             <div className="mb-1 flex items-center gap-2">
-              <span className="text-lg">{job.name}</span>
+              <CardTitle className="text-lg">{job.name}</CardTitle>
               <Badge variant={job.is_active ? "default" : "secondary"}>
                 {job.is_active ? "Active" : "Disabled"}
               </Badge>
@@ -140,7 +140,7 @@ export function JobCard({ job, onExecutionClick }: JobCardProps) {
               </button>
             ) : null}
           </div>
-        </CardTitle>
+        </div>
       </CardHeader>
       <CardContent className="space-y-4">
         <div>

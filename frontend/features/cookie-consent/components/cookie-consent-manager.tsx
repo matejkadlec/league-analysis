@@ -146,7 +146,7 @@ export function CookieConsentManager() {
     >
       <DialogContent
         className={cn(
-          "dialog-white-border max-w-4xl sm:max-w-4xl",
+          "max-w-4xl sm:max-w-4xl",
           isBlockingConsentDecision && "[&>button]:hidden",
         )}
         onPointerDownOutside={(event) => {

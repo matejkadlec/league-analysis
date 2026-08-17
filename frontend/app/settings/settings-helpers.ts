@@ -16,13 +16,6 @@ export const ACCOUNT_ACTION_BUTTON_CLASS =
   "button-medium no-rotation !h-9 !px-3 !py-2 w-36 justify-center";
 export const USER_QUERY_KEY = ["user"] as const;
 
-interface BackendErrorDetail {
-  code?: string | undefined;
-  message?: string | undefined;
-  locked_until?: string | undefined;
-  attempts_remaining?: number | undefined;
-}
-
 export interface MutationError extends Error {
   code?: string | undefined;
   lockedUntil?: string | undefined;
@@ -45,33 +38,10 @@ export function isPasswordStrong(password: string): boolean {
   return hasLowercase && hasUppercase && hasNumber && hasSpecialCharacter;
 }
 
-function parseBackendErrorDetail(
-  apiError: ApiError,
-): BackendErrorDetail | null {
-  if (!apiError.details || typeof apiError.details !== "object") {
-    return null;
-  }
-
-  const detailContainer = apiError.details as { detail?: unknown };
-  if (!detailContainer.detail || typeof detailContainer.detail !== "object") {
-    return null;
-  }
-
-  const detail = detailContainer.detail as Record<string, unknown>;
-  return {
-    code: typeof detail.code === "string" ? detail.code : undefined,
-    message: typeof detail.message === "string" ? detail.message : undefined,
-    locked_until:
-      typeof detail.locked_until === "string" ? detail.locked_until : undefined,
-    attempts_remaining:
-      typeof detail.attempts_remaining === "number"
-        ? detail.attempts_remaining
-        : undefined,
-  };
-}
-
 export function toMutationError(apiError: ApiError): MutationError {
-  const detail = parseBackendErrorDetail(apiError);
+  // `normalizeApiError` has already read and sanitized the structured detail;
+  // re-parsing it here would only re-derive what `ApiError.details` states.
+  const detail = apiError.details?.detail;
   const error = new Error(detail?.message ?? apiError.message) as MutationError;
   error.code = detail?.code;
   error.lockedUntil = detail?.locked_until;

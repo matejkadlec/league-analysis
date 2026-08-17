@@ -1,6 +1,7 @@
+import { z } from "zod";
+
 import {
-  api,
-  normalizeApiError,
+  validatedDelete,
   validatedGet,
   validatedPost,
   type ApiResponse,
@@ -13,6 +14,11 @@ import {
   MatchmakingAnalysisStatusResponse,
   MatchmakingAnalysisStatusResponseSchema,
 } from "@/lib/core/schemas";
+
+const AnalysisActionResponseSchema = z.object({
+  success: z.boolean(),
+  message: z.string(),
+});
 
 export async function startMatchmakingAnalysis(
   puuid: string,
@@ -70,40 +76,18 @@ export async function cancelMatchmakingAnalysis(
   puuid: string,
   createdAt: string,
 ): Promise<ApiResponse<{ success: boolean; message: string }>> {
-  try {
-    const response = await api.delete(
-      `/matchmaking-analysis/player/${puuid}/cancel`,
-      { params: { created_at: createdAt } },
-    );
-    return {
-      success: true,
-      data: response.data,
-    };
-  } catch (error) {
-    return {
-      success: false,
-      error: normalizeApiError(error),
-    };
-  }
+  return validatedDelete(
+    AnalysisActionResponseSchema,
+    `/matchmaking-analysis/player/${puuid}/cancel?${new URLSearchParams({ created_at: createdAt }).toString()}`,
+  );
 }
 
 export async function deleteMatchmakingAnalysisRecord(
   puuid: string,
   createdAt: string,
 ): Promise<ApiResponse<{ success: boolean; message: string }>> {
-  try {
-    const response = await api.delete(
-      `/matchmaking-analysis/player/${puuid}/analysis`,
-      { params: { created_at: createdAt } },
-    );
-    return {
-      success: true,
-      data: response.data,
-    };
-  } catch (error) {
-    return {
-      success: false,
-      error: normalizeApiError(error),
-    };
-  }
+  return validatedDelete(
+    AnalysisActionResponseSchema,
+    `/matchmaking-analysis/player/${puuid}/analysis?${new URLSearchParams({ created_at: createdAt }).toString()}`,
+  );
 }

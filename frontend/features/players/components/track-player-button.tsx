@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { unwrap } from "@/lib/core/api";
 import { Star, StarOff, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/lib/core/hooks";
@@ -31,11 +32,7 @@ export function TrackPlayerButton({
   const { data: trackingStatus, isLoading: isLoadingStatus } = useQuery({
     queryKey: ["tracking-status", userId, puuid],
     queryFn: async () => {
-      const response = await getTrackingStatus(puuid);
-      if (!response.success) {
-        throw new Error(response.error.message);
-      }
-      return response.data;
+      return unwrap(await getTrackingStatus(puuid));
     },
     enabled: !!userId,
     retry: 1,
@@ -46,11 +43,7 @@ export function TrackPlayerButton({
 
   const trackMutation = useMutation({
     mutationFn: async () => {
-      const response = await trackPlayer(puuid);
-      if (!response.success) {
-        throw new Error(response.error.message);
-      }
-      return response.data;
+      return unwrap(await trackPlayer(puuid));
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({
@@ -82,11 +75,7 @@ export function TrackPlayerButton({
 
   const untrackMutation = useMutation({
     mutationFn: async () => {
-      const response = await untrackPlayer(puuid);
-      if (!response.success) {
-        throw new Error(response.error.message);
-      }
-      return response.data;
+      return unwrap(await untrackPlayer(puuid));
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({

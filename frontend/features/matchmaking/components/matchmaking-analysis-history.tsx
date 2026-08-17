@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ApiRequestError } from "@/lib/core/api";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { History, X } from "lucide-react";
 import { useToast } from "@/lib/core/hooks";
@@ -79,7 +80,7 @@ export function MatchmakingAnalysisHistory({
         if (result.error.status === 404) {
           return { items: [] };
         }
-        throw new Error(result.error.message);
+        throw new ApiRequestError(result.error);
       }
       return result.data;
     },
@@ -91,7 +92,7 @@ export function MatchmakingAnalysisHistory({
     mutationFn: async (createdAt: string) => {
       const result = await deleteMatchmakingAnalysisRecord(puuid, createdAt);
       if (!result.success) {
-        throw new Error(result.error.message);
+        throw new ApiRequestError(result.error);
       }
       return createdAt;
     },

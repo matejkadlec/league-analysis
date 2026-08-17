@@ -15,7 +15,10 @@ import { useToast } from "@/lib/core/hooks";
 import { useRelativeTime } from "@/lib/core/use-relative-time";
 import type { SmurfBoostAnalysisResponse } from "@/lib/core/schemas";
 
-import { smurfBoostQueryKey, smurfBoostQueryOptions } from "../smurf-boost-query";
+import {
+  smurfBoostQueryKey,
+  smurfBoostQueryOptions,
+} from "../smurf-boost-query";
 import { MINIMUM_BASELINE_GAMES } from "../smurf-boost-settings";
 import { SmurfBoostResultCard } from "./smurf-boost-result-card";
 
@@ -116,7 +119,8 @@ export function SmurfBoostDetection({ puuid }: SmurfBoostDetectionProps) {
         return;
       }
       toast.success("Comparison complete", {
-        description: "The recent games have been compared with the earlier ones.",
+        description:
+          "The recent games have been compared with the earlier ones.",
       });
     },
     onError: (mutationError: Error) => {
@@ -143,15 +147,17 @@ export function SmurfBoostDetection({ puuid }: SmurfBoostDetectionProps) {
     <div className="space-y-6">
       <Card id="smurf-boost-run">
         <CardHeader className="pb-3">
-          <CardTitle className="flex flex-wrap items-center gap-2">
-            <Search className="h-5 w-5 text-primary" />
-            Compare recent games with earlier games
+          <div className="flex flex-wrap items-center gap-2">
+            <CardTitle className="flex items-center gap-2">
+              <Search className="h-5 w-5 text-primary" />
+              Compare recent games with earlier games
+            </CardTitle>
             {latest?.is_stale && (
               <Badge variant="outline" className="ml-auto">
                 New games since this comparison
               </Badge>
             )}
-          </CardTitle>
+          </div>
           {completedAt && (
             <div className="mt-2 flex items-center gap-1 text-xs text-muted-foreground">
               <Clock className="h-3 w-3" />

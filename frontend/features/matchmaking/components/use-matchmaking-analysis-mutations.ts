@@ -1,4 +1,5 @@
 import type { Dispatch } from "react";
+import { unwrap } from "@/lib/core/api";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import {
@@ -19,11 +20,7 @@ export function useMatchmakingAnalysisMutations(
 
   const startMutation = useMutation({
     mutationFn: async () => {
-      const result = await startMatchmakingAnalysis(puuid);
-      if (!result.success) {
-        throw new Error(result.error.message);
-      }
-      return result.data;
+      return unwrap(await startMatchmakingAnalysis(puuid));
     },
     onMutate: async () => {
       queryClient.removeQueries({
@@ -55,11 +52,7 @@ export function useMatchmakingAnalysisMutations(
       if (!watchingCreatedAt) {
         throw new Error("No active analysis is selected.");
       }
-      const result = await cancelMatchmakingAnalysis(puuid, watchingCreatedAt);
-      if (!result.success) {
-        throw new Error(result.error.message);
-      }
-      return result.data;
+      return unwrap(await cancelMatchmakingAnalysis(puuid, watchingCreatedAt));
     },
     onMutate: () => {
       dispatch({ type: "cancel-requested" });

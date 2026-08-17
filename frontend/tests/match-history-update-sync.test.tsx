@@ -5,14 +5,15 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { validatedGet, post } = vi.hoisted(() => ({
+const { validatedGet, validatedPost } = vi.hoisted(() => ({
   validatedGet: vi.fn(),
-  post: vi.fn(),
+  validatedPost: vi.fn(),
 }));
 
-vi.mock("@/lib/core/api", () => ({
-  api: { post },
+vi.mock("@/lib/core/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/core/api")>()),
   validatedGet,
+  validatedPost,
 }));
 
 vi.mock("@/lib/core/hooks", () => ({
@@ -77,7 +78,7 @@ describe("Match History update", () => {
   beforeEach(() => {
     window.localStorage.clear();
     validatedGet.mockReset();
-    post.mockReset();
+    validatedPost.mockReset();
     validatedGet.mockImplementation(async (_schema: unknown, path: string) => {
       if (path.endsWith("/sync/active")) {
         return { success: true, data: null };
@@ -90,7 +91,8 @@ describe("Match History update", () => {
       }
       return { success: true, data: EMPTY_HISTORY };
     });
-    post.mockResolvedValue({
+    validatedPost.mockResolvedValue({
+      success: true,
       data: {
         id: 7,
         puuid: "player-puuid",
@@ -110,8 +112,11 @@ describe("Match History update", () => {
 
     // The jobs route returns only `{success, message}`, which is why the old
     // code had to guess at a delay. This one returns a run to watch.
-    await waitFor(() => expect(post).toHaveBeenCalled());
-    expect(post).toHaveBeenCalledWith("/players/player-puuid/sync");
+    await waitFor(() => expect(validatedPost).toHaveBeenCalled());
+    expect(validatedPost).toHaveBeenCalledWith(
+      expect.anything(),
+      "/players/player-puuid/sync",
+    );
   });
 
   it("polls the run it started instead of waiting a fixed delay", async () => {
@@ -166,6 +171,6 @@ describe("Match History update", () => {
     await waitFor(() =>
       expect(syncPaths()).toContain("/players/player-puuid/sync/9"),
     );
-    expect(post).not.toHaveBeenCalled();
+    expect(validatedPost).not.toHaveBeenCalled();
   });
 });

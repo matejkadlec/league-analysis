@@ -8,7 +8,7 @@ import {
   MatchListWithPlayerDataResponseSchema,
   MatchStatsResponseSchema,
 } from "@/lib/core/schemas";
-import { validatedGet } from "@/lib/core/api";
+import { normalizeApiError, unwrap, validatedGet } from "@/lib/core/api";
 import { usePlayerSyncRun } from "@/features/players";
 import { getMatchHistoryErrorMessage } from "../utils/match-history-error";
 import { Card, CardContent } from "@/components/ui/card";
@@ -84,17 +84,23 @@ export function MatchHistory({ puuid, lastUpdated }: MatchHistoryProps) {
   }, []);
   /* eslint-enable react-hooks/set-state-in-effect */
 
-  const { data: statsResult } = useQuery({
+  const { data: stats = null } = useQuery({
     queryKey: ["match-history-stats", puuid, queueQueryParam],
-    queryFn: () =>
-      validatedGet(MatchStatsResponseSchema, `/matches/player/${puuid}/stats`, {
-        queues: queueQueryParam,
-      }),
+    queryFn: async () =>
+      unwrap(
+        await validatedGet(
+          MatchStatsResponseSchema,
+          `/matches/player/${puuid}/stats`,
+          { queues: queueQueryParam },
+        ),
+      ),
     enabled: !!puuid && preferencesReady,
+    // MatchHistoryErrorCard below reports the same outage inline.
+    meta: { silenceErrorToast: true },
   });
 
   const {
-    data: response,
+    data = null,
     isLoading,
     error,
     isFetching,
@@ -109,44 +115,31 @@ export function MatchHistory({ puuid, lastUpdated }: MatchHistoryProps) {
       currentPage,
       pageSize,
     ],
-    queryFn: () =>
-      validatedGet(
-        MatchListWithPlayerDataResponseSchema,
-        `/matches/player/${puuid}/detailed`,
-        {
-          queues: queueQueryParam,
-          search: debouncedMatchSearch || undefined,
-          start: (currentPage - 1) * pageSize,
-          count: pageSize,
-        },
+    queryFn: async () =>
+      unwrap(
+        await validatedGet(
+          MatchListWithPlayerDataResponseSchema,
+          `/matches/player/${puuid}/detailed`,
+          {
+            queues: queueQueryParam,
+            search: debouncedMatchSearch || undefined,
+            start: (currentPage - 1) * pageSize,
+            count: pageSize,
+          },
+        ),
       ),
     enabled: !!puuid && preferencesReady,
-    retry: (failureCount, error) => {
-      if (
-        error instanceof Error &&
-        (error.message.includes("Network Error") ||
-          error.message.includes("ERR_NETWORK"))
-      ) {
-        return false;
-      }
-      return failureCount < 2;
-    },
+    // MatchHistoryErrorCard below reports this failure inline.
+    meta: { silenceErrorToast: true },
+    retry: (failureCount, error) =>
+      normalizeApiError(error).kind === "network" ? false : failureCount < 2,
     refetchOnWindowFocus: false,
     refetchOnMount: false,
     refetchOnReconnect: false,
     placeholderData: (previousData) => previousData,
     staleTime: 60000,
-    refetchInterval: (query) => {
-      const data = query.state.data;
-      if (
-        data?.success &&
-        data.data?.matches &&
-        data.data.matches.length === 0
-      ) {
-        return 5000;
-      }
-      return false;
-    },
+    refetchInterval: (query) =>
+      query.state.data?.matches?.length === 0 ? 5000 : false,
   });
 
   const handleQueueFilterSelect = (
@@ -179,10 +172,8 @@ export function MatchHistory({ puuid, lastUpdated }: MatchHistoryProps) {
     setPageSizeOpen(false);
   };
 
-  const data = response?.success ? response.data : null;
   const matches = data?.matches || [];
   const apiTotalMatches = data?.total || 0;
-  const stats = statsResult?.success ? statsResult.data : null;
   const totalMatches = stats?.total_matches ?? apiTotalMatches;
   const wins = stats?.wins ?? 0;
   const losses = stats?.losses ?? 0;
@@ -214,20 +205,13 @@ export function MatchHistory({ puuid, lastUpdated }: MatchHistoryProps) {
     return <MatchHistoryLoadingCard />;
   }
 
-  if ((!isFetching && error) || (response && !response.success)) {
-    const errorMessage = getMatchHistoryErrorMessage(
-      error,
-      response && !response.success ? response.error : null,
-    );
-
-    const isNotFound =
-      errorMessage.toLowerCase().includes("not found") ||
-      (error instanceof Error && error.message.includes("404"));
+  if (!isFetching && error) {
+    const apiError = normalizeApiError(error);
 
     return (
       <MatchHistoryErrorCard
-        isNotFound={isNotFound}
-        errorMessage={errorMessage}
+        isNotFound={apiError.kind === "not-found"}
+        errorMessage={getMatchHistoryErrorMessage(apiError)}
         onRetry={() => void refetch()}
       />
     );

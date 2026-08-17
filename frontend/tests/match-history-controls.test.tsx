@@ -16,8 +16,8 @@ const { validatedGet } = vi.hoisted(() => ({
   validatedGet: vi.fn(),
 }));
 
-vi.mock("@/lib/core/api", () => ({
-  api: { post: vi.fn() },
+vi.mock("@/lib/core/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/core/api")>()),
   validatedGet,
 }));
 

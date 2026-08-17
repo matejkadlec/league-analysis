@@ -73,7 +73,7 @@ export function SidebarPlayerSwitcher({
       </div>
 
       <Dialog open={manageOpen} onOpenChange={onManageOpenChange}>
-        <DialogContent className="dialog-white-border player-management-border max-h-[85vh] max-w-3xl overflow-y-auto">
+        <DialogContent className="player-management-border max-h-[85vh] max-w-3xl overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Users className="h-5 w-5 text-[#cfa93a]" /> Tracked Players

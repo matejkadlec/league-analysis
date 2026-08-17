@@ -2,14 +2,8 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
-import {
-  Eye,
-  EyeOff,
-  Loader2,
-  UserMinus,
-  Users,
-} from "lucide-react";
-import { validatedGet } from "@/lib/core/api";
+import { Eye, EyeOff, Loader2, UserMinus, Users } from "lucide-react";
+import { ApiRequestError, unwrap, validatedGet } from "@/lib/core/api";
 
 import { untrackPlayer } from "../player-api";
 import { useToast } from "@/lib/core/hooks";
@@ -220,7 +214,7 @@ export function TrackedPlayersList({
       );
 
       if (!result.success) {
-        throw new Error(result.error.message);
+        throw new ApiRequestError(result.error);
       }
 
       return result.data;
@@ -231,11 +225,7 @@ export function TrackedPlayersList({
 
   const untrackMutation = useMutation({
     mutationFn: async (puuid: string) => {
-      const response = await untrackPlayer(puuid);
-      if (!response.success) {
-        throw new Error(response.error.message);
-      }
-      return response.data;
+      return unwrap(await untrackPlayer(puuid));
     },
     onSuccess: (_, puuid) => {
       void queryClient.invalidateQueries({

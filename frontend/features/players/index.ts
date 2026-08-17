@@ -1,6 +1,5 @@
 export { PlayerSelector } from "./components/player-selector";
 export { PlayerCard } from "./components/player-card";
-export { AddTrackedPlayer } from "./components/add-tracked-player";
 export { TrackedPlayersList } from "./components/tracked-players-list";
 export { SidebarPlayerSwitcher } from "./components/sidebar-player-switcher";
 export { SelectPlayerCard } from "./components/select-player-card";

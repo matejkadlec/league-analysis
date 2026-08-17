@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { ApiRequestError } from "@/lib/core/api";
 import { TrendingUp, Users } from "lucide-react";
 
 import { getLatestCompletedMatchmakingAnalysis } from "../matchmaking-api";
@@ -69,7 +70,7 @@ export function MatchmakingAnalysisResults({
         if (result.error.status === 404) {
           return null;
         }
-        throw new Error(result.error.message);
+        throw new ApiRequestError(result.error);
       }
       return result.data;
     },
