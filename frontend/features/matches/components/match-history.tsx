@@ -240,14 +240,20 @@ export function MatchHistory({ puuid, lastUpdated }: MatchHistoryProps) {
             activeQueueFilters={activeQueueFilters}
           />
         ) : (
-          <div className="rounded-md border">
-            {matches.map((match) => (
-              <MatchRow
-                key={match.match_id}
-                match={match}
-                playerPuuid={puuid}
-              />
-            ))}
+          // A match row lays out at desktop width and its inner blocks are
+          // fixed-width by design, so on a phone it has to scroll inside this
+          // container. Without `min-w-0` the flex chain above it refuses to
+          // shrink and the row stretches the whole document instead.
+          <div className="min-w-0 overflow-x-auto rounded-md border">
+            <div className="w-max min-w-full">
+              {matches.map((match) => (
+                <MatchRow
+                  key={match.match_id}
+                  match={match}
+                  playerPuuid={puuid}
+                />
+              ))}
+            </div>
           </div>
         )}
 
