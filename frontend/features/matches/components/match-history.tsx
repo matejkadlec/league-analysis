@@ -241,12 +241,17 @@ export function MatchHistory({ puuid, lastUpdated }: MatchHistoryProps) {
             activeQueueFilters={activeQueueFilters}
           />
         ) : (
-          // A match row lays out at desktop width and its inner blocks are
-          // fixed-width by design, so on a phone it has to scroll inside this
-          // container. Without `min-w-0` the flex chain above it refuses to
-          // shrink and the row stretches the whole document instead.
-          <div className="min-w-0 overflow-x-auto rounded-md border">
-            <div className="w-max min-w-full">
+          // Below `lg` a row reflows into stacked blocks and fits any phone.
+          // From `lg` up it is the fixed-width desktop layout, which wants
+          // ~1280px and so still has to scroll inside this container on the
+          // laptop widths that do not have it. `min-w-0` because the flex
+          // chain above refuses to shrink otherwise, and the row would
+          // stretch the whole document instead of scrolling here.
+          <div
+            data-testid="match-list"
+            className="min-w-0 rounded-md border lg:overflow-x-auto"
+          >
+            <div className="lg:w-max lg:min-w-full">
               {matches.map((match) => (
                 <MatchRow
                   key={match.match_id}

@@ -41,27 +41,41 @@ test.describe("player pages on a phone", () => {
       await expect(page.locator("main")).not.toContainText("Loading");
       await page.waitForLoadState("networkidle");
 
-      const { scrollWidth, clientWidth, widest } = await page.evaluate(() => {
-        const root = document.documentElement;
-        let widest = "";
-        let widestRight = root.clientWidth;
-        for (const element of document.querySelectorAll("main *")) {
-          const right = element.getBoundingClientRect().right;
-          if (right > widestRight) {
-            widestRight = right;
-            widest = `${element.tagName.toLowerCase()}.${element.className} → ${Math.round(right)}px`;
+      const { scrollWidth, clientWidth, widest, matchListOverflow } =
+        await page.evaluate(() => {
+          const root = document.documentElement;
+          let widest = "";
+          let widestRight = root.clientWidth;
+          for (const element of document.querySelectorAll("main *")) {
+            const right = element.getBoundingClientRect().right;
+            if (right > widestRight) {
+              widestRight = right;
+              widest = `${element.tagName.toLowerCase()}.${element.className} → ${Math.round(right)}px`;
+            }
           }
-        }
-        return {
-          scrollWidth: root.scrollWidth,
-          clientWidth: root.clientWidth,
-          widest,
-        };
-      });
+          // A container that scrolls its own content sideways keeps the
+          // document honest while still costing a swipe per row, so the match
+          // list reflowing rather than scrolling is its own assertion.
+          const list = document.querySelector("[data-testid='match-list']");
+          return {
+            scrollWidth: root.scrollWidth,
+            clientWidth: root.clientWidth,
+            widest,
+            matchListOverflow: list
+              ? list.scrollWidth - list.clientWidth
+              : null,
+          };
+        });
 
       expect(scrollWidth, `widest overflowing element: ${widest}`).toBe(
         clientWidth,
       );
+      if (matchListOverflow !== null) {
+        expect(
+          matchListOverflow,
+          "match rows should reflow on a phone, not scroll sideways",
+        ).toBeLessThanOrEqual(1);
+      }
     });
   }
 });

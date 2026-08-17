@@ -265,7 +265,7 @@ function MatchSideStats({
   killParticipation: number | null;
 }) {
   return (
-    <div className="w-25 shrink-0 flex flex-col justify-center text-xs ml-2">
+    <div className="flex w-[calc(50%-0.25rem)] flex-col justify-center text-xs lg:ml-2 lg:w-25 lg:shrink-0">
       <span>
         <span className="font-medium">{kda?.toFixed(2) ?? "Perfect"}</span> KDA
       </span>
@@ -298,8 +298,10 @@ function MatchSideColumn({
   emptyKdaFallback: boolean;
 }) {
   return (
-    <div className="w-40 flex items-center gap-2">
-      {renderRunes(participant?.runes)}
+    <div className="flex min-w-0 flex-1 items-center gap-2 lg:w-40 lg:flex-none">
+      {/* Below `lg` the two sides split one phone width, and the rune icons
+          are the detail worth trading for a readable champion name. */}
+      <div className="hidden lg:block">{renderRunes(participant?.runes)}</div>
 
       <div className="flex flex-col items-center gap-0.5">
         <div className="relative h-[52px] w-[52px] rounded overflow-hidden shrink-0">
@@ -369,7 +371,7 @@ function MatchTeamCompositions({
   ddragonVersion: string;
 }) {
   return (
-    <div className="w-37 flex flex-col items-center justify-center gap-0.5 mr-1">
+    <div className="flex w-37 flex-col items-center justify-center gap-0.5 lg:mr-1">
       {teamComps ? (
         <>
           <div className="flex items-center gap-2">
@@ -451,8 +453,13 @@ export function MatchRow({ match, playerPuuid }: MatchRowProps) {
     <div
       className={`px-3 py-1.5 rounded border-2 mb-1.5 border-t-1 border-b-1 border-amber-400/20 last:border-b-0 last:mb-0 ${result.bgClass}`}
     >
-      <div className="flex items-center gap-2">
-        <div className="w-35 shrink-0 flex flex-col justify-center">
+      {/*
+        Below `lg` the blocks wrap instead of holding their desktop widths, and
+        the matchup jumps to the front so the two stat blocks end up adjacent —
+        left one the player's, right one the opponent's, same as on desktop.
+      */}
+      <div className="flex flex-wrap items-center gap-2 lg:flex-nowrap">
+        <div className="flex w-[calc(50%-0.25rem)] flex-col justify-center lg:w-35 lg:shrink-0">
           <span className="text-sm font-medium text-center">
             {getMatchQueueName(match.queue_id)}
           </span>
@@ -461,7 +468,7 @@ export function MatchRow({ match, playerPuuid }: MatchRowProps) {
           </span>
         </div>
 
-        <div className="w-33 shrink-0 flex flex-col justify-center">
+        <div className="flex w-[calc(50%-0.25rem)] flex-col justify-center lg:w-33 lg:shrink-0">
           <span className="text-sm text-center">
             {formatDateTime(match.game_start_timestamp)}
           </span>
@@ -480,7 +487,7 @@ export function MatchRow({ match, playerPuuid }: MatchRowProps) {
           />
         )}
 
-        <div className="flex items-center gap-0 w-[420px]">
+        <div className="order-first flex w-full items-center gap-0 lg:order-none lg:w-[420px]">
           <MatchSideColumn
             participant={participant}
             ddragonVersion={ddragonVersion}
