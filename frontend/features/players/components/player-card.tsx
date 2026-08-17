@@ -1,76 +1,37 @@
 "use client";
 
 import Image from "next/image";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { Clock, Loader2, RefreshCw, User } from "lucide-react";
+
+import { validatedGet } from "@/lib/core/api";
+import { useDDragonVersion } from "@/lib/core/data-dragon-context";
 import {
+  getProfileIconFallbackUrl,
+  getProfileIconUrl,
+} from "@/lib/core/data-dragon";
+import { getPlatformDisplayName } from "@/lib/core/platform-utils";
+import { oldestCompleteFreshness } from "@/lib/core/relative-time";
+import {
+  MatchStatsResponseSchema,
   Player,
   PlayerLeagueSchema,
-  MatchStatsResponseSchema,
 } from "@/lib/core/schemas";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useRelativeTime } from "@/lib/core/use-relative-time";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { User, Trophy, RefreshCw, Loader2, Clock } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
-import { validatedGet } from "@/lib/core/api";
-import { getPlatformDisplayName } from "@/lib/core/platform-utils";
-import {
-  getProfileIconUrl,
-  getProfileIconFallbackUrl,
-} from "@/lib/core/data-dragon";
-import { useDDragonVersion } from "@/lib/core/data-dragon-context";
-import { useState } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getRankColors } from "@/features/players/utils/rank-colors";
 import { TrackPlayerButton } from "@/features/players/components/track-player-button";
 import { usePlayerSyncRun } from "@/features/players/use-player-sync-run";
-import { oldestCompleteFreshness } from "@/lib/core/relative-time";
-import { useRelativeTime } from "@/lib/core/use-relative-time";
+
+import { PlayerCardStats } from "./player-card-stats";
+import { PlayerCardWinRate } from "./player-card-win-rate";
 
 interface PlayerCardProps {
   player: Player;
   onRefreshAll?: () => void;
-}
-
-// Helper function to get win rate color based on percentage
-function getWinRateColor(winRate: number): string {
-  if (winRate >= 51) {
-    return "text-green-500";
-  } else if (winRate > 49) {
-    return "text-yellow-500";
-  } else {
-    return "text-rose-500";
-  }
-}
-
-// Helper function to get win rate bar color based on percentage
-function getWinRateBarColor(winRate: number): string {
-  if (winRate >= 51) {
-    return "bg-green-500";
-  } else if (winRate > 49) {
-    return "bg-yellow-500";
-  } else {
-    return "bg-rose-500";
-  }
-}
-
-// Format win rate - remove .0 if whole number
-// Handles both decimal (0-1) and percentage (0-100) formats
-function formatWinRate(winRate: number): string {
-  // Convert to percentage if it's in decimal format (0-1)
-  const percent = winRate <= 1 ? winRate * 100 : winRate;
-  const formatted = percent.toFixed(1);
-  return formatted.endsWith(".0") ? Math.round(percent).toString() : formatted;
-}
-
-// Format date for display
-function formatDate(dateString: string | null | undefined): string {
-  if (!dateString) return "Never";
-  return new Date(dateString).toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
 }
 
 export function PlayerCard({ player, onRefreshAll }: PlayerCardProps) {
@@ -91,8 +52,10 @@ export function PlayerCard({ player, onRefreshAll }: PlayerCardProps) {
   const profileIconSrc = hasFailedProfileIcon
     ? getProfileIconFallbackUrl(profileIconId, ddragonVersion)
     : getProfileIconUrl(profileIconId, ddragonVersion);
+  const { isUpdating, startSync } = usePlayerSyncRun(player.puuid, {
+    onCompleted: onRefreshAll,
+  });
 
-  // Fetch player league
   const { data: league } = useQuery({
     queryKey: ["player-league", player.puuid],
     queryFn: async () => {
@@ -108,7 +71,6 @@ export function PlayerCard({ player, onRefreshAll }: PlayerCardProps) {
     retry: false,
   });
 
-  // Fetch player stats (all matches)
   const { data: stats } = useQuery({
     queryKey: ["player-stats", player.puuid, 420],
     queryFn: async () => {
@@ -125,18 +87,12 @@ export function PlayerCard({ player, onRefreshAll }: PlayerCardProps) {
     retry: false,
   });
 
-  const { isUpdating, startSync } = usePlayerSyncRun(player.puuid, {
-    onCompleted: onRefreshAll,
-  });
-
   const leagueColors = league ? getRankColors(league.tier) : null;
 
   return (
     <Card id="player-summary">
       <CardHeader className="pb-3">
-        {/* First Part: Header Row */}
         <div className="flex items-center space-x-3">
-          {/* Profile Icon */}
           <div
             className="relative h-18 w-18 rounded-full overflow-hidden bg-primary/10"
             style={{ height: "72px", width: "72px" }}
@@ -227,117 +183,8 @@ export function PlayerCard({ player, onRefreshAll }: PlayerCardProps) {
       </CardHeader>
 
       <CardContent className="space-y-3">
-        {/* Win Rate Section (from league data, or from stats if no league) */}
-        {league ? (
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Trophy className="h-4 w-4 text-yellow-500" />
-                <span className="text-sm font-medium">Win Rate</span>
-              </div>
-              <span
-                className={`text-lg font-bold ${getWinRateColor(league.win_rate)}`}
-              >
-                {formatWinRate(league.win_rate)}%
-              </span>
-            </div>
-            <div className="relative h-2 w-full bg-muted rounded-full overflow-hidden">
-              <div
-                className={`absolute left-0 top-0 h-full duration-300 ${getWinRateBarColor(league.win_rate)}`}
-                style={{ width: `${Math.min(league.win_rate, 100)}%` }}
-              />
-            </div>
-            <div className="flex justify-between text-xs text-muted-foreground">
-              <span>{league.wins}W</span>
-              <span>{league.losses}L</span>
-            </div>
-          </div>
-        ) : stats && stats.total_matches > 0 ? (
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Trophy className="h-4 w-4 text-yellow-500" />
-                <span className="text-sm font-medium">Win Rate</span>
-                <span className="text-xs text-muted-foreground">
-                  (unranked)
-                </span>
-              </div>
-              <span
-                className={`text-lg font-bold ${getWinRateColor(stats.win_rate * 100)}`}
-              >
-                {formatWinRate(stats.win_rate)}%
-              </span>
-            </div>
-            <div className="relative h-2 w-full bg-muted rounded-full overflow-hidden">
-              <div
-                className={`absolute left-0 top-0 h-full duration-300 ${getWinRateBarColor(stats.win_rate * 100)}`}
-                style={{ width: `${Math.min(stats.win_rate * 100, 100)}%` }}
-              />
-            </div>
-            <div className="flex justify-between text-xs text-muted-foreground">
-              <span>{stats.wins}W</span>
-              <span>{stats.losses}L</span>
-            </div>
-          </div>
-        ) : null}
-
-        {/* Analysis Timestamps */}
-        <div className="grid grid-cols-2 gap-3 pt-1 text-sm">
-          <div>
-            <p className="font-medium text-muted-foreground">
-              Last Matchmaking Analysis
-            </p>
-            <p>{formatDate(player.last_matchmaking_analysis)}</p>
-          </div>
-          <div>
-            <p className="font-medium text-muted-foreground">
-              Match History Updated
-            </p>
-            <p>{formatDate(player.match_synced_at)}</p>
-          </div>
-        </div>
-
-        {/* Sample Statistics */}
-        {stats && stats.total_matches > 0 && (
-          <div className="space-y-3">
-            <div className="grid grid-cols-3 gap-3">
-              <div className="text-center p-2 rounded-lg bg-muted/50">
-                <p className="text-lg font-bold text-blue-500">
-                  {stats.avg_kills.toFixed(1)}
-                </p>
-                <p className="text-xs text-muted-foreground">Avg Kills</p>
-              </div>
-              <div className="text-center p-2 rounded-lg bg-muted/50">
-                <p className="text-lg font-bold text-red-500">
-                  {stats.avg_deaths.toFixed(1)}
-                </p>
-                <p className="text-xs text-muted-foreground">Avg Deaths</p>
-              </div>
-              <div className="text-center p-2 rounded-lg bg-muted/50">
-                <p className="text-lg font-bold text-green-500">
-                  {stats.avg_assists.toFixed(1)}
-                </p>
-                <p className="text-xs text-muted-foreground">Avg Assists</p>
-              </div>
-            </div>
-            <div className="grid grid-cols-3 gap-3">
-              <div className="text-center p-2 rounded-lg bg-muted/50">
-                <p className="text-lg font-bold">{stats.avg_kda.toFixed(2)}</p>
-                <p className="text-xs text-muted-foreground">Avg KDA</p>
-              </div>
-              <div className="text-center p-2 rounded-lg bg-muted/50">
-                <p className="text-lg font-bold">{stats.avg_cs.toFixed(0)}</p>
-                <p className="text-xs text-muted-foreground">Avg CS</p>
-              </div>
-              <div className="text-center p-2 rounded-lg bg-muted/50">
-                <p className="text-lg font-bold">
-                  {stats.avg_vision_score.toFixed(0)}
-                </p>
-                <p className="text-xs text-muted-foreground">Avg Vision</p>
-              </div>
-            </div>
-          </div>
-        )}
+        <PlayerCardWinRate league={league} stats={stats} />
+        <PlayerCardStats player={player} stats={stats} />
       </CardContent>
     </Card>
   );

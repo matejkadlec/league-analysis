@@ -46,10 +46,8 @@ function MatchmakingAnalysisContent() {
 
   useEffect(() => {
     if (puuidFromUrl || !referencePlayer) return;
-    router.replace(
-      `/matchmaking-analysis?puuid=${encodeURIComponent(referencePlayer.puuid)}`,
-      { scroll: false },
-    );
+    const nextUrl = `/matchmaking-analysis?puuid=${encodeURIComponent(referencePlayer.puuid)}`;
+    window.history.replaceState(window.history.state, "", nextUrl);
   }, [puuidFromUrl, referencePlayer, router]);
 
   const handlePlayerFound = (player: Player) => {

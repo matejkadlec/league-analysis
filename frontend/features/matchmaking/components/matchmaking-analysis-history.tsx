@@ -223,6 +223,7 @@ export function MatchmakingAnalysisHistory({
                     </TableCell>
                     <TableCell className="text-center p-0">
                       <button
+                        type="button"
                         onClick={() => handleDelete(item.created_at)}
                         className="icon-circle"
                         title="Delete this analysis"

@@ -38,12 +38,12 @@ identity, delivery, and safety rules are inherited from
 ## Storage Classification (Current)
 
 - Strictly necessary:
-  - `league_analysis_auth_state` (cookie)
-  - `auth_access_token` (localStorage)
-  - `auth_refresh_token` (localStorage)
+  - `league_analysis_auth_state` (HttpOnly cookie)
+  - `league_analysis_access_token` (HttpOnly cookie)
+  - `league_analysis_refresh_token` (HttpOnly cookie)
   - `league_analysis_cookie_consent` (cookie)
 - Optional preference storage:
-  - `header_messages_closed` (localStorage)
+  - `header_messages_closed:v1` (localStorage)
   - `league_analysis_match_history_page_size` (localStorage)
   - `league_analysis_match_history_queue_filters` (localStorage)
 

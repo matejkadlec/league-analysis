@@ -79,14 +79,12 @@ export function PlayerContextProvider({
   useEffect(() => {
     const savedPlayer = contextQuery.data?.current_player;
     if (!isPlayerRoute || urlPuuid || !savedPlayer) return;
-    router.replace(
-      playerRoute(
-        pathname,
-        new URLSearchParams(searchParams),
-        savedPlayer.puuid,
-      ),
-      { scroll: false },
+    const nextUrl = playerRoute(
+      pathname,
+      new URLSearchParams(searchParams),
+      savedPlayer.puuid,
     );
+    window.history.replaceState(window.history.state, "", nextUrl);
   }, [
     contextQuery.data,
     isPlayerRoute,

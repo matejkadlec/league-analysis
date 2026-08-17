@@ -68,23 +68,17 @@ describe("toast source contract", () => {
   });
 
   it("uses warnings for local guidance and success for completed operations", () => {
-    const settings = readFileSync(
-      join(process.cwd(), "app/settings/page.tsx"),
-      "utf8",
-    );
-    const accountCard = readFileSync(
-      join(
-        process.cwd(),
-        "features/settings/components/account-settings-card.tsx",
-      ),
-      "utf8",
-    );
+    const settingsDir = join(process.cwd(), "app/settings");
+    const settings = readdirSync(settingsDir)
+      .filter((name) => name.endsWith(".ts") || name.endsWith(".tsx"))
+      .map((name) => readFileSync(join(settingsDir, name), "utf8"))
+      .join("\n");
     const playerSyncRun = readFileSync(
       join(process.cwd(), "features/players/use-player-sync-run.ts"),
       "utf8",
     );
 
-    expect(accountCard).toContain('toast.warning("Passwords do not match"');
+    expect(settings).toContain('toast.warning("Passwords do not match"');
     expect(settings).toContain('toast.warning("Check the Riot API key format"');
     expect(playerSyncRun).toContain('toast.success("Update finished"');
   });

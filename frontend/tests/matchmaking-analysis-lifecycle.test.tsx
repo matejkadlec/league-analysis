@@ -34,11 +34,11 @@ vi.mock("@/features/matchmaking/matchmaking-api", () => ({
 
 vi.mock("sonner", () => ({ toast }));
 
+import { MatchmakingAnalysis } from "../features/matchmaking/components/matchmaking-analysis";
 import {
   estimateMatchmakingMinutesRemaining,
-  MatchmakingAnalysis,
   projectMatchmakingProgress,
-} from "../features/matchmaking/components/matchmaking-analysis";
+} from "../features/matchmaking/components/matchmaking-progress";
 
 const createdAt = "2026-08-09T01:00:00.000Z";
 

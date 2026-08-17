@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { Montserrat } from "next/font/google";
 import localFont from "next/font/local";
 import "./globals.css";
@@ -76,7 +77,9 @@ export default async function RootLayout({
           <Providers ddragonVersion={ddragonVersion}>
             <HeaderMessages />
             <div className="flex min-h-screen">
-              <SidebarNav />
+              <Suspense fallback={null}>
+                <SidebarNav />
+              </Suspense>
               {/* `min-w-0` because a flex item defaults to `min-width: auto`
                   and so refuses to shrink below its content. Without it, one
                   wide child stretches the whole document sideways and every

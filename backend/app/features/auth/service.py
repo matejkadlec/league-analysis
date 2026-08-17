@@ -57,7 +57,10 @@ class PasswordHasher(Protocol):
 pwd_context: PasswordHasher = CryptContext(schemes=["argon2"], deprecated="auto")
 
 # OAuth2 scheme for token authentication
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
+oauth2_scheme = OAuth2PasswordBearer(
+    tokenUrl="/api/v1/auth/login",
+    auto_error=False,
+)
 
 logger = structlog.get_logger(__name__)
 

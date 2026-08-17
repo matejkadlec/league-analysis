@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+import { seedAuthenticatedSession } from "./support/auth";
+
 const NOW = "2026-08-09T10:00:00.000Z";
 const CURRENT_PUUID = "current-player-puuid";
 const RECENT_PUUID = "recent-player-puuid";
@@ -114,9 +116,8 @@ test("keeps player routes, sidebar switching, and dialog scroll lock determinist
   let currentPlayerUpdates = 0;
   let syncStarts = 0;
 
+  await seedAuthenticatedSession(page);
   await page.addInitScript(() => {
-    localStorage.setItem("auth_access_token", "test-access-token");
-    localStorage.setItem("auth_refresh_token", "test-refresh-token");
     localStorage.setItem("theme", "dark");
   });
 
