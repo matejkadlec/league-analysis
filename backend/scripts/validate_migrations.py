@@ -16,7 +16,7 @@ from uuid import uuid4
 
 from dotenv import load_dotenv
 from migration_contract import EXPECTED_ALEMBIC_HEAD
-from sqlalchemy import URL, create_engine, inspect, text
+from sqlalchemy import URL, Connection, create_engine, inspect, text
 
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
 RECONCILE_REVISION = (
@@ -452,6 +452,127 @@ def validate_column_defaults(database: str) -> None:
         )
 
 
+# Prefix for the throwaway constraints this check adds inside a transaction it
+# rolls back, chosen so it cannot collide with a real convention-generated name.
+DRIFT_PROBE_PREFIX = "__drift_probe_"
+
+
+def _check_constraint_definitions(
+    connection: Connection, table: str, schema: str
+) -> tuple[dict[str, str], dict[str, str]]:
+    """Return one table's CHECK definitions as (live, probe) name -> expression.
+
+    Both halves come out of `pg_get_constraintdef`, so both have been through
+    PostgreSQL's own deparser and are directly comparable.
+    """
+    rows = connection.execute(
+        text(
+            "SELECT conname, pg_get_constraintdef(c.oid) "
+            "FROM pg_constraint c "
+            "JOIN pg_class t ON t.oid = c.conrelid "
+            "JOIN pg_namespace n ON n.oid = t.relnamespace "
+            "WHERE c.contype = 'c' AND t.relname = :table AND n.nspname = :schema"
+        ),
+        {"table": table, "schema": schema},
+    ).all()
+
+    live: dict[str, str] = {}
+    probe: dict[str, str] = {}
+    for name, definition in rows:
+        # `NOT VALID` is an artefact of how the probe is added, never part of
+        # what the constraint means.
+        expression = definition.removesuffix(" NOT VALID")
+        if name.startswith(DRIFT_PROBE_PREFIX):
+            probe[name.removeprefix(DRIFT_PROBE_PREFIX)] = expression
+        else:
+            live[name] = expression
+    return live, probe
+
+
+def validate_check_constraints(database: str) -> None:
+    """Assert every CHECK constraint enforces the condition its model declares.
+
+    `alembic check` routes CHECK constraints through Alembic's
+    `checkconstraint_byname` comparison, which matches them by name and never
+    reads the expression. Rewriting a constraint's condition in a model while
+    keeping its name is therefore invisible: the database goes on enforcing the
+    old rule, autogenerate emits nothing, and the gate stays green.
+
+    Comparing the two expressions as text does not work, which is presumably
+    why Alembic does not try. PostgreSQL stores a parsed node and prints it
+    back normalised, so the model's `status IN ('pending', 'failed')` comes out
+    as `status::text = ANY (ARRAY['pending'::character varying, ...])` and no
+    string comparison survives it.
+
+    So both sides are put through that same deparser. Each model constraint is
+    added to its real table as `NOT VALID` (no row scan, and these tables are
+    empty anyway) under a marker name, every CHECK on the table is then read
+    back through `pg_get_constraintdef`, and the marked definitions are
+    compared with the ones that were already there. The whole thing runs in a
+    transaction that is always rolled back, so the database is untouched.
+
+    Constraints are matched on expression rather than on name, because the name
+    is the half `alembic check` already compares.
+    """
+    from sqlalchemy import CheckConstraint
+
+    from app.core.models import Base
+    from app.model_registry import import_all_models
+
+    import_all_models()
+    engine = create_engine(administration_url().set(database=database))
+    disagreements: list[str] = []
+    try:
+        with engine.begin() as connection:
+            for table in Base.metadata.sorted_tables:
+                schema = table.schema or "public"
+                model_checks = [
+                    constraint
+                    for constraint in table.constraints
+                    if isinstance(constraint, CheckConstraint)
+                ]
+                if not model_checks:
+                    continue
+                for index, constraint in enumerate(model_checks):
+                    connection.execute(
+                        text(
+                            f'ALTER TABLE "{schema}"."{table.name}" '
+                            f'ADD CONSTRAINT "{DRIFT_PROBE_PREFIX}{index}" '
+                            f"CHECK ({constraint.sqltext}) NOT VALID"
+                        )
+                    )
+
+                live, probe = _check_constraint_definitions(
+                    connection, table.name, schema
+                )
+                live_expressions = set(live.values())
+                for index, expression in probe.items():
+                    if expression in live_expressions:
+                        continue
+                    declared = model_checks[int(index)]
+                    disagreements.append(
+                        f"{schema}.{table.name}: the model declares "
+                        f"{str(declared.sqltext)!r} (name {declared.name!r}), "
+                        f"which normalises to {expression!r}, and no CHECK on "
+                        f"the table enforces it. The table has: "
+                        + "; ".join(
+                            f"{name} {definition}"
+                            for name, definition in sorted(live.items())
+                        )
+                    )
+            # Nothing here is meant to survive; the probes exist only to be read.
+            connection.rollback()
+    finally:
+        engine.dispose()
+
+    if disagreements:
+        raise RuntimeError(
+            "a CHECK constraint does not enforce what its model says it does, "
+            "which `alembic check` cannot see because it compares CHECK "
+            "constraints by name only:\n  " + "\n  ".join(disagreements)
+        )
+
+
 def validate_metadata_drift(database: str, restored_database: str) -> None:
     """Assert the ORM models describe the migrated schema exactly.
 
@@ -605,6 +726,7 @@ def main() -> int:
             validate_revision(restored_database)
             validate_metadata_drift(database, restored_database)
             validate_column_defaults(database)
+            validate_check_constraints(database)
             if deterministic_snapshot(restored_database) != deterministic_snapshot(
                 database
             ):
