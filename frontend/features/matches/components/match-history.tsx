@@ -95,8 +95,9 @@ export function MatchHistory({ puuid, lastUpdated }: MatchHistoryProps) {
         ),
       ),
     enabled: !!puuid && preferencesReady,
-    // MatchHistoryErrorCard below reports the same outage inline.
-    meta: { silenceErrorToast: true },
+    // Not silenced: MatchHistoryErrorCard renders off the detailed query, so a
+    // stats-only failure would otherwise show 0W/0L with nothing said.
+    meta: { errorTitle: "Match statistics" },
   });
 
   const {

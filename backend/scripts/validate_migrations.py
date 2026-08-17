@@ -5,9 +5,7 @@ from __future__ import annotations
 
 import ast
 import asyncio
-import importlib
 import os
-import pkgutil
 import re
 import subprocess
 import sys
@@ -381,22 +379,6 @@ def validate_revision_0014_repaired_the_seeded_rows(database: str) -> None:
         )
 
 
-def load_application_models() -> None:
-    """Import every model module, so `Base.metadata` holds every table.
-
-    `alembic/env.py` gets this for free by importing the app package the way
-    the application does; this script talks to the database directly, so the
-    registrations have to be triggered here.
-    """
-    importlib.import_module("app.core.riot_api.credential_health")
-
-    import app.features as features
-
-    for module in pkgutil.walk_packages(features.__path__, "app.features."):
-        if module.name.endswith(".models"):
-            importlib.import_module(module.name)
-
-
 def _python_default_literal(column: object) -> object | None:
     """Render a column's Python-side default, or None when it has none."""
     default = getattr(column, "default", None)
@@ -431,8 +413,11 @@ def validate_column_defaults(database: str) -> None:
     this check was added.
     """
     from app.core.models import Base
+    from app.model_registry import import_all_models
 
-    load_application_models()
+    # The same explicit import list `alembic/env.py` uses, so this check and
+    # `alembic check` always see the identical set of tables.
+    import_all_models()
     url = administration_url().set(database=database)
     engine = create_engine(url)
     try:

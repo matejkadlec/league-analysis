@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import {
+  ApiRequestError,
   apiErrorMessage,
   unwrap,
   validatedGet,
@@ -49,8 +50,18 @@ export function RiotApiSettingsCard() {
 
   const { data: setting = null, isLoading } = useQuery({
     queryKey: ["settings", "riot_api_key"],
-    queryFn: async () =>
-      unwrap(await validatedGet(SettingSchema, "/settings/riot_api_key")),
+    queryFn: async () => {
+      const result = await validatedGet(SettingSchema, "/settings/riot_api_key");
+      if (!result.success) {
+        // A deployment whose key lives in the environment has no row here, and
+        // the panels below render that as an ordinary state rather than an error.
+        if (result.error.status === 404) {
+          return null;
+        }
+        throw new ApiRequestError(result.error);
+      }
+      return result.data;
+    },
   });
 
   const { data: keyStatus, isLoading: isApiKeyStatusLoading } = useQuery({
