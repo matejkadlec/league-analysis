@@ -1,7 +1,5 @@
 "use client";
 
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
 import { useAuth } from "@/features/auth";
 
 export default function Error({
@@ -11,16 +9,7 @@ export default function Error({
   reset: () => void;
 }) {
   const { isAuthenticated, isLoading } = useAuth();
-  const router = useRouter();
 
-  // Redirect to sign-in if not authenticated
-  useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
-      router.replace("/sign-in");
-    }
-  }, [isLoading, isAuthenticated, router]);
-
-  // Don't show anything while loading or if not authenticated
   if (isLoading || !isAuthenticated) {
     return null;
   }
@@ -33,6 +22,7 @@ export default function Error({
           Try again. If the problem continues, return to this page later.
         </p>
         <button
+          type="button"
           onClick={() => reset()}
           className="mt-4 rounded-md bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
         >

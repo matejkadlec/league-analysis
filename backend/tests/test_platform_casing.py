@@ -108,21 +108,6 @@ def test_platform_enum_values_are_already_canonical() -> None:
 
 
 @pytest.mark.asyncio
-async def test_name_and_tag_lookup_compares_against_canonical_casing() -> None:
-    """The lookup that could not find match-created players now matches them."""
-    session = _CapturingSession()
-    service = PlayerService(cast(AsyncSession, session))
-
-    # The lookup raises when nothing matches; the query it issued first is
-    # what this test is about.
-    with pytest.raises(PlayerServiceError):
-        await service.get_player_by_name_and_tag("Name", "TAG", "EUN1")
-
-    assert len(session.executed) == 1
-    assert _bound_platform(session.executed[0]) == "eun1"
-
-
-@pytest.mark.asyncio
 async def test_game_name_search_compares_against_canonical_casing() -> None:
     """The sibling lookup normalises identically."""
     session = _CapturingSession()

@@ -392,7 +392,8 @@ async def analyze_match_history(
 
     if credential is None:
         raise HTTPException(
-            status_code=503, detail="Riot API credential is not configured"
+            status_code=503,
+            detail="Riot data is unavailable because no Riot API key is configured. An administrator can add one on the Settings page.",
         )
 
     job_id = str(uuid.uuid4())

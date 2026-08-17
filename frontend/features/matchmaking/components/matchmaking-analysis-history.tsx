@@ -8,7 +8,7 @@ import { useToast } from "@/lib/core/hooks";
 import {
   getMatchmakingAnalysisHistory,
   deleteMatchmakingAnalysisRecord,
-} from "@/lib/core/api";
+} from "../matchmaking-api";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -223,6 +223,7 @@ export function MatchmakingAnalysisHistory({
                     </TableCell>
                     <TableCell className="text-center p-0">
                       <button
+                        type="button"
                         onClick={() => handleDelete(item.created_at)}
                         className="icon-circle"
                         title="Delete this analysis"

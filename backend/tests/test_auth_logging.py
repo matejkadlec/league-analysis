@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock
 
 import jwt
 import pytest
-from fastapi import HTTPException, Request
+from fastapi import HTTPException, Request, Response
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import ClauseElement
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -162,6 +162,7 @@ async def test_inactive_account_login_failure_is_logged() -> None:
     with capture_logs() as records, pytest.raises(HTTPException) as error:
         await _undecorated(login)(
             request=_loopback_request(),
+            response=Response(),
             form_data=form_data,
             auth_service=cast(AuthService, auth_service),
         )
@@ -189,6 +190,7 @@ async def test_locked_account_login_failure_is_logged() -> None:
     with capture_logs() as records, pytest.raises(HTTPException) as error:
         await _undecorated(login)(
             request=_loopback_request(),
+            response=Response(),
             form_data=form_data,
             auth_service=cast(AuthService, auth_service),
         )
@@ -212,6 +214,7 @@ async def test_captcha_required_login_failure_is_logged() -> None:
     with capture_logs() as records, pytest.raises(HTTPException) as error:
         await _undecorated(login)(
             request=_loopback_request(),
+            response=Response(),
             form_data=form_data,
             auth_service=cast(AuthService, auth_service),
         )
@@ -235,6 +238,7 @@ async def test_captcha_verification_failure_is_logged() -> None:
     with capture_logs() as records, pytest.raises(HTTPException) as error:
         await _undecorated(login)(
             request=_loopback_request(),
+            response=Response(),
             form_data=form_data,
             auth_service=cast(AuthService, auth_service),
         )
@@ -268,6 +272,7 @@ async def test_successful_login_is_logged() -> None:
     with capture_logs() as records:
         token = await _undecorated(login)(
             request=_loopback_request(),
+            response=Response(),
             form_data=form_data,
             auth_service=cast(AuthService, auth_service),
         )

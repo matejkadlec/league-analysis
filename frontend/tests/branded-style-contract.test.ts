@@ -29,7 +29,7 @@ const BRANDED_CLASSES = [
 const HAND_ROLLED_GRADIENTS = new Map([
   ["components/ui/skeleton.tsx", "shadcn primitive's loading shimmer sweep"],
   [
-    "features/matches/components/match-history.tsx",
+    "features/matches/components/match-row.tsx",
     "a separator that fades out at both ends, not a surface",
   ],
   [

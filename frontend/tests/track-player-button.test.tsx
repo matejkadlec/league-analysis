@@ -18,7 +18,7 @@ vi.mock("@/features/auth", () => ({
   useAuth: () => ({ user: { id: 7 } }),
 }));
 
-vi.mock("@/lib/core/api", () => ({
+vi.mock("@/features/players/player-api", () => ({
   getTrackingStatus,
   trackPlayer,
   untrackPlayer,

@@ -10,6 +10,7 @@ from sqlalchemy import (
     Index,
     Integer,
     String,
+    text,
 )
 from sqlalchemy import (
     DateTime as SQLDateTime,
@@ -32,22 +33,28 @@ class Match(Base):
             "platform = lower(platform)",
             name="ck_matches_platform_is_lowercase",
         ),
+        # Created by revision 20260808_0004 but never mirrored here, so
+        # autogenerate proposed dropping it.
+        CheckConstraint(
+            "game_start_timestamp_source IN "
+            "('riot_game_start', 'legacy_game_creation')",
+            name="start_timestamp_source",
+        ),
         {"schema": "core"},
     )
 
     # Primary key - match ID from Riot API
     match_id: Mapped[str] = mapped_column(
-        String(64),
+        # Same width as the two tables that reference it.
+        String(20),
         primary_key=True,
-        index=True,
         comment="Unique match identifier from Riot API",
     )
 
     # Platform and routing information
     platform: Mapped[str] = mapped_column(
-        String(8),
+        String(4),
         nullable=False,
-        index=True,
         comment="Platform where the match was played, canonical lowercase (e.g. euw1)",
     )
 
@@ -61,7 +68,6 @@ class Match(Base):
     game_start_timestamp: Mapped[int] = mapped_column(
         BigInteger,
         nullable=False,
-        index=True,
         comment="Actual game start, or creation time for explicitly marked legacy rows",
     )
 
@@ -74,9 +80,9 @@ class Match(Base):
         comment="Source semantics for game_start_timestamp",
     )
 
-    game_end_timestamp: Mapped[int | None] = mapped_column(
+    game_end_timestamp: Mapped[int] = mapped_column(
         BigInteger,
-        nullable=True,
+        nullable=False,
         comment="Game end timestamp in milliseconds since epoch",
     )
 
@@ -87,14 +93,12 @@ class Match(Base):
     queue_id: Mapped[int] = mapped_column(
         Integer,
         nullable=False,
-        index=True,
         comment="Queue type ID (e.g., 420=Ranked Solo, 440=Ranked Flex)",
     )
 
     game_version: Mapped[str] = mapped_column(
         String(32),
         nullable=False,
-        index=True,
         comment="Game version (e.g., '14.20.555.5555')",
     )
 
@@ -103,30 +107,30 @@ class Match(Base):
     )
 
     # Game mode information
-    game_mode: Mapped[str | None] = mapped_column(
+    game_mode: Mapped[str] = mapped_column(
         String(32),
-        nullable=True,
+        nullable=False,
         index=True,
         comment="Game mode (e.g., 'CLASSIC', 'ARAM')",
     )
 
-    game_type: Mapped[str | None] = mapped_column(
+    game_type: Mapped[str] = mapped_column(
         String(32),
-        nullable=True,
+        nullable=False,
         index=True,
         comment="Game type (e.g., 'MATCHED_GAME')",
     )
 
     # Match result
-    early_surrender: Mapped[bool | None] = mapped_column(
+    early_surrender: Mapped[bool] = mapped_column(
         Boolean,
-        nullable=True,
+        nullable=False,
         comment="Whether the game ended in early surrender",
     )
 
-    surrender: Mapped[bool | None] = mapped_column(
+    surrender: Mapped[bool] = mapped_column(
         Boolean,
-        nullable=True,
+        nullable=False,
         comment="Whether the game ended in surrender",
     )
 
@@ -157,7 +161,6 @@ class Match(Base):
         Boolean,
         nullable=False,
         default=False,
-        index=True,
         comment="Whether this match has been processed for playstyle analysis",
     )
 
@@ -172,7 +175,13 @@ class Match(Base):
         return f"<Match(match_id='{self.match_id}', queue_id={self.queue_id}, game_start_timestamp={self.game_start_timestamp})>"
 
 
-# Create indexes for common queries
+# Create indexes for common queries.
+#
+# None of the columns below also carries `index=True`. A btree on (a, b) already
+# serves every lookup a btree on (a) would, so a single-column index on the
+# leading column of one of these is pure write cost -- and `match_id` is the
+# primary key, whose own index covers it. `game_mode` and `game_type` do carry
+# `index=True`, because no composite here leads with either.
 Index("idx_matches_platform_timestamp", Match.platform, Match.game_start_timestamp)
 
 Index("idx_matches_queue_timestamp", Match.queue_id, Match.game_start_timestamp)
@@ -184,4 +193,13 @@ Index("idx_matches_timestamp_queue", Match.game_start_timestamp, Match.queue_id)
 
 Index(
     "idx_matches_analyzed_timestamp", Match.fully_analyzed, Match.game_start_timestamp
+)
+
+# Partial index the baseline created for the "what still needs analysing?" scan.
+# Narrower than the plain `fully_analyzed` index and cheap to keep, so it is
+# declared rather than dropped.
+Index(
+    "idx_matches_processed",
+    Match.fully_analyzed,
+    postgresql_where=text("fully_analyzed = false"),
 )

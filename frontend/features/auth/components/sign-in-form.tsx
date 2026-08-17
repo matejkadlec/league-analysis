@@ -87,7 +87,7 @@ export function SignInForm() {
       } else {
         setError(getLoginErrorMessage(err));
       }
-
+    } finally {
       submissionInFlight.current = false;
       setIsSubmitting(false);
     }

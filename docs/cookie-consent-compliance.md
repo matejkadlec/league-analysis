@@ -83,11 +83,11 @@ Implementation:
 
 - Strictly necessary:
   - `league_analysis_auth_state`
-  - `auth_access_token`
-  - `auth_refresh_token`
+  - `league_analysis_access_token`
+  - `league_analysis_refresh_token`
   - `league_analysis_cookie_consent`
 - Optional preference:
-  - `header_messages_closed`
+  - `header_messages_closed:v1`
   - `league_analysis_match_history_page_size`
   - `league_analysis_match_history_queue_filters`
 

@@ -54,6 +54,7 @@ export function SidebarNav() {
     <>
       {/* Mobile Hamburger Button */}
       <button
+        type="button"
         className="fixed left-4 top-4 z-50 rounded-md bg-[#0a1428] p-2 text-white shadow-lg transition-colors hover:bg-[#0d1a33] md:hidden"
         onClick={() => setMenuOpen(!menuOpen)}
         aria-label="Toggle menu"
@@ -183,6 +184,7 @@ export function SidebarNav() {
                 </Link>
 
                 <button
+                  type="button"
                   onClick={logout}
                   className="flex items-center gap-2 px-4 py-2 pb-4 text-white cursor-pointer transition-colors duration-300 hover:text-[#cfa93a] w-full text-left"
                 >
@@ -223,11 +225,12 @@ export function SidebarNav() {
         </div>
       </aside>
 
-      {/* Overlay for mobile */}
       {menuOpen && (
-        <div
+        <button
+          type="button"
           className="fixed inset-0 z-30 bg-black/50 md:hidden"
           onClick={() => setMenuOpen(false)}
+          aria-label="Close menu"
         />
       )}
     </>

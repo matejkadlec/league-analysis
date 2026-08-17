@@ -46,7 +46,7 @@ vi.mock("@/features/players/components/tracked-players-list", () => ({
   TrackedPlayersList: () => <div>Complete tracked list</div>,
 }));
 
-vi.mock("@/lib/core/api", () => ({
+vi.mock("@/features/players/player-api", () => ({
   discoverPlayer,
   searchPlayerSuggestions,
 }));

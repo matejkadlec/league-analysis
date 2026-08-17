@@ -3,13 +3,22 @@
 from datetime import UTC, datetime
 
 import structlog
-from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Form, HTTPException, Request, Response, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import select
 
 from app.core.rate_limiter import rate_limit
 
-from .dependencies import get_current_active_user, get_current_admin_user
+from .cookies import (
+    REFRESH_TOKEN_COOKIE_NAME,
+    clear_auth_cookies,
+    set_auth_cookies,
+)
+from .dependencies import (
+    get_current_active_user,
+    get_current_admin_user,
+    get_request_access_token,
+)
 from .models import User
 from .schemas import (
     EmailChangeCodeResponse,
@@ -43,7 +52,6 @@ from .service import (
     JoinUsEmailNotConfiguredError,
     JoinUsRateLimitExceededError,
     get_auth_service,
-    oauth2_scheme,
 )
 
 router = APIRouter()
@@ -55,6 +63,7 @@ logger = structlog.get_logger(__name__)
 @rate_limit("5/minute")
 async def login(
     request: Request,
+    response: Response,
     form_data: OAuth2PasswordRequestForm = Depends(),
     captcha_token: str | None = Form(default=None),
     auth_service: AuthService = Depends(get_auth_service),
@@ -155,6 +164,13 @@ async def login(
     )
 
     now = datetime.now(UTC)
+    set_auth_cookies(
+        response,
+        access_token=access_token,
+        refresh_token=refresh_token,
+        access_expires_at=access_expires_at,
+        refresh_expires_at=refresh_expires_at,
+    )
     return Token(
         access_token=access_token,
         refresh_token=refresh_token,
@@ -171,12 +187,24 @@ async def login(
 @rate_limit("20/minute")
 async def refresh_access_token(
     request: Request,
-    refresh_request: RefreshTokenRequest,
+    response: Response,
+    refresh_request: RefreshTokenRequest | None = None,
     auth_service: AuthService = Depends(get_auth_service),
 ) -> Token:
     """Rotate refresh token and issue a new access token pair."""
+    raw_refresh_token = (
+        refresh_request.refresh_token if refresh_request is not None else None
+    ) or request.cookies.get(REFRESH_TOKEN_COOKIE_NAME)
+    if not raw_refresh_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={
+                "code": "INVALID_REFRESH_TOKEN",
+                "message": "Refresh token is invalid, expired, or already revoked.",
+            },
+        )
     rotated = await auth_service.rotate_refresh_token(
-        raw_refresh_token=refresh_request.refresh_token,
+        raw_refresh_token=raw_refresh_token,
         remote_ip=request.client.host if request.client else None,
         user_agent=request.headers.get("user-agent"),
     )
@@ -203,6 +231,13 @@ async def refresh_access_token(
     await auth_service.cleanup_expired_token_state()
 
     now = datetime.now(UTC)
+    set_auth_cookies(
+        response,
+        access_token=access_token,
+        refresh_token=refresh_token,
+        access_expires_at=access_expires_at,
+        refresh_expires_at=refresh_expires_at,
+    )
     return Token(
         access_token=access_token,
         refresh_token=refresh_token,
@@ -217,7 +252,8 @@ async def refresh_access_token(
 
 @router.post("/logout")
 async def logout(
-    token: str = Depends(oauth2_scheme),
+    response: Response,
+    token: str = Depends(get_request_access_token),
     current_user: User = Depends(get_current_active_user),
     auth_service: AuthService = Depends(get_auth_service),
 ) -> dict[str, str]:
@@ -230,6 +266,7 @@ async def logout(
         user_id=current_user.id,
         email=current_user.email,
     )
+    clear_auth_cookies(response)
     return {"message": "Successfully logged out"}
 
 
@@ -328,7 +365,7 @@ async def submit_join_us_contact(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail={
                 "code": "CONTACT_EMAIL_DELIVERY_FAILED",
-                "message": "Failed to send your message. Please try again later.",
+                "message": "Your message could not be sent. Please try again later.",
             },
         ) from e
 
@@ -411,7 +448,7 @@ async def request_email_change_code(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to send verification code: {e!s}",
+            detail="The verification code could not be sent. Please try again later.",
         ) from e
 
 

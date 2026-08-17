@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+import { seedAuthenticatedSession } from "./support/auth";
+
 const NOW = "2026-08-07T10:00:00.000Z";
 const PUUID = "test-player-puuid";
 
@@ -17,10 +19,7 @@ const champions = Array.from({ length: 12 }, (_, index) => ({
 }));
 
 test.beforeEach(async ({ page }) => {
-  await page.addInitScript(() => {
-    localStorage.setItem("auth_access_token", "test-access-token");
-    localStorage.setItem("auth_refresh_token", "test-refresh-token");
-  });
+  await seedAuthenticatedSession(page);
 
   await page.route("**/api/v1/**", async (route) => {
     const path = new URL(route.request().url()).pathname;

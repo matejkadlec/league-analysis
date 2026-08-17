@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -32,13 +32,8 @@ export function HeaderMessages() {
   const { user, isAuthenticated, isLoading: isAuthLoading } = useAuth();
   const queryClient = useQueryClient();
   const pathname = usePathname();
-  const [optionalStorageEnabled, setOptionalStorageEnabled] = useState<boolean>(
-    () => {
-      if (typeof window === "undefined") {
-        return false;
-      }
-      return canUseOptionalStorage();
-    },
+  const optionalStorageEnabledRef = useRef(
+    typeof window !== "undefined" && canUseOptionalStorage(),
   );
   // Store closed server-revision message identifiers.
   const [closedMessages, setClosedMessages] = useState<string[]>(() => {
@@ -47,7 +42,7 @@ export function HeaderMessages() {
     }
 
     try {
-      const stored = localStorage.getItem("header_messages_closed");
+      const stored = localStorage.getItem("header_messages_closed:v1");
       if (stored) {
         const parsed: unknown = JSON.parse(stored);
         if (Array.isArray(parsed)) {
@@ -67,7 +62,7 @@ export function HeaderMessages() {
       const consent = (event as CustomEvent<CookieConsentState | null>).detail;
       const hasOptionalConsent = consent?.level === "all";
 
-      setOptionalStorageEnabled(hasOptionalConsent);
+      optionalStorageEnabledRef.current = hasOptionalConsent;
 
       if (!hasOptionalConsent) {
         setClosedMessages([]);
@@ -75,7 +70,7 @@ export function HeaderMessages() {
       }
 
       try {
-        const stored = localStorage.getItem("header_messages_closed");
+        const stored = localStorage.getItem("header_messages_closed:v1");
         if (!stored) {
           return;
         }
@@ -110,8 +105,8 @@ export function HeaderMessages() {
 
     const newClosed = [...closedMessages, id];
     setClosedMessages(newClosed);
-    if (optionalStorageEnabled) {
-      localStorage.setItem("header_messages_closed", JSON.stringify(newClosed));
+    if (optionalStorageEnabledRef.current) {
+      localStorage.setItem("header_messages_closed:v1", JSON.stringify(newClosed));
     }
   };
 
@@ -201,6 +196,8 @@ export function HeaderMessages() {
             </span>
           </div>
           <button
+            type="button"
+            aria-label="Dismiss maintenance message"
             onClick={() => closeMessage(maintenanceMessageId)}
             className="cursor-pointer absolute right-4 top-1/2 -translate-y-1/2 p-2 hover:bg-amber-900/50 rounded-full transition-colors text-amber-100/80 hover:text-white"
           >
@@ -225,6 +222,8 @@ export function HeaderMessages() {
             </span>
           </div>
           <button
+            type="button"
+            aria-label="Dismiss maintenance completed message"
             onClick={() => closeMessage(maintenanceRecoveredMessageId)}
             className="cursor-pointer absolute right-4 top-1/2 -translate-y-1/2 p-2 hover:bg-emerald-900/50 rounded-full transition-colors text-emerald-100/80 hover:text-white"
           >
@@ -314,6 +313,8 @@ export function HeaderMessages() {
             </span>
           </div>
           <button
+            type="button"
+            aria-label="Dismiss environment API key warning"
             onClick={() => closeMessage(envKeyId)}
             className="cursor-pointer absolute right-4 top-1/2 -translate-y-1/2 p-2 hover:bg-amber-900/50 rounded-full transition-colors text-amber-100/80 hover:text-white"
           >

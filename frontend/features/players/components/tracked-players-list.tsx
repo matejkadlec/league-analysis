@@ -9,7 +9,9 @@ import {
   UserMinus,
   Users,
 } from "lucide-react";
-import { untrackPlayer, validatedGet } from "@/lib/core/api";
+import { validatedGet } from "@/lib/core/api";
+
+import { untrackPlayer } from "../player-api";
 import { useToast } from "@/lib/core/hooks";
 import {
   PlayerLeagueSchema,
@@ -35,12 +37,18 @@ interface TrackedPlayersListProps {
   onViewPlayerChange?: (player: Player | null) => void;
 }
 
-interface TrackedPlayerRowProps {
+interface TrackedPlayerRowSharedProps {
   player: Player;
-  isViewedPlayer: boolean;
   isUntrackingCurrentPlayer: boolean;
-  onViewPlayer: (player: Player) => void;
   onUntrackPlayer: (player: Player) => void;
+}
+
+interface ViewedTrackedPlayerRowProps extends TrackedPlayerRowSharedProps {
+  onHidePlayer: (player: Player) => void;
+}
+
+interface HiddenTrackedPlayerRowProps extends TrackedPlayerRowSharedProps {
+  onViewPlayer: (player: Player) => void;
 }
 
 function getListHeightPx(rowCount: number): number {
@@ -54,13 +62,7 @@ function getListHeightPx(rowCount: number): number {
   );
 }
 
-function TrackedPlayerRow({
-  player,
-  isViewedPlayer,
-  isUntrackingCurrentPlayer,
-  onViewPlayer,
-  onUntrackPlayer,
-}: TrackedPlayerRowProps) {
+function TrackedPlayerDetails({ player }: { player: Player }) {
   const { data: league } = useQuery({
     queryKey: ["player-league", player.puuid],
     queryFn: async () => {
@@ -82,68 +84,118 @@ function TrackedPlayerRow({
   const leagueColors = league ? getRankColors(league.tier) : null;
 
   return (
+    <div className="flex-1">
+      <div className="flex items-center gap-2">
+        <h3 className="font-semibold">{player.game_name}</h3>
+        {player.tag_line && (
+          <span className="text-sm text-muted-foreground">
+            #{player.tag_line}
+          </span>
+        )}
+      </div>
+
+      <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+        {league && (
+          <>
+            <span className={cn("font-semibold", leagueColors?.text)}>
+              {league.display_rank} {league.league_points} LP
+            </span>
+            <span>•</span>
+          </>
+        )}
+
+        <span>{getPlatformDisplayName(player.platform)}</span>
+
+        {typeof player.summoner_level === "number" && (
+          <>
+            <span>•</span>
+            <span>Level {player.summoner_level}</span>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function UntrackTrackedPlayerButton({
+  player,
+  isUntrackingCurrentPlayer,
+  onUntrackPlayer,
+}: TrackedPlayerRowSharedProps) {
+  return (
+    <Button
+      type="button"
+      className="button-medium no-rotation"
+      onClick={() => onUntrackPlayer(player)}
+      disabled={isUntrackingCurrentPlayer}
+    >
+      {isUntrackingCurrentPlayer ? (
+        <Loader2 className="h-4 w-4 animate-spin" />
+      ) : (
+        <UserMinus className="h-4 w-4" />
+      )}
+      Untrack
+    </Button>
+  );
+}
+
+function ViewedTrackedPlayerRow({
+  player,
+  isUntrackingCurrentPlayer,
+  onHidePlayer,
+  onUntrackPlayer,
+}: ViewedTrackedPlayerRowProps) {
+  return (
     <div
       data-testid={`tracked-player-row-${player.puuid}`}
       className="player-management-border flex min-h-[88px] items-center justify-between rounded-lg bg-card p-4 transition-colors hover:bg-accent/50"
     >
-      <div className="flex-1">
-        <div className="flex items-center gap-2">
-          <h3 className="font-semibold">{player.game_name}</h3>
-          {player.tag_line && (
-            <span className="text-sm text-muted-foreground">
-              #{player.tag_line}
-            </span>
-          )}
-        </div>
-
-        <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-          {league && (
-            <>
-              <span className={cn("font-semibold", leagueColors?.text)}>
-                {league.display_rank} {league.league_points} LP
-              </span>
-              <span>•</span>
-            </>
-          )}
-
-          <span>{getPlatformDisplayName(player.platform)}</span>
-
-          {typeof player.summoner_level === "number" && (
-            <>
-              <span>•</span>
-              <span>Level {player.summoner_level}</span>
-            </>
-          )}
-        </div>
+      <TrackedPlayerDetails player={player} />
+      <div className="flex items-center gap-2">
+        <Button
+          type="button"
+          className="button-medium no-rotation"
+          onClick={() => onHidePlayer(player)}
+        >
+          <EyeOff className="h-4 w-4" />
+          Hide
+        </Button>
+        <UntrackTrackedPlayerButton
+          player={player}
+          isUntrackingCurrentPlayer={isUntrackingCurrentPlayer}
+          onUntrackPlayer={onUntrackPlayer}
+        />
       </div>
+    </div>
+  );
+}
 
+function HiddenTrackedPlayerRow({
+  player,
+  isUntrackingCurrentPlayer,
+  onViewPlayer,
+  onUntrackPlayer,
+}: HiddenTrackedPlayerRowProps) {
+  return (
+    <div
+      data-testid={`tracked-player-row-${player.puuid}`}
+      className="player-management-border flex min-h-[88px] items-center justify-between rounded-lg bg-card p-4 transition-colors hover:bg-accent/50"
+    >
+      <TrackedPlayerDetails player={player} />
       <div className="flex items-center gap-2">
         <Button
           type="button"
           className="button-medium no-rotation"
           onClick={() => onViewPlayer(player)}
         >
-          {isViewedPlayer ? (
-            <EyeOff className="h-4 w-4" />
-          ) : (
-            <Eye className="h-4 w-4" />
-          )}
-          {isViewedPlayer ? "Hide" : "View"}
+          <Eye className="h-4 w-4" />
+          View
         </Button>
-
-        <Button
-          type="button"
-          className="button-medium no-rotation"
-          onClick={() => onUntrackPlayer(player)}
-          disabled={isUntrackingCurrentPlayer}
-        >
-          {isUntrackingCurrentPlayer ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <UserMinus className="h-4 w-4" />
-          )}
-          Untrack
-        </Button>
+        <UntrackTrackedPlayerButton
+          player={player}
+          isUntrackingCurrentPlayer={isUntrackingCurrentPlayer}
+          onUntrackPlayer={onUntrackPlayer}
+        />
       </div>
     </div>
   );
@@ -226,14 +278,11 @@ export function TrackedPlayersList({
   };
 
   const handleViewPlayer = (player: Player) => {
-    const isAlreadyVisible = selectedPlayerPuuid === player.puuid;
-
-    if (isAlreadyVisible) {
-      onViewPlayerChange?.(null);
-      return;
-    }
-
     onViewPlayerChange?.(player);
+  };
+
+  const handleHidePlayer = () => {
+    onViewPlayerChange?.(null);
   };
 
   if (isLoading || (isFetching && !data)) {
@@ -312,19 +361,31 @@ export function TrackedPlayersList({
         }}
       >
         <div className="space-y-3">
-          {data.map((player) => (
-            <TrackedPlayerRow
-              key={player.puuid}
-              player={player}
-              isViewedPlayer={selectedPlayerPuuid === player.puuid}
-              isUntrackingCurrentPlayer={
-                untrackMutation.isPending &&
-                untrackMutation.variables === player.puuid
-              }
-              onViewPlayer={handleViewPlayer}
-              onUntrackPlayer={handleUntrack}
-            />
-          ))}
+          {data.map((player) =>
+            selectedPlayerPuuid === player.puuid ? (
+              <ViewedTrackedPlayerRow
+                key={player.puuid}
+                player={player}
+                isUntrackingCurrentPlayer={
+                  untrackMutation.isPending &&
+                  untrackMutation.variables === player.puuid
+                }
+                onHidePlayer={handleHidePlayer}
+                onUntrackPlayer={handleUntrack}
+              />
+            ) : (
+              <HiddenTrackedPlayerRow
+                key={player.puuid}
+                player={player}
+                isUntrackingCurrentPlayer={
+                  untrackMutation.isPending &&
+                  untrackMutation.variables === player.puuid
+                }
+                onViewPlayer={handleViewPlayer}
+                onUntrackPlayer={handleUntrack}
+              />
+            ),
+          )}
         </div>
       </div>
     </Card>

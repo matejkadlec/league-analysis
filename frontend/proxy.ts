@@ -1,25 +1,55 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-// Check if path is a static asset or internal Next.js route
+import {
+  AUTH_STATE_COOKIE_NAME,
+  AUTH_STATE_COOKIE_VALUE,
+} from "@/features/auth/utils/auth-state-cookie";
+
+const PUBLIC_ROUTES = [
+  "/sign-in",
+  "/join-us",
+  "/privacy-policy",
+  "/cookie-policy",
+  "/license",
+];
+
 function isStaticOrInternal(pathname: string): boolean {
   return (
     pathname.startsWith("/_next") ||
     pathname.startsWith("/api") ||
-    pathname.includes(".") || // Static files like .js, .css, .ico, etc.
+    pathname.includes(".") ||
     pathname === "/favicon.ico"
+  );
+}
+
+function isPublicRoute(pathname: string): boolean {
+  return PUBLIC_ROUTES.some(
+    (route) => pathname === route || pathname.startsWith(`${route}/`),
   );
 }
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Skip middleware for static assets and internal routes
   if (isStaticOrInternal(pathname)) {
     return NextResponse.next();
   }
 
-  // Authentication and route protection are enforced client-side by AuthGate.
+  const hasAuthHint =
+    request.cookies.get(AUTH_STATE_COOKIE_NAME)?.value ===
+    AUTH_STATE_COOKIE_VALUE;
+  const isSignInRoute =
+    pathname === "/sign-in" || pathname.startsWith("/sign-in/");
+
+  if (hasAuthHint && isSignInRoute) {
+    return NextResponse.redirect(new URL("/", request.url));
+  }
+
+  if (!hasAuthHint && !isPublicRoute(pathname)) {
+    return NextResponse.redirect(new URL("/sign-in", request.url));
+  }
+
   return NextResponse.next();
 }
 

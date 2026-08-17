@@ -115,7 +115,7 @@ class TokenData(BaseModel):
 class RefreshTokenRequest(BaseModel):
     """Schema for refreshing an access token using refresh token rotation."""
 
-    refresh_token: str = Field(..., min_length=20)
+    refresh_token: str | None = Field(default=None, min_length=20)
 
 
 class UserProfileUpdate(BaseModel):

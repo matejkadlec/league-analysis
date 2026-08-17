@@ -12,44 +12,24 @@ export {
   type ApiErrorKind,
 } from "./api-error";
 import type { ApiError } from "./api-error";
-import {
-  Player,
-  PlayerSchema,
-  MatchmakingAnalysisResponseSchema,
-  MatchmakingAnalysisStatusResponseSchema,
-  MatchmakingAnalysisHistoryResponseSchema,
-  MatchmakingAnalysisResponse,
-  MatchmakingAnalysisStatusResponse,
-  MatchmakingAnalysisHistoryResponse,
-  SmurfBoostAnalysisResponseSchema,
-  SmurfBoostAnalysisResponse,
-  SmurfBoostPresetsResponseSchema,
-  SmurfBoostPresetsResponse,
-  CardPreferenceSchema,
-  CardPreference,
-} from "./schemas";
 import { notifyRiotCredentialHealthUpdated } from "./riot-credential-health-events";
 import {
-  getAccessToken,
   refreshAccessToken,
   removeAuthTokens,
 } from "@/features/auth/utils/token-manager";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
+const API_BASE_URL =
+  typeof window === "undefined"
+    ? process.env.API_INTERNAL_URL ||
+      process.env.NEXT_PUBLIC_API_URL ||
+      "http://localhost:8000"
+    : "";
 
 export const api = axios.create({
   baseURL: `${API_BASE_URL}/api/v1`,
   headers: { "Content-Type": "application/json" },
   timeout: 30000,
-});
-
-// Add auth token to all requests if available
-api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
-  const token = getAccessToken();
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
+  withCredentials: true,
 });
 
 export type ApiResponse<T> =
@@ -111,19 +91,12 @@ api.interceptors.response.use(
     }
 
     originalRequest._retry = true;
-    const refreshedToken = await refreshAccessToken();
-    if (!refreshedToken) {
+    const refreshed = await refreshAccessToken();
+    if (!refreshed) {
       removeAuthTokens();
       return Promise.reject(error);
     }
 
-    if (typeof originalRequest.headers.set === "function") {
-      originalRequest.headers.set("Authorization", `Bearer ${refreshedToken}`);
-    } else {
-      (
-        originalRequest.headers as unknown as Record<string, string>
-      ).Authorization = `Bearer ${refreshedToken}`;
-    }
     return api(originalRequest);
   },
 );
@@ -217,320 +190,7 @@ export async function validatedPatch<T>(
   }
 }
 
-// Player API Functions
-export async function getPlayerByPuuid(
-  puuid: string,
-): Promise<ApiResponse<Player>> {
-  return validatedGet(PlayerSchema, `/players/${puuid}`);
-}
-
-// Player Tracking API Functions
-export async function trackPlayer(puuid: string): Promise<ApiResponse<Player>> {
-  try {
-    const response = await api.post(`/players/${puuid}/track`);
-    return validateResponse(
-      PlayerSchema,
-      `/players/${puuid}/track`,
-      response.data,
-    );
-  } catch (error) {
-    return {
-      success: false,
-      error: normalizeApiError(error),
-    };
-  }
-}
-
-export async function untrackPlayer(
-  puuid: string,
-): Promise<ApiResponse<{ message: string }>> {
-  try {
-    const response = await api.delete(`/players/${puuid}/track`);
-    return {
-      success: true,
-      data: response.data,
-    };
-  } catch (error) {
-    return {
-      success: false,
-      error: normalizeApiError(error),
-    };
-  }
-}
-
-export async function getTrackingStatus(
-  puuid: string,
-): Promise<ApiResponse<{ is_tracked: boolean }>> {
-  try {
-    const response = await api.get(`/players/${puuid}/tracking-status`);
-    return {
-      success: true,
-      data: response.data,
-    };
-  } catch (error) {
-    return {
-      success: false,
-      error: normalizeApiError(error),
-    };
-  }
-}
-
-export async function getTrackedPlayers(): Promise<
-  ApiResponse<{ players: unknown[] }>
-> {
-  try {
-    const response = await api.get(`/players/tracked/list`);
-    return {
-      success: true,
-      data: response.data,
-    };
-  } catch (error) {
-    return {
-      success: false,
-      error: normalizeApiError(error),
-    };
-  }
-}
-
-export interface AddTrackedPlayerParams {
-  game_name: string;
-  tag_line: string;
-  platform: string;
-}
-
-export async function addTrackedPlayer(
-  params: AddTrackedPlayerParams,
-): Promise<ApiResponse<unknown>> {
-  try {
-    const response = await api.post(`/players/add-tracked`, null, { params });
-    return {
-      success: true,
-      data: response.data,
-    };
-  } catch (error) {
-    return {
-      success: false,
-      error: normalizeApiError(error),
-    };
-  }
-}
-
-export interface SearchSuggestionsParams {
-  q: string;
-  platform?: string;
-  limit?: number;
-}
-
-export async function searchPlayerSuggestions(
-  params: SearchSuggestionsParams,
-): Promise<ApiResponse<Player[]>> {
-  const PlayerArraySchema = z.array(PlayerSchema);
-  return validatedGet(PlayerArraySchema, "/players/suggestions", {
-    q: params.q,
-    ...(params.platform !== undefined && { platform: params.platform }),
-    ...(params.limit !== undefined && { limit: params.limit }),
-  });
-}
-
-export interface DiscoverPlayerParams {
-  game_name: string;
-  tag_line: string;
-  platform: string;
-}
-
-export async function discoverPlayer(
-  params: DiscoverPlayerParams,
-): Promise<ApiResponse<Player>> {
-  try {
-    const response = await api.post("/players/discover", null, { params });
-    const parsed = PlayerSchema.safeParse(response.data);
-    if (!parsed.success) {
-      return {
-        success: false,
-        error: {
-          message: "The player response was invalid.",
-          code: "INVALID_RESPONSE",
-          kind: "invalid-response",
-        },
-      };
-    }
-    return { success: true, data: parsed.data };
-  } catch (error) {
-    return { success: false, error: normalizeApiError(error) };
-  }
-}
-
-// Matchmaking Analysis API Functions
-export async function checkPlayerMatches(
-  puuid: string,
-): Promise<
-  ApiResponse<
-    | { success: boolean; matches_found: number }
-    | { message: string; matches_found: number; matches_required: number }
-  >
-> {
-  try {
-    const response = await api.post("/matchmaking-analysis/check-matches", {
-      puuid,
-    });
-    return {
-      success: true,
-      data: response.data,
-    };
-  } catch (error) {
-    return {
-      success: false,
-      error: normalizeApiError(error),
-    };
-  }
-}
-
-export async function startMatchmakingAnalysis(
-  puuid: string,
-): Promise<ApiResponse<MatchmakingAnalysisResponse>> {
-  return validatedPost(
-    MatchmakingAnalysisResponseSchema,
-    "/matchmaking-analysis/start",
-    {
-      puuid,
-    },
-  );
-}
-
-export async function getMatchmakingAnalysisStatus(
-  puuid: string,
-  createdAt: string,
-): Promise<ApiResponse<MatchmakingAnalysisStatusResponse>> {
-  return validatedGet(
-    MatchmakingAnalysisStatusResponseSchema,
-    `/matchmaking-analysis/player/${puuid}/status`,
-    { created_at: createdAt },
-  );
-}
-
-export async function getLatestMatchmakingAnalysis(
-  puuid: string,
-): Promise<ApiResponse<MatchmakingAnalysisResponse>> {
-  return validatedGet(
-    MatchmakingAnalysisResponseSchema,
-    `/matchmaking-analysis/player/${puuid}`,
-  );
-}
-
-export async function getLatestCompletedMatchmakingAnalysis(
-  puuid: string,
-): Promise<ApiResponse<MatchmakingAnalysisResponse>> {
-  return validatedGet(
-    MatchmakingAnalysisResponseSchema,
-    `/matchmaking-analysis/player/${puuid}/latest-completed`,
-  );
-}
-
-export async function getMatchmakingAnalysisHistory(
-  puuid: string,
-  limit: number = 20,
-): Promise<ApiResponse<MatchmakingAnalysisHistoryResponse>> {
-  return validatedGet(
-    MatchmakingAnalysisHistoryResponseSchema,
-    `/matchmaking-analysis/player/${puuid}/history`,
-    { limit },
-  );
-}
-
-export async function cancelMatchmakingAnalysis(
-  puuid: string,
-  createdAt: string,
-): Promise<ApiResponse<{ success: boolean; message: string }>> {
-  try {
-    const response = await api.delete(
-      `/matchmaking-analysis/player/${puuid}/cancel`,
-      { params: { created_at: createdAt } },
-    );
-    return {
-      success: true,
-      data: response.data,
-    };
-  } catch (error) {
-    return {
-      success: false,
-      error: normalizeApiError(error),
-    };
-  }
-}
-
-export async function deleteMatchmakingAnalysisRecord(
-  puuid: string,
-  createdAt: string,
-): Promise<ApiResponse<{ success: boolean; message: string }>> {
-  try {
-    const response = await api.delete(
-      `/matchmaking-analysis/player/${puuid}/analysis`,
-      { params: { created_at: createdAt } },
-    );
-    return {
-      success: true,
-      data: response.data,
-    };
-  } catch (error) {
-    return {
-      success: false,
-      error: normalizeApiError(error),
-    };
-  }
-}
-
-export async function startSmurfBoostDetection(
-  puuid: string,
-): Promise<ApiResponse<SmurfBoostAnalysisResponse>> {
-  return validatedPost(
-    SmurfBoostAnalysisResponseSchema,
-    "/smurf-boost-detection/analyze",
-    { puuid },
-  );
-}
-
-export async function getLatestSmurfBoostDetection(
-  puuid: string,
-): Promise<ApiResponse<SmurfBoostAnalysisResponse>> {
-  return validatedGet(
-    SmurfBoostAnalysisResponseSchema,
-    `/smurf-boost-detection/player/${puuid}`,
-  );
-}
-
-export async function getSmurfBoostPresets(): Promise<
-  ApiResponse<SmurfBoostPresetsResponse>
-> {
-  return validatedGet(
-    SmurfBoostPresetsResponseSchema,
-    "/smurf-boost-detection/presets",
-  );
-}
-
-export async function getCardPreferences(): Promise<
-  ApiResponse<CardPreference[]>
-> {
-  return validatedGet(z.array(CardPreferenceSchema), "/settings/card-preferences");
-}
-
-export async function updateCardPreference(
-  cardId: string,
-  settings: Record<string, number>,
-): Promise<ApiResponse<CardPreference>> {
-  return validatedPut(
-    CardPreferenceSchema,
-    `/settings/card-preferences/${cardId}`,
-    { version: 1, settings },
-  );
-}
-
-export async function resetCardPreference(
-  cardId: string,
-): Promise<ApiResponse<CardPreference>> {
-  return validatedDelete(
-    CardPreferenceSchema,
-    `/settings/card-preferences/${cardId}`,
-  );
-}
+// Feature endpoint functions live with their features (e.g.
+// features/players/player-api.ts); this module stays the generic client.
 
 export default api;

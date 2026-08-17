@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Search, StopCircle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -22,13 +22,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { discoverPlayer, searchPlayerSuggestions } from "@/lib/core/api";
+import { discoverPlayer, searchPlayerSuggestions } from "../player-api";
 import { useToast } from "@/lib/core/hooks";
 import { getPlatformDisplayName } from "@/lib/core/platform-utils";
 import type { Player } from "@/lib/core/schemas";
 import { cn } from "@/lib/core/utils";
 
 import { parseRiotId, type RiotIdParts } from "../utils/riot-id";
+import {
+  PlayerTrackingError,
+  toPlayerTrackingError,
+} from "../utils/tracking-feedback";
 
 const PLATFORM_OPTIONS = [
   ["eun1", "EUNE"],
@@ -83,6 +87,7 @@ export function PlayerSelector({
   inputClassName,
 }: PlayerSelectorProps) {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [searchValue, setSearchValue] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [activeSuggestion, setActiveSuggestion] = useState(0);
@@ -144,14 +149,46 @@ export function PlayerSelector({
         tag_line: pendingRiotId.tagLine,
         platform,
       });
-      if (!result.success) throw new Error(result.error.message);
+      if (!result.success) {
+        throw toPlayerTrackingError(result.error, pendingRiotId, platform);
+      }
       return result.data;
     },
     onSuccess: async (player) => {
       setPendingRiotId(null);
+      void queryClient.invalidateQueries({ queryKey: ["player-suggestions"] });
+      void queryClient.invalidateQueries({ queryKey: ["player", player.puuid] });
       await choosePlayer(player);
     },
-    onError: () => {
+    onError: (error) => {
+      if (error instanceof PlayerTrackingError && error.kind === "api-key") {
+        toast({
+          title: "Player search is temporarily unavailable",
+          description:
+            "The Riot API key is invalid or expired. Please contact an administrator.",
+          variant: "error",
+        });
+        return;
+      }
+      if (
+        error instanceof PlayerTrackingError &&
+        error.kind === "rate-limited"
+      ) {
+        toast({
+          title: "Player search could not finish",
+          description: "Riot temporarily limited requests. Try again later.",
+          variant: "warning",
+        });
+        return;
+      }
+      if (error instanceof PlayerTrackingError && error.kind === "not-found") {
+        toast({
+          title: "Player search could not finish",
+          description: error.message,
+          variant: "error",
+        });
+        return;
+      }
       toast({
         title: "Player search could not finish",
         description: "Check the Riot ID and server, then try again.",

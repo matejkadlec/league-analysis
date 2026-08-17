@@ -8,6 +8,13 @@ authors = [
 ]
 dependencies = [
     "alembic>=1.19.1",
+    # Alembic's autogenerate does not diff enum MEMBERS at all, so adding a
+    # value to a Python enum without an `ALTER TYPE` passes `alembic check` and
+    # then fails at runtime with InvalidTextRepresentation. This registers an
+    # enum comparator on the standard hook. It is a runtime dependency, not a
+    # dev one: the ops it generates (`op.sync_enum_values`) live in revision
+    # files that production has to execute.
+    "alembic-postgresql-enum>=1.10.0",
     "apscheduler>=3.11.3",
     "asyncpg>=0.31.0",
     "email-validator>=2.3.0",
@@ -57,12 +64,13 @@ venvPath = "."
 venv = ".venv"
 reportMissingImports = true
 reportMissingTypeStubs = "none"
-# The ORM models describe columns more confidently than the migrated schema
-# does — `alembic/metadata-drift.txt` records 321 places where the two already
-# disagree. Code therefore keeps `is None` and `isinstance` guards against
-# values the annotations claim are impossible. Enabling these two rules would
-# report those guards as unnecessary, and the only way to satisfy them is to
-# delete a runtime check on the word of an annotation that is known to drift.
+# These were disabled because the ORM models used to describe columns more
+# confidently than the migrated schema did, so `is None` and `isinstance`
+# guards protected against values the annotations called impossible. Revision
+# 20260816_0014 closed that gap and `alembic check` now runs clean, so the
+# original justification is gone. They stay off only because re-enabling them
+# reports every such guard at once; each one now needs judging on whether it
+# defends against bad Riot data rather than against a lying annotation.
 reportUnnecessaryIsInstance = "none"
 reportUnnecessaryComparison = "none"
 # Rules Pyright leaves off even in strict mode. These four are enabled because
@@ -159,13 +167,17 @@ ignore = [
 ]
 
 [tool.ruff.lint.isort]
-# scripts and alembic are listed explicitly because implicit first-party
-# detection depends on the working directory: the gate runs Ruff from
-# backend/ and the pre-commit hook from the repository root, and they
-# disagreed on where `from scripts import ...` and `from alembic import ...`
-# belong until the classification was pinned. backend/alembic/ (the
-# migrations tree) otherwise shadows the alembic package only from backend/.
-known-first-party = ["alembic", "app", "scripts"]
+# scripts is listed explicitly because implicit first-party detection depends
+# on the working directory: the gate runs Ruff from backend/ and the pre-commit
+# hook from the repository root, and they disagreed on where
+# `from scripts import ...` belongs until the classification was pinned.
+known-first-party = ["app", "scripts"]
+# `alembic` is the same problem with the opposite answer. Run from backend/,
+# Ruff sees the `alembic/` directory and calls it first-party; run from the
+# repository root it does not, and calls it third-party. `from alembic import
+# context` imports the library either way, so third-party is the true answer --
+# without this the gate and the pre-commit hook each rewrite `env.py` back.
+known-third-party = ["alembic"]
 
 [dependency-groups]
 dev = [
@@ -195,9 +207,8 @@ branch = true
 # (10,276 statements, 2,170 branches). Statement-only coverage reads 55%; the
 # branch figure is the honest one, because a half-tested `if` is half-tested.
 # The floor sits three points under so the gate passes today and can be
-# ratcheted up as coverage grows, in the same spirit as
-# alembic/metadata-drift.txt. It is armed by the `--cov` flags in test.sh; a
-# bare `pytest` stays fast.
+# ratcheted up as coverage grows. It is armed by the `--cov` flags in test.sh;
+# a bare `pytest` stays fast.
 fail_under = 47
 show_missing = true
 
@@ -231,9 +242,12 @@ python-Levenshtein = "Levenshtein"
 
 [tool.deptry.per_rule_ignores]
 # Drivers and plugin extras are required at runtime but imported by
-# SQLAlchemy, Pydantic, or FastAPI rather than application code.
+# SQLAlchemy, Pydantic, or FastAPI rather than application code. The two
+# alembic entries are imported by `alembic/env.py`, which `extend_exclude`
+# keeps out of the scan.
 DEP002 = [
     "alembic",
+    "alembic-postgresql-enum",
     "asyncpg",
     "email-validator",
     "psycopg2-binary",

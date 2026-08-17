@@ -9,6 +9,7 @@ export {
   usePlayerContext,
 } from "./context/player-context";
 export { playerQueryKey, playerQueryOptions } from "./player-query";
+export { usePlayerSyncRun } from "./use-player-sync-run";
 export {
   MATCH_HISTORY_PATH,
   PLAYER_OVERVIEW_PATH,

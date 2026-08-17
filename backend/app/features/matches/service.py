@@ -44,7 +44,7 @@ from .match_persistence import (
     extract_store_participant_identity,
     match_dto_id,
     match_end_flags,
-    merge_reprocess_participants,
+    upsert_match,
 )
 from .match_stats import (
     accumulate_champion_stats,
@@ -1313,43 +1313,13 @@ class MatchService:
         match_dto: MatchDTO,
         timeline_payload: MatchTimelineDTO | None = None,
     ) -> None:
-        """Update existing match or insert new match using merge (upsert)."""
+        """Update existing match or insert new match using merge (upsert).
+
+        Delegates to `upsert_match` so there is exactly one copy of the
+        match-persistence sequence; this wrapper adds the cleanup interlock.
+        """
         await _ensure_riot_writer_maintenance_is_inactive(self.db)
-
-        platform_id = match_dto.info.platform or "EUN1"
-        match_id = match_dto.metadata.match_id
-        early_surrender, surrender = match_end_flags(match_dto.info.participants)
-
-        try:
-            await self.db.merge(
-                build_match_record(
-                    match_dto,
-                    platform_id,
-                    early_surrender,
-                    surrender,
-                    fully_analyzed=True,
-                )
-            )
-            await merge_reprocess_participants(
-                self.db,
-                match_dto,
-                match_id,
-                platform_id,
-            )
-            await replace_match_timeline_rows(
-                self.db,
-                match_dto,
-                timeline_payload,
-            )
-            await self.db.commit()
-        except Exception as error:
-            logger.error(
-                "match_timeline_persist_failed",
-                match_id=match_id,
-                error_type=type(error).__name__,
-            )
-            await self.db.rollback()
-            raise
+        await upsert_match(self.db, match_dto, timeline_payload)
 
     async def sync_matches_for_player(
         self,

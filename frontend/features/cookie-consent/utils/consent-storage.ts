@@ -8,7 +8,7 @@ export const COOKIE_CONSENT_OPEN_PREFERENCES_EVENT =
   "league-analysis-cookie-consent-open-preferences";
 
 const OPTIONAL_STORAGE_KEYS = [
-  "header_messages_closed",
+  "header_messages_closed:v1",
   "league_analysis_match_history_page_size",
   "league_analysis_match_history_queue_filters",
 ] as const;

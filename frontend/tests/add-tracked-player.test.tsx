@@ -17,7 +17,7 @@ vi.mock("@/features/auth", () => ({
   useAuth: () => ({ user: { id: 7 } }),
 }));
 
-vi.mock("@/lib/core/api", () => ({
+vi.mock("@/features/players/player-api", () => ({
   addTrackedPlayer,
   searchPlayerSuggestions,
   trackPlayer,
@@ -176,7 +176,9 @@ describe("AddTrackedPlayer", () => {
     addTrackedPlayer.mockResolvedValue({
       success: false,
       error: {
-        message: "Riot API Key is invalid or expired. Please update it in Settings.",
+        message:
+          "Riot data is temporarily unavailable. Please contact an administrator.",
+        code: "RIOT_API_KEY_INVALID",
         status: 503,
       },
     });

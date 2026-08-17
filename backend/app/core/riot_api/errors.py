@@ -56,6 +56,15 @@ class AuthenticationError(RiotAPIError):
     pass
 
 
+# HTTPException detail for endpoints that surface an invalid Riot API key.
+# The frontend maps the code (api-error.ts, api.ts); the message is for
+# direct API consumers.
+RIOT_API_KEY_INVALID_DETAIL = {
+    "code": "RIOT_API_KEY_INVALID",
+    "message": "Riot data is temporarily unavailable. Please contact an administrator.",
+}
+
+
 class ForbiddenError(RiotAPIError):
     """Forbidden error (403) - insufficient permissions."""
 

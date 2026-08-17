@@ -7,7 +7,7 @@ from typing import cast
 from unittest.mock import AsyncMock
 
 import pytest
-from fastapi import HTTPException, Request
+from fastapi import HTTPException, Request, Response
 from fastapi.security import OAuth2PasswordRequestForm
 
 from app.features.auth.dependencies import (
@@ -85,7 +85,7 @@ async def test_inactive_user_is_forbidden() -> None:
     with pytest.raises(HTTPException) as error:
         await get_current_active_user(user)
     assert error.value.status_code == 403
-    assert error.value.detail == "Inactive user account"
+    assert cast(dict[str, str], error.value.detail)["code"] == "ACCOUNT_INACTIVE"
 
 
 @pytest.mark.asyncio
@@ -104,6 +104,7 @@ async def test_login_returns_a_dedicated_inactive_account_code() -> None:
     with pytest.raises(HTTPException) as error:
         await _undecorated(login)(
             request=_loopback_request(),
+            response=Response(),
             form_data=form_data,
             auth_service=cast(AuthService, auth_service),
         )
@@ -127,6 +128,7 @@ async def test_refresh_returns_the_same_inactive_account_code() -> None:
     with pytest.raises(HTTPException) as error:
         await _undecorated(refresh_access_token)(
             request=_loopback_request(),
+            response=Response(),
             refresh_request=RefreshTokenRequest(
                 refresh_token="refresh-token-value-1234"
             ),
@@ -148,7 +150,7 @@ async def test_non_admin_user_is_forbidden_and_admin_is_allowed() -> None:
     with pytest.raises(HTTPException) as error:
         await get_current_admin_user(regular_user)
     assert error.value.status_code == 403
-    assert error.value.detail == "Admin privileges required"
+    assert cast(dict[str, str], error.value.detail)["code"] == "ADMIN_REQUIRED"
 
     admin_user = User(is_active=True, is_admin=True)
     assert await get_current_admin_user(admin_user) is admin_user

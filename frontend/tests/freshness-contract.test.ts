@@ -18,10 +18,9 @@ const SOURCE_DIRECTORIES = ["app", "components", "features", "lib"];
 const NON_FRESHNESS_UPDATED_AT = new Map([
   ["lib/core/schemas.ts", "declares the wire shape, does not display it"],
   ["features/auth/types.ts", "the signed-in user record's own mutation time"],
-  ["app/settings/page.tsx", "when a setting itself was last changed"],
   [
-    "features/playstyle-analysis/components/playstyle-analysis.tsx",
-    "when the analysis was recomputed, not when player data was synced",
+    "app/settings/riot-api-settings-card.tsx",
+    "when a setting itself was last changed",
   ],
 ]);
 

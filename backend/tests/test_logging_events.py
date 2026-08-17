@@ -18,6 +18,7 @@ from app.core.validation import validate_list_items
 from app.features.jobs.base import BaseJob, _validation_field_locations
 from app.features.jobs.error_handling import RateLimitSignal, _handle_error
 from app.features.jobs.log_capture import BoundedLogCapture
+from app.features.matches import match_persistence
 from app.features.matches import router as matches_router
 from app.features.matches import service as matches_service_module
 from app.features.matches.match_stats import advanced_int
@@ -249,21 +250,14 @@ def _fake_record(*_args: object, **_kwargs: object) -> object:
 
 
 @pytest.mark.asyncio
-async def test_reprocess_commit_failure_logs_error(
+async def test_upsert_match_failure_logs_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A failed match persist logs the identifier before the rollback re-raise."""
+    """A failed match persist logs the identifier before the quiet rollback."""
+    monkeypatch.setattr(match_persistence, "build_match_record", _fake_record)
+    monkeypatch.setattr(match_persistence, "merge_reprocess_participants", AsyncMock())
     monkeypatch.setattr(
-        matches_service_module,
-        "_ensure_riot_writer_maintenance_is_inactive",
-        AsyncMock(),
-    )
-    monkeypatch.setattr(matches_service_module, "build_match_record", _fake_record)
-    monkeypatch.setattr(
-        matches_service_module, "merge_reprocess_participants", AsyncMock()
-    )
-    monkeypatch.setattr(
-        matches_service_module, "replace_match_timeline_rows", AsyncMock(return_value=1)
+        match_persistence, "replace_match_timeline_rows", AsyncMock(return_value=1)
     )
 
     database = SimpleNamespace(
@@ -271,7 +265,6 @@ async def test_reprocess_commit_failure_logs_error(
         commit=AsyncMock(side_effect=RuntimeError("persist boom")),
         rollback=AsyncMock(),
     )
-    service = matches_service_module.MatchService(cast(AsyncSession, database))
     match_dto = cast(
         Any,
         SimpleNamespace(
@@ -281,12 +274,11 @@ async def test_reprocess_commit_failure_logs_error(
     )
 
     with capture_logs() as logs, pytest.raises(RuntimeError, match="persist boom"):
-        await service._reprocess_match(match_dto, None)
+        await match_persistence.upsert_match(cast(AsyncSession, database), match_dto)
 
-    entries = _events(logs, "match_timeline_persist_failed")
+    entries = _events(logs, "Failed to upsert match")
     assert len(entries) == 1
     assert entries[0]["match_id"] == "EUN1_1"
-    assert entries[0]["error_type"] == "RuntimeError"
     database.rollback.assert_awaited_once()
 
 
@@ -415,6 +407,9 @@ class _ExecuteResult:
     def scalars(self) -> _ScalarsStub:
         assert self._items is not None, "this result answers scalars()"
         return _ScalarsStub(self._items)
+
+    def scalar_one(self) -> object:
+        return self._scalar
 
     def scalar_one_or_none(self) -> object:
         return self._scalar

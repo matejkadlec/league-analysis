@@ -18,8 +18,9 @@ Alembic, Pydantic v2, structlog, APScheduler, httpx. Features live under
 ## Rules
 
 - async/await for all I/O; type hints everywhere.
-- Features depend on core, never the reverse. Features expose public APIs via
-  `__init__.py`; keep routes thin and logic in services.
+- Features depend on core, never the reverse. Feature `__init__.py` files stay
+  minimal; import from submodules directly. Keep routes thin and logic in
+  services.
 - Log through `structlog.get_logger(__name__)` with structured key-value
   fields. Event names are static snake_case identifiers — never interpolate
   values into the event string — and logs must never carry tokens,
