@@ -1,7 +1,9 @@
 # `_check_exact_match` guards `game_name`/`tag_line` against NULL even though
-# the ORM types them non-optional, because alembic/metadata-drift.txt records
-# the schema disagreeing. Mirrors `reportUnnecessaryComparison = "none"` in
-# pyproject.toml, which the file-level `strict` pragma otherwise discards.
+# both the ORM and the schema now type them non-optional. The guard predates
+# revision 20260816_0014 and is kept as a defence against malformed Riot
+# payloads, not against a lying annotation. Mirrors
+# `reportUnnecessaryComparison = "none"` in pyproject.toml, which the
+# file-level `strict` pragma otherwise discards.
 # pyright: reportUnnecessaryComparison=none
 """Player service for handling player data operations."""
 

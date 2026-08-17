@@ -5,6 +5,7 @@ from typing import TypedDict, override
 
 from sqlalchemy import (
     CheckConstraint,
+    ForeignKey,
     Index,
     PrimaryKeyConstraint,
     String,
@@ -41,6 +42,7 @@ class MatchmakingAnalysis(Base):
     # Composite primary key
     puuid: Mapped[str] = mapped_column(
         String(78),
+        ForeignKey("core.players.puuid", ondelete="CASCADE"),
         nullable=False,
         comment="Player PUUID this analysis is for",
     )

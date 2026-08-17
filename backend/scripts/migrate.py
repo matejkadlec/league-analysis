@@ -7,10 +7,10 @@ import argparse
 import sys
 from pathlib import Path
 
+from alembic import command
 from alembic.config import Config
 from sqlalchemy import create_engine, text
 
-from alembic import command
 from app.core.config import get_settings
 
 BACKEND_ROOT = Path(__file__).resolve().parent.parent

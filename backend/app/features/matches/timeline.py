@@ -141,14 +141,22 @@ class MatchTimeline(Base):
             "participant_id",
             name="uq_match_timelines_match_participant",
         ),
+        # Bare names: the `ck` naming convention is
+        # `ck_%(table_name)s_%(constraint_name)s`, so it prefixes these itself.
+        # Spelling the prefix here too yields `ck_match_timelines_ck_match_...`.
         CheckConstraint(
             "participant_id BETWEEN 1 AND 10",
-            name="ck_match_timelines_participant_id_range",
+            name="participant_id_range",
         ),
-        CheckConstraint(
-            "team_id IN (100, 200)", name="ck_match_timelines_team_id_valid"
-        ),
-        {"schema": "core"},
+        CheckConstraint("team_id IN (100, 200)", name="team_id_valid"),
+        {
+            "schema": "core",
+            "comment": (
+                "Objective-focused match timeline aggregates.\n"
+                "Stores one row per participant with objective takedowns and "
+                "team objective totals."
+            ),
+        },
     )
 
     # Composite PK requested by product requirements.
@@ -232,9 +240,19 @@ class MatchTimeline(Base):
         JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
     )
 
-    # Small objective event log with compact entries (t=timestamp, o=objective, r=role).
+    # The comment is the decoder for the short keys, so it belongs on the column
+    # rather than only here -- it is the one place the encoding is written down
+    # next to the data.
     objective_events: Mapped[list[dict[str, Any]]] = mapped_column(
-        JSONB, nullable=False, default=list, server_default=text("'[]'::jsonb")
+        JSONB,
+        nullable=False,
+        default=list,
+        server_default=text("'[]'::jsonb"),
+        comment=(
+            "Compact objective event log.\n"
+            "Each object uses short keys: t=timestamp, o=objective, "
+            "r=role(K/A), optional l=lane, s=subtype, m=monsterType."
+        ),
     )
 
     created_at: Mapped[datetime] = mapped_column(

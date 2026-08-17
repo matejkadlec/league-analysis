@@ -24,7 +24,7 @@ from enum import Enum
 from typing import Any, override
 
 import structlog
-from sqlalchemy import Boolean, Integer, String, select, update
+from sqlalchemy import Boolean, Index, Integer, String, select, update
 from sqlalchemy import DateTime as SQLDateTime
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column
@@ -75,7 +75,10 @@ class RateLimitState(Base):
         Integer,
         nullable=False,
         default=3,
-        comment="Priority level: 1=highest, 2=medium, 3=lowest",
+        comment=(
+            "Priority level: 1=highest (PLAYER_UPDATER), 2=medium "
+            "(MATCH_FETCHER), 3=lowest (MATCHMAKING_ANALYSIS)"
+        ),
     )
     requests_made: Mapped[int] = mapped_column(
         Integer,
@@ -119,7 +122,15 @@ class RateLimitState(Base):
         onupdate=func.now(),
     )
 
-    __table_args__ = ({"schema": "core"},)
+    __table_args__ = (
+        # Present in the database since the baseline; declared here so the
+        # models stop proposing its removal.
+        Index("idx_rate_limit_priority_waiting", "priority", "is_waiting"),
+        {
+            "schema": "core",
+            "comment": "Central rate limit state for all Riot API components",
+        },
+    )
 
     @override
     def __repr__(self) -> str:
