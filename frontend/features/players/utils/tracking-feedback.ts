@@ -21,22 +21,6 @@ const SERVER_DISPLAY_NAMES: Record<string, string> = {
   vn2: "VN",
 };
 
-export type PlayerTrackingFailureKind =
-  | "not-found"
-  | "rate-limited"
-  | "api-key"
-  | "unexpected";
-
-export class PlayerTrackingError extends Error {
-  constructor(
-    public readonly kind: PlayerTrackingFailureKind,
-    message: string,
-  ) {
-    super(message);
-    this.name = "PlayerTrackingError";
-  }
-}
-
 export function getServerDisplayName(platform: string): string {
   return SERVER_DISPLAY_NAMES[platform.toLowerCase()] ?? platform.toUpperCase();
 }
@@ -48,30 +32,30 @@ export function playerNotFoundMessage(
   return `Player ${riotId.gameName}#${riotId.tagLine} wasn't found on server ${getServerDisplayName(platform)}.`;
 }
 
-export function toPlayerTrackingError(
+export type PlayerTrackingFailureKind =
+  | "not-found"
+  | "rate-limited"
+  | "api-key"
+  | "unexpected";
+
+/**
+ * Classify a failed player lookup from the error the API layer already
+ * normalized. `normalizeApiError` has done the work of reading the status and
+ * the structured code, so this only has to name the four outcomes the selector
+ * words differently — no second error type, and no sniffing the message text
+ * for "api key", which the backend now states as `RIOT_API_KEY_INVALID`.
+ */
+export function playerTrackingFailureKind(
   error: ApiError,
-  riotId: RiotIdParts,
-  platform: string,
-): PlayerTrackingError {
-  const message = error.message.trim();
-  if (error.status === 404 || error.code === "PLAYER_NOT_FOUND") {
-    return new PlayerTrackingError(
-      "not-found",
-      playerNotFoundMessage(riotId, platform),
-    );
+): PlayerTrackingFailureKind {
+  if (error.kind === "not-found" || error.code === "PLAYER_NOT_FOUND") {
+    return "not-found";
   }
-
-  if (error.status === 429) {
-    return new PlayerTrackingError("rate-limited", message);
+  if (error.kind === "rate-limit") {
+    return "rate-limited";
   }
-
-  if (
-    error.code === "RIOT_API_KEY_INVALID" ||
-    message.toLowerCase().includes("api key") ||
-    message.toLowerCase().includes("unauthorized")
-  ) {
-    return new PlayerTrackingError("api-key", message);
+  if (error.code === "RIOT_API_KEY_INVALID") {
+    return "api-key";
   }
-
-  return new PlayerTrackingError("unexpected", message);
+  return "unexpected";
 }

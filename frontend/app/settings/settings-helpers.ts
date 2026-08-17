@@ -1,4 +1,4 @@
-import type { ApiError } from "@/lib/core/api";
+import { normalizeApiError, type StructuredErrorDetail } from "@/lib/core/api";
 
 export const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export const EMAIL_CODE_SLOTS = [
@@ -16,13 +16,6 @@ export const ACCOUNT_ACTION_BUTTON_CLASS =
   "button-medium no-rotation !h-9 !px-3 !py-2 w-36 justify-center";
 export const USER_QUERY_KEY = ["user"] as const;
 
-export interface MutationError extends Error {
-  code?: string | undefined;
-  lockedUntil?: string | undefined;
-  attemptsRemaining?: number | undefined;
-  status?: number | undefined;
-}
-
 export function isPasswordStrong(password: string): boolean {
   if (password.length < 8) {
     return false;
@@ -38,16 +31,16 @@ export function isPasswordStrong(password: string): boolean {
   return hasLowercase && hasUppercase && hasNumber && hasSpecialCharacter;
 }
 
-export function toMutationError(apiError: ApiError): MutationError {
-  // `normalizeApiError` has already read and sanitized the structured detail;
-  // re-parsing it here would only re-derive what `ApiError.details` states.
-  const detail = apiError.details?.detail;
-  const error = new Error(detail?.message ?? apiError.message) as MutationError;
-  error.code = detail?.code;
-  error.lockedUntil = detail?.locked_until;
-  error.attemptsRemaining = detail?.attempts_remaining;
-  error.status = apiError.status;
-  return error;
+/**
+ * The structured detail behind a thrown settings mutation, or undefined when
+ * the failure carried none. Every caller here branches on `detail.code`, which
+ * `normalizeApiError` has already read and sanitized — copying those fields
+ * onto a bespoke `Error` subclass only re-derived what `ApiError` states.
+ */
+export function settingsErrorDetail(
+  error: unknown,
+): StructuredErrorDetail | undefined {
+  return normalizeApiError(error).details?.detail;
 }
 
 export function emptyCodeDigits(): string[] {

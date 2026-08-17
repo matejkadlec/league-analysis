@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { unwrap } from "@/lib/core/api";
+import { ApiRequestError, normalizeApiError, unwrap } from "@/lib/core/api";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Search, StopCircle } from "lucide-react";
 
@@ -31,8 +31,8 @@ import { cn } from "@/lib/core/utils";
 
 import { parseRiotId, type RiotIdParts } from "../utils/riot-id";
 import {
-  PlayerTrackingError,
-  toPlayerTrackingError,
+  playerNotFoundMessage,
+  playerTrackingFailureKind,
 } from "../utils/tracking-feedback";
 
 const PLATFORM_OPTIONS = [
@@ -151,7 +151,7 @@ export function PlayerSelector({
         platform,
       });
       if (!result.success) {
-        throw toPlayerTrackingError(result.error, pendingRiotId, platform);
+        throw new ApiRequestError(result.error);
       }
       return result.data;
     },
@@ -164,7 +164,8 @@ export function PlayerSelector({
       await choosePlayer(player);
     },
     onError: (error) => {
-      if (error instanceof PlayerTrackingError && error.kind === "api-key") {
+      const kind = playerTrackingFailureKind(normalizeApiError(error));
+      if (kind === "api-key") {
         toast({
           title: "Player search is temporarily unavailable",
           description:
@@ -173,10 +174,7 @@ export function PlayerSelector({
         });
         return;
       }
-      if (
-        error instanceof PlayerTrackingError &&
-        error.kind === "rate-limited"
-      ) {
+      if (kind === "rate-limited") {
         toast({
           title: "Player search could not finish",
           description: "Riot temporarily limited requests. Try again later.",
@@ -184,10 +182,10 @@ export function PlayerSelector({
         });
         return;
       }
-      if (error instanceof PlayerTrackingError && error.kind === "not-found") {
+      if (kind === "not-found" && pendingRiotId) {
         toast({
           title: "Player search could not finish",
-          description: error.message,
+          description: playerNotFoundMessage(pendingRiotId, platform),
           variant: "error",
         });
         return;
