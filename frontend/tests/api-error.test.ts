@@ -6,7 +6,7 @@ import {
   apiErrorMessage,
   normalizeApiError,
 } from "../lib/core/api-error";
-import { toPlayerTrackingError } from "../features/players/utils/tracking-feedback";
+import { playerTrackingFailureKind } from "../features/players/utils/tracking-feedback";
 
 function axiosError(
   status: number | undefined,
@@ -94,17 +94,7 @@ describe("API error presentation", () => {
       message:
         "Riot data is temporarily unavailable. Please contact an administrator.",
     });
-    expect(
-      toPlayerTrackingError(
-        normalized,
-        { gameName: "SomeName", tagLine: "1234" },
-        "eun1",
-      ),
-    ).toMatchObject({
-      kind: "api-key",
-      message:
-        "Riot data is temporarily unavailable. Please contact an administrator.",
-    });
+    expect(playerTrackingFailureKind(normalized)).toBe("api-key");
   });
 
   it("classifies authentication, authorization, not-found and conflict paths", () => {
@@ -115,6 +105,18 @@ describe("API error presentation", () => {
       message: "Player not found",
     });
     expect(normalizeApiError(axiosError(409, {})).kind).toBe("conflict");
+  });
+
+  it("names the player-lookup outcomes the selector words differently", () => {
+    const kindOf = (status: number | undefined, body: unknown) =>
+      playerTrackingFailureKind(normalizeApiError(axiosError(status, body)));
+
+    expect(kindOf(404, { detail: "Player not found" })).toBe("not-found");
+    expect(kindOf(429, {})).toBe("rate-limited");
+    expect(kindOf(500, {})).toBe("unexpected");
+    // A network failure carries no status at all and must not read as a
+    // missing player, which would tell the viewer the Riot ID was wrong.
+    expect(kindOf(undefined, undefined)).toBe("unexpected");
   });
 
   it("uses safe messages for network, timeout and invalid-response failures", () => {

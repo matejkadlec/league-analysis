@@ -4,12 +4,14 @@ import axios, {
   InternalAxiosRequestConfig,
 } from "axios";
 import { z } from "zod";
-import { normalizeApiError } from "./api-error";
+import { ApiRequestError, normalizeApiError } from "./api-error";
 export {
+  ApiRequestError,
   apiErrorMessage,
   normalizeApiError,
   type ApiError,
   type ApiErrorKind,
+  type StructuredErrorDetail,
 } from "./api-error";
 import type { ApiError } from "./api-error";
 import { notifyRiotCredentialHealthUpdated } from "./riot-credential-health-events";
@@ -34,6 +36,22 @@ export const api = axios.create({
 
 export type ApiResponse<T> =
   { success: true; data: T } | { success: false; error: ApiError };
+
+/**
+ * Unwrap an `ApiResponse` inside a query or mutation function.
+ *
+ * The `validated*` helpers resolve with `{ success: false }` rather than
+ * rejecting, so a caller reading only `.data` turns a failed request into a
+ * silent empty state and never reaches the `QueryCache` error toast that
+ * `frontend/CLAUDE.md` makes the floor. Throwing here keeps that contract and
+ * carries the `ApiError` through, so the toast can name the failure.
+ */
+export function unwrap<T>(result: ApiResponse<T>): T {
+  if (!result.success) {
+    throw new ApiRequestError(result.error);
+  }
+  return result.data;
+}
 
 // Standard error code returned by backend when Riot API key is invalid
 const RIOT_API_KEY_INVALID_CODE = "RIOT_API_KEY_INVALID";

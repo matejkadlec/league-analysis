@@ -93,8 +93,6 @@ def _precondition_attribution(
             LP_SOURCE_UNAVAILABLE,
             "ambiguous_progression_batch",
         )
-    if match.game_end_timestamp is None:
-        return LPAttribution(None, LP_SOURCE_UNAVAILABLE, "missing_match_end")
     return None
 
 

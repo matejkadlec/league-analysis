@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { api, validatedGet } from "@/lib/core/api";
+import { unwrap, validatedGet, validatedPost } from "@/lib/core/api";
 import { useToast } from "@/lib/core/hooks";
 import { PlayerSyncRun, PlayerSyncRunSchema } from "@/lib/core/schemas";
 
@@ -49,12 +49,12 @@ export function usePlayerSyncRun(
   const activeSyncQuery = useQuery({
     queryKey: ["player-sync-active", puuid],
     queryFn: async () => {
-      const result = await validatedGet(
-        PlayerSyncRunSchema.nullable(),
-        `/players/${puuid}/sync/active`,
+      return unwrap(
+        await validatedGet(
+          PlayerSyncRunSchema.nullable(),
+          `/players/${puuid}/sync/active`,
+        ),
       );
-      if (!result.success) throw new Error(result.error.message);
-      return result.data;
     },
     refetchInterval: (query) => (query.state.data ? 1_000 : false),
   });
@@ -72,12 +72,12 @@ export function usePlayerSyncRun(
   const exactSyncQuery = useQuery({
     queryKey: ["player-sync", puuid, observedSyncId],
     queryFn: async () => {
-      const result = await validatedGet(
-        PlayerSyncRunSchema,
-        `/players/${puuid}/sync/${observedSyncId}`,
+      return unwrap(
+        await validatedGet(
+          PlayerSyncRunSchema,
+          `/players/${puuid}/sync/${observedSyncId}`,
+        ),
       );
-      if (!result.success) throw new Error(result.error.message);
-      return result.data;
     },
     enabled: observedSyncId !== null,
     refetchInterval: (query) =>
@@ -89,10 +89,9 @@ export function usePlayerSyncRun(
 
   const startSyncMutation = useMutation({
     mutationFn: async () => {
-      const response = await api.post(`/players/${puuid}/sync`);
-      const parsed = PlayerSyncRunSchema.safeParse(response.data);
-      if (!parsed.success) throw new Error("The update response was invalid.");
-      return parsed.data;
+      return unwrap(
+        await validatedPost(PlayerSyncRunSchema, `/players/${puuid}/sync`),
+      );
     },
     onSuccess: (syncRun) => {
       // The start endpoint attaches to an existing active run rather than

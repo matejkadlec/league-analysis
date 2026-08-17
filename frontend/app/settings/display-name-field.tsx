@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { validatedPatch } from "@/lib/core/api";
+import { ApiRequestError, validatedPatch } from "@/lib/core/api";
 import {
   UserResponseSchema,
   type UserProfileUpdate,
@@ -15,7 +15,6 @@ import { Loader2, Save } from "lucide-react";
 import {
   ACCOUNT_ACTION_BUTTON_CLASS,
   USER_QUERY_KEY,
-  toMutationError,
 } from "./settings-helpers";
 
 export function DisplayNameField() {
@@ -37,7 +36,7 @@ export function DisplayNameField() {
         update,
       );
       if (!result.success) {
-        throw toMutationError(result.error);
+        throw new ApiRequestError(result.error);
       }
       return result.data;
     },

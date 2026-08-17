@@ -22,7 +22,7 @@ import {
   RecentPerformanceCard,
   RoleStatsCard,
 } from "@/features/profile";
-import { validatedGet } from "@/lib/core/api";
+import { unwrap, validatedGet } from "@/lib/core/api";
 import {
   ChampionStatsResponseSchema,
   LaneStatsResponseSchema,
@@ -57,29 +57,30 @@ function PlayerOverviewContent({ puuid }: { puuid: string }) {
     isLoading: isPlayerLoading,
     error: playerError,
   } = useQuery(playerQueryOptions(puuid));
-  const { data: championStatsResult, isLoading: isChampionLoading } = useQuery({
-    queryKey: ["champion-stats", puuid],
-    queryFn: () =>
-      validatedGet(
-        ChampionStatsResponseSchema,
-        `/matches/player/${puuid}/champion-stats`,
-        { queue: 420 },
-      ),
-  });
-  const { data: laneStatsResult, isLoading: isLaneLoading } = useQuery({
+  const { data: championStats = null, isLoading: isChampionLoading } = useQuery(
+    {
+      queryKey: ["champion-stats", puuid],
+      queryFn: async () =>
+        unwrap(
+          await validatedGet(
+            ChampionStatsResponseSchema,
+            `/matches/player/${puuid}/champion-stats`,
+            { queue: 420 },
+          ),
+        ),
+    },
+  );
+  const { data: laneStats = null, isLoading: isLaneLoading } = useQuery({
     queryKey: ["lane-stats", puuid],
-    queryFn: () =>
-      validatedGet(
-        LaneStatsResponseSchema,
-        `/matches/player/${puuid}/lane-stats`,
-        { queue: 420 },
+    queryFn: async () =>
+      unwrap(
+        await validatedGet(
+          LaneStatsResponseSchema,
+          `/matches/player/${puuid}/lane-stats`,
+          { queue: 420 },
+        ),
       ),
   });
-
-  const championStats = championStatsResult?.success
-    ? championStatsResult.data
-    : null;
-  const laneStats = laneStatsResult?.success ? laneStatsResult.data : null;
 
   const handleRefreshAll = () => {
     void queryClient.invalidateQueries({ queryKey: playerQueryKey(puuid) });

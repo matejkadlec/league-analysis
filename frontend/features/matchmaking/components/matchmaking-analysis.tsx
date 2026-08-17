@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { ApiRequestError } from "@/lib/core/api";
 import { useQuery } from "@tanstack/react-query";
 
 import { getLatestMatchmakingAnalysis } from "../matchmaking-api";
@@ -35,7 +36,7 @@ export function MatchmakingAnalysis({
         if (result.error.status === 404) {
           return null;
         }
-        throw new Error(result.error.message);
+        throw new ApiRequestError(result.error);
       }
       return result.data;
     },

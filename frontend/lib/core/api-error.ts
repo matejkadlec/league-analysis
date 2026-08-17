@@ -19,10 +19,30 @@ export interface ApiError {
   code?: string | undefined;
   status?: number | undefined;
   kind: ApiErrorKind;
-  details?: unknown;
+  details?: { detail: StructuredErrorDetail } | undefined;
 }
 
-interface StructuredErrorDetail {
+/**
+ * A rejected request carrying the normalized error rather than only its text.
+ *
+ * Throwing a plain `Error` built from `result.error.message` loses
+ * `kind`/`code`/`status`, so the
+ * `QueryCache` handler in `components/providers.tsx` re-normalizes a bare
+ * `Error` into `kind: "unexpected"` and shows the generic fallback instead of
+ * the curated message. `normalizeApiError` unwraps this class back to the
+ * original `ApiError`.
+ */
+export class ApiRequestError extends Error {
+  readonly apiError: ApiError;
+
+  constructor(apiError: ApiError) {
+    super(apiError.message);
+    this.name = "ApiRequestError";
+    this.apiError = apiError;
+  }
+}
+
+export interface StructuredErrorDetail {
   code?: string | undefined;
   message?: string | undefined;
   locked_until?: string | undefined;
@@ -54,9 +74,7 @@ function readStructuredDetail(value: unknown): StructuredErrorDetail | null {
     message:
       typeof detail.message === "string" ? detail.message.trim() : undefined,
     locked_until:
-      typeof detail.locked_until === "string"
-        ? detail.locked_until
-        : undefined,
+      typeof detail.locked_until === "string" ? detail.locked_until : undefined,
     attempts_remaining:
       typeof detail.attempts_remaining === "number"
         ? detail.attempts_remaining
@@ -241,10 +259,17 @@ function responseApiError(
 }
 
 export function normalizeApiError(error: unknown): ApiError {
+  if (error instanceof ApiRequestError) {
+    return error.apiError;
+  }
+
   if (axios.isAxiosError(error)) {
     const status = error.response?.status;
     if (status !== undefined) {
-      return responseApiError(status, extractResponseError(error.response?.data));
+      return responseApiError(
+        status,
+        extractResponseError(error.response?.data),
+      );
     }
 
     if (

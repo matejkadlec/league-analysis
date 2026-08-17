@@ -1,7 +1,13 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertCircle, Loader2, RotateCcw, Save, SlidersHorizontal } from "lucide-react";
+import {
+  AlertCircle,
+  Loader2,
+  RotateCcw,
+  Save,
+  SlidersHorizontal,
+} from "lucide-react";
 import { useState } from "react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -15,6 +21,7 @@ import {
   resetCardPreference,
   updateCardPreference,
 } from "../smurf-boost-api";
+import { unwrap } from "@/lib/core/api";
 import { apiErrorMessage } from "@/lib/core/api-error";
 import { useToast } from "@/lib/core/hooks";
 import type { CardPreference, SmurfBoostPreset } from "@/lib/core/schemas";
@@ -55,11 +62,7 @@ export function SmurfBoostSettingsCard() {
   const presetsQuery = useQuery({
     queryKey: PRESETS_KEY,
     queryFn: async () => {
-      const result = await getSmurfBoostPresets();
-      if (!result.success) {
-        throw new Error(result.error.message);
-      }
-      return result.data;
+      return unwrap(await getSmurfBoostPresets());
     },
     staleTime: 3600000,
     retry: false,
@@ -68,11 +71,7 @@ export function SmurfBoostSettingsCard() {
   const preferenceQuery = useQuery({
     queryKey: PREFERENCE_KEY,
     queryFn: async () => {
-      const result = await getCardPreferences();
-      if (!result.success) {
-        throw new Error(result.error.message);
-      }
-      return result.data;
+      return unwrap(await getCardPreferences());
     },
     retry: false,
   });
@@ -205,13 +204,15 @@ export function SmurfBoostSettingsCard() {
   return (
     <Card id="smurf-boost-settings">
       <CardHeader className="pb-3">
-        <CardTitle className="flex flex-wrap items-center gap-2">
-          <SlidersHorizontal className="h-5 w-5 text-primary" />
-          Detection settings
+        <div className="flex flex-wrap items-center gap-2">
+          <CardTitle className="flex items-center gap-2">
+            <SlidersHorizontal className="h-5 w-5 text-primary" />
+            Detection settings
+          </CardTitle>
           <Badge variant="outline" className="ml-auto">
             {preference.isDefault ? "Shipped defaults" : "Your settings"}
           </Badge>
-        </CardTitle>
+        </div>
       </CardHeader>
       <CardContent className="space-y-6">
         <p className="text-sm text-muted-foreground">

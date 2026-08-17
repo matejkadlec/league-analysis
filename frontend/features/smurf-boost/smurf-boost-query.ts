@@ -1,4 +1,5 @@
 import { queryOptions } from "@tanstack/react-query";
+import { ApiRequestError } from "@/lib/core/api";
 
 import { getLatestSmurfBoostDetection } from "./smurf-boost-api";
 
@@ -21,12 +22,14 @@ export function smurfBoostQueryOptions(puuid: string | null) {
         if (result.error.status === 404) {
           return null;
         }
-        throw new Error(result.error.message);
+        throw new ApiRequestError(result.error);
       }
       return result.data;
     },
     enabled: !!puuid,
     retry: false,
     staleTime: 30000,
+    // SmurfBoostDetection renders this failure inline as a destructive alert.
+    meta: { silenceErrorToast: true },
   });
 }

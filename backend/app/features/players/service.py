@@ -1,10 +1,3 @@
-# `_check_exact_match` guards `game_name`/`tag_line` against NULL even though
-# both the ORM and the schema now type them non-optional. The guard predates
-# revision 20260816_0014 and is kept as a defence against malformed Riot
-# payloads, not against a lying annotation. Mirrors
-# `reportUnnecessaryComparison = "none"` in pyproject.toml, which the
-# file-level `strict` pragma otherwise discards.
-# pyright: reportUnnecessaryComparison=none
 """Player service for handling player data operations."""
 
 from collections.abc import Sequence
@@ -351,10 +344,8 @@ class PlayerService:
     @staticmethod
     def _check_exact_match(player: Player, game_name: str, tag_line: str) -> bool:
         """Check if player is an exact match."""
-        return bool(
-            player.game_name is not None
-            and player.game_name.lower() == game_name.lower()
-            and player.tag_line is not None
+        return (
+            player.game_name.lower() == game_name.lower()
             and player.tag_line.lower() == tag_line.lower()
         )
 

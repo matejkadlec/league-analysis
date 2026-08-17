@@ -101,17 +101,6 @@ class RiotAPIKey(Base):
         nullable=False,
         comment="When this key was added to the system",
     )
-    last_used_at: Mapped[datetime | None] = mapped_column(
-        SQLDateTime(timezone=True),
-        nullable=True,
-        comment="Last time this key was successfully used",
-    )
-    times_used: Mapped[int] = mapped_column(
-        BigInteger,
-        default=0,
-        nullable=False,
-        comment="Total number of requests made with this key",
-    )
 
 
 class RiotCredentialHealth(Base):

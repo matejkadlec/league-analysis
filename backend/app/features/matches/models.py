@@ -29,9 +29,10 @@ class Match(Base):
         # Same canonical spelling as `core.players.platform`. This column was
         # internally consistent at uppercase, but two columns of the same name
         # disagreeing is a comparison bug waiting to be written.
+        # Spelled bare: the `ck` convention prefixes `ck_<table>_` itself.
         CheckConstraint(
             "platform = lower(platform)",
-            name="ck_matches_platform_is_lowercase",
+            name="platform_is_lowercase",
         ),
         # Created by revision 20260808_0004 but never mirrored here, so
         # autogenerate proposed dropping it.

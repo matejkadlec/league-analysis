@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { validatedPost } from "@/lib/core/api";
+import { ApiRequestError, validatedPost } from "@/lib/core/api";
 import { MessageResponseSchema } from "@/lib/core/schemas";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,8 +20,7 @@ import {
   PASSWORD_REQUIREMENTS_TEXT,
   USER_QUERY_KEY,
   isPasswordStrong,
-  toMutationError,
-  type MutationError,
+  settingsErrorDetail,
 } from "./settings-helpers";
 
 export function PasswordChangeSection() {
@@ -65,7 +64,7 @@ export function PasswordChangeSection() {
       );
 
       if (!result.success) {
-        throw toMutationError(result.error);
+        throw new ApiRequestError(result.error);
       }
 
       return result.data;
@@ -81,8 +80,7 @@ export function PasswordChangeSection() {
       toast.success("Password changed");
     },
     onError: (error: Error) => {
-      const mutationError = error as MutationError;
-      if (mutationError.code === "CURRENT_PASSWORD_INVALID") {
+      if (settingsErrorDetail(error)?.code === "CURRENT_PASSWORD_INVALID") {
         setCurrentPasswordError("Current password is invalid.");
         return;
       }

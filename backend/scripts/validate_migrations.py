@@ -10,12 +10,13 @@ import re
 import subprocess
 import sys
 import tempfile
+from enum import Enum
 from pathlib import Path
 from uuid import uuid4
 
 from dotenv import load_dotenv
 from migration_contract import EXPECTED_ALEMBIC_HEAD
-from sqlalchemy import URL, create_engine, text
+from sqlalchemy import URL, Connection, create_engine, inspect, text
 
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
 RECONCILE_REVISION = (
@@ -378,6 +379,200 @@ def validate_revision_0014_repaired_the_seeded_rows(database: str) -> None:
         )
 
 
+def _python_default_literal(column: object) -> object | None:
+    """Render a column's Python-side default, or None when it has none."""
+    default = getattr(column, "default", None)
+    if default is None or default.is_callable or default.is_sequence:
+        return None
+    return default.arg
+
+
+def _rendered_default(value: object) -> str:
+    """Spell a Python default the way PostgreSQL prints the same constant."""
+    # `{True: ...}[0]` would hit the True key, because bool and int share a
+    # hash. Booleans therefore have to be tested before anything numeric.
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, Enum):
+        return str(value.value)
+    return str(value)
+
+
+def validate_column_defaults(database: str) -> None:
+    """Assert no column's DEFAULT disagrees with the model's own default.
+
+    `alembic/env.py` leaves `compare_server_default` off, because turning it on
+    reports 127 columns where the database carries a `DEFAULT` and the model
+    declares only a client-side `default=`. That is a difference in where the
+    value is written, not in what it is, and closing it would mean restating
+    every one of those defaults in the models.
+
+    The failure that difference could hide is the one checked here: the two
+    sides naming *different* values, so a row written by hand in psql and a row
+    written through the ORM disagree. All 128 comparable columns agreed when
+    this check was added.
+    """
+    from app.core.models import Base
+    from app.model_registry import import_all_models
+
+    # The same explicit import list `alembic/env.py` uses, so this check and
+    # `alembic check` always see the identical set of tables.
+    import_all_models()
+    url = administration_url().set(database=database)
+    engine = create_engine(url)
+    try:
+        inspector = inspect(engine)
+        disagreements: list[str] = []
+        for table in Base.metadata.sorted_tables:
+            reflected = {
+                column["name"]: column
+                for column in inspector.get_columns(table.name, schema=table.schema)
+            }
+            for column in table.columns:
+                info = reflected.get(column.name)
+                if info is None or info.get("default") is None:
+                    continue
+                python_default = _python_default_literal(column)
+                if python_default is None:
+                    continue
+                database_default = str(info["default"]).split("::")[0].strip("'")
+                if database_default != _rendered_default(python_default):
+                    disagreements.append(
+                        f"{table.schema}.{table.name}.{column.name}: "
+                        f"database {info['default']!r}, model {python_default!r}"
+                    )
+    finally:
+        engine.dispose()
+
+    if disagreements:
+        raise RuntimeError(
+            "a column's DEFAULT disagrees with the model's own default, so a "
+            "hand-written INSERT and an ORM INSERT would store different "
+            "values:\n  " + "\n  ".join(disagreements)
+        )
+
+
+# Prefix for the throwaway constraints this check adds inside a transaction it
+# rolls back, chosen so it cannot collide with a real convention-generated name.
+DRIFT_PROBE_PREFIX = "__drift_probe_"
+
+
+def _check_constraint_definitions(
+    connection: Connection, table: str, schema: str
+) -> tuple[dict[str, str], dict[str, str]]:
+    """Return one table's CHECK definitions as (live, probe) name -> expression.
+
+    Both halves come out of `pg_get_constraintdef`, so both have been through
+    PostgreSQL's own deparser and are directly comparable.
+    """
+    rows = connection.execute(
+        text(
+            "SELECT conname, pg_get_constraintdef(c.oid) "
+            "FROM pg_constraint c "
+            "JOIN pg_class t ON t.oid = c.conrelid "
+            "JOIN pg_namespace n ON n.oid = t.relnamespace "
+            "WHERE c.contype = 'c' AND t.relname = :table AND n.nspname = :schema"
+        ),
+        {"table": table, "schema": schema},
+    ).all()
+
+    live: dict[str, str] = {}
+    probe: dict[str, str] = {}
+    for name, definition in rows:
+        # `NOT VALID` is an artefact of how the probe is added, never part of
+        # what the constraint means.
+        expression = definition.removesuffix(" NOT VALID")
+        if name.startswith(DRIFT_PROBE_PREFIX):
+            probe[name.removeprefix(DRIFT_PROBE_PREFIX)] = expression
+        else:
+            live[name] = expression
+    return live, probe
+
+
+def validate_check_constraints(database: str) -> None:
+    """Assert every CHECK constraint enforces the condition its model declares.
+
+    `alembic check` routes CHECK constraints through Alembic's
+    `checkconstraint_byname` comparison, which matches them by name and never
+    reads the expression. Rewriting a constraint's condition in a model while
+    keeping its name is therefore invisible: the database goes on enforcing the
+    old rule, autogenerate emits nothing, and the gate stays green.
+
+    Comparing the two expressions as text does not work, which is presumably
+    why Alembic does not try. PostgreSQL stores a parsed node and prints it
+    back normalised, so the model's `status IN ('pending', 'failed')` comes out
+    as `status::text = ANY (ARRAY['pending'::character varying, ...])` and no
+    string comparison survives it.
+
+    So both sides are put through that same deparser. Each model constraint is
+    added to its real table as `NOT VALID` (no row scan, and these tables are
+    empty anyway) under a marker name, every CHECK on the table is then read
+    back through `pg_get_constraintdef`, and the marked definitions are
+    compared with the ones that were already there. The whole thing runs in a
+    transaction that is always rolled back, so the database is untouched.
+
+    Constraints are matched on expression rather than on name, because the name
+    is the half `alembic check` already compares.
+    """
+    from sqlalchemy import CheckConstraint
+
+    from app.core.models import Base
+    from app.model_registry import import_all_models
+
+    import_all_models()
+    engine = create_engine(administration_url().set(database=database))
+    disagreements: list[str] = []
+    try:
+        with engine.begin() as connection:
+            for table in Base.metadata.sorted_tables:
+                schema = table.schema or "public"
+                model_checks = [
+                    constraint
+                    for constraint in table.constraints
+                    if isinstance(constraint, CheckConstraint)
+                ]
+                if not model_checks:
+                    continue
+                for index, constraint in enumerate(model_checks):
+                    connection.execute(
+                        text(
+                            f'ALTER TABLE "{schema}"."{table.name}" '
+                            f'ADD CONSTRAINT "{DRIFT_PROBE_PREFIX}{index}" '
+                            f"CHECK ({constraint.sqltext}) NOT VALID"
+                        )
+                    )
+
+                live, probe = _check_constraint_definitions(
+                    connection, table.name, schema
+                )
+                live_expressions = set(live.values())
+                for index, expression in probe.items():
+                    if expression in live_expressions:
+                        continue
+                    declared = model_checks[int(index)]
+                    disagreements.append(
+                        f"{schema}.{table.name}: the model declares "
+                        f"{str(declared.sqltext)!r} (name {declared.name!r}), "
+                        f"which normalises to {expression!r}, and no CHECK on "
+                        f"the table enforces it. The table has: "
+                        + "; ".join(
+                            f"{name} {definition}"
+                            for name, definition in sorted(live.items())
+                        )
+                    )
+            # Nothing here is meant to survive; the probes exist only to be read.
+            connection.rollback()
+    finally:
+        engine.dispose()
+
+    if disagreements:
+        raise RuntimeError(
+            "a CHECK constraint does not enforce what its model says it does, "
+            "which `alembic check` cannot see because it compares CHECK "
+            "constraints by name only:\n  " + "\n  ".join(disagreements)
+        )
+
+
 def validate_metadata_drift(database: str, restored_database: str) -> None:
     """Assert the ORM models describe the migrated schema exactly.
 
@@ -530,6 +725,8 @@ def main() -> int:
             restore_validation_archive(restored_database, archive)
             validate_revision(restored_database)
             validate_metadata_drift(database, restored_database)
+            validate_column_defaults(database)
+            validate_check_constraints(database)
             if deterministic_snapshot(restored_database) != deterministic_snapshot(
                 database
             ):

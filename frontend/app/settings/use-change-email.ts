@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { validatedPost } from "@/lib/core/api";
+import { ApiRequestError, validatedPost } from "@/lib/core/api";
 import {
   EmailChangeCodeResponseSchema,
   UserResponseSchema,
@@ -14,8 +14,7 @@ import {
   EMAIL_REGEX,
   USER_QUERY_KEY,
   emptyCodeDigits,
-  toMutationError,
-  type MutationError,
+  settingsErrorDetail,
 } from "./settings-helpers";
 
 export function useChangeEmail() {
@@ -92,7 +91,7 @@ export function useChangeEmail() {
         { new_email: targetEmail },
       );
       if (!result.success) {
-        throw toMutationError(result.error);
+        throw new ApiRequestError(result.error);
       }
       return result.data;
     },
@@ -107,25 +106,25 @@ export function useChangeEmail() {
       });
     },
     onError: (error: Error) => {
-      const mutationError = error as MutationError;
+      const detail = settingsErrorDetail(error);
 
-      if (mutationError.code === "EMAIL_UNCHANGED") {
+      if (detail?.code === "EMAIL_UNCHANGED") {
         setNewEmailError(
           "New email must be different from your current email address.",
         );
         return;
       }
 
-      if (mutationError.code === "EMAIL_ALREADY_REGISTERED") {
+      if (detail?.code === "EMAIL_ALREADY_REGISTERED") {
         setNewEmailError("This email address is already registered.");
         return;
       }
 
       if (
-        mutationError.code === "EMAIL_CHANGE_LOCKED" ||
-        mutationError.code === "EMAIL_CHANGE_TOO_MANY_ATTEMPTS"
+        detail?.code === "EMAIL_CHANGE_LOCKED" ||
+        detail?.code === "EMAIL_CHANGE_TOO_MANY_ATTEMPTS"
       ) {
-        applyEmailLock(mutationError.lockedUntil);
+        applyEmailLock(detail?.locked_until);
         return;
       }
 
@@ -145,7 +144,7 @@ export function useChangeEmail() {
         },
       );
       if (!result.success) {
-        throw toMutationError(result.error);
+        throw new ApiRequestError(result.error);
       }
       return result.data;
     },
@@ -157,30 +156,30 @@ export function useChangeEmail() {
       void checkAuth();
     },
     onError: (error: Error) => {
-      const mutationError = error as MutationError;
+      const detail = settingsErrorDetail(error);
 
-      if (mutationError.code === "EMAIL_CHANGE_INVALID_CODE") {
+      if (detail?.code === "EMAIL_CHANGE_INVALID_CODE") {
         setEmailCodeError("This code is incorrect.");
         return;
       }
 
-      if (mutationError.code === "EMAIL_CHANGE_CODE_EXPIRED") {
+      if (detail?.code === "EMAIL_CHANGE_CODE_EXPIRED") {
         setEmailCodeError(
           "This code has expired. Use 'Resend the code.' to get a new one.",
         );
         return;
       }
 
-      if (mutationError.code === "EMAIL_CHANGE_REQUEST_NOT_FOUND") {
+      if (detail?.code === "EMAIL_CHANGE_REQUEST_NOT_FOUND") {
         setEmailCodeError("No active code found. Please resend the code.");
         return;
       }
 
       if (
-        mutationError.code === "EMAIL_CHANGE_TOO_MANY_ATTEMPTS" ||
-        mutationError.code === "EMAIL_CHANGE_LOCKED"
+        detail?.code === "EMAIL_CHANGE_TOO_MANY_ATTEMPTS" ||
+        detail?.code === "EMAIL_CHANGE_LOCKED"
       ) {
-        applyEmailLock(mutationError.lockedUntil);
+        applyEmailLock(detail?.locked_until);
         return;
       }
 

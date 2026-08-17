@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { ApiRequestError, normalizeApiError, unwrap } from "@/lib/core/api";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Search, StopCircle } from "lucide-react";
 
@@ -29,9 +30,14 @@ import type { Player } from "@/lib/core/schemas";
 import { cn } from "@/lib/core/utils";
 
 import { parseRiotId, type RiotIdParts } from "../utils/riot-id";
+
+interface DiscoverAttempt {
+  riotId: RiotIdParts;
+  platform: string;
+}
 import {
-  PlayerTrackingError,
-  toPlayerTrackingError,
+  playerNotFoundMessage,
+  playerTrackingFailureKind,
 } from "../utils/tracking-feedback";
 
 const PLATFORM_OPTIONS = [
@@ -107,12 +113,12 @@ export function PlayerSelector({
   const suggestionsQuery = useQuery({
     queryKey: ["player-suggestions", debouncedSearch, "all-platforms"],
     queryFn: async () => {
-      const result = await searchPlayerSuggestions({
-        q: debouncedSearch,
-        limit: 5,
-      });
-      if (!result.success) throw new Error(result.error.message);
-      return result.data;
+      return unwrap(
+        await searchPlayerSuggestions({
+          q: debouncedSearch,
+          limit: 5,
+        }),
+      );
     },
     enabled: debouncedSearch.length >= 2,
     staleTime: 30_000,
@@ -139,29 +145,33 @@ export function PlayerSelector({
     }
   };
 
+  // The Riot ID and server travel as mutation variables rather than being read
+  // from state in `onError`: cancelling or switching server while the request
+  // is in flight would otherwise name a server that was never queried, or drop
+  // the specific "wasn't found on <server>" wording for the generic message.
   const discoverMutation = useMutation({
-    mutationFn: async () => {
-      if (!pendingRiotId) {
-        throw new Error("Enter a Riot ID in Name#Tag format.");
-      }
+    mutationFn: async ({ riotId, platform }: DiscoverAttempt) => {
       const result = await discoverPlayer({
-        game_name: pendingRiotId.gameName,
-        tag_line: pendingRiotId.tagLine,
+        game_name: riotId.gameName,
+        tag_line: riotId.tagLine,
         platform,
       });
       if (!result.success) {
-        throw toPlayerTrackingError(result.error, pendingRiotId, platform);
+        throw new ApiRequestError(result.error);
       }
       return result.data;
     },
     onSuccess: async (player) => {
       setPendingRiotId(null);
       void queryClient.invalidateQueries({ queryKey: ["player-suggestions"] });
-      void queryClient.invalidateQueries({ queryKey: ["player", player.puuid] });
+      void queryClient.invalidateQueries({
+        queryKey: ["player", player.puuid],
+      });
       await choosePlayer(player);
     },
-    onError: (error) => {
-      if (error instanceof PlayerTrackingError && error.kind === "api-key") {
+    onError: (error, attempt) => {
+      const kind = playerTrackingFailureKind(normalizeApiError(error));
+      if (kind === "api-key") {
         toast({
           title: "Player search is temporarily unavailable",
           description:
@@ -170,10 +180,7 @@ export function PlayerSelector({
         });
         return;
       }
-      if (
-        error instanceof PlayerTrackingError &&
-        error.kind === "rate-limited"
-      ) {
+      if (kind === "rate-limited") {
         toast({
           title: "Player search could not finish",
           description: "Riot temporarily limited requests. Try again later.",
@@ -181,10 +188,10 @@ export function PlayerSelector({
         });
         return;
       }
-      if (error instanceof PlayerTrackingError && error.kind === "not-found") {
+      if (kind === "not-found") {
         toast({
           title: "Player search could not finish",
-          description: error.message,
+          description: playerNotFoundMessage(attempt.riotId, attempt.platform),
           variant: "error",
         });
         return;
@@ -296,15 +303,15 @@ export function PlayerSelector({
           ))}
           {!suggestionsQuery.isFetching &&
             (suggestions.length === 0 || isValidRiotId(searchValue)) && (
-            <button
-              type="button"
-              className="w-full rounded px-2 py-2 text-left text-xs text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={submitUnknownPlayer}
-            >
-              Search Riot for this Name#Tag
-            </button>
-          )}
+              <button
+                type="button"
+                className="w-full rounded px-2 py-2 text-left text-xs text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={submitUnknownPlayer}
+              >
+                Search Riot for this Name#Tag
+              </button>
+            )}
         </div>
       )}
 
@@ -312,7 +319,7 @@ export function PlayerSelector({
         open={pendingRiotId !== null}
         onOpenChange={(open) => !open && setPendingRiotId(null)}
       >
-        <DialogContent className="dialog-white-border">
+        <DialogContent>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Search className="h-5 w-5 text-[#cfa93a]" /> Select player server
@@ -350,7 +357,11 @@ export function PlayerSelector({
               type="button"
               className="button-medium no-rotation py-2 px-4"
               disabled={discoverMutation.isPending}
-              onClick={() => discoverMutation.mutate()}
+              onClick={() => {
+                if (pendingRiotId) {
+                  discoverMutation.mutate({ riotId: pendingRiotId, platform });
+                }
+              }}
             >
               {discoverMutation.isPending && (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />

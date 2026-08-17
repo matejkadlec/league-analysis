@@ -12,11 +12,11 @@ export function MatchmakingExplanationCard() {
   return (
     <Card className="overflow-hidden">
       <CardHeader className="pb-3">
-        <CardTitle className="flex items-center justify-between">
-          <span className="flex items-center gap-2">
+        <div className="flex items-center justify-between">
+          <CardTitle className="flex items-center gap-2">
             <GitBranch className="h-5 w-5 text-primary" />
             Calculation Flowchart
-          </span>
+          </CardTitle>
           <Button
             variant="ghost"
             size="sm"
@@ -30,7 +30,7 @@ export function MatchmakingExplanationCard() {
               }`}
             />
           </Button>
-        </CardTitle>
+        </div>
       </CardHeader>
       <CardContent className="pt-2 pb-4">
         <p className="text-sm text-muted-foreground mb-3">

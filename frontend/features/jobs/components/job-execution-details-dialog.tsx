@@ -33,15 +33,13 @@ export function JobExecutionDetailsDialog({
   onToggleApiCall,
 }: JobExecutionDetailsDialogProps) {
   const apiCalls = execution?.detailed_logs?.api_calls as
-    | APICallEntry[]
-    | undefined;
+    APICallEntry[] | undefined;
   const logs = execution?.detailed_logs?.logs as
-    | Array<Record<string, unknown>>
-    | undefined;
+    Array<Record<string, unknown>> | undefined;
 
   return (
     <Dialog open={!!execution} onOpenChange={onOpenChange}>
-      <DialogContent className="dialog-white-border max-w-5xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileText className="h-5 w-5 text-gold-base" />
@@ -101,7 +99,9 @@ export function JobExecutionDetailsDialog({
                   </span>
                 </div>
                 <div className="flex items-center justify-between gap-3 pr-4">
-                  <span className="text-muted-foreground">Records created:</span>
+                  <span className="text-muted-foreground">
+                    Records created:
+                  </span>
                   <span className="font-medium text-right">
                     {execution.records_created}
                   </span>
@@ -117,11 +117,16 @@ export function JobExecutionDetailsDialog({
                 <div className="flex items-center justify-between gap-3 pr-4">
                   <span className="text-muted-foreground">Duration:</span>
                   <span className="font-medium text-right">
-                    {formatDuration(execution.started_at, execution.completed_at)}
+                    {formatDuration(
+                      execution.started_at,
+                      execution.completed_at,
+                    )}
                   </span>
                 </div>
                 <div className="flex items-center justify-between gap-3 pr-4">
-                  <span className="text-muted-foreground">Records updated:</span>
+                  <span className="text-muted-foreground">
+                    Records updated:
+                  </span>
                   <span className="font-medium text-right">
                     {execution.records_updated}
                   </span>

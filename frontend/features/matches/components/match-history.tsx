@@ -8,7 +8,7 @@ import {
   MatchListWithPlayerDataResponseSchema,
   MatchStatsResponseSchema,
 } from "@/lib/core/schemas";
-import { validatedGet } from "@/lib/core/api";
+import { normalizeApiError, unwrap, validatedGet } from "@/lib/core/api";
 import { usePlayerSyncRun } from "@/features/players";
 import { getMatchHistoryErrorMessage } from "../utils/match-history-error";
 import { Card, CardContent } from "@/components/ui/card";
@@ -84,17 +84,24 @@ export function MatchHistory({ puuid, lastUpdated }: MatchHistoryProps) {
   }, []);
   /* eslint-enable react-hooks/set-state-in-effect */
 
-  const { data: statsResult } = useQuery({
+  const { data: stats = null } = useQuery({
     queryKey: ["match-history-stats", puuid, queueQueryParam],
-    queryFn: () =>
-      validatedGet(MatchStatsResponseSchema, `/matches/player/${puuid}/stats`, {
-        queues: queueQueryParam,
-      }),
+    queryFn: async () =>
+      unwrap(
+        await validatedGet(
+          MatchStatsResponseSchema,
+          `/matches/player/${puuid}/stats`,
+          { queues: queueQueryParam },
+        ),
+      ),
     enabled: !!puuid && preferencesReady,
+    // Not silenced: MatchHistoryErrorCard renders off the detailed query, so a
+    // stats-only failure would otherwise show 0W/0L with nothing said.
+    meta: { errorTitle: "Match statistics" },
   });
 
   const {
-    data: response,
+    data = null,
     isLoading,
     error,
     isFetching,
@@ -109,44 +116,31 @@ export function MatchHistory({ puuid, lastUpdated }: MatchHistoryProps) {
       currentPage,
       pageSize,
     ],
-    queryFn: () =>
-      validatedGet(
-        MatchListWithPlayerDataResponseSchema,
-        `/matches/player/${puuid}/detailed`,
-        {
-          queues: queueQueryParam,
-          search: debouncedMatchSearch || undefined,
-          start: (currentPage - 1) * pageSize,
-          count: pageSize,
-        },
+    queryFn: async () =>
+      unwrap(
+        await validatedGet(
+          MatchListWithPlayerDataResponseSchema,
+          `/matches/player/${puuid}/detailed`,
+          {
+            queues: queueQueryParam,
+            search: debouncedMatchSearch || undefined,
+            start: (currentPage - 1) * pageSize,
+            count: pageSize,
+          },
+        ),
       ),
     enabled: !!puuid && preferencesReady,
-    retry: (failureCount, error) => {
-      if (
-        error instanceof Error &&
-        (error.message.includes("Network Error") ||
-          error.message.includes("ERR_NETWORK"))
-      ) {
-        return false;
-      }
-      return failureCount < 2;
-    },
+    // MatchHistoryErrorCard below reports this failure inline.
+    meta: { silenceErrorToast: true },
+    retry: (failureCount, error) =>
+      normalizeApiError(error).kind === "network" ? false : failureCount < 2,
     refetchOnWindowFocus: false,
     refetchOnMount: false,
     refetchOnReconnect: false,
     placeholderData: (previousData) => previousData,
     staleTime: 60000,
-    refetchInterval: (query) => {
-      const data = query.state.data;
-      if (
-        data?.success &&
-        data.data?.matches &&
-        data.data.matches.length === 0
-      ) {
-        return 5000;
-      }
-      return false;
-    },
+    refetchInterval: (query) =>
+      query.state.data?.matches?.length === 0 ? 5000 : false,
   });
 
   const handleQueueFilterSelect = (
@@ -179,10 +173,8 @@ export function MatchHistory({ puuid, lastUpdated }: MatchHistoryProps) {
     setPageSizeOpen(false);
   };
 
-  const data = response?.success ? response.data : null;
   const matches = data?.matches || [];
   const apiTotalMatches = data?.total || 0;
-  const stats = statsResult?.success ? statsResult.data : null;
   const totalMatches = stats?.total_matches ?? apiTotalMatches;
   const wins = stats?.wins ?? 0;
   const losses = stats?.losses ?? 0;
@@ -214,20 +206,13 @@ export function MatchHistory({ puuid, lastUpdated }: MatchHistoryProps) {
     return <MatchHistoryLoadingCard />;
   }
 
-  if ((!isFetching && error) || (response && !response.success)) {
-    const errorMessage = getMatchHistoryErrorMessage(
-      error,
-      response && !response.success ? response.error : null,
-    );
-
-    const isNotFound =
-      errorMessage.toLowerCase().includes("not found") ||
-      (error instanceof Error && error.message.includes("404"));
+  if (!isFetching && error) {
+    const apiError = normalizeApiError(error);
 
     return (
       <MatchHistoryErrorCard
-        isNotFound={isNotFound}
-        errorMessage={errorMessage}
+        isNotFound={apiError.kind === "not-found"}
+        errorMessage={getMatchHistoryErrorMessage(apiError)}
         onRetry={() => void refetch()}
       />
     );
@@ -256,14 +241,25 @@ export function MatchHistory({ puuid, lastUpdated }: MatchHistoryProps) {
             activeQueueFilters={activeQueueFilters}
           />
         ) : (
-          <div className="rounded-md border">
-            {matches.map((match) => (
-              <MatchRow
-                key={match.match_id}
-                match={match}
-                playerPuuid={puuid}
-              />
-            ))}
+          // Below `lg` a row reflows into stacked blocks and fits any phone.
+          // From `lg` up it is the fixed-width desktop layout, which wants
+          // ~1280px and so still has to scroll inside this container on the
+          // laptop widths that do not have it. `min-w-0` because the flex
+          // chain above refuses to shrink otherwise, and the row would
+          // stretch the whole document instead of scrolling here.
+          <div
+            data-testid="match-list"
+            className="min-w-0 rounded-md border lg:overflow-x-auto"
+          >
+            <div className="lg:w-max lg:min-w-full">
+              {matches.map((match) => (
+                <MatchRow
+                  key={match.match_id}
+                  match={match}
+                  playerPuuid={puuid}
+                />
+              ))}
+            </div>
           </div>
         )}
 

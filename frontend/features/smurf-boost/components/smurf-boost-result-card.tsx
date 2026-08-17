@@ -370,14 +370,16 @@ export function SmurfBoostResultCard({
   return (
     <Card id="smurf-boost-result">
       <CardHeader className="pb-3">
-        <CardTitle className="flex flex-wrap items-center gap-2">
-          <ShieldQuestion className="h-5 w-5 text-primary" />
-          Comparison result
+        <div className="flex flex-wrap items-center gap-2">
+          <CardTitle className="flex items-center gap-2">
+            <ShieldQuestion className="h-5 w-5 text-primary" />
+            Comparison result
+          </CardTitle>
           <Badge variant="secondary" className="ml-auto">
             Recent {results.recent_games} games against the previous{" "}
             {results.baseline_games}
           </Badge>
-        </CardTitle>
+        </div>
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <Badge variant="outline" className="gap-1">
             <Gauge className="h-3 w-3" />

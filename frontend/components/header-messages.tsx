@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { z } from "zod";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -11,19 +12,19 @@ import {
   canUseOptionalStorage,
   type CookieConsentState,
 } from "@/features/cookie-consent";
-import { api } from "@/lib/core/api";
+import { unwrap, validatedGet } from "@/lib/core/api";
 import { RIOT_CREDENTIAL_HEALTH_UPDATED_EVENT } from "@/lib/core/riot-credential-health-events";
 
-interface ServiceStatus {
-  is_under_maintenance: boolean;
-  reason: "ok" | "api_key_missing" | "api_key_invalid";
-  active_source: "db" | "env" | "none";
-  credential_status: "missing" | "unknown" | "valid" | "invalid";
-  health_revision: number;
-  observed_at: string;
-  has_recent_recovery: boolean;
-  recovery_notice_key: string | null;
-}
+const ServiceStatusSchema = z.object({
+  is_under_maintenance: z.boolean(),
+  reason: z.enum(["ok", "api_key_missing", "api_key_invalid"]),
+  active_source: z.enum(["db", "env", "none"]),
+  credential_status: z.enum(["missing", "unknown", "valid", "invalid"]),
+  health_revision: z.number(),
+  observed_at: z.string(),
+  has_recent_recovery: z.boolean(),
+  recovery_notice_key: z.string().nullable(),
+});
 
 // Temporarily disabled while Riot production-key review is pending.
 const SHOW_SIGNED_OUT_RECRUITMENT_BANNER = false;
@@ -77,7 +78,9 @@ export function HeaderMessages() {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed)) {
           setClosedMessages(
-            parsed.filter((value): value is string => typeof value === "string"),
+            parsed.filter(
+              (value): value is string => typeof value === "string",
+            ),
           );
         }
       } catch {
@@ -106,16 +109,19 @@ export function HeaderMessages() {
     const newClosed = [...closedMessages, id];
     setClosedMessages(newClosed);
     if (optionalStorageEnabledRef.current) {
-      localStorage.setItem("header_messages_closed:v1", JSON.stringify(newClosed));
+      localStorage.setItem(
+        "header_messages_closed:v1",
+        JSON.stringify(newClosed),
+      );
     }
   };
 
   const { data: serviceStatus } = useQuery({
     queryKey: ["service-status"],
-    queryFn: async () => {
-      const res = await api.get<ServiceStatus>("/settings/service-status");
-      return res.data;
-    },
+    queryFn: async () =>
+      unwrap(
+        await validatedGet(ServiceStatusSchema, "/settings/service-status"),
+      ),
     enabled: !!isAuthenticated,
     staleTime: 5 * 1000,
     refetchInterval: 15 * 1000,
@@ -307,8 +313,7 @@ export function HeaderMessages() {
             <AlertTriangle className="h-4 w-4 shrink-0" />
             <span>
               Using Riot API Key from environment variables. Consider adding it
-              to database for better management. Also note that local server
-              {" "}
+              to database for better management. Also note that local server{" "}
               <b>needs a restart</b> after environment variable change.
             </span>
           </div>

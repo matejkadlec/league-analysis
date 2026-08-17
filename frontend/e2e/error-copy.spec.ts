@@ -1,5 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
+import { seedAuthenticatedSession } from "./support/auth";
+
 /**
  * Browser evidence for the 2026-08 error-copy sweep: rewritten error states,
  * exercised in a real Chromium against mocked API responses.
@@ -24,10 +26,10 @@ const player = {
 };
 
 async function signIn(page: Page) {
-  await page.addInitScript(() => {
-    localStorage.setItem("auth_access_token", "test-access-token");
-    localStorage.setItem("auth_refresh_token", "test-refresh-token");
-  });
+  // The app gates routes on an httpOnly cookie, not on anything in
+  // localStorage; the middleware redirects without it and the page renders
+  // nothing at all.
+  await seedAuthenticatedSession(page);
 
   await page.route("**/api/v1/auth/me", async (route) => {
     await route.fulfill({
@@ -50,6 +52,14 @@ async function signIn(page: Page) {
   });
 }
 
+/**
+ * The consent dialog is modal, so until it is dismissed Radix marks the rest
+ * of the page `aria-hidden` and every role query below finds nothing.
+ */
+async function acceptCookieBanner(page: Page) {
+  await page.getByRole("button", { name: "Accept necessary" }).click();
+}
+
 test("unknown routes offer a way back home", async ({ page }) => {
   await signIn(page);
   await page.route("**/api/v1/**", async (route) => {
@@ -60,6 +70,7 @@ test("unknown routes offer a way back home", async ({ page }) => {
   });
 
   await page.goto("/this-route-does-not-exist");
+  await acceptCookieBanner(page);
 
   await expect(
     page.getByRole("heading", { name: "This page does not exist" }),
@@ -108,6 +119,7 @@ test("the rewritten curated 404 detail reaches the viewer without a PUUID", asyn
   });
 
   await page.goto("/player-overview");
+  await acceptCookieBanner(page);
 
   await expect(page.getByText("Could not load this data")).toBeVisible();
   await expect(page.getByText(PUUID)).toHaveCount(0);
@@ -164,6 +176,7 @@ test("an invalid Riot credential during player search shows the admin-contact to
   });
 
   await page.goto("/player-overview");
+  await acceptCookieBanner(page);
 
   const search = page.getByPlaceholder("Search for player").first();
   await search.fill("SomeName#1234");

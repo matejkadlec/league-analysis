@@ -102,13 +102,15 @@ export function ChampionStatsCard({
   return (
     <Card id="top-champions">
       <CardHeader className="pb-3">
-        <CardTitle className="flex flex-wrap items-center gap-2">
-          <Swords className="h-5 w-5 text-primary" />
-          Top Champions
+        <div className="flex flex-wrap items-center gap-2">
+          <CardTitle className="flex items-center gap-2">
+            <Swords className="h-5 w-5 text-primary" />
+            Top Champions
+          </CardTitle>
           <Badge variant="secondary" className="ml-auto text-right">
             Ranked by games played · {stats.champions.length} champions total
           </Badge>
-        </CardTitle>
+        </div>
         <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
           {lastUpdated ? (
             <div className="flex items-center gap-1">
