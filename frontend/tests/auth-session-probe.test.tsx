@@ -162,6 +162,55 @@ describe("a refresh that never reaches the server", () => {
   });
 });
 
+describe("a probe that fails right after a refresh the server honoured", () => {
+  it("does not end the session over a 5xx", async () => {
+    // The worst possible moment to guess. The server accepted the refresh a
+    // fraction of a second ago, so it has just issued a fresh 30-day token
+    // that is now in the jar. If the retried probe comes back 502 -- a
+    // redeploy, a DB blip -- tearing down here clears the hint, bounces the
+    // visitor to /sign-in, and leaves that brand-new HttpOnly credential live
+    // with nothing asking the server to revoke it. The first probe's 5xx
+    // branch already declines to guess; these two agreeing is the point.
+    document.cookie = `${AUTH_STATE_COOKIE_NAME}=${AUTH_STATE_COOKIE_VALUE}; path=/`;
+    let probes = 0;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes("/auth/refresh")) {
+        return new Response("{}", { status: 200 });
+      }
+      probes += 1;
+      return new Response("{}", { status: probes === 1 ? 401 : 502 });
+    });
+
+    const { getByTestId } = renderProvider();
+
+    await waitFor(() =>
+      expect(getByTestId("state").textContent).toBe("settled:false"),
+    );
+    expect(probes).toBe(2);
+    expect(document.cookie).toContain(AUTH_STATE_COOKIE_NAME);
+  });
+
+  it("does end the session when the retried probe is refused", async () => {
+    // The other half, so the branch is pinned in both directions rather than
+    // being satisfied by never tearing down at all.
+    document.cookie = `${AUTH_STATE_COOKIE_NAME}=${AUTH_STATE_COOKIE_VALUE}; path=/`;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      if (String(input).includes("/auth/refresh")) {
+        return new Response("{}", { status: 200 });
+      }
+      return new Response("{}", { status: 401 });
+    });
+
+    const { getByTestId } = renderProvider();
+
+    await waitFor(() =>
+      expect(getByTestId("state").textContent).toBe("settled:false"),
+    );
+    expect(document.cookie).not.toContain(AUTH_STATE_COOKIE_NAME);
+  });
+});
+
 describe("a response that arrives but cannot be read", () => {
   it("is not treated as a rejected session", async () => {
     // A body truncated mid-stream, a captive portal answering with HTML, a

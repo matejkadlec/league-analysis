@@ -70,18 +70,25 @@ const eslintConfig = [
       "no-restricted-imports": [
         "error",
         {
-          paths: [
+          // Patterns, not `paths`: `paths` matches the specifier string
+          // literally, and relative imports are the house style inside
+          // `features/auth/` -- `auth-context.tsx` reaches token-manager as
+          // "../utils/token-manager". A rule keyed on the "@/" alias
+          // therefore never bound to the files that matter, and any new file
+          // beside them would have bypassed it by copying its neighbours.
+          patterns: [
             {
-              name: "@/features/auth/utils/token-manager",
-              importNames: ["removeAuthTokens"],
+              group: [
+                "**/token-manager",
+                "*/token-manager",
+                "./token-manager",
+                "**/auth-state-cookie",
+                "*/auth-state-cookie",
+                "./auth-state-cookie",
+              ],
+              importNames: ["removeAuthTokens", "clearAuthStateCookie"],
               message:
-                "Only the refresh call can tell a rejected session from an unreachable server. Let refreshAccessToken decide, or handle the failure without ending the session.",
-            },
-            {
-              name: "@/features/auth/utils/auth-state-cookie",
-              importNames: ["clearAuthStateCookie"],
-              message:
-                "Retracting the hint is a teardown. It belongs to token-manager, which knows whether the server actually refused.",
+                "Only the refresh call can tell a rejected session from an unreachable server. Ending a session from anywhere else signs people out over a redeploy, with a valid refresh cookie still in the jar. Let refreshAccessToken decide, or handle the failure without ending the session.",
             },
           ],
         },
@@ -103,7 +110,24 @@ const eslintConfig = [
             "Writing a cookie by hand can retract the session hint without telling the server, which reports the visitor as signed out while their refresh token stays live. Cookie writes belong in auth-state-cookie.ts or consent-storage.ts.",
         },
         {
-          // The server-side equivalent, which carries no `document`.
+          // `response.cookies.delete(...)` in proxy.ts, and the Cookie Store
+          // API in the browser. Neither goes through `document.cookie`, so
+          // neither is reached by the selectors above -- and proxy.ts is the
+          // file that routes on the hint, so a delete written there strands
+          // the visitor exactly as the original bug did.
+          selector:
+            "CallExpression[callee.property.name=/^(set|delete)$/][callee.object.property.name='cookies']",
+          message:
+            "Deleting or setting a cookie here bypasses the one place that owns session cookies. proxy.ts routes on the session hint, so retracting it here reports the visitor as signed out while their refresh token stays live on the server.",
+        },
+        {
+          selector:
+            "CallExpression[callee.property.name=/^(set|delete)$/][callee.object.name=/^cookie[sS]tore$/]",
+          message:
+            "Deleting or setting a cookie here bypasses the one place that owns session cookies. Cookie writes belong in auth-state-cookie.ts or consent-storage.ts.",
+        },
+        {
+          // The raw header form.
           selector:
             "CallExpression[callee.property.name=/^(set|append)$/] > Literal[value=/^set-cookie$/i]",
           message:
