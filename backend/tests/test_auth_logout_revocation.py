@@ -108,6 +108,78 @@ async def test_logout_blacklists_the_access_token_when_one_is_present() -> None:
 
 
 @pytest.mark.asyncio
+async def test_the_refresh_cookie_decides_who_is_logged_out() -> None:
+    """A presented access token must not override the refresh cookie.
+
+    This route is unauthenticated, so both credentials arrive unverified from
+    the same request. Letting the access token win means a leaked one names
+    the victim even when the browser's own refresh cookie says otherwise --
+    turning the fallback into an override.
+    """
+    service = _service(user_id=7)
+    resolved: list[str] = []
+
+    async def _resolve(token: str) -> int:
+        resolved.append(token)
+        return 99
+
+    cast(AsyncMock, service).resolve_user_id_for_access_token = _resolve
+
+    await logout(
+        request=_request_with_cookies(
+            bearer="someone-elses-access-token",
+            **{REFRESH_TOKEN_COOKIE_NAME: "refresh-token"},
+        ),
+        response=Response(),
+        auth_service=service,
+    )
+
+    cast(
+        AsyncMock, service
+    ).revoke_all_refresh_tokens_for_user.assert_awaited_once_with(7)
+    assert resolved == []
+
+
+@pytest.mark.asyncio
+async def test_refresh_tokens_are_revoked_before_the_access_token() -> None:
+    """Each revocation commits separately, so the order is the failure mode.
+
+    If the second call fails -- dropped connection, deadlock, statement
+    timeout -- whatever the first did stands. Losing the 30-minute credential
+    and keeping the 30-day one is survivable, because it dies on its own. The
+    other way round leaves a live 30-day refresh cookie in a browser that has
+    already been told it is signed out, which is exactly what this branch
+    exists to stop.
+    """
+    service = _service(user_id=9)
+    order: list[str] = []
+
+    def _record_refresh(*_args: object, **_kwargs: object) -> None:
+        order.append("refresh")
+
+    def _record_access(*_args: object, **_kwargs: object) -> None:
+        order.append("access")
+
+    cast(
+        AsyncMock, service
+    ).revoke_all_refresh_tokens_for_user.side_effect = _record_refresh
+    cast(AsyncMock, service).revoke_access_token.side_effect = _record_access
+
+    await logout(
+        request=_request_with_cookies(
+            **{
+                ACCESS_TOKEN_COOKIE_NAME: "access-token",
+                REFRESH_TOKEN_COOKIE_NAME: "refresh-token",
+            }
+        ),
+        response=Response(),
+        auth_service=service,
+    )
+
+    assert order == ["refresh", "access"]
+
+
+@pytest.mark.asyncio
 async def test_logout_accepts_a_bearer_token_when_no_cookies_are_present() -> None:
     """/login returns the pair in its body, so a client can hold only a Bearer.
 
@@ -212,6 +284,25 @@ async def test_a_refresh_shaped_token_cannot_be_spent_as_an_access_token() -> No
         await _resolver().resolve_user_id_for_access_token(_access_token(typ="refresh"))
         is None
     )
+
+
+@pytest.mark.asyncio
+async def test_an_access_token_with_no_expiry_names_nobody() -> None:
+    """And, more to the point, does not crash an unauthenticated endpoint.
+
+    The age bound reads `exp`. Without the type check, a token carrying none
+    reaches `datetime.fromtimestamp(None)`, which raises TypeError -- not
+    InvalidTokenError, so nothing catches it and any anonymous caller can turn
+    /auth/logout into a 500.
+    """
+    settings = get_global_settings()
+    no_exp = jwt.encode(
+        {"user_id": 9, "typ": "access", "jti": "t"},
+        settings.jwt_secret_key,
+        algorithm=settings.jwt_algorithm,
+    )
+
+    assert await _resolver().resolve_user_id_for_access_token(no_exp) is None
 
 
 @pytest.mark.asyncio
