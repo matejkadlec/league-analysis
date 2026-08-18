@@ -1,11 +1,5 @@
 import type { Page } from "@playwright/test";
 
-/** A 1x1 transparent PNG, served in place of every upstream image. */
-const TRANSPARENT_PNG = Buffer.from(
-  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
-  "base64",
-);
-
 /**
  * Keep the suite off the public internet.
  *
@@ -18,16 +12,17 @@ const TRANSPARENT_PNG = Buffer.from(
  * into a flaky run.
  *
  * The manifest fetch behind `resolveDDragonVersion` is server-side too, and no
- * browser-level route reaches it; `playwright.config.ts` pins `DDRAGON_VERSION`
- * so that one never runs at all.
+ * browser-level route reaches it. `test.sh` pins `DDRAGON_VERSION` on the build
+ * and `playwright.config.ts` pins it on the server, which between them cover
+ * the prerendered and the dynamic routes.
  *
- * Images are answered with a pixel rather than aborted. Aborting is instant,
- * so `onError` fires while React is still hydrating and the state it sets
- * ("this icon failed, use the fallback") counts as a mismatch — React then
- * throws away the server HTML and re-renders the tree. A real 403 arrives long
- * after hydration and never does that. Serving a pixel also keeps the layout
- * measurable: a broken image reports its alt text's width, which is not the
- * width the mobile specs exist to check.
+ * Aborting is safe here. It was worth checking, because an abort is instant
+ * where a real 403 is not, and the icons that fail this way sit behind an
+ * `onError` fallback in `player-card`. Under `next dev` that did coincide with
+ * a hydration mismatch — but serving a placeholder pixel instead did not fix
+ * it, and moving the suite onto the production build did, so the abort was
+ * never the cause. Aborting also leaves the fallback branch exercised, which a
+ * pixel would quietly stop covering.
  *
  * `/_next/image` is only intercepted when it is proxying an absolute URL. The
  * app serves its own logo through it too, and that one is local.
@@ -38,9 +33,6 @@ export async function blockUpstreamRequests(page: Page): Promise<void> {
       url.hostname !== "127.0.0.1" ||
       (url.pathname === "/_next/image" &&
         /^https?:\/\//.test(url.searchParams.get("url") ?? "")),
-    (route) =>
-      route.request().resourceType() === "image"
-        ? route.fulfill({ contentType: "image/png", body: TRANSPARENT_PNG })
-        : route.abort(),
+    (route) => route.abort(),
   );
 }

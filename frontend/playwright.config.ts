@@ -22,11 +22,13 @@ export default defineConfig({
     // test.sh uses. Locally: `npm run build && npm run test:e2e`.
     command: "npm run start:standalone",
     env: {
-      NEXT_PUBLIC_API_URL: "http://127.0.0.1:3100",
-      // The layout resolves this from Riot's CDN when it is unset, which is a
-      // public-internet dependency the gate should not carry — and a version
-      // that changes under the suite. `blockUpstreamRequests` cannot stop it:
-      // the fetch is server-side.
+      // Only reaches the routes that stay dynamic. Every prerendered route
+      // baked its version in at build time, which is why test.sh pins the
+      // build as well — keep the two values in step. Unpinned, the layout
+      // resolves this from Riot's CDN, which is both a public-internet
+      // dependency the gate should not carry and a version that changes under
+      // the suite. `blockUpstreamRequests` cannot stop it: the fetch is
+      // server-side.
       DDRAGON_VERSION: "16.15.1",
       HOSTNAME: "127.0.0.1",
       PORT: "3100",

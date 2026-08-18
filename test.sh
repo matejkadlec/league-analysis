@@ -187,7 +187,13 @@ run_frontend_tests() {
 
 run_frontend_build() {
   cd "$repository_root/frontend"
-  npm run build
+  # Most player routes prerender, and the root layout resolves the Data Dragon
+  # version while they do, so an unpinned build calls Riot's CDN and bakes the
+  # answer into the static payload. The end-to-end specs then read that baked
+  # value and no runtime environment can change it. Keep this in step with the
+  # DDRAGON_VERSION in frontend/playwright.config.ts, which covers the routes
+  # that stay dynamic.
+  DDRAGON_VERSION=16.15.1 npm run build
 }
 
 run_frontend_e2e() {
