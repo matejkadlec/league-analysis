@@ -27,7 +27,6 @@ describe("Data Dragon version resolution", () => {
       resolveDDragonVersion(fetchManifest as unknown as typeof fetch),
     ).resolves.toBe("12.34.5");
     expect(fetchManifest).not.toHaveBeenCalled();
-    vi.unstubAllEnvs();
   });
 
   it("ignores a malformed DDRAGON_VERSION pin rather than serving it", async () => {
@@ -45,7 +44,6 @@ describe("Data Dragon version resolution", () => {
       { pinned: "latest" },
     );
     consoleError.mockRestore();
-    vi.unstubAllEnvs();
   });
 
   it("falls back safely for failed or malformed manifests", async () => {

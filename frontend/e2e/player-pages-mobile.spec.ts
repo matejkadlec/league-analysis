@@ -30,7 +30,11 @@ const ROUTES = [
     `/match-history?puuid=${PUUID}`,
     ["match-list", "match-history-queue-filters"],
   ],
-  ["matchmaking analysis", `/matchmaking-analysis?puuid=${PUUID}`, []],
+  [
+    "matchmaking analysis",
+    `/matchmaking-analysis?puuid=${PUUID}`,
+    ["matchmaking-analysis-history-stacked"],
+  ],
 ] as const;
 
 test.describe("player pages on a phone", () => {

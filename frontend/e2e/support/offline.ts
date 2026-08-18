@@ -5,11 +5,11 @@ import type { Page } from "@playwright/test";
  *
  * The specs mock the API, but that is not the whole of what a player page
  * requests. Champion, profile and summoner-spell icons come straight from Riot's
- * CDN, and the two `<Image>` call sites that omit `unoptimized` route theirs
- * through `/_next/image`, which the Next server — not the browser — fetches
- * upstream. Both are public-internet dependencies the gate would otherwise
- * carry: they 403 harmlessly today, but a slow or blocked CDN turns into a
- * flaky run.
+ * CDN, and `champion-stats-card` and `player-card` omit `unoptimized`, so
+ * theirs route through `/_next/image` and are fetched by the Next server rather
+ * than the browser. Both are public-internet dependencies the gate would
+ * otherwise carry: they 403 harmlessly today, but a slow or blocked CDN turns
+ * into a flaky run.
  *
  * The manifest fetch behind `resolveDDragonVersion` is server-side too, and no
  * browser-level route reaches it; `playwright.config.ts` pins `DDRAGON_VERSION`

@@ -11,6 +11,7 @@ import {
   deleteMatchmakingAnalysisRecord,
 } from "../matchmaking-api";
 
+import type { MatchmakingAnalysisHistoryItem } from "@/lib/core/schemas";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -40,6 +41,113 @@ function AnalyzedPlayerResultLabel({ playerLabel }: { playerLabel: string }) {
 }
 
 const HISTORY_FETCH_LIMIT = 100;
+
+/**
+ * The three win-rate figures a history row shows, with the colour each is
+ * drawn in.
+ *
+ * Both layouts read this rather than recomputing it, so the stacked blocks
+ * cannot drift from the table on which side of a gap counts as good news.
+ */
+function historyFigures(item: MatchmakingAnalysisHistoryItem) {
+  const gap = item.gap * 100;
+  // Currently set to 0 so the numbers are always coloured, as it's more
+  // visually pleasing; might be changed to the 3% threshold in the future.
+  const isSignificant = Math.abs(gap) >= 0;
+  const allyColor = !isSignificant
+    ? ""
+    : gap > 0
+      ? "text-green-600 dark:text-green-400"
+      : "text-red-600 dark:text-red-400";
+  const enemyColor = !isSignificant
+    ? ""
+    : gap < 0
+      ? "text-green-600 dark:text-green-400"
+      : "text-red-600 dark:text-red-400";
+
+  return [
+    {
+      label: "Ally Team WR",
+      value: `${(item.team_avg_winrate * 100).toFixed(1)}%`,
+      colorClass: allyColor,
+    },
+    {
+      label: "Enemy Team WR",
+      value: `${(item.enemy_avg_winrate * 100).toFixed(1)}%`,
+      colorClass: enemyColor,
+    },
+    {
+      label: "Win Rates Gap",
+      value: `${Math.abs(gap).toFixed(1)}%`,
+      colorClass: allyColor,
+    },
+  ];
+}
+
+function DeleteAnalysisButton({
+  createdAt,
+  onDelete,
+}: {
+  createdAt: string;
+  onDelete: (createdAt: string) => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onDelete(createdAt)}
+      className="icon-circle"
+      title="Delete this analysis"
+    >
+      <X />
+    </button>
+  );
+}
+
+/**
+ * One analysis stacked for a narrow screen.
+ *
+ * The table's five columns need roughly 430px before the three win-rate
+ * headings start wrapping, which is wider than a phone. Scrolling it sideways
+ * would put the gap — the number the whole card exists to show — behind a
+ * gesture, so below `sm` each analysis becomes its own block instead.
+ */
+function AnalysisBlock({
+  item,
+  isDeleting,
+  onDelete,
+}: {
+  item: MatchmakingAnalysisHistoryItem;
+  isDeleting: boolean;
+  onDelete: (createdAt: string) => void;
+}) {
+  return (
+    <li
+      className={`rounded-md border border-border/60 bg-muted/20 p-3 transition-all duration-300 ${
+        isDeleting ? "opacity-0 scale-y-0" : "opacity-100 scale-y-100"
+      }`}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-sm">{formatDateTime(item.created_at)}</span>
+        <DeleteAnalysisButton
+          createdAt={item.created_at}
+          onDelete={onDelete}
+        />
+      </div>
+      <dl className="mt-3 grid grid-cols-3 gap-2 border-t border-border/40 pt-2">
+        {historyFigures(item).map((figure) => (
+          <div key={figure.label}>
+            <dt className="text-[0.6875rem] uppercase tracking-wide text-muted-foreground">
+              {figure.label}
+            </dt>
+            <dd className={`tabular-nums text-sm ${figure.colorClass}`}>
+              {figure.value}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </li>
+  );
+}
 
 /**
  * Format date/time as D.M.YYYY H:MM AM|PM (no leading zeros except minutes)
@@ -158,7 +266,27 @@ export function MatchmakingAnalysisHistory({
         <AnalyzedPlayerResultLabel playerLabel={analyzedPlayerLabel} />
       </CardHeader>
       <CardContent>
-        <div className="overflow-x-auto overflow-y-auto max-h-[490px]">
+        {/* Tailwind's reset removes the list marker, and WebKit then drops the
+            list role — which would leave this labelled group unannounced on the
+            one platform that ever sees it. `role="list"` puts the semantics
+            back. */}
+        <ul
+          role="list"
+          aria-label="Analysis history"
+          data-testid="matchmaking-analysis-history-stacked"
+          className="space-y-3 overflow-y-auto max-h-[490px] sm:hidden"
+        >
+          {data.items.map((item) => (
+            <AnalysisBlock
+              key={item.created_at}
+              item={item}
+              isDeleting={deletingIds.has(item.created_at)}
+              onDelete={handleDelete}
+            />
+          ))}
+        </ul>
+
+        <div className="hidden sm:block overflow-x-auto overflow-y-auto max-h-[490px]">
           <Table>
             <TableHeader>
               <TableRow className="h-11 border-b border-border/50">
@@ -179,27 +307,7 @@ export function MatchmakingAnalysisHistory({
             </TableHeader>
             <TableBody>
               {data.items.map((item) => {
-                const teamWr = item.team_avg_winrate * 100;
-                const enemyWr = item.enemy_avg_winrate * 100;
-                const gap = item.gap * 100;
-                // Currently set to 0 so the numbers always colored, as it's more
-                // visually pleasing, might be changed to the 3% threshold in the future
-                const isSignificant = Math.abs(gap) >= 0;
-                const isTeamHigher = gap > 0;
-                const isEnemyHigher = gap < 0;
                 const isDeleting = deletingIds.has(item.created_at);
-
-                const colorClass = !isSignificant
-                  ? ""
-                  : isTeamHigher
-                    ? "text-green-600 dark:text-green-400"
-                    : "text-red-600 dark:text-red-400";
-
-                const inverseColorClass = !isSignificant
-                  ? ""
-                  : isEnemyHigher
-                    ? "text-green-600 dark:text-green-400"
-                    : "text-red-600 dark:text-red-400";
 
                 return (
                   <TableRow
@@ -209,28 +317,21 @@ export function MatchmakingAnalysisHistory({
                     <TableCell className="text-left text-sm">
                       {formatDateTime(item.created_at)}
                     </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      <span className={colorClass}>{teamWr.toFixed(1)}%</span>
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      <span className={inverseColorClass}>
-                        {enemyWr.toFixed(1)}%
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      <span className={colorClass}>
-                        {Math.abs(gap).toFixed(1)}%
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-center p-0">
-                      <button
-                        type="button"
-                        onClick={() => handleDelete(item.created_at)}
-                        className="icon-circle"
-                        title="Delete this analysis"
+                    {historyFigures(item).map((figure) => (
+                      <TableCell
+                        key={figure.label}
+                        className="text-right tabular-nums"
                       >
-                        <X />
-                      </button>
+                        <span className={figure.colorClass}>
+                          {figure.value}
+                        </span>
+                      </TableCell>
+                    ))}
+                    <TableCell className="text-center p-0">
+                      <DeleteAnalysisButton
+                        createdAt={item.created_at}
+                        onDelete={handleDelete}
+                      />
                     </TableCell>
                   </TableRow>
                 );
