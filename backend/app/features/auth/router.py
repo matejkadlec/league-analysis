@@ -251,7 +251,13 @@ async def refresh_access_token(
 
 
 @router.post("/logout")
-@rate_limit("20/minute")
+# Deliberately not rate limited. `get_remote_address` keys on
+# `request.client.host`, uvicorn runs with --no-proxy-headers, and browser
+# traffic arrives through the Next.js rewrite, so every user shares one
+# bucket. A limit here is therefore globally exhaustible, and its failure mode
+# is the wrong way round: refusing a logout leaves a usable 30-day refresh
+# token in the browser of someone who has been told they are signed out, while
+# the cost of an extra logout is one hash lookup.
 async def logout(
     request: Request,
     response: Response,
@@ -271,13 +277,26 @@ async def logout(
     answered rather than rejected: logout is idempotent, and a caller can only
     ever revoke the session their own request already carries.
     """
-    access_token = request.cookies.get(ACCESS_TOKEN_COOKIE_NAME)
+    # The Authorization header first, matching `get_request_access_token`:
+    # /login returns the pair in its body, so a non-browser client holds the
+    # strongest credential there is and must still be able to spend it on
+    # ending its own session.
+    authorization = request.headers.get("authorization", "")
+    bearer_token = (
+        authorization[7:].strip() if authorization[:7].lower() == "bearer " else None
+    )
+    access_token = bearer_token or request.cookies.get(ACCESS_TOKEN_COOKIE_NAME)
     refresh_token = request.cookies.get(REFRESH_TOKEN_COOKIE_NAME)
 
     user_id: int | None = None
     if refresh_token:
         user_id = await auth_service.resolve_user_id_for_refresh_token(refresh_token)
     if access_token:
+        if user_id is None:
+            # No refresh cookie — a Bearer client, or a browser that lost it.
+            # The access token names its owner and its signature is verified
+            # during decoding, so it is a sound fallback rather than a guess.
+            user_id = auth_service.resolve_user_id_for_access_token(access_token)
         await auth_service.revoke_access_token(access_token, reason="logout")
 
     if user_id is not None:

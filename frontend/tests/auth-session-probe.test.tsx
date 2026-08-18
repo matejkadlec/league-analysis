@@ -43,17 +43,17 @@ function clearCookies() {
   }
 }
 
+beforeEach(() => {
+  clearCookies();
+  vi.restoreAllMocks();
+});
+
+afterEach(() => {
+  cleanup();
+  clearCookies();
+});
+
 describe("signed-out session probe", () => {
-  beforeEach(() => {
-    clearCookies();
-    vi.restoreAllMocks();
-  });
-
-  afterEach(() => {
-    cleanup();
-    clearCookies();
-  });
-
   it("makes no request when the session hint is absent", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch");
 

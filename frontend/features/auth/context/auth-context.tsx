@@ -17,6 +17,7 @@ import {
   setAuthTokens,
 } from "../utils/token-manager";
 import {
+  AUTH_PROBE_TIMEOUT_MS,
   createAuthLoginError,
   getLoginRequestError,
   LOGIN_REQUEST_TIMEOUT_MS,
@@ -37,9 +38,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Check authentication status on mount and after login
   const checkAuth = useCallback(async () => {
+    // Announce that a check is running, so finishing one is always a state
+    // change. Without this a re-check that lands on the values already held —
+    // a retry against a session that turns out to be dead — sets nothing,
+    // React bails out of the render, and the gate never re-evaluates the
+    // cookie the check just cleared. The screen would then keep offering a
+    // retry button that could no longer change anything.
+    setIsLoading(true);
     const fetchCurrentUser = async () =>
       fetch(`${API_BASE_URL}/api/v1/auth/me`, {
         credentials: "include",
+        // A backend that accepts the connection and then never answers is not
+        // hypothetical on a small host, and without a deadline this promise
+        // never settles: `isLoading` stays true and every surface that gates
+        // on it — this gate, the sidebar, the header — renders nothing. A
+        // white screen with no spinner and no way out is the symptom this
+        // whole change exists to remove, so it must not be reachable by
+        // simply waiting.
+        signal: AbortSignal.timeout(AUTH_PROBE_TIMEOUT_MS),
       }).catch((fetchError) => {
         if (process.env.NODE_ENV === "development") {
           console.warn(

@@ -12,6 +12,7 @@ import {
 import {
   AUTH_STATE_COOKIE_NAME,
   AUTH_STATE_COOKIE_VALUE,
+  clearAuthStateCookie,
   hasAuthStateCookie,
 } from "@/features/auth/utils/auth-state-cookie";
 
@@ -25,7 +26,7 @@ vi.mock("next/navigation", () => ({
 const auth = vi.hoisted(() => ({
   isAuthenticated: false,
   isLoading: false,
-  checkAuth: vi.fn(),
+  checkAuth: vi.fn(async () => {}),
 }));
 
 vi.mock("@/features/auth", () => ({
@@ -49,7 +50,8 @@ beforeEach(() => {
   nav.pathname = "/";
   auth.isAuthenticated = false;
   auth.isLoading = false;
-  auth.checkAuth.mockClear();
+  auth.checkAuth.mockReset();
+  auth.checkAuth.mockImplementation(async () => {});
   clearHint();
   removeAuthTokens();
 });
@@ -100,6 +102,24 @@ describe("a session the API rejected", () => {
     await waitFor(() => expect(nav.replace).toHaveBeenCalledWith("/sign-in"));
   });
 
+  it("escapes the retry surface once a retry proves the session is dead", async () => {
+    // The retry re-checks and the check clears the hint — but that changes no
+    // React state, and the cookie is not reactive, so without an explicit
+    // re-read the gate would keep showing "Can't reach the server" forever
+    // over a session that is definitively gone. Reloading was the only exit,
+    // and nothing on screen said so.
+    setHint();
+    auth.checkAuth.mockImplementation(async () => {
+      clearHint();
+    });
+
+    const { getByRole } = render(<AuthGate>protected content</AuthGate>);
+
+    getByRole("button", { name: "Try again" }).click();
+
+    await waitFor(() => expect(nav.replace).toHaveBeenCalledWith("/sign-in"));
+  });
+
   it("does not redirect while the session is still being checked", async () => {
     auth.isLoading = true;
 
@@ -142,9 +162,53 @@ describe("the sign-in page", () => {
 
     expect(queryByText("sign in form")).toBeNull();
   });
+
+  it("renders the form for a signed-out visitor carrying a stale hint", () => {
+    // Pins the conjunction rather than either half. Deciding on the hint
+    // alone blanks the sign-in page for exactly the visitor who needs it --
+    // the one whose session died but whose cookie outlived it.
+    nav.pathname = "/sign-in";
+    auth.isAuthenticated = false;
+    setHint();
+
+    const { getByText } = render(<AuthGate>sign in form</AuthGate>);
+
+    expect(getByText("sign in form")).toBeTruthy();
+  });
 });
 
 describe("giving up on a session", () => {
+  it("deletes with the path the server wrote, not the current page's", () => {
+    // jsdom serves every test from "/", so a delete that omits path=/ passes
+    // here and fails in production: a visitor on /player-overview would
+    // delete a page-scoped cookie while the "/" hint survived its own
+    // delete -- the stranded state, now permanent.
+    const written: string[] = [];
+    const original = Object.getOwnPropertyDescriptor(
+      Document.prototype,
+      "cookie",
+    );
+    Object.defineProperty(document, "cookie", {
+      configurable: true,
+      get: () => "",
+      set: (value: string) => written.push(value),
+    });
+
+    try {
+      clearAuthStateCookie();
+    } finally {
+      delete (document as unknown as Record<string, unknown>).cookie;
+      if (original) {
+        Object.defineProperty(Document.prototype, "cookie", original);
+      }
+    }
+
+    expect(written).toHaveLength(1);
+    expect(written[0]).toContain("path=/");
+    expect(written[0]).toContain("max-age=0");
+    expect(written[0]).toContain("SameSite=Lax");
+  });
+
   it("retracts the hint cookie proxy.ts routes on", () => {
     setHint();
     expect(hasAuthStateCookie()).toBe(true);
@@ -152,6 +216,49 @@ describe("giving up on a session", () => {
     removeAuthTokens();
 
     expect(hasAuthStateCookie()).toBe(false);
+  });
+
+  it("clears the hint when the server rejects the refresh", async () => {
+    // The load-bearing line of the whole fix. For the reported visitor --
+    // hint cookie, no usable tokens -- this rejection is what retracts the
+    // hint, which is what lets the gate redirect instead of rendering
+    // nothing. Deleting it used to pass the entire suite.
+    setHint();
+    markAuthSession(true);
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("{}", { status: 401 }),
+    );
+
+    const result = await refreshAccessToken();
+
+    expect(result).toBeNull();
+    expect(hasAuthStateCookie()).toBe(false);
+  });
+
+  it("keeps the session when the server is merely unavailable", async () => {
+    // A 502 is a redeploy, not a rejection. Tearing down here signed people
+    // out mid-deploy with a valid refresh cookie still in the jar.
+    setHint();
+    markAuthSession(true);
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("{}", { status: 502 }),
+    );
+
+    const result = await refreshAccessToken();
+
+    expect(result).toBeNull();
+    expect(hasAuthStateCookie()).toBe(true);
+  });
+
+  it("keeps the session when the refresh never reaches the server", async () => {
+    setHint();
+    markAuthSession(true);
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("offline"));
+
+    const result = await refreshAccessToken();
+
+    expect(result).toBeNull();
+    expect(hasAuthStateCookie()).toBe(true);
   });
 
   it("does not let a refresh that lands after teardown resurrect it", async () => {

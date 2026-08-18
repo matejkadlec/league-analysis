@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useReducer } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/features/auth";
 import { hasAuthStateCookie } from "@/features/auth/utils/auth-state-cookie";
@@ -64,6 +64,12 @@ export function AuthGate({ children }: AuthGateProps) {
   const { isAuthenticated, isLoading, checkAuth } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
+  // The cookie is not reactive and nothing subscribes to it, so a re-check
+  // that lands on the state already held changes nothing React can see. This
+  // forces the re-read after a retry, which is what lets a check that
+  // discovers a dead session act on it instead of leaving the retry surface
+  // up for good.
+  const [recheckCount, forceRecheck] = useReducer((n: number) => n + 1, 0);
 
   const hasSessionHint = hasAuthStateCookie();
   const isPublicRoute = PUBLIC_ROUTES.some(
@@ -90,7 +96,9 @@ export function AuthGate({ children }: AuthGateProps) {
     if (isSignedOutOnProtectedRoute) {
       router.replace("/sign-in");
     }
-  }, [isSignedOutOnProtectedRoute, router]);
+    // `recheckCount` is a dependency so a retry re-runs this even when every
+    // other input is unchanged.
+  }, [isSignedOutOnProtectedRoute, router, recheckCount]);
 
   if (isSignInRoute) {
     // Hide the form only while the hint agrees a session is current, since
@@ -112,5 +120,11 @@ export function AuthGate({ children }: AuthGateProps) {
   }
 
   // Hint present, session unconfirmed: the server could not be reached.
-  return <SessionUnverified onRetry={() => void checkAuth()} />;
+  return (
+    <SessionUnverified
+      onRetry={() => {
+        void Promise.resolve(checkAuth()).finally(forceRecheck);
+      }}
+    />
+  );
 }

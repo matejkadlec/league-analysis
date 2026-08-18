@@ -20,9 +20,11 @@ def _undecorated[**P, R](endpoint: Callable[P, R]) -> Callable[P, R]:
     return cast(Callable[P, R], inspect.unwrap(endpoint))
 
 
-def _request_with_cookies(**cookies: str) -> Request:
+def _request_with_cookies(bearer: str | None = None, **cookies: str) -> Request:
     header = "; ".join(f"{name}={value}" for name, value in cookies.items())
     raw = [(b"cookie", header.encode())] if header else []
+    if bearer is not None:
+        raw.append((b"authorization", f"Bearer {bearer}".encode()))
     return Request(
         {
             "type": "http",
@@ -104,3 +106,32 @@ async def test_logout_blacklists_the_access_token_when_one_is_present() -> None:
     cast(AsyncMock, service).revoke_access_token.assert_awaited_once_with(
         "access-token", reason="logout"
     )
+
+
+@pytest.mark.asyncio
+async def test_logout_accepts_a_bearer_token_when_no_cookies_are_present() -> None:
+    """/login returns the pair in its body, so a client can hold only a Bearer.
+
+    Reading identity from cookies alone made this a 200 that revoked nothing:
+    the caller presents the strongest credential there is and still could not
+    end its own session.
+    """
+    service = _service(user_id=None)
+
+    def _resolve(_token: str) -> int:
+        return 9
+
+    cast(AsyncMock, service).resolve_user_id_for_access_token = _resolve
+
+    await _undecorated(logout)(
+        request=_request_with_cookies(bearer="access-token"),
+        response=Response(),
+        auth_service=service,
+    )
+
+    cast(AsyncMock, service).revoke_access_token.assert_awaited_once_with(
+        "access-token", reason="logout"
+    )
+    cast(
+        AsyncMock, service
+    ).revoke_all_refresh_tokens_for_user.assert_awaited_once_with(9)

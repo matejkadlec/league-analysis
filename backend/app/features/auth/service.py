@@ -820,6 +820,31 @@ class AuthService:
         token_record = result.scalar_one_or_none()
         return None if token_record is None else token_record.user_id
 
+    def resolve_user_id_for_access_token(self, access_token: str) -> int | None:
+        """Read the owner out of an access token, expiry aside.
+
+        Logout uses this when there is no refresh cookie to go on. Expiry is
+        ignored on purpose — an expired access token is exactly the case that
+        needs to work, and the signature is still verified, so the token names
+        its owner rather than merely claiming one.
+        """
+        try:
+            payload = jwt.decode(
+                access_token,
+                self.settings.jwt_secret_key,
+                algorithms=[self.settings.jwt_algorithm],
+                options={"verify_exp": False},
+            )
+        except InvalidTokenError:
+            return None
+
+        user_id = payload.get("user_id")
+        return (
+            user_id
+            if isinstance(user_id, int) and payload.get("typ") == "access"
+            else None
+        )
+
     async def revoke_access_token(
         self,
         access_token: str,

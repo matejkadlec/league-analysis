@@ -6,6 +6,7 @@
  */
 
 import { clearAuthStateCookie } from "./auth-state-cookie";
+import { AUTH_PROBE_TIMEOUT_MS } from "./login-error";
 
 let refreshInFlight: Promise<boolean> | null = null;
 let sessionHint = false;
@@ -68,6 +69,10 @@ export async function refreshAccessToken(): Promise<string | null> {
           "Content-Type": "application/json",
         },
         body: "{}",
+        // Same deadline as the probe that calls this: a refresh that never
+        // settles strands the caller exactly as a probe that never settles
+        // would.
+        signal: AbortSignal.timeout(AUTH_PROBE_TIMEOUT_MS),
       });
 
       if (!response.ok) {
