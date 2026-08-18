@@ -108,11 +108,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const userData = await response.json();
           setUser(userData);
         } else {
-          // A null response is a network failure, not a rejection — the same
-          // distinction the branch above turns on. Tearing the session down
-          // here would sign the user out over a blip, moments after a refresh
-          // the server had just honoured.
-          if (response) {
+          // Only a refusal ends the session, and only 401/403 is a refusal.
+          // A null response is a network failure and a 5xx is a redeploy or a
+          // blip -- neither is evidence about this session, and this is the
+          // worst possible moment to guess: the server honoured the refresh a
+          // fraction of a second ago, so it just issued a fresh 30-day token
+          // that is now in the jar. Tearing down here clears the hint, bounces
+          // the visitor to /sign-in, and leaves that brand-new HttpOnly
+          // credential live with nothing asking the server to revoke it. The
+          // first probe's own 5xx branch below already declines to guess;
+          // these two agreeing is the point.
+          if (
+            response &&
+            (response.status === 401 || response.status === 403)
+          ) {
             removeAuthTokens();
           }
           setUser(null);

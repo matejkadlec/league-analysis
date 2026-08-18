@@ -137,6 +137,31 @@ describe("re-checking an established session", () => {
   });
 });
 
+describe("a refresh that never reaches the server", () => {
+  it("does not end the session", async () => {
+    // The branch no ownership rule can police: `auth-context.tsx` is allowed
+    // to tear a session down -- for logout, and for a 403. What it must not
+    // do is tear down here. The probe 401'd and the refresh could not be
+    // delivered, so nothing has said this session is over, and the refresh
+    // cookie in the jar may be perfectly good. A teardown on this path is
+    // what stranded people: hint gone, bounced to /sign-in, over a redeploy.
+    document.cookie = `${AUTH_STATE_COOKIE_NAME}=${AUTH_STATE_COOKIE_VALUE}; path=/`;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      if (String(input).includes("/auth/refresh")) {
+        throw new Error("offline");
+      }
+      return new Response("{}", { status: 401 });
+    });
+
+    const { getByTestId } = renderProvider();
+
+    await waitFor(() =>
+      expect(getByTestId("state").textContent).toBe("settled:false"),
+    );
+    expect(document.cookie).toContain(AUTH_STATE_COOKIE_NAME);
+  });
+});
+
 describe("a response that arrives but cannot be read", () => {
   it("is not treated as a rejected session", async () => {
     // A body truncated mid-stream, a captive portal answering with HTML, a

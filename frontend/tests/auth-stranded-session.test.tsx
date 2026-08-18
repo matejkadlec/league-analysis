@@ -163,13 +163,22 @@ describe("a session the API rejected", () => {
       // Under fake timers any pending timeout satisfies the latter, so a
       // delay of zero would pass it -- and a message that flashes on every
       // healthy page load is the regression this half exists to catch.
+      // Against a literal, not against the constant under test. Advancing
+      // `SLOW_PROBE_NOTICE_MS - 1` only proves the component honours its own
+      // value, so every value passes by construction -- including one
+      // millisecond, which is exactly the flash on every healthy page load
+      // this half exists to prevent. `Math.max` also keeps a mistaken
+      // constant failing as an assertion rather than as "Negative ticks are
+      // not supported", which reads like a broken test.
+      expect(SLOW_PROBE_NOTICE_MS).toBeGreaterThanOrEqual(300);
+
       await act(async () => {
-        vi.advanceTimersByTime(SLOW_PROBE_NOTICE_MS - 1);
+        vi.advanceTimersByTime(Math.max(0, 300 - 1));
       });
       expect(queryByText("Checking your session…")).toBeNull();
 
       await act(async () => {
-        vi.advanceTimersByTime(1);
+        vi.advanceTimersByTime(SLOW_PROBE_NOTICE_MS);
       });
 
       expect(queryByText("Checking your session…")).toBeTruthy();

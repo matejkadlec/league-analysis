@@ -34,17 +34,6 @@ interface AuthGateProps {
 }
 
 /**
- * Shown when the session hint says a session exists but the API could not be
- * asked whether it is still valid.
- *
- * This state has to render something. Redirecting is wrong — `proxy.ts` routes
- * on the same hint and would send the visitor straight back, and an
- * unreachable server is not evidence the session ended. Rendering nothing is
- * how this component produced a permanently blank page: no route change, no
- * message, and nothing to click, because the one thing that would re-check
- * runs only on mount.
- */
-/**
  * Nothing at all for the first moment, then an explanation.
  *
  * The delay is the point: a probe that answers promptly is the normal case,
@@ -72,6 +61,17 @@ function SlowProbe() {
   );
 }
 
+/**
+ * Shown when the session hint says a session exists but the API could not be
+ * asked whether it is still valid.
+ *
+ * This state has to render something. Redirecting is wrong — `proxy.ts` routes
+ * on the same hint and would send the visitor straight back, and an
+ * unreachable server is not evidence the session ended. Rendering nothing is
+ * how this component produced a permanently blank page: no route change, no
+ * message, and nothing to click, because the one thing that would re-check
+ * runs only on mount.
+ */
 function SessionUnverified({
   onRetry,
   onSignOut,

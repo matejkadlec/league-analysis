@@ -1,16 +1,6 @@
 export const AUTH_STATE_COOKIE_NAME = "league_analysis_auth_state";
 export const AUTH_STATE_COOKIE_VALUE = "1";
 
-/**
- * Drop a hint the session behind it no longer honours.
- *
- * The hint can outlive its session: it is written for the refresh token's
- * lifetime, but that token can be revoked, rotated out, or lost with the row
- * it lived in, and the cookie in the browser knows none of that. Left alone,
- * `proxy.ts` keeps believing it and keeps admitting the visitor to routes the
- * API will refuse — so clearing it is what turns a dead session back into a
- * plain signed-out one.
- */
 const hintListeners = new Set<() => void>();
 
 /**
@@ -34,6 +24,16 @@ export function subscribeToAuthStateCookie(listener: () => void): () => void {
   };
 }
 
+/**
+ * Drop a hint the session behind it no longer honours.
+ *
+ * The hint can outlive its session: it is written for the refresh token's
+ * lifetime, but that token can be revoked, rotated out, or lost with the row
+ * it lived in, and the cookie in the browser knows none of that. Left alone,
+ * `proxy.ts` keeps believing it and keeps admitting the visitor to routes the
+ * API will refuse — so clearing it is what turns a dead session back into a
+ * plain signed-out one.
+ */
 export function clearAuthStateCookie(): void {
   if (typeof document === "undefined") {
     return;
