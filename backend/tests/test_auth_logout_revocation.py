@@ -3,10 +3,11 @@
 import inspect
 from collections.abc import Callable
 from typing import cast
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi import Request, Response
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.features.auth.cookies import (
     ACCESS_TOKEN_COOKIE_NAME,
@@ -135,3 +136,28 @@ async def test_logout_accepts_a_bearer_token_when_no_cookies_are_present() -> No
     cast(
         AsyncMock, service
     ).revoke_all_refresh_tokens_for_user.assert_awaited_once_with(9)
+
+
+@pytest.mark.asyncio
+async def test_a_revoked_refresh_token_names_nobody() -> None:
+    """Otherwise a token already revoked can still revoke every other session.
+
+    There is no DB in this suite, so the guard is read off the statement the
+    service builds. Crude, but it fails if the filter is dropped, which is the
+    only thing standing between a spent credential and mass revocation.
+    """
+    statements: list[object] = []
+
+    class _RecordingDb:
+        async def execute(self, statement: object) -> object:
+            statements.append(statement)
+            result = MagicMock()
+            result.scalar_one_or_none.return_value = None
+            return result
+
+    service = AuthService(cast("AsyncSession", _RecordingDb()))
+
+    assert await service.resolve_user_id_for_refresh_token("spent-token") is None
+
+    sql = str(statements[0]).lower()
+    assert "revoked_at is null" in sql

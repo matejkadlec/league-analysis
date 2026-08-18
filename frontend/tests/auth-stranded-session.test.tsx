@@ -62,6 +62,20 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+describe("a session that is genuinely current", () => {
+  it("draws the protected page", () => {
+    // The one case with no assertion anywhere before this: every other test
+    // here checks that something is NOT drawn, so the whole suite stayed
+    // green against a gate that rendered nothing for everyone.
+    auth.isAuthenticated = true;
+    setHint();
+
+    const { getByText } = render(<AuthGate>protected content</AuthGate>);
+
+    expect(getByText("protected content")).toBeTruthy();
+  });
+});
+
 describe("a session the API rejected", () => {
   it("sends the visitor to sign-in instead of rendering a blank page", async () => {
     const { queryByText } = render(<AuthGate>protected content</AuthGate>);

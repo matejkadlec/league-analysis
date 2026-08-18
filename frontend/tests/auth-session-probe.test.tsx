@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, waitFor } from "@testing-library/react";
+import { act, cleanup, render, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { useEffect } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AuthProvider, useAuth } from "@/features/auth/context/auth-context";
@@ -14,8 +15,15 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
 }));
 
+let triggerRecheck: (() => Promise<void>) | null = null;
+
 function AuthStateProbe() {
-  const { isLoading, isAuthenticated } = useAuth();
+  const { isLoading, isAuthenticated, checkAuth } = useAuth();
+  // Assigned in an effect, not during render: reassigning a module-level
+  // binding while rendering is a side effect, and eslint rejects it.
+  useEffect(() => {
+    triggerRecheck = checkAuth;
+  }, [checkAuth]);
   return (
     <span data-testid="state">{`${isLoading ? "loading" : "settled"}:${isAuthenticated}`}</span>
   );
@@ -44,6 +52,7 @@ function clearCookies() {
 }
 
 beforeEach(() => {
+  triggerRecheck = null;
   clearCookies();
   vi.restoreAllMocks();
 });
@@ -51,6 +60,54 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   clearCookies();
+});
+
+describe("re-checking an established session", () => {
+  it("never raises isLoading, which would unmount the whole app shell", async () => {
+    // Four consumers render null while `isLoading` is true -- the auth gate,
+    // the sidebar, the header and the player context. Raising it on a
+    // re-check blanked the settings page mid-edit, because that is where the
+    // real callers live (display-name and email change), and blanked the
+    // retry surface for the full probe timeout.
+    //
+    // The probe is held open on purpose: a re-check that resolves in the same
+    // tick collapses both state writes into one render, so the transient this
+    // is about is only observable while the request is still outstanding.
+    document.cookie = `${AUTH_STATE_COOKIE_NAME}=${AUTH_STATE_COOKIE_VALUE}; path=/`;
+    const settled = () =>
+      new Response(JSON.stringify({ id: 1, email: "someone@example.com" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(settled());
+
+    const { getByTestId } = renderProvider();
+    await waitFor(() =>
+      expect(getByTestId("state").textContent).toBe("settled:true"),
+    );
+
+    let release: (() => void) | null = null;
+    fetchSpy.mockImplementation(
+      () =>
+        new Promise<Response>((resolve) => {
+          release = () => resolve(settled());
+        }),
+    );
+
+    let recheck: Promise<void> | undefined;
+    await act(async () => {
+      recheck = triggerRecheck?.();
+    });
+
+    // Mid-flight: the shell must still be drawn.
+    expect(getByTestId("state").textContent).toBe("settled:true");
+
+    await act(async () => {
+      release?.();
+      await recheck;
+    });
+    expect(getByTestId("state").textContent).toBe("settled:true");
+  });
 });
 
 describe("signed-out session probe", () => {

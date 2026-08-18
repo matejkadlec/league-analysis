@@ -814,7 +814,12 @@ class AuthService:
         """
         result = await self.db.execute(
             select(RefreshToken).where(
-                RefreshToken.token_hash == self._hash_refresh_token(raw_refresh_token)
+                RefreshToken.token_hash == self._hash_refresh_token(raw_refresh_token),
+                # A revoked token must not authorise revoking everything else.
+                # Expiry is still allowed through: an old-but-unrevoked token
+                # is the ordinary way to log out of a session left idle, which
+                # is the case this method exists for.
+                RefreshToken.revoked_at.is_(None),
             )
         )
         token_record = result.scalar_one_or_none()

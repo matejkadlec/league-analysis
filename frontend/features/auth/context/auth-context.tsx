@@ -38,13 +38,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Check authentication status on mount and after login
   const checkAuth = useCallback(async () => {
-    // Announce that a check is running, so finishing one is always a state
-    // change. Without this a re-check that lands on the values already held —
-    // a retry against a session that turns out to be dead — sets nothing,
-    // React bails out of the render, and the gate never re-evaluates the
-    // cookie the check just cleared. The screen would then keep offering a
-    // retry button that could no longer change anything.
-    setIsLoading(true);
+    // Deliberately does NOT raise `isLoading`. Four consumers unmount their
+    // whole subtree while it is true — the gate, the sidebar, the header, the
+    // player context — so raising it on a re-check would blank the settings
+    // page mid-edit every time a display-name or email change calls back here,
+    // and would blank the retry surface itself for the whole probe timeout.
+    // The re-render a completed re-check needs comes from `forceRecheck` in
+    // `auth-gate.tsx` instead, which costs nobody their screen.
     const fetchCurrentUser = async () =>
       fetch(`${API_BASE_URL}/api/v1/auth/me`, {
         credentials: "include",
@@ -216,14 +216,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // usable in this browser — the dangerous version being a shared machine,
     // where the next person can spend it.
     try {
-      await fetch(`${API_BASE_URL}/api/v1/auth/logout`, {
+      const response = await fetch(`${API_BASE_URL}/api/v1/auth/logout`, {
         method: "POST",
         credentials: "include",
+        // Without a deadline a backend that accepts the connection and hangs
+        // makes Sign Out do nothing at all — no teardown, no navigation, no
+        // spinner — and every further click stacks another dead request.
+        signal: AbortSignal.timeout(AUTH_PROBE_TIMEOUT_MS),
       });
+      if (!response.ok) {
+        // `fetch` only rejects on network failure, so a 5xx arrives here
+        // looking like success. Say so rather than reporting a revocation
+        // that did not happen.
+        console.error("Sign out could not be completed by the server", {
+          status: response.status,
+        });
+      }
     } catch {
-      // Server unreachable, so nothing was revoked. Still clear local state:
-      // leaving someone staring at a session they asked to end is worse, and
-      // the tokens expire on their own.
+      // Unreachable or timed out, so nothing was revoked. Still clear local
+      // state: leaving someone staring at a session they asked to end is
+      // worse, and the tokens expire on their own.
     }
 
     removeAuthTokens();

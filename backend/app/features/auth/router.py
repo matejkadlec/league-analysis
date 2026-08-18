@@ -301,8 +301,11 @@ async def logout(
 
     if user_id is not None:
         await auth_service.revoke_all_refresh_tokens_for_user(user_id)
-
-    await auth_service.cleanup_expired_token_state()
+        # Only for a caller that proved it holds a credential. This issues
+        # table-wide DELETEs and a COMMIT, and the endpoint is unauthenticated,
+        # so running it unconditionally would let anonymous requests drive
+        # write transactions at request rate.
+        await auth_service.cleanup_expired_token_state()
     logger.info("logout_succeeded", user_id=user_id)
     clear_auth_cookies(response)
     return {"message": "Successfully logged out"}

@@ -98,6 +98,10 @@ export async function refreshAccessToken(): Promise<string | null> {
           await fetch(`${getApiBaseUrl()}/api/v1/auth/logout`, {
             method: "POST",
             credentials: "include",
+            // `refreshInFlight` is only cleared in the outer `finally`, so a
+            // hang here would leave every later refresh awaiting a promise
+            // that never settles — token refresh silently dead for the tab.
+            signal: AbortSignal.timeout(AUTH_PROBE_TIMEOUT_MS),
           });
         } catch {
           // Unreachable; the token expires on its own schedule.
