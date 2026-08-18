@@ -101,15 +101,16 @@ export async function refreshAccessToken(): Promise<string | null> {
         // response installed as an HttpOnly cookie. Clearing the hint would
         // only hide it: JS cannot touch that cookie, and nothing has told the
         // server to revoke it. So ask the server to end the session properly.
-        if (sessionHint) {
-          // Somebody has signed in since the teardown, and `credentials:
-          // "include"` sends whatever is in the jar now -- which is their
-          // session, not the one this refresh rotated. Ending it here would
-          // sign out a user who just signed in. The orphaned token is left to
-          // expire on its own; that is the cheaper of the two mistakes.
-          return false;
-        }
-
+        // Unconditional, even when somebody has signed in since the
+        // teardown. It is tempting to skip this to avoid ending their
+        // session -- but this response has already ended it: /auth/refresh
+        // answers 200 with Set-Cookie for all three cookies under the same
+        // names and path, so the browser committed them the moment the
+        // headers arrived, and the jar now holds the *rotated* session, not
+        // theirs. Their HttpOnly cookies are gone and JavaScript cannot put
+        // them back. Leaving it here would show them a signed-in shell with
+        // their own name on it while every request carried somebody else's
+        // credentials. Sending them back to sign in is the only sound exit.
         clearAuthStateCookie();
         try {
           await fetch(`${getApiBaseUrl()}/api/v1/auth/logout`, {

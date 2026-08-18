@@ -1,12 +1,25 @@
 "use client";
 
-import { useEffect, useReducer, useSyncExternalStore } from "react";
+import {
+  useEffect,
+  useReducer,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/features/auth";
 import {
   hasAuthStateCookie,
   subscribeToAuthStateCookie,
 } from "@/features/auth/utils/auth-state-cookie";
+
+/**
+ * How long the screen may stay empty before it owes the visitor a word.
+ *
+ * Long enough that a healthy probe never reaches it, short enough that
+ * nobody concludes the page is broken.
+ */
+const SLOW_PROBE_NOTICE_MS = 600;
 
 const PUBLIC_ROUTES = [
   "/sign-in",
@@ -31,13 +44,53 @@ interface AuthGateProps {
  * message, and nothing to click, because the one thing that would re-check
  * runs only on mount.
  */
+/**
+ * Nothing at all for the first moment, then an explanation.
+ *
+ * The delay is the point: a probe that answers promptly is the normal case,
+ * and flashing a message on every page load would be worse than the silence
+ * it replaces.
+ */
+function SlowProbe() {
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setVisible(true), SLOW_PROBE_NOTICE_MS);
+    return () => clearTimeout(timer);
+  }, []);
+
+  if (!visible) {
+    return null;
+  }
+
+  return (
+    <div className="flex min-h-[60vh] items-center justify-center p-6">
+      <p className="text-sm text-muted-foreground">
+        Checking your session&hellip;
+      </p>
+    </div>
+  );
+}
+
 function SessionUnverified({
   onRetry,
   onSignOut,
 }: {
-  onRetry: () => void;
-  onSignOut: () => void;
+  onRetry: () => Promise<void>;
+  onSignOut: () => Promise<void>;
 }) {
+  // Both actions can take the full probe deadline, and this surface exists
+  // precisely for the server that is not answering -- so both will regularly
+  // run the whole ten seconds. Without a pending state nothing on screen
+  // moves in that time: `checkAuth` deliberately never raises `isLoading`,
+  // and `logout` clears nothing until its request settles. The visitor reads
+  // that as a dead button and clicks again, stacking another probe each time.
+  const [pending, setPending] = useState<"retry" | "signOut" | null>(null);
+  const run = (which: "retry" | "signOut", action: () => Promise<void>) => {
+    setPending(which);
+    void action().finally(() => setPending(null));
+  };
+
   return (
     <div className="flex min-h-[60vh] items-center justify-center p-6">
       <div className="max-w-md text-center">
@@ -51,10 +104,11 @@ function SessionUnverified({
         <div className="mt-4 flex items-center justify-center gap-2">
           <button
             type="button"
-            onClick={onRetry}
-            className="rounded-md border border-border px-4 py-2 text-sm transition-colors hover:bg-muted"
+            onClick={() => run("retry", onRetry)}
+            disabled={pending !== null}
+            className="rounded-md border border-border px-4 py-2 text-sm transition-colors hover:bg-muted disabled:opacity-60"
           >
-            Try again
+            {pending === "retry" ? "Checking…" : "Try again"}
           </button>
           {/* The only way out when the failure is permanent rather than
               transient -- a 500 on this one account, say. Retrying takes the
@@ -64,10 +118,11 @@ function SessionUnverified({
               is stuck on this screen until they clear the cookie by hand. */}
           <button
             type="button"
-            onClick={onSignOut}
-            className="rounded-md px-4 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted"
+            onClick={() => run("signOut", onSignOut)}
+            disabled={pending !== null}
+            className="rounded-md px-4 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted disabled:opacity-60"
           >
-            Sign out
+            {pending === "signOut" ? "Signing out…" : "Sign out"}
           </button>
         </div>
       </div>
@@ -147,19 +202,22 @@ export function AuthGate({ children }: AuthGateProps) {
   }
 
   if (isLoading || isSignedOutOnProtectedRoute) {
-    // Either still resolving, or the effect above is navigating away.
-    return null;
+    // Either still resolving, or the effect above is navigating away. The
+    // usual probe settles in milliseconds and nobody should see anything --
+    // but a backend that accepts the connection and then hangs takes the full
+    // ten-second deadline, and twice that when a refresh is honoured and the
+    // second probe hangs too. This gate wraps the entire layout, so all of
+    // that time is a white page with no header, no spinner and nothing to
+    // read: the reported symptom exactly, just time-boxed. Say something once
+    // it has gone on long enough to look broken.
+    return <SlowProbe />;
   }
 
   // Hint present, session unconfirmed: the server could not be reached.
   return (
     <SessionUnverified
-      onRetry={() => {
-        void Promise.resolve(checkAuth()).finally(forceRecheck);
-      }}
-      onSignOut={() => {
-        void Promise.resolve(logout()).finally(forceRecheck);
-      }}
+      onRetry={() => Promise.resolve(checkAuth()).finally(forceRecheck)}
+      onSignOut={() => Promise.resolve(logout()).finally(forceRecheck)}
     />
   );
 }

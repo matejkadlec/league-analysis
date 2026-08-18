@@ -146,6 +146,33 @@ describe("a session the API rejected", () => {
     expect(nav.replace).not.toHaveBeenCalled();
   });
 
+  it("says what it is doing once the probe has run long enough to look broken", async () => {
+    // This gate wraps the entire layout, so a backend that accepts the
+    // connection and hangs used to mean a white page -- no header, no
+    // spinner, nothing to read -- for the full ten-second deadline, and twice
+    // that when a refresh is honoured and the second probe hangs too. That is
+    // the reported symptom, merely time-boxed.
+    vi.useFakeTimers();
+    auth.isLoading = true;
+    setHint();
+
+    try {
+      const { queryByText } = render(<AuthGate>protected content</AuthGate>);
+
+      // Nothing at first: a healthy probe settles in milliseconds and must
+      // not flash a message on every page load.
+      expect(queryByText("Checking your session…")).toBeNull();
+
+      await act(async () => {
+        vi.advanceTimersByTime(1_000);
+      });
+
+      expect(queryByText("Checking your session…")).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("leaves public routes alone", async () => {
     nav.pathname = "/privacy-policy";
 
@@ -158,6 +185,44 @@ describe("a session the API rejected", () => {
 });
 
 describe("the can't-reach-the-server surface", () => {
+  it("says a retry is running, and refuses to stack another", async () => {
+    // Both actions can take the full ten-second deadline, and this surface
+    // exists for exactly the server that will take it. With nothing on screen
+    // moving, the visitor reads the button as dead and clicks again, stacking
+    // another probe each time.
+    setHint();
+    let release: (() => void) | null = null;
+    auth.checkAuth.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          release = () => resolve();
+        }),
+    );
+
+    const { getByRole, queryByRole } = render(
+      <AuthGate>protected content</AuthGate>,
+    );
+
+    await act(async () => {
+      getByRole("button", { name: "Try again" }).click();
+    });
+
+    expect(queryByRole("button", { name: "Try again" })).toBeNull();
+    expect(getByRole("button", { name: "Checking…" })).toHaveProperty(
+      "disabled",
+      true,
+    );
+    expect(getByRole("button", { name: "Sign out" })).toHaveProperty(
+      "disabled",
+      true,
+    );
+
+    await act(async () => {
+      release?.();
+    });
+    expect(auth.checkAuth).toHaveBeenCalledTimes(1);
+  });
+
   it("offers a way out when retrying will never work", async () => {
     // A persistent 500 on this one account takes the same branch forever:
     // `proxy.ts` sends /sign-in back here while the hint lives, and the
@@ -352,11 +417,15 @@ describe("giving up on a session", () => {
     expect(hasAuthStateCookie()).toBe(true);
   });
 
-  it("does not sign out whoever signed in after the teardown", async () => {
-    // Same race, but the stale refresh succeeds. `credentials: "include"`
-    // sends whatever is in the jar now, which is B's session -- so asking the
-    // server to end "this" session would revoke every session B owns, on
-    // every device, moments after B signed in.
+  it("ends the session even when somebody has signed in since", async () => {
+    // The trap this test exists to keep shut: it looks like the polite thing
+    // to do is leave the new user alone. But /auth/refresh answers 200 with
+    // Set-Cookie for all three cookies under the same names and path, so by
+    // the time this code runs the browser has already replaced the new user's
+    // jar with the rotated session. Skipping the logout would leave a shell
+    // with their name on it sending somebody else's credentials -- and the
+    // previous version of this test missed that only because its mock
+    // response carried no Set-Cookie.
     setHint();
     markAuthSession(true);
     const calls: string[] = [];
@@ -364,17 +433,20 @@ describe("giving up on a session", () => {
       const url = String(input);
       calls.push(url);
       if (url.includes("/auth/refresh")) {
-        removeAuthTokens(); // A signs out mid-flight.
+        removeAuthTokens(); // The first user signs out mid-flight.
         setHint();
-        markAuthSession(true); // B signs in.
+        markAuthSession(true); // A second user signs in.
+        // What the real 200 does to the jar: the rotated session lands on top
+        // of the one that was just established.
+        setHint();
       }
       return new Response("{}", { status: 200 });
     });
 
     await refreshAccessToken();
 
-    expect(calls.some((url) => url.includes("/auth/logout"))).toBe(false);
-    expect(hasAuthStateCookie()).toBe(true);
+    expect(calls.some((url) => url.includes("/auth/logout"))).toBe(true);
+    expect(hasAuthStateCookie()).toBe(false);
   });
 
   it("does not let a refresh that lands after teardown resurrect it", async () => {

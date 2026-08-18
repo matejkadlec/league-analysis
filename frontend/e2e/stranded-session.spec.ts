@@ -74,13 +74,33 @@ test.describe("a session the API no longer honours", () => {
 
     await page.goto("/");
 
-    // The heading, not just the button: the root error boundary renders its
-    // own "Try again" in the same place, so a change that made this gate
-    // throw would swap a crash page in and still satisfy a button-only
-    // assertion.
+    // The heading, not just the button: both error boundaries render their
+    // own "Try again", so a button-only assertion cannot tell this surface
+    // apart from a crash page.
     await expect(page.getByText("Can't reach the server")).toBeVisible();
     await expect(page.getByRole("button", { name: "Try again" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
     expect(new URL(page.url()).pathname).toBe("/");
+  });
+
+  test("says something rather than nothing while a hung backend is probed", async ({
+    page,
+  }) => {
+    // The variant with no coverage until now, and the one closest to the
+    // original report: the server accepts the connection and then never
+    // answers. The probe runs to its full ten-second deadline, and because
+    // this gate wraps the whole layout, every second of that used to be an
+    // empty white page -- indistinguishable from the bug for anyone who does
+    // not wait it out.
+    await page.route("**/api/v1/auth/**", async () => {
+      // Deliberately never fulfilled.
+      await new Promise(() => {});
+    });
+
+    await page.goto("/");
+
+    await expect(page.getByText("Checking your session")).toBeVisible({
+      timeout: 5_000,
+    });
   });
 });
