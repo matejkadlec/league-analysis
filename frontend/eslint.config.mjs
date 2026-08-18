@@ -52,43 +52,65 @@ const eslintConfig = [
   // `refreshAccessToken` is the one place that can tell a rejected session
   // (401/403) from a server it could not reach (502, timeout, offline).
   // Everywhere else sees the same failed request either way, so a teardown
-  // from anywhere else signs people out over a redeploy or a dropped
-  // connection, with a valid refresh cookie still in the jar and the hint
-  // gone that would have let it be used.
+  // from anywhere else signs people out over a redeploy, with a valid refresh
+  // cookie still in the jar and the hint gone that would have let it be used.
   //
-  // This lived in a test that scanned source text with regexes, and was
-  // defeated twice: by an aliased import, by a cookie string held in a
-  // variable, by bracket notation, by a `//` inside a string literal eating
-  // the line. Every one of those is a spelling, and a spelling always has
-  // another spelling. These rules read the syntax tree and the module graph
-  // instead, so renaming on import or reaching the property a different way
-  // changes nothing.
+  // This rule has been rewritten several times, and every earlier version
+  // failed the same way: it enumerated spellings -- helper names, receiver
+  // names, file extensions, import specifiers -- and an enumeration is always
+  // one spelling short. Adversarial audits walked past those versions with
+  // bracket notation, a renamed local, a relative import, a `.jsx` file, a
+  // dynamic `import()`, and a wrapper exported from the owner file itself.
+  //
+  // So this version stops enumerating twice over. Imports are an ALLOWLIST:
+  // a new export from token-manager is blocked by default rather than needing
+  // to be added to a list of forbidden names. And cookie mutation is keyed on
+  // the hint's own name rather than on the receiver, so `store.delete(NAME)`,
+  // `jar.delete(NAME)` and `(await cookies()).delete(NAME)` are all the same
+  // to it, while the six files that legitimately `.get(NAME)` stay silent.
+  //
+  // Two things it still cannot see, both semantic rather than syntactic, and
+  // both left to review and to the behavioural tests in
+  // `tests/auth-session-probe.test.tsx`: a bulk cookie sweep in
+  // `consent-storage.ts` that happens to include the hint, and a bad teardown
+  // decision inside one of the files that is allowed to make them.
   {
-    files: ["**/*.{js,cjs,mjs,cts,mts,ts,tsx}"],
+    files: ["**/*.{js,jsx,cjs,mjs,cts,mts,ts,tsx}"],
     ignores: ["tests/**", "e2e/**"],
     rules: {
       "no-restricted-imports": [
         "error",
         {
-          // Patterns, not `paths`: `paths` matches the specifier string
-          // literally, and relative imports are the house style inside
-          // `features/auth/` -- `auth-context.tsx` reaches token-manager as
-          // "../utils/token-manager". A rule keyed on the "@/" alias
-          // therefore never bound to the files that matter, and any new file
-          // beside them would have bypassed it by copying its neighbours.
+          // Patterns rather than `paths`, because `paths` matches the
+          // specifier literally and relative imports are the house style
+          // inside `features/auth/`. `allowImportNames` rather than
+          // `importNames`, because a forbidden-name list is defeated by
+          // adding a differently-named export that does the same thing.
           patterns: [
             {
               group: [
                 "**/token-manager",
                 "*/token-manager",
                 "./token-manager",
+              ],
+              allowImportNames: ["refreshAccessToken"],
+              message:
+                "Only the refresh call can tell a rejected session from an unreachable server. Ending a session from anywhere else signs people out over a redeploy, with a valid refresh cookie still in the jar.",
+            },
+            {
+              group: [
                 "**/auth-state-cookie",
                 "*/auth-state-cookie",
                 "./auth-state-cookie",
               ],
-              importNames: ["removeAuthTokens", "clearAuthStateCookie"],
+              allowImportNames: [
+                "AUTH_STATE_COOKIE_NAME",
+                "AUTH_STATE_COOKIE_VALUE",
+                "hasAuthStateCookie",
+                "subscribeToAuthStateCookie",
+              ],
               message:
-                "Only the refresh call can tell a rejected session from an unreachable server. Ending a session from anywhere else signs people out over a redeploy, with a valid refresh cookie still in the jar. Let refreshAccessToken decide, or handle the failure without ending the session.",
+                "Reading the session hint is fine; retracting it is a teardown, and belongs to token-manager, which knows whether the server actually refused.",
             },
           ],
         },
@@ -96,8 +118,9 @@ const eslintConfig = [
       "no-restricted-syntax": [
         "error",
         {
-          // Any receiver, any spelling: `document.cookie`, `document["cookie"]`,
-          // `globalThis.document.cookie`, or an alias held in a variable.
+          // Any receiver, any spelling: `document.cookie`,
+          // `document["cookie"]`, `globalThis.document.cookie`, or an alias
+          // held in a variable.
           selector:
             "AssignmentExpression[left.type='MemberExpression'][left.property.name='cookie']",
           message:
@@ -110,28 +133,34 @@ const eslintConfig = [
             "Writing a cookie by hand can retract the session hint without telling the server, which reports the visitor as signed out while their refresh token stays live. Cookie writes belong in auth-state-cookie.ts or consent-storage.ts.",
         },
         {
-          // `response.cookies.delete(...)` in proxy.ts, and the Cookie Store
-          // API in the browser. Neither goes through `document.cookie`, so
-          // neither is reached by the selectors above -- and proxy.ts is the
-          // file that routes on the hint, so a delete written there strands
-          // the visitor exactly as the original bug did.
+          // Keyed on the cookie, not on what is holding it: a Server Action
+          // doing `const store = await cookies(); store.delete(NAME)` is the
+          // same act as `cookieStore.delete(NAME)`, and naming the local
+          // variable differently must not change the answer.
           selector:
-            "CallExpression[callee.property.name=/^(set|delete)$/][callee.object.property.name='cookies']",
+            "CallExpression[callee.property.name=/^(set|delete)$/] > Identifier[name='AUTH_STATE_COOKIE_NAME']",
           message:
-            "Deleting or setting a cookie here bypasses the one place that owns session cookies. proxy.ts routes on the session hint, so retracting it here reports the visitor as signed out while their refresh token stays live on the server.",
+            "Setting or deleting the session hint here bypasses the one place that owns it. proxy.ts routes on this cookie, so retracting it without telling the server reports the visitor as signed out while their refresh token stays live and spendable.",
         },
         {
           selector:
-            "CallExpression[callee.property.name=/^(set|delete)$/][callee.object.name=/^cookie[sS]tore$/]",
+            "CallExpression[callee.property.name=/^(set|delete)$/] > Literal[value='league_analysis_auth_state']",
           message:
-            "Deleting or setting a cookie here bypasses the one place that owns session cookies. Cookie writes belong in auth-state-cookie.ts or consent-storage.ts.",
+            "Setting or deleting the session hint here bypasses the one place that owns it. proxy.ts routes on this cookie, so retracting it without telling the server reports the visitor as signed out while their refresh token stays live and spendable.",
         },
         {
-          // The raw header form.
+          // The raw header form, with the header name in any shape.
           selector:
-            "CallExpression[callee.property.name=/^(set|append)$/] > Literal[value=/^set-cookie$/i]",
+            "CallExpression[callee.property.name=/^(set|append)$/][callee.object.property.name='headers']",
           message:
-            "Setting a Set-Cookie header here bypasses the one place that owns session cookies. proxy.ts routes on the hint, so a delete written here strands the visitor exactly as the original bug did.",
+            "Set response headers that carry cookies through the module that owns them. A Set-Cookie written here can retract the session hint that proxy.ts routes on.",
+        },
+        {
+          // `no-restricted-imports` never visits ImportExpression, so a
+          // dynamic import is invisible to the allowlist above.
+          selector: "ImportExpression[source.value=/(token-manager)$/]",
+          message:
+            "Importing the session teardown dynamically evades the import allowlist. Only the refresh call may end a session.",
         },
       ],
     },
