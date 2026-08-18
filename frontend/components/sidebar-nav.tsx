@@ -185,7 +185,9 @@ export function SidebarNav() {
 
                 <button
                   type="button"
-                  onClick={logout}
+                  onClick={() => {
+                    void logout();
+                  }}
                   className="flex items-center gap-2 px-4 py-2 pb-4 text-white cursor-pointer transition-colors duration-300 hover:text-[#cfa93a] w-full text-left"
                 >
                   <LogOut className="h-4 w-4 text-[#cfa93a] scale-x-[-1]" />

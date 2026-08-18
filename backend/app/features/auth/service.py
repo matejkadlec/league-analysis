@@ -825,13 +825,22 @@ class AuthService:
         token_record = result.scalar_one_or_none()
         return None if token_record is None else token_record.user_id
 
-    def resolve_user_id_for_access_token(self, access_token: str) -> int | None:
-        """Read the owner out of an access token, expiry aside.
+    async def resolve_user_id_for_access_token(self, access_token: str) -> int | None:
+        """Read the owner out of a recently expired access token.
 
         Logout uses this when there is no refresh cookie to go on. Expiry is
-        ignored on purpose — an expired access token is exactly the case that
-        needs to work, and the signature is still verified, so the token names
-        its owner rather than merely claiming one.
+        relaxed on purpose — an access token that died 30 minutes ago is
+        exactly the case that needs to work — but it is bounded rather than
+        ignored, because this route is unauthenticated and revokes every
+        session the named user owns.
+
+        An access token that expired longer ago than a refresh token lives
+        cannot belong to a session that still exists, so honouring it buys
+        nobody a logout. It does buy an attacker one: a token leaked once
+        into a log or a crash dump would otherwise stay a replayable
+        "sign this user out of everything" button for good, and an expired
+        token is never blacklisted, so the replay leaves no trace to dedupe
+        against.
         """
         try:
             payload = jwt.decode(
@@ -843,12 +852,25 @@ class AuthService:
         except InvalidTokenError:
             return None
 
+        exp = payload.get("exp")
+        if not isinstance(exp, int):
+            return None
+        expired_for = datetime.now(UTC) - datetime.fromtimestamp(exp, tz=UTC)
+        if expired_for > timedelta(days=self.settings.jwt_refresh_token_expire_days):
+            return None
+
         user_id = payload.get("user_id")
-        return (
-            user_id
-            if isinstance(user_id, int) and payload.get("typ") == "access"
-            else None
-        )
+        if not isinstance(user_id, int) or payload.get("typ") != "access":
+            return None
+
+        # A token already spent on a logout must not authorise another one.
+        # Without this, one still-live leaked token is a replayable "sign this
+        # user out of everything" button for as long as it lasts.
+        token_id = payload.get("jti")
+        if isinstance(token_id, str) and await self.is_access_token_revoked(token_id):
+            return None
+
+        return user_id
 
     async def revoke_access_token(
         self,

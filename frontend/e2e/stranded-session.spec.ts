@@ -74,8 +74,13 @@ test.describe("a session the API no longer honours", () => {
 
     await page.goto("/");
 
-    await expect(
-      page.getByRole("button", { name: "Try again" }),
-    ).toBeVisible();
+    // The heading, not just the button: the root error boundary renders its
+    // own "Try again" in the same place, so a change that made this gate
+    // throw would swap a crash page in and still satisfy a button-only
+    // assertion.
+    await expect(page.getByText("Can't reach the server")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Try again" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
+    expect(new URL(page.url()).pathname).toBe("/");
   });
 });

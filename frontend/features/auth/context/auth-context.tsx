@@ -129,11 +129,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(null);
       }
     } catch (error) {
-      // Catch any other errors (e.g., JSON parsing)
+      // Reaching here means the request itself came back but reading it did
+      // not work -- a body truncated mid-stream, a captive portal answering
+      // with HTML, a bad gzip. That says nothing about whether the session is
+      // valid, so it gets the same treatment as an unreachable server: no
+      // teardown. Tearing down here signed people out over a parse blip while
+      // their refresh cookie was still good, and because that also bumps the
+      // session epoch it could end the session on every other device too.
       if (process.env.NODE_ENV === "development") {
         console.warn("Auth check failed:", error);
       }
-      removeAuthTokens();
       setUser(null);
       queryClient.clear();
     } finally {

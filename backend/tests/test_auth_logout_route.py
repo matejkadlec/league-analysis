@@ -81,7 +81,9 @@ def test_repeated_logouts_are_never_refused(client: TestClient) -> None:
     limit here is therefore globally deniable: one client can spend the quota
     and nobody else can sign out.
     """
-    for _ in range(25):
+    # More iterations than any per-minute limit anyone would plausibly set
+    # here; the existing limits in this router run 3-20/minute.
+    for _ in range(80):
         assert _post(client).status_code == 200
 
 

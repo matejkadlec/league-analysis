@@ -1,9 +1,12 @@
 "use client";
 
-import { useEffect, useReducer } from "react";
+import { useEffect, useReducer, useSyncExternalStore } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/features/auth";
-import { hasAuthStateCookie } from "@/features/auth/utils/auth-state-cookie";
+import {
+  hasAuthStateCookie,
+  subscribeToAuthStateCookie,
+} from "@/features/auth/utils/auth-state-cookie";
 
 const PUBLIC_ROUTES = [
   "/sign-in",
@@ -28,7 +31,13 @@ interface AuthGateProps {
  * message, and nothing to click, because the one thing that would re-check
  * runs only on mount.
  */
-function SessionUnverified({ onRetry }: { onRetry: () => void }) {
+function SessionUnverified({
+  onRetry,
+  onSignOut,
+}: {
+  onRetry: () => void;
+  onSignOut: () => void;
+}) {
   return (
     <div className="flex min-h-[60vh] items-center justify-center p-6">
       <div className="max-w-md text-center">
@@ -39,13 +48,28 @@ function SessionUnverified({ onRetry }: { onRetry: () => void }) {
           Your session could not be confirmed. This is usually a connection
           problem rather than a signed-out session.
         </p>
-        <button
-          type="button"
-          onClick={onRetry}
-          className="mt-4 rounded-md border border-border px-4 py-2 text-sm transition-colors hover:bg-muted"
-        >
-          Try again
-        </button>
+        <div className="mt-4 flex items-center justify-center gap-2">
+          <button
+            type="button"
+            onClick={onRetry}
+            className="rounded-md border border-border px-4 py-2 text-sm transition-colors hover:bg-muted"
+          >
+            Try again
+          </button>
+          {/* The only way out when the failure is permanent rather than
+              transient -- a 500 on this one account, say. Retrying takes the
+              same branch forever, `proxy.ts` sends /sign-in back here while
+              the hint lives, and the sidebar's Sign Out button is not drawn
+              for a visitor who is not authenticated. Without this the visitor
+              is stuck on this screen until they clear the cookie by hand. */}
+          <button
+            type="button"
+            onClick={onSignOut}
+            className="rounded-md px-4 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted"
+          >
+            Sign out
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -61,7 +85,7 @@ function SessionUnverified({ onRetry }: { onRetry: () => void }) {
  * the client would not draw, or bouncing one the client thought was fine.
  */
 export function AuthGate({ children }: AuthGateProps) {
-  const { isAuthenticated, isLoading, checkAuth } = useAuth();
+  const { isAuthenticated, isLoading, checkAuth, logout } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
   // The cookie is not reactive and nothing subscribes to it, so a re-check
@@ -71,7 +95,15 @@ export function AuthGate({ children }: AuthGateProps) {
   // up for good.
   const [recheckCount, forceRecheck] = useReducer((n: number) => n + 1, 0);
 
-  const hasSessionHint = hasAuthStateCookie();
+  // Subscribed rather than read during render: the cookie changes without any
+  // React state changing, so a gate that only read it at render time kept
+  // drawing the signed-in shell after the interceptor had given the session
+  // up.
+  const hasSessionHint = useSyncExternalStore(
+    subscribeToAuthStateCookie,
+    hasAuthStateCookie,
+    () => false,
+  );
   const isPublicRoute = PUBLIC_ROUTES.some(
     (route) => pathname === route || pathname.startsWith(`${route}/`),
   );
@@ -124,6 +156,9 @@ export function AuthGate({ children }: AuthGateProps) {
     <SessionUnverified
       onRetry={() => {
         void Promise.resolve(checkAuth()).finally(forceRecheck);
+      }}
+      onSignOut={() => {
+        void Promise.resolve(logout()).finally(forceRecheck);
       }}
     />
   );

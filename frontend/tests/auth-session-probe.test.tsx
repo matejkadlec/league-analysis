@@ -16,14 +16,16 @@ vi.mock("next/navigation", () => ({
 }));
 
 let triggerRecheck: (() => Promise<void>) | null = null;
+let triggerLogout: (() => Promise<void>) | null = null;
 
 function AuthStateProbe() {
-  const { isLoading, isAuthenticated, checkAuth } = useAuth();
+  const { isLoading, isAuthenticated, checkAuth, logout } = useAuth();
   // Assigned in an effect, not during render: reassigning a module-level
   // binding while rendering is a side effect, and eslint rejects it.
   useEffect(() => {
     triggerRecheck = checkAuth;
-  }, [checkAuth]);
+    triggerLogout = logout;
+  }, [checkAuth, logout]);
   return (
     <span data-testid="state">{`${isLoading ? "loading" : "settled"}:${isAuthenticated}`}</span>
   );
@@ -53,6 +55,7 @@ function clearCookies() {
 
 beforeEach(() => {
   triggerRecheck = null;
+  triggerLogout = null;
   clearCookies();
   vi.restoreAllMocks();
 });
@@ -60,6 +63,30 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   clearCookies();
+});
+
+describe("signing out", () => {
+  it("gives the logout request a deadline", async () => {
+    // Without one, a backend that accepts the connection and hangs makes Sign
+    // Out do nothing at all -- no teardown, no navigation, no spinner -- and
+    // every further click stacks another dead request.
+    document.cookie = `${AUTH_STATE_COOKIE_NAME}=${AUTH_STATE_COOKIE_VALUE}; path=/`;
+    let seen: AbortSignal | null | undefined;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      if (String(input).includes("/auth/logout")) {
+        seen = init?.signal;
+      }
+      return new Response("{}", { status: 200 });
+    });
+
+    renderProvider();
+    await waitFor(() => expect(triggerLogout).not.toBeNull());
+    await act(async () => {
+      await triggerLogout?.();
+    });
+
+    expect(seen).toBeInstanceOf(AbortSignal);
+  });
 });
 
 describe("re-checking an established session", () => {
@@ -110,6 +137,30 @@ describe("re-checking an established session", () => {
   });
 });
 
+describe("a response that arrives but cannot be read", () => {
+  it("is not treated as a rejected session", async () => {
+    // A body truncated mid-stream, a captive portal answering with HTML, a
+    // bad gzip. None of that says the session ended. Tearing down here signed
+    // people out over a parse blip while their refresh cookie was still good
+    // -- and because the teardown bumps the session epoch, an in-flight
+    // refresh would then ask the server to end the session on every device.
+    document.cookie = `${AUTH_STATE_COOKIE_NAME}=${AUTH_STATE_COOKIE_VALUE}; path=/`;
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("<html>captive portal</html>", {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    const { getByTestId } = renderProvider();
+
+    await waitFor(() =>
+      expect(getByTestId("state").textContent).toBe("settled:false"),
+    );
+    expect(document.cookie).toContain(AUTH_STATE_COOKIE_NAME);
+  });
+});
+
 describe("signed-out session probe", () => {
   it("makes no request when the session hint is absent", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch");
@@ -144,7 +195,15 @@ describe("signed-out session probe", () => {
     // substitute for checking.
     expect(fetchSpy).toHaveBeenCalledWith(
       "/api/v1/auth/me",
-      expect.objectContaining({ credentials: "include" }),
+      expect.objectContaining({
+        credentials: "include",
+        // A backend that accepts the connection and never answers leaves
+        // `isLoading` true forever, and every surface gated on it renders
+        // nothing -- the original white screen, reachable by simply waiting.
+        // `objectContaining` matches a subset, so without naming the signal
+        // this assertion is green with the deadline deleted.
+        signal: expect.any(AbortSignal),
+      }),
     );
   });
 });

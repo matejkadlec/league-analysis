@@ -41,6 +41,9 @@ export interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (credentials: LoginRequest) => Promise<void>;
-  logout: () => void;
+  // Awaited, not fire-and-forget: only the server can revoke, so callers that
+  // act on the result -- the "can't reach the server" escape hatch -- need to
+  // know when the request has actually come back.
+  logout: () => Promise<void>;
   checkAuth: () => Promise<void>;
 }

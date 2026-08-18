@@ -80,7 +80,15 @@ export async function refreshAccessToken(): Promise<string | null> {
         // the API being restarted or redeployed, and treating that as a
         // rejection signed people out mid-deploy while their refresh cookie
         // was still perfectly valid.
-        if (response.status === 401 || response.status === 403) {
+        if (
+          (response.status === 401 || response.status === 403) &&
+          epoch === sessionEpoch
+        ) {
+          // Only if this refresh still belongs to the session on screen. A
+          // rejection that arrives after a teardown is about the session that
+          // ended, and tearing down again would take out whoever signed in
+          // since -- on a shared machine, the next person, moments after they
+          // signed in successfully.
           removeAuthTokens();
         }
         return false;
@@ -93,6 +101,15 @@ export async function refreshAccessToken(): Promise<string | null> {
         // response installed as an HttpOnly cookie. Clearing the hint would
         // only hide it: JS cannot touch that cookie, and nothing has told the
         // server to revoke it. So ask the server to end the session properly.
+        if (sessionHint) {
+          // Somebody has signed in since the teardown, and `credentials:
+          // "include"` sends whatever is in the jar now -- which is their
+          // session, not the one this refresh rotated. Ending it here would
+          // sign out a user who just signed in. The orphaned token is left to
+          // expire on its own; that is the cheaper of the two mistakes.
+          return false;
+        }
+
         clearAuthStateCookie();
         try {
           await fetch(`${getApiBaseUrl()}/api/v1/auth/logout`, {

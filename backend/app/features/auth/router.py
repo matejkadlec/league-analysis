@@ -291,16 +291,24 @@ async def logout(
     user_id: int | None = None
     if refresh_token:
         user_id = await auth_service.resolve_user_id_for_refresh_token(refresh_token)
+    if access_token and user_id is None:
+        # No refresh cookie — a Bearer client, or a browser that lost it.
+        # The access token names its owner and its signature is verified
+        # during decoding, so it is a sound fallback rather than a guess.
+        user_id = await auth_service.resolve_user_id_for_access_token(access_token)
+
+    # Refresh tokens first. Each revocation commits on its own, so a failure
+    # between the two leaves whatever the earlier call already did. Losing the
+    # 30-day credential and keeping the 30-minute one is survivable — it dies
+    # by itself. The other order leaves the live refresh cookie in a browser
+    # that has already been told it is signed out, which is the exact state
+    # this whole change exists to remove.
+    if user_id is not None:
+        await auth_service.revoke_all_refresh_tokens_for_user(user_id)
     if access_token:
-        if user_id is None:
-            # No refresh cookie — a Bearer client, or a browser that lost it.
-            # The access token names its owner and its signature is verified
-            # during decoding, so it is a sound fallback rather than a guess.
-            user_id = auth_service.resolve_user_id_for_access_token(access_token)
         await auth_service.revoke_access_token(access_token, reason="logout")
 
     if user_id is not None:
-        await auth_service.revoke_all_refresh_tokens_for_user(user_id)
         # Only for a caller that proved it holds a credential. This issues
         # table-wide DELETEs and a COMMIT, and the endpoint is unauthenticated,
         # so running it unconditionally would let anonymous requests drive

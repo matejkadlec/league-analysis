@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, waitFor } from "@testing-library/react";
+import { act, cleanup, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AuthGate } from "@/components/auth-gate";
@@ -27,6 +27,7 @@ const auth = vi.hoisted(() => ({
   isAuthenticated: false,
   isLoading: false,
   checkAuth: vi.fn(async () => {}),
+  logout: vi.fn(async () => {}),
 }));
 
 vi.mock("@/features/auth", () => ({
@@ -52,6 +53,8 @@ beforeEach(() => {
   auth.isLoading = false;
   auth.checkAuth.mockReset();
   auth.checkAuth.mockImplementation(async () => {});
+  auth.logout.mockReset();
+  auth.logout.mockImplementation(async () => {});
   clearHint();
   removeAuthTokens();
 });
@@ -154,6 +157,45 @@ describe("a session the API rejected", () => {
   });
 });
 
+describe("the can't-reach-the-server surface", () => {
+  it("offers a way out when retrying will never work", async () => {
+    // A persistent 500 on this one account takes the same branch forever:
+    // `proxy.ts` sends /sign-in back here while the hint lives, and the
+    // sidebar's Sign Out button is not drawn for a visitor who is not
+    // authenticated. Without this control the only escape is deleting the
+    // cookie by hand in devtools.
+    setHint();
+    auth.logout.mockImplementation(async () => {
+      clearHint();
+    });
+
+    const { getByRole } = render(<AuthGate>protected content</AuthGate>);
+
+    getByRole("button", { name: "Sign out" }).click();
+
+    await waitFor(() => expect(nav.replace).toHaveBeenCalledWith("/sign-in"));
+  });
+
+  it("stops drawing the signed-in shell the moment the session is given up", async () => {
+    // The cookie is not reactive and the interceptor's teardown changes no
+    // React state, so a gate that only read it at render time kept the whole
+    // signed-in UI on screen over an API refusing every call.
+    auth.isAuthenticated = true;
+    setHint();
+
+    const { getByText, queryByText } = render(
+      <AuthGate>protected content</AuthGate>,
+    );
+    expect(getByText("protected content")).toBeTruthy();
+
+    await act(async () => {
+      removeAuthTokens();
+    });
+
+    expect(queryByText("protected content")).toBeNull();
+  });
+});
+
 describe("the sign-in page", () => {
   it("still renders when React state is stale but the hint is gone", () => {
     // The axios interceptor can tear a session down without React hearing
@@ -232,6 +274,22 @@ describe("giving up on a session", () => {
     expect(hasAuthStateCookie()).toBe(false);
   });
 
+  it("gives the refresh a deadline", async () => {
+    // Without one, a backend that accepts the connection and hangs strands
+    // the caller exactly as a probe that never settles would.
+    setHint();
+    markAuthSession(true);
+    let seen: AbortSignal | null | undefined;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) => {
+      seen = init?.signal;
+      return new Response("{}", { status: 200 });
+    });
+
+    await refreshAccessToken();
+
+    expect(seen).toBeInstanceOf(AbortSignal);
+  });
+
   it("clears the hint when the server rejects the refresh", async () => {
     // The load-bearing line of the whole fix. For the reported visitor --
     // hint cookie, no usable tokens -- this rejection is what retracts the
@@ -275,16 +333,60 @@ describe("giving up on a session", () => {
     expect(hasAuthStateCookie()).toBe(true);
   });
 
+  it("does not tear down a session that started after it was rejected", async () => {
+    // A shared machine: A signs out while a refresh of A's session is still
+    // in flight, B signs in, then the stale refresh finally comes back 401.
+    // Acting on it here would delete B's hint and bounce B -- who just signed
+    // in successfully -- straight back to the sign-in page.
+    setHint();
+    markAuthSession(true);
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+      removeAuthTokens(); // A signs out mid-flight.
+      setHint();
+      markAuthSession(true); // B signs in.
+      return new Response("{}", { status: 401 });
+    });
+
+    await refreshAccessToken();
+
+    expect(hasAuthStateCookie()).toBe(true);
+  });
+
+  it("does not sign out whoever signed in after the teardown", async () => {
+    // Same race, but the stale refresh succeeds. `credentials: "include"`
+    // sends whatever is in the jar now, which is B's session -- so asking the
+    // server to end "this" session would revoke every session B owns, on
+    // every device, moments after B signed in.
+    setHint();
+    markAuthSession(true);
+    const calls: string[] = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      calls.push(url);
+      if (url.includes("/auth/refresh")) {
+        removeAuthTokens(); // A signs out mid-flight.
+        setHint();
+        markAuthSession(true); // B signs in.
+      }
+      return new Response("{}", { status: 200 });
+    });
+
+    await refreshAccessToken();
+
+    expect(calls.some((url) => url.includes("/auth/logout"))).toBe(false);
+    expect(hasAuthStateCookie()).toBe(true);
+  });
+
   it("does not let a refresh that lands after teardown resurrect it", async () => {
     setHint();
     markAuthSession(true);
 
     // A refresh already in flight when the user logs out. The server answers
     // 200 and re-sets the cookies, which the browser applies regardless.
-    const calls: string[] = [];
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+    const calls: { url: string; signal: AbortSignal | null | undefined }[] = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
       const url = String(input);
-      calls.push(url);
+      calls.push({ url, signal: init?.signal });
       if (url.includes("/auth/refresh")) {
         removeAuthTokens();
         setHint();
@@ -298,6 +400,11 @@ describe("giving up on a session", () => {
     expect(hasAuthStateCookie()).toBe(false);
     // Clearing the hint only hides the rotated token; the new refresh cookie
     // is HttpOnly, so the session has to be ended server-side.
-    expect(calls.some((url) => url.includes("/auth/logout"))).toBe(true);
+    const logoutCall = calls.find((call) => call.url.includes("/auth/logout"));
+    expect(logoutCall).toBeTruthy();
+    // `refreshInFlight` is cleared only in the outer `finally`, so a logout
+    // that hangs here leaves every later refresh awaiting a promise that
+    // never settles -- token refresh silently dead for the whole tab.
+    expect(logoutCall?.signal).toBeInstanceOf(AbortSignal);
   });
 });
