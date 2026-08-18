@@ -9,6 +9,12 @@ export default defineConfig({
   },
   test: {
     exclude: [...configDefaults.exclude, "e2e/**"],
+    // Restore `vi.stubEnv` after every test rather than trusting each one to
+    // unstub itself. A test that stubs an environment variable and then fails
+    // an assertion never reaches its own cleanup line, so the stub survives
+    // into every test after it and buries the original failure under a cascade
+    // of unrelated ones.
+    unstubEnvs: true,
     coverage: {
       provider: "v8",
       reporter: ["text", "json-summary"],

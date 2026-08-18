@@ -8,7 +8,6 @@ import structlog
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from slowapi import Limiter
 from slowapi.util import get_remote_address
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_riot_client
 from app.core.rate_limiter import typed_limit
@@ -369,16 +368,29 @@ async def get_player_recent_opponents(
 
 
 @router.post("/{puuid}/track", response_model=PlayerResponse)
+# Same ceiling as POST /{puuid}/sync, because this now starts the same run.
+# Deduplication in create_or_get_player_sync caps concurrency per PUUID, not
+# rate: tracking several players, or cycling untrack/track after each run
+# finishes, would otherwise spend Riot quota past the limit that endpoint was
+# deliberately given.
+@typed_limit(limiter, "10/minute")
 async def track_player(
+    request: Request,
     puuid: str,
     player_service: PlayerServiceDep,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_active_user),
 ):
     """
     Mark a player for automated tracking and monitoring.
 
-    Tracked players will have their match history and rank automatically
-    updated every 2 minutes by the background job scheduler.
+    Tracking alone only adds the player to the Match Fetcher's set, so their
+    matches and rank would not arrive until its next scheduled pass — a
+    runtime setting, 900s in production at the time of writing. That is a long
+    time to look at an empty profile you just added, so this starts the same
+    explicit update the Update button does: one claimed PlayerSyncRun, writers
+    via BaseJob. If a fleet-wide writer is already running the run reports
+    SYNC_BUSY and the scheduler picks the player up on its next pass anyway.
 
     Returns:
         Updated player data with is_tracked=True
@@ -391,7 +403,6 @@ async def track_player(
 
     try:
         player = await player_service.track_player(puuid, current_user.id)
-        return player
     except RiotWriterMaintenanceActiveError as e:
         raise HTTPException(
             status_code=503,
@@ -409,6 +420,30 @@ async def track_player(
             status_code=500,
             detail="The player could not be tracked. Please try again later.",
         ) from e
+
+    # The tracking row is committed by here, so claiming the run sits outside
+    # the block above on purpose. The sync only saves the viewer from waiting
+    # for the Match Fetcher; failing to claim it is no reason to answer that
+    # the tracking failed, when it did not and the scheduler will still pick
+    # the player up.
+    try:
+        sync_run, created = await create_or_get_player_sync(
+            player_service.db,
+            user_id=current_user.id,
+            puuid=puuid,
+        )
+    except Exception as e:
+        logger.error(
+            "track_player_initial_sync_not_started",
+            error=str(e),
+            puuid=puuid,
+            exc_info=True,
+        )
+    else:
+        if created:
+            background_tasks.add_task(run_player_sync, sync_run.id)
+
+    return player
 
 
 @router.delete("/{puuid}/track", response_model=PlayerResponse)
@@ -496,108 +531,6 @@ async def get_tracked_players(
         ) from e
 
 
-async def _riot_writer_maintenance_is_active(session: AsyncSession) -> bool:
-    """Check the cleanup interlock before a foreground Riot-data write."""
-    from app.features.jobs.maintenance import (
-        locked_riot_writer_configurations,
-        riot_writer_maintenance_is_active,
-    )
-
-    configurations = await locked_riot_writer_configurations(session)
-    return riot_writer_maintenance_is_active(configurations)
-
-
-@router.post("/add-tracked", response_model=PlayerResponse)
-async def add_tracked_player(
-    player_service: PlayerServiceDep,
-    riot_client: Annotated[RiotAPIClient, Depends(get_riot_client)],
-    background_tasks: BackgroundTasks,
-    current_user: User = Depends(get_current_active_user),
-    game_name: str = Query(..., description="Game name"),
-    tag_line: str = Query(..., description="Tag line (without #)"),
-    platform: str = Query("eun1", description="Platform platform"),
-):
-    """
-    Search for a player in Riot API and add them with is_tracked=true.
-
-    Args:
-        game_name: Game name
-        tag_line: Tag line
-        platform: Platform platform (default: eun1)
-
-    Returns:
-        Player data with is_tracked=True
-
-    Raises:
-        400: Invalid input or tracking limit reached
-        404: Player not found in Riot API
-        500: Unexpected error
-    """
-    from app.features.jobs.maintenance import RiotWriterMaintenanceActiveError
-
-    try:
-        # Validate inputs
-        _validate_game_name(game_name)
-        _validate_tag_line(tag_line)
-
-        if await _riot_writer_maintenance_is_active(player_service.db):
-            raise HTTPException(
-                status_code=503,
-                detail="Riot data maintenance is in progress. Try again after it completes.",
-            )
-
-        result = await player_service.add_and_track_player(
-            riot_client=riot_client,
-            game_name=game_name,
-            tag_line=tag_line,
-            platform=platform,
-            user_id=current_user.id,
-        )
-
-        # Onboarding runs the same explicit Player Sync lifecycle as the
-        # Update button: one claimed PlayerSyncRun, writers via BaseJob.
-        # If a fleet-wide writer is already running the run reports SYNC_BUSY
-        # and the scheduler picks the new tracked player up on its next pass.
-        sync_run, created = await create_or_get_player_sync(
-            player_service.db,
-            user_id=current_user.id,
-            puuid=result.puuid,
-        )
-        if created:
-            background_tasks.add_task(run_player_sync, sync_run.id)
-
-        return result
-
-    except RiotWriterMaintenanceActiveError as e:
-        raise HTTPException(
-            status_code=503,
-            detail="Riot data maintenance is in progress. Try again after it completes.",
-        ) from e
-    except ValueError as e:
-        _handle_tracking_value_error(e)
-    except NotFoundError as e:
-        raise HTTPException(status_code=404, detail="Player not found") from e
-    except RateLimitError as e:
-        raise HTTPException(
-            status_code=429, detail="Riot API rate limit reached"
-        ) from e
-    except (AuthenticationError, ForbiddenError) as e:
-        logger.error("riot_api_auth_error", error=str(e))
-        raise HTTPException(
-            status_code=503,
-            detail=RIOT_API_KEY_INVALID_DETAIL,
-        ) from e
-    except HTTPException:
-        raise
-    except Exception as e:
-        full_id = f"{game_name}#{tag_line}"
-        _handle_tracking_unexpected_error(e, full_id, game_name, platform)
-        raise HTTPException(
-            status_code=500,
-            detail="The player could not be added to tracking. Please try again later.",
-        ) from e
-
-
 def _handle_tracking_value_error(e: ValueError) -> None:
     """Handle ValueError during player tracking."""
     error_msg = str(e)
@@ -605,24 +538,6 @@ def _handle_tracking_value_error(e: ValueError) -> None:
         raise HTTPException(status_code=404, detail=error_msg)
     else:
         raise HTTPException(status_code=400, detail=error_msg)
-
-
-def _handle_tracking_unexpected_error(
-    e: Exception, full_id: str | None, game_name: str | None, platform: str
-) -> None:
-    """Handle unexpected errors during player tracking."""
-    logger.error(
-        "add_tracked_player_failed",
-        error=str(e),
-        full_id=full_id,
-        game_name=game_name,
-        platform=platform,
-        exc_info=e,
-    )
-    raise HTTPException(
-        status_code=500,
-        detail="The player could not be added to tracking. Please try again later.",
-    )
 
 
 # === Player League Endpoints ===

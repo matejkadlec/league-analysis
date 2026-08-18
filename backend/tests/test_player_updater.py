@@ -198,7 +198,6 @@ async def test_new_player_uses_submitted_riot_id_when_account_omits_it(
         refresh=AsyncMock(side_effect=populate_database_timestamps),
     )
     service = PlayerService(cast(AsyncSession, db))
-    service.track_player = AsyncMock(return_value=SimpleNamespace(puuid="safe"))
     riot_client = SimpleNamespace(
         get_account_by_riot_id=AsyncMock(
             return_value=SimpleNamespace(puuid="p" * 78, game_name=None, tag_line=None)
@@ -208,11 +207,10 @@ async def test_new_player_uses_submitted_riot_id_when_account_omits_it(
         ),
     )
 
-    await service.add_and_track_player(
-        cast(RiotAPIClient, riot_client),
-        "Submitted Name",
-        "SAFE",
-        user_id=7,
+    await service.discover_player(
+        riot_client=cast(RiotAPIClient, riot_client),
+        game_name="Submitted Name",
+        tag_line="SAFE",
         platform="eun1",
     )
 

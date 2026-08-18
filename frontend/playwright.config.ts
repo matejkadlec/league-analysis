@@ -8,9 +8,30 @@ export default defineConfig({
     browserName: "chromium",
   },
   webServer: {
-    command: "npm run dev -- --hostname 127.0.0.1 --port 3100",
+    // The production build, not `next dev`. Under the dev server these specs
+    // hit a hydration mismatch that production never sees: compiling on first
+    // visit stretches the initial load, and once the icon requests stop going
+    // to the network — which is the point of `blockUpstreamRequests` — the
+    // page loads fast enough to start hydrating before what it hydrates
+    // against has settled. React then throws away the server HTML and
+    // re-renders the tree, which is not a state any assertion should be
+    // measuring. Serving what actually ships removes it, and halves the
+    // suite's runtime as a side effect.
+    //
+    // This needs `npm run build` to have run first, which is the order
+    // test.sh uses. Locally: `npm run build && npm run test:e2e`.
+    command: "npm run start:standalone",
     env: {
-      NEXT_PUBLIC_API_URL: "http://127.0.0.1:3100",
+      // Only reaches the routes that stay dynamic. Every prerendered route
+      // baked its version in at build time, which is why test.sh pins the
+      // build as well — keep the two values in step. Unpinned, the layout
+      // resolves this from Riot's CDN, which is both a public-internet
+      // dependency the gate should not carry and a version that changes under
+      // the suite. `blockUpstreamRequests` cannot stop it: the fetch is
+      // server-side.
+      DDRAGON_VERSION: "16.15.1",
+      HOSTNAME: "127.0.0.1",
+      PORT: "3100",
     },
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,

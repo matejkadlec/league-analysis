@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 import { seedAuthenticatedSession } from "./support/auth";
+import { blockUpstreamRequests } from "./support/offline";
 
 const NOW = "2026-08-09T10:00:00.000Z";
 const CURRENT_PUUID = "current-player-puuid";
@@ -117,6 +118,7 @@ test("keeps player routes, sidebar switching, and dialog scroll lock determinist
   let syncStarts = 0;
 
   await seedAuthenticatedSession(page);
+  await blockUpstreamRequests(page);
   await page.addInitScript(() => {
     localStorage.setItem("theme", "dark");
   });

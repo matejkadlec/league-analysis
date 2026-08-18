@@ -19,6 +19,33 @@ describe("Data Dragon version resolution", () => {
     ).resolves.toBe("99.1.2");
   });
 
+  it("honours a well-formed DDRAGON_VERSION pin without asking Riot", async () => {
+    vi.stubEnv("DDRAGON_VERSION", "12.34.5");
+    const fetchManifest = vi.fn();
+
+    await expect(
+      resolveDDragonVersion(fetchManifest as unknown as typeof fetch),
+    ).resolves.toBe("12.34.5");
+    expect(fetchManifest).not.toHaveBeenCalled();
+  });
+
+  it("ignores a malformed DDRAGON_VERSION pin rather than serving it", async () => {
+    vi.stubEnv("DDRAGON_VERSION", "latest");
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const fetchManifest = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify(["99.1.2"])));
+
+    await expect(
+      resolveDDragonVersion(fetchManifest as typeof fetch),
+    ).resolves.toBe("99.1.2");
+    expect(consoleError).toHaveBeenCalledWith(
+      "DDRAGON_VERSION is not a version number; ignoring it",
+      { pinned: "latest" },
+    );
+    consoleError.mockRestore();
+  });
+
   it("falls back safely for failed or malformed manifests", async () => {
     const failed = vi.fn().mockRejectedValue(new Error("offline"));
     const malformed = vi

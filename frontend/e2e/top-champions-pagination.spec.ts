@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 import { seedAuthenticatedSession } from "./support/auth";
+import { blockUpstreamRequests } from "./support/offline";
 
 const NOW = "2026-08-07T10:00:00.000Z";
 const PUUID = "test-player-puuid";
@@ -20,6 +21,7 @@ const champions = Array.from({ length: 12 }, (_, index) => ({
 
 test.beforeEach(async ({ page }) => {
   await seedAuthenticatedSession(page);
+  await blockUpstreamRequests(page);
 
   await page.route("**/api/v1/**", async (route) => {
     const path = new URL(route.request().url()).pathname;

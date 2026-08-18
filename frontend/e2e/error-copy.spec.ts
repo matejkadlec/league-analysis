@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import { seedAuthenticatedSession } from "./support/auth";
+import { blockUpstreamRequests } from "./support/offline";
 
 /**
  * Browser evidence for the 2026-08 error-copy sweep: rewritten error states,
@@ -30,6 +31,7 @@ async function signIn(page: Page) {
   // localStorage; the middleware redirects without it and the page renders
   // nothing at all.
   await seedAuthenticatedSession(page);
+  await blockUpstreamRequests(page);
 
   await page.route("**/api/v1/auth/me", async (route) => {
     await route.fulfill({

@@ -187,15 +187,22 @@ run_frontend_tests() {
 
 run_frontend_build() {
   cd "$repository_root/frontend"
-  npm run build
+  # Most player routes prerender, and the root layout resolves the Data Dragon
+  # version while they do, so an unpinned build calls Riot's CDN and bakes the
+  # answer into the static payload. The end-to-end specs then read that baked
+  # value and no runtime environment can change it. Keep this in step with the
+  # DDRAGON_VERSION in frontend/playwright.config.ts, which covers the routes
+  # that stay dynamic.
+  DDRAGON_VERSION=16.15.1 npm run build
 }
 
 run_frontend_e2e() {
   cd "$repository_root/frontend"
   # Every request is mocked in the specs, so this needs no database and no
-  # backend — only the Next.js dev server playwright.config.ts starts itself.
-  # It runs after the production build because that build is the step that
-  # would break on artefacts a dev server leaves in .next.
+  # backend — only the server playwright.config.ts starts itself. It has to
+  # run after the production build, because what it starts is that build:
+  # `npm run start:standalone` serves .next/standalone rather than compiling
+  # on demand.
   npm run test:e2e
 }
 

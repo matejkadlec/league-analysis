@@ -1,6 +1,7 @@
 import type { Page } from "@playwright/test";
 
 import { seedAuthenticatedSession } from "./auth";
+import { blockUpstreamRequests } from "./offline";
 
 /**
  * A player with enough stored data that every table, row and stat block on the
@@ -245,6 +246,7 @@ const matchmakingHistory = {
 /** Route every request the player-centric pages make to a populated fixture. */
 export async function installPopulatedPlayerMocks(page: Page): Promise<void> {
   await seedAuthenticatedSession(page);
+  await blockUpstreamRequests(page);
   await page.addInitScript(() => {
     localStorage.setItem("theme", "dark");
   });
