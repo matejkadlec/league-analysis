@@ -49,11 +49,18 @@ def set_auth_cookies(
         samesite="lax",
         path="/",
     )
+    # Deliberately readable by JavaScript, unlike the two above. It carries no
+    # secret — only the literal "1" — and its whole job is to answer "is there a
+    # session?" without a round trip. `proxy.ts` reads it server-side to route,
+    # and `AuthProvider` reads it client-side to decide whether probing
+    # /auth/me is worth doing: with it HttpOnly the client could not, so every
+    # signed-out visit spent two requests learning what this cookie's absence
+    # already says, and logged a browser-generated 401 for each.
     response.set_cookie(
         AUTH_STATE_COOKIE_NAME,
         AUTH_STATE_COOKIE_VALUE,
         max_age=AUTH_STATE_COOKIE_MAX_AGE_SECONDS,
-        httponly=True,
+        httponly=False,
         secure=secure,
         samesite="lax",
         path="/",
@@ -71,7 +78,7 @@ def clear_auth_cookies(response: Response) -> None:
         response.delete_cookie(
             name,
             path="/",
-            httponly=True,
+            httponly=name != AUTH_STATE_COOKIE_NAME,
             secure=secure,
             samesite="lax",
         )
