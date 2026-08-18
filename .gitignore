@@ -60,6 +60,9 @@ frontend/build/
 # Claude Code linked worktrees
 .claude/worktrees/
 
+# Local agent tooling state
+.zcode/
+
 # Untracked
 docs/examples/
 untracked/
