@@ -249,9 +249,12 @@ and repository/project identifiers.
 This selects Node from `.nvmrc`, runs `npm ci`, ESLint with zero warnings,
 TypeScript, Vitest regressions, and a Next.js production build.
 
-The separate browser suite runs with `cd frontend && npx playwright install
-chromium && npm run test:e2e`. Its API is intercepted with deterministic fixture
-responses, so it does not require a Riot credential or a local database.
+The browser suite runs as the last frontend step, against the production build
+the step before it produced rather than a dev server — see
+[`quality-checks.md`](quality-checks.md#decisions) for why. Running it alone
+therefore needs that build first: `npm run build && npm run test:e2e`. Its API
+is intercepted with deterministic fixture responses, so it needs neither a Riot
+credential nor a local database.
 
 Use the workspace `get_errors` diagnostic on changed TypeScript files when it
 is available; it complements ESLint and TypeScript rather than replacing them.

@@ -28,10 +28,16 @@ so it is safe to call from the main checkout or any worktree.
   health-checks the stack, and performs a real dump and restore. It is
   deliberately outside `./test.sh`, which must stay fast enough to run during
   implementation.
-- **The Playwright suite is outside the gate.** `cd frontend && npm run test:e2e`
-  needs `npx playwright install chromium` once per pinned browser version. It
-  stays separate until that provisioning is part of the deterministic CI
-  environment. It uses intercepted fixtures and never calls Riot or a database.
+- **The Playwright suite is inside the gate, and runs against the production
+  build.** It used to sit outside because provisioning a pinned browser was not
+  deterministic; `gate.Dockerfile` now installs the Chromium matching the
+  `@playwright/test` pin, which removed that reason. It runs after the build
+  step because what it starts is that build. Against `next dev` the suite hit a
+  hydration mismatch that production never sees: compiling on first visit
+  stretches the initial load, and once the specs stopped letting icon requests
+  reach the network, pages began hydrating before the payload had settled, so
+  React discarded the server HTML and re-rendered — not a state worth asserting
+  on. It uses intercepted fixtures and reaches neither Riot nor a database.
 - **Dependency advisories are GitHub's job, not a CI job.** Advisory databases
   change independently of a commit, so an advisory check is not reproducible
   and cannot gate anything deterministically. Dependabot alerts and security
