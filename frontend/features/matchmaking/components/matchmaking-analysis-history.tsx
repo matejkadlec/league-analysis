@@ -274,7 +274,10 @@ export function MatchmakingAnalysisHistory({
           role="list"
           aria-label="Analysis history"
           data-testid="matchmaking-analysis-history-stacked"
-          className="space-y-3 overflow-y-auto max-h-[490px] sm:hidden"
+          // 490px is eleven table rows but only about four blocks, and a
+          // short scroll region nested inside a scrolling page is worse than
+          // a slightly longer page. Bounded by the viewport instead.
+          className="space-y-3 overflow-y-auto max-h-[70vh] sm:hidden"
         >
           {data.items.map((item) => (
             <AnalysisBlock

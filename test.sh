@@ -193,9 +193,10 @@ run_frontend_build() {
 run_frontend_e2e() {
   cd "$repository_root/frontend"
   # Every request is mocked in the specs, so this needs no database and no
-  # backend — only the Next.js dev server playwright.config.ts starts itself.
-  # It runs after the production build because that build is the step that
-  # would break on artefacts a dev server leaves in .next.
+  # backend — only the server playwright.config.ts starts itself. It has to
+  # run after the production build, because what it starts is that build:
+  # `npm run start:standalone` serves .next/standalone rather than compiling
+  # on demand.
   npm run test:e2e
 }
 

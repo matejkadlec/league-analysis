@@ -228,7 +228,13 @@ export function MatchHistoryHeader({
                     {queueOption.label}
                   </button>
                   {index < MATCH_HISTORY_QUEUE_FILTERS.length - 1 && (
-                    <span className="text-muted-foreground">|</span>
+                    // Only on the single-line layout. Nothing can tell CSS
+                    // which option a wrapped line ends on, so below xl the
+                    // separators would leave a trailing bar hanging off the
+                    // end of most lines.
+                    <span className="hidden text-muted-foreground xl:inline">
+                      |
+                    </span>
                   )}
                 </div>
               );
