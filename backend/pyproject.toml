@@ -29,9 +29,9 @@ dependencies = [
     "python-Levenshtein>=0.27.4",
     "python-multipart>=0.0.32",
     "slowapi>=0.1.10",
-    "sqlalchemy>=2.0.51",
+    "sqlalchemy>=2.0.52",
     "structlog>=26.1.0",
-    "uvicorn[standard]>=0.52.1",
+    "uvicorn[standard]>=0.52.3",
     "starlette>=1.6.0",
 ]
 requires-python = ">=3.14,<3.15"
@@ -189,7 +189,7 @@ dev = [
     # diagnostics, and a gate that calls itself deterministic cannot have its
     # type checker tighten underneath it on an unrelated commit.
     "pyright==1.1.411",
-    "ruff==0.16.2",
+    "ruff==0.16.3",
     "vulture>=2.16",
     "xenon>=0.9.3",
     "pytest-socket>=0.7.0",

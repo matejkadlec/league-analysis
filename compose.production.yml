@@ -36,7 +36,7 @@ x-backend-environment: &backend-environment
 services:
   postgres:
     <<: *security-defaults
-    image: postgres:18.4-bookworm
+    image: postgres:18.6-bookworm
     container_name: ${LGA_POSTGRES_CONTAINER_NAME:-league-analysis-postgres}
     restart: unless-stopped
     # The official image starts as root to fix data-directory ownership, then

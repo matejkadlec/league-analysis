@@ -37,7 +37,7 @@ COPY --from=rhysd/actionlint:1.7.12 /usr/local/bin/actionlint /usr/local/bin/act
 COPY --from=zricethezav/gitleaks:v8.30.1 /usr/bin/gitleaks /usr/local/bin/gitleaks
 
 # uv, and the Python it resolves from .python-version.
-COPY --from=ghcr.io/astral-sh/uv:0.12.3 /uv /usr/local/bin/uv
+COPY --from=ghcr.io/astral-sh/uv:0.12.4 /uv /usr/local/bin/uv
 ENV UV_PYTHON_INSTALL_DIR=/opt/uv-python \
     UV_LINK_MODE=copy \
     UV_COMPILE_BYTECODE=0
