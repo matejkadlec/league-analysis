@@ -22,7 +22,11 @@ vi.mock("next/navigation", () => ({
   usePathname: () => nav.pathname,
 }));
 
-const auth = vi.hoisted(() => ({ isAuthenticated: false, isLoading: false }));
+const auth = vi.hoisted(() => ({
+  isAuthenticated: false,
+  isLoading: false,
+  checkAuth: vi.fn(),
+}));
 
 vi.mock("@/features/auth", () => ({
   useAuth: () => auth,
@@ -45,6 +49,7 @@ beforeEach(() => {
   nav.pathname = "/";
   auth.isAuthenticated = false;
   auth.isLoading = false;
+  auth.checkAuth.mockClear();
   clearHint();
   removeAuthTokens();
 });
@@ -63,17 +68,36 @@ describe("a session the API rejected", () => {
     await waitFor(() => expect(nav.replace).toHaveBeenCalledWith("/sign-in"));
   });
 
-  it("waits for the hint to clear rather than fighting proxy.ts", async () => {
-    // The hint still set means the session was never rejected — the server
-    // could not be reached. `proxy.ts` sends /sign-in back to / while the hint
-    // lives, so redirecting now would bounce the visitor between the two
-    // forever.
+  it("offers a retry instead of a blank page when the server is unreachable", async () => {
+    // Hint still set means the session was never rejected — the server could
+    // not be reached. `proxy.ts` sends /sign-in back to / while the hint
+    // lives, so redirecting would bounce the visitor forever. Rendering null
+    // was the original bug: no route change, nothing to click, and the only
+    // thing that re-checks runs on mount.
     setHint();
 
-    render(<AuthGate>protected content</AuthGate>);
+    const { getByRole, getByText } = render(
+      <AuthGate>protected content</AuthGate>,
+    );
 
     await settle();
     expect(nav.replace).not.toHaveBeenCalled();
+    expect(getByText("Can't reach the server")).toBeTruthy();
+
+    getByRole("button", { name: "Try again" }).click();
+    expect(auth.checkAuth).toHaveBeenCalled();
+  });
+
+  it("does not draw protected content when the hint is gone but state is stale", async () => {
+    // The interceptor can tear a session down without the context hearing.
+    // Rendering on `isAuthenticated` alone left the signed-in UI up over an
+    // API refusing every call.
+    auth.isAuthenticated = true;
+
+    const { queryByText } = render(<AuthGate>protected content</AuthGate>);
+
+    expect(queryByText("protected content")).toBeNull();
+    await waitFor(() => expect(nav.replace).toHaveBeenCalledWith("/sign-in"));
   });
 
   it("does not redirect while the session is still being checked", async () => {
@@ -136,9 +160,14 @@ describe("giving up on a session", () => {
 
     // A refresh already in flight when the user logs out. The server answers
     // 200 and re-sets the cookies, which the browser applies regardless.
-    vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
-      removeAuthTokens();
-      setHint();
+    const calls: string[] = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      calls.push(url);
+      if (url.includes("/auth/refresh")) {
+        removeAuthTokens();
+        setHint();
+      }
       return new Response("{}", { status: 200 });
     });
 
@@ -146,5 +175,8 @@ describe("giving up on a session", () => {
 
     expect(result).toBeNull();
     expect(hasAuthStateCookie()).toBe(false);
+    // Clearing the hint only hides the rotated token; the new refresh cookie
+    // is HttpOnly, so the session has to be ended server-side.
+    expect(calls.some((url) => url.includes("/auth/logout"))).toBe(true);
   });
 });

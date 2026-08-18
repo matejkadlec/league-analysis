@@ -71,15 +71,32 @@ export async function refreshAccessToken(): Promise<string | null> {
       });
 
       if (!response.ok) {
-        removeAuthTokens();
+        // Only the server refusing the token ends a session. A 502 or 503 is
+        // the API being restarted or redeployed, and treating that as a
+        // rejection signed people out mid-deploy while their refresh cookie
+        // was still perfectly valid.
+        if (response.status === 401 || response.status === 403) {
+          removeAuthTokens();
+        }
         return false;
       }
 
       if (epoch !== sessionEpoch) {
         // Torn down while this was in flight — a logout, or a probe that gave
-        // up. The response already re-set the cookies, so undo that rather
-        // than report a session the rest of the app has finished with.
+        // up. This refresh still succeeded, and rotation means the server has
+        // already issued and stored a *new* 30-day refresh token, which the
+        // response installed as an HttpOnly cookie. Clearing the hint would
+        // only hide it: JS cannot touch that cookie, and nothing has told the
+        // server to revoke it. So ask the server to end the session properly.
         clearAuthStateCookie();
+        try {
+          await fetch(`${getApiBaseUrl()}/api/v1/auth/logout`, {
+            method: "POST",
+            credentials: "include",
+          });
+        } catch {
+          // Unreachable; the token expires on its own schedule.
+        }
         return false;
       }
 

@@ -800,6 +800,26 @@ class AuthService:
 
         await self.db.commit()
 
+    async def resolve_user_id_for_refresh_token(
+        self,
+        raw_refresh_token: str,
+    ) -> int | None:
+        """Identify the owner of a refresh token without rotating it.
+
+        Logout needs this because it must work when the access token has
+        already expired. That is the common case rather than the rare one: the
+        access token lives 30 minutes and the refresh token 30 days, so any
+        logout after a short idle period has nothing but the refresh cookie
+        left to say whose session to end.
+        """
+        result = await self.db.execute(
+            select(RefreshToken).where(
+                RefreshToken.token_hash == self._hash_refresh_token(raw_refresh_token)
+            )
+        )
+        token_record = result.scalar_one_or_none()
+        return None if token_record is None else token_record.user_id
+
     async def revoke_access_token(
         self,
         access_token: str,

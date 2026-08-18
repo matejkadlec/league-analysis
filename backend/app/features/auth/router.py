@@ -10,6 +10,7 @@ from sqlalchemy import select
 from app.core.rate_limiter import rate_limit
 
 from .cookies import (
+    ACCESS_TOKEN_COOKIE_NAME,
     REFRESH_TOKEN_COOKIE_NAME,
     clear_auth_cookies,
     set_auth_cookies,
@@ -17,7 +18,6 @@ from .cookies import (
 from .dependencies import (
     get_current_active_user,
     get_current_admin_user,
-    get_request_access_token,
 )
 from .models import User
 from .schemas import (
@@ -251,21 +251,40 @@ async def refresh_access_token(
 
 
 @router.post("/logout")
+@rate_limit("20/minute")
 async def logout(
+    request: Request,
     response: Response,
-    token: str = Depends(get_request_access_token),
-    current_user: User = Depends(get_current_active_user),
     auth_service: AuthService = Depends(get_auth_service),
 ) -> dict[str, str]:
-    """Revoke current access token and all active refresh tokens for the user."""
-    await auth_service.revoke_access_token(token, reason="logout")
-    await auth_service.revoke_all_refresh_tokens_for_user(current_user.id)
+    """Revoke whatever session the request still carries, and always succeed.
+
+    This deliberately does not depend on a valid access token. It used to, and
+    that made it fail exactly when it mattered: the access token expires after
+    30 minutes while the refresh token lives 30 days, so logging out after any
+    idle period returned 401 and revoked nothing, leaving a usable 30-day
+    credential in the browser of someone who had just been told they were
+    signed out. The client cannot make up the difference — only the server can
+    revoke, and clearing cookies merely hides the credential.
+
+    Identity therefore comes from either cookie, and an unauthenticated call is
+    answered rather than rejected: logout is idempotent, and a caller can only
+    ever revoke the session their own request already carries.
+    """
+    access_token = request.cookies.get(ACCESS_TOKEN_COOKIE_NAME)
+    refresh_token = request.cookies.get(REFRESH_TOKEN_COOKIE_NAME)
+
+    user_id: int | None = None
+    if refresh_token:
+        user_id = await auth_service.resolve_user_id_for_refresh_token(refresh_token)
+    if access_token:
+        await auth_service.revoke_access_token(access_token, reason="logout")
+
+    if user_id is not None:
+        await auth_service.revoke_all_refresh_tokens_for_user(user_id)
+
     await auth_service.cleanup_expired_token_state()
-    logger.info(
-        "logout_succeeded",
-        user_id=current_user.id,
-        email=current_user.email,
-    )
+    logger.info("logout_succeeded", user_id=user_id)
     clear_auth_cookies(response)
     return {"message": "Successfully logged out"}
 

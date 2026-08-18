@@ -92,7 +92,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const userData = await response.json();
           setUser(userData);
         } else {
-          removeAuthTokens();
+          // A null response is a network failure, not a rejection — the same
+          // distinction the branch above turns on. Tearing the session down
+          // here would sign the user out over a blip, moments after a refresh
+          // the server had just honoured.
+          if (response) {
+            removeAuthTokens();
+          }
           setUser(null);
           queryClient.clear();
         }
@@ -187,13 +193,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [checkAuth, queryClient, router]);
 
-  const logout = useCallback(() => {
-    void fetch(`${API_BASE_URL}/api/v1/auth/logout`, {
-      method: "POST",
-      credentials: "include",
-    }).catch(() => {
-      // Best effort logout revocation.
-    });
+  const logout = useCallback(async () => {
+    // Awaited, not fire-and-forget. Only the server can revoke; clearing
+    // cookies here just hides the credential. Tearing down first would mean
+    // reporting "signed out" while a 30-day refresh token stayed live and
+    // usable in this browser — the dangerous version being a shared machine,
+    // where the next person can spend it.
+    try {
+      await fetch(`${API_BASE_URL}/api/v1/auth/logout`, {
+        method: "POST",
+        credentials: "include",
+      });
+    } catch {
+      // Server unreachable, so nothing was revoked. Still clear local state:
+      // leaving someone staring at a session they asked to end is worse, and
+      // the tokens expire on their own.
+    }
 
     removeAuthTokens();
     queryClient.clear();

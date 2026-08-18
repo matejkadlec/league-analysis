@@ -18,62 +18,99 @@ interface AuthGateProps {
 }
 
 /**
+ * Shown when the session hint says a session exists but the API could not be
+ * asked whether it is still valid.
+ *
+ * This state has to render something. Redirecting is wrong — `proxy.ts` routes
+ * on the same hint and would send the visitor straight back, and an
+ * unreachable server is not evidence the session ended. Rendering nothing is
+ * how this component produced a permanently blank page: no route change, no
+ * message, and nothing to click, because the one thing that would re-check
+ * runs only on mount.
+ */
+function SessionUnverified({ onRetry }: { onRetry: () => void }) {
+  return (
+    <div className="flex min-h-[60vh] items-center justify-center p-6">
+      <div className="max-w-md text-center">
+        <h1 className="text-lg font-semibold text-foreground">
+          Can&apos;t reach the server
+        </h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Your session could not be confirmed. This is usually a connection
+          problem rather than a signed-out session.
+        </p>
+        <button
+          type="button"
+          onClick={onRetry}
+          className="mt-4 rounded-md border border-border px-4 py-2 text-sm transition-colors hover:bg-muted"
+        >
+          Try again
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/**
  * Client render gate. Route-level redirects live in `proxy.ts` so the wrong
  * page never flashes before navigation.
+ *
+ * Every branch here decides on the hint cookie as well as on React state,
+ * because `proxy.ts` decides on that cookie alone. Where the two disagree is
+ * exactly where a page used to render nothing — the server admitting a visitor
+ * the client would not draw, or bouncing one the client thought was fine.
  */
 export function AuthGate({ children }: AuthGateProps) {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, checkAuth } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
 
+  const hasSessionHint = hasAuthStateCookie();
   const isPublicRoute = PUBLIC_ROUTES.some(
     (route) => pathname === route || pathname.startsWith(`${route}/`),
   );
   const isSignInRoute =
     pathname === "/sign-in" || pathname.startsWith("/sign-in/");
 
-  // Both branches below decide on the hint cookie rather than on React state
-  // alone, because `proxy.ts` decides on the hint too. Where the two disagree
-  // is precisely where a page renders nothing: the server admits a visitor the
-  // client will not draw, or bounces one the client thinks is fine.
-  const hasSessionHint = hasAuthStateCookie();
+  // Both halves have to agree before protected content is drawn. The hint
+  // alone is not proof (it outlives its session), and React state alone goes
+  // stale — the axios interceptor can tear a session down without the context
+  // hearing about it, which left the signed-in UI up over an API that refused
+  // every call.
+  const isSignedIn = isAuthenticated && hasSessionHint;
 
-  // Only the API can say whether a session is still honoured. When it says no,
-  // the teardown clears the hint — so waiting for the hint to go is what
-  // separates "rejected" from "could not reach the server". Redirecting on the
-  // latter would fight `proxy.ts`, which sends /sign-in back to / while the
-  // hint is set, and the two would bounce the visitor forever.
-  const isStrandedOnProtectedRoute =
-    !isLoading &&
-    !isAuthenticated &&
-    !hasSessionHint &&
-    !isPublicRoute &&
-    !isSignInRoute;
+  // Redirect only once the hint is gone. While it is set, `proxy.ts` sends
+  // /sign-in back to / on that same cookie, so redirecting now would bounce
+  // the visitor between the two forever. Waiting for the hint is also what
+  // separates a rejected session from a server that could not be reached.
+  const isSignedOutOnProtectedRoute =
+    !isLoading && !hasSessionHint && !isPublicRoute && !isSignInRoute;
 
   useEffect(() => {
-    if (isStrandedOnProtectedRoute) {
+    if (isSignedOutOnProtectedRoute) {
       router.replace("/sign-in");
     }
-  }, [isStrandedOnProtectedRoute, router]);
+  }, [isSignedOutOnProtectedRoute, router]);
 
   if (isSignInRoute) {
-    // Hiding the form is only right when `proxy.ts` is about to redirect away
-    // from it, and it only does that while the hint is set. Without this the
-    // interceptor could clear the hint while React still believed it was
-    // signed in, leaving the sign-in page blank.
-    if (isAuthenticated && hasSessionHint) {
-      return null;
-    }
-    return <>{children}</>;
+    // Hide the form only while the hint agrees a session is current, since
+    // that is the only case where `proxy.ts` is about to redirect away.
+    return isSignedIn ? null : <>{children}</>;
   }
 
   if (isPublicRoute) {
     return <>{children}</>;
   }
 
-  if (isLoading || !isAuthenticated) {
+  if (isSignedIn) {
+    return <>{children}</>;
+  }
+
+  if (isLoading || isSignedOutOnProtectedRoute) {
+    // Either still resolving, or the effect above is navigating away.
     return null;
   }
 
-  return <>{children}</>;
+  // Hint present, session unconfirmed: the server could not be reached.
+  return <SessionUnverified onRetry={() => void checkAuth()} />;
 }
