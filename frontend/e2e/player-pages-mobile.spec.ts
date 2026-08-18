@@ -18,19 +18,25 @@ import {
 
 const PHONE = { width: 390, height: 844 };
 
-// The third field says whether the route renders the match list, so a fixture
-// that stopped producing matches fails here instead of quietly skipping the
-// assertion that list exists for.
+// A container that scrolls its own content sideways keeps the document honest
+// while still costing the reader a swipe, so surfaces that should reflow are
+// measured one by one. The third field names them, and each is asserted to be
+// present: a fixture that stopped producing matches fails here instead of
+// quietly skipping the assertion it exists for.
 const ROUTES = [
-  ["player overview", `/player-overview?puuid=${PUUID}`, false],
-  ["match history", `/match-history?puuid=${PUUID}`, true],
-  ["matchmaking analysis", `/matchmaking-analysis?puuid=${PUUID}`, false],
+  ["player overview", `/player-overview?puuid=${PUUID}`, []],
+  [
+    "match history",
+    `/match-history?puuid=${PUUID}`,
+    ["match-list", "match-history-queue-filters"],
+  ],
+  ["matchmaking analysis", `/matchmaking-analysis?puuid=${PUUID}`, []],
 ] as const;
 
 test.describe("player pages on a phone", () => {
   test.use({ viewport: PHONE });
 
-  for (const [name, route, hasMatchList] of ROUTES) {
+  for (const [name, route, reflowSurfaces] of ROUTES) {
     test(`${name} never scrolls the page sideways`, async ({ page }) => {
       test.setTimeout(60_000);
       await installPopulatedPlayerMocks(page);
@@ -44,8 +50,8 @@ test.describe("player pages on a phone", () => {
       await expect(page.locator("main")).not.toContainText("Loading");
       await page.waitForLoadState("networkidle");
 
-      const { scrollWidth, clientWidth, widest, matchListOverflow } =
-        await page.evaluate(() => {
+      const { scrollWidth, clientWidth, widest, surfaceOverflow } =
+        await page.evaluate((testIds: readonly string[]) => {
           const root = document.documentElement;
           let widest = "";
           let widestRight = root.clientWidth;
@@ -56,31 +62,34 @@ test.describe("player pages on a phone", () => {
               widest = `${element.tagName.toLowerCase()}.${element.className} → ${Math.round(right)}px`;
             }
           }
-          // A container that scrolls its own content sideways keeps the
-          // document honest while still costing a swipe per row, so the match
-          // list reflowing rather than scrolling is its own assertion.
-          const list = document.querySelector("[data-testid='match-list']");
+          const surfaceOverflow: Record<string, number | null> = {};
+          for (const testId of testIds) {
+            const surface = document.querySelector(
+              `[data-testid='${testId}']`,
+            );
+            surfaceOverflow[testId] = surface
+              ? surface.scrollWidth - surface.clientWidth
+              : null;
+          }
           return {
             scrollWidth: root.scrollWidth,
             clientWidth: root.clientWidth,
             widest,
-            matchListOverflow: list
-              ? list.scrollWidth - list.clientWidth
-              : null,
+            surfaceOverflow,
           };
-        });
+        }, reflowSurfaces);
 
       expect(scrollWidth, `widest overflowing element: ${widest}`).toBe(
         clientWidth,
       );
-      if (hasMatchList) {
+      for (const testId of reflowSurfaces) {
         expect(
-          matchListOverflow,
-          "the match list should be on this page for the reflow to be measured",
+          surfaceOverflow[testId],
+          `${testId} should be on this page for its reflow to be measured`,
         ).not.toBeNull();
         expect(
-          matchListOverflow,
-          "match rows should reflow on a phone, not scroll sideways",
+          surfaceOverflow[testId],
+          `${testId} should reflow on a phone, not scroll sideways`,
         ).toBeLessThanOrEqual(1);
       }
     });

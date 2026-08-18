@@ -1,6 +1,7 @@
 import type { Page } from "@playwright/test";
 
 import { seedAuthenticatedSession } from "./auth";
+import { blockUpstreamRequests } from "./offline";
 
 /**
  * The mocked API surface the smurf-and-boost page needs, shared by the
@@ -195,6 +196,7 @@ export async function installSmurfBoostMocks(page: Page): Promise<HarnessState> 
   };
 
   await seedAuthenticatedSession(page);
+  await blockUpstreamRequests(page);
   await page.addInitScript(() => {
     localStorage.setItem("theme", "dark");
   });

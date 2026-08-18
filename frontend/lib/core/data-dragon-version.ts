@@ -7,6 +7,21 @@ const VERSION_PATTERN = /^\d+\.\d+\.\d+$/;
 export async function resolveDDragonVersion(
   fetchVersionManifest: typeof fetch = fetch,
 ): Promise<string> {
+  // An explicit pin skips the network entirely: it is how a bad upstream
+  // release is held back without a deploy, and how the end-to-end suite keeps
+  // Riot's CDN out of the gate and its icon URLs stable from run to run. A
+  // malformed value is ignored rather than obeyed, so a typo cannot point
+  // every asset at a version that does not exist.
+  const pinned = process.env.DDRAGON_VERSION;
+  if (pinned && VERSION_PATTERN.test(pinned)) {
+    return pinned;
+  }
+  if (pinned) {
+    console.error("DDRAGON_VERSION is not a version number; ignoring it", {
+      pinned,
+    });
+  }
+
   try {
     const response = await fetchVersionManifest(VERSION_MANIFEST_URL, {
       next: { revalidate: 6 * 60 * 60 },

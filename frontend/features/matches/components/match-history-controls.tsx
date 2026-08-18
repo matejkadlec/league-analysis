@@ -191,14 +191,22 @@ export function MatchHistoryHeader({
         </div>
 
         <div
-          className="order-3 col-span-2 min-w-0 w-full overflow-x-auto xl:order-none xl:col-span-1 xl:justify-self-center"
+          className="order-3 col-span-2 min-w-0 w-full xl:order-none xl:col-span-1 xl:justify-self-center xl:overflow-x-auto"
           data-testid="match-history-queue-filters"
           aria-describedby="match-history-queue-instructions"
         >
           <p id="match-history-queue-instructions" className="sr-only">
             Select one queue, or hold Shift while selecting to combine queues.
           </p>
-          <div className="flex w-max min-w-full items-center justify-center text-sm">
+          {/*
+            Below xl the strip wraps onto as many lines as the column allows;
+            the seven options measure ~770px together, which no phone column
+            can hold without a swipe. The per-option `widthClass` stays either
+            way — it is what stops the strip shifting when the selected label
+            goes bold — and `w-max min-w-full` is xl-only because that is where
+            it centres a single line instead of forcing one.
+          */}
+          <div className="flex flex-wrap items-center justify-center gap-y-1 text-sm xl:w-max xl:min-w-full xl:flex-nowrap xl:gap-y-0">
             {MATCH_HISTORY_QUEUE_FILTERS.map((queueOption, index) => {
               const isSelected = activeQueueFilters.includes(queueOption.id);
 
