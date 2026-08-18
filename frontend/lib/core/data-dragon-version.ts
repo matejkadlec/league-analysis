@@ -4,6 +4,17 @@ const VERSION_MANIFEST_URL =
   "https://ddragon.leagueoflegends.com/api/versions.json";
 const VERSION_PATTERN = /^\d+\.\d+\.\d+$/;
 
+/**
+ * Resolve the Data Dragon version every asset URL is built from.
+ *
+ * The root layout awaits this, and most player routes prerender, so for those
+ * the answer is baked into the static payload at build time and changes on
+ * deploy rather than on any schedule — verified by reading `ddragonVersion`
+ * back out of `.next/server/app/*.rsc` and out of the running production
+ * container. The `revalidate` below therefore only governs the routes that
+ * stay dynamic. That is fine in practice: Data Dragon keeps old versions
+ * served, this repository releases per commit, and Riot patches fortnightly.
+ */
 export async function resolveDDragonVersion(
   fetchVersionManifest: typeof fetch = fetch,
 ): Promise<string> {
