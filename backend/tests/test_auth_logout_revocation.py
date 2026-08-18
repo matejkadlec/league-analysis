@@ -292,8 +292,10 @@ async def test_an_access_token_with_no_expiry_names_nobody() -> None:
 
     The age bound reads `exp`. Without the type check, a token carrying none
     reaches `datetime.fromtimestamp(None)`, which raises TypeError -- not
-    InvalidTokenError, so nothing catches it and any anonymous caller can turn
-    /auth/logout into a 500.
+    InvalidTokenError, so nothing catches it and logout answers 500. The
+    signature is verified first, so this needs a token the server itself
+    signed rather than a forged one; a claim set that changes shape is
+    exactly what a future token-format change would produce.
     """
     settings = get_global_settings()
     no_exp = jwt.encode(

@@ -68,7 +68,14 @@ def set_auth_cookies(
 
 
 def clear_auth_cookies(response: Response) -> None:
-    """Expire every auth cookie on logout or failed refresh."""
+    """Expire every auth cookie. Called by logout, and by logout only.
+
+    A rejected refresh does NOT come through here: `refresh_access_token`
+    raises straight out, so a 401 from it carries no Set-Cookie at all and
+    leaves the whole jar in place. That is why the browser has to retract the
+    session hint itself — without that, `proxy.ts` keeps routing on a cookie
+    the server has already stopped honouring.
+    """
     secure = _cookie_secure()
     for name in (
         ACCESS_TOKEN_COOKIE_NAME,

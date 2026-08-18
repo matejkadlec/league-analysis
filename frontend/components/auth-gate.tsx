@@ -19,7 +19,7 @@ import {
  * Long enough that a healthy probe never reaches it, short enough that
  * nobody concludes the page is broken.
  */
-const SLOW_PROBE_NOTICE_MS = 600;
+export const SLOW_PROBE_NOTICE_MS = 600;
 
 const PUBLIC_ROUTES = [
   "/sign-in",

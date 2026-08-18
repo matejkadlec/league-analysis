@@ -58,12 +58,15 @@ export function clearAuthStateCookie(): void {
  * only "1" — enough to answer "is anyone signed in?" without asking the API.
  *
  * A `false` here is trustworthy in the direction that matters: the backend
- * writes all three cookies together and clears them together, so no hint means
- * no usable session. The reverse is not guaranteed — the hint outlives the
- * refresh token (30 days against a shorter session), so a `true` still has to
- * be confirmed against /auth/me. `proxy.ts` already routes on exactly this
- * asymmetry, and treating it the same way here keeps client and server from
- * disagreeing about who is signed in.
+ * only ever writes this cookie beside a session it just issued, so no hint
+ * means no usable session. The reverse is not guaranteed, and not because of
+ * the lifetimes — the hint and the refresh token are written with the same
+ * 30 days. It is that the token can be revoked, rotated out, or lost with the
+ * row it lived in, and none of that touches the cookie; a rejected refresh
+ * answers 401 with no Set-Cookie at all, so the jar survives it intact. A
+ * `true` therefore still has to be confirmed against /auth/me. `proxy.ts`
+ * already routes on exactly this asymmetry, and treating it the same way here
+ * keeps client and server from disagreeing about who is signed in.
  */
 export function hasAuthStateCookie(): boolean {
   if (typeof document === "undefined") {

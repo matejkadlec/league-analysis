@@ -3,7 +3,7 @@
 import { act, cleanup, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { AuthGate } from "@/components/auth-gate";
+import { AuthGate, SLOW_PROBE_NOTICE_MS } from "@/components/auth-gate";
 import {
   markAuthSession,
   refreshAccessToken,
@@ -159,12 +159,17 @@ describe("a session the API rejected", () => {
     try {
       const { queryByText } = render(<AuthGate>protected content</AuthGate>);
 
-      // Nothing at first: a healthy probe settles in milliseconds and must
-      // not flash a message on every page load.
+      // Advanced to just short of the delay, not merely "not yet advanced".
+      // Under fake timers any pending timeout satisfies the latter, so a
+      // delay of zero would pass it -- and a message that flashes on every
+      // healthy page load is the regression this half exists to catch.
+      await act(async () => {
+        vi.advanceTimersByTime(SLOW_PROBE_NOTICE_MS - 1);
+      });
       expect(queryByText("Checking your session…")).toBeNull();
 
       await act(async () => {
-        vi.advanceTimersByTime(1_000);
+        vi.advanceTimersByTime(1);
       });
 
       expect(queryByText("Checking your session…")).toBeTruthy();
@@ -217,10 +222,19 @@ describe("the can't-reach-the-server surface", () => {
       true,
     );
 
+    // The stacking the title names, actually attempted.
+    await act(async () => {
+      getByRole("button", { name: "Checking…" }).click();
+    });
+    expect(auth.checkAuth).toHaveBeenCalledTimes(1);
+
     await act(async () => {
       release?.();
     });
-    expect(auth.checkAuth).toHaveBeenCalledTimes(1);
+    expect(getByRole("button", { name: "Try again" })).toHaveProperty(
+      "disabled",
+      false,
+    );
   });
 
   it("offers a way out when retrying will never work", async () => {
@@ -417,39 +431,13 @@ describe("giving up on a session", () => {
     expect(hasAuthStateCookie()).toBe(true);
   });
 
-  it("ends the session even when somebody has signed in since", async () => {
-    // The trap this test exists to keep shut: it looks like the polite thing
-    // to do is leave the new user alone. But /auth/refresh answers 200 with
-    // Set-Cookie for all three cookies under the same names and path, so by
-    // the time this code runs the browser has already replaced the new user's
-    // jar with the rotated session. Skipping the logout would leave a shell
-    // with their name on it sending somebody else's credentials -- and the
-    // previous version of this test missed that only because its mock
-    // response carried no Set-Cookie.
-    setHint();
-    markAuthSession(true);
-    const calls: string[] = [];
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
-      const url = String(input);
-      calls.push(url);
-      if (url.includes("/auth/refresh")) {
-        removeAuthTokens(); // The first user signs out mid-flight.
-        setHint();
-        markAuthSession(true); // A second user signs in.
-        // What the real 200 does to the jar: the rotated session lands on top
-        // of the one that was just established.
-        setHint();
-      }
-      return new Response("{}", { status: 200 });
-    });
-
-    await refreshAccessToken();
-
-    expect(calls.some((url) => url.includes("/auth/logout"))).toBe(true);
-    expect(hasAuthStateCookie()).toBe(false);
-  });
-
   it("does not let a refresh that lands after teardown resurrect it", async () => {
+    // Also the guard against the tempting mistake of skipping this logout
+    // when somebody has signed in since the teardown. /auth/refresh answers
+    // 200 with Set-Cookie for all three cookies under the same names and
+    // path, so by the time this runs the browser has already replaced their
+    // jar with the rotated session -- skipping would leave a shell with
+    // their name on it sending somebody else's credentials.
     setHint();
     markAuthSession(true);
 
