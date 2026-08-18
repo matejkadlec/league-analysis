@@ -53,6 +53,7 @@ async def test_tracking_a_player_starts_one_initial_sync(
     background_tasks = BackgroundTasks()
 
     result = await players_router.track_player(
+        request=_request(),
         puuid="test-puuid",
         player_service=cast(PlayerService, player_service),
         background_tasks=background_tasks,
@@ -62,6 +63,7 @@ async def test_tracking_a_player_starts_one_initial_sync(
     assert result is response
     claim.assert_awaited_once_with(player_service.db, user_id=7, puuid="test-puuid")
     assert len(background_tasks.tasks) == 1
+    assert background_tasks.tasks[0].func is players_router.run_player_sync
     assert background_tasks.tasks[0].args == (11,)
 
 
@@ -82,6 +84,7 @@ async def test_tracking_an_already_syncing_player_queues_no_second_task(
     background_tasks = BackgroundTasks()
 
     await players_router.track_player(
+        request=_request(),
         puuid="test-puuid",
         player_service=cast(PlayerService, player_service),
         background_tasks=background_tasks,
@@ -106,6 +109,7 @@ async def test_tracking_blocks_and_starts_nothing_during_maintenance(
 
     with pytest.raises(HTTPException) as error:
         await players_router.track_player(
+            request=_request(),
             puuid="test-puuid",
             player_service=cast(PlayerService, player_service),
             background_tasks=background_tasks,
@@ -114,6 +118,40 @@ async def test_tracking_blocks_and_starts_nothing_during_maintenance(
 
     assert error.value.status_code == 503
     claim.assert_not_awaited()
+    assert not background_tasks.tasks
+
+
+@pytest.mark.asyncio
+async def test_a_failed_sync_claim_still_reports_the_player_as_tracked(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The tracking write is already committed when the claim runs.
+
+    Reporting 500 here would tell the client the player was not tracked while
+    the row exists, so the toast would contradict the sidebar. The sync is
+    only an optimisation over the scheduler's next pass.
+    """
+    response = SimpleNamespace(puuid="test-puuid", platform="eun1")
+    player_service = SimpleNamespace(
+        db=object(),
+        track_player=AsyncMock(return_value=response),
+    )
+    monkeypatch.setattr(
+        players_router,
+        "create_or_get_player_sync",
+        AsyncMock(side_effect=RuntimeError("claim exploded")),
+    )
+    background_tasks = BackgroundTasks()
+
+    result = await players_router.track_player(
+        request=_request(),
+        puuid="test-puuid",
+        player_service=cast(PlayerService, player_service),
+        background_tasks=background_tasks,
+        current_user=cast(User, SimpleNamespace(id=7)),
+    )
+
+    assert result is response
     assert not background_tasks.tasks
 
 

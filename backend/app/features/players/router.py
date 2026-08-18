@@ -368,7 +368,14 @@ async def get_player_recent_opponents(
 
 
 @router.post("/{puuid}/track", response_model=PlayerResponse)
+# Same ceiling as POST /{puuid}/sync, because this now starts the same run.
+# Deduplication in create_or_get_player_sync caps concurrency per PUUID, not
+# rate: tracking several players, or cycling untrack/track after each run
+# finishes, would otherwise spend Riot quota past the limit that endpoint was
+# deliberately given.
+@typed_limit(limiter, "10/minute")
 async def track_player(
+    request: Request,
     puuid: str,
     player_service: PlayerServiceDep,
     background_tasks: BackgroundTasks,
@@ -396,14 +403,6 @@ async def track_player(
 
     try:
         player = await player_service.track_player(puuid, current_user.id)
-        sync_run, created = await create_or_get_player_sync(
-            player_service.db,
-            user_id=current_user.id,
-            puuid=puuid,
-        )
-        if created:
-            background_tasks.add_task(run_player_sync, sync_run.id)
-        return player
     except RiotWriterMaintenanceActiveError as e:
         raise HTTPException(
             status_code=503,
@@ -421,6 +420,30 @@ async def track_player(
             status_code=500,
             detail="The player could not be tracked. Please try again later.",
         ) from e
+
+    # The tracking row is committed by here, so claiming the run sits outside
+    # the block above on purpose. The sync only saves the viewer from waiting
+    # for the Match Fetcher; failing to claim it is no reason to answer that
+    # the tracking failed, when it did not and the scheduler will still pick
+    # the player up.
+    try:
+        sync_run, created = await create_or_get_player_sync(
+            player_service.db,
+            user_id=current_user.id,
+            puuid=puuid,
+        )
+    except Exception as e:
+        logger.error(
+            "track_player_initial_sync_not_started",
+            error=str(e),
+            puuid=puuid,
+            exc_info=True,
+        )
+    else:
+        if created:
+            background_tasks.add_task(run_player_sync, sync_run.id)
+
+    return player
 
 
 @router.delete("/{puuid}/track", response_model=PlayerResponse)
