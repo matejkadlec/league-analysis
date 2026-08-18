@@ -632,47 +632,6 @@ class PlayerService:
 
     # === Player Tracking Methods for Automated Jobs ===
 
-    async def add_and_track_player(
-        self,
-        riot_client: RiotAPIClient,
-        game_name: str,
-        tag_line: str,
-        user_id: int,
-        platform: str = "eun1",
-    ) -> PlayerResponse:
-        """
-        Fetch player from Riot API and track them.
-
-        Combines player upsert + tracking in one flow.
-
-        Args:
-            riot_client: RiotAPIClient instance
-            game_name: Riot game name
-            tag_line: Riot tag line
-            platform: Platform code (default: eun1)
-            user_id: User ID for user-scoped tracking
-
-        Returns:
-            PlayerResponse
-
-        Raises:
-            ValueError: If player not found
-        """
-        try:
-            player = await self.discover_player(
-                riot_client=riot_client,
-                game_name=game_name,
-                tag_line=tag_line,
-                platform=platform,
-            )
-            return await self.track_player(player.puuid, user_id)
-        except Exception as error:
-            logger.error(
-                "add_and_track_player_failed",
-                error_type=type(error).__name__,
-            )
-            raise
-
     async def discover_player(
         self,
         riot_client: RiotAPIClient,

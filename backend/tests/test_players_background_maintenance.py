@@ -1,4 +1,4 @@
-"""Direct player-add background task regressions."""
+"""Player tracking and maintenance-interlock regressions."""
 
 from types import SimpleNamespace
 from typing import cast
@@ -10,7 +10,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.requests import Request
 
 from app.core.riot_api.client import RiotAPIClient
-from app.core.riot_api.errors import NotFoundError, RateLimitError
 from app.core.riot_api.models import MatchDTO
 from app.features.auth.models import User
 from app.features.jobs.maintenance import RiotWriterMaintenanceActiveError
@@ -36,140 +35,86 @@ def _request() -> Request:
 
 
 @pytest.mark.asyncio
-async def test_player_add_blocks_core_and_auth_writes_during_maintenance(
+async def test_tracking_a_player_starts_one_initial_sync(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The foreground route checks the interlock before player persistence."""
-    add_and_track_player = AsyncMock()
-    player_service = SimpleNamespace(
-        db=object(), add_and_track_player=add_and_track_player
-    )
-    monkeypatch.setattr(
-        players_router,
-        "_riot_writer_maintenance_is_active",
-        AsyncMock(return_value=True),
-    )
+    """Tracking claims the same PlayerSyncRun lifecycle as the Update button.
 
-    with pytest.raises(HTTPException) as error:
-        await players_router.add_tracked_player(
-            player_service=cast(PlayerService, player_service),
-            riot_client=cast(RiotAPIClient, object()),
-            background_tasks=BackgroundTasks(),
-            current_user=cast(User, SimpleNamespace(id=7)),
-            game_name="Player",
-            tag_line="TAG",
-            platform="eun1",
-        )
-
-    assert error.value.status_code == 503
-    add_and_track_player.assert_not_awaited()
-
-
-@pytest.mark.asyncio
-async def test_player_add_continues_when_maintenance_is_inactive(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """The maintenance guard does not block normal tracked-player creation.
-
-    Onboarding claims the same PlayerSyncRun lifecycle as the Update button,
-    so a freshly created run schedules exactly one orchestrator task.
+    Without it a newly tracked player shows nothing until the Match Fetcher's
+    next pass, which is a runtime setting measured in minutes, not seconds.
     """
     response = SimpleNamespace(puuid="test-puuid", platform="eun1")
-    add_and_track_player = AsyncMock(return_value=response)
     player_service = SimpleNamespace(
         db=object(),
-        add_and_track_player=add_and_track_player,
-    )
-    monkeypatch.setattr(
-        players_router,
-        "_riot_writer_maintenance_is_active",
-        AsyncMock(return_value=False),
+        track_player=AsyncMock(return_value=response),
     )
     claim = AsyncMock(return_value=(SimpleNamespace(id=11), True))
     monkeypatch.setattr(players_router, "create_or_get_player_sync", claim)
     background_tasks = BackgroundTasks()
 
-    result = await players_router.add_tracked_player(
+    result = await players_router.track_player(
+        puuid="test-puuid",
         player_service=cast(PlayerService, player_service),
-        riot_client=cast(RiotAPIClient, object()),
         background_tasks=background_tasks,
         current_user=cast(User, SimpleNamespace(id=7)),
-        game_name="Player",
-        tag_line="TAG",
-        platform="eun1",
     )
 
     assert result is response
-    add_and_track_player.assert_awaited_once()
     claim.assert_awaited_once_with(player_service.db, user_id=7, puuid="test-puuid")
     assert len(background_tasks.tasks) == 1
     assert background_tasks.tasks[0].args == (11,)
 
 
 @pytest.mark.asyncio
-async def test_player_add_returns_not_found_for_a_missing_riot_account(
+async def test_tracking_an_already_syncing_player_queues_no_second_task(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The client can render a server-specific missing-player message from 404."""
+    """Attaching to a running update must not start a second orchestrator."""
     player_service = SimpleNamespace(
         db=object(),
-        add_and_track_player=AsyncMock(
-            side_effect=NotFoundError("Resource not found", status_code=404)
-        ),
+        track_player=AsyncMock(return_value=SimpleNamespace(puuid="test-puuid")),
     )
     monkeypatch.setattr(
         players_router,
-        "_riot_writer_maintenance_is_active",
-        AsyncMock(return_value=False),
+        "create_or_get_player_sync",
+        AsyncMock(return_value=(SimpleNamespace(id=11), False)),
+    )
+    background_tasks = BackgroundTasks()
+
+    await players_router.track_player(
+        puuid="test-puuid",
+        player_service=cast(PlayerService, player_service),
+        background_tasks=background_tasks,
+        current_user=cast(User, SimpleNamespace(id=7)),
     )
 
-    with pytest.raises(HTTPException) as error:
-        await players_router.add_tracked_player(
-            player_service=cast(PlayerService, player_service),
-            riot_client=cast(RiotAPIClient, object()),
-            background_tasks=BackgroundTasks(),
-            current_user=cast(User, SimpleNamespace(id=7)),
-            game_name="SomeName",
-            tag_line="1234",
-            platform="eun1",
-        )
-
-    assert error.value.status_code == 404
-    assert error.value.detail == "Player not found"
+    assert not background_tasks.tasks
 
 
 @pytest.mark.asyncio
-async def test_player_add_preserves_the_riot_rate_limit_status(
+async def test_tracking_blocks_and_starts_nothing_during_maintenance(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A live Riot 429 must not be collapsed into a generic server failure."""
+    """The interlock has to stop the sync as well as the tracking write."""
     player_service = SimpleNamespace(
         db=object(),
-        add_and_track_player=AsyncMock(
-            side_effect=RateLimitError(
-                "Rate limit exceeded", status_code=429, retry_after=10
-            )
-        ),
+        track_player=AsyncMock(side_effect=RiotWriterMaintenanceActiveError()),
     )
-    monkeypatch.setattr(
-        players_router,
-        "_riot_writer_maintenance_is_active",
-        AsyncMock(return_value=False),
-    )
+    claim = AsyncMock()
+    monkeypatch.setattr(players_router, "create_or_get_player_sync", claim)
+    background_tasks = BackgroundTasks()
 
     with pytest.raises(HTTPException) as error:
-        await players_router.add_tracked_player(
+        await players_router.track_player(
+            puuid="test-puuid",
             player_service=cast(PlayerService, player_service),
-            riot_client=cast(RiotAPIClient, object()),
-            background_tasks=BackgroundTasks(),
+            background_tasks=background_tasks,
             current_user=cast(User, SimpleNamespace(id=7)),
-            game_name="SomeName",
-            tag_line="1234",
-            platform="eun1",
         )
 
-    assert error.value.status_code == 429
-    assert error.value.detail == "Riot API rate limit reached"
+    assert error.value.status_code == 503
+    claim.assert_not_awaited()
+    assert not background_tasks.tasks
 
 
 @pytest.mark.asyncio
