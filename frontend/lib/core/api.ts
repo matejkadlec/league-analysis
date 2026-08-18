@@ -15,10 +15,7 @@ export {
 } from "./api-error";
 import type { ApiError } from "./api-error";
 import { notifyRiotCredentialHealthUpdated } from "./riot-credential-health-events";
-import {
-  refreshAccessToken,
-  removeAuthTokens,
-} from "@/features/auth/utils/token-manager";
+import { refreshAccessToken } from "@/features/auth/utils/token-manager";
 
 const API_BASE_URL =
   typeof window === "undefined"
@@ -111,7 +108,10 @@ api.interceptors.response.use(
     originalRequest._retry = true;
     const refreshed = await refreshAccessToken();
     if (!refreshed) {
-      removeAuthTokens();
+      // Teardown belongs to the refresh call, which knows whether the server
+      // rejected the session or was simply unreachable. Clearing the hint from
+      // here left React still believing it was signed in, and that
+      // disagreement rendered as a blank page.
       return Promise.reject(error);
     }
 

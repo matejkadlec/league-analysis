@@ -77,7 +77,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else if (response.status === 401) {
         const refreshedToken = await refreshAccessToken();
         if (!refreshedToken) {
-          removeAuthTokens();
+          // No `removeAuthTokens()` here: only the refresh call can tell a
+          // rejected session from one it never reached, and it already tears
+          // down in the first case. Clearing here too would turn a network
+          // blip into a real sign-out, with a valid refresh cookie still in
+          // the jar and the hint gone that would have let it be used.
           setUser(null);
           queryClient.clear();
           return;

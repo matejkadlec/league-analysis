@@ -16,6 +16,29 @@ export const AUTH_STATE_COOKIE_VALUE = "1";
  * asymmetry, and treating it the same way here keeps client and server from
  * disagreeing about who is signed in.
  */
+/**
+ * Drop a hint the session behind it no longer honours.
+ *
+ * The hint can outlive its session: it is written for the refresh token's
+ * lifetime, but that token can be revoked, rotated out, or lost with the row
+ * it lived in, and the cookie in the browser knows none of that. Left alone,
+ * `proxy.ts` keeps believing it and keeps admitting the visitor to routes the
+ * API will refuse — so clearing it is what turns a dead session back into a
+ * plain signed-out one.
+ */
+export function clearAuthStateCookie(): void {
+  if (typeof document === "undefined") {
+    return;
+  }
+
+  // Mirror the attributes `set_auth_cookies` writes. Browsers key a cookie on
+  // name, domain and path, so a bare delete usually lands — but "usually" is
+  // the wrong guarantee here: a hint that survives its delete is exactly the
+  // state where `proxy.ts` admits a visitor the API will refuse.
+  const secure = location.protocol === "https:" ? "; Secure" : "";
+  document.cookie = `${AUTH_STATE_COOKIE_NAME}=; max-age=0; path=/; SameSite=Lax${secure}`;
+}
+
 export function hasAuthStateCookie(): boolean {
   if (typeof document === "undefined") {
     return false;

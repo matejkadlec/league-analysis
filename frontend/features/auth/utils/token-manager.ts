@@ -5,8 +5,14 @@
  * backend to rotate or drop that session; JavaScript never reads the tokens.
  */
 
+import { clearAuthStateCookie } from "./auth-state-cookie";
+
 let refreshInFlight: Promise<boolean> | null = null;
 let sessionHint = false;
+// Bumped every time the session is torn down. A refresh that started before
+// the teardown can still land after it, and its Set-Cookie response would
+// otherwise put the hint back and resurrect a session the user just left.
+let sessionEpoch = 0;
 
 function isBrowser(): boolean {
   return typeof window !== "undefined";
@@ -29,7 +35,13 @@ export function setAuthTokens(): void {
 }
 
 export function removeAuthTokens(): void {
+  sessionEpoch += 1;
   sessionHint = false;
+  // Every path that gives up on a session routes through here, so this is the
+  // one place that has to retract the cookie `proxy.ts` routes on. Without it
+  // a session the API has stopped honouring still looks live to the server,
+  // which admits the visitor to a page the client then cannot render.
+  clearAuthStateCookie();
 }
 
 export function getAccessToken(): string | null {
@@ -47,6 +59,7 @@ export async function refreshAccessToken(): Promise<string | null> {
   }
 
   const runRefresh = async (): Promise<boolean> => {
+    const epoch = sessionEpoch;
     try {
       const response = await fetch(`${getApiBaseUrl()}/api/v1/auth/refresh`, {
         method: "POST",
@@ -59,6 +72,14 @@ export async function refreshAccessToken(): Promise<string | null> {
 
       if (!response.ok) {
         removeAuthTokens();
+        return false;
+      }
+
+      if (epoch !== sessionEpoch) {
+        // Torn down while this was in flight — a logout, or a probe that gave
+        // up. The response already re-set the cookies, so undo that rather
+        // than report a session the rest of the app has finished with.
+        clearAuthStateCookie();
         return false;
       }
 
