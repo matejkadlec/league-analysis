@@ -21,6 +21,7 @@ import {
   getLoginRequestError,
   LOGIN_REQUEST_TIMEOUT_MS,
 } from "../utils/login-error";
+import { hasAuthStateCookie } from "../utils/auth-state-cookie";
 import type { User, LoginRequest, AuthContextType } from "../types";
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -48,6 +49,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         return null;
       });
+
+    // No session hint means the backend never issued one, or cleared it on
+    // logout or a rejected refresh. Asking anyway costs two requests to be
+    // told what we already know, and the browser logs each 401 as a console
+    // error that reads like a fault to anyone with devtools open.
+    if (!hasAuthStateCookie()) {
+      removeAuthTokens();
+      setUser(null);
+      setIsLoading(false);
+      return;
+    }
 
     try {
       let response = await fetchCurrentUser();
