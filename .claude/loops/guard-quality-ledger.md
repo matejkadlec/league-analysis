@@ -343,6 +343,62 @@ three untested messages in `login-error.ts`.
   right resolution is to record that the type is the guard, not to write a
   test that duplicates it.
 
+- ~~`features/matches/components/match-row.tsx`~~ — done 2026-08-19,
+  twenty-two tests, **twenty-one mutations, no survivors**. 1.33% → 97.33%
+  statements and 100% functions; 561 lines and 74 missing statements, larger
+  than any file the zero-covered list ever held. Deferred three times by
+  earlier rows before this one; it should have been taken the first time.
+
+  **`deleted`, and the reason it survived a repo full of gates.**
+  `getResultInfo` returned `{text, colorClass, bgClass}` and the row read
+  only `bgClass` — "VICTORY", "DEFEAT" and "REMAKE" are computed on every
+  render and appear nowhere on screen. Nothing catches it: `vulture` is
+  Python-only, and ESLint has no rule for an object property that is
+  constructed and never read. It was found by writing a test that asserted
+  the word "REMAKE" and watching it fail against *correct* code. The function
+  is now `getResultBgClass` returning a string.
+
+  That deletion is also why this row asserts Tailwind classes where most
+  earlier rows refused to: with the labels gone, the background tint is the
+  only thing in the row that says how the game went. Same standing as the
+  win-rate colour in `matchmaking-analysis-history` — the class carries the
+  finding, not the styling.
+
+  **The guard worth the row is the kill-participation wiring.** Each side's
+  percentage is `(kills + assists) / thatTeam.kills`, and which team that is
+  comes from `participant.team_id === 100 ? blue : red` with the opponent's
+  block reading the mirror. Cross the two and nothing looks wrong: both
+  numbers stay percentages, in range, on the right screen, and the row tells
+  a player they carried a fight they sat out of. The fixture gives blue and
+  red different kill totals **chosen so all four wirings produce four
+  distinct percentages** (50/20 correct, 25/40 crossed) — with equal totals
+  the assertion passes against the mutation. Also killed: the `kills > 0`
+  guard (a shut-out team is a real scoreline, and without it the row prints
+  `Infinity%`), and the `!participant` arm, which without its guard falls
+  through the cascade and tints a data gap as a defeat.
+
+  **Two call sites, one comparison, and a fixture that only saw one of
+  them.** `champ.puuid === playerPuuid` — the yellow ring that says which of
+  the ten icons is you — is written twice, once per lineup. The first draft
+  put the player on blue, so mutating the red call site alone survived. Now
+  parameterised over both sides. The count assertion is paired with a total
+  (`toHaveLength(10)`), per the standing rule that a DOM query must pin how
+  many elements it found: without it, a mutation rendering one icon per
+  lineup still leaves exactly one ringed.
+
+  `accepted`: nothing. Every mutation ran red on the first try except the two
+  above, which were fixture faults, not equivalent mutants — the fourth
+  consecutive iteration where that was true.
+
+  **Logged rather than pinned:** `getDaysAgo` counts elapsed 24-hour blocks
+  while the date printed directly above it is a calendar day, so a game at
+  23:00 last night reads "Today" under tomorrow's date. Fixing it means
+  deciding a rule nobody has decided (is a 00:30 game last night's session?),
+  so the tests deliberately sit inside each band rather than on its edge and
+  say so. Also: this is the **fourth** hand-rolled `formatDateTime`, and the
+  copies no longer agree — two write `4.3.2026`, one writes `4/3/2026`. Four
+  suites now pin one behaviour four ways.
+
 The rest, enumerated 2026-08-19 rather than left as "plus 9 more":
 ~~`app/jobs/page.tsx`~~ (30, done 2026-08-19 — nine mutations; it is the only
 consumer of `components/ui/tabs.tsx`, so both closed together),
@@ -367,6 +423,37 @@ resolved by the route-shell row — their `<ProtectedRoute>` wrapper is pinned
 as source text and the rest is render plumbing that was accepted with reasons.
 Frontend coverage over the sweep: **64.72% → 73.62% statements, 57.70% →
 66.42% branches**, 414 → 493 tests.
+
+**The class the card still does not name: 1–79%.** Measured 2026-08-19 from
+`coverage-summary.json`, 30 files sit in it holding **625 missing
+statements** — more than the 0% class ever held, and it has never had a rule.
+The card's two rules are "≥80%, mutate it" and "0%, coverage is the finding";
+a file at 7% falls through both, which is exactly how `match-row.tsx` got
+deferred three times while reading 1.33% instead of 0%.
+
+The band is really two. **Under 20% is the zero class wearing a different
+number** — the covered lines are the imports and the export statement, and
+nothing has ever rendered the file: `match-row.tsx` (1.3%, now done),
+`player-card.tsx` (4.3%), `player-context.tsx` (7.1%),
+`join-us-form.tsx` (7.4%), `job-execution-api-calls.tsx` (11.1%),
+`job-execution-logs.tsx` (12.5%), `matchmaking-api.ts` (12.5%),
+`player-api.ts` (14.3%). Treat these as 0%: read and decide, do not mutate.
+Two of them are `validated*` delegation modules and resolve the same way
+`smurf-boost-api.ts` did — but note *why* they read as 0% rather than as
+covered: every consumer test mocks the module, so a typo'd endpoint path
+passes the whole suite. That is a real hole and it is one level up from where
+the row put it.
+
+**20–79% is the frontend twin of the backend's thin-service class**: the
+happy path is tested and the error and edge branches are not. Biggest first,
+by missing statements: `use-job-card-controls.ts` (93 missing, 38.8%),
+`header-messages.tsx` (46, 47.7%), `lib/core/api.ts` (31, 49.2% — every
+request in the app goes through it, so it is the highest stake per statement
+on the list), `player-selector.tsx` (29, 69.1%), `job-card-format.ts` (27,
+34.1%), `use-change-email.ts` (26, 77.8%), `cookie-consent-manager.tsx` (26,
+61.8%), `tracked-players-list.tsx` (24, 59.3%). These are ordinary mutate
+targets; the ≥80% rule applies to them unchanged, they were simply never
+enumerated.
 
 ### Backend
 

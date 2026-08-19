@@ -1,5 +1,19 @@
 # Improvements
 
+- 2026-08-19 frontend/features/matches/components/match-row.tsx: `getDaysAgo`
+  and the date printed directly above it can contradict each other. The date
+  comes from `formatDate` (calendar day, local zone); the label comes from
+  `Math.floor(diffMs / 86_400_000)`, which counts elapsed 24-hour blocks. A
+  game played at 23:00 last night is 11 hours old at 10:00 this morning, so
+  the row reads "5.8.2026 11:00 PM" with "Today" under it — on the 6th. The
+  same skew makes "Yesterday" span from 24 to 48 hours back, i.e. into the day
+  before yesterday. Nothing breaks, but the two lines are meant to be two
+  readings of one instant and they are not. The fix is to floor both
+  timestamps to local midnight before differencing; it was left alone because
+  the tests would then have to pin a rule nobody has decided yet (does a game
+  at 00:30 count as last night's session?). Tests in `tests/match-row.test.tsx`
+  deliberately sit inside each band rather than on its edge, and say so.
+
 - 2026-08-19 frontend/features/matchmaking/components/matchmaking-analysis-results.tsx:
   `matches_analyzed === 820 ? 910 : matches_analyzed` is a data migration
   living in a render function. The backend's basis formula used to be
@@ -69,6 +83,17 @@
   silently not reach the other. Deleting the local copy and importing the
   jobs-side export is the whole change; it was left alone because moving a
   helper across features is a structural call this loop did not come for.
+
+  Wider than two, counted 2026-08-19 while testing `match-row.tsx`: there are
+  **four** hand-rolled `formatDateTime`/`formatTime` copies, and they do not
+  all agree. `job-execution-format.ts` and `matchmaking-analysis-history.tsx`
+  are character-identical D.M.YYYY; `matchmaking-analysis-results.tsx` writes
+  the same date with **slashes** (`4/3/2026`) and `match-row.tsx` with **dots**
+  (`4.3.2026`), so two screens in the same app format the same instant two
+  different ways. Each carries its own copy of the `hours ? hours : 12` and
+  `padStart(2, "0")` fixes, and all four are now separately tested — four
+  suites pinning one behaviour. One exported helper, one format decided, three
+  deletions.
 
 - 2026-08-19 frontend/features/jobs/components/job-execution-format.ts:
   `apiCallKey` joins endpoint, region, param_key, and the first/last
