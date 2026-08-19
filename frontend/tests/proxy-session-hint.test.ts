@@ -138,6 +138,7 @@ describe("the edge and the session hint", () => {
     what: string;
     path: string;
     hint: boolean;
+    cookie?: string;
     status: number;
     headers: [string, string][];
   }[] = [
@@ -229,6 +230,19 @@ describe("the edge and the session hint", () => {
       headers: [["x-middleware-next", "1"]],
     },
     {
+      // The edge compares the value, not just the name. Relaxing that to a
+      // name check leaves the edge admitting a visitor the browser reports as
+      // signed out, which is the `/` <-> `/sign-in` bounce the whole fix is
+      // about -- and it left every test green, because nothing ever sent a
+      // cookie with the wrong value.
+      what: "a visitor carrying a hint cookie with some other value",
+      path: "/player-overview",
+      hint: false,
+      cookie: `${AUTH_STATE_COOKIE_NAME}=someone-elses-value`,
+      status: 307,
+      headers: [["location", "http://localhost:3000/sign-in"]],
+    },
+    {
       what: "a visitor with no hint on a protected route",
       path: "/player-overview",
       hint: false,
@@ -246,7 +260,13 @@ describe("the edge and the session hint", () => {
 
   it.each(cases)("passes $what through untouched", async (testCase) => {
     const response = await proxy(
-      testCase.hint ? hintedRequest(testCase.path) : plainRequest(testCase.path),
+      testCase.cookie
+        ? new NextRequest(new URL(`http://localhost:3000${testCase.path}`), {
+            headers: { cookie: testCase.cookie },
+          })
+        : testCase.hint
+          ? hintedRequest(testCase.path)
+          : plainRequest(testCase.path),
     );
 
     expect([...response.headers.entries()]).toEqual(testCase.headers);

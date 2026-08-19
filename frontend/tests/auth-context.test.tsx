@@ -277,6 +277,51 @@ describe("AuthProvider logout", () => {
     );
   });
 
+  it("changes nothing when a beacon is queued instead of a request answered", async () => {
+    // The escape a later audit wrote, and it reads as an improvement: catch
+    // the offline case, hand the logout to `navigator.sendBeacon` so the
+    // browser retries it after the tab closes, and count that as the server
+    // having answered. It is not one. `sendBeacon` returns true for *queued*
+    // -- against a refused connection it still returns true -- so
+    // `serverAnswered` becomes true unconditionally, the opt-in above turns
+    // into dead code, and plain `logout()` is back to tearing the session
+    // down over every blip with the refresh token live and unrevoked.
+    //
+    // jsdom has no `sendBeacon`, which is why the whole suite stayed green
+    // for that edit. So the test supplies one: the invariant is about the
+    // effect, not the API -- queueing is not answering, whatever the return
+    // value says.
+    refreshAccessToken.mockResolvedValue({ outcome: "unreachable" });
+    const sendBeacon = vi.fn(() => true);
+    Object.defineProperty(navigator, "sendBeacon", {
+      value: sendBeacon,
+      configurable: true,
+      writable: true,
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.reject(new Error("offline"))),
+    );
+
+    try {
+      const logout = renderLogout();
+      await act(async () => {
+        await Promise.resolve();
+      });
+      removeAuthTokens.mockReset();
+      routerPush.mockReset();
+
+      await act(async () => {
+        await logout();
+      });
+
+      expect(removeAuthTokens).not.toHaveBeenCalled();
+      expect(routerPush).not.toHaveBeenCalled();
+    } finally {
+      delete (navigator as { sendBeacon?: unknown }).sendBeacon;
+    }
+  });
+
   it("changes nothing when an edge answers 401 for an automatic logout", async () => {
     // A maintenance Worker sits in front of this route, and `/auth/logout`
     // itself has no auth dependency and cannot answer 401. So a 401 here was

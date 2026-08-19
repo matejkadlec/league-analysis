@@ -2,7 +2,10 @@
 
 import { describe, expect, it } from "vitest";
 
-import eslintConfig from "../eslint.config.mjs";
+import eslintConfig, {
+  sessionTeardownImports,
+  sessionTeardownSyntax,
+} from "../eslint.config.mjs";
 
 /**
  * A flat-config block replaces a rule's options; it does not merge them.
@@ -40,17 +43,31 @@ describe("the eslint config's shared teardown rules", () => {
     for (const block of blocks) {
       const [, options] = block.rules?.["no-restricted-imports"] as [
         string,
-        { patterns?: { group?: string[] }[] },
+        { patterns?: { group?: string[]; allowImportNames?: string[] }[] },
       ];
       const groups = (options.patterns ?? []).flatMap(
         (pattern) => pattern.group ?? [],
       );
-      expect(groups, `block for ${JSON.stringify(block.files)}`).toContain(
-        "**/auth/utils/token-manager*",
-      );
-      expect(groups, `block for ${JSON.stringify(block.files)}`).toContain(
-        "**/auth/utils/auth-state-cookie*",
-      );
+      for (const shared of sessionTeardownImports) {
+        for (const pattern of shared.group ?? []) {
+          expect(groups, `block for ${JSON.stringify(block.files)}`).toContain(
+            pattern,
+          );
+        }
+        // The allowlist itself, not just the paths it applies to: a block
+        // carrying the right patterns with `clearAuthStateCookie` added to
+        // the allowed names permits the teardown import while looking
+        // identical from the outside.
+        const applied = (options.patterns ?? []).find((pattern) =>
+          (pattern.group ?? []).some((entry) =>
+            (shared.group ?? []).includes(entry),
+          ),
+        );
+        expect(
+          applied?.allowImportNames,
+          `block for ${JSON.stringify(block.files)}`,
+        ).toEqual(shared.allowImportNames);
+      }
     }
   });
 
@@ -64,9 +81,14 @@ describe("the eslint config's shared teardown rules", () => {
         ...{ selector: string }[],
       ];
       const selectors = rules.map((rule) => rule.selector);
-      expect(selectors, `block for ${JSON.stringify(block.files)}`).toContain(
-        "CallExpression[callee.property.name=/^(set|delete)$/] Identifier[name='AUTH_STATE_COOKIE_NAME']",
-      );
+      // Every shared selector, not a sample of one: a block carrying the
+      // hint-name selector while dropping the `document.cookie`, `Set-Cookie`
+      // and `Clear-Site-Data` ones would have passed a spot check.
+      for (const shared of sessionTeardownSyntax) {
+        expect(selectors, `block for ${JSON.stringify(block.files)}`).toContain(
+          shared.selector,
+        );
+      }
     }
   });
 });

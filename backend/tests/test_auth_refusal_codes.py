@@ -153,23 +153,42 @@ async def test_a_database_fault_is_not_laundered_into_a_refusal() -> None:
         await RealAuthService(db).rotate_refresh_token(raw_refresh_token="x")
     cast(AsyncMock, db.commit).assert_not_awaited()
 
-    # 2. The user lookup, which `rotate_refresh_token` reads as "unknown user"
-    #    when it answers None -- so it must never answer None for a fault.
+    # 2. The user lookup, driven through `rotate_refresh_token` rather than
+    #    called directly -- the call site is what matters. Swallowing there
+    #    lands in the unknown-user branch, which revokes the still-valid row
+    #    on its way out, so a transient SELECT fault does not merely mint a
+    #    refusal: it makes one true.
+    now = datetime.now(UTC)
+    record = MagicMock()
+    record.revoked_at = None
+    record.expires_at = now + timedelta(days=30)
+    record.user_id = 5
+    lookup = MagicMock()
+    lookup.scalar_one_or_none = MagicMock(return_value=record)
     db = MagicMock()
-    db.execute = AsyncMock(side_effect=fault)
-    with pytest.raises(DBAPIError):
-        await RealAuthService(db).get_user_by_id(1)
-
-    # 3. The revocation the reuse branch performs before refusing. Swallowing
-    #    here refuses while the token family stays live.
-    db = MagicMock()
-    db.execute = AsyncMock(side_effect=fault)
+    db.execute = AsyncMock(side_effect=[lookup, fault])
     db.commit = AsyncMock()
     with pytest.raises(DBAPIError):
-        await RealAuthService(db).revoke_all_refresh_tokens_for_user(1)
+        await RealAuthService(db).rotate_refresh_token(raw_refresh_token="x")
+    assert record.revoked_at is None
+    cast(AsyncMock, db.commit).assert_not_awaited()
+
+    # 3. The revocation the reuse branch performs before refusing, again
+    #    through the real path: a reused token is a refusal, but only once the
+    #    family really has been revoked. Swallowing there refuses while every
+    #    token stays live.
+    reused = MagicMock()
+    reused.revoked_at = now
+    reused.user_id = 5
+    reused_lookup = MagicMock()
+    reused_lookup.scalar_one_or_none = MagicMock(return_value=reused)
+    db = MagicMock()
+    db.execute = AsyncMock(side_effect=[reused_lookup, fault])
+    db.commit = AsyncMock()
+    with pytest.raises(DBAPIError):
+        await RealAuthService(db).rotate_refresh_token(raw_refresh_token="x")
 
     # 4. The commit that stores the rotated token.
-    now = datetime.now(UTC)
     record = MagicMock()
     record.revoked_at = None
     record.expires_at = now + timedelta(days=30)

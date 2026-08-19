@@ -8,7 +8,7 @@ import nextTypeScript from "eslint-config-next/typescript";
 // drops this allowlist there -- which is what happened to `proxy.ts`, turning
 // the file the design treats as most dangerous into the only one allowed to
 // import the teardown helpers.
-const sessionTeardownImports = [
+export const sessionTeardownImports = [
           {
             // Trailing `*` because a specifier may carry an extension:
             // `.../token-manager.js` matched none of these patterns and
@@ -41,7 +41,7 @@ const sessionTeardownImports = [
           },
 ];
 
-const sessionTeardownSyntax = [
+export const sessionTeardownSyntax = [
   {
     // Any receiver, any spelling: `document.cookie`,
     // `document["cookie"]`, `globalThis.document.cookie`, or an alias
@@ -353,16 +353,20 @@ const eslintConfig = [
       ],
     },
   },
-  // Server code under `app/` runs where a cookie store is writable, and a
-  // sweep over `getAll()` names nothing the selectors above can see -- and it
-  // takes the HttpOnly refresh cookie with it, not just the hint. Scoped to
-  // route handlers first, which was one spelling short: a Server Action does
-  // the same sweep and is not a route handler. So it covers everything under
-  // `app/` except the five pages that read the hint, which are listed because
-  // a sixth reader should be a decision rather than a default.
+  // The server-side cookie store, wherever it is opened.
+  //
+  // A sweep over `getAll()` names nothing the selectors above can see, and it
+  // takes the HttpOnly refresh cookie with it, not just the hint. This was
+  // scoped to route handlers, then to `app/**`, and both were one spelling
+  // short: a Server Action is defined by a `"use server"` directive, not by a
+  // path, so it can live in `features/` or `lib/` and neither scope saw it.
+  // The five pages that read the hint are the whole exception list, and a
+  // sixth reader should be a decision rather than a default.
   {
-    files: ["app/**/*.{ts,tsx,js,jsx}"],
+    files: ["**/*.{ts,tsx,js,jsx}"],
     ignores: [
+      "tests/**",
+      "e2e/**",
       "app/license/page.tsx",
       "app/sign-in/page.tsx",
       "app/privacy-policy/page.tsx",
@@ -374,10 +378,8 @@ const eslintConfig = [
         "error",
         {
           // Spread here too: this block replaces the repo-wide rule for these
-          // files rather than adding to it, and forgetting that is how
-          // `proxy.ts` once became the only file allowed to import the
-          // teardown helpers. `tests/eslint-config-contract.test.ts` now fails
-          // if any block sets this rule without them.
+          // files rather than adding to it. `eslint-config-contract.test.ts`
+          // fails if any block sets this rule without them.
           patterns: sessionTeardownImports,
           paths: [
             {
@@ -389,6 +391,20 @@ const eslintConfig = [
           ],
         },
       ],
+    },
+  },
+  // The five pages that legitimately read the hint server-side. They get the
+  // teardown allowlist back and nothing else.
+  {
+    files: [
+      "app/license/page.tsx",
+      "app/sign-in/page.tsx",
+      "app/privacy-policy/page.tsx",
+      "app/cookie-policy/page.tsx",
+      "app/join-us/page.tsx",
+    ],
+    rules: {
+      "no-restricted-imports": ["error", { patterns: sessionTeardownImports }],
     },
   },
   // The two files that own cookie writes: one performs the delete

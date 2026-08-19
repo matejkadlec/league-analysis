@@ -216,6 +216,57 @@ describe("a refresh that never reaches the server", () => {
   });
 });
 
+describe("the first probe answering 403", () => {
+  it("keeps the session when the 403 names nothing", async () => {
+    // A Cloudflare WAF rule, a bot-fight challenge or "I'm Under Attack" mode
+    // answers a background request with 403 and an HTML body, and the origin
+    // never sees it. This is the branch that sees it first, and it had no
+    // test at all: a bare teardown here signs every visitor out over a
+    // challenge while their 30-day refresh token stays live and unrevoked.
+    document.cookie = `${AUTH_STATE_COOKIE_NAME}=${AUTH_STATE_COOKIE_VALUE}; path=/`;
+    let refreshes = 0;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      if (String(input).includes("/auth/refresh")) {
+        refreshes += 1;
+        return new Response("{}", { status: 200 });
+      }
+      return new Response("<html>Access denied</html>", {
+        status: 403,
+        headers: { "content-type": "text/html" },
+      });
+    });
+
+    const { getByTestId } = renderProvider();
+
+    await waitFor(() =>
+      expect(getByTestId("state").textContent).toBe("settled:false"),
+    );
+    // A 403 is not a 401, so there is nothing to retry with a refresh.
+    expect(refreshes).toBe(0);
+    expect(document.cookie).toContain(AUTH_STATE_COOKIE_NAME);
+  });
+
+  it("ends the session when the 403 names the end of it", async () => {
+    // The other half: `/auth/me` answers 403 ACCOUNT_INACTIVE for a
+    // deactivated account, and that is a refusal this API issued about this
+    // session.
+    document.cookie = `${AUTH_STATE_COOKIE_NAME}=${AUTH_STATE_COOKIE_VALUE}; path=/`;
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({ detail: { code: "ACCOUNT_INACTIVE", message: "off" } }),
+        { status: 403, headers: { "content-type": "application/json" } },
+      ),
+    );
+
+    const { getByTestId } = renderProvider();
+
+    await waitFor(() =>
+      expect(getByTestId("state").textContent).toBe("settled:false"),
+    );
+    expect(document.cookie).not.toContain(AUTH_STATE_COOKIE_NAME);
+  });
+});
+
 describe("a probe that fails right after a refresh the server honoured", () => {
   it("does not end the session over a 5xx", async () => {
     // The worst possible moment to guess. The server accepted the refresh a
