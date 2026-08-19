@@ -85,7 +85,10 @@ const league = {
   fresh_blood: false,
   hot_streak: false,
   created_at: "2026-08-19T08:00:00Z",
-  win_rate: 60,
+  // Post-parse shape: the schema has already normalized the API's percent to
+  // a fraction. Deliberately disagrees with the stats fixture's 0.6 so an
+  // assertion can tell which source the ranked branch rendered.
+  win_rate: 0.555,
   total_games: 100,
   display_rank: "Gold II",
 };
@@ -154,6 +157,9 @@ describe("what the card says about the player", () => {
     // 60W/40L from the league row, not recomputed from match stats.
     expect(screen.getByText("60W")).toBeTruthy();
     expect(screen.getByText("40L")).toBeTruthy();
+    // The league's own figure, not the match-stats 60% — the fixtures
+    // disagree precisely so this line can tell them apart.
+    expect(screen.getByText("55.5%")).toBeTruthy();
   });
 
   it("falls back to unranked match stats when there is no league row", async () => {
