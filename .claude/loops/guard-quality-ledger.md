@@ -640,6 +640,38 @@ three untested messages in `login-error.ts`.
   sees it), and `onCompleted: onRefreshAll` dropped (the sync completes and
   the page never refreshes, so the button visibly does nothing).
 
+- ~~`features/jobs/components/job-execution-api-calls.tsx`~~ and
+  ~~`features/jobs/components/job-execution-logs.tsx`~~ — done 2026-08-19
+  together (one suite, `tests/job-execution-render.test.tsx`), 11 tests,
+  **10 mutations, one survivor on the first pass and it was the fixture's
+  fault**. 11.1% and 12.5% → 100% statements each. The two renderers behind a
+  job execution's expanded view; the format helpers they call were already
+  pinned, so this suite pins only the conditional structure that lives here.
+
+  The survivor, recorded because it is the campaign's recurring shape:
+  `hasMultipleParams = count > 1 && param_key` mutated to `count > 0` — the
+  "single call gets no expander" fixture carried **no `param_key`**, so the
+  mutated conjunction was still falsy and the test proved nothing about the
+  count. The fixture now carries the key, making the count the half that
+  refuses. Same lesson as `player-context` and the Zod-path fixture: **the
+  fixture must make the guard under test the one that does the work.**
+
+  Killed and worth naming: 400 match fetches collapsing into "first, ...,
+  last" rather than rendering any single call's params as if they were all
+  400's, the expand toggle reported under the same `apiCallKey` the parent's
+  Set is checked by (any other string toggles an entry no render reads — the
+  click works, the row never opens), the session-closed line gated on
+  `completedAt`, lowercase backend levels normalised to `[ERROR]`, a
+  malformed level degrading to INFO rather than DEBUG, `event` excluded from
+  the extra-fields dump, and object-valued extras serialised rather than
+  `[object Object]`. Branches on `job-execution-logs` sit at 76.9%: the
+  uncovered arms are the WARNING/DEBUG/else colour classes, presentational
+  by the same reasoning as every prior row's colour-arm acceptance.
+
+**With these, the under-20% sub-band is closed.** Re-measured 2026-08-19:
+the only files under 20% with ≥10 statements are the two `app/*/page.tsx`
+route shells already resolved by the route-shell row.
+
 The rest, enumerated 2026-08-19 rather than left as "plus 9 more":
 ~~`app/jobs/page.tsx`~~ (30, done 2026-08-19 — nine mutations; it is the only
 consumer of `components/ui/tabs.tsx`, so both closed together),
@@ -676,8 +708,8 @@ The band is really two. **Under 20% is the zero class wearing a different
 number** — the covered lines are the imports and the export statement, and
 nothing has ever rendered the file: `match-row.tsx` (1.3%, now done),
 ~~`player-card.tsx`~~ (4.3%, done 2026-08-19), `player-context.tsx` (7.1%),
-~~`join-us-form.tsx`~~ (7.4%, done 2026-08-19), `job-execution-api-calls.tsx` (11.1%),
-`job-execution-logs.tsx` (12.5%), ~~`matchmaking-api.ts`~~ (12.5%, done 2026-08-19),
+~~`join-us-form.tsx`~~ (7.4%, done 2026-08-19), ~~`job-execution-api-calls.tsx`~~ (11.1%, done 2026-08-19),
+~~`job-execution-logs.tsx`~~ (12.5%, done 2026-08-19), ~~`matchmaking-api.ts`~~ (12.5%, done 2026-08-19),
 ~~`player-api.ts`~~ (14.3%, done 2026-08-19). Treat these as 0%: read and decide, do not mutate.
 Two of them are `validated*` delegation modules and resolve the same way
 `smurf-boost-api.ts` did — but note *why* they read as 0% rather than as
