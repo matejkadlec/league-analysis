@@ -1,5 +1,8 @@
 """Persisted per-match LP observation regressions."""
 
+import os
+import time
+from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import cast
@@ -13,6 +16,7 @@ from app.features.matches.match_lp import (
     LP_SOURCE_UNAVAILABLE,
     attribute_lp_change,
     initialize_participant_lp,
+    league_snapshot_datetime,
     persist_match_lp_observations,
 )
 from app.features.matches.models import Match
@@ -318,3 +322,184 @@ async def test_persisted_observation_is_idempotent_on_retry() -> None:
     assert first == 1
     assert second == 0
     assert participant.lp_change == 18
+
+
+def test_a_win_that_lost_lp_is_refused_rather_than_recorded() -> None:
+    """A signed LP change must agree with the result it is attached to.
+
+    The counters can transition by exactly one while the LP moved the other
+    way -- a decay, a promotion adjustment, or a snapshot pair that quietly
+    spans more than the one match. None of those are this match's LP, and
+    persisting the number anyway puts a negative LP change on a victory in
+    the match history, which is a wrong number rather than a missing one.
+    """
+    before = _snapshot(created_at=BASE_TIME, lp=40, wins=10, losses=8)
+    after = _snapshot(
+        created_at=BASE_TIME + timedelta(hours=1),
+        lp=24,
+        wins=11,
+        losses=8,
+    )
+
+    result = attribute_lp_change(
+        _participant(win=True),
+        _match(),
+        before,
+        after,
+        progression_match_count=1,
+    )
+
+    assert result.change is None
+    assert result.source == LP_SOURCE_UNAVAILABLE
+    assert result.reason == "invalid_result_direction"
+
+
+@pytest.mark.parametrize(
+    "minutes_after",
+    [
+        # Ended before the earlier snapshot was taken.
+        -30,
+        # Ended after the later one.
+        120,
+    ],
+)
+def test_a_match_outside_the_snapshot_pair_proves_nothing(
+    minutes_after: int,
+) -> None:
+    """LP is only attributable when the two snapshots bracket the match.
+
+    Both snapshots and the counters can look perfect while the match they are
+    being credited to happened outside them -- the LP then belongs to some
+    other game in the window. The bracket is what makes the attribution a
+    proof instead of a guess.
+    """
+    before = _snapshot(created_at=BASE_TIME, lp=40, wins=10, losses=8)
+    after = _snapshot(
+        created_at=BASE_TIME + timedelta(hours=1),
+        lp=58,
+        wins=11,
+        losses=8,
+    )
+
+    result = attribute_lp_change(
+        _participant(win=True),
+        _match(minutes_after=minutes_after),
+        before,
+        after,
+        progression_match_count=1,
+    )
+
+    assert result.change is None
+    assert result.reason == "outside_snapshot_window"
+
+
+def test_a_win_and_a_loss_between_snapshots_prove_neither() -> None:
+    """Both counters moving means the window holds more than this match.
+
+    `progression_match_count` only counts the matches in the batch being
+    persisted, not the games that happened between the two snapshots. An hour
+    of play can put a win and a loss inside one window, and then the LP delta
+    is the sum of two results. Requiring the *other* counter to have stayed
+    still is what refuses that -- checking only the counter matching the
+    result would credit one match with both games' LP.
+    """
+    before = _snapshot(created_at=BASE_TIME, lp=40, wins=10, losses=8)
+    after = _snapshot(
+        created_at=BASE_TIME + timedelta(hours=1),
+        lp=50,
+        wins=11,
+        losses=9,
+    )
+
+    result = attribute_lp_change(
+        _participant(win=True),
+        _match(),
+        before,
+        after,
+        progression_match_count=1,
+    )
+
+    assert result.change is None
+    assert result.reason == "counter_mismatch"
+
+
+def test_a_missing_later_snapshot_is_named_as_such() -> None:
+    """The two missing-snapshot refusals are distinct and both are recorded.
+
+    `lp_change_reason` is the only record of why a match has no LP, and a
+    pending after-snapshot is recoverable on the next league sync while other
+    refusals are not. Collapsing the two loses that distinction.
+    """
+    result = attribute_lp_change(
+        _participant(win=True),
+        _match(),
+        _snapshot(created_at=BASE_TIME, lp=40, wins=10, losses=8),
+        None,
+        progression_match_count=1,
+    )
+
+    assert result.change is None
+    assert result.reason == "missing_after_snapshot"
+
+
+def test_a_remake_is_initialized_as_a_certain_zero() -> None:
+    """A remake's LP is known to be zero before any league snapshot arrives.
+
+    Riot marks it ineligible for progression, so nothing was won or lost.
+    Leaving it pending instead means the next observation window sees a match
+    it thinks is unattributed, and a real LP change from a different game can
+    land on a remake that moved nobody's rank.
+    """
+    participant = _participant(win=False, remake=True)
+
+    initialize_participant_lp(participant, queue_id=420, remake=True)
+
+    assert participant.lp_change == 0
+    assert participant.lp_change_source == LP_SOURCE_REMAKE
+    assert participant.lp_change_reason == "riot_eligible_for_progression_false"
+
+
+@pytest.fixture
+def clock_far_from_utc() -> Iterator[None]:
+    """Run a test under a zone 14 hours from UTC, then restore the real one.
+
+    The gate container runs UTC, so a bug that reads a stored timestamp in
+    local time is invisible there and wrong by hours on the Prague host that
+    actually runs this. Forcing a zone makes the difference observable
+    wherever the suite runs.
+    """
+    previous = os.environ.get("TZ")
+    os.environ["TZ"] = "Pacific/Kiritimati"
+    time.tzset()
+    try:
+        yield
+    finally:
+        if previous is None:
+            del os.environ["TZ"]
+        else:
+            os.environ["TZ"] = previous
+        time.tzset()
+
+
+def test_a_stored_timestamp_without_a_zone_is_read_as_utc(
+    clock_far_from_utc: None,
+) -> None:
+    """A naive league timestamp means UTC, not whatever zone the host is in.
+
+    Every other time in this module is UTC, and the comparison that decides
+    whether a match sits between two snapshots mixes them. Reading a naive
+    value as local time shifts it by the host offset, which silently moves
+    matches in and out of the window -- and reads correctly in a UTC gate
+    while being hours wrong in production.
+
+    The fixture argument is unused in the body: it is the forced zone.
+    """
+    del clock_far_from_utc
+    naive = _snapshot(
+        created_at=datetime(2026, 8, 15, 12),
+        lp=40,
+        wins=10,
+        losses=8,
+    )
+
+    assert league_snapshot_datetime(naive) == datetime(2026, 8, 15, 12, tzinfo=UTC)
