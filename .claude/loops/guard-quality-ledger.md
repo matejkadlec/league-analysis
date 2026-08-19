@@ -785,6 +785,63 @@ route shells already resolved by the route-shell row.
   on a failed poll — the exact regression the file's original iteration
   guarded — and `tests/job-executions.test.tsx` caught it before commit.
 
+- ~~`backend: app/features/matchmaking_analysis/schemas.py`~~ — done
+  2026-08-19, 4 tests (`tests/test_matchmaking_analysis_schemas.py`),
+  **4 mutations, all killed**. 80.4% → 100%. The missing fifth was exactly
+  the three `@computed_field` bodies — the values every status and history
+  response serialises and the frontend renders directly.
+
+  Killed: `progress` counting enumerated PUUIDs instead of finished ones
+  (the progress bar reads 100% the moment the work is listed, before a
+  single player is analysed), the `gap` subtraction order (the history card
+  prints `|gap|` and encodes the sign as colour alone, so this subtraction
+  is the only thing saying which team was stronger — the same finding as
+  the frontend's `historyFigures` row, now pinned on both sides of the
+  wire), the `le=1.0` bound on winrates (a 0-100 value slipping in renders
+  as 5500% on the results card), and `total_puuids` off by one. The
+  serialisation itself is asserted through `model_dump()` — a
+  `@computed_field` demoted to a plain property vanishes from every
+  response while every in-process test still passes.
+
+- ~~`backend: app/features/auth/schemas.py`~~ — done 2026-08-19, 2 tests
+  (in `tests/test_auth_authorization.py`, which already held this file's
+  suite), **3 mutations, all killed**. 90.9% → 100%. The existing
+  weak-password parametrize already kills wiring mutations across the four
+  regex rules (each fixture fails exactly one rule), and the `!=` match
+  validator was pinned; what was uncovered was the two guards no route can
+  reach the obvious way. Killed: the length rule inside
+  `validate_password_strength` (both call sites hide it behind
+  `Field(min_length=8)`, so the named policy function silently lost its
+  length rule for any future direct caller — pinned by calling the function,
+  which is the unit, not the route), the Join Us body trim (`return value`
+  for `return normalized` stores the untrimmed submission), and the
+  whitespace-only rejection (`Field(min_length=1)` sees the raw `"   "` and
+  passes it; the validator is the only thing between a blank message and the
+  inbox, and constraints do not re-run on the validator's return value).
+  Harness note: a `docker exec` heredoc without `-i` feeds python an empty
+  script and every mutation "survives" by never being applied — the run is
+  only real if each mutation echoes its apply confirmation.
+
+- ~~`backend: app/core/riot_api/client.py` (retry loop)~~ — done 2026-08-19,
+  not a mutation iteration but the library swap the user asked for:
+  **tenacity now owns the retry loop**, and the swap was made provable by
+  freezing an oracle first. `tests/test_riot_client_rate_limit_retry.py`
+  (end-to-end 429: wait exactly what `Retry-After` said, exhaustion carries
+  the header evidence, `retry_on_failure=False` sends exactly once) was
+  committed green against the hand-written loop *before* the loop changed,
+  so the machinery swap is proven against behaviour rather than against
+  tests written for it. The end-to-end logging suites ran unchanged across
+  both implementations; only the helper-signature tests moved (the helpers
+  became pure raisers — the `(should_retry, sleep)` tuple protocol and the
+  `return None` retry sentinel are gone). **4 mutations, all killed
+  red/green** against the new wiring: network errors dropped from the
+  transient predicate, the 429 wait replaced with exponential guessing, one
+  attempt too many, and `retry_on_failure=False` retrying anyway.
+  Two harness traps burned into this row: `git checkout -- <file>` as the
+  mutation-restore step **reverts uncommitted work** — commit the real
+  change before any scripted restore touches its file; and the earlier
+  `docker exec` heredoc note above claimed its third victim in one session.
+
 The rest, enumerated 2026-08-19 rather than left as "plus 9 more":
 ~~`app/jobs/page.tsx`~~ (30, done 2026-08-19 — nine mutations; it is the only
 consumer of `components/ui/tabs.tsx`, so both closed together),
@@ -935,9 +992,9 @@ The tail, named rather than counted — the remaining 21 of those 30, sorted by
 what is at stake rather than by size:
 
 *Validators (executable rules on untrusted input):*
-`app/features/matchmaking_analysis/schemas.py` (52, **80.4%** — the
-lowest-covered file on the whole list, and six validators),
-`app/features/auth/schemas.py` (74, 90.9%, six validators),
+~~`app/features/matchmaking_analysis/schemas.py`~~ (52, 80.4% — done
+2026-08-19, row below),
+~~`app/features/auth/schemas.py`~~ (74, 90.9% — done 2026-08-19, row below),
 `app/features/settings/schemas.py` (229, 97.6%, **fourteen** validators —
 biggest file in the covered half of the backend).
 

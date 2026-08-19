@@ -1,4 +1,4 @@
-import type { Page } from "@playwright/test";
+import { expect, type Page } from "@playwright/test";
 
 import { seedAuthenticatedSession } from "./auth";
 import { blockUpstreamRequests } from "./offline";
@@ -350,4 +350,54 @@ export async function installPopulatedPlayerMocks(page: Page): Promise<void> {
 
     return route.fulfill({ status: 404, body: "Not found" });
   });
+}
+
+/**
+ * The three data-rich player routes, each with a `ready` selector that only
+ * its populated content renders and the surfaces the reflow spec measures.
+ *
+ * `ready` exists because the loading skeletons are textless `<Skeleton>`
+ * pulses: a wait built on the word "Loading" disappearing passes while a
+ * skeleton is still on screen, and a scan or measurement then grades an
+ * empty page. Gate on content, never on the absence of a loading marker.
+ */
+export const POPULATED_ROUTES = [
+  {
+    name: "player overview",
+    route: `/player-overview?puuid=${PUUID}`,
+    // The rank badge from the league fixture, rendered verbatim by
+    // PlayerCard: it mounts only once the league query has resolved, well
+    // past the page skeleton. (Champion names are display-transformed, so
+    // they are not safe anchors.)
+    ready: "text=Emerald II",
+    reflowSurfaces: [],
+  },
+  {
+    name: "match history",
+    route: `/match-history?puuid=${PUUID}`,
+    ready: "[data-testid='match-list']",
+    reflowSurfaces: ["match-list", "match-history-queue-filters"],
+  },
+  {
+    name: "matchmaking analysis",
+    route: `/matchmaking-analysis?puuid=${PUUID}`,
+    ready: "[data-testid='matchmaking-analysis-history-stacked']",
+    reflowSurfaces: ["matchmaking-analysis-history-stacked"],
+  },
+] as const;
+
+export type PopulatedRoute = (typeof POPULATED_ROUTES)[number];
+
+/** Mount a populated route and wait until its data-rich content is in the DOM. */
+export async function gotoPopulatedRoute(
+  page: Page,
+  route: PopulatedRoute,
+): Promise<void> {
+  await installPopulatedPlayerMocks(page);
+  await page.goto(route.route);
+  await page.getByRole("button", { name: "Accept necessary" }).click();
+  // Attached rather than visible: the matchmaking gate element is the
+  // stacked mobile list, present in the DOM at every viewport.
+  await expect(page.locator(route.ready).first()).toBeAttached();
+  await page.waitForLoadState("networkidle");
 }

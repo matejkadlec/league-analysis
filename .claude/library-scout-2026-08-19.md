@@ -52,6 +52,15 @@ Largest possible win. Blocked on a backend fix, not a tool choice.
 
 ### 2.2 `tenacity >=9.1.4` → `backend/app/core/riot_api/client.py:236-461`
 
+**ADOPTED 2026-08-19** (tenacity 9.1.4, commit `2017ee0` on
+`loop/guard-quality-14`). The experiment ran exactly as the decider asked: a
+new end-to-end 429 oracle was committed green against the hand-written loop
+first, the logging suites survived the swap unchanged, and only the
+helper-signature tests needed mechanical edits. Four mutations against the
+new wiring shown red/green. The `AsyncRetrying` instance passes
+`sleep=lambda s: asyncio.sleep(s)` so tests patching `asyncio.sleep` keep
+observing every wait.
+
 Retires ~60-90 of ~180 lines: the attempt loop, attempt counting, the two `2**attempt`
 sleep sites, and the `(should_retry, sleep_seconds)` tuple threaded through
 `_handle_http_error_status` → `_execute_single_request` → `_make_request`. Riot-specific
@@ -71,6 +80,16 @@ logging) stays hand-written. Zero transitive deps, Apache-2.0, py314 in its own 
   `[tool.deptry.per_rule_ignores]` DEP002 line. Nothing else.
 
 ### 2.3 `@axe-core/playwright@4.13.0` → `frontend/e2e/` (net-new coverage, retires 0 lines)
+
+**ADOPTED 2026-08-19** (commit `cbf39a0` on `loop/guard-quality-14`), as its
+own spec (`e2e/accessibility.spec.ts`) over the three populated player routes
+rather than inside the reflow spec. The first run found three real defects,
+all fixed in the same commit: combobox ARIA attributes without the combobox
+role on the player search, the match list scrollable without keyboard
+access, and three match-row metadata spans under 4.5:1 on the win/loss tint.
+One correction to this section's premise: axe does NOT cover WCAG 1.4.1
+use-of-color — no automated rule does — so the match-row tint finding stays
+open in IMPROVEMENTS.md.
 
 Not a code-deletion candidate: it closes a demonstrated uncaught defect class (WCAG 1.4.1
 colour-only signalling, already found by hand in `match-row.tsx`). Deque's own package,

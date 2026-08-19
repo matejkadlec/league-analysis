@@ -740,7 +740,7 @@ test("keeps player routes, sidebar switching, and dialog scroll lock determinist
 
   const currentBeforeLocalSelection = currentPuuid;
   const contextUpdatesBeforeLocalSelection = currentPlayerUpdates;
-  const analysisPlayerSearch = page.getByRole("textbox", {
+  const analysisPlayerSearch = page.getByRole("combobox", {
     name: "Choose player for analysis",
   });
   await expect(analysisPlayerSearch).toHaveAttribute(

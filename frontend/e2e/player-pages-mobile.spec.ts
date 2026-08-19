@@ -1,8 +1,8 @@
 import { expect, test } from "@playwright/test";
 
 import {
-  installPopulatedPlayerMocks,
-  PUUID,
+  gotoPopulatedRoute,
+  POPULATED_ROUTES,
 } from "./support/populated-player-harness";
 
 /**
@@ -20,39 +20,20 @@ const PHONE = { width: 390, height: 844 };
 
 // A container that scrolls its own content sideways keeps the document honest
 // while still costing the reader a swipe, so surfaces that should reflow are
-// measured one by one. The third field names them, and each is asserted to be
-// present: a fixture that stopped producing matches fails here instead of
+// measured one by one. `reflowSurfaces` names them, and each is asserted to
+// be present: a fixture that stopped producing matches fails here instead of
 // quietly skipping the assertion it exists for.
-const ROUTES = [
-  ["player overview", `/player-overview?puuid=${PUUID}`, []],
-  [
-    "match history",
-    `/match-history?puuid=${PUUID}`,
-    ["match-list", "match-history-queue-filters"],
-  ],
-  [
-    "matchmaking analysis",
-    `/matchmaking-analysis?puuid=${PUUID}`,
-    ["matchmaking-analysis-history-stacked"],
-  ],
-] as const;
-
 test.describe("player pages on a phone", () => {
   test.use({ viewport: PHONE });
 
-  for (const [name, route, reflowSurfaces] of ROUTES) {
+  for (const route of POPULATED_ROUTES) {
+    const { name, reflowSurfaces } = route;
     test(`${name} never scrolls the page sideways`, async ({ page }) => {
       test.setTimeout(60_000);
-      await installPopulatedPlayerMocks(page);
-
-      await page.goto(route);
-      await page.getByRole("button", { name: "Accept necessary" }).click();
-
-      // Without this the measurement can land on the loading skeletons, which
-      // are narrow by construction and would pass whatever the real content
-      // does.
-      await expect(page.locator("main")).not.toContainText("Loading");
-      await page.waitForLoadState("networkidle");
+      // The readiness gate inside waits for populated content, so the
+      // measurement cannot land on the loading skeletons, which are narrow
+      // by construction and would pass whatever the real content does.
+      await gotoPopulatedRoute(page, route);
 
       const { scrollWidth, clientWidth, widest, surfaceOverflow } =
         await page.evaluate((testIds: readonly string[]) => {

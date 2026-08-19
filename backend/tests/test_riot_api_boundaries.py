@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import TypedDict
 from unittest.mock import AsyncMock, patch
 
+import httpx
 import pytest
 from pydantic import ValidationError as PydanticValidationError
 
@@ -24,6 +25,7 @@ from app.core.riot_api.errors import (
     ForbiddenError,
     NotFoundError,
     RateLimitError,
+    RiotAPIError,
     ServiceUnavailableError,
 )
 from app.core.riot_api.rate_limiter import RateLimiter
@@ -75,18 +77,18 @@ def test_retry_after_and_rate_limit_use_safe_bounds() -> None:
     assert client._parse_retry_after({}) == 120
     assert client._parse_retry_after({"retry-after": "invalid"}) == 120
     assert client._parse_retry_after({"retry-after": "0"}) == 1
-    assert client._handle_rate_limit({"retry-after": "3"}, 0, 1) == (True, 3)
-
     with pytest.raises(RateLimitError) as error:
-        client._handle_rate_limit({"retry-after": "3"}, 1, 1)
+        client._handle_rate_limit({"retry-after": "3"})
     assert error.value.retry_after == 3
 
 
 def test_server_retry_boundary_and_queue_normalization() -> None:
     client = RiotAPIClient(api_key="RGAPI-test-only")
-    assert client._handle_server_error(500, 0, 1) == (True, 1)
+    with pytest.raises(RiotAPIError) as server_error:
+        client._handle_server_error(500)
+    assert server_error.value.status_code == 500
     with pytest.raises(ServiceUnavailableError):
-        client._handle_server_error(503, 1, 1)
+        client._handle_server_error(503)
 
     assert client._normalize_queue_type("420") is QueueType.RANKED_SOLO_5X5
     with pytest.raises(ValueError, match="Unsupported Riot queue"):
@@ -94,6 +96,30 @@ def test_server_retry_boundary_and_queue_normalization() -> None:
     assert client._extract_endpoint_path("https://europe.api.riotgames.com/path") == (
         "path"
     )
+
+
+@pytest.mark.asyncio
+async def test_null_body_raises_instead_of_returning_none() -> None:
+    """A 200 whose JSON body is `null` must raise at the HTTP boundary.
+
+    Callers are typed `dict | list`; letting None through crashes them on a
+    subscript far from the request. Riot answers objects and lists, so a null
+    body is an intermediary glitch, and the retry loop this client had before
+    tenacity already treated it as a failed request.
+    """
+    client = RiotAPIClient(api_key="RGAPI-test-only")
+    client.session = httpx.AsyncClient(
+        transport=httpx.MockTransport(
+            lambda _request: httpx.Response(
+                200, content=b"null", headers={"Content-Type": "application/json"}
+            )
+        )
+    )
+
+    with pytest.raises(RiotAPIError, match="null"):
+        await client._make_request(
+            "https://europe.api.riotgames.com/lol/match/v5/matches/EUN1_1"
+        )
 
 
 def test_product_supported_queue_catalog_is_explicit_and_complete() -> None:
