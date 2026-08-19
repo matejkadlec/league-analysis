@@ -29,7 +29,9 @@ from app.features.jobs.implementations.player_updater import PlayerUpdaterJob
 from app.features.jobs.maintenance import (
     RIOT_MAINTENANCE_MODE_KEY,
     RIOT_WRITER_TABLES,
+    RiotWriterMaintenanceActiveError,
     RiotWriterMaintenanceConfigurationError,
+    ensure_riot_writer_maintenance_is_inactive,
     is_riot_writer_maintenance_active,
     preserve_riot_writer_maintenance_mode,
     riot_writer_maintenance_is_active,
@@ -501,3 +503,65 @@ async def test_regular_writers_fail_when_riot_rejects_the_api_key(
 
     assert kwargs["success"] is False
     assert kwargs["error_message"] == ("API key error: Invalid or expired Riot API key")
+
+
+class _WriterInterlockSession:
+    """Session double for the maintenance interlock read path.
+
+    Records every statement so the test can hold the module to its own
+    docstring: locks first, in cleanup's order, then a locked read.
+    """
+
+    def __init__(self, maintenance_mode: bool) -> None:
+        self.statements: list[object] = []
+        self._maintenance_mode = maintenance_mode
+
+    async def execute(self, statement: object) -> object:
+        self.statements.append(statement)
+        configuration = _job_configuration_double(
+            job_type=JobType.MATCH_FETCHER,
+            config_json={RIOT_MAINTENANCE_MODE_KEY: self._maintenance_mode},
+        )
+
+        class Scalars:
+            def all(self) -> list[JobConfiguration]:
+                return [configuration]
+
+        return SimpleNamespace(scalars=lambda: Scalars())
+
+
+@pytest.mark.asyncio
+async def test_writer_refusal_locks_first_and_raises_on_an_active_interlock() -> None:
+    # The refusal exists to stop a Riot writer while cleanup owns the data
+    # tables. It only works if the lock comes *before* the read — read first
+    # and the answer can be stale by the time the writer proceeds, which is
+    # the lock inversion the table order in this module exists to prevent.
+    # Compiling the Select below configures every mapper, so the whole
+    # registry must be imported first (the same trap as test_transformers).
+    from app.model_registry import import_all_models
+
+    import_all_models()
+
+    session = _WriterInterlockSession(maintenance_mode=True)
+
+    with pytest.raises(RiotWriterMaintenanceActiveError):
+        await ensure_riot_writer_maintenance_is_inactive(cast(AsyncSession, session))
+
+    assert str(session.statements[0]) == (
+        f"LOCK TABLE {', '.join(RIOT_WRITER_TABLES)} IN ROW EXCLUSIVE MODE"
+    )
+    configuration_read = session.statements[1]
+    assert isinstance(configuration_read, Select)
+    # A read without FOR UPDATE lets cleanup flip the interlock between this
+    # check and the write it is guarding.
+    assert configuration_read._for_update_arg is not None
+    assert "job_type IN" in str(cast(object, configuration_read))
+
+
+@pytest.mark.asyncio
+async def test_writer_proceeds_when_no_interlock_is_set() -> None:
+    session = _WriterInterlockSession(maintenance_mode=False)
+
+    await ensure_riot_writer_maintenance_is_inactive(cast(AsyncSession, session))
+
+    assert len(session.statements) == 2

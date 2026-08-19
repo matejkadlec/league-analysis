@@ -725,6 +725,23 @@ route shells already resolved by the route-shell row.
   DTO path (name chain, tag default, position fallback, vision coercion) —
   same table, two writers.
 
+- ~~`backend: app/features/jobs/maintenance.py`~~ — done 2026-08-19, 2 tests
+  appended to `tests/test_jobs.py`, **4 mutations, all killed**. 88% → 100%,
+  branches included. The uncovered half was the read path of the cleanup
+  interlock — the thing that stops a Riot writer while cleanup owns the data
+  tables.
+
+  All four kills are the interlock's actual contract: the table **lock taken
+  before the read** (read first and the answer can be stale by the time the
+  writer proceeds — the exact lock inversion the module's table-order comment
+  exists to prevent), the read carrying `FOR UPDATE` (without it cleanup can
+  flip the interlock between the check and the write it guards), the refusal
+  actually raising `RiotWriterMaintenanceActiveError` rather than computing
+  the answer and dropping it, and the read filtering to the two writer job
+  types. Harness note: asserting on the compiled `Select` configures every
+  mapper, so the test imports `model_registry.import_all_models()` first —
+  third appearance of the registry trap this campaign.
+
 The rest, enumerated 2026-08-19 rather than left as "plus 9 more":
 ~~`app/jobs/page.tsx`~~ (30, done 2026-08-19 — nine mutations; it is the only
 consumer of `components/ui/tabs.tsx`, so both closed together),
