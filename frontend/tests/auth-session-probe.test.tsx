@@ -259,7 +259,9 @@ describe("the first probe answering 403", () => {
     document.cookie = `${AUTH_STATE_COOKIE_NAME}=${AUTH_STATE_COOKIE_VALUE}; path=/`;
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(
-        JSON.stringify({ detail: { code: "ACCOUNT_INACTIVE", message: "off" } }),
+        JSON.stringify({
+          detail: { code: "ACCOUNT_INACTIVE", message: "off" },
+        }),
         { status: 403, headers: { "content-type": "application/json" } },
       ),
     );
@@ -330,7 +332,9 @@ describe("a probe that fails right after a refresh the server honoured", () => {
         );
       }
       return new Response(
-        JSON.stringify({ detail: { code: "ACCOUNT_INACTIVE", message: "off" } }),
+        JSON.stringify({
+          detail: { code: "ACCOUNT_INACTIVE", message: "off" },
+        }),
         { status: 403, headers: { "content-type": "application/json" } },
       );
     });
@@ -502,14 +506,12 @@ describe("signed-out session probe", () => {
 
   it("still verifies the session when the hint is present", async () => {
     document.cookie = `${AUTH_STATE_COOKIE_NAME}=${AUTH_STATE_COOKIE_VALUE}; path=/`;
-    const fetchSpy = vi
-      .spyOn(globalThis, "fetch")
-      .mockResolvedValue(
-        new Response(JSON.stringify({ id: 1, email: "someone@example.com" }), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        }),
-      );
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ id: 1, email: "someone@example.com" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
 
     const { getByTestId } = renderProvider();
 
@@ -616,5 +618,25 @@ describe("a login the server refuses", () => {
         triggerLogin?.({ email: "user@example.com", password: "wrong" }),
       ).rejects.toMatchObject({ code: "INVALID_CREDENTIALS", status: 401 });
     });
+  });
+});
+
+describe("useAuth outside an AuthProvider", () => {
+  it("refuses rather than handing back an undefined session", () => {
+    // Every gated surface reads `isAuthenticated` off this hook. Without the
+    // guard the context is `undefined` and the destructure throws somewhere
+    // else entirely -- "Cannot destructure property" pointing at the caller,
+    // not at the missing provider. The named error is what turns a misplaced
+    // component into a one-line fix.
+    //
+    // React logs the thrown render, so the console is silenced for the length
+    // of the assertion rather than left to look like a real failure.
+    const quiet = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    expect(() => render(<AuthStateProbe />)).toThrow(
+      "useAuth must be used within an AuthProvider",
+    );
+
+    quiet.mockRestore();
   });
 });

@@ -1,5 +1,14 @@
 # Improvements
 
+- 2026-08-19 frontend/features/matchmaking/components/matchmaking-analysis-history.tsx:
+  its private `formatDateTime` is a second copy of the exported one in
+  `features/jobs/components/job-execution-format.ts` — same D.M.YYYY H:MM AM/PM
+  format, same midnight and zero-padding fixes, character for character. Both
+  are now tested, so the same behaviour is pinned twice and a fix to one would
+  silently not reach the other. Deleting the local copy and importing the
+  jobs-side export is the whole change; it was left alone because moving a
+  helper across features is a structural call this loop did not come for.
+
 - 2026-08-19 frontend/features/jobs/components/job-execution-format.ts:
   `apiCallKey` joins endpoint, region, param_key, and the first/last
   timestamp and param — but not `count`. Two API-call entries differing only

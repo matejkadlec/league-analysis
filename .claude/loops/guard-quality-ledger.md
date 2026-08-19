@@ -11,6 +11,8 @@ Never re-attack a file that already has a row unless the file changed since.
 | File | Attacked | Mutations | Status | Evidence / reason |
 |---|---|---|---|---|
 | `features/auth/utils/token-manager.ts` | 2026-08-19 | 5 | `killed` | 3 died (content-type guard, `sessionEpoch` bump, `clearAuthStateCookie` in the post-teardown 200 path). 2 survived the full 342-test suite: `namesTheEndOfTheSession` catch → `return true`, and `refreshAccessToken`'s `!isBrowser()` → `refused`. Both killed by `tests/token-manager-guards.test.ts`, each shown red against its mutation and green against real code. |
+| `features/matchmaking/components/matchmaking-analysis-history.tsx` | 2026-08-19 | 6 | `killed` | The largest zero-covered file left on the frontend. Six tests in `tests/matchmaking-analysis-history.test.tsx`, all six mutations dead, each against a different one. The two worth reading: the `status === 404` branch, which is the *normal* first visit — a player who has never run an analysis — and letting it through renders that as "Analysis history could not be loaded" plus a global "Could not load this data" toast, because this query silences nothing either (the same wiring that made the Riot card's 404 non-equivalent); and `historyFigures`' `gap > 0`, which decides which of the two win rates is drawn green. The gap itself is printed through `Math.abs`, so the colour is the *only* thing on screen saying which side the gap favoured — flip the comparison and the card tells someone their team was outmatched in the game where it was the stronger one. That is why a Tailwind class is asserted here when earlier rows refused to: this one carries the finding rather than the styling. Also killed: `invalidateQueries` on `matchmaking-analysis-results` (nothing else invalidates the sibling panel, so the record just deleted stays on screen as the current result until a page reload — tested through a probe query on that key rather than by spying on the client), the failed-delete message (the row fades out on click and comes back on failure, so without it all the viewer sees is a flicker), `Math.abs` on the printed gap, and the midnight `hours ? hours : 12`. Fixtures use zone-less timestamps, which parse as local time, so the expected strings read the same on the Prague laptop and in the UTC gate. Worth noting: `formatDateTime` here is a second copy of the one in `job-execution-format.ts`, now tested twice; logged rather than merged. |
+| `features/auth/utils/login-error.ts` | 2026-08-19 | 5 | `killed` | Target 3 on the covered list, and the last one left unfinished — it had been claimed by a peer session that never opened a branch or a PR for it, so it was reclaimed rather than left dangling. 95.8% statements hid three untested messages, all of them the ones a person can act on. Killed: the `ACCOUNT_LOCKED` branch that names a time (the existing test only passed an unparseable `locked_until`, so the branch that formats a real one had never run — without it a lockout says "please try again later" and leaves someone guessing between a minute and the rest of the day, which is the whole reason the server sends the timestamp); `CAPTCHA_INVALID`, reachable on any retry after a failed check and otherwise a dead-end "Something went wrong"; and `status === 429`. The lockout assertion matches the *shape* of the message rather than the formatted time, because `toLocaleString()` reads differently under the gate's `LANG=C` and UTC than on the Prague laptop. Folded in from target 2: `useAuth` outside an `AuthProvider` (auth-context line 322), now one test in `tests/auth-session-probe.test.tsx` — without the guard the context is `undefined` and the failure surfaces as a destructure error pointing at the caller instead of at the missing provider. `accepted` as an **equivalent mutant**: `getLoginErrorDetail`'s `typeof detail === "object"` guard. Checked rather than assumed — `detail` only ever arrives from a JSON body, and no non-object JSON value carries a `.code` or `.locked_until` property, so dropping the guard produces the identical error either way. |
 | `app/settings/email-code-inputs.tsx` | 2026-08-19 | 7 | `killed` | Zero-covered, and it is the only way a verification code gets entered. Seven tests in `tests/email-code-inputs.test.tsx`, six mutations dead on the first pass: paste stripping non-digits (people paste "Your code is 123 456" straight from the mail, and without the strip the field silently refuses it), paste replacing rather than merging (otherwise a shorter second code leaves the tail of the first behind and submits six digits that were in neither mail), the empty-paste early return, focus advancing on each digit, backspace stepping back off an empty slot, and the digits-only filter. The seventh needed a different assertion: removing `.slice(0, EMAIL_CODE_LENGTH - index)` changes nothing on screen, because the extra digits are written to array indexes past the last rendered box. It is still a real defect — `use-change-email` joins this array and refuses anything that is not exactly six characters, so a seventh entry leaves all six boxes looking correctly filled under "Enter all 6 digits" with nothing to click that fixes it. Killed by asserting the array the component emits, which is its output contract, rather than the DOM. |
 | `features/smurf-boost/smurf-boost-api.ts` | 2026-08-19 | 0 | `accepted` | Flagged as an open hole twice by earlier rows, so it was worth opening — and the answer is that 0% is the correct number here. All six exports are single-expression delegations to `validatedGet`/`validatedPost`/`validatedPut`/`validatedDelete`: no branch, no fallback, no transform, nothing between the argument and the request. The only tests possible assert "this function passes this path and this schema", which restates the file line for line and would need editing every time the file is, while catching nothing the type checker does not already. Not mutated, per the 0%-coverage rule. The behaviour worth guarding is one level down in `lib/core/api` (already covered) and one level up in the components (already covered). Two things checked rather than assumed: `puuid` and `cardId` are interpolated into URLs unencoded, but both are server-issued opaque identifiers in the URL-safe alphabet, so there is no injection or escaping hole to pin. This row closes the target rather than deferring it again. |
 | `app/settings/password-change-section.tsx` | 2026-08-19 | 6 | `killed` | Zero-covered credential path. Five of six mutations died against `tests/password-change-section.test.tsx`. The two refusals that never reach the server are the ones that matter: dropping the repeat-password check sends a value nobody can read back, so a mistyped new password becomes the account's password and only email recovers it; dropping the strength check spends a round trip to be told in a toast what is already printed under the field. Also killed: `CURRENT_PASSWORD_INVALID` landing on the field rather than a vanishing toast, clearing the three inputs on success, and `setShowNewPassword(false)` — two of these inputs can be switched to plain text on a settings page that stays open, so without it the new password stays legible on screen after the change. `accepted`: the `changePasswordMutation.isPending` half of the handler's early return. The button already carries `disabled` while pending and it is a `type="button"` outside any form, so a disabled button never delivers the click and the check cannot be reached — the same shape as `sign-in-form`'s `submissionInFlight` ref. The test that covers it says so rather than claiming the guard. |
@@ -34,6 +36,11 @@ Seeded 2026-08-19 from `frontend/coverage/coverage-summary.json`
 (53.76% statements / 48.87% branches over `app`, `components`, `features`,
 `lib`, `proxy.ts`). Regenerate before trusting it.
 
+**Regenerated 2026-08-19** after the rows above: **64.72% statements / 57.70%
+branches** (was 53.76 / 48.87), 414 tests. The zero-covered class is down from
+19 files to 12, all of them named below — there is no unenumerated remainder
+left on the frontend. `proxy.ts` reads 100% / 100% and needs no row.
+
 ### Covered — mutate these
 
 Highest risk first. 27 files sit at ≥80% statements with ≥20 statements; the
@@ -46,9 +53,11 @@ head of that list:
    behaviour), the three `NODE_ENV === "development"` console warns, and the
    captcha-token append at line 182. Deleted as dead: the `typeof window`
    ternary that chose between `""` and `""`. `useAuth` outside a provider
-   (line 322) is still unguarded — one 3-line test, worth folding into the next
-   auth iteration.
-3. `features/auth/utils/login-error.ts` — 93.8% / 86.3%.
+   (line 322) was folded into the `login-error.ts` iteration and is now tested.
+3. ~~`features/auth/utils/login-error.ts`~~ — done 2026-08-19, reclaimed from a
+   peer session that had claimed it and never opened a branch. A file at 95.8%
+   still had three of its user-facing messages untested; high coverage on a
+   `switch` says the switch ran, not that every arm did.
 4. ~~`features/auth/components/sign-in-form.tsx`~~ — done 2026-08-19, and the
    first target where nothing died. Accepted and left in place: `isFormValid`
    (React Hook Form's own `required` rules already refuse an empty submit, so
@@ -88,7 +97,11 @@ head of that list:
   shown red against its own mutation.
 - ~~`features/jobs/components/job-executions.tsx`~~ — done 2026-08-19. Left
   open: the `IntersectionObserver` paging path, which jsdom cannot trigger.
-- `features/matchmaking/components/matchmaking-analysis-history.tsx` — 58
+- ~~`features/matchmaking/components/matchmaking-analysis-history.tsx`~~ — done
+  2026-08-19. The 404-is-a-normal-state shape shows up a second time: when a
+  list endpoint answers "this player has nothing" with a 404, the branch that
+  catches it is load-bearing twice over — once for the card and once for the
+  global error toast.
 - ~~`app/settings/riot-api-settings-card.tsx`~~ — done 2026-08-19. The lesson
   to carry: a mutation that leaves the DOM identical is not automatically
   equivalent. The global `queryCache.onError` in `components/providers.tsx`
@@ -107,10 +120,71 @@ head of that list:
 - `features/profile/components/recent-performance-card.tsx` — 41
 - `app/settings/display-name-field.tsx` — 38
 - `features/profile/components/role-stats-card.tsx` — 31
-- …plus 9 more in the report.
+
+The rest, enumerated 2026-08-19 rather than left as "plus 9 more": `app/jobs/page.tsx` (30),
+`features/matchmaking/components/matchmaking-analysis-results.tsx` (30),
+`features/profile/components/champion-stats-card.tsx` (30),
+`app/matchmaking-analysis/page.tsx` (25), `app/player-overview/page.tsx` (24),
+`features/jobs/components/system-status.tsx` (20),
+`features/players/components/player-card-format.ts` (16),
+`components/ui/tabs.tsx` (11). The three `app/*/page.tsx` entries are route
+shells; check what they actually hold before spending an iteration on one.
 
 ### Backend
 
-Not yet enumerated. Backend coverage is armed by `--cov` in `test.sh` with
-`fail_under = 47`; generate the equivalent report and append the same two
-classes here before starting backend iterations.
+Enumerated 2026-08-19, from `docker compose -f compose.gate.yml run --rm
+--build -v <main-repo>/.git:<same path> -e
+PYTEST_ADDOPTS="--cov-report=json:coverage-backend.json" gate -b`. That
+appends a report to the `--cov` flags `test.sh` already passes and needs no
+change to any config file; the JSON lands in `backend/` and is not committed.
+**57.18% covered** with branch coverage on (10,214 statements, 3,880 missing,
+2,102 branches) against `fail_under = 47`. The gate was green.
+
+The frontend's two classes do not carry over, and that is the finding worth
+recording before any backend iteration: **there is not one 0%-covered file in
+`app`** — not a single module with ≥10 statements at zero. Every backend file
+is touched by something. What the backend has instead is a third class the
+card does not name: large service modules covered *thinly*, where the tested
+share is the happy path and the missing lines are the error and edge branches.
+Those are holes, but they are holes of a different shape, and the card's
+"0% coverage is already the finding" rule gives no guidance for them.
+
+**Mutate these** — 38 files at ≥80% with ≥20 statements. The head, with the
+schema/model files set aside (they are largely declarative and Pyright already
+holds their shape):
+
+1. `app/core/riot_api/rate_limiter.py` — 128 stmts, 81.6%. The lowest-covered
+   file on the mutate list, and it is the thing standing between this app and
+   a Riot rate-limit ban.
+2. `app/features/matches/match_lp.py` — 96 stmts, 90.2%. LP arithmetic; the
+   numerics audit under [Rank Manipulation] applies here.
+3. `app/features/smurf_boost_detection/statistics.py` — 59 stmts, 89.3%, and
+   `composite.py` / `engine.py` / `signals.py` around it at 96–98%. This is
+   the accusation engine, so a wrong number here is a wrong verdict about a
+   person.
+4. `app/features/matches/transformers.py` — 51 stmts, 82.2%.
+5. `app/features/jobs/maintenance.py` — 40 stmts, 87.5%.
+6. `app/core/validation.py` — 40 stmts, 93.5%; `app/core/database.py` — 33,
+   90.9%; `app/core/riot_api/errors.py` — 32, 94.4%.
+
+**Thinly covered — decide, do not blind-mutate.** Biggest absolute holes; a
+mutation aimed at a covered line here says little, so read what is missing
+first:
+
+| File | Stmts | % | Missing |
+|---|---|---|---|
+| `app/features/playstyle_analysis/evaluators.py` | 396 | 8.6% | 347 |
+| `app/features/matchmaking_analysis/service.py` | 532 | 34.2% | 321 |
+| `app/features/auth/service.py` | 568 | 40.6% | 315 |
+| `app/features/matches/service.py` | 424 | 31.7% | 282 |
+| `app/features/players/service.py` | 375 | 34.6% | 228 |
+| `app/features/jobs/router.py` | 271 | 17.8% | 215 |
+| `app/features/jobs/base.py` | 394 | 55.6% | 160 |
+| `app/core/riot_api/db_rate_limiter.py` | 223 | 23.7% | 157 |
+| `app/features/jobs/scheduler.py` | 263 | 49.9% | 122 |
+| `app/features/jobs/service.py` | 175 | 26.9% | 121 |
+
+`evaluators.py` is the outlier: 396 statements at 8.6% is effectively the
+zero-covered class wearing a fig leaf, and it is the largest single hole in
+either half of the codebase. `auth/service.py` is the one with the most at
+stake per missing line.
