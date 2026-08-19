@@ -98,28 +98,49 @@ def test_server_retry_boundary_and_queue_normalization() -> None:
     )
 
 
+def _client_with_bodies(bodies: list[bytes]) -> tuple[RiotAPIClient, list[bytes]]:
+    """A 200-answering client whose transport serves each body in turn."""
+    served: list[bytes] = []
+
+    def _handler(_request: httpx.Request) -> httpx.Response:
+        body = bodies[len(served)]
+        served.append(body)
+        return httpx.Response(
+            200, content=body, headers={"Content-Type": "application/json"}
+        )
+
+    client = RiotAPIClient(api_key="RGAPI-test-only")
+    client.session = httpx.AsyncClient(transport=httpx.MockTransport(_handler))
+    return client, served
+
+
 @pytest.mark.asyncio
-async def test_null_body_raises_instead_of_returning_none() -> None:
-    """A 200 whose JSON body is `null` must raise at the HTTP boundary.
+async def test_null_body_is_retried_then_raises(
+    recorded_sleeps: list[float],
+) -> None:
+    """A 200 whose JSON body is `null` retries and, exhausted, raises.
 
     Callers are typed `dict | list`; letting None through crashes them on a
     subscript far from the request. Riot answers objects and lists, so a null
-    body is an intermediary glitch, and the retry loop this client had before
-    tenacity already treated it as a failed request.
+    body is an intermediary glitch — the old loop's `if result is not None`
+    retried it, which is what lets a one-off glitch self-heal on the next
+    attempt instead of failing the whole batch.
     """
-    client = RiotAPIClient(api_key="RGAPI-test-only")
-    client.session = httpx.AsyncClient(
-        transport=httpx.MockTransport(
-            lambda _request: httpx.Response(
-                200, content=b"null", headers={"Content-Type": "application/json"}
-            )
-        )
+    client, served = _client_with_bodies([b"null", b'{"ok": true}'])
+    result = await client._make_request(
+        "https://europe.api.riotgames.com/lol/match/v5/matches/EUN1_1"
     )
+    assert result == {"ok": True}
+    assert served == [b"null", b'{"ok": true}']
+    assert recorded_sleeps == [1]
 
+    client, served = _client_with_bodies([b"null"] * 4)
     with pytest.raises(RiotAPIError, match="null"):
         await client._make_request(
             "https://europe.api.riotgames.com/lol/match/v5/matches/EUN1_1"
         )
+    assert served == [b"null"] * 4
+    assert recorded_sleeps == [1, 1, 2, 4]
 
 
 def test_product_supported_queue_catalog_is_explicit_and_complete() -> None:

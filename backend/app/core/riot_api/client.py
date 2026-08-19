@@ -24,6 +24,7 @@ from .errors import (
     BadRequestError,
     ForbiddenError,
     NotFoundError,
+    NullResponseBodyError,
     PuuidDecryptionError,
     RateLimitError,
     RiotAPIError,
@@ -344,15 +345,13 @@ class RiotAPIClient:
 
             response_data = response.json()
             if response_data is None:
-                # A 200 whose body is JSON `null` (a proxy or cache glitch —
-                # Riot answers objects and lists). The old retry loop turned
-                # this into a raised error; letting None through here returns
+                # The old loop's `if result is not None` treated a null body
+                # as one more transient failure: retried, then logged and
+                # raised on exhaustion. Letting None through instead returns
                 # it to callers typed `dict | list`, which then crash on a
-                # subscript far from the HTTP layer.
-                raise RiotAPIError(
-                    "Request failed: response body was null",
-                    status_code=response.status_code,
-                )
+                # subscript far from the HTTP layer. No status code — 200 on
+                # an error object would mislead every downstream branch.
+                raise NullResponseBodyError("Request failed: response body was null")
             return response_data
         finally:
             await response.aclose()
@@ -373,8 +372,10 @@ class RiotAPIClient:
 
     @staticmethod
     def _is_transient_error(error: BaseException) -> bool:
-        """The retry policy: network failures, 429s and 5xx answers."""
+        """The retry policy: network failures, null bodies, 429s and 5xx."""
         if isinstance(error, TimeoutError | httpx.RequestError):
+            return True
+        if isinstance(error, NullResponseBodyError):
             return True
         return isinstance(error, RiotAPIError) and (
             error.status_code == 429 or (error.status_code or 0) >= 500
@@ -394,6 +395,8 @@ class RiotAPIClient:
         attempt = retry_state.attempt_number - 1
         if isinstance(error, RateLimitError):
             return  # "Rate limit hit" was already logged when the 429 landed.
+        if isinstance(error, NullResponseBodyError):
+            return  # Retried silently, as the old loop did; exhaustion logs.
         if isinstance(error, TimeoutError | httpx.RequestError):
             logger.warning(
                 "riot_api_network_retry",
@@ -473,11 +476,15 @@ class RiotAPIClient:
             )
             raise RiotAPIError(f"Request failed: {error!s}") from error
         except RiotAPIError as error:
-            # Exhausted 5xx keeps its terminal log; a 429 raises bare, and the
-            # immediately-raised client errors were never logged here.
-            if (error.status_code or 0) >= 500:
+            # Exhausted 5xx and null bodies keep their terminal log; a 429
+            # raises bare, and the immediately-raised client errors were
+            # never logged here.
+            if (error.status_code or 0) >= 500 or isinstance(
+                error, NullResponseBodyError
+            ):
                 logger.error(
                     "riot_api_request_failed",
+                    endpoint=self._extract_endpoint_path(url),
                     status_code=error.status_code,
                     attempts=max_attempts,
                     error_type=type(error).__name__,
