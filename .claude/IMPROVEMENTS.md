@@ -1,5 +1,29 @@
 # Improvements
 
+- 2026-08-19 frontend/features/players/components/player-card-format.ts:
+  `formatWinRate` guesses its own units — `winRate <= 1 ? winRate * 100 :
+  winRate` — because its two callers disagree. `PlayerCardWinRate` passes
+  `league.win_rate` (already 0-100) and `stats.win_rate` (0-1) into the same
+  function, and passes the stats value *multiplied* to the colour helpers on
+  the neighbouring line. A ranked player whose win rate is between 0 and 1
+  percent therefore renders as 100%. It needs about 100 ranked games with at
+  most one win, so it is rare rather than impossible; the fix is to make the
+  unit explicit at the call site rather than sharper in the guess.
+
+- 2026-08-19 backend/app/features/playstyle_analysis/: the whole feature is
+  1,864 lines with no consumer. Its router is mounted at
+  `/api/v1/playstyle-analysis` with two endpoints, but nothing in the frontend
+  calls either one — the only frontend route named `/playstyle-analysis` is a
+  server-side `redirect()` to player overview, and no background job writes a
+  `PlaystyleAnalysis` row (`maintenance.py` only prunes the table). The
+  evidence is a grep of `frontend/` for the path, of `backend/app` for the
+  service outside its own package, and of `jobs/implementations/` for the
+  model. That makes `evaluators.py` (760 lines, 396 statements, 8.6% covered)
+  the largest untested file in the repository *and* unreachable from the
+  product. Decide whether it is a planned feature or a leftover before anyone
+  spends a test campaign on it; if it is planned, a ticket, and if not, a
+  deletion of the package plus its router registration and its table.
+
 - 2026-08-19 frontend/features/matchmaking/components/matchmaking-analysis-history.tsx:
   its private `formatDateTime` is a second copy of the exported one in
   `features/jobs/components/job-execution-format.ts` — same D.M.YYYY H:MM AM/PM
