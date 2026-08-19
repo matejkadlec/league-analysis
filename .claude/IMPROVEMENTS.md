@@ -1,12 +1,12 @@
 # Improvements
 
-- 2026-08-19 deploy/container-qa.sh: two gate runs on the self-hosted runner
-  cannot coexist. The script hard-defaults to ports 18097/18098 and aborts with
-  "Container QA port 18097 is already in use", while `quality-checks.yml`
-  scopes concurrency per pull request (`quality-checks-${{ pr.number || ref }}`),
-  so any two open PRs race. Observed killing a green run on PR #93. Either give
-  the workflow a runner-wide concurrency group for this step, or derive
-  `LGA_CONTAINER_QA_*_PORT` from `github.run_id` — the overrides already exist.
+- 2026-08-19 frontend/features/jobs/components/job-execution-format.ts:
+  `apiCallKey` joins endpoint, region, param_key, and the first/last
+  timestamp and param — but not `count`. Two API-call entries differing only
+  in their count produce the same string, and it is used as a React `key`, so
+  the second row would keep the first one's rendered numbers. The surrounding
+  fields make that combination unlikely, which is why it was left alone;
+  adding `call.count` to the join is the whole fix.
 
 - 2026-08-19 frontend/components/ui/form.tsx: `FormControl` always points
   `aria-describedby` at `${formItemId}-form-item-description`, but
