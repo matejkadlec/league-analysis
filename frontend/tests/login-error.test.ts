@@ -139,6 +139,19 @@ describe("sign-in error mapping", () => {
     );
   });
 
+  it("does not treat a thrown non-Error as an authentication error", () => {
+    // Dropping the `instanceof Error` gate survived the whole suite: nothing
+    // ever handed `isAuthLoginError` anything but an Error. It is the gate in
+    // `getLoginRequestError`, which returns the value as-is when it passes --
+    // so a bare object thrown by the fetch layer would skip the NETWORK_ERROR
+    // fallback, and the visitor stops being told to check their connection.
+    expect(isAuthLoginError("boom")).toBe(false);
+    expect(isAuthLoginError({ code: "ACCOUNT_LOCKED" })).toBe(false);
+    expect(isAuthLoginError(null)).toBe(false);
+
+    expect(getLoginRequestError("boom", false).code).toBe("NETWORK_ERROR");
+  });
+
   it("names the two refusals a person can act on themselves", () => {
     // A rejected CAPTCHA and a rate limit are both recoverable by the person
     // in front of the form -- solve it again, or wait. Falling through to

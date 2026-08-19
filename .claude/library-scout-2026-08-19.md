@@ -58,8 +58,10 @@ new end-to-end 429 oracle was committed green against the hand-written loop
 first, the logging suites survived the swap unchanged, and only the
 helper-signature tests needed mechanical edits. Four mutations against the
 new wiring shown red/green. The `AsyncRetrying` instance passes
-`sleep=lambda s: asyncio.sleep(s)` so tests patching `asyncio.sleep` keep
-observing every wait.
+`sleep=asyncio.sleep`; tests patching `asyncio.sleep` still observe every
+wait only because the retryer is built per call, inside `_make_request` —
+hoisting that construction to module or instance scope would freeze the
+real sleep in and hang the `recorded_sleeps` suites on real waits.
 
 Retires ~60-90 of ~180 lines: the attempt loop, attempt counting, the two `2**attempt`
 sleep sites, and the `(should_retry, sleep_seconds)` tuple threaded through

@@ -1,11 +1,11 @@
 """Riot client retry and failure logging regressions."""
 
-from collections.abc import Callable
 from typing import Any
 from unittest.mock import AsyncMock
 
 import httpx
 import pytest
+from conftest import RiotClientFactory
 from structlog.testing import capture_logs
 from structlog.typing import EventDict
 
@@ -15,8 +15,6 @@ from app.core.riot_api.errors import (
     RiotAPIError,
     ServiceUnavailableError,
 )
-
-ClientFactory = Callable[[list[int]], tuple[RiotAPIClient, list[int]]]
 
 
 def _client() -> RiotAPIClient:
@@ -29,7 +27,7 @@ def _events(logs: list[EventDict], event_name: str) -> list[EventDict]:
 
 @pytest.mark.asyncio
 async def test_server_error_retry_decision_logs_warning(
-    riot_client_answering: ClientFactory, recorded_sleeps: list[float]
+    riot_client_answering: RiotClientFactory, recorded_sleeps: list[float]
 ) -> None:
     """A 5xx retry decision is visible with its backoff before the sleep."""
     client, _ = riot_client_answering([500, 200])
@@ -58,7 +56,7 @@ async def test_server_error_retry_decision_logs_warning(
 async def test_exhausted_server_error_logs_final_failure(
     status_code: int,
     expected_error: type[Exception],
-    riot_client_answering: ClientFactory,
+    riot_client_answering: RiotClientFactory,
     recorded_sleeps: list[float],
 ) -> None:
     """The terminal 5xx raise emits the shared final-failure event so 5xx
