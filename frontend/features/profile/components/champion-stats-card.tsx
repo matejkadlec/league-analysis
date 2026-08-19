@@ -19,7 +19,12 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { formatFractionAsPercent } from "@/lib/core/format";
+import {
+  formatFractionAsPercent,
+  formatKDA,
+  kdaColor,
+  winRateColors,
+} from "@/lib/core/format";
 import {
   ChampionPaginationState,
   getChampionPage,
@@ -30,26 +35,6 @@ interface ChampionStatsCardProps {
   dataSourceKey: string;
   stats: ChampionStatsResponse;
   lastUpdated?: string | null | undefined;
-}
-
-// Helper function to get win rate color
-function getWinRateColor(winRate: number): string {
-  const winRatePercent = winRate * 100;
-  if (winRatePercent >= 51) return "text-green-500";
-  if (winRatePercent > 49) return "text-yellow-500";
-  return "text-rose-500";
-}
-
-// Helper function to get KDA color
-function getKDAColor(kda: number): string {
-  if (kda >= 3) return "text-green-500";
-  if (kda >= 2) return "text-yellow-500";
-  return "text-rose-500";
-}
-
-// Format KDA
-function formatKDA(kda: number): string {
-  return kda.toFixed(2);
 }
 
 export function ChampionStatsCard({
@@ -190,7 +175,7 @@ export function ChampionStatsCard({
                   {champ.avg_assists.toFixed(1)}
                 </p>
                 <p className="text-xs">
-                  <span className={getKDAColor(champ.avg_kda)}>
+                  <span className={kdaColor(champ.avg_kda)}>
                     {formatKDA(champ.avg_kda)}
                   </span>{" "}
                   <span className="text-muted-foreground">KDA</span>
@@ -200,7 +185,7 @@ export function ChampionStatsCard({
               {/* Win rate */}
               <div className="text-right w-16">
                 <p
-                  className={`text-sm font-bold ${getWinRateColor(champ.win_rate)}`}
+                  className={`text-sm font-bold ${winRateColors(champ.win_rate).text}`}
                 >
                   {formatFractionAsPercent(champ.win_rate)}
                 </p>

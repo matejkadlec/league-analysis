@@ -9,7 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { TrendingUp, TrendingDown, Minus, Activity, Clock } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { useRelativeTime } from "@/lib/core/use-relative-time";
-import { formatFractionAsPercent } from "@/lib/core/format";
+import { formatFractionAsPercent, formatKDA } from "@/lib/core/format";
 
 interface RecentPerformanceCardProps {
   puuid: string;
@@ -283,8 +283,8 @@ export function RecentPerformanceCard({
 
           <StatComparisonRow
             label="KDA"
-            recentValue={recent.avg_kda.toFixed(2)}
-            overallValue={overall.avg_kda.toFixed(2)}
+            recentValue={formatKDA(recent.avg_kda)}
+            overallValue={formatKDA(overall.avg_kda)}
             trend={kdaTrend}
           />
         </div>

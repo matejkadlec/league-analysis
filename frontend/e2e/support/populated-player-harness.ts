@@ -63,7 +63,11 @@ const league = {
   fresh_blood: false,
   hot_streak: true,
   created_at: NOW,
-  win_rate: 70 / 126,
+  // A percentage, not a fraction: the backend's PlayerLeague.win_rate
+  // property multiplies by 100 (leagues_schemas.py says "as a percentage").
+  // This fixture served a fraction until 2026-08-20, which the UI's old
+  // unit-guessing formatter silently absorbed.
+  win_rate: (70 / 126) * 100,
   total_games: 126,
   display_rank: "Emerald II",
 };
