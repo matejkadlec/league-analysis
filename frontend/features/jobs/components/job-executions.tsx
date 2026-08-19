@@ -46,22 +46,33 @@ export function JobExecutions({
   // 100, so the old growing-`size` query 422'd on the sixth load-more.
   // Tradeoff accepted with the switch: `refetchInterval` refreshes every
   // loaded page each tick (N small requests instead of one big one).
+  //
+  // The failure envelope is deliberately re-thrown: returned as data, a
+  // single failed 15-second poll would *replace* every loaded page and
+  // truncate the list to page 1 until someone scrolls it back in. Thrown,
+  // React Query keeps the previous pages (and their pageParams) stale and
+  // retries on the next tick.
   const { data, isLoading, isFetching, hasNextPage, fetchNextPage } =
     useInfiniteQuery({
       queryKey: ["job-executions-infinite"],
-      queryFn: async ({ pageParam }) =>
-        validatedGet(JobExecutionListResponseSchema, "/jobs/executions/all", {
-          page: pageParam,
-          size: PAGE_SIZE,
-        }),
+      queryFn: async ({ pageParam }) => {
+        const result = await validatedGet(
+          JobExecutionListResponseSchema,
+          "/jobs/executions/all",
+          { page: pageParam, size: PAGE_SIZE },
+        );
+        if (!result.success) {
+          throw new Error(result.error.message);
+        }
+        return result.data;
+      },
       initialPageParam: 1,
       getNextPageParam: (lastPage, allPages) => {
         const loaded = allPages.reduce(
-          (sum, page) => sum + (page.success ? page.data.executions.length : 0),
+          (sum, page) => sum + page.executions.length,
           0,
         );
-        const total = lastPage.success ? lastPage.data.total : 0;
-        return loaded < total ? allPages.length + 1 : undefined;
+        return loaded < lastPage.total ? allPages.length + 1 : undefined;
       },
       enabled: !!initialExecutions,
       refetchInterval: 15000,
@@ -70,23 +81,18 @@ export function JobExecutions({
       refetchOnReconnect: false,
     });
 
-  // Until any page has actually succeeded, fall back to the executions the
-  // page handed in — the poll re-runs every 15 seconds behind a table someone
-  // is reading, and a failed poll must not empty it.
-  const successfulPages = useMemo(
-    () =>
-      (data?.pages ?? []).flatMap((page) => (page.success ? [page.data] : [])),
-    [data],
-  );
+  // Until the query has ever succeeded, fall back to the executions the page
+  // handed in — the poll re-runs every 15 seconds behind a table someone is
+  // reading, and a failed poll must not empty it.
   const allExecutions = useMemo(
     () =>
-      successfulPages.length > 0
-        ? successfulPages.flatMap((page) => page.executions)
-        : (initialExecutions?.executions ?? []),
-    [successfulPages, initialExecutions],
+      data?.pages.flatMap((page) => page.executions) ??
+      initialExecutions?.executions ??
+      [],
+    [data, initialExecutions],
   );
   const totalExecutions =
-    (successfulPages.at(-1)?.total ?? initialExecutions?.total) || 0;
+    (data?.pages.at(-1)?.total ?? initialExecutions?.total) || 0;
   const hasMore = hasNextPage || allExecutions.length < totalExecutions;
   const internalSelectedExecution = useMemo(() => {
     if (selectedExecutionId !== undefined && selectedExecutionId !== null) {

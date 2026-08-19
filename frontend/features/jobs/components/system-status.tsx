@@ -17,9 +17,6 @@ interface SystemStatusProps {
   status: JobStatusResponse | null;
 }
 
-/**
- * Format timestamp to relative time
- */
 export function SystemStatus({ status }: SystemStatusProps) {
   if (!status) {
     return (

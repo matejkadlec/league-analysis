@@ -83,7 +83,6 @@ function getTrendIndicatorRaw(
   };
 }
 
-// Format percentage
 // Format number with 1 decimal (remove .0 if whole)
 function formatNumber(value: number): string {
   const formatted = value.toFixed(1);

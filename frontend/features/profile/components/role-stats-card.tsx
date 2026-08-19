@@ -27,7 +27,6 @@ function getKDAColor(kda: number): string {
   return "text-rose-500";
 }
 
-// Format win rate percentage
 // Format KDA
 function formatKDA(kda: number): string {
   return kda.toFixed(2);

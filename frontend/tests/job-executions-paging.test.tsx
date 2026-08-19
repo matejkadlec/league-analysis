@@ -85,7 +85,7 @@ function renderExecutions() {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
-  return render(
+  const view = render(
     <QueryClientProvider client={client}>
       <JobExecutions
         executions={pageOf(1)}
@@ -94,6 +94,7 @@ function renderExecutions() {
       />
     </QueryClientProvider>,
   );
+  return { ...view, client };
 }
 
 describe("the executions list's paging", () => {
@@ -159,5 +160,44 @@ describe("the executions list's paging", () => {
     scrollSentinelIntoView();
 
     expect(validatedGet.mock.calls.length).toBe(calls);
+  });
+
+  it("keeps every loaded page on screen through a failed poll", async () => {
+    // The 15-second poll refetches all loaded pages. If the failure envelope
+    // were returned as data instead of thrown, React Query would *replace*
+    // the good pages with it, truncate the list back to page 1, and stop
+    // paging — an operator scrolled to 40 rows loses 20 of them to a deploy
+    // blip and they do not come back on the next successful tick.
+    const { client } = renderExecutions();
+    await waitFor(() =>
+      expect(screen.getByText("Showing 20 of 50 executions")).toBeTruthy(),
+    );
+    scrollSentinelIntoView();
+    await waitFor(() =>
+      expect(screen.getByText("Showing 40 of 50 executions")).toBeTruthy(),
+    );
+
+    validatedGet.mockResolvedValue({
+      success: false,
+      error: { kind: "server", status: 500, message: "deploying" },
+    });
+    await act(async () => {
+      await client.refetchQueries({ queryKey: ["job-executions-infinite"] });
+    });
+    expect(screen.getByText("Showing 40 of 50 executions")).toBeTruthy();
+
+    // And the next successful poll still refetches both pages, not just one.
+    validatedGet.mockImplementation(async (_schema, _url, params) => ({
+      success: true,
+      data: pageOf((params as { page: number }).page),
+    }));
+    await act(async () => {
+      await client.refetchQueries({ queryKey: ["job-executions-infinite"] });
+    });
+    expect(screen.getByText("Showing 40 of 50 executions")).toBeTruthy();
+    const refetchedPages = validatedGet.mock.calls
+      .slice(-2)
+      .map((call) => (call[2] as { page: number }).page);
+    expect(refetchedPages).toEqual([1, 2]);
   });
 });
