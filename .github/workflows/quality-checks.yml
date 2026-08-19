@@ -19,8 +19,19 @@ permissions:
 jobs:
   quality-gate:
     name: Deterministic full-project gate
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # The Pi, not a GitHub-hosted runner. GitHub bills Actions minutes only for
+    # its own hardware -- "GitHub Actions usage is free for self-hosted
+    # runners" -- and this account's included minutes were nearly spent, while
+    # the runner that deploys is idle between merges.
+    #
+    # It is also the more honest place to run: pi5ram16 is aarch64, so the
+    # container QA below now builds and boots the same architecture production
+    # actually serves, instead of amd64 images that never ship anywhere.
+    runs-on: [self-hosted, pi5ram16]
+    # Four Cortex-A76 cores against a hosted runner's eight, and the gate
+    # builds the frontend for the Playwright suite. The deploy workflow uses
+    # the same runner, so a merge waits for a gate already in flight.
+    timeout-minutes: 90
 
     steps:
       - name: Checkout repository
@@ -44,3 +55,18 @@ jobs:
 
       - name: Build and verify isolated production containers
         run: ./deploy/container-qa.sh
+
+      # This runner is the production host, so the gate has to clean up after
+      # itself: every run leaves a rebuilt gate image and its build cache
+      # behind, and the box was already holding 22GB of reclaimable cache
+      # before this workflow moved here.
+      #
+      # Only unreferenced things, and never volumes -- production's PostgreSQL
+      # data is a named volume, and `docker volume prune` does not ask twice.
+      # Dangling images are untagged by definition, so the release-per-commit
+      # tags the deploy keeps are untouched.
+      - name: Reclaim disposable build space
+        if: always()
+        run: |
+          docker image prune --force
+          docker builder prune --force --filter until=168h
