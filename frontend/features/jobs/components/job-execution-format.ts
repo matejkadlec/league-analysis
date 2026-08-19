@@ -1,3 +1,10 @@
+import { formatDateTime } from "@/lib/core/format";
+
+/** The jobs surfaces all show seconds; this names that policy once. */
+export function formatJobTimestamp(timestamp: string): string {
+  return formatDateTime(timestamp, { seconds: true });
+}
+
 export function formatDuration(
   started: string,
   completed: string | null | undefined,
@@ -11,31 +18,6 @@ export function formatDuration(
   const minutes = Math.floor(seconds / 60);
   const remainingSeconds = Math.floor(seconds % 60);
   return `${minutes}m ${remainingSeconds}s`;
-}
-
-export function formatDateTime(timestamp: string): string {
-  const date = new Date(timestamp);
-
-  const day = date.getDate();
-  const month = date.getMonth() + 1;
-  const year = date.getFullYear();
-
-  let hours = date.getHours();
-  const minutes = date.getMinutes();
-  const seconds = date.getSeconds();
-  const ampm = hours >= 12 ? "PM" : "AM";
-
-  hours = hours % 12;
-  hours = hours ? hours : 12;
-
-  const minutesStr = minutes < 10 ? "0" + minutes : minutes;
-  const secondsStr = seconds < 10 ? "0" + seconds : seconds;
-
-  return `${day}.${month}.${year} ${hours}:${minutesStr}:${secondsStr} ${ampm}`;
-}
-
-export function formatLogDateTime(timestamp: string): string {
-  return formatDateTime(timestamp);
 }
 
 export function formatRecordsSummary(created: number, updated: number): string {

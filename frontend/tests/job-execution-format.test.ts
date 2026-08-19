@@ -4,8 +4,8 @@ import {
   apiCallKey,
   detailedLogKey,
   formatApiCallParamLabel,
-  formatDateTime,
   formatDuration,
+  formatJobTimestamp,
   formatRecordsSummary,
 } from "../features/jobs/components/job-execution-format";
 
@@ -39,23 +39,13 @@ describe("how a job run is worded", () => {
     expect(formatApiCallParamLabel(paramKey)).toBe(expected);
   });
 
-  it("renders midnight as 12 AM, with padded minutes and seconds", () => {
-    // Built in local time and read back in local time, so this says the same
-    // thing in every timezone the gate or a laptop happens to use. The two
-    // things worth pinning are the 24-to-12 hour conversion, which reads 0:05
-    // as 12:05, and the padding that keeps 3:5:7 from reaching a viewer.
+  it("shows seconds on every jobs timestamp", () => {
+    // The clock's own midnight/noon/padding behaviour is pinned in
+    // tests/format.test.ts; this pins only the jobs policy — seconds on.
     const localMidnight = new Date(2026, 0, 2, 0, 5, 7);
 
-    expect(formatDateTime(localMidnight.toISOString())).toBe(
+    expect(formatJobTimestamp(localMidnight.toISOString())).toBe(
       "2.1.2026 12:05:07 AM",
-    );
-  });
-
-  it("renders noon as 12 PM rather than 0 PM", () => {
-    const localNoon = new Date(2026, 0, 2, 12, 30, 0);
-
-    expect(formatDateTime(localNoon.toISOString())).toBe(
-      "2.1.2026 12:30:00 PM",
     );
   });
 });

@@ -2,11 +2,7 @@ import { Trophy } from "lucide-react";
 
 import type { MatchStatsResponse, PlayerLeague } from "@/lib/core/schemas";
 
-import {
-  formatWinRate,
-  getWinRateBarColor,
-  getWinRateColor,
-} from "./player-card-format";
+import { formatFractionAsPercent, winRateColors } from "@/lib/core/format";
 
 interface PlayerCardWinRateProps {
   league: PlayerLeague | null | undefined;
@@ -22,14 +18,16 @@ export function PlayerCardWinRate({ league, stats }: PlayerCardWinRateProps) {
             <Trophy className="h-4 w-4 text-yellow-500" />
             <span className="text-sm font-medium">Win Rate</span>
           </div>
-          <span className={`text-lg font-bold ${getWinRateColor(league.win_rate)}`}>
-            {formatWinRate(league.win_rate)}%
+          <span
+            className={`text-lg font-bold ${winRateColors(league.win_rate).text}`}
+          >
+            {formatFractionAsPercent(league.win_rate)}
           </span>
         </div>
         <div className="relative h-2 w-full bg-muted rounded-full overflow-hidden">
           <div
-            className={`absolute left-0 top-0 h-full duration-300 ${getWinRateBarColor(league.win_rate)}`}
-            style={{ width: `${Math.min(league.win_rate, 100)}%` }}
+            className={`absolute left-0 top-0 h-full duration-300 ${winRateColors(league.win_rate).bar}`}
+            style={{ width: `${Math.min(league.win_rate, 1) * 100}%` }}
           />
         </div>
         <div className="flex justify-between text-xs text-muted-foreground">
@@ -50,15 +48,15 @@ export function PlayerCardWinRate({ league, stats }: PlayerCardWinRateProps) {
             <span className="text-xs text-muted-foreground">(unranked)</span>
           </div>
           <span
-            className={`text-lg font-bold ${getWinRateColor(stats.win_rate * 100)}`}
+            className={`text-lg font-bold ${winRateColors(stats.win_rate).text}`}
           >
-            {formatWinRate(stats.win_rate)}%
+            {formatFractionAsPercent(stats.win_rate)}
           </span>
         </div>
         <div className="relative h-2 w-full bg-muted rounded-full overflow-hidden">
           <div
-            className={`absolute left-0 top-0 h-full duration-300 ${getWinRateBarColor(stats.win_rate * 100)}`}
-            style={{ width: `${Math.min(stats.win_rate * 100, 100)}%` }}
+            className={`absolute left-0 top-0 h-full duration-300 ${winRateColors(stats.win_rate).bar}`}
+            style={{ width: `${Math.min(stats.win_rate, 1) * 100}%` }}
           />
         </div>
         <div className="flex justify-between text-xs text-muted-foreground">

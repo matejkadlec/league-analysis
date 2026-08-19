@@ -1,3 +1,5 @@
+import { formatDateTime } from "@/lib/core/format";
+
 import type { AuthLoginError } from "../types";
 
 export const LOGIN_REQUEST_TIMEOUT_MS = 30_000;
@@ -85,7 +87,7 @@ function formatLockoutTime(lockedUntil: string): string | null {
   const lockoutTime = new Date(lockedUntil);
   return Number.isNaN(lockoutTime.getTime())
     ? null
-    : lockoutTime.toLocaleString();
+    : formatDateTime(lockedUntil);
 }
 
 export function getLoginErrorMessage(error: unknown): string {

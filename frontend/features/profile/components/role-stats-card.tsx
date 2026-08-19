@@ -5,31 +5,16 @@ import { LaneStatsResponse } from "@/lib/core/schemas";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Map, Clock } from "lucide-react";
 import { useRelativeTime } from "@/lib/core/use-relative-time";
-import { formatFractionAsPercent } from "@/lib/core/format";
+import {
+  formatFractionAsPercent,
+  formatKDA,
+  kdaColor,
+  winRateColors,
+} from "@/lib/core/format";
 
 interface RoleStatsCardProps {
   stats: LaneStatsResponse;
   lastUpdated?: string | null | undefined;
-}
-
-// Helper function to get win rate color
-function getWinRateColor(winRate: number): string {
-  const winRatePercent = winRate * 100;
-  if (winRatePercent >= 51) return "text-green-500";
-  if (winRatePercent > 49) return "text-yellow-500";
-  return "text-rose-500";
-}
-
-// Helper function to get KDA color
-function getKDAColor(kda: number): string {
-  if (kda >= 3) return "text-green-500";
-  if (kda >= 2) return "text-yellow-500";
-  return "text-rose-500";
-}
-
-// Format KDA
-function formatKDA(kda: number): string {
-  return kda.toFixed(2);
 }
 
 // Get position icon path
@@ -42,14 +27,6 @@ function getPositionIconPath(lane: string): string {
     Support: "/positions/position-utility.svg",
   };
   return iconMap[lane] || "/positions/position-middle.svg";
-}
-
-// Get bar color based on win rate
-function getWinRateBarColor(winRate: number): string {
-  const winRatePercent = winRate * 100;
-  if (winRatePercent >= 51) return "bg-green-500";
-  if (winRatePercent > 49) return "bg-yellow-500";
-  return "bg-rose-500";
 }
 
 export function RoleStatsCard({ stats, lastUpdated }: RoleStatsCardProps) {
@@ -133,7 +110,7 @@ export function RoleStatsCard({ stats, lastUpdated }: RoleStatsCardProps) {
                           {lane.avg_assists.toFixed(1)}
                         </p>
                         <p className="text-xs">
-                          <span className={getKDAColor(lane.avg_kda)}>
+                          <span className={kdaColor(lane.avg_kda)}>
                             {formatKDA(lane.avg_kda)}
                           </span>{" "}
                           <span className="text-muted-foreground">KDA</span>
@@ -143,7 +120,7 @@ export function RoleStatsCard({ stats, lastUpdated }: RoleStatsCardProps) {
                       {/* Win rate */}
                       <div className="text-right w-16">
                         <p
-                          className={`text-sm font-bold ${getWinRateColor(lane.win_rate)}`}
+                          className={`text-sm font-bold ${winRateColors(lane.win_rate).text}`}
                         >
                           {formatFractionAsPercent(lane.win_rate)}
                         </p>
@@ -157,7 +134,7 @@ export function RoleStatsCard({ stats, lastUpdated }: RoleStatsCardProps) {
                   {/* Play rate bar */}
                   <div className="relative h-2 w-full bg-muted rounded-full overflow-hidden">
                     <div
-                      className={`absolute left-0 top-0 h-full ${getWinRateBarColor(lane.win_rate)} transition-all duration-300`}
+                      className={`absolute left-0 top-0 h-full ${winRateColors(lane.win_rate).bar} transition-all duration-300`}
                       style={{ width: `${playRate}%` }}
                     />
                   </div>
