@@ -621,6 +621,25 @@ three untested messages in `login-error.ts`.
   payloads for five response schemas to guard a failure mode that already
   announces itself.
 
+- ~~`features/players/components/player-card.tsx`~~ — done 2026-08-19, 11
+  tests, **7 mutations, all killed**. 4.3% → 95.65% statements, 92% branches,
+  100% functions; the one line left is the stats queryFn's failure
+  `return null`, the exact mirror of the league one that is covered.
+
+  Killed and worth naming: the freshness label fed by **all three** sync
+  timestamps (drop `match_synced_at` from the list and a player whose matches
+  never synced claims "Updated 3 hours ago" — the exact lie the label
+  exists to prevent), the profile-icon fallback branches (inverted, every
+  player shows icon 29 and the 404 retries the real icon), the failure
+  remembered per puuid+icon rather than per player (a player who picks a new
+  icon after theirs 404'd gets the new one tried, not the fallback carried
+  over), `total_matches > 0` mutated to `>= 0` ("Played 0 games"), the
+  Update button pressable mid-sync, the `{ queue: 420 }` filter dropped from
+  the stats request (the card would blend ARAM and normals into a number
+  labelled as ranked form — this queryFn is inline, so no api-module suite
+  sees it), and `onCompleted: onRefreshAll` dropped (the sync completes and
+  the page never refreshes, so the button visibly does nothing).
+
 The rest, enumerated 2026-08-19 rather than left as "plus 9 more":
 ~~`app/jobs/page.tsx`~~ (30, done 2026-08-19 — nine mutations; it is the only
 consumer of `components/ui/tabs.tsx`, so both closed together),
@@ -656,7 +675,7 @@ deferred three times while reading 1.33% instead of 0%.
 The band is really two. **Under 20% is the zero class wearing a different
 number** — the covered lines are the imports and the export statement, and
 nothing has ever rendered the file: `match-row.tsx` (1.3%, now done),
-`player-card.tsx` (4.3%), `player-context.tsx` (7.1%),
+~~`player-card.tsx`~~ (4.3%, done 2026-08-19), `player-context.tsx` (7.1%),
 ~~`join-us-form.tsx`~~ (7.4%, done 2026-08-19), `job-execution-api-calls.tsx` (11.1%),
 `job-execution-logs.tsx` (12.5%), ~~`matchmaking-api.ts`~~ (12.5%, done 2026-08-19),
 ~~`player-api.ts`~~ (14.3%, done 2026-08-19). Treat these as 0%: read and decide, do not mutate.
