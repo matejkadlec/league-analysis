@@ -55,49 +55,108 @@ function hintedRequest(pathname: string): NextRequest {
   });
 }
 
+function plainRequest(pathname: string): NextRequest {
+  return new NextRequest(new URL(`http://localhost:3000${pathname}`));
+}
+
 afterEach(() => {
   vi.unstubAllGlobals();
 });
 
 describe("the edge and the session hint", () => {
+  // Every response this file can produce, asserted whole.
+  //
+  // Two earlier versions of this test checked one response each, and both
+  // were walked past. Naming forbidden channels missed `Clear-Site-Data` on a
+  // `rewrite`; asserting the envelope for a single path missed a teardown
+  // that simply excluded that path; and spying on `globalThis.fetch` missed a
+  // probe made through axios, which is already a dependency here. The common
+  // shape of all three is a test that samples. So this samples nothing: every
+  // routing case the edge has, compared against its complete header set. A
+  // teardown that reaches any of them fails, whatever channel it uses and
+  // however it decided -- because the decision is not what is being watched.
+  const cases: {
+    what: string;
+    path: string;
+    hint: boolean;
+    status: number;
+    headers: [string, string][];
+  }[] = [
+    {
+      what: "a hinted visitor on a protected route",
+      path: "/player-overview",
+      hint: true,
+      status: 200,
+      headers: [["x-middleware-next", "1"]],
+    },
+    {
+      what: "a hinted visitor on another protected route",
+      path: "/match-history",
+      hint: true,
+      status: 200,
+      headers: [["x-middleware-next", "1"]],
+    },
+    {
+      what: "a hinted visitor on the home page",
+      path: "/",
+      hint: true,
+      status: 200,
+      headers: [["x-middleware-next", "1"]],
+    },
+    {
+      what: "a hinted visitor on a public route",
+      path: "/privacy-policy",
+      hint: true,
+      status: 200,
+      headers: [["x-middleware-next", "1"]],
+    },
+    {
+      // Routing on the hint, which is all the edge may do with it.
+      what: "a hinted visitor arriving at the sign-in page",
+      path: "/sign-in",
+      hint: true,
+      status: 307,
+      headers: [["location", "http://localhost:3000/"]],
+    },
+    {
+      what: "a visitor with no hint on a protected route",
+      path: "/player-overview",
+      hint: false,
+      status: 307,
+      headers: [["location", "http://localhost:3000/sign-in"]],
+    },
+    {
+      what: "a visitor with no hint on a public route",
+      path: "/privacy-policy",
+      hint: false,
+      status: 200,
+      headers: [["x-middleware-next", "1"]],
+    },
+  ];
+
+  it.each(cases)("passes $what through untouched", async (testCase) => {
+    const response = await proxy(
+      testCase.hint ? hintedRequest(testCase.path) : plainRequest(testCase.path),
+    );
+
+    expect([...response.headers.entries()]).toEqual(testCase.headers);
+    expect(response.status).toBe(testCase.status);
+  });
+
   it("never asks the API whether a session is still good", async () => {
-    // The edge cannot tell a refusal from an outage: it gets one answer, or
-    // none, and no way to retry with a refresh -- that is the browser's job,
-    // and `refreshAccessToken` is where the distinction lives. So an edge that
-    // probes has already lost, whatever it does with the answer. Asserting the
-    // absence of the question closes every channel the answer could be acted
-    // on through.
+    // A cheaper early signal than the table above, and strictly weaker: it
+    // only sees `globalThis.fetch` at call time, so an imported client or a
+    // module-scope alias walks past it. The table is the guarantee; this
+    // names the mistake, because an edge that probes has already lost. It
+    // cannot tell a refusal from an outage, and cannot retry with a refresh
+    // -- that is `refreshAccessToken`'s job, in the browser, where the
+    // distinction exists.
     const fetchSpy = vi.fn(() => Promise.reject(new Error("ECONNREFUSED")));
     vi.stubGlobal("fetch", fetchSpy);
 
     await proxy(hintedRequest("/player-overview"));
-    await proxy(hintedRequest("/match-history"));
-    await proxy(new NextRequest(new URL("http://localhost:3000/")));
+    await proxy(plainRequest("/"));
 
     expect(fetchSpy).not.toHaveBeenCalled();
-  });
-
-  it("passes a hinted request through untouched", async () => {
-    // No header that retracts anything, whatever it is called. `Set-Cookie`
-    // was the first channel an audit reached for and `Clear-Site-Data` the
-    // second, so this asserts the whole envelope rather than a list of names.
-    const response = await proxy(hintedRequest("/player-overview"));
-
-    // Positive, not a denylist: this is exactly what `NextResponse.next()`
-    // produces. A `rewrite` swaps in `x-middleware-rewrite` and carries no
-    // `location`, so listing forbidden headers missed it -- the same
-    // enumerate-the-spellings mistake the lint rules made six times.
-    expect([...response.headers.entries()]).toEqual([["x-middleware-next", "1"]]);
-  });
-
-  it("still keeps a visitor without a hint off protected routes", async () => {
-    // The routing the edge is for, and the reason it reads the cookie at all.
-    const response = await proxy(
-      new NextRequest(new URL("http://localhost:3000/player-overview")),
-    );
-
-    expect(response.headers.get("location")).toBe(
-      "http://localhost:3000/sign-in",
-    );
   });
 });

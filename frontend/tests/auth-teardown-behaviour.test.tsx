@@ -251,14 +251,39 @@ describe("cookie consent", () => {
   // stored consent is missing or its version is stale -- so bumping
   // COOKIE_CONSENT_VERSION would have signed out every visitor on their next
   // page load, with the server perfectly healthy.
-  it("does not take the session hint with it when it clears optional storage", async () => {
+  // Three cases, not one. A later audit split the mount effect's condition --
+  // "missing or stale" became two branches, which reads as the more careful
+  // version -- and put the sweep on the stale half, which nothing exercised.
+  // Bumping COOKIE_CONSENT_VERSION would then have signed out every returning
+  // visitor on their next page load. So each branch that can reach a sweep is
+  // named here: no consent, stale consent, and the button that writes one.
+  it.each([
+    ["no consent at all", ""],
+    ["consent given under an earlier policy version", "v0|all|2026-01-01T00:00:00.000Z"],
+  ])("does not take the session hint with it: %s", async (_case, value) => {
     setHint();
-    // Missing consent: the branch that sweeps.
+    document.cookie = value
+      ? `league_analysis_cookie_consent=${encodeURIComponent(value)}; path=/`
+      : "league_analysis_cookie_consent=; max-age=0; path=/";
+
+    render(<CookieConsentManager />);
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(hasAuthStateCookie()).toBe(true);
+  });
+
+  it("does not take the session hint with it when a choice is saved", async () => {
+    setHint();
     document.cookie = "league_analysis_cookie_consent=; max-age=0; path=/";
 
     render(<CookieConsentManager />);
     await act(async () => {
       await Promise.resolve();
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Accept necessary" }));
     });
 
     expect(hasAuthStateCookie()).toBe(true);

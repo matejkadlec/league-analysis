@@ -366,6 +366,16 @@ describe("giving up on a session", () => {
     expect(hasAuthStateCookie()).toBe(false);
   });
 
+  it("reads the hint as present only for the value the server writes", async () => {
+    // `proxy.ts` compares against AUTH_STATE_COOKIE_VALUE exactly. Relaxing
+    // this to a name-only match left every test green while the edge and the
+    // browser silently disagreed about who is signed in -- which is the
+    // disagreement the whole fix is about.
+    document.cookie = `${AUTH_STATE_COOKIE_NAME}=something-else; path=/`;
+
+    expect(hasAuthStateCookie()).toBe(false);
+  });
+
   it("keeps the deadline short enough to be a deadline", async () => {
     // Every other deadline assertion is relative to this constant, so nothing
     // bounded it above: raising it to ten minutes left all 251 tests green

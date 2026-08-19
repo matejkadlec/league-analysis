@@ -225,6 +225,43 @@ const eslintConfig = [
       ],
     },
   },
+  // The edge asks nobody anything.
+  //
+  // `proxy.ts` runs on every request and owns the same cookie the browser
+  // does, and two audits reached for the same escape there: probe the API,
+  // fold "unreachable" into "signed out", retract the hint. It cannot do
+  // better -- it gets one answer or none, and no way to retry with a refresh,
+  // which is `refreshAccessToken`'s job and needs the browser. So the edge
+  // makes no requests at all. `tests/proxy-session-hint.test.ts` asserts the
+  // whole response envelope for every routing case, which catches a teardown
+  // whatever channel it uses; this catches the request itself, which that test
+  // cannot see when it is made through an imported client rather than the
+  // global `fetch` it can spy on.
+  {
+    files: ["proxy.ts"],
+    rules: {
+      "no-restricted-globals": [
+        "error",
+        {
+          name: "fetch",
+          message:
+            "The edge cannot tell a refusal from an outage, and cannot retry with a refresh. Asking the API here ends with a session torn down over a redeploy.",
+        },
+      ],
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["axios", "**/lib/core/api", "@/lib/core/api"],
+              message:
+                "The edge cannot tell a refusal from an outage, and cannot retry with a refresh. Asking the API here ends with a session torn down over a redeploy.",
+            },
+          ],
+        },
+      ],
+    },
+  },
   // The two files that own cookie writes: one performs the delete
   // `token-manager` asks for, the other handles an unrelated, non-credential
   // cookie. Neither decides that a session is over.

@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_global_settings
 from app.features.auth.cookies import (
     ACCESS_TOKEN_COOKIE_NAME,
+    AUTH_STATE_COOKIE_NAME,
     REFRESH_TOKEN_COOKIE_NAME,
 )
 from app.features.auth.revoked_access_token import RevokedAccessToken
@@ -85,7 +86,15 @@ async def test_logout_succeeds_and_clears_cookies_with_no_session_at_all() -> No
     assert result == {"message": "Successfully logged out"}
     cast(AsyncMock, service).revoke_all_refresh_tokens_for_user.assert_not_awaited()
     cleared = response.headers.getlist("set-cookie")
-    for name in (ACCESS_TOKEN_COOKIE_NAME, REFRESH_TOKEN_COOKIE_NAME):
+    # The session hint belongs in this list too: `proxy.ts` routes on it, so a
+    # logout that leaves it standing sends the visitor back into a signed-in
+    # shell the API will refuse. The browser clears it as well, and this is the
+    # half that also covers a logout from another tab or a stale page.
+    for name in (
+        ACCESS_TOKEN_COOKIE_NAME,
+        REFRESH_TOKEN_COOKIE_NAME,
+        AUTH_STATE_COOKIE_NAME,
+    ):
         assert any(header.startswith(f"{name}=") for header in cleared)
 
 
