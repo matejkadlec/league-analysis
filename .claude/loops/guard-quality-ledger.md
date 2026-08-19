@@ -234,10 +234,38 @@ three untested messages in `login-error.ts`.
   Logged rather than fixed: `getWinRateColor` / `getWinRateBarColor` /
   `formatWinRate` exist in three copies, and the same name means a fraction in
   two of them and a percent in the third.
+- ~~`features/profile/components/champion-stats-card.tsx`~~ — done
+  2026-08-19, six tests, nine mutations. **Two survived, and both were the
+  test's fault rather than an equivalent mutant.** One iteration after the
+  same thing on `role-stats-card`, which makes it the pattern of this stretch
+  and the reason to keep mutating even when the tests look thorough.
+
+  The first: the headline test claimed that reading `paginationState.page`
+  instead of `pageForChampionDataSource(...)` strands someone on an empty
+  card. It does not — `getChampionPage` clamps an out-of-range page back into
+  range, so the empty card is already impossible and the test passed against
+  the mutation. The guard is real but the failure is different: page to
+  champions 11–12 of one player, open a player with twenty champions, and you
+  land on their eleventh-best. The second list has to be **longer** than the
+  page reached in the first for the difference to exist at all. **A test whose
+  stated failure mode is wrong passes for the wrong reason** — the mutation is
+  what tells you, and the comment had to be rewritten, not just the fixture.
+
+  The second: the KDA fixture held 3, 2 and 1.99, so moving the green
+  threshold from 3 to 2.5 recoloured nothing it looked at. Every band needs a
+  value *just under* its threshold as well as one on it, or the test pins only
+  that three bands exist.
+
+  Died cleanly: the rank number restarting per page (the second page opens
+  with another "1", reading as the best champion twice), both ends of the
+  pager, and both off-by-ones available in the "1–5 of 12" label.
 
 The rest, enumerated 2026-08-19 rather than left as "plus 9 more": `app/jobs/page.tsx` (30),
 `features/matchmaking/components/matchmaking-analysis-results.tsx` (30),
-`features/profile/components/champion-stats-card.tsx` (30),
+~~`features/profile/components/champion-stats-card.tsx`~~ (30, done 2026-08-19 —
+six tests, nine mutations, **two survivors and both of them the test's
+fault**, one iteration after the same thing happened on `role-stats-card`;
+see the paired row below),
 `app/matchmaking-analysis/page.tsx` (25), `app/player-overview/page.tsx` (24),
 `features/jobs/components/system-status.tsx` (20),
 ~~`features/players/components/player-card-format.ts`~~ (16, done 2026-08-19),
