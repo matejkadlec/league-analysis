@@ -23,15 +23,17 @@ vi.mock("next/navigation", () => ({
 
 let triggerRecheck: (() => Promise<void>) | null = null;
 let triggerLogout: AuthContextType["logout"] | null = null;
+let triggerLogin: AuthContextType["login"] | null = null;
 
 function AuthStateProbe() {
-  const { isLoading, isAuthenticated, checkAuth, logout } = useAuth();
+  const { isLoading, isAuthenticated, checkAuth, logout, login } = useAuth();
   // Assigned in an effect, not during render: reassigning a module-level
   // binding while rendering is a side effect, and eslint rejects it.
   useEffect(() => {
     triggerRecheck = checkAuth;
     triggerLogout = logout;
-  }, [checkAuth, logout]);
+    triggerLogin = login;
+  }, [checkAuth, logout, login]);
   return (
     <span data-testid="state">{`${isLoading ? "loading" : "settled"}:${isAuthenticated}`}</span>
   );
@@ -41,13 +43,16 @@ function renderProvider() {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
-  return render(
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <AuthStateProbe />
-      </AuthProvider>
-    </QueryClientProvider>,
-  );
+  return {
+    queryClient,
+    ...render(
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <AuthStateProbe />
+        </AuthProvider>
+      </QueryClientProvider>,
+    ),
+  };
 }
 
 function clearCookies() {
@@ -62,6 +67,7 @@ function clearCookies() {
 beforeEach(() => {
   triggerRecheck = null;
   triggerLogout = null;
+  triggerLogin = null;
   clearCookies();
   vi.restoreAllMocks();
 });
@@ -339,6 +345,41 @@ describe("a probe that fails right after a refresh the server honoured", () => {
     expect(document.cookie).not.toContain(AUTH_STATE_COOKIE_NAME);
   });
 
+  it("signs the visitor in when the retried probe answers", async () => {
+    // The whole point of refreshing: an expired access token is supposed to be
+    // invisible. Every other test in this block asserts a teardown that must
+    // not happen, so all of them pass on a provider that never signs anyone in
+    // after a refresh -- and the recovery path itself was the one part of this
+    // file coverage reported as never executed. Emptying `setUser` in the
+    // retried-probe branch left all 345 tests green.
+    document.cookie = `${AUTH_STATE_COOKIE_NAME}=${AUTH_STATE_COOKIE_VALUE}; path=/`;
+    let probes = 0;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      if (String(input).includes("/auth/refresh")) {
+        return new Response("{}", { status: 200 });
+      }
+      probes += 1;
+      if (probes === 1) {
+        return new Response(
+          JSON.stringify({ detail: "Your session is invalid or expired." }),
+          { status: 401, headers: { "content-type": "application/json" } },
+        );
+      }
+      return new Response(
+        JSON.stringify({ id: 1, email: "user@example.com" }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    });
+
+    const { getByTestId } = renderProvider();
+
+    await waitFor(() =>
+      expect(getByTestId("state").textContent).toBe("settled:true"),
+    );
+    expect(probes).toBe(2);
+    expect(document.cookie).toContain(AUTH_STATE_COOKIE_NAME);
+  });
+
   it("keeps the session when the retried probe refuses without naming why", async () => {
     // `/auth/me`'s own 401 carries a plain-string detail, and so does a
     // challenge in front of it -- and this particular 401 arrives moments
@@ -489,5 +530,91 @@ describe("signed-out session probe", () => {
         signal: expect.any(AbortSignal),
       }),
     );
+  });
+});
+
+describe("data cached for one account", () => {
+  // Every `queryClient.clear()` in `auth-context.tsx` -- six of them, on both
+  // teardown and sign-in -- could be deleted with all 345 tests still green.
+  // The cache is where the account's own data lives: match history, profile,
+  // settings. Nothing asserted that it stops being readable when the identity
+  // that filled it goes away, and the QueryClient is created once per tab, so
+  // it outlives any number of sessions unless something empties it.
+  const cachedPrivateData = { note: "previous account's data" };
+
+  it("is dropped when the session ends", async () => {
+    document.cookie = `${AUTH_STATE_COOKIE_NAME}=${AUTH_STATE_COOKIE_VALUE}; path=/`;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      if (String(input).includes("/auth/refresh")) {
+        throw new Error("offline");
+      }
+      return new Response("{}", { status: 401 });
+    });
+
+    const { getByTestId, queryClient } = renderProvider();
+    queryClient.setQueryData(["matches"], cachedPrivateData);
+
+    await waitFor(() =>
+      expect(getByTestId("state").textContent).toBe("settled:false"),
+    );
+    expect(queryClient.getQueryData(["matches"])).toBeUndefined();
+  });
+
+  it("is dropped before the next sign-in can read it", async () => {
+    // The shared-machine case, and the one a visitor sees: sign in as someone
+    // else in the same tab and the first paint comes from cache, so the new
+    // account's screen is filled with the previous account's data until every
+    // query has refetched.
+    document.cookie = `${AUTH_STATE_COOKIE_NAME}=${AUTH_STATE_COOKIE_VALUE}; path=/`;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) =>
+      String(input).includes("/auth/login")
+        ? new Response("{}", { status: 200 })
+        : new Response(JSON.stringify({ id: 2, email: "next@example.com" }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          }),
+    );
+
+    const { getByTestId, queryClient } = renderProvider();
+    await waitFor(() =>
+      expect(getByTestId("state").textContent).toBe("settled:true"),
+    );
+    queryClient.setQueryData(["matches"], cachedPrivateData);
+
+    await act(async () => {
+      await triggerLogin?.({
+        email: "next@example.com",
+        password: "secret-password",
+      });
+    });
+
+    expect(queryClient.getQueryData(["matches"])).toBeUndefined();
+  });
+});
+
+describe("a login the server refuses", () => {
+  it("surfaces what the server said rather than a generic failure", async () => {
+    // The wiring coverage reported as never executed: `login` reads the error
+    // body and hands it to `createAuthLoginError` with the status. That helper
+    // is unit-tested and the form that renders the message is tested against a
+    // mocked `login`, so the one line joining them -- the only place the
+    // server's own reason enters the app -- was guarded by nothing. Passing
+    // `null` instead of the parsed payload keeps both of those suites green
+    // and turns every rejected sign-in into "something went wrong".
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({ detail: { code: "INVALID_CREDENTIALS" } }),
+        { status: 401, headers: { "content-type": "application/json" } },
+      ),
+    );
+
+    renderProvider();
+    await waitFor(() => expect(triggerLogin).not.toBeNull());
+
+    await act(async () => {
+      await expect(
+        triggerLogin?.({ email: "user@example.com", password: "wrong" }),
+      ).rejects.toMatchObject({ code: "INVALID_CREDENTIALS", status: 401 });
+    });
   });
 });

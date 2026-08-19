@@ -11,6 +11,7 @@ Never re-attack a file that already has a row unless the file changed since.
 | File | Attacked | Mutations | Status | Evidence / reason |
 |---|---|---|---|---|
 | `features/auth/utils/token-manager.ts` | 2026-08-19 | 5 | `killed` | 3 died (content-type guard, `sessionEpoch` bump, `clearAuthStateCookie` in the post-teardown 200 path). 2 survived the full 342-test suite: `namesTheEndOfTheSession` catch → `return true`, and `refreshAccessToken`'s `!isBrowser()` → `refused`. Both killed by `tests/token-manager-guards.test.ts`, each shown red against its mutation and green against real code. |
+| `features/auth/context/auth-context.tsx` | 2026-08-19 | 4 | `killed` | 2 died (`setUser` on the first successful probe, `setIsLoading(false)` in the `finally` — 3 and 13 tests red). 1 survived: `queryClient.clear()` on the refresh-failure teardown; probing further, **all six** `clear()` calls in the file could be deleted with the suite green. Also 0%-covered and now killed: the retried-probe success branch (lines 106–108, the whole point of refreshing) and `createAuthLoginError(payload, …)` (line 215, the only place the server's own sign-in refusal enters the app). Four tests in `tests/auth-session-probe.test.tsx`, each shown red against its own mutation and green against real code; `./test.sh -f` green under `compose.gate.yml`. |
 
 ## Target list
 
@@ -24,7 +25,14 @@ Highest risk first. 27 files sit at ≥80% statements with ≥20 statements; the
 head of that list:
 
 1. ~~`features/auth/utils/token-manager.ts`~~ — done 2026-08-19, 2 survivors.
-2. `features/auth/context/auth-context.tsx` — 92.4% / 82.6%, 105 stmts.
+2. ~~`features/auth/context/auth-context.tsx`~~ — done 2026-08-19. Accepted and
+   left in place: the other five `queryClient.clear()` sites (same invariant as
+   the two now guarded — a per-branch spy assertion would pin the call, not the
+   behaviour), the three `NODE_ENV === "development"` console warns, and the
+   captcha-token append at line 182. Deleted as dead: the `typeof window`
+   ternary that chose between `""` and `""`. `useAuth` outside a provider
+   (line 322) is still unguarded — one 3-line test, worth folding into the next
+   auth iteration.
 3. `features/auth/utils/login-error.ts` — 93.8% / 86.3%.
 4. `features/auth/components/sign-in-form.tsx` — 80.4% / 70.7%.
 5. `components/auth-gate.tsx` — 97.7% / 100%. Expect `clean`; it is the
