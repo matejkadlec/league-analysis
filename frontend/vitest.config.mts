@@ -25,16 +25,23 @@ export default defineConfig({
         "**/*.config.*",
         "next-env.d.ts",
       ],
-      // Floors, not targets. Measured 2026-08-16 on the default scope (the
-      // files the suite actually imports): 61.78% statements, 55.09%
-      // branches, 59.61% functions, 62.12% lines. Each floor sits ~3 points
-      // under its measurement so the gate passes today and can be ratcheted
-      // up as coverage grows.
+      // Floors, not targets, and they only mean anything while they track
+      // the measurement. Left at their 2026-08-16 values they fell ~11 points
+      // behind: deleting the eleven session test files -- 40% of the suite,
+      // taking token-manager.ts from 95% statements to 6% and its branches to
+      // zero -- still cleared every floor, so the stage said nothing about
+      // the work this branch exists for.
+      //
+      // Measured 2026-08-19 on the default scope (the files the suite
+      // actually imports): 72.60% statements, 65.62% branches, 68.33%
+      // functions, 72.91% lines. Each floor sits ~3 points under its
+      // measurement, so ratchet these up whenever coverage grows -- a floor
+      // that stops moving stops catching anything.
       thresholds: {
-        statements: 58,
-        branches: 52,
-        functions: 56,
-        lines: 59,
+        statements: 69,
+        branches: 62,
+        functions: 65,
+        lines: 69,
       },
     },
   },
