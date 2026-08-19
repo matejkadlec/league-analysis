@@ -700,6 +700,31 @@ route shells already resolved by the route-shell row.
   misspelled), and `int(vision_score or 0)` (a None float reaching an int
   column).
 
+- ~~`backend: app/core/riot_api/transformers.py`~~ — done 2026-08-19, 6 tests
+  appended to `tests/test_riot_contracts.py`, **5 mutations, all killed**.
+  76% → 93%. The raw-dict twin of the DTO transformer, and still live:
+  `_store_match_detail` validates, transforms, and constructs rows from its
+  dicts. Same strongest-guard-is-cheapest shape as the DTO row —
+  `Match(**transformed["match"])` and `MatchParticipant(**participants[0])`
+  are the production lines verbatim, so every key in both dicts is checked
+  against real columns.
+
+  Killed: a match-dict key typo, the remake inversion on this path too, the
+  early-surrender aggregation reading the late-surrender key (they are
+  different outcomes for LP), validation ceasing to require `matchId`, and
+  the legacy `summonerName` winning over the Riot ID.
+
+  `accepted` with a measurement, not a shrug: **the per-participant
+  `except → continue` (163-170) is unreachable both ways.** A non-dict
+  participant raises earlier, in `_transform_match_info`'s surrender sweep
+  over the same list (measured: `[good, None]` raises at line 53 and loses
+  the whole match), and a dict participant cannot raise in the skip loop
+  because `.get` with a default never does. The "skip one, keep nine"
+  resilience it promises does not exist; logged in IMPROVEMENTS.md along
+  with the four quiet normalisation disagreements between this path and the
+  DTO path (name chain, tag default, position fallback, vision coercion) —
+  same table, two writers.
+
 The rest, enumerated 2026-08-19 rather than left as "plus 9 more":
 ~~`app/jobs/page.tsx`~~ (30, done 2026-08-19 — nine mutations; it is the only
 consumer of `components/ui/tabs.tsx`, so both closed together),
