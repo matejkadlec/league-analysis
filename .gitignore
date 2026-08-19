@@ -18,6 +18,7 @@ build/
 
 # Node.js / Next.js
 node_modules/
+/package-lock.json
 frontend/.next/
 frontend/out/
 frontend/.cache/

@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { validatedPost } from "@/lib/core/api";
+import { type ApiResponse, validatedPost } from "@/lib/core/api";
 import { useToast } from "@/lib/core/hooks";
 import {
   JobConfiguration,
+  type JobControlActionResponse,
   JobControlActionResponseSchema,
   JobExecution,
   JobTriggerResponseSchema,
@@ -167,9 +168,11 @@ export function useJobCardControls(
 
   // The six control endpoints answer the same shape and want the same
   // toast-on-success / try-again-later-on-anything-else handling; only the
-  // URL and the wording differ, so those are the only inputs.
+  // request and the wording differ, so those are the only inputs. The
+  // mutationFn stays at each call site because the backend's
+  // test_frontend_api_paths.py reads the validatedPost URL literal there.
   function useControlMutation<TArg = void>(
-    buildUrl: (arg: TArg) => string,
+    mutationFn: (arg: TArg) => Promise<ApiResponse<JobControlActionResponse>>,
     success: { title: string; description: string; variant: "success" | "info" },
     failureTitle: string,
     onSuccessExtra?: () => void,
@@ -181,8 +184,7 @@ export function useJobCardControls(
         variant: "error",
       });
     return useMutation({
-      mutationFn: (arg: TArg) =>
-        validatedPost(JobControlActionResponseSchema, buildUrl(arg)),
+      mutationFn,
       onSuccess: (result) => {
         if (result.success && result.data.success) {
           toast(success);
@@ -197,7 +199,7 @@ export function useJobCardControls(
   }
 
   const pauseMutation = useControlMutation(
-    () => `/jobs/${job.id}/pause`,
+    () => validatedPost(JobControlActionResponseSchema, `/jobs/${job.id}/pause`),
     {
       title: `${job.name} paused`,
       description: "Scheduled runs will wait until the job is resumed.",
@@ -207,7 +209,8 @@ export function useJobCardControls(
   );
 
   const resumeMutation = useControlMutation(
-    () => `/jobs/${job.id}/resume`,
+    () =>
+      validatedPost(JobControlActionResponseSchema, `/jobs/${job.id}/resume`),
     {
       title: `${job.name} resumed`,
       description: "Scheduled runs are active again.",
@@ -217,7 +220,11 @@ export function useJobCardControls(
   );
 
   const stopMutation = useControlMutation(
-    (force: boolean) => `/jobs/${job.id}/stop${force ? "?force=true" : ""}`,
+    (force: boolean) =>
+      validatedPost(
+        JobControlActionResponseSchema,
+        `/jobs/${job.id}/stop${force ? "?force=true" : ""}`,
+      ),
     {
       title: `${job.name} stop requested`,
       description: "The current run is stopping in the background.",
@@ -266,7 +273,11 @@ export function useJobCardControls(
   });
 
   const testStopMutation = useControlMutation(
-    () => `/jobs/${job.id}/test/stop`,
+    () =>
+      validatedPost(
+        JobControlActionResponseSchema,
+        `/jobs/${job.id}/test/stop`,
+      ),
     {
       title: `${job.name} test stopped`,
       description: "The test run is no longer active.",
@@ -277,7 +288,11 @@ export function useJobCardControls(
   );
 
   const testPauseMutation = useControlMutation(
-    () => `/jobs/${job.id}/test/pause`,
+    () =>
+      validatedPost(
+        JobControlActionResponseSchema,
+        `/jobs/${job.id}/test/pause`,
+      ),
     {
       title: `${job.name} test paused`,
       description: "The test run will wait until it is resumed.",
@@ -287,7 +302,11 @@ export function useJobCardControls(
   );
 
   const testResumeMutation = useControlMutation(
-    () => `/jobs/${job.id}/test/resume`,
+    () =>
+      validatedPost(
+        JobControlActionResponseSchema,
+        `/jobs/${job.id}/test/resume`,
+      ),
     {
       title: `${job.name} test resumed`,
       description: "The test run is active again.",
