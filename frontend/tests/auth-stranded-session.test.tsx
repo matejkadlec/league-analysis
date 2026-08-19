@@ -5,7 +5,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AuthGate, SLOW_PROBE_NOTICE_MS } from "@/components/auth-gate";
 import {
-  markAuthSession,
   refreshAccessToken,
   removeAuthTokens,
 } from "@/features/auth/utils/token-manager";
@@ -366,7 +365,6 @@ describe("giving up on a session", () => {
     // Without one, a backend that accepts the connection and hangs strands
     // the caller exactly as a probe that never settles would.
     setHint();
-    markAuthSession(true);
     let seen: AbortSignal | null | undefined;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) => {
       seen = init?.signal;
@@ -384,9 +382,26 @@ describe("giving up on a session", () => {
     // hint, which is what lets the gate redirect instead of rendering
     // nothing. Deleting it used to pass the entire suite.
     setHint();
-    markAuthSession(true);
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response("{}", { status: 401 }),
+    );
+
+    const result = await refreshAccessToken();
+
+    expect(result).toEqual({ outcome: "refused" });
+    expect(hasAuthStateCookie()).toBe(false);
+  });
+
+  it("ends the session when the account is deactivated", async () => {
+    // `/auth/refresh` answers 403 ACCOUNT_INACTIVE and revokes every refresh
+    // token server-side before it does. Nothing else in the suite feeds a 403
+    // to a refresh, so narrowing the refusal check to `=== 401` used to pass
+    // the entire gate -- and it leaves the visitor on "Can't reach the server"
+    // for good, with retry taking the same branch every time and a session
+    // the backend has already destroyed.
+    setHint();
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("{}", { status: 403 }),
     );
 
     const result = await refreshAccessToken();
@@ -399,7 +414,6 @@ describe("giving up on a session", () => {
     // A 502 is a redeploy, not a rejection. Tearing down here signed people
     // out mid-deploy with a valid refresh cookie still in the jar.
     setHint();
-    markAuthSession(true);
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response("{}", { status: 502 }),
     );
@@ -416,7 +430,6 @@ describe("giving up on a session", () => {
 
   it("keeps the session when the refresh never reaches the server", async () => {
     setHint();
-    markAuthSession(true);
     vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("offline"));
 
     const result = await refreshAccessToken();
@@ -439,7 +452,6 @@ describe("giving up on a session", () => {
     // than a teardown, and telling a refusal from an outage requires reading
     // `outcome`, which is the decision this whole design turns on.
     setHint();
-    markAuthSession(true);
     const answers: unknown[] = [];
     for (const respond of [
       () => Promise.resolve(new Response("{}", { status: 401 })),
@@ -448,7 +460,6 @@ describe("giving up on a session", () => {
       () => Promise.reject(new Error("offline")),
     ]) {
       setHint();
-      markAuthSession(true);
       vi.spyOn(globalThis, "fetch").mockImplementation(respond);
       answers.push(await refreshAccessToken());
     }
@@ -465,16 +476,19 @@ describe("giving up on a session", () => {
     // Acting on it here would delete B's hint and bounce B -- who just signed
     // in successfully -- straight back to the sign-in page.
     setHint();
-    markAuthSession(true);
     vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
       removeAuthTokens(); // A signs out mid-flight.
       setHint();
-      markAuthSession(true); // B signs in.
       return new Response("{}", { status: 401 });
     });
 
-    await refreshAccessToken();
+    const result = await refreshAccessToken();
 
+    // Reported as nothing learned, not as `unavailable` carrying the 401.
+    // `api.ts` re-encodes a status into a response and `normalizeApiError`
+    // reads 401 back as `kind: "authentication"`, so passing the status on
+    // would hand B somebody else's refusal as their own.
+    expect(result).toEqual({ outcome: "unreachable" });
     expect(hasAuthStateCookie()).toBe(true);
   });
 
@@ -486,7 +500,6 @@ describe("giving up on a session", () => {
     // jar with the rotated session -- skipping would leave a shell with
     // their name on it sending somebody else's credentials.
     setHint();
-    markAuthSession(true);
 
     // A refresh already in flight when the user logs out. The server answers
     // 200 and re-sets the cookies, which the browser applies regardless.

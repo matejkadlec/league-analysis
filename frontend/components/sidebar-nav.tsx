@@ -192,7 +192,9 @@ export function SidebarNav() {
                   type="button"
                   onClick={() => {
                     setSigningOut(true);
-                    void logout().finally(() => setSigningOut(false));
+                    void logout({
+                      evenIfTheServerCannotBeReached: true,
+                    }).finally(() => setSigningOut(false));
                   }}
                   disabled={signingOut}
                   className="flex items-center gap-2 px-4 py-2 pb-4 text-white cursor-pointer transition-colors duration-300 hover:text-[#cfa93a] w-full text-left disabled:cursor-default disabled:opacity-60"

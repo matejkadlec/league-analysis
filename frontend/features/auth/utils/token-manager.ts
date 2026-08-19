@@ -28,16 +28,17 @@ import { AUTH_PROBE_TIMEOUT_MS } from "./login-error";
 export type SessionRefresh =
   /** The session is current; the cookies were rotated. */
   | { outcome: "refreshed" }
-  /** The server refused this session. The hint has already been retracted. */
+  /** This session is over, and the hint has already been retracted. */
   | { outcome: "refused" }
-  /** The server answered, but not about this session -- a 5xx, a rate limit,
-   *  or a verdict on a session that had already ended. Says nothing. */
+  /** The server answered about this session, but not about whether it is
+   *  valid -- a 5xx, a rate limit. Never a refusal status: those are either a
+   *  refusal or, if they arrive after a teardown, about nothing. */
   | { outcome: "unavailable"; status: number }
-  /** No answer at all: unreachable, or the deadline passed. Says nothing. */
+  /** Nothing was learned: unreachable, the deadline passed, or the answer
+   *  turned out to be about a session that had already ended. */
   | { outcome: "unreachable" };
 
 let refreshInFlight: Promise<SessionRefresh> | null = null;
-let sessionHint = false;
 // Bumped every time the session is torn down. A refresh that started before
 // the teardown can still land after it, and its Set-Cookie response would
 // otherwise put the hint back and resurrect a session the user just left.
@@ -55,26 +56,13 @@ function getApiBaseUrl(): string {
     : "";
 }
 
-export function markAuthSession(active: boolean): void {
-  sessionHint = active;
-}
-
-export function setAuthTokens(): void {
-  markAuthSession(true);
-}
-
 export function removeAuthTokens(): void {
   sessionEpoch += 1;
-  sessionHint = false;
   // Every path that gives up on a session routes through here, so this is the
   // one place that has to retract the cookie `proxy.ts` routes on. Without it
   // a session the API has stopped honouring still looks live to the server,
   // which admits the visitor to a page the client then cannot render.
   clearAuthStateCookie();
-}
-
-export function getAccessToken(): string | null {
-  return sessionHint ? "session" : null;
 }
 
 export async function refreshAccessToken(): Promise<SessionRefresh> {
@@ -119,10 +107,19 @@ export async function refreshAccessToken(): Promise<SessionRefresh> {
           removeAuthTokens();
           return { outcome: "refused" };
         }
-        // Either not a refusal at all, or a refusal aimed at a session that
-        // has already ended. Both are silence on the question the caller
-        // asked, and the status travels with it so a rate limit is not
-        // reported as an unreachable server.
+        if (response.status === 401 || response.status === 403) {
+          // A refusal aimed at a session that has already ended, so it says
+          // nothing about the one on screen. Reporting the status here would
+          // undo the distinction this type exists for: `api.ts` re-encodes it,
+          // `normalizeApiError` reads 401 as `kind: "authentication"`, and the
+          // caller is back to treating somebody else's refusal as its own.
+          return { outcome: "unreachable" };
+        }
+        // Not a refusal at all. The status travels with it so a rate limit is
+        // not reported as an unreachable server -- `/auth/refresh` is rate
+        // limited into a single shared bucket, so a 429 here is ordinary, and
+        // "check that the backend is running" is the wrong thing to say about
+        // a backend that is running and answering.
         return { outcome: "unavailable", status: response.status };
       }
 
@@ -161,19 +158,26 @@ export async function refreshAccessToken(): Promise<SessionRefresh> {
         return { outcome: "refused" };
       }
 
-      markAuthSession(true);
       return { outcome: "refreshed" };
     } catch {
       return { outcome: "unreachable" };
-    } finally {
-      refreshInFlight = null;
     }
   };
 
-  refreshInFlight = runRefresh();
-  return await refreshInFlight;
-}
-
-export function hasAuthTokens(): boolean {
-  return sessionHint;
+  // Cleared here rather than in a `finally` inside `runRefresh`. Anything that
+  // throws in the synchronous prefix of that function -- `AbortSignal.timeout`
+  // on a browser too old to have it, say -- runs the whole body, including a
+  // `finally`, before this assignment happens. The reset would land first and
+  // the assignment second, leaving a settled promise cached forever and every
+  // later refresh short-circuiting on it without touching the network: token
+  // refresh silently dead for the tab.
+  const attempt = runRefresh();
+  refreshInFlight = attempt;
+  try {
+    return await attempt;
+  } finally {
+    if (refreshInFlight === attempt) {
+      refreshInFlight = null;
+    }
+  }
 }

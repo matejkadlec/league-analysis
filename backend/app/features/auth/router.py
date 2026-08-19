@@ -280,9 +280,14 @@ async def logout(
     signed out. The client cannot make up the difference — only the server can
     revoke, and clearing cookies merely hides the credential.
 
-    Identity therefore comes from either cookie, and an unauthenticated call is
-    answered rather than rejected: logout is idempotent, and a caller can only
-    ever revoke the session their own request already carries.
+    Identity therefore comes from the refresh cookie, and an unauthenticated
+    call is answered rather than rejected: logout is idempotent, and a caller
+    can only ever revoke the session their own request already carries.
+
+    "Always succeed" means never refusing a caller for lacking credentials. A
+    database fault still propagates as a 500 with the cookies left in place,
+    deliberately: answering 200 there would report a revocation that did not
+    happen, which is the failure this route exists to stop.
     """
     # The Authorization header first, matching `get_request_access_token`, so
     # a non-browser client holding only the pair `/login` returned still gets

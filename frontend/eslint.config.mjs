@@ -90,6 +90,16 @@ const eslintConfig = [
   // see -- are now correct code and dead code respectively, rather than the
   // teardowns that walked past every version of this rule.
   //
+  // Honest signals are not sufficient on their own, though: an eighth audit
+  // read the outcome correctly and *then* called `logout()`, which tore the
+  // session down even when its own request never arrived. So the last layer is
+  // that the unconditional teardown is opt-in. Plain `logout()` -- what a
+  // timer or an effect will write -- changes nothing locally when the server
+  // cannot be reached; only a control under someone's finger passes
+  // `evenIfTheServerCannotBeReached`. Past that point an escape has to type
+  // that flag on a timer, which is a lie stated at the call site rather than a
+  // hole here, and no rule in this file could ever discharge it.
+  //
   // The cookie-mutation rule is deliberately receiver-free, which costs one
   // false positive: a `Map` keyed by the cookie's name is flagged too.
   // Narrowing it to particular receivers is what let `store.delete(NAME)`
@@ -180,6 +190,15 @@ const eslintConfig = [
           // header today, so it costs nothing to forbid.
           selector:
             "CallExpression[callee.property.name=/^(set|append)$/][arguments.0.value=/^set-cookie$/i]",
+          message:
+            "Writing a Set-Cookie header by hand can retract the session hint without telling the server, which reports the visitor as signed out while their refresh token stays live. Cookie writes belong in auth-state-cookie.ts or the backend.",
+        },
+        {
+          // The same header as an object property rather than an argument:
+          // `NextResponse.json(data, { headers: { "Set-Cookie": ... } })` and
+          // `new Headers({ "Set-Cookie": ... })`. Two forms, because the rule
+          // above sees neither.
+          selector: "Property[key.value=/^set-cookie$/i]",
           message:
             "Writing a Set-Cookie header by hand can retract the session hint without telling the server, which reports the visitor as signed out while their refresh token stays live. Cookie writes belong in auth-state-cookie.ts or the backend.",
         },

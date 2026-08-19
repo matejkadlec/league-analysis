@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render } from "@testing-library/react";
+import { act, cleanup, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { api, normalizeApiError } from "@/lib/core/api";
@@ -184,6 +184,14 @@ describe("the axios interceptor", () => {
 });
 
 describe("the can't-reach-the-server surface", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("does not sign the visitor out on its own", async () => {
     // Sitting on this screen is not evidence of anything. An audit added an
     // effect here that gave up after a couple of retries and called
@@ -194,7 +202,12 @@ describe("the can't-reach-the-server surface", () => {
 
     render(<AuthGate>protected content</AuthGate>);
 
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    // Long enough that a teardown on a timer cannot simply outwait the
+    // assertion. Fifty milliseconds passed a retry-then-give-up effect that
+    // fired a second later.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60_000);
+    });
 
     expect(auth.logout).not.toHaveBeenCalled();
     expect(hasAuthStateCookie()).toBe(true);

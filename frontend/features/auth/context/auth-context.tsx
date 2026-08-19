@@ -11,11 +11,7 @@ import {
 } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import {
-  refreshAccessToken,
-  removeAuthTokens,
-  setAuthTokens,
-} from "../utils/token-manager";
+import { refreshAccessToken, removeAuthTokens } from "../utils/token-manager";
 import {
   AUTH_PROBE_TIMEOUT_MS,
   createAuthLoginError,
@@ -88,7 +84,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (response.ok) {
         const userData = await response.json();
-        setAuthTokens();
         setUser(userData);
       } else if (response.status === 401) {
         const refresh = await refreshAccessToken();
@@ -161,102 +156,136 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     void checkAuth();
   }, [checkAuth]);
 
-  const login = useCallback(async (credentials: LoginRequest) => {
-    setIsLoading(true);
-    try {
-      // OAuth2 password flow requires form-data format
-      const formData = new URLSearchParams();
-      formData.append("username", credentials.email); // OAuth2 uses 'username' field
-      formData.append("password", credentials.password);
-      if (credentials.captchaToken) {
-        formData.append("captcha_token", credentials.captchaToken);
-      }
-
-      const abortController = new AbortController();
-      let didTimeout = false;
-      const timeoutId = setTimeout(() => {
-        didTimeout = true;
-        abortController.abort();
-      }, LOGIN_REQUEST_TIMEOUT_MS);
-
+  const login = useCallback(
+    async (credentials: LoginRequest) => {
+      setIsLoading(true);
       try {
-        const response = await fetch(`${API_BASE_URL}/api/v1/auth/login`, {
-          method: "POST",
-          credentials: "include",
-          headers: {
-            "Content-Type": "application/x-www-form-urlencoded",
-          },
-          body: formData,
-          signal: abortController.signal,
-        });
-
-        if (!response.ok) {
-          let payload: unknown = null;
-          try {
-            payload = await response.json();
-          } catch (error) {
-            if (getLoginRequestError(error, didTimeout).code === "REQUEST_TIMEOUT") {
-              throw error;
-            }
-          }
-          throw createAuthLoginError(payload, response.status);
+        // OAuth2 password flow requires form-data format
+        const formData = new URLSearchParams();
+        formData.append("username", credentials.email); // OAuth2 uses 'username' field
+        formData.append("password", credentials.password);
+        if (credentials.captchaToken) {
+          formData.append("captcha_token", credentials.captchaToken);
         }
 
-        await response.json();
+        const abortController = new AbortController();
+        let didTimeout = false;
+        const timeoutId = setTimeout(() => {
+          didTimeout = true;
+          abortController.abort();
+        }, LOGIN_REQUEST_TIMEOUT_MS);
+
+        try {
+          const response = await fetch(`${API_BASE_URL}/api/v1/auth/login`, {
+            method: "POST",
+            credentials: "include",
+            headers: {
+              "Content-Type": "application/x-www-form-urlencoded",
+            },
+            body: formData,
+            signal: abortController.signal,
+          });
+
+          if (!response.ok) {
+            let payload: unknown = null;
+            try {
+              payload = await response.json();
+            } catch (error) {
+              if (
+                getLoginRequestError(error, didTimeout).code ===
+                "REQUEST_TIMEOUT"
+              ) {
+                throw error;
+              }
+            }
+            throw createAuthLoginError(payload, response.status);
+          }
+
+          await response.json();
+        } catch (error) {
+          throw getLoginRequestError(error, didTimeout);
+        } finally {
+          clearTimeout(timeoutId);
+        }
+
+        queryClient.clear();
+
+        // Fetch user data
+        await checkAuth();
+
+        // Redirect to home page
+        router.push("/");
       } catch (error) {
-        throw getLoginRequestError(error, didTimeout);
-      } finally {
-        clearTimeout(timeoutId);
+        setIsLoading(false);
+        throw error;
       }
+    },
+    [checkAuth, queryClient, router],
+  );
 
-      setAuthTokens();
-      queryClient.clear();
-
-      // Fetch user data
-      await checkAuth();
-
-      // Redirect to home page
-      router.push("/");
-    } catch (error) {
-      setIsLoading(false);
-      throw error;
-    }
-  }, [checkAuth, queryClient, router]);
-
-  const logout = useCallback(async () => {
-    // Awaited, not fire-and-forget. Only the server can revoke; clearing
-    // cookies here just hides the credential. Tearing down first would mean
-    // reporting "signed out" while a 30-day refresh token stayed live and
-    // usable in this browser — the dangerous version being a shared machine,
-    // where the next person can spend it.
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/v1/auth/logout`, {
-        method: "POST",
-        credentials: "include",
-        // Without a deadline a backend that accepts the connection and hangs
-        // makes Sign Out do nothing at all — no teardown, no navigation, no
-        // spinner — and every further click stacks another dead request.
-        signal: AbortSignal.timeout(AUTH_PROBE_TIMEOUT_MS),
-      });
-      if (!response.ok) {
-        // `fetch` only rejects on network failure, so a 5xx arrives here
-        // looking like success. Say so rather than reporting a revocation
-        // that did not happen.
-        console.error("Sign out could not be completed by the server", {
-          status: response.status,
+  const logout = useCallback(
+    async (options?: { evenIfTheServerCannotBeReached?: boolean }) => {
+      // The default is safe, and that is the whole point of the option.
+      //
+      // Eight adversarial audits have now walked past the guard on "only the
+      // refresh call may end a session", and the last one did it by mounting a
+      // keep-alive that called `logout()` on a timer when a refresh failed.
+      // `logout()` is reached through React context, so no import rule can see
+      // it, and it tore the session down even when its own request never
+      // reached the server -- clearing the hint while the 30-day refresh cookie
+      // stayed live and unrevoked in the jar. Every lint rule stayed green.
+      //
+      // Nothing stops a future component calling this. So the unconditional
+      // teardown stopped being the default: a caller that just writes
+      // `logout()` now sends the request and, if the server never answered,
+      // changes nothing locally. That is the right answer for a machine, and
+      // it is the shape a machine will naturally write.
+      //
+      // Only a visitor who asked gets the other behaviour, because only for
+      // them is a stranded local session worse than a stranded remote one --
+      // being left staring at an account they just asked to leave. Both call
+      // sites that pass this flag are a button under someone's finger, and a
+      // timer passing it is a lie visible at the call site.
+      let serverAnswered = false;
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/v1/auth/logout`, {
+          method: "POST",
+          credentials: "include",
+          // Without a deadline a backend that accepts the connection and hangs
+          // makes Sign Out do nothing at all — no teardown, no navigation, no
+          // spinner — and every further click stacks another dead request.
+          signal: AbortSignal.timeout(AUTH_PROBE_TIMEOUT_MS),
         });
+        // Success only. `/auth/logout` carries no auth dependency and cannot
+        // answer 401 itself, so counting one as "already signed out" would
+        // only ever be trusting an edge -- and a maintenance Worker sits in
+        // front of this route. A 401 minted there during a deploy would let an
+        // automatic logout tear the session down with nothing revoked, which
+        // is the exact failure the opt-in above exists to prevent.
+        serverAnswered = response.ok;
+        if (!response.ok) {
+          // `fetch` only rejects on network failure, so a 5xx arrives here
+          // looking like success. Say so rather than reporting a revocation
+          // that did not happen.
+          console.error("Sign out could not be completed by the server", {
+            status: response.status,
+          });
+        }
+      } catch {
+        // Unreachable or timed out, so nothing was revoked.
       }
-    } catch {
-      // Unreachable or timed out, so nothing was revoked. Still clear local
-      // state: leaving someone staring at a session they asked to end is
-      // worse, and the tokens expire on their own.
-    }
 
-    removeAuthTokens();
-    queryClient.clear();
-    setUser(null);
-    router.push("/sign-in");
-  }, [queryClient, router]);
+      if (!serverAnswered && !options?.evenIfTheServerCannotBeReached) {
+        return;
+      }
+
+      removeAuthTokens();
+      queryClient.clear();
+      setUser(null);
+      router.push("/sign-in");
+    },
+    [queryClient, router],
+  );
 
   const value = useMemo(
     () => ({
@@ -270,9 +299,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [user, isLoading, login, logout, checkAuth],
   );
 
-  return (
-    <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {

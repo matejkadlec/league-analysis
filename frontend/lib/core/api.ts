@@ -126,7 +126,11 @@ api.interceptors.response.use(
         refresh.outcome === "unavailable"
           ? new AxiosError(
               "The session could not be renewed.",
-              AxiosError.ERR_BAD_RESPONSE,
+              // What axios itself would pair with each status, so a consumer
+              // reading `.code` is not told a 429 came back as a 5xx.
+              refresh.status >= 500
+                ? AxiosError.ERR_BAD_RESPONSE
+                : AxiosError.ERR_BAD_REQUEST,
               originalRequest,
               error.request,
               {

@@ -16,6 +16,7 @@ from app.features.auth.cookies import (
     ACCESS_TOKEN_COOKIE_NAME,
     REFRESH_TOKEN_COOKIE_NAME,
 )
+from app.features.auth.revoked_access_token import RevokedAccessToken
 from app.features.auth.router import logout
 from app.features.auth.service import AuthService
 
@@ -375,3 +376,42 @@ async def test_a_token_already_blacklisted_is_not_inserted_twice() -> None:
 
     assert db.added == 0
     assert db.committed == 0
+
+
+@pytest.mark.asyncio
+async def test_the_blacklist_row_names_the_token_it_revokes() -> None:
+    """Nothing else in the suite looks at what is actually inserted.
+
+    The fakes above all ignore the instance handed to `add()`, so swapping
+    `token_id=token_id` for `token_id=user_id` -- or dropping `expires_at`, or
+    writing the wrong user -- leaves every test green while the blacklist stops
+    matching the token it is meant to revoke. `is_access_token_revoked` then
+    answers False forever and a spent token keeps working.
+    """
+
+    class _CapturingDb:
+        def __init__(self) -> None:
+            self.added: list[RevokedAccessToken] = []
+
+        def add(self, instance: RevokedAccessToken) -> None:
+            self.added.append(instance)
+
+        async def execute(self, _statement: Select[Any]) -> object:
+            result = MagicMock()
+            result.scalar_one_or_none.return_value = None
+            return result
+
+        async def commit(self) -> None:
+            return None
+
+    db = _CapturingDb()
+    service = AuthService(cast("AsyncSession", db))
+
+    await service.revoke_access_token(_live_access_token(), reason="logout")
+
+    assert len(db.added) == 1
+    row = db.added[0]
+    assert row.token_id == "t"
+    assert row.user_id == 9
+    assert row.reason == "logout"
+    assert row.expires_at > datetime.now(UTC)

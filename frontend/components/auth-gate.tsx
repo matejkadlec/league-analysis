@@ -1,11 +1,6 @@
 "use client";
 
-import {
-  useEffect,
-  useReducer,
-  useState,
-  useSyncExternalStore,
-} from "react";
+import { useEffect, useReducer, useState, useSyncExternalStore } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/features/auth";
 import {
@@ -217,7 +212,11 @@ export function AuthGate({ children }: AuthGateProps) {
   return (
     <SessionUnverified
       onRetry={() => Promise.resolve(checkAuth()).finally(forceRecheck)}
-      onSignOut={() => Promise.resolve(logout()).finally(forceRecheck)}
+      onSignOut={() =>
+        Promise.resolve(
+          logout({ evenIfTheServerCannotBeReached: true }),
+        ).finally(forceRecheck)
+      }
     />
   );
 }
