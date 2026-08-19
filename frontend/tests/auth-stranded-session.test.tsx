@@ -14,6 +14,11 @@ import {
   clearAuthStateCookie,
   hasAuthStateCookie,
 } from "@/features/auth/utils/auth-state-cookie";
+import { AUTH_PROBE_TIMEOUT_MS } from "@/features/auth/utils/login-error";
+import {
+  hangingFetch,
+  installDrivableAbortDeadlines,
+} from "./deadline-support";
 
 const nav = vi.hoisted(() => ({ replace: vi.fn(), pathname: "/" }));
 
@@ -361,19 +366,71 @@ describe("giving up on a session", () => {
     expect(hasAuthStateCookie()).toBe(false);
   });
 
-  it("gives the refresh a deadline", async () => {
-    // Without one, a backend that accepts the connection and hangs strands
-    // the caller exactly as a probe that never settles would.
+  it("gives up on the refresh at the deadline, not never", async () => {
+    // Without a deadline a backend that accepts the connection and hangs
+    // strands the caller exactly as a probe that never settles would. Asserted
+    // as an effect: this used to check only that the signal was an
+    // `AbortSignal`, which stayed green with the deadline deleted.
     setHint();
-    let seen: AbortSignal | null | undefined;
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) => {
-      seen = init?.signal;
-      return new Response("{}", { status: 200 });
-    });
+    vi.useFakeTimers();
+    const restoreDeadlines = installDrivableAbortDeadlines();
+    try {
+      vi.spyOn(globalThis, "fetch").mockImplementation(hangingFetch());
 
-    await refreshAccessToken();
+      let settled = false;
+      const pending = refreshAccessToken().then((result) => {
+        settled = true;
+        return result;
+      });
 
-    expect(seen).toBeInstanceOf(AbortSignal);
+      await vi.advanceTimersByTimeAsync(AUTH_PROBE_TIMEOUT_MS - 100);
+      expect(settled).toBe(false);
+
+      await vi.advanceTimersByTimeAsync(200);
+      await expect(pending).resolves.toEqual({ outcome: "unreachable" });
+      // Nothing was learned, so nothing is torn down.
+      expect(hasAuthStateCookie()).toBe(true);
+    } finally {
+      restoreDeadlines();
+      vi.useRealTimers();
+    }
+  });
+
+  it("gives up on the post-teardown logout at the deadline, not never", async () => {
+    // The refresh that lands after a teardown asks the server to end the
+    // rotated session, and `refreshInFlight` is only cleared once that
+    // settles. Without a deadline on it, one hung logout leaves every later
+    // refresh awaiting a promise that never settles: token refresh silently
+    // dead for the whole tab.
+    setHint();
+    vi.useFakeTimers();
+    const restoreDeadlines = installDrivableAbortDeadlines();
+    try {
+      const hang = hangingFetch();
+      vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+        if (String(input).includes("/auth/refresh")) {
+          removeAuthTokens(); // Torn down while this was in flight.
+          setHint();
+          return new Response("{}", { status: 200 });
+        }
+        return await hang(input, init);
+      });
+
+      let settled = false;
+      const pending = refreshAccessToken().then((result) => {
+        settled = true;
+        return result;
+      });
+
+      await vi.advanceTimersByTimeAsync(AUTH_PROBE_TIMEOUT_MS - 100);
+      expect(settled).toBe(false);
+
+      await vi.advanceTimersByTimeAsync(200);
+      await expect(pending).resolves.toEqual({ outcome: "refused" });
+    } finally {
+      restoreDeadlines();
+      vi.useRealTimers();
+    }
   });
 
   it("clears the hint when the server rejects the refresh", async () => {
@@ -522,9 +579,8 @@ describe("giving up on a session", () => {
     // is HttpOnly, so the session has to be ended server-side.
     const logoutCall = calls.find((call) => call.url.includes("/auth/logout"));
     expect(logoutCall).toBeTruthy();
-    // `refreshInFlight` is cleared only in the outer `finally`, so a logout
-    // that hangs here leaves every later refresh awaiting a promise that
-    // never settles -- token refresh silently dead for the whole tab.
-    expect(logoutCall?.signal).toBeInstanceOf(AbortSignal);
+    // That this logout also has a working deadline is asserted as an effect
+    // in "gives up on the post-teardown logout at the deadline, not never";
+    // `toBeInstanceOf(AbortSignal)` here was green with the deadline deleted.
   });
 });

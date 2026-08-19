@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act, cleanup, render } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { api, normalizeApiError } from "@/lib/core/api";
@@ -212,5 +212,29 @@ describe("the can't-reach-the-server surface", () => {
     expect(auth.logout).not.toHaveBeenCalled();
     expect(hasAuthStateCookie()).toBe(true);
     expect(nav.replace).not.toHaveBeenCalled();
+  });
+
+  it("still signs the visitor out when they press the button here", async () => {
+    // The counterpart, and the reason `logout` takes a flag rather than
+    // simply never tearing down: this screen exists for the server that is
+    // not answering, so its Sign out button is the one caller that must act
+    // anyway. Dropping the flag here -- one word, invisible to every lint
+    // rule, since the call arrives through context -- leaves the visitor
+    // pressing a button that does nothing at all, on the one surface whose
+    // whole purpose is to be the way out.
+    setHint();
+
+    render(<AuthGate>protected content</AuthGate>);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
+    });
+
+    expect(auth.logout).toHaveBeenCalledWith({
+      evenIfTheServerCannotBeReached: true,
+    });
   });
 });

@@ -119,11 +119,14 @@ const eslintConfig = [
           // adding a differently-named export that does the same thing.
           patterns: [
             {
+              // Trailing `*` because a specifier may carry an extension:
+              // `.../token-manager.js` matched none of these patterns and
+              // resolves to the same module.
               group: [
-                "**/auth/utils/token-manager",
-                "../utils/token-manager",
-                "./utils/token-manager",
-                "./token-manager",
+                "**/auth/utils/token-manager*",
+                "../utils/token-manager*",
+                "./utils/token-manager*",
+                "./token-manager*",
               ],
               allowImportNames: ["refreshAccessToken"],
               message:
@@ -131,10 +134,10 @@ const eslintConfig = [
             },
             {
               group: [
-                "**/auth/utils/auth-state-cookie",
-                "../utils/auth-state-cookie",
-                "./utils/auth-state-cookie",
-                "./auth-state-cookie",
+                "**/auth/utils/auth-state-cookie*",
+                "../utils/auth-state-cookie*",
+                "./utils/auth-state-cookie*",
+                "./auth-state-cookie*",
               ],
               allowImportNames: [
                 "AUTH_STATE_COOKIE_NAME",
@@ -206,9 +209,18 @@ const eslintConfig = [
           // `no-restricted-imports` never visits ImportExpression, so a
           // dynamic import is invisible to the allowlist above.
           selector:
-            "ImportExpression[source.value=/auth\\/utils\\/(token-manager|auth-state-cookie)$/]",
+            "ImportExpression[source.value=/auth\\/utils\\/(token-manager|auth-state-cookie)/]",
           message:
             "Importing the session teardown dynamically evades the import allowlist. Only the refresh call may end a session.",
+        },
+        {
+          // And a specifier that is not a literal has no `source.value` at
+          // all, so `await import(`@/features/auth/utils/${name}`)` is
+          // invisible to the rule above as well. Nothing in the tree imports
+          // dynamically today, so refusing the unreadable form costs nothing.
+          selector: "ImportExpression:not([source.type='Literal'])",
+          message:
+            "A dynamic import whose specifier is not a literal cannot be checked against the allowlist. Import it statically.",
         },
       ],
     },

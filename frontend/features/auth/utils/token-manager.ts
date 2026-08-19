@@ -164,13 +164,14 @@ export async function refreshAccessToken(): Promise<SessionRefresh> {
     }
   };
 
-  // Cleared here rather than in a `finally` inside `runRefresh`. Anything that
-  // throws in the synchronous prefix of that function -- `AbortSignal.timeout`
-  // on a browser too old to have it, say -- runs the whole body, including a
-  // `finally`, before this assignment happens. The reset would land first and
-  // the assignment second, leaving a settled promise cached forever and every
-  // later refresh short-circuiting on it without touching the network: token
-  // refresh silently dead for the tab.
+  // Cleared here rather than in a `finally` inside `runRefresh`. A `finally`
+  // in there runs before this assignment does whenever the body settles
+  // synchronously, so the reset would land first and the assignment second,
+  // leaving a settled promise cached forever and every later refresh
+  // short-circuiting on it without touching the network: token refresh
+  // silently dead for the tab. Nothing in the current body can settle that
+  // early -- the whole thing is inside a `try` and awaits a fetch -- so this
+  // is about the next edit, not about a live bug.
   const attempt = runRefresh();
   refreshInFlight = attempt;
   try {

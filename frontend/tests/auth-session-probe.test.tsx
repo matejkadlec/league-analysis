@@ -10,13 +10,19 @@ import {
   AUTH_STATE_COOKIE_NAME,
   AUTH_STATE_COOKIE_VALUE,
 } from "@/features/auth/utils/auth-state-cookie";
+import { AUTH_PROBE_TIMEOUT_MS } from "@/features/auth/utils/login-error";
+import type { AuthContextType } from "@/features/auth/types";
+import {
+  hangingFetch,
+  installDrivableAbortDeadlines,
+} from "./deadline-support";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
 }));
 
 let triggerRecheck: (() => Promise<void>) | null = null;
-let triggerLogout: (() => Promise<void>) | null = null;
+let triggerLogout: AuthContextType["logout"] | null = null;
 
 function AuthStateProbe() {
   const { isLoading, isAuthenticated, checkAuth, logout } = useAuth();
@@ -65,27 +71,75 @@ afterEach(() => {
   clearCookies();
 });
 
-describe("signing out", () => {
-  it("gives the logout request a deadline", async () => {
-    // Without one, a backend that accepts the connection and hangs makes Sign
-    // Out do nothing at all -- no teardown, no navigation, no spinner -- and
-    // every further click stacks another dead request.
+describe("request deadlines", () => {
+  // Asserted as an effect -- the request actually gives up, at that length --
+  // rather than as `expect(signal).toBeInstanceOf(AbortSignal)`, which four
+  // tests used to do. Replacing every deadline in the auth path with a signal
+  // that never fires kept all of them green while restoring the reported
+  // symptom. See `deadline-support.ts` for why fake timers alone cannot see
+  // `AbortSignal.timeout`.
+  let restoreDeadlines: (() => void) | null = null;
+
+  afterEach(() => {
+    restoreDeadlines?.();
+    restoreDeadlines = null;
+    vi.useRealTimers();
+  });
+
+  it("gives up on the session probe at the deadline, not never", async () => {
+    // A backend that accepts the connection and never answers leaves
+    // `isLoading` true forever, and every surface gated on it renders nothing:
+    // the original white screen, reachable by simply waiting.
+    vi.useFakeTimers();
+    restoreDeadlines = installDrivableAbortDeadlines();
     document.cookie = `${AUTH_STATE_COOKIE_NAME}=${AUTH_STATE_COOKIE_VALUE}; path=/`;
-    let seen: AbortSignal | null | undefined;
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
-      if (String(input).includes("/auth/logout")) {
-        seen = init?.signal;
-      }
-      return new Response("{}", { status: 200 });
+    vi.spyOn(globalThis, "fetch").mockImplementation(hangingFetch());
+
+    const { getByTestId } = renderProvider();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(AUTH_PROBE_TIMEOUT_MS - 100);
     });
+    // Still waiting: a shorter deadline would have settled this already, and
+    // the spinner it shows is the honest answer while the request is live.
+    expect(getByTestId("state").textContent).toBe("loading:false");
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(200);
+    });
+    expect(getByTestId("state").textContent).toBe("settled:false");
+  });
+
+  it("gives up on the logout request at the deadline, not never", async () => {
+    // Without one, Sign Out does nothing at all -- no teardown, no navigation,
+    // and the promise both buttons drive their spinner from never settles, so
+    // every further click stacks another dead request.
+    vi.useFakeTimers();
+    restoreDeadlines = installDrivableAbortDeadlines();
+    document.cookie = `${AUTH_STATE_COOKIE_NAME}=${AUTH_STATE_COOKIE_VALUE}; path=/`;
+    vi.spyOn(globalThis, "fetch").mockImplementation(hangingFetch());
 
     renderProvider();
-    await waitFor(() => expect(triggerLogout).not.toBeNull());
     await act(async () => {
-      await triggerLogout?.();
+      await Promise.resolve();
+    });
+    expect(triggerLogout).not.toBeNull();
+
+    let settled = false;
+    const pending = triggerLogout?.().then(() => {
+      settled = true;
     });
 
-    expect(seen).toBeInstanceOf(AbortSignal);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(AUTH_PROBE_TIMEOUT_MS - 100);
+    });
+    expect(settled).toBe(false);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(200);
+      await pending;
+    });
+    expect(settled).toBe(true);
   });
 });
 
