@@ -4,6 +4,8 @@ import { useQuery } from "@tanstack/react-query";
 import { ApiRequestError } from "@/lib/core/api";
 import { TrendingUp, Users } from "lucide-react";
 
+import { formatDateTime } from "@/lib/core/format";
+
 import { getLatestCompletedMatchmakingAnalysis } from "../matchmaking-api";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -32,26 +34,6 @@ function AnalyzedPlayerResultLabel({ playerLabel }: { playerLabel: string }) {
       </span>
     </p>
   );
-}
-
-/**
- * Format date/time as DD/MM/YYYY H:MM AM|PM (no leading zeros except minutes)
- */
-function formatDateTime(dateString: string): string {
-  const date = new Date(dateString);
-  const day = date.getDate();
-  const month = date.getMonth() + 1;
-  const year = date.getFullYear();
-
-  let hours = date.getHours();
-  const minutes = date.getMinutes();
-  const ampm = hours >= 12 ? "PM" : "AM";
-  hours = hours % 12;
-  hours = hours ? hours : 12; // the hour '0' should be '12'
-
-  const minutesStr = minutes < 10 ? `0${minutes}` : minutes;
-
-  return `${day}/${month}/${year} ${hours}:${minutesStr} ${ampm}`;
 }
 
 export function MatchmakingAnalysisResults({

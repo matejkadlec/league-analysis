@@ -293,20 +293,22 @@ describe("the last matchmaking analysis result", () => {
   });
 
   it.each([
-    [new Date(2026, 2, 4, 14, 7), "4/3/2026 2:07 PM"],
+    [new Date(2026, 2, 4, 14, 7), "4.3.2026 2:07 PM"],
     // Midnight is the one `hours % 12` turns into 0, which is what the
-    // `hours ? hours : 12` line exists for. Without a midnight fixture that
-    // line can be deleted and every other hour still reads correctly.
-    [new Date(2026, 2, 4, 0, 5), "4/3/2026 12:05 AM"],
+    // `|| 12` in the shared formatter exists for. Without a midnight fixture
+    // that expression can be deleted and every other hour still reads
+    // correctly.
+    [new Date(2026, 2, 4, 0, 5), "4.3.2026 12:05 AM"],
     // Noon is the only hour where `>= 12` and `> 12` disagree, so it is the
     // only fixture that pins the meridiem boundary.
-    [new Date(2026, 2, 4, 12, 30), "4/3/2026 12:30 PM"],
-    [new Date(2026, 2, 4, 23, 59), "4/3/2026 11:59 PM"],
+    [new Date(2026, 2, 4, 12, 30), "4.3.2026 12:30 PM"],
+    [new Date(2026, 2, 4, 23, 59), "4.3.2026 11:59 PM"],
   ])("writes %s as %s", async (createdAt, expected) => {
-    // A third copy of the same D/M/YYYY h:mm AM/PM formatter lives here, and
-    // its three fixes are the ones every hand-rolled clock gets wrong: `07`
-    // minutes rather than `7`, midnight reading as 12 rather than 0, and noon
-    // being PM rather than AM.
+    // This card used to carry the one D/M/YYYY (slashes) copy of the clock;
+    // it now reads the shared dots-shaped formatDateTime, and these fixtures
+    // pin the three things every hand-rolled clock gets wrong: `07` minutes
+    // rather than `7`, midnight reading as 12 rather than 0, and noon being
+    // PM rather than AM.
     getLatestCompletedMatchmakingAnalysis.mockResolvedValue(
       completed(EVEN, createdAt.toISOString()),
     );

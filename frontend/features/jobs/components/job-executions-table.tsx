@@ -12,8 +12,8 @@ import {
 import type { JobExecution } from "@/lib/core/schemas";
 
 import {
-  formatDateTime,
   formatDuration,
+  formatJobTimestamp,
   formatRecordsSummary,
 } from "./job-execution-format";
 
@@ -95,11 +95,11 @@ export function JobExecutionsTable({
                 </Badge>
               </TableCell>
               <TableCell className="text-sm text-muted-foreground">
-                {formatDateTime(execution.started_at)}
+                {formatJobTimestamp(execution.started_at)}
               </TableCell>
               <TableCell className="text-sm text-muted-foreground">
                 {execution.completed_at
-                  ? formatDateTime(execution.completed_at)
+                  ? formatJobTimestamp(execution.completed_at)
                   : "—"}
               </TableCell>
               <TableCell className="text-sm">

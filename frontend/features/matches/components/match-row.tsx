@@ -17,6 +17,7 @@ import {
   getRuneStyleIconUrl,
   getRuneStyleName,
 } from "@/lib/core/data-dragon";
+import { formatDateTime } from "@/lib/core/format";
 import { useDDragonVersion } from "@/lib/core/data-dragon-context";
 import { formatMatchLpChange } from "../utils/lp-change";
 import {
@@ -43,25 +44,6 @@ interface MatchSideParticipant {
   summoner1_id?: number | null | undefined;
   summoner2_id?: number | null | undefined;
   runes?: ParticipantRunes | null | undefined;
-}
-
-function formatTime(timestamp: number): string {
-  const date = new Date(timestamp);
-  let hours = date.getHours();
-  const minutes = date.getMinutes();
-  const ampm = hours >= 12 ? "PM" : "AM";
-  hours = hours % 12;
-  hours = hours ? hours : 12; // 0 should be 12
-  return `${hours}:${minutes.toString().padStart(2, "0")} ${ampm}`;
-}
-
-function formatDate(timestamp: number): string {
-  const date = new Date(timestamp);
-  return `${date.getDate()}.${date.getMonth() + 1}.${date.getFullYear()}`;
-}
-
-function formatDateTime(timestamp: number): string {
-  return `${formatDate(timestamp)} ${formatTime(timestamp)}`;
 }
 
 function formatDuration(seconds: number): string {

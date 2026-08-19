@@ -38,3 +38,27 @@ export function kdaColor(kda: number): string {
 export function formatKDA(kda: number): string {
   return kda.toFixed(2);
 }
+
+// One copy of the local-time timestamp. Four hand-rolled versions of this
+// clock existed, disagreeing only on the date separator; dots were the
+// majority and are now the app-wide shape. Hand-rolled rather than Intl
+// because recent ICU puts a narrow no-break space before AM/PM, which is
+// invisible in a diff and breaks exact-text assertions and copy-paste.
+
+/** Local-time "4.3.2026 2:07 PM"; pass { seconds: true } for "…2:07:09 PM". */
+export function formatDateTime(
+  timestamp: string | number,
+  { seconds = false }: { seconds?: boolean } = {},
+): string {
+  const date = new Date(timestamp);
+  // An unparseable timestamp otherwise renders "NaN.NaN.NaN 12:NaN AM";
+  // "—" matches the placeholder sibling surfaces already use.
+  if (Number.isNaN(date.getTime())) return "—";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const hours = date.getHours() % 12 || 12;
+  const meridiem = date.getHours() >= 12 ? "PM" : "AM";
+  const clock = seconds
+    ? `${hours}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
+    : `${hours}:${pad(date.getMinutes())}`;
+  return `${date.getDate()}.${date.getMonth() + 1}.${date.getFullYear()} ${clock} ${meridiem}`;
+}
