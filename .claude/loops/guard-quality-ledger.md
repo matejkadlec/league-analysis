@@ -259,6 +259,33 @@ three untested messages in `login-error.ts`.
   Died cleanly: the rank number restarting per page (the second page opens
   with another "1", reading as the best champion twice), both ends of the
   pager, and both off-by-ones available in the "1–5 of 12" label.
+- ~~`features/jobs/components/system-status.tsx`~~ — done 2026-08-19, nine
+  tests, twelve mutations, all died. The file is worth reading for the two
+  things the mutations did *not* find, both of which came out of reading it.
+
+  **A live trap, logged rather than fixed.** The private `formatRelativeTime`
+  computes `now - date`, and its first band is `diffMins < 1 -> "Just now"`.
+  The same function also renders `next_run_time`, which is a time in the
+  future: a negative difference clears every band, so a run fifteen minutes
+  out reads "Next scheduled run: Just now". It is unreachable only because
+  `jobs/router.py:786` hard-codes `next_run_time=None,  # TODO: Get from
+  scheduler`. Whoever does that TODO ships the wrong label in the same change.
+  A test cannot be written for it without first pinning behaviour nobody has
+  decided on, so it is in `IMPROVEMENTS.md` with the line number.
+
+  **Accepted as unreachable, and kept.** The health headline ends in
+  `: "Check Required"`, and no value the backend can produce reaches it:
+  arriving there needs `!isHealthy`, `running_executions <= 0`, and
+  `scheduler_running`, which contradicts `isHealthy`'s own definition unless
+  the count is negative or `NaN`. `z.number()` admits both; a `len()` on the
+  server produces neither. Unlike the two validation patterns deleted from
+  `display-name-field.tsx`, this arm is the *last* branch of a cascade over
+  untrusted numbers, so what it guards against is rendering nothing at all.
+  Kept, and now recorded as deliberate rather than as an untested branch.
+
+  The four relative-time bands are the reason the mutation count is high:
+  `45m ago` and `45h ago` are both plausible readings of a jobs page, and a
+  boundary that slips by a factor of sixty is invisible in review.
 
 The rest, enumerated 2026-08-19 rather than left as "plus 9 more": `app/jobs/page.tsx` (30),
 `features/matchmaking/components/matchmaking-analysis-results.tsx` (30),
@@ -267,7 +294,8 @@ six tests, nine mutations, **two survivors and both of them the test's
 fault**, one iteration after the same thing happened on `role-stats-card`;
 see the paired row below),
 `app/matchmaking-analysis/page.tsx` (25), `app/player-overview/page.tsx` (24),
-`features/jobs/components/system-status.tsx` (20),
+~~`features/jobs/components/system-status.tsx`~~ (20, done 2026-08-19 — nine
+tests, twelve mutations, all died; the row below carries the two findings),
 ~~`features/players/components/player-card-format.ts`~~ (16, done 2026-08-19),
 `components/ui/tabs.tsx` (11). The three `app/*/page.tsx` entries are route
 shells; check what they actually hold before spending an iteration on one.

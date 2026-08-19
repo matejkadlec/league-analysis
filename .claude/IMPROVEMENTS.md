@@ -1,5 +1,18 @@
 # Improvements
 
+- 2026-08-19 frontend/features/jobs/components/system-status.tsx: its private
+  `formatRelativeTime` computes `now - date` and its first band is
+  `diffMins < 1 -> "Just now"`, but the same function also renders
+  `next_run_time`, which is a time in the *future*. A negative difference
+  clears every band, so a run scheduled fifteen minutes out renders as
+  "Next scheduled run: Just now". It is unreachable today only because
+  `backend/app/features/jobs/router.py:786` hard-codes
+  `next_run_time=None,  # TODO: Get from scheduler` — so whoever does that TODO
+  ships the wrong label in the same change, with nothing in the gate to say so.
+  The shared `lib/core/relative-time.ts` is no help: it clamps with
+  `Math.max(0, ...)` and would answer "just now" too. Either that TODO comes
+  with a forward-looking formatter, or the `next_run_time` block goes.
+
 - 2026-08-19 frontend/features/players/components/player-card-format.ts:
   `formatWinRate` guesses its own units — `winRate <= 1 ? winRate * 100 :
   winRate` — because its two callers disagree. `PlayerCardWinRate` passes
