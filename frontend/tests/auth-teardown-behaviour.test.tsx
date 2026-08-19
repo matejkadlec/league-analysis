@@ -11,7 +11,6 @@ import {
   AUTH_STATE_COOKIE_VALUE,
   hasAuthStateCookie,
 } from "@/features/auth/utils/auth-state-cookie";
-import { markAuthSession } from "@/features/auth/utils/token-manager";
 
 /**
  * The session hint survives every failure that is not a refusal.
@@ -64,6 +63,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  delete api.defaults.adapter;
   vi.restoreAllMocks();
   document.cookie = `${AUTH_STATE_COOKIE_NAME}=; max-age=0; path=/`;
 });
@@ -75,7 +75,6 @@ describe("the axios interceptor", () => {
     // a refresh that fails because the API is being redeployed: nothing here
     // has been told the session is over.
     setHint();
-    markAuthSession(true);
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response("{}", { status: 502 }),
     );
@@ -92,6 +91,30 @@ describe("the axios interceptor", () => {
     expect(hasAuthStateCookie()).toBe(true);
   });
 
+  it("reports a rate limit as a rate limit, not as an outage", async () => {
+    // `/auth/refresh` is rate limited, uvicorn runs with --no-proxy-headers
+    // and browser traffic arrives through one rewrite, so every user shares a
+    // single bucket -- a 429 here is ordinary. Reporting the refresh outcome
+    // without its status told those visitors to "check that the backend is
+    // running" while the backend was up and answering them.
+    setHint();
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("{}", { status: 429 }),
+    );
+    api.defaults.adapter = async (config) => {
+      throw Object.assign(new Error("unauthorized"), {
+        isAxiosError: true,
+        config,
+        response: { status: 401, data: {}, headers: {}, config },
+      });
+    };
+
+    const failure = await api.get("/players").catch((error: unknown) => error);
+
+    expect(normalizeApiError(failure).kind).toBe("rate-limit");
+    expect(hasAuthStateCookie()).toBe(true);
+  });
+
   it("stops calling an unreachable server an authentication failure", async () => {
     // The 401 that started this is true of the expired access token and of
     // nothing else, so forwarding it makes a redeploy indistinguishable from a
@@ -102,10 +125,7 @@ describe("the axios interceptor", () => {
     // write `if (kind === "authentication") logout()` gets a teardown that
     // reads as correct code.
     setHint();
-    markAuthSession(true);
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response("{}", { status: 502 }),
-    );
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("offline"));
     api.defaults.adapter = async (config) => {
       throw Object.assign(new Error("unauthorized"), {
         isAxiosError: true,
@@ -120,13 +140,31 @@ describe("the axios interceptor", () => {
     expect(queryErrorToast(failure)).not.toBeNull();
   });
 
-  it("still calls a refused session an authentication failure", async () => {
-    // The other direction, and the reason the branch above reads the hint
-    // rather than assuming. A server that answers 401 to the refresh has
-    // refused; relabelling that as a network failure would leave a dead
-    // session looking transient and retryable forever.
+  it("reports a redeploy as a service failure", async () => {
     setHint();
-    markAuthSession(true);
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("{}", { status: 502 }),
+    );
+    api.defaults.adapter = async (config) => {
+      throw Object.assign(new Error("unauthorized"), {
+        isAxiosError: true,
+        config,
+        response: { status: 401, data: {}, headers: {}, config },
+      });
+    };
+
+    const failure = await api.get("/players").catch((error: unknown) => error);
+
+    expect(normalizeApiError(failure).kind).toBe("service");
+    expect(queryErrorToast(failure)).not.toBeNull();
+  });
+
+  it("still calls a refused session an authentication failure", async () => {
+    // The other direction, and the reason the interceptor forwards what the
+    // refresh reported rather than guessing. A server that answers 401 to the
+    // refresh has refused; relabelling that would leave a dead session looking
+    // transient and retryable forever.
+    setHint();
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response("{}", { status: 401 }),
     );

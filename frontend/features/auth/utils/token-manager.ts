@@ -8,7 +8,35 @@
 import { clearAuthStateCookie } from "./auth-state-cookie";
 import { AUTH_PROBE_TIMEOUT_MS } from "./login-error";
 
-let refreshInFlight: Promise<boolean> | null = null;
+/**
+ * What a refresh attempt found out, and the reason this is not a boolean.
+ *
+ * A guard saying "only `refreshAccessToken` may decide a session is over" has
+ * now been walked past seven times by adversarial review. Six of those were
+ * about the *shape* of the calling code, and were answered with better lint
+ * rules and then with tests that assert the effect. The seventh was not: this
+ * function returned a falsy value for a rejected session and for a server it
+ * never reached, and it is the one import every file in the repo is allowed to
+ * make. `if (!(await refreshAccessToken())) logout()` therefore reads as
+ * correct code, is invisible to any import rule, and signs people out over a
+ * redeploy. The signal was the hole, not the callers.
+ *
+ * So the distinction the whole design turns on is now in the return type, and
+ * every variant is an object -- a stale `if (!result)` is dead code rather
+ * than a teardown, which is the direction a mistake here should fail in.
+ */
+export type SessionRefresh =
+  /** The session is current; the cookies were rotated. */
+  | { outcome: "refreshed" }
+  /** The server refused this session. The hint has already been retracted. */
+  | { outcome: "refused" }
+  /** The server answered, but not about this session -- a 5xx, a rate limit,
+   *  or a verdict on a session that had already ended. Says nothing. */
+  | { outcome: "unavailable"; status: number }
+  /** No answer at all: unreachable, or the deadline passed. Says nothing. */
+  | { outcome: "unreachable" };
+
+let refreshInFlight: Promise<SessionRefresh> | null = null;
 let sessionHint = false;
 // Bumped every time the session is torn down. A refresh that started before
 // the teardown can still land after it, and its Set-Cookie response would
@@ -49,17 +77,16 @@ export function getAccessToken(): string | null {
   return sessionHint ? "session" : null;
 }
 
-export async function refreshAccessToken(): Promise<string | null> {
+export async function refreshAccessToken(): Promise<SessionRefresh> {
   if (!isBrowser()) {
-    return null;
+    return { outcome: "unreachable" };
   }
 
   if (refreshInFlight) {
-    const ok = await refreshInFlight;
-    return ok ? "cookie" : null;
+    return await refreshInFlight;
   }
 
-  const runRefresh = async (): Promise<boolean> => {
+  const runRefresh = async (): Promise<SessionRefresh> => {
     const epoch = sessionEpoch;
     try {
       const response = await fetch(`${getApiBaseUrl()}/api/v1/auth/refresh`, {
@@ -90,8 +117,13 @@ export async function refreshAccessToken(): Promise<string | null> {
           // since -- on a shared machine, the next person, moments after they
           // signed in successfully.
           removeAuthTokens();
+          return { outcome: "refused" };
         }
-        return false;
+        // Either not a refusal at all, or a refusal aimed at a session that
+        // has already ended. Both are silence on the question the caller
+        // asked, and the status travels with it so a rate limit is not
+        // reported as an unreachable server.
+        return { outcome: "unavailable", status: response.status };
       }
 
       if (epoch !== sessionEpoch) {
@@ -124,21 +156,22 @@ export async function refreshAccessToken(): Promise<string | null> {
         } catch {
           // Unreachable; the token expires on its own schedule.
         }
-        return false;
+        // The session this refresh belonged to is over either way, and the
+        // line above has just ended the rotated one too.
+        return { outcome: "refused" };
       }
 
       markAuthSession(true);
-      return true;
+      return { outcome: "refreshed" };
     } catch {
-      return false;
+      return { outcome: "unreachable" };
     } finally {
       refreshInFlight = null;
     }
   };
 
   refreshInFlight = runRefresh();
-  const ok = await refreshInFlight;
-  return ok ? "cookie" : null;
+  return await refreshInFlight;
 }
 
 export function hasAuthTokens(): boolean {

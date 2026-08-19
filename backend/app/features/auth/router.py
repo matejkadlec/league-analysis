@@ -258,10 +258,16 @@ async def refresh_access_token(
 # is the wrong way round: refusing a logout leaves a usable 30-day refresh
 # token in the browser of someone who has been told they are signed out, while
 # the cost of an extra logout is one hash lookup.
+# No body parameter, deliberately. Declaring one makes FastAPI read and
+# validate the body, which turns a malformed or non-JSON body -- a
+# `navigator.sendBeacon` logout sends `text/plain` -- into a 422 on a route
+# whose entire contract is that it cannot fail, and a 422 here means nothing
+# was revoked. `/refresh` accepts a body token and can afford to; this cannot,
+# and no client in this repo sends one. If a non-cookie client ever appears,
+# read the body by hand and ignore whatever does not parse.
 async def logout(
     request: Request,
     response: Response,
-    refresh_request: RefreshTokenRequest | None = None,
     auth_service: AuthService = Depends(get_auth_service),
 ) -> dict[str, str]:
     """Revoke whatever session the request still carries, and always succeed.
@@ -286,13 +292,7 @@ async def logout(
         authorization[7:].strip() if authorization[:7].lower() == "bearer " else None
     )
     access_token = bearer_token or request.cookies.get(ACCESS_TOKEN_COOKIE_NAME)
-    # Body first, then the cookie, exactly as `/refresh` reads it. A client
-    # that holds the pair `/login` returned has no cookie jar, and reading only
-    # the cookie answered it "Successfully logged out" while leaving its 30-day
-    # refresh token fully spendable at `/refresh`.
-    refresh_token = (
-        refresh_request.refresh_token if refresh_request is not None else None
-    ) or request.cookies.get(REFRESH_TOKEN_COOKIE_NAME)
+    refresh_token = request.cookies.get(REFRESH_TOKEN_COOKIE_NAME)
 
     # Only the refresh token names a user, because naming one signs them out
     # everywhere and this route is unauthenticated. A refresh token is checked

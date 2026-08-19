@@ -391,7 +391,7 @@ describe("giving up on a session", () => {
 
     const result = await refreshAccessToken();
 
-    expect(result).toBeNull();
+    expect(result).toEqual({ outcome: "refused" });
     expect(hasAuthStateCookie()).toBe(false);
   });
 
@@ -406,7 +406,11 @@ describe("giving up on a session", () => {
 
     const result = await refreshAccessToken();
 
-    expect(result).toBeNull();
+    // Reported as what it was, status and all. A caller that cannot tell this
+    // from a refusal is one `if (!result) logout()` away from signing the
+    // visitor out over a redeploy, and that is the shape an audit used to walk
+    // past every guard in the repo with.
+    expect(result).toEqual({ outcome: "unavailable", status: 502 });
     expect(hasAuthStateCookie()).toBe(true);
   });
 
@@ -417,8 +421,42 @@ describe("giving up on a session", () => {
 
     const result = await refreshAccessToken();
 
-    expect(result).toBeNull();
+    expect(result).toEqual({ outcome: "unreachable" });
     expect(hasAuthStateCookie()).toBe(true);
+  });
+
+  it("never answers a refresh with a falsy value", async () => {
+    // The seventh escape, and the only one that got past both the lint rules
+    // and the behavioural tests. This function is the one import every file in
+    // the repo is allowed to make, and it used to return a falsy value for a
+    // rejected session and for a server it never reached alike. So
+    // `if (!(await refreshAccessToken())) logout()` read as correct code,
+    // was invisible to any import rule, and signed people out over a redeploy
+    // -- an audit shipped exactly that as a proactive keep-alive.
+    //
+    // Nothing can stop someone writing that check. This makes it inert when
+    // they do: every outcome is truthy, so the naive test is dead code rather
+    // than a teardown, and telling a refusal from an outage requires reading
+    // `outcome`, which is the decision this whole design turns on.
+    setHint();
+    markAuthSession(true);
+    const answers: unknown[] = [];
+    for (const respond of [
+      () => Promise.resolve(new Response("{}", { status: 401 })),
+      () => Promise.resolve(new Response("{}", { status: 502 })),
+      () => Promise.resolve(new Response("{}", { status: 429 })),
+      () => Promise.reject(new Error("offline")),
+    ]) {
+      setHint();
+      markAuthSession(true);
+      vi.spyOn(globalThis, "fetch").mockImplementation(respond);
+      answers.push(await refreshAccessToken());
+    }
+
+    expect(answers).toHaveLength(4);
+    for (const answer of answers) {
+      expect(answer).toBeTruthy();
+    }
   });
 
   it("does not tear down a session that started after it was rejected", async () => {
@@ -465,7 +503,7 @@ describe("giving up on a session", () => {
 
     const result = await refreshAccessToken();
 
-    expect(result).toBeNull();
+    expect(result).toEqual({ outcome: "refused" });
     expect(hasAuthStateCookie()).toBe(false);
     // Clearing the hint only hides the rotated token; the new refresh cookie
     // is HttpOnly, so the session has to be ended server-side.

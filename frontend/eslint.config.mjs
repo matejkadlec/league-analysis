@@ -79,12 +79,16 @@ const eslintConfig = [
   // these rules could not.
   //
   // But that test file is an enumeration too -- of surfaces, and a new
-  // component with a query and a `logout()` is a fresh hole in it. The third
-  // layer is the only one that scales: `api.ts` no longer forwards a 401 that
-  // a failed refresh could not resolve, so `kind === "authentication"` means
-  // the server actually refused. That makes `if (kind === "authentication")
-  // logout()` -- the shape a future author is most likely to reach for, and
-  // the one nothing here can see -- correct code rather than a trap.
+  // component with a query and a `logout()` is a fresh hole in it. The layer
+  // that scales is neither of these: it is that the signals a caller reads no
+  // longer lie. `refreshAccessToken` returns a `SessionRefresh` naming what it
+  // found rather than a falsy value meaning both "refused" and "unreachable",
+  // and `api.ts` forwards that verbatim rather than passing on a 401 the
+  // refresh could not resolve. So `if (kind === "authentication") logout()`
+  // and `if (!(await refreshAccessToken())) logout()` -- the two shapes a
+  // future author is most likely to reach for, and the two nothing here can
+  // see -- are now correct code and dead code respectively, rather than the
+  // teardowns that walked past every version of this rule.
   //
   // The cookie-mutation rule is deliberately receiver-free, which costs one
   // false positive: a `Map` keyed by the cookie's name is flagged too.
@@ -166,6 +170,18 @@ const eslintConfig = [
             "CallExpression[callee.property.name=/^(set|delete)$/] Literal[value='league_analysis_auth_state']",
           message:
             "Setting or deleting the session hint here bypasses the one place that owns it. proxy.ts routes on this cookie, so retracting it without telling the server reports the visitor as signed out while their refresh token stays live and spendable.",
+        },
+        {
+          // A cookie can also be retracted by writing the raw header, which
+          // spells neither `.delete` nor the cookie's own name -- an early
+          // audit escaped through exactly that in `proxy.ts`. Keyed on the
+          // header rather than on the payload, so a `Set-Cookie` assembled
+          // from fragments is caught too. Nothing in the tree writes this
+          // header today, so it costs nothing to forbid.
+          selector:
+            "CallExpression[callee.property.name=/^(set|append)$/][arguments.0.value=/^set-cookie$/i]",
+          message:
+            "Writing a Set-Cookie header by hand can retract the session hint without telling the server, which reports the visitor as signed out while their refresh token stays live. Cookie writes belong in auth-state-cookie.ts or the backend.",
         },
         {
           // `no-restricted-imports` never visits ImportExpression, so a

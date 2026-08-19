@@ -56,7 +56,7 @@ describe("AuthProvider login timeout", () => {
     getAccessToken.mockReset();
     getAccessToken.mockReturnValue(null);
     refreshAccessToken.mockReset();
-    refreshAccessToken.mockResolvedValue(null);
+    refreshAccessToken.mockResolvedValue({ outcome: "unreachable" });
     removeAuthTokens.mockReset();
     setAuthTokens.mockReset();
     routerPush.mockReset();
@@ -245,7 +245,7 @@ describe("AuthProvider logout", () => {
     removeAuthTokens.mockReset();
     routerPush.mockReset();
     getAccessToken.mockReturnValue(null);
-    refreshAccessToken.mockResolvedValue(null);
+    refreshAccessToken.mockResolvedValue({ outcome: "unreachable" });
 
     let releaseServer: (() => void) | undefined;
     vi.stubGlobal(
@@ -287,8 +287,12 @@ describe("AuthProvider logout", () => {
       settled = true;
     });
 
+    // Real timers and a real wait, not one microtask. An audit gave up on the
+    // server after two seconds via `Promise.race` and this test stayed green,
+    // because it had already finished asserting -- restoring the exact failure
+    // its own comment names.
     await act(async () => {
-      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 2100));
     });
 
     expect(settled).toBe(false);
@@ -303,5 +307,11 @@ describe("AuthProvider logout", () => {
     expect(settled).toBe(true);
     expect(removeAuthTokens).toHaveBeenCalled();
     expect(routerPush).toHaveBeenCalledWith("/sign-in");
+    // The mock ignores its arguments, so without this the request could be a
+    // GET -- 405, nothing revoked -- and every assertion above still holds.
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringContaining("/auth/logout"),
+      expect.objectContaining({ method: "POST" }),
+    );
   });
 });

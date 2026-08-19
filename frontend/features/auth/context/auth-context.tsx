@@ -91,8 +91,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setAuthTokens();
         setUser(userData);
       } else if (response.status === 401) {
-        const refreshedToken = await refreshAccessToken();
-        if (!refreshedToken) {
+        const refresh = await refreshAccessToken();
+        if (refresh.outcome !== "refreshed") {
           // No `removeAuthTokens()` here: only the refresh call can tell a
           // rejected session from one it never reached, and it already tears
           // down in the first case. Clearing here too would turn a network
