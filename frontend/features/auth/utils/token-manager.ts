@@ -69,7 +69,16 @@ const SESSION_ENDING_CODES = new Set([
 export async function namesTheEndOfTheSession(
   response: Response,
 ): Promise<boolean> {
-  if (!(response.headers.get("content-type") ?? "").includes("application/json")) {
+  // Any JSON media type, not the exact string: an audit answered errors as
+  // RFC 9457 `application/problem+json`, a change that keeps `detail.code`
+  // intact and reads as a tidy-up, and a strict match would have quietly
+  // stopped every genuine sign-out from working. A challenge page is not
+  // served as any flavour of JSON, which is the distinction that matters.
+  if (
+    !/^application\/([\w.+-]+\+)?json/i.test(
+      response.headers.get("content-type") ?? "",
+    )
+  ) {
     return false;
   }
   try {

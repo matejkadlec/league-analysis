@@ -1,6 +1,6 @@
 // @vitest-environment node
 
-import { readdirSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -74,12 +74,12 @@ function discoverRoutes(): string[] {
       if (entry.isFile() && /^page\.(tsx|ts|jsx|js)$/.test(entry.name)) {
         routes.push(prefix === "" ? "/" : prefix);
       }
-      if (
-        entry.isDirectory() &&
-        !entry.name.startsWith("_") &&
-        !entry.name.startsWith("(")
-      ) {
-        walk(join(dir, entry.name), `${prefix}/${entry.name}`);
+      if (entry.isDirectory() && !entry.name.startsWith("_")) {
+        // A route group contributes no URL segment, so recurse without
+        // appending it -- skipping the directory outright hid every route
+        // inside it, which is the same hole in a different costume.
+        const segment = entry.name.startsWith("(") ? "" : `/${entry.name}`;
+        walk(join(dir, entry.name), `${prefix}${segment}`);
       }
     }
   };
@@ -292,6 +292,22 @@ describe("the edge and the session hint", () => {
       ? [["x-middleware-next", "1"]]
       : [["location", "http://localhost:3000/sign-in"]];
     expect([...response.headers.entries()]).toEqual(expected);
+  });
+
+  it("has no other edge entrypoint to hide in", () => {
+    // Next accepts `proxy`, `middleware`, `src/proxy` and `src/middleware`,
+    // and runs whichever exists. Everything asserted here is asserted about
+    // `@/proxy` alone, and the lint rules name files too -- so a second
+    // entrypoint would be an edge with no rules and no coverage at all.
+    const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+    for (const candidate of [
+      "middleware.ts",
+      "middleware.js",
+      "src/proxy.ts",
+      "src/middleware.ts",
+    ]) {
+      expect(existsSync(join(root, candidate))).toBe(false);
+    }
   });
 
   it("never asks the API whether a session is still good", async () => {

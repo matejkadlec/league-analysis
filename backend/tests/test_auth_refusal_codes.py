@@ -14,6 +14,7 @@ the right direction -- visitors keep their session and get the retry surface
 -- which is exactly why nothing else would catch it.
 """
 
+import re
 from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock
 
@@ -88,3 +89,63 @@ async def test_a_deactivated_account_names_itself_and_revokes_first() -> None:
     cast(
         AsyncMock, service.revoke_all_refresh_tokens_for_user
     ).assert_awaited_once_with(7)
+
+
+@pytest.mark.asyncio
+async def test_the_refusal_survives_the_app_as_json_the_browser_can_read() -> None:
+    """The shape on the wire, after every middleware and exception handler.
+
+    The tests above pin what the route raises; this pins what the browser
+    actually receives, because the client reads `detail.code` out of a JSON
+    body. An error envelope added anywhere in the stack -- an RFC 7807
+    handler, a middleware wrapping errors -- would silently stop every genuine
+    sign-out from working, and it would do so quietly: visitors keep a dead
+    session and see the retry surface forever.
+    """
+    import httpx
+
+    from app.main import app
+
+    transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
+    async with httpx.AsyncClient(
+        transport=transport, base_url="http://testserver"
+    ) as client:
+        response = await client.post("/api/v1/auth/refresh", json={})
+
+    assert response.status_code == 401
+    # The same rule the client applies (`namesTheEndOfTheSession`): any JSON
+    # media type, because an RFC 9457 envelope is a fine thing to add and the
+    # client handles it -- but a body the browser cannot read as JSON, or one
+    # that no longer carries `detail.code`, silently ends every genuine
+    # sign-out.
+    assert re.match(r"^application/([\w.+-]+\+)?json", response.headers["content-type"])
+    assert response.json()["detail"]["code"] == "INVALID_REFRESH_TOKEN"
+
+
+@pytest.mark.asyncio
+async def test_a_database_fault_is_not_laundered_into_a_refusal() -> None:
+    """An outage must not come back as "your session is over".
+
+    `None` from `rotate_refresh_token` becomes 401 INVALID_REFRESH_TOKEN, and
+    the browser is required to end the session on that name. Catching a
+    database error in there and returning `None` -- the kind of defensive edit
+    that reads as robustness -- produces a refusal byte-identical to a real
+    one, so every client-side guard behaves correctly and every visitor is
+    signed out for the length of the blip, with their refresh row live and
+    unrevoked and its HttpOnly cookie still in the jar.
+    """
+    from sqlalchemy.exc import DBAPIError
+
+    from app.features.auth.service import AuthService as RealAuthService
+
+    db = MagicMock()
+    db.execute = AsyncMock(
+        side_effect=DBAPIError("SELECT", {}, Exception("connection terminated"))
+    )
+    db.commit = AsyncMock()
+    service = RealAuthService(db)
+
+    with pytest.raises(DBAPIError):
+        await service.rotate_refresh_token(raw_refresh_token="whatever")
+
+    cast(AsyncMock, db.commit).assert_not_awaited()

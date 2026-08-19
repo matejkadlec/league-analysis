@@ -409,6 +409,48 @@ describe("giving up on a session", () => {
     expect(hasAuthStateCookie()).toBe(true);
   });
 
+  it("still recognises a refusal wrapped in a problem+json envelope", async () => {
+    // The other direction, and the reason the media type is matched loosely.
+    // An audit answered errors as RFC 9457 `application/problem+json` -- an
+    // ordinary tidy-up that keeps `detail.code` -- and a strict match on
+    // `application/json` stopped every genuine sign-out from firing: a dead
+    // session then shows "Can't reach the server" forever while the client
+    // asserts something it knows to be false.
+    setHint();
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          detail: { code: "INVALID_REFRESH_TOKEN", message: "gone" },
+          status: 401,
+        }),
+        { status: 401, headers: { "content-type": "application/problem+json" } },
+      ),
+    );
+
+    const result = await refreshAccessToken();
+
+    expect(result).toEqual({ outcome: "refused" });
+    expect(hasAuthStateCookie()).toBe(false);
+  });
+
+  it("does not take a refusal-shaped body served as HTML for a refusal", async () => {
+    // The content-type check, on its own. A challenge page is free to embed
+    // anything, and a body is only this API's answer if it arrives as this
+    // API's media type.
+    setHint();
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({ detail: { code: "INVALID_REFRESH_TOKEN" } }),
+        { status: 401, headers: { "content-type": "text/html" } },
+      ),
+    );
+
+    const result = await refreshAccessToken();
+
+    expect(result).toEqual({ outcome: "unreachable" });
+    expect(hasAuthStateCookie()).toBe(true);
+  });
+
   it("does not treat a 403 about something else as the end of the session", async () => {
     // A 403 from this API means "not authorized for this", which is not "your
     // session is over". An audit added an `email_verified` gate to the one

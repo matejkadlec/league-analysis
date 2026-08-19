@@ -710,7 +710,18 @@ class AuthService:
         remote_ip: str | None = None,
         user_agent: str | None = None,
     ) -> tuple[User, str, datetime, str, datetime] | None:
-        """Rotate refresh token and return new access/refresh pair."""
+        """Rotate refresh token and return new access/refresh pair.
+
+        `None` means the server refused: no such token, reuse, expiry, or an
+        unknown user. It must never mean "something went wrong". The router
+        answers `None` with 401 INVALID_REFRESH_TOKEN, and the browser is
+        required to end the session on that -- so an infrastructure failure
+        swallowed into a `None` here is laundered into a refusal that looks
+        byte-identical to a real one, and every visitor is signed out for the
+        length of a database blip while their refresh row stays live and
+        unrevoked. Let those errors raise: a 500 says nothing about the
+        session, which is the truth, and the client keeps it.
+        """
         token_hash = self._hash_refresh_token(raw_refresh_token)
         result = await self.db.execute(
             select(RefreshToken).where(RefreshToken.token_hash == token_hash)

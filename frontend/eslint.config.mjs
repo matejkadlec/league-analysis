@@ -270,7 +270,19 @@ const eslintConfig = [
   // cannot see when it is made through an imported client rather than the
   // global `fetch` it can spy on.
   {
-    files: ["proxy.ts"],
+    // Every name Next will run as the edge, not just the one in the tree:
+    // it accepts `proxy`, `middleware` and both under `src/`, and an audit
+    // put the probe in `middleware.ts`, where no rule here applied.
+    files: [
+      "proxy.ts",
+      "proxy.js",
+      "middleware.ts",
+      "middleware.js",
+      "src/proxy.ts",
+      "src/proxy.js",
+      "src/middleware.ts",
+      "src/middleware.js",
+    ],
     rules: {
       "no-restricted-globals": [
         "error",
@@ -330,6 +342,29 @@ const eslintConfig = [
           selector: "MemberExpression[property.name='fetch']",
           message:
             "The edge cannot tell a refusal from an outage, and cannot retry with a refresh. Asking the API here ends with a session torn down over a redeploy.",
+        },
+      ],
+    },
+  },
+  // Route handlers run on the server, where a cookie store is writable and a
+  // sweep over `getAll()` names nothing the selectors above can see -- and it
+  // takes the HttpOnly refresh cookie with it, not just the hint. Nothing in
+  // the tree has a route handler today, so refusing the store here costs
+  // nothing; the five Server Components that read the hint are untouched.
+  {
+    files: ["app/**/route.{ts,tsx,js,jsx}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "next/headers",
+              importNames: ["cookies"],
+              message:
+                "A route handler can write cookies, and a sweep here retracts the session hint and the HttpOnly refresh cookie with it while the token stays live server-side. Only the backend ends a session.",
+            },
+          ],
         },
       ],
     },

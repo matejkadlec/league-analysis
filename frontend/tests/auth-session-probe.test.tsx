@@ -250,10 +250,27 @@ describe("a probe that fails right after a refresh the server honoured", () => {
     // being satisfied by never tearing down at all. `/auth/me` answers 403
     // ACCOUNT_INACTIVE for a deactivated account, and that names the end of
     // the session.
+    //
+    // The first probe has to answer 401, or the refresh is never attempted and
+    // this lands in the first-probe 403 branch instead -- which is how an
+    // earlier version of this test passed while asserting nothing about the
+    // path its own describe block names. `probes` is asserted for that reason.
     document.cookie = `${AUTH_STATE_COOKIE_NAME}=${AUTH_STATE_COOKIE_VALUE}; path=/`;
+    let probes = 0;
+    let refreshes = 0;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       if (String(input).includes("/auth/refresh")) {
+        refreshes += 1;
         return new Response("{}", { status: 200 });
+      }
+      probes += 1;
+      if (probes === 1) {
+        // What `/auth/me` really answers for an expired access token: a
+        // plain-string detail, which names nothing and sends us to refresh.
+        return new Response(
+          JSON.stringify({ detail: "Your session is invalid or expired." }),
+          { status: 401, headers: { "content-type": "application/json" } },
+        );
       }
       return new Response(
         JSON.stringify({ detail: { code: "ACCOUNT_INACTIVE", message: "off" } }),
@@ -266,6 +283,8 @@ describe("a probe that fails right after a refresh the server honoured", () => {
     await waitFor(() =>
       expect(getByTestId("state").textContent).toBe("settled:false"),
     );
+    expect(refreshes).toBe(1);
+    expect(probes).toBe(2);
     expect(document.cookie).not.toContain(AUTH_STATE_COOKIE_NAME);
   });
 
@@ -277,9 +296,19 @@ describe("a probe that fails right after a refresh the server honoured", () => {
     // token that refresh had just issued. The visitor gets the way out
     // instead: the "Can't reach the server" surface, with Retry and Sign out.
     document.cookie = `${AUTH_STATE_COOKIE_NAME}=${AUTH_STATE_COOKIE_VALUE}; path=/`;
+    let probes = 0;
+    let refreshes = 0;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       if (String(input).includes("/auth/refresh")) {
+        refreshes += 1;
         return new Response("{}", { status: 200 });
+      }
+      probes += 1;
+      if (probes === 1) {
+        return new Response(
+          JSON.stringify({ detail: "Your session is invalid or expired." }),
+          { status: 401, headers: { "content-type": "application/json" } },
+        );
       }
       return new Response("<html>Access denied</html>", {
         status: 403,
@@ -292,6 +321,8 @@ describe("a probe that fails right after a refresh the server honoured", () => {
     await waitFor(() =>
       expect(getByTestId("state").textContent).toBe("settled:false"),
     );
+    expect(refreshes).toBe(1);
+    expect(probes).toBe(2);
     expect(document.cookie).toContain(AUTH_STATE_COOKIE_NAME);
   });
 });
