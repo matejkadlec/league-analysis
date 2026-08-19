@@ -592,6 +592,35 @@ three untested messages in `login-error.ts`.
   not the bypass, so deleting `#nl` from either half breaks nothing. Full
   write-up in IMPROVEMENTS.md.
 
+- ~~`features/players/player-api.ts`~~ and
+  ~~`features/matchmaking/matchmaking-api.ts`~~ — done 2026-08-19 together,
+  one suite (`tests/feature-api-wiring.test.ts`), 10 tests, **6 mutations, all
+  killed**. 14.3% and 12.5% → 100% everything. The last two `validated*`
+  delegation modules from the under-20% band, resolved the way the corrected
+  `smurf-boost-api.ts` row said they should be once its premise became true:
+  the helpers themselves are pinned by `api-validated-helpers.test.ts`, and
+  every (path, method) pair is proved against `app.openapi()` by
+  `test_frontend_api_paths.py`.
+
+  What that pair of guards still left open, and what this suite pins, is the
+  rest of the wire shape — the part the backend test deliberately does not
+  read: query parameter **names** (a typo'd optional param is silently
+  ignored and the search quietly spans the wrong platform; `created_at`
+  renamed means polling watches the wrong analysis), the conditional spread
+  in `searchPlayerSuggestions`, the request body (`startMatchmakingAnalysis`
+  with the body dropped), which arguments ride the URL versus `params`
+  (`discoverPlayer` and both DELETEs build their own query strings), and
+  crossed verbs on one route — `trackPlayer` mutated to DELETE stays a
+  registered (path, method) pair, so only this suite catches the track button
+  untracking.
+
+  Deliberately not pinned, with the reason in the file header: schema
+  pairing. A function wired to the wrong schema fails **closed** — the real
+  payload is rejected and the caller sees `success: false` — and the
+  schema-to-return-type link is tsc's job. Asserting it would mean fixture
+  payloads for five response schemas to guard a failure mode that already
+  announces itself.
+
 The rest, enumerated 2026-08-19 rather than left as "plus 9 more":
 ~~`app/jobs/page.tsx`~~ (30, done 2026-08-19 — nine mutations; it is the only
 consumer of `components/ui/tabs.tsx`, so both closed together),
@@ -629,8 +658,8 @@ number** — the covered lines are the imports and the export statement, and
 nothing has ever rendered the file: `match-row.tsx` (1.3%, now done),
 `player-card.tsx` (4.3%), `player-context.tsx` (7.1%),
 ~~`join-us-form.tsx`~~ (7.4%, done 2026-08-19), `job-execution-api-calls.tsx` (11.1%),
-`job-execution-logs.tsx` (12.5%), `matchmaking-api.ts` (12.5%),
-`player-api.ts` (14.3%). Treat these as 0%: read and decide, do not mutate.
+`job-execution-logs.tsx` (12.5%), ~~`matchmaking-api.ts`~~ (12.5%, done 2026-08-19),
+~~`player-api.ts`~~ (14.3%, done 2026-08-19). Treat these as 0%: read and decide, do not mutate.
 Two of them are `validated*` delegation modules and resolve the same way
 `smurf-boost-api.ts` did — but note *why* they read as 0% rather than as
 covered: every consumer test mocks the module, so a typo'd endpoint path
