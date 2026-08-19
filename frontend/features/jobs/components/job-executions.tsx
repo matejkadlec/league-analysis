@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useState, useEffect, useRef, useMemo } from "react";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { validatedGet } from "@/lib/core/api";
 import {
   JobExecutionListResponse,
@@ -30,7 +30,6 @@ export function JobExecutions({
 }: JobExecutionsProps) {
   const [selectedExecutionState, setSelectedExecutionState] =
     useState<JobExecution | null>(null);
-  const [displayCount, setDisplayCount] = useState(20);
   const [expandedApiCalls, setExpandedApiCalls] = useState<Set<string>>(
     new Set(),
   );
@@ -43,39 +42,52 @@ export function JobExecutions({
     return map;
   }, [jobs]);
 
-  const {
-    data: response,
-    isLoading,
-    isFetching,
-  } = useQuery({
-    queryKey: ["job-executions-infinite", displayCount],
-    queryFn: async () => {
-      const result = await validatedGet(
-        JobExecutionListResponseSchema,
-        "/jobs/executions/all",
-        {
-          page: 1,
-          size: displayCount,
-        },
-      );
-      return result;
-    },
-    enabled: !!initialExecutions,
-    refetchInterval: 15000,
-    refetchOnWindowFocus: false,
-    refetchOnMount: false,
-    refetchOnReconnect: false,
-    placeholderData: (previousData) => previousData,
-    staleTime: 0,
-  });
+  // Fixed-size pages, not one growing request: the backend caps `size` at
+  // 100, so the old growing-`size` query 422'd on the sixth load-more.
+  // Tradeoff accepted with the switch: `refetchInterval` refreshes every
+  // loaded page each tick (N small requests instead of one big one).
+  const { data, isLoading, isFetching, hasNextPage, fetchNextPage } =
+    useInfiniteQuery({
+      queryKey: ["job-executions-infinite"],
+      queryFn: async ({ pageParam }) =>
+        validatedGet(JobExecutionListResponseSchema, "/jobs/executions/all", {
+          page: pageParam,
+          size: PAGE_SIZE,
+        }),
+      initialPageParam: 1,
+      getNextPageParam: (lastPage, allPages) => {
+        const loaded = allPages.reduce(
+          (sum, page) => sum + (page.success ? page.data.executions.length : 0),
+          0,
+        );
+        const total = lastPage.success ? lastPage.data.total : 0;
+        return loaded < total ? allPages.length + 1 : undefined;
+      },
+      enabled: !!initialExecutions,
+      refetchInterval: 15000,
+      refetchOnWindowFocus: false,
+      refetchOnMount: false,
+      refetchOnReconnect: false,
+    });
 
-  const data = response?.success ? response.data : initialExecutions;
-  const allExecutions = useMemo(
-    () => data?.executions || [],
-    [data?.executions],
+  // Until any page has actually succeeded, fall back to the executions the
+  // page handed in — the poll re-runs every 15 seconds behind a table someone
+  // is reading, and a failed poll must not empty it.
+  const successfulPages = useMemo(
+    () =>
+      (data?.pages ?? []).flatMap((page) => (page.success ? [page.data] : [])),
+    [data],
   );
-  const totalExecutions = data?.total || 0;
-  const hasMore = allExecutions.length < totalExecutions;
+  const allExecutions = useMemo(
+    () =>
+      successfulPages.length > 0
+        ? successfulPages.flatMap((page) => page.executions)
+        : (initialExecutions?.executions ?? []),
+    [successfulPages, initialExecutions],
+  );
+  const totalExecutions =
+    (successfulPages.at(-1)?.total ?? initialExecutions?.total) || 0;
+  const hasMore = hasNextPage || allExecutions.length < totalExecutions;
   const internalSelectedExecution = useMemo(() => {
     if (selectedExecutionId !== undefined && selectedExecutionId !== null) {
       return (
@@ -87,18 +99,12 @@ export function JobExecutions({
     return selectedExecutionState;
   }, [selectedExecutionId, allExecutions, selectedExecutionState]);
 
-  const loadMore = useCallback(() => {
-    if (!isFetching && hasMore) {
-      setDisplayCount((prev) => prev + PAGE_SIZE);
-    }
-  }, [isFetching, hasMore]);
-
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
         const first = entries[0];
         if (first?.isIntersecting && hasMore && !isFetching) {
-          loadMore();
+          void fetchNextPage();
         }
       },
       { threshold: 0.1, rootMargin: "200px" },
@@ -114,7 +120,7 @@ export function JobExecutions({
         observer.unobserve(currentRef);
       }
     };
-  }, [loadMore, hasMore, isFetching]);
+  }, [fetchNextPage, hasMore, isFetching]);
 
   const getJobName = (jobConfigId: number): string => {
     return jobNameMap.get(jobConfigId) || `Job #${jobConfigId}`;

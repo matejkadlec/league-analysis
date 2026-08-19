@@ -121,8 +121,18 @@ three untested messages in `login-error.ts`.
 
 - ~~`app/settings/use-change-email.ts`~~ — done 2026-08-19, six tests, each
   shown red against its own mutation.
-- ~~`features/jobs/components/job-executions.tsx`~~ — done 2026-08-19. Left
-  open: the `IntersectionObserver` paging path, which jsdom cannot trigger.
+- ~~`features/jobs/components/job-executions.tsx`~~ — done 2026-08-19. The
+  `IntersectionObserver` paging path, first left open as "jsdom cannot
+  trigger", **closed later the same day**: a stand-in observer class hands
+  the callback to the test, which fires it deliberately. It was worth
+  closing — the wheel-audit found the paging was a live bug (a growing
+  `size` request 422s against the router's `le=100` cap on the sixth
+  load-more), the fix moved it to `useInfiniteQuery`, and the new
+  `tests/job-executions-paging.test.tsx` (3 tests, 3 mutations killed) is
+  what pins fixed-size pages, the stop condition, and the page sequence.
+  The rewrite also briefly reintroduced the failed-poll-empties-the-table
+  bug this file's original row was about — caught by that row's own test,
+  which is the system working.
 - ~~`features/matchmaking/components/matchmaking-analysis-history.tsx`~~ — done
   2026-08-19. The 404-is-a-normal-state shape shows up a second time: when a
   list endpoint answers "this player has nothing" with a 404, the branch that
@@ -763,6 +773,17 @@ route shells already resolved by the route-shell row.
   job logs and error toasts; the status code is the difference between "our
   key is bad" and "Riot is down", and the 429 retry hint is the only
   actionable part of a rate limit. All three shapes pinned.
+
+- ~~`features/jobs/components/job-executions.tsx` (paging)~~ — reworked
+  2026-08-19 after the wheel-audit: `useInfiniteQuery` with fixed-size pages
+  replaces the growing-`size` single query, **fixing a live 422** (the
+  backend caps `size` at `le=100`; the old shape hit it on the sixth
+  load-more, and nothing pinned it because jsdom's missing
+  `IntersectionObserver` had been accepted as untestable). Three tests,
+  three mutations killed (size grown past the cap, paging that never stops,
+  page number pinned at 1). The first draft of the rework emptied the table
+  on a failed poll — the exact regression the file's original iteration
+  guarded — and `tests/job-executions.test.tsx` caught it before commit.
 
 The rest, enumerated 2026-08-19 rather than left as "plus 9 more":
 ~~`app/jobs/page.tsx`~~ (30, done 2026-08-19 — nine mutations; it is the only
