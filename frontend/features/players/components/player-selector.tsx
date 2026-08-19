@@ -256,6 +256,9 @@ export function PlayerSelector({
         onKeyDown={onSearchKeyDown}
         placeholder={placeholder}
         aria-label={ariaLabel}
+        // The attributes below are only valid on a combobox; without the role
+        // a screen reader is told nothing about the listbox this input drives.
+        role="combobox"
         aria-autocomplete="list"
         aria-controls={showResults ? listboxId : undefined}
         aria-expanded={showResults}

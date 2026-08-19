@@ -327,7 +327,7 @@ function MatchSideColumn({
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
-        <span className="text-xs text-muted-foreground">
+        <span className="text-xs text-foreground/75">
           {participant ? `Lv ${participant.champion_level}` : "—"}
         </span>
         {participant ? (
@@ -444,7 +444,7 @@ export function MatchRow({ match, playerPuuid }: MatchRowProps) {
           <span className="text-sm font-medium text-center">
             {getMatchQueueName(match.queue_id)}
           </span>
-          <span className="text-xs text-muted-foreground text-center mt-1">
+          <span className="text-xs text-foreground/75 text-center mt-1">
             Patch {match.game_version.split(".").slice(0, 2).join(".")}
           </span>
         </div>
@@ -453,7 +453,7 @@ export function MatchRow({ match, playerPuuid }: MatchRowProps) {
           <span className="text-sm text-center">
             {formatDateTime(match.game_start_timestamp)}
           </span>
-          <span className="text-xs text-center text-muted-foreground mt-1">
+          <span className="text-xs text-center text-foreground/75 mt-1">
             {getDaysAgo(match.game_start_timestamp)}
           </span>
         </div>

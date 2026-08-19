@@ -250,6 +250,11 @@ export function MatchHistory({ puuid, lastUpdated }: MatchHistoryProps) {
           <div
             data-testid="match-list"
             className="min-w-0 rounded-md border lg:overflow-x-auto"
+            // A region that scrolls sideways on laptop widths must be
+            // reachable without a mouse, and a focusable region needs a name.
+            role="region"
+            aria-label="Match list"
+            tabIndex={0}
           >
             <div className="lg:w-max lg:min-w-full">
               {matches.map((match) => (
