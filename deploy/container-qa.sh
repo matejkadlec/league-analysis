@@ -94,7 +94,13 @@ cleanup() {
   fi
   exit "$status"
 }
-trap cleanup EXIT
+# INT/TERM as well as EXIT. A non-interactive bash killed by a signal it has
+# not trapped exits without running its EXIT trap, so a cancelled CI run --
+# `cancel-in-progress: true` fires on every re-push -- left this script's three
+# containers alive and holding the QA ports indefinitely. Two such sets were
+# found still running on the runner, 13 and 19 minutes after the runs that
+# started them had been cancelled.
+trap cleanup EXIT INT TERM HUP
 
 compose config --quiet
 

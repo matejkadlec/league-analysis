@@ -53,8 +53,35 @@ jobs:
           LGA_GATE_UID="$(id -u)" LGA_GATE_GID="$(id -g)" \
             docker compose --file compose.gate.yml run --rm --build --no-TTY gate
 
+      # A cancelled run cannot clean up after itself once the shell is gone, so
+      # sweep what earlier ones left. Container names are `lga-qa-<uid>-<pid>`,
+      # and a container whose pid is no longer alive on this host can only be
+      # an orphan -- which is how two full sets ended up still running, and
+      # still holding the QA ports, long after their runs were cancelled.
+      # Nothing else on this box is named `lga-qa-`; production's containers
+      # are not.
+      - name: Remove QA containers left by cancelled runs
+        run: |
+          docker ps --filter 'name=^lga-qa-' --format '{{.Names}}' | while read -r name; do
+            pid="$(cut -d- -f4 <<<"$name")"
+            if [[ -n "$pid" ]] && ! kill -0 "$pid" 2>/dev/null; then
+              printf 'Removing orphaned %s\n' "$name"
+              docker rm --force "$name" >/dev/null
+            fi
+          done
+
+      # Ports derived from the run. `concurrency` above is keyed per pull
+      # request, so two PRs can genuinely reach this step at once, and only
+      # these two ports were fixed -- everything else in container-qa.sh is
+      # already per-run unique, from the compose project to the container names
+      # to the network, all built from `lga-qa-$(id -u)-$$`. The script has
+      # always accepted these overrides; nothing was passing them.
       - name: Build and verify isolated production containers
-        run: ./deploy/container-qa.sh
+        run: |
+          port_base=$(( 20000 + (GITHUB_RUN_ID % 5000) * 2 ))
+          LGA_CONTAINER_QA_FRONTEND_PORT="$port_base" \
+          LGA_CONTAINER_QA_BACKEND_PORT="$(( port_base + 1 ))" \
+            ./deploy/container-qa.sh
 
       # This runner is the production host, so the gate has to clean up after
       # itself: every run leaves a rebuilt gate image and its build cache
