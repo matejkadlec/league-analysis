@@ -50,8 +50,8 @@ left on the frontend. `proxy.ts` reads 100% / 100% and needs no row.
 
 ### Covered — mutate these
 
-Highest risk first. 27 files sit at ≥80% statements with ≥20 statements; the
-head of that list:
+Highest risk first. **31** files sit at ≥80% statements with ≥20 statements
+(recounted 2026-08-19 from the regenerated summary). The head, worked in order:
 
 1. ~~`features/auth/utils/token-manager.ts`~~ — done 2026-08-19, 2 survivors.
 2. ~~`features/auth/context/auth-context.tsx`~~ — done 2026-08-19. Accepted and
@@ -94,6 +94,25 @@ head of that list:
     behind their wording were not. `smurf-boost-api.ts` remains at 0% across
     all six functions and belongs in the zero-covered list below.
 
+The tail, named rather than counted — the 14 of those 31 no iteration has
+touched, largest first:
+`features/matchmaking/components/matchmaking-analysis-session.tsx` (85, br 88),
+`features/matches/match-history-preferences.ts` (36),
+`features/matches/queue-catalog.ts` (31),
+`features/players/components/track-player-button.tsx` (30),
+`features/players/utils/riot-id.ts` (27),
+`lib/core/relative-time.ts` (27, br 72),
+`components/ui/select.tsx` (25), `components/ui/table.tsx` (24),
+`components/ui/dialog.tsx` (23),
+`features/auth/utils/auth-state-cookie.ts` (23, br 67),
+`lib/core/hooks.ts` (23, br 80),
+`components/toast-host.tsx` (20, br 71),
+`lib/core/data-dragon-version.ts` (20, br 88).
+Branch percentage is the better sort key here than statements: the three
+lowest — `auth-state-cookie.ts`, `toast-host.tsx`, `relative-time.ts` — are all
+small files whose *statements* are near-fully run, which is the shape that hid
+three untested messages in `login-error.ts`.
+
 `proxy.ts` is in the coverage scope; check its number when regenerating.
 
 ### Zero-covered — decide, do not mutate
@@ -132,6 +151,55 @@ head of that list:
   `deleted` row in the ledger. Two validation checks in a row where the second
   is a strict superset of the first: worth looking for wherever a guard was
   added defensively beside one that already covered it.
+- ~~the three `app/*/page.tsx` entries~~ — done 2026-08-19, resolved as one
+  row because the finding was not in any of them individually. They are not
+  route shells: each is ~200 lines of query wiring. But the only guard in them
+  whose loss is silent is the `<ProtectedRoute>` wrapper, and it was untested
+  on **six** pages — `/`, `/player-overview`, `/match-history`,
+  `/matchmaking-analysis`, `/settings`, `/smurf-boost-detection`. Deleting it
+  from any one of them typechecked, linted, and passed all 451 tests; what
+  ships is a page that renders its own chrome to a signed-out visitor and fills
+  it with 401s. `tests/page-navigation-contract.test.ts` already pinned
+  `requireAdmin` on `/jobs` and nothing else, so the flag on the one admin page
+  was guarded while the wrapper on the other six was not. The new test is
+  written fail-closed — a page is required to be wrapped unless its route is
+  named in `PUBLIC_ROUTES` or its file calls `redirect(`, so a new page is
+  protected by default and making one public is a deliberate edit. Verified
+  red against the mutation on all seven pages, one at a time.
+
+  **Accepted, with the reason worth keeping:** `handleRefreshAll` in
+  `player-overview/page.tsx` invalidates seven query keys, and a deleted line
+  leaves one card stale after a refresh. It was checked rather than assumed:
+  every one of the seven maps to a live query in the rendered subtree, nothing
+  the page renders is missing from it, and the one key the subtree uses that is
+  *absent* — `tracking-status`, via `TrackPlayerButton` inside `PlayerCard` —
+  is absent correctly, because whether you follow a player does not change when
+  their Riot data does. A killing test needs five separate fetch mocks and the
+  failure it would catch self-corrects on the next mount.
+
+  The remaining plumbing in all three — skeleton-vs-content ternaries, the
+  `isLoading` three-way, the per-card `null` fallbacks — is accepted as render
+  shape. A mutation there changes which placeholder is on screen for one frame.
+- **Coverage floors ratcheted 2026-08-19**, in the same iteration, because
+  they had fallen 18 points behind (51/46/48/52 against a measured
+  69.19/61.14/63.68/69.66) and every test this loop added could have been
+  deleted with the gate silent — which is the exact failure the comment above
+  those floors was written about, repeated by the campaign that wrote it.
+  Verified the new floors bite by raising one to 99 and watching the run exit
+  non-zero. The coverage `include` was also extension-qualified: a bare
+  `components/**` was handing `CLAUDE.md` and `AGENTS.md` to the parser and
+  printing a RolldownError stack for each, which is how the same message about
+  a *real* file would get ignored.
+- **The `process.env.TZ` trick is safe to copy** — settled by `pitfall-check`
+  rather than assumed, since an earlier row recommended it. Vitest 4's default
+  `pool: "forks"` with `isolate: true` gives every test file its own process
+  (distinct PIDs, confirmed on a probe, and still distinct under
+  `--maxWorkers=1`); nothing in `package.json`, `test.sh` or the config
+  overrides it. Under `--no-isolate` it does leak, and `unstubEnvs: true` does
+  not help — it restores `vi.stubEnv`, not a raw assignment. The one wrong
+  claim in that file's header, that the zone is set "before anything reads
+  `Intl`", has been corrected in place: ESM hoists the imports above it, and
+  the trick works only because `formatDate` builds its formatter per call.
 - `features/profile/components/role-stats-card.tsx` — 31
 
 The rest, enumerated 2026-08-19 rather than left as "plus 9 more": `app/jobs/page.tsx` (30),
@@ -162,9 +230,24 @@ share is the happy path and the missing lines are the error and edge branches.
 Those are holes, but they are holes of a different shape, and the card's
 "0% coverage is already the finding" rule gives no guidance for them.
 
-**Mutate these** — 38 files at ≥80% with ≥20 statements. The head, with the
-schema/model files set aside (they are largely declarative and Pyright already
-holds their shape):
+**Mutate these** — 38 files at ≥80% with ≥20 statements.
+
+**Accepted as a class, 2026-08-19: the 8 purely declarative files.** Not
+"schemas and models" as a name — that name is wrong, and checking it is what
+produced this row. Filtering the 38 by *no function bodies and no validators*
+leaves exactly eight, all at 100%: `matches/participants_schemas.py` (80),
+`jobs/schemas.py` (67), `smurf_boost_detection/schemas.py` (60),
+`smurf_boost_detection/config.py` (43), `players/schemas.py` (41),
+`core/models.py` (32), `playstyle_analysis/models.py` (26),
+`players/leagues_schemas.py` (24). These declare field names and types and
+nothing else; Pyright holds their shape and a mutation to a type annotation is
+a type error, not a surviving mutant. The other schema files are **not** in
+this class and stay on the list — `settings/schemas.py` carries 14 validators,
+`auth/schemas.py` 6, `matchmaking_analysis/schemas.py` 6. A validator is
+executable input validation at a trust boundary, which is the opposite of
+declarative.
+
+That leaves 30 with logic. The head, worked in order:
 
 1. ~~`app/core/riot_api/rate_limiter.py`~~ — done 2026-08-19, 82% → 96%. The
    lesson for the rest of the backend list: on a file this size, the covered
@@ -183,6 +266,40 @@ holds their shape):
 5. `app/features/jobs/maintenance.py` — 40 stmts, 87.5%.
 6. `app/core/validation.py` — 40 stmts, 93.5%; `app/core/database.py` — 33,
    90.9%; `app/core/riot_api/errors.py` — 32, 94.4%.
+
+The tail, named rather than counted — the remaining 21 of those 30, sorted by
+what is at stake rather than by size:
+
+*Validators (executable rules on untrusted input):*
+`app/features/matchmaking_analysis/schemas.py` (52, **80.4%** — the
+lowest-covered file on the whole list, and six validators),
+`app/features/auth/schemas.py` (74, 90.9%, six validators),
+`app/features/settings/schemas.py` (229, 97.6%, **fourteen** validators —
+biggest file in the covered half of the backend).
+
+*Numerics, all unattacked and all neighbours of the file where two mutants
+survived 620 tests:* `smurf_boost_detection/signals.py` (159, 96.8%),
+`engine.py` (107, 96.9%), `composite.py` (95, 98.2%).
+
+*Riot-API surface:* `core/riot_api/models.py` (261, 95.1% — four validators,
+so not declarative despite the name), `core/riot_api/constants.py` (95, 95.1%),
+`features/matches/schemas.py` (176, 98.9%),
+`features/matches/participants.py` (119, 98.3%).
+
+*Auth plumbing:* `auth/cookies.py` (22, 100%),
+`auth/user_cookie_consent.py` (26), `auth/refresh_token.py` (24),
+`auth/email_change_request.py` (22), `auth/revoked_access_token.py` (20),
+`auth/models.py` (35). The last five are ORM rows with one method each and are
+the closest thing the backend has to the declarative class without qualifying
+for it.
+
+*Remainder:* `core/request_logging.py` (47, 98.4%),
+`core/exceptions.py` (20, 86.4%), `features/jobs/models.py` (80, 97.5%),
+`features/matches/models.py` (38), `features/players/models.py` (31),
+`smurf_boost_detection/models.py` (26).
+
+Recounted 2026-08-19 against a regenerated report (57.52%, 636 tests); the
+57.18% above was measured before the last three iterations landed.
 
 **Thinly covered — decide, do not blind-mutate.** Biggest absolute holes; a
 mutation aimed at a covered line here says little, so read what is missing
