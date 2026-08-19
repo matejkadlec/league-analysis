@@ -1,12 +1,13 @@
 """The auth-state hint must stay readable while the tokens stay HttpOnly."""
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, timedelta, tzinfo
 from typing import cast
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi import Request, Response
 
+from app.features.auth import cookies as cookies_module
 from app.features.auth.cookies import (
     ACCESS_TOKEN_COOKIE_NAME,
     AUTH_STATE_COOKIE_NAME,
@@ -61,6 +62,56 @@ def test_the_hint_lives_exactly_as_long_as_the_refresh_token() -> None:
 
     def max_age(name: str) -> int:
         for part in cookies[name].split("; "):
+            if part.lower().startswith("max-age="):
+                return int(part.split("=", 1)[1])
+        raise AssertionError(f"{name} has no Max-Age")
+
+    assert max_age(AUTH_STATE_COOKIE_NAME) == max_age(REFRESH_TOKEN_COOKIE_NAME)
+
+
+def test_the_two_lifetimes_are_measured_once_not_twice(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The test above only catches this about once in a hundred thousand runs.
+
+    `_max_age_seconds` truncates against the clock of the moment it is called,
+    so computing it separately for the refresh cookie and for the hint left
+    them a second apart whenever a whole-second boundary fell between the two
+    calls -- and the hint, written second, is the one that came out shorter.
+    A hint expiring before the refresh token beside it is the stranded
+    session, so "the same lifetime" has to be one measurement, not two that
+    usually agree.
+
+    Rather than wait for a boundary, move it: this clock advances a second per
+    reading, so a second call cannot agree with the first.
+    """
+
+    class _AdvancingClock:
+        readings = 0
+
+        @classmethod
+        def now(cls, tz: tzinfo | None = None) -> datetime:
+            cls.readings += 1
+            return datetime(2026, 1, 1, tzinfo=UTC) + timedelta(seconds=cls.readings)
+
+    monkeypatch.setattr(cookies_module, "datetime", _AdvancingClock)
+
+    response = Response()
+    expires = datetime(2026, 2, 1, tzinfo=UTC)
+    set_auth_cookies(
+        response,
+        access_token="access",
+        refresh_token="refresh",
+        access_expires_at=expires,
+        refresh_expires_at=expires,
+    )
+    written = {
+        header.split("=", 1)[0]: header
+        for header in response.headers.getlist("set-cookie")
+    }
+
+    def max_age(name: str) -> int:
+        for part in written[name].split("; "):
             if part.lower().startswith("max-age="):
                 return int(part.split("=", 1)[1])
         raise AssertionError(f"{name} has no Max-Age")
