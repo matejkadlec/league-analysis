@@ -16,23 +16,15 @@ export function formatFractionAsPercent(fraction: number): string {
 // One copy of the win-rate verdict. This lived in three files with the same
 // names meaning two different units (fraction vs percent), and the one
 // call site that guessed its unit rendered a sub-1% ranked win rate as 100%.
-// The contract everywhere is now a 0-1 fraction; a percent-shaped source
-// (league.win_rate) divides by 100 at the call site, where the unit is known.
+// The contract everywhere is a 0-1 fraction; the one percent-shaped API
+// field (league.win_rate) is normalized in its schema, at the boundary.
 
-/** Text color for a 0-1 win-rate fraction: green ≥51%, yellow >49%, rose below. */
-export function winRateTextColor(fraction: number): string {
+/** Text and bar colors for a 0-1 win-rate fraction: green ≥51%, yellow >49%, rose below. */
+export function winRateColors(fraction: number): { text: string; bar: string } {
   const percent = fraction * 100;
-  if (percent >= 51) return "text-green-500";
-  if (percent > 49) return "text-yellow-500";
-  return "text-rose-500";
-}
-
-/** Bar color for a 0-1 win-rate fraction, same bands as the text color. */
-export function winRateBarColor(fraction: number): string {
-  const percent = fraction * 100;
-  if (percent >= 51) return "bg-green-500";
-  if (percent > 49) return "bg-yellow-500";
-  return "bg-rose-500";
+  if (percent >= 51) return { text: "text-green-500", bar: "bg-green-500" };
+  if (percent > 49) return { text: "text-yellow-500", bar: "bg-yellow-500" };
+  return { text: "text-rose-500", bar: "bg-rose-500" };
 }
 
 /** Text color for a KDA verdict: green ≥3, yellow ≥2, rose below. */

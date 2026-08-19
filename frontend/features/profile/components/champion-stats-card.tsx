@@ -23,7 +23,7 @@ import {
   formatFractionAsPercent,
   formatKDA,
   kdaColor,
-  winRateTextColor,
+  winRateColors,
 } from "@/lib/core/format";
 import {
   ChampionPaginationState,
@@ -185,7 +185,7 @@ export function ChampionStatsCard({
               {/* Win rate */}
               <div className="text-right w-16">
                 <p
-                  className={`text-sm font-bold ${winRateTextColor(champ.win_rate)}`}
+                  className={`text-sm font-bold ${winRateColors(champ.win_rate).text}`}
                 >
                   {formatFractionAsPercent(champ.win_rate)}
                 </p>

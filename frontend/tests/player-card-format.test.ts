@@ -22,11 +22,6 @@ import { describe, expect, it } from "vitest";
 
 import { formatDate } from "@/features/players/components/player-card-format";
 
-// The win-rate colour and figure tests that lived here moved to
-// tests/format.test.ts with the helpers themselves: three per-file copies
-// (players, role card, champion card) are now one fraction-based module in
-// lib/core/format.ts, and the unit-guessing formatWinRate is gone.
-
 describe("the last-updated date", () => {
   it("reads the same clock everywhere it is rendered", () => {
     // This timestamp is half an hour before midnight UTC, so any zone east of

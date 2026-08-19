@@ -9,8 +9,7 @@ import {
   formatFractionAsPercent,
   formatKDA,
   kdaColor,
-  winRateBarColor,
-  winRateTextColor,
+  winRateColors,
 } from "@/lib/core/format";
 
 interface RoleStatsCardProps {
@@ -121,7 +120,7 @@ export function RoleStatsCard({ stats, lastUpdated }: RoleStatsCardProps) {
                       {/* Win rate */}
                       <div className="text-right w-16">
                         <p
-                          className={`text-sm font-bold ${winRateTextColor(lane.win_rate)}`}
+                          className={`text-sm font-bold ${winRateColors(lane.win_rate).text}`}
                         >
                           {formatFractionAsPercent(lane.win_rate)}
                         </p>
@@ -135,7 +134,7 @@ export function RoleStatsCard({ stats, lastUpdated }: RoleStatsCardProps) {
                   {/* Play rate bar */}
                   <div className="relative h-2 w-full bg-muted rounded-full overflow-hidden">
                     <div
-                      className={`absolute left-0 top-0 h-full ${winRateBarColor(lane.win_rate)} transition-all duration-300`}
+                      className={`absolute left-0 top-0 h-full ${winRateColors(lane.win_rate).bar} transition-all duration-300`}
                       style={{ width: `${playRate}%` }}
                     />
                   </div>

@@ -1,5 +1,7 @@
 import type { MatchStatsResponse, Player } from "@/lib/core/schemas";
 
+import { formatKDA } from "@/lib/core/format";
+
 import { formatDate } from "./player-card-format";
 
 interface PlayerCardStatsProps {
@@ -49,7 +51,7 @@ export function PlayerCardStats({ player, stats }: PlayerCardStatsProps) {
           </div>
           <div className="grid grid-cols-3 gap-3">
             <div className="text-center p-2 rounded-lg bg-muted/50">
-              <p className="text-lg font-bold">{stats.avg_kda.toFixed(2)}</p>
+              <p className="text-lg font-bold">{formatKDA(stats.avg_kda)}</p>
               <p className="text-xs text-muted-foreground">Avg KDA</p>
             </div>
             <div className="text-center p-2 rounded-lg bg-muted/50">
