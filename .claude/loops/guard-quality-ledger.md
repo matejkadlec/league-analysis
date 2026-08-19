@@ -26,7 +26,7 @@ head of that list:
 
 1. ~~`features/auth/utils/token-manager.ts`~~ — done 2026-08-19, 2 survivors.
 2. ~~`features/auth/context/auth-context.tsx`~~ — done 2026-08-19. Accepted and
-   left in place: the other five `queryClient.clear()` sites (same invariant as
+   left in place: the other four `queryClient.clear()` sites (same invariant as
    the two now guarded — a per-branch spy assertion would pin the call, not the
    behaviour), the three `NODE_ENV === "development"` console warns, and the
    captcha-token append at line 182. Deleted as dead: the `typeof window`

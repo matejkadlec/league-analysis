@@ -98,6 +98,20 @@ ground.
   shortlist, not the whole job — a covered line with a weak assertion still
   hides, which is the case only mutation finds.
 
+## One checkout, one loop session
+
+Two sessions working this loop in the same working tree corrupt each other.
+Iterations mutate tracked source and restore it seconds later, so a gate run
+started by session A reads a file session B is mid-mutation on: pre-commit
+stashes the unstaged edit, the file changes underneath it, and the run fails
+as `files were modified by this hook` — pointing at whichever unrelated hook
+happened to be running. It looks exactly like a real architecture violation
+and is not one. Observed 2026-08-19.
+
+Run concurrent iterations with `isolation: "worktree"`, or run them one at a
+time. Before believing any gate failure, check `git status` is clean and
+re-run on an untouched tree.
+
 ## Merge contract
 
 Batch survivors by area into small PRs — auth, matches, jobs, settings — not
