@@ -13,9 +13,11 @@ import type { JobExecution } from "@/lib/core/schemas";
 
 import { JobExecutionApiCalls } from "./job-execution-api-calls";
 import { JobExecutionLogs } from "./job-execution-logs";
-import { formatDateTime } from "@/lib/core/format";
-
-import { type APICallEntry, formatDuration } from "./job-execution-format";
+import {
+  type APICallEntry,
+  formatDuration,
+  formatJobTimestamp,
+} from "./job-execution-format";
 
 interface JobExecutionDetailsDialogProps {
   execution: JobExecution | null;
@@ -85,7 +87,7 @@ export function JobExecutionDetailsDialog({
                 <div className="flex items-center justify-between gap-3 pr-4">
                   <span className="text-muted-foreground">Started at:</span>
                   <span className="font-medium text-right">
-                    {formatDateTime(execution.started_at, { seconds: true })}
+                    {formatJobTimestamp(execution.started_at)}
                   </span>
                 </div>
                 <div className="flex items-center justify-between gap-3 pr-4">
@@ -108,7 +110,7 @@ export function JobExecutionDetailsDialog({
                   <span className="text-muted-foreground">Completed at:</span>
                   <span className="font-medium text-right">
                     {execution.completed_at
-                      ? formatDateTime(execution.completed_at, { seconds: true })
+                      ? formatJobTimestamp(execution.completed_at)
                       : "N/A"}
                   </span>
                 </div>

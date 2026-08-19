@@ -1,3 +1,5 @@
+import { formatDateTime } from "./format";
+
 // The bucket ladder below stays hand-written: Intl.RelativeTimeFormat takes a
 // unit already chosen and does no unit selection. `numeric: "always"` is
 // deliberate — "auto" would turn day = 1 into "yesterday" and change copy in
@@ -27,13 +29,8 @@ export function formatRelativeTime(
   const elapsedDays = Math.floor(elapsedHours / 24);
   if (elapsedDays < 7) return relativeFormatter.format(-elapsedDays, "day");
 
-  return new Date(timestamp).toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  // Older than a week: the app-wide absolute shape, not a third clock.
+  return formatDateTime(timestamp);
 }
 
 export function oldestCompleteFreshness(

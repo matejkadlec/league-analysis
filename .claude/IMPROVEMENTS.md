@@ -198,3 +198,9 @@
   keyboard users get a focus stop on a region that does not scroll. Removing
   it below `lg` needs a `matchMedia` hook for one tab stop — left alone as
   not worth the machinery; revisit if the region's classes change anyway.
+
+- 2026-08-20 frontend/features/jobs/components/job-card-format.ts: two
+  `formatDuration` copies in features/jobs share the same `N/A` / `Xs` /
+  `Xm Ys` grammar (the other in job-execution-format.ts takes started and
+  completed timestamps). Delegating one to the other changes the zero-second
+  case ("0.0s" vs "N/A"), so the merge needs a decision on which is right.

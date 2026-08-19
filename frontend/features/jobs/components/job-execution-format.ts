@@ -1,3 +1,10 @@
+import { formatDateTime } from "@/lib/core/format";
+
+/** The jobs surfaces all show seconds; this names that policy once. */
+export function formatJobTimestamp(timestamp: string): string {
+  return formatDateTime(timestamp, { seconds: true });
+}
+
 export function formatDuration(
   started: string,
   completed: string | null | undefined,

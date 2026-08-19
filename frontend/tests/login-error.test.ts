@@ -115,10 +115,10 @@ describe("sign-in error mapping", () => {
     // between a minute and the rest of the day -- which is the whole reason
     // the server sends the timestamp.
     //
-    // The time itself is `toLocaleString()`, so the exact string depends on
-    // the locale and zone the process runs under. Asserting the shape keeps
-    // this saying the same thing on a Prague laptop and in the gate
-    // container, where `LANG=C` and UTC would produce something else.
+    // The time renders through the shared formatDateTime, so its shape is
+    // locale-independent — but the UTC fixture still lands on different
+    // local hours on a Prague laptop and in the gate container, so the
+    // assertion pins the shape, not the exact instant.
     const message = getLoginErrorMessage(
       createAuthLoginError(
         {
@@ -132,7 +132,7 @@ describe("sign-in error mapping", () => {
     );
 
     expect(message).toMatch(
-      /^Too many sign-in attempts\. Try again after .+\.$/,
+      /^Too many sign-in attempts\. Try again after \d{1,2}\.\d{1,2}\.\d{4} \d{1,2}:\d{2} (AM|PM)\.$/,
     );
     expect(message).not.toBe(
       "Too many sign-in attempts. Please try again later.",

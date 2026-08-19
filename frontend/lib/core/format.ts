@@ -51,6 +51,9 @@ export function formatDateTime(
   { seconds = false }: { seconds?: boolean } = {},
 ): string {
   const date = new Date(timestamp);
+  // An unparseable timestamp otherwise renders "NaN.NaN.NaN 12:NaN AM";
+  // "—" matches the placeholder sibling surfaces already use.
+  if (Number.isNaN(date.getTime())) return "—";
   const pad = (n: number) => String(n).padStart(2, "0");
   const hours = date.getHours() % 12 || 12;
   const meridiem = date.getHours() >= 12 ? "PM" : "AM";
