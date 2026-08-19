@@ -672,6 +672,34 @@ three untested messages in `login-error.ts`.
 the only files under 20% with ≥10 statements are the two `app/*/page.tsx`
 route shells already resolved by the route-shell row.
 
+- ~~`backend: app/features/matches/transformers.py`~~ — done 2026-08-19, 7
+  tests appended to `tests/test_transformers.py`, **6 mutations, all killed**.
+  82% → 100% statements. Head of the backend mutate list, and the missing 18%
+  was `extract_participant_data` entire — the DTO→row mapping both
+  persistence paths run on every ingested match.
+
+  The cheapest guard in the row is the strongest: the test builds
+  `MatchParticipant(match_id=..., **extract_participant_data(dto))`, which is
+  literally the production line from `match_persistence.py`. SQLAlchemy
+  raises on an unknown kwarg, so one construction checks all ~75 dict keys
+  against the real columns without pinning a single value — a renamed column
+  or a typo'd key fails here, not at the first ingested match after deploy.
+  (Instantiating a mapped class configures every mapper, so the test imports
+  `model_registry.import_all_models()` first — the registry trap again.)
+
+  Killed and worth naming: the remake inversion (`not
+  eligible_for_progression` — Riot has no remake flag, and inverted the
+  wrong way every real game is stored as a remake and excluded from every
+  analysis), the three-generation display-name chain (`riotIdGameName` over
+  legacy `summonerName` over "Unknown Player" — the API sends empty strings,
+  not nulls), the `individualPosition` fallback for payloads with an empty
+  `teamPosition`, a challenges key typo (the dict is raw Riot camelCase and
+  `.get(wrong, 0)` writes a silent zero into every row forever — the exact
+  class of bug the lopsided prod data has hidden before; `roam_kills` reads
+  `killsOnOtherLanesEarlyJungleAsLaner`, which nobody would notice was
+  misspelled), and `int(vision_score or 0)` (a None float reaching an int
+  column).
+
 The rest, enumerated 2026-08-19 rather than left as "plus 9 more":
 ~~`app/jobs/page.tsx`~~ (30, done 2026-08-19 — nine mutations; it is the only
 consumer of `components/ui/tabs.tsx`, so both closed together),
