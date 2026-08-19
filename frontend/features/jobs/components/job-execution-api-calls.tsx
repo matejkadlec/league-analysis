@@ -2,11 +2,12 @@
 
 import { ChevronUp } from "lucide-react";
 
+import { formatDateTime } from "@/lib/core/format";
+
 import {
   type APICallEntry,
   apiCallKey,
   formatApiCallParamLabel,
-  formatLogDateTime,
 } from "./job-execution-format";
 
 interface JobExecutionApiCallsProps {
@@ -30,7 +31,7 @@ export function JobExecutionApiCalls({
       <div className="max-h-[300px] overflow-auto rounded-md border bg-background p-3">
         <div className="space-y-2 font-mono text-[11px]">
           <div className="text-blue-600 dark:text-blue-400">
-            [INFO] [{formatLogDateTime(startedAt)}]: Riot API client session
+            [INFO] [{formatDateTime(startedAt, { seconds: true })}]: Riot API client session
             started
           </div>
 
@@ -44,7 +45,7 @@ export function JobExecutionApiCalls({
               <div key={callKey} className="space-y-1">
                 <div className="text-blue-600 dark:text-blue-400">
                   [INFO] [
-                  {formatLogDateTime(call.first_timestamp || startedAt)}
+                  {formatDateTime(call.first_timestamp || startedAt, { seconds: true })}
                   ]: Called {call.endpoint} {countText}
                 </div>
                 <div className="pl-4 text-muted-foreground">
@@ -95,7 +96,7 @@ export function JobExecutionApiCalls({
 
           {completedAt && (
             <div className="text-blue-600 dark:text-blue-400">
-              [INFO] [{formatLogDateTime(completedAt)}]: Riot API client session
+              [INFO] [{formatDateTime(completedAt, { seconds: true })}]: Riot API client session
               closed
             </div>
           )}

@@ -13,31 +13,6 @@ export function formatDuration(
   return `${minutes}m ${remainingSeconds}s`;
 }
 
-export function formatDateTime(timestamp: string): string {
-  const date = new Date(timestamp);
-
-  const day = date.getDate();
-  const month = date.getMonth() + 1;
-  const year = date.getFullYear();
-
-  let hours = date.getHours();
-  const minutes = date.getMinutes();
-  const seconds = date.getSeconds();
-  const ampm = hours >= 12 ? "PM" : "AM";
-
-  hours = hours % 12;
-  hours = hours ? hours : 12;
-
-  const minutesStr = minutes < 10 ? "0" + minutes : minutes;
-  const secondsStr = seconds < 10 ? "0" + seconds : seconds;
-
-  return `${day}.${month}.${year} ${hours}:${minutesStr}:${secondsStr} ${ampm}`;
-}
-
-export function formatLogDateTime(timestamp: string): string {
-  return formatDateTime(timestamp);
-}
-
 export function formatRecordsSummary(created: number, updated: number): string {
   if (created === 0 && updated === 0) {
     return "No records created or updated";

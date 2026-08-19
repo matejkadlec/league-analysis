@@ -2,7 +2,9 @@
 
 import { Badge } from "@/components/ui/badge";
 
-import { detailedLogKey, formatLogDateTime } from "./job-execution-format";
+import { formatDateTime } from "@/lib/core/format";
+
+import { detailedLogKey } from "./job-execution-format";
 
 interface JobExecutionLogsProps {
   logs: Array<Record<string, unknown>>;
@@ -58,7 +60,7 @@ export function JobExecutionLogs({ logs }: JobExecutionLogsProps) {
                     [{logLevel}]
                   </span>
                   <span className="shrink-0 text-muted-foreground">
-                    [{formatLogDateTime(String(log.timestamp || ""))}]:
+                    [{formatDateTime(String(log.timestamp || ""), { seconds: true })}]:
                   </span>
                   <span className="flex-1 break-all">
                     {String(log.event || "")}

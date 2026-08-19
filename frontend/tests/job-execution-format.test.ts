@@ -4,10 +4,10 @@ import {
   apiCallKey,
   detailedLogKey,
   formatApiCallParamLabel,
-  formatDateTime,
   formatDuration,
   formatRecordsSummary,
 } from "../features/jobs/components/job-execution-format";
+import { formatDateTime } from "../lib/core/format";
 
 describe("how a job run is worded", () => {
   it.each([
@@ -46,7 +46,7 @@ describe("how a job run is worded", () => {
     // as 12:05, and the padding that keeps 3:5:7 from reaching a viewer.
     const localMidnight = new Date(2026, 0, 2, 0, 5, 7);
 
-    expect(formatDateTime(localMidnight.toISOString())).toBe(
+    expect(formatDateTime(localMidnight.toISOString(), { seconds: true })).toBe(
       "2.1.2026 12:05:07 AM",
     );
   });
@@ -54,8 +54,18 @@ describe("how a job run is worded", () => {
   it("renders noon as 12 PM rather than 0 PM", () => {
     const localNoon = new Date(2026, 0, 2, 12, 30, 0);
 
-    expect(formatDateTime(localNoon.toISOString())).toBe(
+    expect(formatDateTime(localNoon.toISOString(), { seconds: true })).toBe(
       "2.1.2026 12:30:00 PM",
+    );
+  });
+
+  it("leaves the seconds off unless asked", () => {
+    // The jobs surfaces are the only ones that show seconds; everywhere else
+    // shows "2.1.2026 12:05 AM", and this pins that the flag defaults off.
+    const localMidnight = new Date(2026, 0, 2, 0, 5, 7);
+
+    expect(formatDateTime(localMidnight.toISOString())).toBe(
+      "2.1.2026 12:05 AM",
     );
   });
 });

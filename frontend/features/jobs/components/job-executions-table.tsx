@@ -11,11 +11,9 @@ import {
 } from "@/components/ui/table";
 import type { JobExecution } from "@/lib/core/schemas";
 
-import {
-  formatDateTime,
-  formatDuration,
-  formatRecordsSummary,
-} from "./job-execution-format";
+import { formatDateTime } from "@/lib/core/format";
+
+import { formatDuration, formatRecordsSummary } from "./job-execution-format";
 
 interface JobExecutionsTableProps {
   executions: JobExecution[];
@@ -95,11 +93,11 @@ export function JobExecutionsTable({
                 </Badge>
               </TableCell>
               <TableCell className="text-sm text-muted-foreground">
-                {formatDateTime(execution.started_at)}
+                {formatDateTime(execution.started_at, { seconds: true })}
               </TableCell>
               <TableCell className="text-sm text-muted-foreground">
                 {execution.completed_at
-                  ? formatDateTime(execution.completed_at)
+                  ? formatDateTime(execution.completed_at, { seconds: true })
                   : "—"}
               </TableCell>
               <TableCell className="text-sm">
