@@ -11,6 +11,7 @@ Never re-attack a file that already has a row unless the file changed since.
 | File | Attacked | Mutations | Status | Evidence / reason |
 |---|---|---|---|---|
 | `features/auth/utils/token-manager.ts` | 2026-08-19 | 5 | `killed` | 3 died (content-type guard, `sessionEpoch` bump, `clearAuthStateCookie` in the post-teardown 200 path). 2 survived the full 342-test suite: `namesTheEndOfTheSession` catch → `return true`, and `refreshAccessToken`'s `!isBrowser()` → `refused`. Both killed by `tests/token-manager-guards.test.ts`, each shown red against its mutation and green against real code. |
+| `features/auth/components/sign-in-form.tsx` | 2026-08-19 | 7 | `killed` | **Zero mutations died.** The three aimed at covered lines all survived the 349-test suite: `isFormValid` → `true`, `setIsSubmitting(false)` dropped from the `finally`, `setError(null)` dropped at submit. Coverage also showed the entire captcha escalation at 0% — `captchaRequired` was never true in any test, because the site key is unset in the test env so every case took the "not configured" branch. Three tests in `tests/sign-in-form.test.tsx` now cover the retry-after-failure path and both captcha branches; four further mutations (`setCaptchaRequired(true)`, `isCaptchaSatisfied` → `true`, dropping `captchaToken` from the login payload, and the fail-closed message) were each shown red against them. `./test.sh -f` green under `compose.gate.yml` from a linked worktree. |
 | `features/auth/context/auth-context.tsx` | 2026-08-19 | 4 | `killed` | 2 died (`setUser` on the first successful probe, `setIsLoading(false)` in the `finally` — 3 and 13 tests red). 1 survived: `queryClient.clear()` on the refresh-failure teardown; probing further, **all six** `clear()` calls in the file could be deleted with the suite green. Also 0%-covered and now killed: the retried-probe success branch (lines 106–108, the whole point of refreshing) and `createAuthLoginError(payload, …)` (line 215, the only place the server's own sign-in refusal enters the app). Four tests in `tests/auth-session-probe.test.tsx`, each shown red against its own mutation and green against real code; `./test.sh -f` green under `compose.gate.yml`. |
 
 ## Target list
@@ -34,7 +35,14 @@ head of that list:
    (line 322) is still unguarded — one 3-line test, worth folding into the next
    auth iteration.
 3. `features/auth/utils/login-error.ts` — 93.8% / 86.3%.
-4. `features/auth/components/sign-in-form.tsx` — 80.4% / 70.7%.
+4. ~~`features/auth/components/sign-in-form.tsx`~~ — done 2026-08-19, and the
+   first target where nothing died. Accepted and left in place: `isFormValid`
+   (React Hook Form's own `required` rules already refuse an empty submit, so
+   the guard only changes whether the button looks disabled), the
+   `ACCOUNT_LOCKED` wiring at line 80 (the message itself is unit-tested in
+   `login-error.test.ts`), and the `submissionInFlight` ref, whose early return
+   no test reaches — a disabled submit button already blocks implicit
+   submission, so reaching it needs two submits inside one tick.
 5. `components/auth-gate.tsx` — 97.7% / 100%. Expect `clean`; it is the
    negative control that proves the loop can return nothing.
 6. `components/ui/form.tsx` — 90.5% st but 41.7% br. Widest statement/branch
