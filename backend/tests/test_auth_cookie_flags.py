@@ -259,3 +259,36 @@ async def test_a_successful_login_installs_the_cookies() -> None:
     )
 
     _assert_the_session_was_installed(response)
+
+
+@pytest.mark.parametrize(
+    ("environment", "expect_secure"),
+    [("production", True), ("test", False), ("", False)],
+)
+def test_secure_tracks_the_environment(
+    monkeypatch: pytest.MonkeyPatch, environment: str, expect_secure: bool
+) -> None:
+    """The one attribute deciding whether the browser stores the cookie at all.
+
+    The suite runs with ENVIRONMENT=test, so `_cookie_secure()` answered False
+    everywhere and both ways of breaking it passed: hardcoding False ships a
+    30-day HttpOnly refresh token over plaintext to anyone on the path, and
+    hardcoding True over an http origin makes the browser discard all three
+    Set-Cookie headers -- /login answers 200, the hint never lands, and the
+    gate bounces the visitor straight back to /sign-in with no message, for
+    ever. That second one is reachable by configuration, not hypothesis:
+    `deploy/production.env.example` names an http origin while
+    `compose.production.yml` sets ENVIRONMENT=production.
+
+    The other tests in this file read the same headers, so they need the
+    environment they were written under; only this one varies it.
+    """
+    monkeypatch.setenv("ENVIRONMENT", environment)
+    cookies = _set_cookie_headers()
+
+    for name in (
+        ACCESS_TOKEN_COOKIE_NAME,
+        REFRESH_TOKEN_COOKIE_NAME,
+        AUTH_STATE_COOKIE_NAME,
+    ):
+        assert ("secure" in cookies[name].lower()) is expect_secure, name

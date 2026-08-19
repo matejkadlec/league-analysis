@@ -322,6 +322,34 @@ describe("AuthProvider logout", () => {
     }
   });
 
+  it("tears down without the flag when the server did answer", async () => {
+    // The default is "changed nothing" only when the request never arrived.
+    // A 200 means the server revoked the family, and stopping there would
+    // leave the visitor on a signed-in shell whose credentials are already
+    // dead -- the mirror-image failure, and a one-line hole: deleting
+    // `serverAnswered = response.ok` passed all 320 tests, because every
+    // caller today happens to pass the flag.
+    refreshAccessToken.mockResolvedValue({ outcome: "unreachable" });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.resolve({ ok: true, status: 200 } as Response)),
+    );
+
+    const logout = renderLogout();
+    await act(async () => {
+      await Promise.resolve();
+    });
+    removeAuthTokens.mockReset();
+    routerPush.mockReset();
+
+    await act(async () => {
+      await logout();
+    });
+
+    expect(removeAuthTokens).toHaveBeenCalled();
+    expect(routerPush).toHaveBeenCalledWith("/sign-in");
+  });
+
   it("changes nothing when an edge answers 401 for an automatic logout", async () => {
     // A maintenance Worker sits in front of this route, and `/auth/logout`
     // itself has no auth dependency and cannot answer 401. So a 401 here was

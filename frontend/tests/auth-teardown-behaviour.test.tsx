@@ -165,6 +165,44 @@ describe("the axios interceptor", () => {
     expect(queryErrorToast(failure)).not.toBeNull();
   });
 
+  it("retries a 401 once, never in a loop", async () => {
+    // `_retry` is the only thing stopping this interceptor re-entering
+    // itself. Without it a 401 that survives a successful refresh loops --
+    // refresh, retry, 401, refresh -- and every turn rotates the refresh
+    // token server-side. `/auth/refresh` is 20/minute against one bucket
+    // shared by everyone (uvicorn runs --no-proxy-headers and browser traffic
+    // arrives through a single rewrite), so one tab in this loop spends the
+    // site-wide budget in about a second and every other signed-in visitor
+    // gets "Can't reach the server" until the minute rolls over.
+    setHint();
+    let refreshes = 0;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+      refreshes += 1;
+      return new Response("{}", { status: 200 });
+    });
+    let requests = 0;
+    api.defaults.adapter = async (config) => {
+      requests += 1;
+      // A ceiling, so an unguarded interceptor terminates and fails an
+      // assertion instead of spinning until the worker dies.
+      if (requests > 5) {
+        return { status: 200, data: {}, headers: {}, config, statusText: "" };
+      }
+      throw Object.assign(new Error("unauthorized"), {
+        isAxiosError: true,
+        config,
+        response: { status: 401, data: {}, headers: {}, config },
+      });
+    };
+
+    await expect(api.get("/players")).rejects.toBeTruthy();
+
+    // The original, and one retry after the refresh. Nothing more: without
+    // the guard this runs to the ceiling and resolves.
+    expect(requests).toBe(2);
+    expect(refreshes).toBe(1);
+  });
+
   it("still calls a refused session an authentication failure", async () => {
     // The other direction, and the reason the interceptor forwards what the
     // refresh reported rather than guessing. A server that answers 401 to the
