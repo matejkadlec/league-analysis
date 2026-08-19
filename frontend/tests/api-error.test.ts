@@ -43,6 +43,24 @@ describe("API error presentation", () => {
     );
   });
 
+  it.each([
+    ["a string detail", { detail: "Traceback (most recent call last)" }],
+    ["a structured detail", { detail: { code: "sqlalchemy.exc.OperationalError" } }],
+    ["a top-level field", { error_code: "at Object.<anonymous> (/app/main.py)" }],
+  ])("refuses to carry %s through as an error code", (_label, data) => {
+    // The sibling guard on `message` is tested three ways; this one was tested
+    // nowhere, and widening `SAFE_CODE_PATTERN` to `/.*/` kept all 353 tests
+    // green. `code` is the field callers branch on and `reportApiError` logs,
+    // so prose arriving in it is the same leak the message pattern exists to
+    // stop -- just through the field nobody was watching.
+    const { code } = normalizeApiError(axiosError(400, data));
+
+    // The invariant is the shape, not one bad string: whatever reaches `code`
+    // is a token this API defines, never text from a server it does not
+    // control.
+    expect(code).toMatch(/^[A-Z][A-Z0-9_]{1,63}$/);
+  });
+
   it("preserves a typed validation message and structured lock metadata", () => {
     const result = normalizeApiError(
       axiosError(429, {

@@ -117,6 +117,19 @@ Run concurrent iterations with `isolation: "worktree"`, or run them one at a
 time. Before believing any gate failure, check `git status` is clean and
 re-run on an untouched tree.
 
+Two things a linked worktree needs, both learned the hard way on 2026-08-19:
+
+- **`node_modules` is not there.** Symlinking the main checkout's is enough for
+  `npx vitest` and costs no install. Note that a `node_modules/` ignore rule
+  has a trailing slash and so does not match a symlink — it shows up as
+  untracked, and `git add -A` would commit it. Commit explicit paths.
+- **The containerized gate leaves root-owned directories behind.**
+  `backend/.venv`, `frontend/node_modules` and `frontend/.next` are volume
+  mount points, created on the host as root and left empty. The next
+  `git commit` then dies in pre-commit with `Permission denied` creating
+  `backend/.venv/CACHEDIR.TAG`. `rmdir` them — the parent is yours, so this
+  needs no root — and restore the symlink.
+
 ## Merge contract
 
 Batch survivors by area into small PRs — auth, matches, jobs, settings — not
