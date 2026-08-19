@@ -1,5 +1,18 @@
 # Improvements
 
+- 2026-08-19 frontend/features/players/context/player-context.tsx: the
+  `!!urlPuuid &&` in `isLoading: authLoading || contextQuery.isLoading ||
+  (!!urlPuuid && urlPlayerQuery.isLoading)` is a React Query v4 leftover and
+  does nothing. In v5 `isLoading` is derived as `isPending && isFetching`, so a
+  disabled query reports `isLoading: false` — measured directly, not inferred:
+  a disabled `useQuery` returns `{isLoading: false, isPending: true,
+  isFetching: false}`. Under v4, where `isLoading === isPending`, dropping the
+  guard would have left every page permanently in its skeleton state, which is
+  presumably why it was written. Removing it now is behaviour-neutral; it is
+  recorded rather than done because it is the kind of "harmless" conjunct whose
+  deletion looks risky without this note. Any other `x && query.isLoading` in
+  the codebase is the same leftover.
+
 - 2026-08-19 frontend/features/jobs/components/use-job-card-controls.ts: all
   **eight** `useMutation` blocks carry an `onError` handler that cannot fire.
   Every `mutationFn` is a `validatedPost`, and `validatedPost` wraps its whole

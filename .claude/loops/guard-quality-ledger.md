@@ -510,6 +510,55 @@ three untested messages in `login-error.ts`.
   rejection in the file that force-stops production jobs if that contract ever
   changes.
 
+- ~~`features/players/context/player-context.tsx`~~ — done 2026-08-19, 15
+  tests, **14 mutations, six survivors on the first pass and five of them the
+  test's fault**. 7.14% → 95.23% statements, 0% → 100% branches. From the
+  under-20% band, and it is the state every player-centric page reads.
+
+  **This row is mostly about the fixtures, because the first pass was mostly
+  wrong.** The file has two effects that both depend on `contextQuery.data`,
+  and the persist mutation's `onSuccess` *rewrites* `contextQuery.data`. That
+  single feedback edge is what made five assertions vacuous:
+
+  - "the URL wins over the saved player" passed against reading the saved
+    player, because once the PUT resolves the saved player **becomes** the URL
+    player and the two readings agree. The fixture now holds the round-trip
+    open — which is not an artificial state, it is exactly the window in which
+    someone opens a shared link.
+  - the write-once guard (`persistedUrlPuuidRef`) was untestable for the same
+    reason: after the PUT lands, the *other* guard
+    (`current_player?.puuid === urlPuuid`) already stops the second write, so
+    the ref only covers the window before the response. **Two guards where one
+    is enough on the happy path means the fixture has to reproduce the unhappy
+    timing or it tests neither.**
+  - two `expect(replace).not.toHaveBeenCalled()` assertions passed because
+    they ran before the context query had landed. **Waiting for a request to
+    be *issued* proves the test was faster than the fetch, not that the effect
+    declined to run**; they now wait for the data to arrive and then assert.
+  - the picker's `setQueryData` seeding was simply never asserted.
+
+  **The one real equivalent mutant this loop has recorded, and it was
+  measured rather than argued.** `isLoading: … || (!!urlPuuid &&
+  urlPlayerQuery.isLoading)` — the `!!urlPuuid &&` does nothing under React
+  Query v5, where `isLoading` is `isPending && isFetching` and a disabled
+  query therefore reports `false`. Verified with a throwaway render of a
+  disabled `useQuery`: `{isLoading: false, isPending: true, isFetching:
+  false}`. Under v4, where `isLoading === isPending`, dropping it would have
+  left every page permanently in its skeleton, which is why it exists. Left in
+  place and logged; the point is that "equivalent" was established by running
+  the library, not by reading the source.
+
+  Killed and worth naming: the URL-vs-saved precedence (a shared link showing
+  a different player's data under that person's name in the address bar), the
+  `router.replace` restore that must not be `history.replaceState` (the
+  address bar would change without the router knowing, so every sidebar link
+  is built without the player), `isPlayerCentricPath` (a `?puuid=` on the
+  settings page is not a selection), the query-parameter preservation, not
+  persisting a `?puuid=` that failed to load (the URL is user input, and
+  storing an unloadable PUUID makes every later page start by failing), the
+  signed-out `enabled` guard, and `usePlayerContext` throwing outside its
+  provider.
+
 The rest, enumerated 2026-08-19 rather than left as "plus 9 more":
 ~~`app/jobs/page.tsx`~~ (30, done 2026-08-19 — nine mutations; it is the only
 consumer of `components/ui/tabs.tsx`, so both closed together),
