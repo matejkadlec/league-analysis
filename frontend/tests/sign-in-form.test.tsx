@@ -120,6 +120,35 @@ describe("SignInForm", () => {
     expect(screen.queryByText("Failed to fetch")).toBeNull();
   });
 
+  it("shows a rejected field's message and points the input at it", async () => {
+    // Guards `components/ui/form.tsx`, through its only consumer. Every error
+    // path in those primitives was unexercised: no test in the suite had ever
+    // rendered a validation message, so `FormMessage` returning `null`
+    // unconditionally, `aria-invalid` pinned to `false`, and the message id
+    // dropped from `aria-describedby` each kept all 352 tests green. The first
+    // means nobody is ever told which field is wrong; the other two mean a
+    // screen reader is not told either.
+    // `a@b` on purpose. The input is `type="email"`, and the form does not set
+    // `noValidate`, so the browser's own constraint validation refuses to
+    // submit anything it considers malformed and React Hook Form never runs --
+    // "not-an-email" produces a native bubble and no `FormMessage` at all.
+    // `a@b` is valid to the browser and fails this form's pattern rule, which
+    // wants a TLD, so it is the shape that actually reaches these primitives.
+    const user = userEvent.setup();
+    render(<SignInForm />);
+
+    await user.type(screen.getByLabelText("Email"), "a@b");
+    await user.type(screen.getByLabelText("Password"), "secret-password");
+    await user.click(screen.getByRole("button", { name: "Sign In" }));
+
+    const message = await screen.findByText("Invalid email address");
+    const email = screen.getByLabelText("Email");
+
+    expect(email.getAttribute("aria-invalid")).toBe("true");
+    expect(email.getAttribute("aria-describedby")).toContain(message.id);
+    expect(login).not.toHaveBeenCalled();
+  });
+
   it("hands the form back after a failure, without the last failure's message", async () => {
     // Both halves of this were unguarded, and both strand the visitor on a
     // form they cannot use. Dropping `setIsSubmitting(false)` from the
