@@ -803,6 +803,25 @@ route shells already resolved by the route-shell row.
   `@computed_field` demoted to a plain property vanishes from every
   response while every in-process test still passes.
 
+- ~~`backend: app/features/auth/schemas.py`~~ — done 2026-08-19, 2 tests
+  (in `tests/test_auth_authorization.py`, which already held this file's
+  suite), **3 mutations, all killed**. 90.9% → 100%. The existing
+  weak-password parametrize already kills wiring mutations across the four
+  regex rules (each fixture fails exactly one rule), and the `!=` match
+  validator was pinned; what was uncovered was the two guards no route can
+  reach the obvious way. Killed: the length rule inside
+  `validate_password_strength` (both call sites hide it behind
+  `Field(min_length=8)`, so the named policy function silently lost its
+  length rule for any future direct caller — pinned by calling the function,
+  which is the unit, not the route), the Join Us body trim (`return value`
+  for `return normalized` stores the untrimmed submission), and the
+  whitespace-only rejection (`Field(min_length=1)` sees the raw `"   "` and
+  passes it; the validator is the only thing between a blank message and the
+  inbox, and constraints do not re-run on the validator's return value).
+  Harness note: a `docker exec` heredoc without `-i` feeds python an empty
+  script and every mutation "survives" by never being applied — the run is
+  only real if each mutation echoes its apply confirmation.
+
 The rest, enumerated 2026-08-19 rather than left as "plus 9 more":
 ~~`app/jobs/page.tsx`~~ (30, done 2026-08-19 — nine mutations; it is the only
 consumer of `components/ui/tabs.tsx`, so both closed together),
@@ -955,7 +974,7 @@ what is at stake rather than by size:
 *Validators (executable rules on untrusted input):*
 ~~`app/features/matchmaking_analysis/schemas.py`~~ (52, 80.4% — done
 2026-08-19, row below),
-`app/features/auth/schemas.py` (74, 90.9%, six validators),
+~~`app/features/auth/schemas.py`~~ (74, 90.9% — done 2026-08-19, row below),
 `app/features/settings/schemas.py` (229, 97.6%, **fourteen** validators —
 biggest file in the covered half of the backend).
 

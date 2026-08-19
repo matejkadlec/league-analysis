@@ -17,9 +17,12 @@ from app.features.auth.dependencies import (
 from app.features.auth.models import User
 from app.features.auth.router import login, refresh_access_token
 from app.features.auth.schemas import (
+    JoinUsContactRequest,
+    JoinUsSubject,
     PasswordChangeRequest,
     RefreshTokenRequest,
     UserCreate,
+    validate_password_strength,
 )
 from app.features.auth.service import AuthService
 
@@ -61,6 +64,24 @@ def _loopback_request() -> Request:
 def test_user_create_rejects_weak_passwords(password: str) -> None:
     with pytest.raises(ValueError):
         UserCreate(email="player@example.com", display_name="Player", password=password)
+
+
+def test_password_policy_owns_the_length_rule_itself() -> None:
+    # Both schema call sites hide the length rule behind Field(min_length=8);
+    # the named policy function must still enforce it for any caller that
+    # doesn't.
+    with pytest.raises(ValueError, match="at least 8 characters"):
+        validate_password_strength("Sh0rt-!")
+
+
+def test_join_us_body_is_trimmed_and_whitespace_only_is_rejected() -> None:
+    # Field(min_length=1) sees the raw value, so "   " passes it; only the
+    # validator stands between a whitespace-only submission and the inbox.
+    request = JoinUsContactRequest(subject=JoinUsSubject.OTHER, body="  hello  ")
+    assert request.body == "hello"
+
+    with pytest.raises(ValueError, match="cannot be empty"):
+        JoinUsContactRequest(subject=JoinUsSubject.OTHER, body="   ")
 
 
 def test_password_change_requires_matching_strong_passwords() -> None:
