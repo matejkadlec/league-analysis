@@ -64,11 +64,15 @@ export default defineConfig({
       // the zero-covered class was closed. Ratchet on the way out of a batch
       // of work, not once per file -- but do ratchet, or the floors drift
       // eighteen points behind again the way they just did.
+      // Ratcheted 2026-08-19 on the way out of the next batch: 78.50%
+      // statements, 72.02% branches, 72.96% functions, 78.63% lines over 561
+      // tests, after `match-row.tsx` (1.33% → 97.33%), `lib/core/api.ts`
+      // (49.18% → 98.36%) and `use-job-card-controls.ts` (38.81% → 78.94%).
       thresholds: {
-        statements: 71,
-        branches: 64,
-        functions: 66,
-        lines: 71,
+        statements: 76,
+        branches: 70,
+        functions: 70,
+        lines: 76,
       },
     },
   },

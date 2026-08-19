@@ -1,5 +1,30 @@
 # Improvements
 
+- 2026-08-19 frontend/features/jobs/components/use-job-card-controls.ts: all
+  **eight** `useMutation` blocks carry an `onError` handler that cannot fire.
+  Every `mutationFn` is a `validatedPost`, and `validatedPost` wraps its whole
+  body in `try/catch` and *resolves* with `{ success: false }` rather than
+  rejecting — a contract now pinned by `tests/api-validated-helpers.test.ts`
+  ("answers a failed %s rather than throwing out of the helper", all five
+  verbs). So the failure is always reported by the `else` arm of `onSuccess`,
+  and the ~48 lines of `onError` are dead. Verified both directions: forcing
+  the mocked `validatedPost` to reject does reach the handler and does raise
+  the right toast, so the code works — it is simply unreachable. Left in place
+  deliberately rather than deleted: this file stops and force-stops production
+  jobs, and the handlers are the difference between a toast and an unhandled
+  rejection if that contract ever changes. Worth revisiting only if the
+  duplication is being cleaned up anyway.
+
+- 2026-08-19 frontend/features/jobs/components/use-job-card-controls.ts:
+  `handlePauseResume` and the first eight lines of `handleMainAction` are the
+  same code — the paused/test/regular resume-or-pause branch, written twice.
+  `handleMainAction` could call `handlePauseResume()` for its paused case and
+  lose seven lines. This is not cosmetic: the duplicate is how a mutation to
+  the resume branch survived the first draft of `tests/job-card-controls.test.tsx`,
+  because the test was exercising the other copy. Both copies are now covered,
+  which means the next person to fix a bug in one of them has a test that
+  notices they missed the other.
+
 - 2026-08-19 frontend/features/matches/components/match-row.tsx: the row says
   whether the game was won, lost or remade **by background colour and nothing
   else** — emerald, rose, or grey, with no text, icon or label anywhere in the

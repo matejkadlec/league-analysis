@@ -452,6 +452,64 @@ three untested messages in `login-error.ts`.
   upgrade that changed nothing about this app into a failing test, while a
   blanked code is what actually loses the reader.
 
+- ~~`features/jobs/components/use-job-card-controls.ts`~~ — done 2026-08-19,
+  29 tests, **24 mutations**, one survivor resolved and one `accepted` with
+  evidence. 38.81% → 78.94% statements, 34.9% → 84.9% branches. The largest
+  file in the 20–79% band (93 missing statements) and the one with the most at
+  stake: it is the admin control surface over the live scheduler, and several
+  of its actions are irreversible.
+
+  **One button, five meanings.** `handleMainAction` is a cascade over four
+  booleans — resume, stop the test run, force-stop, stop, trigger — and each
+  arm sends a different request. The line worth the row is
+  `stopMutation.mutate(isAnyStopping)`: the force flag is *whether a graceful
+  stop is already in flight*, which makes force the second press. Mutated to
+  `true`, one click kills a healthy job mid-write; mutated to `false`, a job
+  wedged in its stopping state can never be forced. Both are now red.
+
+  **Test run and scheduled job are separate targets that are both true at
+  once.** `is_running` and `is_test_running` can hold together, and the test
+  branch is checked first, so mutating that check stops production work the
+  admin never touched and leaves the test running. Four such crossings — main
+  action stop, main action resume, pause control pause, pause control resume —
+  each mutated separately.
+
+  **The survivor was a duplicate the test had only covered once.**
+  `handlePauseResume` and the head of `handleMainAction` are the same seven
+  lines written twice, and the first draft tested the `handleMainAction` copy
+  only, so blanking the `handlePauseResume` resume branch survived. This is
+  the shape to look for in any hook with a "do the main thing" and a "do the
+  specific thing" entry point: **covering one entry point is not covering the
+  branch, it is covering one copy of it.** Logged as a simplification too.
+
+  **The manual-run notification is a small state machine and all of it is
+  guarded now:** it must ignore a scheduled run finishing first (normal on a
+  15-minute schedule, and without the `triggered_by` filter the admin is told
+  their queued run completed), ignore an execution predating the press
+  (`id > baselineId`, or the previous manual run is reported as this one),
+  stay silent through PENDING/RUNNING/PAUSED, and map SUCCESS, RATE_LIMITED,
+  CANCELLED and FAILED to four different messages — four endings that need
+  four different actions from the admin.
+
+  **Both failure shapes report, and that matters more here than usual:** the
+  card's flags come from a refetch, so on either failure the card looks
+  exactly as it did before the press. The toast is the only thing that says
+  the press did nothing; without it the admin believes the job is paused.
+  Also killed: an already-running trigger reported as an error rather than as
+  the warning it is — the action there is to wait, not to go read a log.
+
+  `accepted`, with the reachability checked rather than assumed: **all eight
+  `onError` handlers are unreachable.** Every `mutationFn` is a
+  `validatedPost`, which catches everything and *resolves* with
+  `{ success: false }` — a contract pinned one row up in
+  `api-validated-helpers.test.ts`. Forcing the mock to reject does reach the
+  handlers and does raise the right toast, so they work; they simply cannot
+  fire. Kept rather than deleted, unlike `getResultInfo`'s dead fields, and
+  the distinction is deliberate: those were computed and displayed nowhere,
+  pure waste, while these are the difference between a toast and an unhandled
+  rejection in the file that force-stops production jobs if that contract ever
+  changes.
+
 The rest, enumerated 2026-08-19 rather than left as "plus 9 more":
 ~~`app/jobs/page.tsx`~~ (30, done 2026-08-19 — nine mutations; it is the only
 consumer of `components/ui/tabs.tsx`, so both closed together),
