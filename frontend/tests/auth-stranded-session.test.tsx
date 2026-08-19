@@ -14,6 +14,7 @@ import {
   clearAuthStateCookie,
   hasAuthStateCookie,
 } from "@/features/auth/utils/auth-state-cookie";
+import { PUBLIC_ROUTES } from "@/features/auth/utils/public-routes";
 import { AUTH_PROBE_TIMEOUT_MS } from "@/features/auth/utils/login-error";
 import {
   hangingFetch,
@@ -202,14 +203,32 @@ describe("a session the API rejected", () => {
     }
   });
 
-  it("leaves public routes alone", async () => {
-    nav.pathname = "/privacy-policy";
+  // Every entry, not a sample of one. This asserted `/privacy-policy` alone
+  // while the gate kept its own copy of the list, so dropping `/cookie-policy`
+  // from that copy passed the whole suite -- and a signed-out visitor clicking
+  // Cookie Policy in the consent banner would have been redirected to
+  // /sign-in, with a legally required page unreadable to exactly the people
+  // most likely to open it. The list is shared with `proxy.ts` now, so this
+  // sweeps whatever it holds rather than restating it.
+  it.each(PUBLIC_ROUTES)("leaves the public route %s alone", async (route) => {
+    nav.pathname = route;
 
     const { getByText } = render(<AuthGate>policy text</AuthGate>);
 
     expect(getByText("policy text")).toBeTruthy();
     await settle();
     expect(nav.replace).not.toHaveBeenCalled();
+  });
+
+  it("still sends a signed-out visitor away from a protected route", async () => {
+    // The other direction: a list that grew to cover everything would pass
+    // the sweep above and let anyone read any page signed out.
+    nav.pathname = "/players";
+
+    render(<AuthGate>protected content</AuthGate>);
+
+    await settle();
+    expect(nav.replace).toHaveBeenCalledWith("/sign-in");
   });
 });
 

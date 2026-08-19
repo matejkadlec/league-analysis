@@ -325,9 +325,9 @@ const eslintConfig = [
           // list, and anything else -- including a helper that exists to make
           // a request -- has to argue with this rule first.
           selector:
-            "ImportDeclaration:not([source.value='next/server']):not([source.value='@/features/auth/utils/auth-state-cookie'])",
+            "ImportDeclaration:not([source.value='next/server']):not([source.value='@/features/auth/utils/auth-state-cookie']):not([source.value='@/features/auth/utils/public-routes'])",
           message:
-            "proxy.ts may import only next/server and the session-hint constants. A helper imported here can make the request this file must never make: the edge cannot tell a refusal from an outage.",
+            "proxy.ts may import only next/server, the session-hint constants and the public-route list. A helper imported here can make the request this file must never make: the edge cannot tell a refusal from an outage.",
         },
         {
           // `ImportDeclaration` is the static form only. An audit reopened the

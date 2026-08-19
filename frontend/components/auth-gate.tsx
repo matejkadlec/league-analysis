@@ -7,6 +7,7 @@ import {
   hasAuthStateCookie,
   subscribeToAuthStateCookie,
 } from "@/features/auth/utils/auth-state-cookie";
+import { isPublicRoute as pathnameIsPublic } from "@/features/auth/utils/public-routes";
 
 /**
  * How long the screen may stay empty before it owes the visitor a word.
@@ -15,14 +16,6 @@ import {
  * nobody concludes the page is broken.
  */
 export const SLOW_PROBE_NOTICE_MS = 600;
-
-const PUBLIC_ROUTES = [
-  "/sign-in",
-  "/join-us",
-  "/privacy-policy",
-  "/cookie-policy",
-  "/license",
-];
 
 interface AuthGateProps {
   children: React.ReactNode;
@@ -154,9 +147,7 @@ export function AuthGate({ children }: AuthGateProps) {
     hasAuthStateCookie,
     () => false,
   );
-  const isPublicRoute = PUBLIC_ROUTES.some(
-    (route) => pathname === route || pathname.startsWith(`${route}/`),
-  );
+  const isPublicRoute = pathnameIsPublic(pathname);
   const isSignInRoute =
     pathname === "/sign-in" || pathname.startsWith("/sign-in/");
 
