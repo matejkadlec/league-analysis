@@ -33,6 +33,9 @@ class _SyncSessionShim:
     async def execute(self, statement: Any) -> Any:
         return self._session.execute(statement)
 
+    async def commit(self) -> None:
+        self._session.commit()
+
 
 @pytest.fixture
 def session() -> Iterator[Session]:
@@ -59,6 +62,8 @@ def _store(
     service: AuthService,
     raw: str,
     *,
+    row_id: int = 1,
+    user_id: int = 9,
     token_id: str,
     revoked: bool = False,
     replaced_by: str | None = None,
@@ -67,10 +72,9 @@ def _store(
     now = datetime.now(UTC)
     session.add(
         RefreshToken(
-            # SQLite does not autoincrement a BIGINT primary key; the value is
-            # never read, so any distinct number does.
-            id=abs(hash(token_id)) % 1_000_000,
-            user_id=9,
+            # SQLite does not autoincrement a BIGINT primary key.
+            id=row_id,
+            user_id=user_id,
             token_id=token_id,
             token_hash=service._hash_refresh_token(raw),
             issued_at=now - timedelta(days=1),
@@ -188,3 +192,39 @@ async def test_a_rotation_records_the_replacement_it_issued() -> None:
     assert rotated is not None
     assert len(added) == 1
     assert record.replaced_by_token_id == added[0].token_id
+
+
+@pytest.mark.asyncio
+async def test_a_logout_revokes_this_users_live_tokens_and_only_theirs(
+    session: Session,
+) -> None:
+    """The other half of the route, and it was mocked everywhere.
+
+    Ten tests reference `revoke_all_refresh_tokens_for_user`, and every one of
+    them replaces it with an AsyncMock and asserts it was awaited -- so "logout
+    revokes the session" was only ever checked as "logout calls something
+    named revoke". Its WHERE clause and its write were invisible: matching on
+    `id` instead of `user_id`, inverting the revoked filter, or never stamping
+    `revoked_at` at all each left all 615 tests green while the route answered
+    "Successfully logged out" with the session still live for 30 days.
+    """
+    service = _service(session)
+    _store(session, service, "live", row_id=1, token_id="t1")
+    _store(
+        session,
+        service,
+        "rotated",
+        row_id=2,
+        token_id="t2",
+        revoked=True,
+        replaced_by="t3",
+    )
+    _store(session, service, "someone-else", row_id=3, user_id=10, token_id="t4")
+
+    await service.revoke_all_refresh_tokens_for_user(9)
+
+    revoked = {
+        row.token_id: row.revoked_at is not None
+        for row in session.query(RefreshToken).all()
+    }
+    assert revoked == {"t1": True, "t2": True, "t4": False}
