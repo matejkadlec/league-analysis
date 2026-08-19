@@ -14,7 +14,6 @@ from structlog.typing import EventDict
 
 from app.core.database import DatabaseManager
 from app.core.riot_api.errors import AuthenticationError, RateLimitError
-from app.core.validation import validate_list_items
 from app.features.jobs.base import BaseJob, _validation_field_locations
 from app.features.jobs.error_handling import RateLimitSignal, _handle_error
 from app.features.jobs.log_capture import BoundedLogCapture
@@ -114,20 +113,6 @@ async def test_unexpected_rollback_still_logs_warning() -> None:
     assert len(entries) == 1
     assert entries[0]["log_level"] == "warning"
     assert entries[0]["error_type"] == "ValueError"
-
-
-def test_invalid_list_item_logs_static_event() -> None:
-    """The item-type rejection keeps its context in fields, not the event."""
-    items = cast("list[dict[str, Any]]", [{"a": 1}, "nope"])
-
-    with capture_logs() as logs:
-        assert validate_list_items(items, ["a"]) is False
-
-    entries = _events(logs, "invalid_item_type")
-    assert len(entries) == 1
-    assert entries[0]["context"] == "item"
-    assert entries[0]["index"] == 1
-    assert entries[0]["got_type"] == "str"
 
 
 def _raise_through(error: Exception, operation: str, *, critical: bool = True) -> None:

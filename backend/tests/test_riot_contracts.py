@@ -13,7 +13,6 @@ from app.core.riot_api.models import (
     MatchTimelineDTO,
     SummonerDTO,
 )
-from app.core.riot_api.transformers import MatchTransformer
 from app.features.matches.timeline import build_match_timeline_rows
 
 FIXTURE: dict[str, Any] = json.loads(
@@ -84,16 +83,6 @@ def test_current_match_contracts_keep_creation_and_actual_start(queue_id: str) -
     assert match.info.participants[0].summoner_name == "Sanitized Legacy Name"
 
 
-def test_raw_match_transformer_keeps_both_timestamp_semantics() -> None:
-    payload = _match_payload("420")
-    transformer = MatchTransformer()
-    assert transformer.validate_match_data(payload)
-    transformed = transformer.transform_match_data(payload)["match"]
-    assert transformed["game_creation_timestamp"] == 1_786_100_000_000
-    assert transformed["game_start_timestamp"] == 1_786_100_060_000
-    assert transformed["game_start_timestamp_source"] == "riot_game_start"
-
-
 @pytest.mark.parametrize("variant", QUEUE_VARIANTS["queues"])
 def test_new_supported_queue_variants_preserve_queue_identity(
     variant: dict[str, Any],
@@ -109,11 +98,9 @@ def test_new_supported_queue_variants_preserve_queue_identity(
     )
 
     match = MatchDTO.model_validate(payload)
-    transformed = MatchTransformer().transform_match_data(payload)["match"]
 
     assert match.info.queue_id == variant["id"]
-    assert transformed["queue_id"] == variant["id"]
-    assert transformed["game_mode"] == variant["game_mode"]
+    assert match.info.game_mode == variant["game_mode"]
 
     rows = build_match_timeline_rows(match, _timeline_payload(variant["base_fixture"]))
     assert len(rows) == 1
@@ -182,73 +169,3 @@ def test_atakhan_is_historical_and_unknown_current_objectives_are_retained() -> 
     historical = MatchDTO.model_validate(historical_payload)
     historical_row = build_match_timeline_rows(historical, current_timeline)[0]
     assert historical_row["atakhan_takedowns"] == 1
-
-
-def test_transformed_dicts_fit_the_rows_they_become() -> None:
-    # `_store_match_detail` runs `Match(**transformed["match"])` and
-    # `MatchParticipant(**p)` verbatim. SQLAlchemy raises on an unknown kwarg,
-    # so constructing both rows checks every key in both dicts against the
-    # real columns — the raw-dict twin of the DTO-path test in
-    # test_transformers.py, guarding the *other* live ingestion path.
-    from app.features.matches.models import Match
-    from app.features.matches.participants import MatchParticipant
-    from app.model_registry import import_all_models
-
-    import_all_models()
-
-    transformed = MatchTransformer().transform_match_data(_match_payload("420"))
-    match_row = Match(**transformed["match"])
-    participant_row = MatchParticipant(**transformed["participants"][0])
-
-    assert match_row.queue_id == 420
-    assert participant_row.puuid
-    # The fixture is a completed, non-remake game; eligibleForProgression is
-    # true, and the transformer stores its negation.
-    assert participant_row.remake is False
-
-
-def test_display_name_prefers_the_riot_id_over_the_legacy_name() -> None:
-    payload = _match_payload("420")
-    payload["info"]["participants"][0].pop("gameName", None)
-    transformed = MatchTransformer().transform_match_data(payload)
-
-    assert transformed["participants"][0]["game_name"] == "Sanitized Player"
-    assert transformed["participants"][0]["game_name"] != "Sanitized Legacy Name"
-
-
-def test_one_surrendering_participant_flags_the_whole_match() -> None:
-    # The flags live on participants in the payload but on the match in the
-    # schema; `any()` is the aggregation, and the two flags must not read
-    # each other's key — an early surrender is a different outcome (no LP-
-    # relevant game) than a late one.
-    payload = _match_payload("420")
-    payload["info"]["participants"][0]["gameEndedInEarlySurrender"] = True
-    transformed = MatchTransformer().transform_match_data(payload)["match"]
-
-    assert transformed["early_surrender"] is True
-    assert transformed["surrender"] is False
-
-
-def test_validation_refuses_a_match_missing_its_identity() -> None:
-    complete = _match_payload("420")
-    assert MatchTransformer().validate_match_data(complete)
-
-    unidentified = _match_payload("420")
-    del unidentified["metadata"]["matchId"]
-    assert not MatchTransformer().validate_match_data(unidentified)
-
-    anonymous = _match_payload("420")
-    del anonymous["info"]["participants"][0]["puuid"]
-    assert not MatchTransformer().validate_match_data(anonymous)
-
-    # The docstring promises "True if valid, False otherwise" — garbage that
-    # explodes inside the validators must come back as a refusal, not a raise,
-    # because the caller treats this as a yes/no gate before transforming.
-    assert not MatchTransformer().validate_match_data(None)  # type: ignore[arg-type]
-
-
-def test_transform_raises_rather_than_storing_a_partial_match() -> None:
-    # The except in transform_match_data logs and re-raises; swallowing it
-    # would hand `_store_match_detail` a half-built dict to persist.
-    with pytest.raises(AttributeError):
-        MatchTransformer().transform_match_data({"metadata": {}, "info": None})

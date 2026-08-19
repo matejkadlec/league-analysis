@@ -4,12 +4,6 @@ from types import SimpleNamespace
 from typing import Any
 
 from app.core.riot_api.models import ParticipantDTO
-from app.core.validation import (
-    is_empty_or_none,
-    validate_list_items,
-    validate_nested_fields,
-    validate_required_fields,
-)
 from app.features.matches.participants import MatchParticipant
 from app.features.matches.transformers import MatchDTOTransformer, PlayerDataSanitizer
 
@@ -55,23 +49,6 @@ def test_name_and_platform_sanitization_is_stable() -> None:
         "tag_line": None,
         "platform": "EUN1",
     }
-
-
-def test_core_shape_validation_rejects_missing_or_invalid_data() -> None:
-    assert validate_required_fields({"id": 1}, ["id"])
-    assert not validate_required_fields({}, ["id"])
-    assert validate_nested_fields({"metadata": {"id": 1}}, {"metadata": ["id"]})
-    assert not validate_nested_fields({"metadata": []}, {"metadata": ["id"]})
-    # A nested object that exists but lacks the field inside it — the branch
-    # that recurses, not the one that checks the parent's presence.
-    assert not validate_nested_fields({"metadata": {"other": 1}}, {"metadata": ["id"]})
-    assert validate_list_items([{"id": 1}], ["id"])
-    assert not validate_list_items([], ["id"])
-    # Same distinction one level down: the item is a dict, the field is not in it.
-    assert not validate_list_items([{"other": 1}], ["id"])
-    assert is_empty_or_none(None)
-    assert is_empty_or_none("")
-    assert not is_empty_or_none(0)
 
 
 def test_extracted_participant_fits_the_row_it_becomes() -> None:

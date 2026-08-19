@@ -1,29 +1,13 @@
 # Improvements
 
-- 2026-08-19 backend/app/core/riot_api/transformers.py: the per-participant
-  `except → continue` (lines 163-170) that is supposed to skip one malformed
-  participant and keep the match **cannot run**. `transform_match_data` calls
-  `_transform_match_info` first, whose `any(p.get(...) for p in participants)`
-  iterates the same list and raises on the non-dict participant before the
-  skip loop is reached — measured: a `[good, None]` list raises AttributeError
-  at line 53 and the whole match is lost. And a participant that IS a dict
-  never raises in the skip loop, because `.get` with a default cannot. So the
-  resilience is illusory both ways. In practice `validate_match_data` runs
-  first and refuses such payloads, so nothing is broken today; either delete
-  the dead handler or hoist the surrender-flag sweep to tolerate non-dicts.
-
-- 2026-08-19 backend/app/core/riot_api/transformers.py +
-  backend/app/features/matches/transformers.py: **two live ingestion paths
-  disagree about the same normalisation.** The raw-dict path prefers
-  `gameName` → `riotIdGameName` → `summonerName` ("Unknown"); the DTO path
-  reads `riotIdGameName` → `summonerName` ("Unknown Player"). One stores
-  `tag_line` default "NA", the other `None`. One leaves `team_position` as
-  `""` with no `individualPosition` fallback, the other falls back. One
-  int-coerces `vision_score`, the other passes the raw float. Same table,
-  two writers, four quiet differences — a player ingested via
-  `_store_match_detail` and re-ingested via `upsert_match` flips fields.
-  Consolidating on the DTO path (typed, and now the better-tested one) and
-  deleting `MatchTransformer` is the obvious end state.
+- 2026-08-19 RESOLVED same day: two entries about
+  backend/app/core/riot_api/transformers.py (an unreachable per-participant
+  skip handler, and four normalisation disagreements with the DTO
+  transformer) are moot — the wheel-audit workflow established the whole
+  raw-dict path had zero callers (`_store_match_detail` is never invoked;
+  `store_match_from_dto` is the only ingestion path), and the file,
+  `core/validation.py` and the dead service method were deleted outright.
+  One writer remains, so there is nothing left to disagree.
 
 - 2026-08-19 backend/app/features/auth/service.py +
   frontend/features/auth/components/join-us-form.tsx: **a message ending in

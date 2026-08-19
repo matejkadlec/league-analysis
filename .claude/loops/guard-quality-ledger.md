@@ -700,30 +700,29 @@ route shells already resolved by the route-shell row.
   misspelled), and `int(vision_score or 0)` (a None float reaching an int
   column).
 
-- ~~`backend: app/core/riot_api/transformers.py`~~ — done 2026-08-19, 6 tests
-  appended to `tests/test_riot_contracts.py`, **5 mutations, all killed**.
-  76% → 93%. The raw-dict twin of the DTO transformer, and still live:
-  `_store_match_detail` validates, transforms, and constructs rows from its
-  dicts. Same strongest-guard-is-cheapest shape as the DTO row —
-  `Match(**transformed["match"])` and `MatchParticipant(**participants[0])`
-  are the production lines verbatim, so every key in both dicts is checked
-  against real columns.
+- ~~`backend: app/core/riot_api/transformers.py`~~ — **deleted 2026-08-19**,
+  same day it was first resolved as "pin", and the correction is the row.
+  The first pass wrote 6 tests and killed 5 mutations on the claim that the
+  raw-dict path was "still live: `_store_match_detail` validates, transforms,
+  and constructs rows". The method exists — but the wheel-audit workflow
+  checked the next level up, and **nothing calls `_store_match_detail`**;
+  the only real ingestion path is `store_match_from_dto` over the pydantic
+  `MatchDTO`. Verified by grep before acting: the method's name appears
+  nowhere in `app/` outside its own definition. Same mistake the
+  `evaluators.py` row exists to warn about — checking who calls the function
+  but not who calls the caller — made by the same loop that wrote that row.
 
-  Killed: a match-dict key typo, the remake inversion on this path too, the
-  early-surrender aggregation reading the late-surrender key (they are
-  different outcomes for LP), validation ceasing to require `matchId`, and
-  the legacy `summonerName` winning over the Riot ID.
-
-  `accepted` with a measurement, not a shrug: **the per-participant
-  `except → continue` (163-170) is unreachable both ways.** A non-dict
-  participant raises earlier, in `_transform_match_info`'s surrender sweep
-  over the same list (measured: `[good, None]` raises at line 53 and loses
-  the whole match), and a dict participant cannot raise in the skip loop
-  because `.get` with a default never does. The "skip one, keep nine"
-  resilience it promises does not exist; logged in IMPROVEMENTS.md along
-  with the four quiet normalisation disagreements between this path and the
-  DTO path (name chain, tag default, position fallback, vision coercion) —
-  same table, two writers.
+  Resolution: deleted the whole dead chain — `core/riot_api/transformers.py`
+  (`MatchTransformer`), `core/validation.py` (its only app-side consumer),
+  `MatchService._store_match_detail` plus the `self.transformer` attribute,
+  the four barrel re-exports, and the ten tests that pinned any of it
+  (including the six written that morning and the pre-existing
+  raw-transformer timestamp test; the queue-variant contract test now
+  asserts through `MatchDTO` alone). 645 backend tests green after the cut.
+  What the dead path's tests taught was folded into the DTO row where it
+  belongs: the remake inversion, the name chain and the surrender
+  aggregation are all pinned there against the transformer production
+  actually runs.
 
 - ~~`backend: app/features/jobs/maintenance.py`~~ — done 2026-08-19, 2 tests
   appended to `tests/test_jobs.py`, **4 mutations, all killed**. 88% → 100%,
@@ -747,10 +746,10 @@ route shells already resolved by the route-shell row.
   remaining mutate-list heads, each missing 1-3 lines), **5 mutations, all
   killed**, all three files now 100% including branches.
 
-  `validation.py`: the two uncovered lines were the *recursing* halves —
-  a nested object that exists but lacks the field inside it, and a list item
-  that is a dict but missing the field. Both are one assert each in the
-  existing shape test, and both mutations (dropping the inner check) died.
+  `validation.py`: covered to 100% in the morning, **deleted in the
+  afternoon** by the wheel-audit follow-up — its only app-side consumer was
+  the dead raw-dict transformer chain (see that row). The two hours of life
+  its new asserts had are the cost of testing before asking who calls it.
 
   `database.py`: one deletion and one test. **Deleted the module-level
   `get_session()`** — zero callers, and broken by design: it `return`s the
