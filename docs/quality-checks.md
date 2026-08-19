@@ -74,9 +74,15 @@ so it is safe to call from the main checkout or any worktree.
   production actually serves instead of amd64 images that never ship. The
   costs are real and accepted: four cores rather than eight, and one runner
   shared with the deploy workflow, so a merge queues behind a gate already in
-  flight. The workflow prunes dangling images and week-old build cache
-  afterwards, because the CI host is the production host -- never volumes,
-  which is where production's database lives.
+  flight. Runs are cheap despite the hardware: measured on the box, the gate
+  image is 49s cold and 1s warm, and the whole gate is ~3 minutes, because the
+  Dockerfile copies only `.python-version` and the repository arrives as a
+  bind mount -- so nothing short of a toolchain bump invalidates the daemon's
+  layer cache. That cache is why the cleanup step filters on `unused-for`
+  rather than `until`, which would discard it weekly however often it was
+  used. The cleanup runs because the CI host is the production host, and it
+  touches only dangling images and untouched cache -- never volumes, which is
+  where production's database lives.
 - **CI always runs the complete gate.** `./test.sh -r` exists for local
   documentation-only feedback, but CI does not try to detect that case: a
   required check that skips itself has to be wired through every step, and

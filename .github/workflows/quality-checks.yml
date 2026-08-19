@@ -65,8 +65,16 @@ jobs:
       # data is a named volume, and `docker volume prune` does not ask twice.
       # Dangling images are untagged by definition, so the release-per-commit
       # tags the deploy keeps are untouched.
+      #
+      # `unused-for`, not `until`: the daemon's layer cache is what makes this
+      # workflow cheap. Measured on this box, the gate image is 49s cold and
+      # 1s warm, because the Dockerfile copies only `.python-version` and the
+      # repository arrives as a bind mount -- so nothing but a toolchain bump
+      # invalidates it. `until=168h` filters on when a cache entry was created,
+      # which would throw that away every week however often it was used;
+      # `unused-for=168h` keeps whatever the last week actually touched.
       - name: Reclaim disposable build space
         if: always()
         run: |
           docker image prune --force
-          docker builder prune --force --filter until=168h
+          docker buildx prune --force --filter unused-for=168h
