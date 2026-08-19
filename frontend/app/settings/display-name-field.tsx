@@ -88,14 +88,6 @@ export function DisplayNameField() {
       return;
     }
 
-    if (!/^[\p{L}\p{M}_ ]+$/u.test(trimmed)) {
-      toast.warning("Check the display name characters", {
-        description:
-          "Only letters, underscores, and spaces are allowed in the display name.",
-      });
-      return;
-    }
-
     updateDisplayNameMutation.mutate({ display_name: trimmed });
   };
 

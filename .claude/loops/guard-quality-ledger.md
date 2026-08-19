@@ -118,7 +118,10 @@ head of that list:
   tests. The two key builders here are read by `job-executions.tsx` above it,
   so that file is now the cheaper of the remaining jobs targets.
 - `features/profile/components/recent-performance-card.tsx` — 41
-- `app/settings/display-name-field.tsx` — 38
+- ~~`app/settings/display-name-field.tsx`~~ — done 2026-08-19, and the first
+  `deleted` row in the ledger. Two validation checks in a row where the second
+  is a strict superset of the first: worth looking for wherever a guard was
+  added defensively beside one that already covered it.
 - `features/profile/components/role-stats-card.tsx` — 31
 
 The rest, enumerated 2026-08-19 rather than left as "plus 9 more": `app/jobs/page.tsx` (30),
