@@ -32,6 +32,21 @@ class Settings(BaseSettings):
     postgres_host: str
     postgres_port: int
 
+    @field_validator(
+        "postgres_db", "postgres_user", "postgres_password", "postgres_host"
+    )
+    @classmethod
+    def reject_blank_connection_fields(cls, v: str) -> str:
+        """A present-but-blank variable is a missing one, not an empty value.
+
+        pydantic-settings accepts "" for str fields; the old require_env helper
+        rejected it, and a blank POSTGRES_HOST failing here beats it failing as
+        a connection error at first query.
+        """
+        if v.strip() == "":
+            raise ValueError("must not be blank")
+        return v
+
     @property
     def database_url(self) -> str:
         """Construct async database URL from components."""
@@ -198,21 +213,15 @@ class Settings(BaseSettings):
 
 
 def get_settings() -> Settings:
-    """Get application settings instance."""
+    """Get application settings instance.
 
-    def require_env(name: str) -> str:
-        value = os.getenv(name)
-        if value is None or value.strip() == "":
-            raise ValueError(f"Missing required environment variable: {name}")
-        return value
-
-    return Settings(
-        postgres_db=require_env("POSTGRES_DB"),
-        postgres_user=require_env("POSTGRES_USER"),
-        postgres_password=require_env("POSTGRES_PASSWORD"),
-        postgres_host=require_env("POSTGRES_HOST"),
-        postgres_port=int(require_env("POSTGRES_PORT")),
-    )
+    The five postgres fields have no defaults, so pydantic-settings itself
+    raises on any missing one — and reports all of them at once, where the
+    old per-field helper stopped at the first.
+    """
+    # The five postgres fields arrive via env/env_file; pyright only sees the
+    # generated __init__ signature.
+    return Settings()  # pyright: ignore[reportCallIssue]
 
 
 # Create a global settings instance lazily

@@ -1,5 +1,14 @@
 # Improvements
 
+- 2026-08-19 RESOLVED same day: two entries about
+  backend/app/core/riot_api/transformers.py (an unreachable per-participant
+  skip handler, and four normalisation disagreements with the DTO
+  transformer) are moot — the wheel-audit workflow established the whole
+  raw-dict path had zero callers (`_store_match_detail` is never invoked;
+  `store_match_from_dto` is the only ingestion path), and the file,
+  `core/validation.py` and the dead service method were deleted outright.
+  One writer remains, so there is nothing left to disagree.
+
 - 2026-08-19 backend/app/features/auth/service.py +
   frontend/features/auth/components/join-us-form.tsx: **a message ending in
   `#nl` turns off the captcha and the hourly limit on the public contact

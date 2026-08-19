@@ -13,7 +13,6 @@ from app.core.riot_api.models import (
     MatchTimelineDTO,
     SummonerDTO,
 )
-from app.core.riot_api.transformers import MatchTransformer
 from app.features.matches.timeline import build_match_timeline_rows
 
 FIXTURE: dict[str, Any] = json.loads(
@@ -84,16 +83,6 @@ def test_current_match_contracts_keep_creation_and_actual_start(queue_id: str) -
     assert match.info.participants[0].summoner_name == "Sanitized Legacy Name"
 
 
-def test_raw_match_transformer_keeps_both_timestamp_semantics() -> None:
-    payload = _match_payload("420")
-    transformer = MatchTransformer()
-    assert transformer.validate_match_data(payload)
-    transformed = transformer.transform_match_data(payload)["match"]
-    assert transformed["game_creation_timestamp"] == 1_786_100_000_000
-    assert transformed["game_start_timestamp"] == 1_786_100_060_000
-    assert transformed["game_start_timestamp_source"] == "riot_game_start"
-
-
 @pytest.mark.parametrize("variant", QUEUE_VARIANTS["queues"])
 def test_new_supported_queue_variants_preserve_queue_identity(
     variant: dict[str, Any],
@@ -109,11 +98,9 @@ def test_new_supported_queue_variants_preserve_queue_identity(
     )
 
     match = MatchDTO.model_validate(payload)
-    transformed = MatchTransformer().transform_match_data(payload)["match"]
 
     assert match.info.queue_id == variant["id"]
-    assert transformed["queue_id"] == variant["id"]
-    assert transformed["game_mode"] == variant["game_mode"]
+    assert match.info.game_mode == variant["game_mode"]
 
     rows = build_match_timeline_rows(match, _timeline_payload(variant["base_fixture"]))
     assert len(rows) == 1

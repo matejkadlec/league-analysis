@@ -5,6 +5,7 @@ import { LaneStatsResponse } from "@/lib/core/schemas";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Map, Clock } from "lucide-react";
 import { useRelativeTime } from "@/lib/core/use-relative-time";
+import { formatFractionAsPercent } from "@/lib/core/format";
 
 interface RoleStatsCardProps {
   stats: LaneStatsResponse;
@@ -24,14 +25,6 @@ function getKDAColor(kda: number): string {
   if (kda >= 3) return "text-green-500";
   if (kda >= 2) return "text-yellow-500";
   return "text-rose-500";
-}
-
-// Format win rate percentage
-function formatWinRate(winRate: number): string {
-  const percent = winRate * 100;
-  return percent % 1 === 0
-    ? `${percent.toFixed(0)}%`
-    : `${percent.toFixed(1)}%`;
 }
 
 // Format KDA
@@ -152,7 +145,7 @@ export function RoleStatsCard({ stats, lastUpdated }: RoleStatsCardProps) {
                         <p
                           className={`text-sm font-bold ${getWinRateColor(lane.win_rate)}`}
                         >
-                          {formatWinRate(lane.win_rate)}
+                          {formatFractionAsPercent(lane.win_rate)}
                         </p>
                         <p className="text-xs text-muted-foreground">
                           {lane.wins}W {lane.losses}L

@@ -75,10 +75,3 @@ async def get_db() -> AsyncGenerator[AsyncSession]:
     """Fastapi dependency for getting a database session."""
     async with db_manager.get_session() as session:
         yield session
-
-
-# Convenience function for getting a session in non-FastAPI contexts
-async def get_session():
-    """Get a database session."""
-    async with db_manager.get_session() as session:
-        return session

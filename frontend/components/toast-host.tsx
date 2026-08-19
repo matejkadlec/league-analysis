@@ -4,45 +4,22 @@ import { useEffect } from "react";
 import { CircleCheckBig, CircleX, Info, TriangleAlert } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Toaster } from "sonner";
-import {
-  appToast,
-  TOAST_DEFAULT_DURATION_MS,
-  type ToastVariant,
-} from "@/lib/core/hooks";
+import { z } from "zod";
+
+import { appToast, TOAST_DEFAULT_DURATION_MS } from "@/lib/core/hooks";
 
 const TOAST_ICON_CLASS = "h-[18px] w-[18px]";
 const TOAST_PREVIEW_EVENT = "league-analysis:toast";
 
-interface ToastPreviewDetail {
-  variant: ToastVariant;
-  title: string;
-  description?: string;
-  duration?: number;
-}
-
-function isToastPreviewDetail(value: unknown): value is ToastPreviewDetail {
-  if (typeof value !== "object" || value === null) {
-    return false;
-  }
-
-  const detail = value as Record<string, unknown>;
-  const validVariant =
-    detail.variant === "success" ||
-    detail.variant === "warning" ||
-    detail.variant === "error" ||
-    detail.variant === "info";
-
-  return (
-    validVariant &&
-    typeof detail.title === "string" &&
-    (detail.description === undefined ||
-      typeof detail.description === "string") &&
-    (detail.duration === undefined ||
-      (typeof detail.duration === "number" &&
-        Number.isFinite(detail.duration) &&
-        detail.duration > 0))
-  );
-}
+// The event detail is an untrusted payload off the DOM, so it gets the same
+// treatment as wire data in lib/core/schemas.ts. `.finite()` is load-bearing:
+// z.number() alone accepts Infinity, which the old guard rejected.
+const ToastPreviewDetailSchema = z.object({
+  variant: z.enum(["success", "warning", "error", "info"]),
+  title: z.string(),
+  description: z.string().optional(),
+  duration: z.number().finite().positive().optional(),
+});
 
 export function ToastHost() {
   const { theme = "system" } = useTheme();
@@ -53,9 +30,19 @@ export function ToastHost() {
     }
 
     const showPreviewToast = (event: Event) => {
-      const detail = (event as CustomEvent<unknown>).detail;
-      if (isToastPreviewDetail(detail)) {
-        appToast.toast(detail);
+      const parsed = ToastPreviewDetailSchema.safeParse(
+        (event as CustomEvent<unknown>).detail,
+      );
+      if (parsed.success) {
+        // zod's optional infers `| undefined`, which exactOptionalPropertyTypes
+        // rejects against ToastOptions' plain optionals — spread only what is set.
+        const { variant, title, description, duration } = parsed.data;
+        appToast.toast({
+          variant,
+          title,
+          ...(description !== undefined && { description }),
+          ...(duration !== undefined && { duration }),
+        });
       }
     };
 

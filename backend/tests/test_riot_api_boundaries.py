@@ -372,3 +372,16 @@ def test_unreadable_rate_headers_do_not_break_the_request() -> None:
     limiter.update_limits({1: "2:1"}, MATCH_DETAIL_ENDPOINT)  # type: ignore[dict-item]
 
     assert limiter._app_windows == {}
+
+
+def test_riot_error_strings_carry_the_status_and_the_retry_hint() -> None:
+    # These strings are what lands in job logs and error toasts; the status
+    # code is the difference between "our key is bad" and "Riot is down",
+    # and the retry hint is the only actionable part of a 429.
+    from app.core.riot_api.errors import RiotAPIError
+
+    assert str(RiotAPIError("boom", status_code=503)) == "Riot API Error 503: boom"
+    assert str(RiotAPIError("slow down", status_code=429, retry_after=12.0)) == (
+        "Rate Limit Error 429: slow down (Retry after: 12.0s)"
+    )
+    assert str(RiotAPIError("no reply")) == "Riot API Error: no reply"

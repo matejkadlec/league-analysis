@@ -23,7 +23,6 @@ from app.core.riot_api.errors import (
     RiotAPIError,
 )
 from app.core.riot_api.models import MatchDTO, MatchTimelineDTO
-from app.core.riot_api.transformers import MatchTransformer
 from app.features.players.models import Player
 
 from .match_analysis import (
@@ -180,7 +179,6 @@ class MatchService:
     def __init__(self, db: AsyncSession):
         """Initialize match service with database session only."""
         self.db = db
-        self.transformer = MatchTransformer()
 
     @classmethod
     def is_current_game_version(cls, game_version: str) -> bool:
@@ -1022,47 +1020,6 @@ class MatchService:
 
         self.db.add_all(new_players)
         logger.debug("Created minimal player records", count=len(new_players))
-
-    async def _store_match_detail(self, match_data: dict[str, Any]) -> Match:
-        """Store match detail in database."""
-        try:
-            await _ensure_riot_writer_maintenance_is_inactive(self.db)
-            # Validate match data
-            if not self.transformer.validate_match_data(match_data):
-                raise ValueError("Invalid match data")
-
-            transformed = self.transformer.transform_match_data(match_data)
-            platform_id = transformed["match"].get("platform", "EUN1")
-
-            # Ensure all participant players exist
-            await self._ensure_players_exist(transformed["participants"], platform_id)
-
-            # Store match and participants
-            match = Match(**transformed["match"])
-            self.db.add(match)
-
-            participants = [
-                MatchParticipant(**p_data) for p_data in transformed["participants"]
-            ]
-            from .match_lp import initialize_participant_lp
-
-            for participant in participants:
-                initialize_participant_lp(
-                    participant,
-                    queue_id=transformed["match"]["queue_id"],
-                    remake=participant.remake,
-                )
-            self.db.add_all(participants)
-
-            await self.db.commit()
-            await self.db.refresh(match)
-
-            logger.info("Stored match detail", match_id=match.match_id)
-            return match
-        except Exception as e:
-            await self.db.rollback()
-            logger.error("Failed to store match detail", error=str(e))
-            raise
 
     def _calculate_kda(self, kills: int, deaths: int, assists: int) -> float:
         """Calculate KDA ratio."""

@@ -1,3 +1,11 @@
+// The bucket ladder below stays hand-written: Intl.RelativeTimeFormat takes a
+// unit already chosen and does no unit selection. `numeric: "always"` is
+// deliberate — "auto" would turn day = 1 into "yesterday" and change copy in
+// every consumer of useRelativeTime.
+const relativeFormatter = new Intl.RelativeTimeFormat("en-US", {
+  numeric: "always",
+});
+
 export function formatRelativeTime(
   value: string | null | undefined,
   now = Date.now(),
@@ -11,19 +19,13 @@ export function formatRelativeTime(
   if (elapsedSeconds < 60) return "just now";
 
   const elapsedMinutes = Math.floor(elapsedSeconds / 60);
-  if (elapsedMinutes < 60) {
-    return `${elapsedMinutes} minute${elapsedMinutes === 1 ? "" : "s"} ago`;
-  }
+  if (elapsedMinutes < 60) return relativeFormatter.format(-elapsedMinutes, "minute");
 
   const elapsedHours = Math.floor(elapsedMinutes / 60);
-  if (elapsedHours < 24) {
-    return `${elapsedHours} hour${elapsedHours === 1 ? "" : "s"} ago`;
-  }
+  if (elapsedHours < 24) return relativeFormatter.format(-elapsedHours, "hour");
 
   const elapsedDays = Math.floor(elapsedHours / 24);
-  if (elapsedDays < 7) {
-    return `${elapsedDays} day${elapsedDays === 1 ? "" : "s"} ago`;
-  }
+  if (elapsedDays < 7) return relativeFormatter.format(-elapsedDays, "day");
 
   return new Date(timestamp).toLocaleDateString("en-US", {
     year: "numeric",

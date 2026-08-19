@@ -121,8 +121,18 @@ three untested messages in `login-error.ts`.
 
 - ~~`app/settings/use-change-email.ts`~~ — done 2026-08-19, six tests, each
   shown red against its own mutation.
-- ~~`features/jobs/components/job-executions.tsx`~~ — done 2026-08-19. Left
-  open: the `IntersectionObserver` paging path, which jsdom cannot trigger.
+- ~~`features/jobs/components/job-executions.tsx`~~ — done 2026-08-19. The
+  `IntersectionObserver` paging path, first left open as "jsdom cannot
+  trigger", **closed later the same day**: a stand-in observer class hands
+  the callback to the test, which fires it deliberately. It was worth
+  closing — the wheel-audit found the paging was a live bug (a growing
+  `size` request 422s against the router's `le=100` cap on the sixth
+  load-more), the fix moved it to `useInfiniteQuery`, and the new
+  `tests/job-executions-paging.test.tsx` (3 tests, 3 mutations killed) is
+  what pins fixed-size pages, the stop condition, and the page sequence.
+  The rewrite also briefly reintroduced the failed-poll-empties-the-table
+  bug this file's original row was about — caught by that row's own test,
+  which is the system working.
 - ~~`features/matchmaking/components/matchmaking-analysis-history.tsx`~~ — done
   2026-08-19. The 404-is-a-normal-state shape shows up a second time: when a
   list endpoint answers "this player has nothing" with a 404, the branch that
@@ -671,6 +681,109 @@ three untested messages in `login-error.ts`.
 **With these, the under-20% sub-band is closed.** Re-measured 2026-08-19:
 the only files under 20% with ≥10 statements are the two `app/*/page.tsx`
 route shells already resolved by the route-shell row.
+
+- ~~`backend: app/features/matches/transformers.py`~~ — done 2026-08-19, 7
+  tests appended to `tests/test_transformers.py`, **6 mutations, all killed**.
+  82% → 100% statements. Head of the backend mutate list, and the missing 18%
+  was `extract_participant_data` entire — the DTO→row mapping both
+  persistence paths run on every ingested match.
+
+  The cheapest guard in the row is the strongest: the test builds
+  `MatchParticipant(match_id=..., **extract_participant_data(dto))`, which is
+  literally the production line from `match_persistence.py`. SQLAlchemy
+  raises on an unknown kwarg, so one construction checks all ~75 dict keys
+  against the real columns without pinning a single value — a renamed column
+  or a typo'd key fails here, not at the first ingested match after deploy.
+  (Instantiating a mapped class configures every mapper, so the test imports
+  `model_registry.import_all_models()` first — the registry trap again.)
+
+  Killed and worth naming: the remake inversion (`not
+  eligible_for_progression` — Riot has no remake flag, and inverted the
+  wrong way every real game is stored as a remake and excluded from every
+  analysis), the three-generation display-name chain (`riotIdGameName` over
+  legacy `summonerName` over "Unknown Player" — the API sends empty strings,
+  not nulls), the `individualPosition` fallback for payloads with an empty
+  `teamPosition`, a challenges key typo (the dict is raw Riot camelCase and
+  `.get(wrong, 0)` writes a silent zero into every row forever — the exact
+  class of bug the lopsided prod data has hidden before; `roam_kills` reads
+  `killsOnOtherLanesEarlyJungleAsLaner`, which nobody would notice was
+  misspelled), and `int(vision_score or 0)` (a None float reaching an int
+  column).
+
+- ~~`backend: app/core/riot_api/transformers.py`~~ — **deleted 2026-08-19**,
+  same day it was first resolved as "pin", and the correction is the row.
+  The first pass wrote 6 tests and killed 5 mutations on the claim that the
+  raw-dict path was "still live: `_store_match_detail` validates, transforms,
+  and constructs rows". The method exists — but the wheel-audit workflow
+  checked the next level up, and **nothing calls `_store_match_detail`**;
+  the only real ingestion path is `store_match_from_dto` over the pydantic
+  `MatchDTO`. Verified by grep before acting: the method's name appears
+  nowhere in `app/` outside its own definition. Same mistake the
+  `evaluators.py` row exists to warn about — checking who calls the function
+  but not who calls the caller — made by the same loop that wrote that row.
+
+  Resolution: deleted the whole dead chain — `core/riot_api/transformers.py`
+  (`MatchTransformer`), `core/validation.py` (its only app-side consumer),
+  `MatchService._store_match_detail` plus the `self.transformer` attribute,
+  the four barrel re-exports, and the ten tests that pinned any of it
+  (including the six written that morning and the pre-existing
+  raw-transformer timestamp test; the queue-variant contract test now
+  asserts through `MatchDTO` alone). 645 backend tests green after the cut.
+  What the dead path's tests taught was folded into the DTO row where it
+  belongs: the remake inversion, the name chain and the surrender
+  aggregation are all pinned there against the transformer production
+  actually runs.
+
+- ~~`backend: app/features/jobs/maintenance.py`~~ — done 2026-08-19, 2 tests
+  appended to `tests/test_jobs.py`, **4 mutations, all killed**. 88% → 100%,
+  branches included. The uncovered half was the read path of the cleanup
+  interlock — the thing that stops a Riot writer while cleanup owns the data
+  tables.
+
+  All four kills are the interlock's actual contract: the table **lock taken
+  before the read** (read first and the answer can be stale by the time the
+  writer proceeds — the exact lock inversion the module's table-order comment
+  exists to prevent), the read carrying `FOR UPDATE` (without it cleanup can
+  flip the interlock between the check and the write it guards), the refusal
+  actually raising `RiotWriterMaintenanceActiveError` rather than computing
+  the answer and dropping it, and the read filtering to the two writer job
+  types. Harness note: asserting on the compiled `Select` configures every
+  mapper, so the test imports `model_registry.import_all_models()` first —
+  third appearance of the registry trap this campaign.
+
+- ~~`backend: app/core/validation.py`~~, ~~`app/core/database.py`~~ and
+  ~~`app/core/riot_api/errors.py`~~ — done 2026-08-19 as one sweep (the
+  remaining mutate-list heads, each missing 1-3 lines), **5 mutations, all
+  killed**, all three files now 100% including branches.
+
+  `validation.py`: covered to 100% in the morning, **deleted in the
+  afternoon** by the wheel-audit follow-up — its only app-side consumer was
+  the dead raw-dict transformer chain (see that row). The two hours of life
+  its new asserts had are the cost of testing before asking who calls it.
+
+  `database.py`: one deletion and one test. **Deleted the module-level
+  `get_session()`** — zero callers, and broken by design: it `return`s the
+  session from inside its own `async with`, so every caller would receive a
+  session the context manager has already closed. The `db_manager.close()`
+  path is kept and now pinned, because `validate_migrations.py` and
+  `reconcile_admin_account.py` both end with it — if it stops delegating to
+  `engine.dispose`, their connections leak silently.
+
+  `errors.py`: `RiotAPIError.__str__`'s status branch. These strings land in
+  job logs and error toasts; the status code is the difference between "our
+  key is bad" and "Riot is down", and the 429 retry hint is the only
+  actionable part of a rate limit. All three shapes pinned.
+
+- ~~`features/jobs/components/job-executions.tsx` (paging)~~ — reworked
+  2026-08-19 after the wheel-audit: `useInfiniteQuery` with fixed-size pages
+  replaces the growing-`size` single query, **fixing a live 422** (the
+  backend caps `size` at `le=100`; the old shape hit it on the sixth
+  load-more, and nothing pinned it because jsdom's missing
+  `IntersectionObserver` had been accepted as untestable). Three tests,
+  three mutations killed (size grown past the cap, paging that never stops,
+  page number pinned at 1). The first draft of the rework emptied the table
+  on a failed poll — the exact regression the file's original iteration
+  guarded — and `tests/job-executions.test.tsx` caught it before commit.
 
 The rest, enumerated 2026-08-19 rather than left as "plus 9 more":
 ~~`app/jobs/page.tsx`~~ (30, done 2026-08-19 — nine mutations; it is the only

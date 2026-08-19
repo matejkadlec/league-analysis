@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { TrendingUp, TrendingDown, Minus, Activity, Clock } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { useRelativeTime } from "@/lib/core/use-relative-time";
+import { formatFractionAsPercent } from "@/lib/core/format";
 
 interface RecentPerformanceCardProps {
   puuid: string;
@@ -80,14 +81,6 @@ function getTrendIndicatorRaw(
     color: "text-muted-foreground",
     label: "stable",
   };
-}
-
-// Format percentage
-function formatPercent(value: number): string {
-  const percent = value * 100;
-  return percent % 1 === 0
-    ? `${percent.toFixed(0)}%`
-    : `${percent.toFixed(1)}%`;
 }
 
 // Format number with 1 decimal (remove .0 if whole)
@@ -283,8 +276,8 @@ export function RecentPerformanceCard({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <StatComparisonRow
             label="Win Rate"
-            recentValue={formatPercent(recent.win_rate)}
-            overallValue={formatPercent(overall.win_rate)}
+            recentValue={formatFractionAsPercent(recent.win_rate)}
+            overallValue={formatFractionAsPercent(overall.win_rate)}
             trend={winRateTrend}
           />
 

@@ -78,7 +78,8 @@ export async function cancelMatchmakingAnalysis(
 ): Promise<ApiResponse<{ success: boolean; message: string }>> {
   return validatedDelete(
     AnalysisActionResponseSchema,
-    `/matchmaking-analysis/player/${puuid}/cancel?${new URLSearchParams({ created_at: createdAt }).toString()}`,
+    `/matchmaking-analysis/player/${puuid}/cancel`,
+    { created_at: createdAt },
   );
 }
 
@@ -88,6 +89,7 @@ export async function deleteMatchmakingAnalysisRecord(
 ): Promise<ApiResponse<{ success: boolean; message: string }>> {
   return validatedDelete(
     AnalysisActionResponseSchema,
-    `/matchmaking-analysis/player/${puuid}/analysis?${new URLSearchParams({ created_at: createdAt }).toString()}`,
+    `/matchmaking-analysis/player/${puuid}/analysis`,
+    { created_at: createdAt },
   );
 }

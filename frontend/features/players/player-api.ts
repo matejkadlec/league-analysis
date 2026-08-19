@@ -54,10 +54,6 @@ export type DiscoverPlayerParams = Record<
 export async function discoverPlayer(
   params: DiscoverPlayerParams,
 ): Promise<ApiResponse<Player>> {
-  // The endpoint reads its arguments from the query string, and `validatedPost`
-  // only carries a body, so they go on the URL.
-  return validatedPost(
-    PlayerSchema,
-    `/players/discover?${new URLSearchParams({ ...params }).toString()}`,
-  );
+  // The endpoint reads its arguments from the query string, not a body.
+  return validatedPost(PlayerSchema, "/players/discover", undefined, params);
 }

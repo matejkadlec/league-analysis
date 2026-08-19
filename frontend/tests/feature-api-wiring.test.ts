@@ -121,9 +121,12 @@ describe("player-api wire shapes", () => {
     });
 
     expect(request().method).toBe("post");
-    expect(request().url).toBe(
-      "/players/discover?game_name=Hide+on+bush&tag_line=KR1&platform=eun1",
-    );
+    expect(request().url).toBe("/players/discover");
+    expect(request().params).toEqual({
+      game_name: "Hide on bush",
+      tag_line: "KR1",
+      platform: "eun1",
+    });
     expect(request().data).toBeUndefined();
   });
 });
@@ -167,20 +170,20 @@ describe("matchmaking-api wire shapes", () => {
     expect(seen[0]?.url).toBe("/matchmaking-analysis/player/p-1/history");
   });
 
-  it("cancels and deletes with created_at on the query string", async () => {
-    // `validatedDelete` carries no params argument, so these two build the
-    // query string by hand — the encoding is this module's own code.
+  it("cancels and deletes with created_at as a query parameter", async () => {
     await cancelMatchmakingAnalysis("p-1", "2026-08-19T10:00:00Z");
     await deleteMatchmakingAnalysisRecord("p-1", "2026-08-19T10:00:00Z");
 
-    expect(seen.map((r) => [r.method, r.url])).toEqual([
+    expect(seen.map((r) => [r.method, r.url, r.params])).toEqual([
       [
         "delete",
-        "/matchmaking-analysis/player/p-1/cancel?created_at=2026-08-19T10%3A00%3A00Z",
+        "/matchmaking-analysis/player/p-1/cancel",
+        { created_at: "2026-08-19T10:00:00Z" },
       ],
       [
         "delete",
-        "/matchmaking-analysis/player/p-1/analysis?created_at=2026-08-19T10%3A00%3A00Z",
+        "/matchmaking-analysis/player/p-1/analysis",
+        { created_at: "2026-08-19T10:00:00Z" },
       ],
     ]);
   });
