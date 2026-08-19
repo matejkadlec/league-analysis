@@ -34,6 +34,11 @@ Seeded 2026-08-19 from `frontend/coverage/coverage-summary.json`
 (53.76% statements / 48.87% branches over `app`, `components`, `features`,
 `lib`, `proxy.ts`). Regenerate before trusting it.
 
+**Regenerated 2026-08-19** after the rows above: **64.72% statements / 57.70%
+branches** (was 53.76 / 48.87), 414 tests. The zero-covered class is down from
+19 files to 12, all of them named below — there is no unenumerated remainder
+left on the frontend. `proxy.ts` reads 100% / 100% and needs no row.
+
 ### Covered — mutate these
 
 Highest risk first. 27 files sit at ≥80% statements with ≥20 statements; the
@@ -107,10 +112,71 @@ head of that list:
 - `features/profile/components/recent-performance-card.tsx` — 41
 - `app/settings/display-name-field.tsx` — 38
 - `features/profile/components/role-stats-card.tsx` — 31
-- …plus 9 more in the report.
+
+The rest, enumerated 2026-08-19 rather than left as "plus 9 more": `app/jobs/page.tsx` (30),
+`features/matchmaking/components/matchmaking-analysis-results.tsx` (30),
+`features/profile/components/champion-stats-card.tsx` (30),
+`app/matchmaking-analysis/page.tsx` (25), `app/player-overview/page.tsx` (24),
+`features/jobs/components/system-status.tsx` (20),
+`features/players/components/player-card-format.ts` (16),
+`components/ui/tabs.tsx` (11). The three `app/*/page.tsx` entries are route
+shells; check what they actually hold before spending an iteration on one.
 
 ### Backend
 
-Not yet enumerated. Backend coverage is armed by `--cov` in `test.sh` with
-`fail_under = 47`; generate the equivalent report and append the same two
-classes here before starting backend iterations.
+Enumerated 2026-08-19, from `docker compose -f compose.gate.yml run --rm
+--build -v <main-repo>/.git:<same path> -e
+PYTEST_ADDOPTS="--cov-report=json:coverage-backend.json" gate -b`. That
+appends a report to the `--cov` flags `test.sh` already passes and needs no
+change to any config file; the JSON lands in `backend/` and is not committed.
+**57.18% covered** with branch coverage on (10,214 statements, 3,880 missing,
+2,102 branches) against `fail_under = 47`. The gate was green.
+
+The frontend's two classes do not carry over, and that is the finding worth
+recording before any backend iteration: **there is not one 0%-covered file in
+`app`** — not a single module with ≥10 statements at zero. Every backend file
+is touched by something. What the backend has instead is a third class the
+card does not name: large service modules covered *thinly*, where the tested
+share is the happy path and the missing lines are the error and edge branches.
+Those are holes, but they are holes of a different shape, and the card's
+"0% coverage is already the finding" rule gives no guidance for them.
+
+**Mutate these** — 38 files at ≥80% with ≥20 statements. The head, with the
+schema/model files set aside (they are largely declarative and Pyright already
+holds their shape):
+
+1. `app/core/riot_api/rate_limiter.py` — 128 stmts, 81.6%. The lowest-covered
+   file on the mutate list, and it is the thing standing between this app and
+   a Riot rate-limit ban.
+2. `app/features/matches/match_lp.py` — 96 stmts, 90.2%. LP arithmetic; the
+   numerics audit under [Rank Manipulation] applies here.
+3. `app/features/smurf_boost_detection/statistics.py` — 59 stmts, 89.3%, and
+   `composite.py` / `engine.py` / `signals.py` around it at 96–98%. This is
+   the accusation engine, so a wrong number here is a wrong verdict about a
+   person.
+4. `app/features/matches/transformers.py` — 51 stmts, 82.2%.
+5. `app/features/jobs/maintenance.py` — 40 stmts, 87.5%.
+6. `app/core/validation.py` — 40 stmts, 93.5%; `app/core/database.py` — 33,
+   90.9%; `app/core/riot_api/errors.py` — 32, 94.4%.
+
+**Thinly covered — decide, do not blind-mutate.** Biggest absolute holes; a
+mutation aimed at a covered line here says little, so read what is missing
+first:
+
+| File | Stmts | % | Missing |
+|---|---|---|---|
+| `app/features/playstyle_analysis/evaluators.py` | 396 | 8.6% | 347 |
+| `app/features/matchmaking_analysis/service.py` | 532 | 34.2% | 321 |
+| `app/features/auth/service.py` | 568 | 40.6% | 315 |
+| `app/features/matches/service.py` | 424 | 31.7% | 282 |
+| `app/features/players/service.py` | 375 | 34.6% | 228 |
+| `app/features/jobs/router.py` | 271 | 17.8% | 215 |
+| `app/features/jobs/base.py` | 394 | 55.6% | 160 |
+| `app/core/riot_api/db_rate_limiter.py` | 223 | 23.7% | 157 |
+| `app/features/jobs/scheduler.py` | 263 | 49.9% | 122 |
+| `app/features/jobs/service.py` | 175 | 26.9% | 121 |
+
+`evaluators.py` is the outlier: 396 statements at 8.6% is effectively the
+zero-covered class wearing a fig leaf, and it is the largest single hole in
+either half of the codebase. `auth/service.py` is the one with the most at
+stake per missing line.
