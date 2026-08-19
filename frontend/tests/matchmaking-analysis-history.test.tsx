@@ -1,0 +1,272 @@
+// @vitest-environment jsdom
+
+import {
+  QueryClient,
+  QueryClientProvider,
+  useQuery,
+} from "@tanstack/react-query";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const { getMatchmakingAnalysisHistory, deleteMatchmakingAnalysisRecord, toast } =
+  vi.hoisted(() => ({
+    getMatchmakingAnalysisHistory: vi.fn(),
+    deleteMatchmakingAnalysisRecord: vi.fn(),
+    toast: {
+      success: vi.fn(),
+      error: vi.fn(),
+      warning: vi.fn(),
+      info: vi.fn(),
+    },
+  }));
+
+vi.mock("@/features/matchmaking/matchmaking-api", async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import("@/features/matchmaking/matchmaking-api")
+  >()),
+  getMatchmakingAnalysisHistory,
+  deleteMatchmakingAnalysisRecord,
+}));
+
+vi.mock("@/lib/core/hooks", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/core/hooks")>()),
+  useToast: () => toast,
+}));
+
+import { MatchmakingAnalysisHistory } from "@/features/matchmaking/components/matchmaking-analysis-history";
+import { appToast } from "@/lib/core/hooks";
+import { createProvidersQueryClient } from "@/components/providers";
+
+const PUUID = "puuid-under-test";
+
+/**
+ * Timestamps are written without a zone on purpose.
+ *
+ * `formatDateTime` reads the date back with `getHours()`/`getDate()`, so a
+ * `Z`-suffixed fixture would render one clock in the Prague laptop and another
+ * in the UTC gate container. A date-time with no offset is parsed as local
+ * time, which makes the expected string the same in both.
+ */
+const AHEAD = {
+  created_at: "2026-03-04T14:07:00",
+  team_avg_winrate: 0.523,
+  enemy_avg_winrate: 0.491,
+  gap: 0.032,
+};
+
+const BEHIND = {
+  created_at: "2026-03-03T00:05:00",
+  team_avg_winrate: 0.474,
+  enemy_avg_winrate: 0.512,
+  gap: -0.038,
+};
+
+function answerWith(items: (typeof AHEAD)[]) {
+  getMatchmakingAnalysisHistory.mockResolvedValue({
+    success: true,
+    data: { items },
+  });
+}
+
+function renderHistory() {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
+  render(
+    <QueryClientProvider client={queryClient}>
+      <MatchmakingAnalysisHistory puuid={PUUID} analyzedPlayerLabel="Sett#EUN" />
+    </QueryClientProvider>,
+  );
+  return queryClient;
+}
+
+/**
+ * The table half of the card. Both layouts render in jsdom -- the stacked
+ * blocks are hidden by a Tailwind breakpoint, which no stylesheet applies
+ * here -- so every figure is on screen twice and the queries have to say
+ * which copy they mean.
+ */
+async function table() {
+  return within(await screen.findByRole("table"));
+}
+
+describe("the matchmaking analysis history card", () => {
+  beforeEach(() => {
+    getMatchmakingAnalysisHistory.mockReset();
+    deleteMatchmakingAnalysisRecord.mockReset();
+    Object.values(toast).forEach((fn) => fn.mockReset());
+    answerWith([AHEAD, BEHIND]);
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it("reads a player with no analyses as empty, not as a failure", async () => {
+    // A player who has never run an analysis is the normal first visit, and
+    // the API answers it with a 404. Letting that through turns the ordinary
+    // state into "Analysis history could not be loaded".
+    //
+    // This renders on the real provider client rather than a bare one,
+    // because the card alone cannot tell the two apart -- the empty branch
+    // and the error branch are both rendered from the same `if`. What
+    // separates them is the global `queryCache.onError`, which announces any
+    // failed query and is not silenced here: let the 404 through and every
+    // new player is told something broke on a page that is working.
+    getMatchmakingAnalysisHistory.mockResolvedValue({
+      success: false,
+      error: { status: 404, kind: "not_found" },
+    });
+    const announce = vi.spyOn(appToast, "toast").mockImplementation(() => "");
+    const queryClient = createProvidersQueryClient();
+    queryClient.setDefaultOptions({ queries: { retry: false } });
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MatchmakingAnalysisHistory
+          puuid={PUUID}
+          analyzedPlayerLabel="Sett#EUN"
+        />
+      </QueryClientProvider>,
+    );
+
+    expect(
+      await screen.findByText(
+        "No completed analyses are available for this player yet.",
+      ),
+    ).toBeTruthy();
+    expect(announce).not.toHaveBeenCalled();
+
+    announce.mockRestore();
+    queryClient.clear();
+  });
+
+  it("says the history could not be loaded when it could not be", async () => {
+    getMatchmakingAnalysisHistory.mockResolvedValue({
+      success: false,
+      error: { status: 500, kind: "server" },
+    });
+    const queryClient = renderHistory();
+
+    expect(
+      await screen.findByText("Analysis history could not be loaded."),
+    ).toBeTruthy();
+
+    queryClient.clear();
+  });
+
+  it("colours each win rate by which side the gap favoured", async () => {
+    // The gap is printed as an absolute value, so the colour is the only
+    // thing on screen saying which team it favoured -- swap the comparison
+    // and the card tells someone their team was outmatched in the game where
+    // it was the stronger one. That is why a class is asserted here and not
+    // in the rows that treat styling as styling: this class carries the
+    // finding, and nothing else does.
+    const queryClient = renderHistory();
+
+    const rows = await table();
+    expect(rows.getByText("52.3%").className).toContain("text-green-600");
+    expect(rows.getByText("49.1%").className).toContain("text-red-600");
+
+    // The losing side of the same card, and the sign that is not printed.
+    expect(rows.getByText("47.4%").className).toContain("text-red-600");
+    expect(rows.getByText("51.2%").className).toContain("text-green-600");
+    expect(rows.getByText("3.8%")).toBeTruthy();
+    expect(rows.queryByText("-3.8%")).toBeNull();
+
+    queryClient.clear();
+  });
+
+  it("reads midnight as 12 AM rather than 0 AM", async () => {
+    const queryClient = renderHistory();
+
+    const rows = await table();
+    expect(rows.getByText("3.3.2026 12:05 AM")).toBeTruthy();
+    expect(rows.getByText("4.3.2026 2:07 PM")).toBeTruthy();
+
+    queryClient.clear();
+  });
+
+  it("reloads the results panel after a record is deleted", async () => {
+    // The results panel beside this card is a separate query keyed on the
+    // same player. Nothing else invalidates it, so without this the analysis
+    // someone just deleted stays on screen as the current result, and the
+    // only way back is a page reload.
+    deleteMatchmakingAnalysisRecord.mockResolvedValue({
+      success: true,
+      data: { success: true, message: "deleted" },
+    });
+    const resultsQuery = vi.fn().mockResolvedValue("results");
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+
+    function ResultsProbe() {
+      // Stands in for the sibling panel: same key, and deliberately never
+      // stale on its own, so a refetch can only come from the invalidation.
+      useQuery({
+        queryKey: ["matchmaking-analysis-results", PUUID],
+        queryFn: resultsQuery,
+        staleTime: Infinity,
+      });
+      return null;
+    }
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MatchmakingAnalysisHistory
+          puuid={PUUID}
+          analyzedPlayerLabel="Sett#EUN"
+        />
+        <ResultsProbe />
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() => expect(resultsQuery).toHaveBeenCalledTimes(1));
+    const remove = (await table()).getAllByTitle("Delete this analysis");
+    fireEvent.click(remove[0]!);
+
+    // The click starts a 300ms fade before the request goes out.
+    await waitFor(
+      () =>
+        expect(deleteMatchmakingAnalysisRecord).toHaveBeenCalledWith(
+          PUUID,
+          AHEAD.created_at,
+        ),
+      { timeout: 2000 },
+    );
+    await waitFor(() => expect(resultsQuery).toHaveBeenCalledTimes(2));
+
+    queryClient.clear();
+  });
+
+  it("says so when a delete did not happen", async () => {
+    // The row fades out the moment the button is clicked and comes back when
+    // the request fails. Without the message that is all the viewer sees: a
+    // row that flickered and stayed, with nothing saying the deletion was
+    // refused rather than mis-clicked.
+    deleteMatchmakingAnalysisRecord.mockResolvedValue({
+      success: false,
+      error: { status: 500, kind: "server" },
+    });
+    const queryClient = renderHistory();
+
+    const rows = await table();
+    fireEvent.click(rows.getAllByTitle("Delete this analysis")[0]!);
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalled(), {
+      timeout: 2000,
+    });
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(rows.getByText("4.3.2026 2:07 PM")).toBeTruthy();
+
+    queryClient.clear();
+  });
+});
