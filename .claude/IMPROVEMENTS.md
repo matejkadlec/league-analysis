@@ -1,5 +1,15 @@
 # Improvements
 
+- 2026-08-19 frontend/features/players/components/player-card-format.ts:
+  `formatWinRate` guesses its own units — `winRate <= 1 ? winRate * 100 :
+  winRate` — because its two callers disagree. `PlayerCardWinRate` passes
+  `league.win_rate` (already 0-100) and `stats.win_rate` (0-1) into the same
+  function, and passes the stats value *multiplied* to the colour helpers on
+  the neighbouring line. A ranked player whose win rate is between 0 and 1
+  percent therefore renders as 100%. It needs about 100 ranked games with at
+  most one win, so it is rare rather than impossible; the fix is to make the
+  unit explicit at the call site rather than sharper in the guess.
+
 - 2026-08-19 backend/app/features/playstyle_analysis/: the whole feature is
   1,864 lines with no consumer. Its router is mounted at
   `/api/v1/playstyle-analysis` with two endpoints, but nothing in the frontend
