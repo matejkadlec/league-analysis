@@ -1,5 +1,31 @@
 # Improvements
 
+- 2026-08-19 backend/app/features/auth/service.py +
+  frontend/features/auth/components/join-us-form.tsx: **a message ending in
+  `#nl` turns off the captcha and the hourly limit on the public contact
+  form.** `/api/v1/auth/join-us/contact` is unauthenticated and sends an
+  email. `_is_join_us_test_submission` matches a case-insensitive
+  `endswith("#nl")` on the trimmed body, and `submit_join_us_contact_request`
+  wraps *all three* protections in `if not is_test_submission`: the 300-character
+  minimum, `_enforce_join_us_regular_rate_limit` (3/hour/IP), and the Turnstile
+  verification. The email is still sent — `_send_join_us_contact_email` runs
+  outside that branch — and `_record_join_us_submission` files the row with
+  `is_test=True`, which the rate limiter then excludes from its own count, so
+  test submissions never accumulate against anything.
+
+  The only remaining brake is `@rate_limit("5/minute")` on the route, so this
+  is throttled rather than unbounded: **300 uncaptcha'd emails per hour per IP
+  against an intended 3**, from any client, with no bot check at all. And it is
+  not obscure — `NO_LIMIT_TEST_SUFFIX = "#nl"` is a literal in a `"use client"`
+  component, so the string ships to every visitor in the public JS bundle.
+  Reading it is enough to use it.
+
+  Not fixed here because the right fix is a product decision rather than a
+  one-liner: gate the bypass on a non-production `ENVIRONMENT`, or on a shared
+  secret that is not in the bundle, or delete it. `tests/join-us-form.test.tsx`
+  deliberately pins the *protections* and not the bypass, so removing `#nl`
+  from either half breaks nothing and does not read as a regression.
+
 - 2026-08-19 frontend/features/players/context/player-context.tsx: the
   `!!urlPuuid &&` in `isLoading: authLoading || contextQuery.isLoading ||
   (!!urlPuuid && urlPlayerQuery.isLoading)` is a React Query v4 leftover and

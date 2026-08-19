@@ -559,6 +559,39 @@ three untested messages in `login-error.ts`.
   signed-out `enabled` guard, and `usePlayerContext` throwing outside its
   provider.
 
+- ~~`features/auth/components/join-us-form.tsx`~~ — done 2026-08-19, 18
+  tests, **18 mutations, no survivors**. 7.4% → 96.29% statements. From the
+  under-20% band; the file behind the only unauthenticated endpoint that
+  sends an email, so every client-side refusal here is the difference between
+  a contact form and an open relay.
+
+  Killed and worth naming: the 300-character minimum measured **after
+  trimming** (without the trim, 300 spaces pass), the boundary itself pinned
+  at exactly 300, the captcha requirement including the empty-token case
+  (`captchaToken !== null` alone accepts `""`, a token the server will
+  reject, spending the submission), the whole-whitespace site key treated as
+  no site key (otherwise the widget never renders and the requirement is
+  unsatisfiable — the form is permanently dead in any environment without a
+  key), the single-use Turnstile token cleared on success **and reset on
+  failure** (without the failure reset the button stays enabled holding a
+  spent token and every retry is rejected for reusing it), the message kept
+  in the form when the send fails (it is 300+ characters; clearing it is
+  "write it again"), the double-submit guard for the window before React
+  re-renders the disabled button, the on-page `role="alert"` beside the
+  transient toast, and the auth hint trusted only **while** the session is
+  loading — a stale cookie hint must not override a resolved `isLoading:
+  false`.
+
+  The finding that outranks the tests, logged rather than fixed because the
+  fix is a product decision: **a message ending in `#nl` turns off the
+  captcha, the 300-character minimum and the 3/hour rate limit server-side,
+  and the suffix ships in the public JS bundle** (`NO_LIMIT_TEST_SUFFIX` is a
+  literal in a `"use client"` file). The email still sends; only the route's
+  `@rate_limit("5/minute")` remains — 300 uncaptcha'd emails per hour per IP
+  against an intended 3. The suite deliberately pins the *protections* and
+  not the bypass, so deleting `#nl` from either half breaks nothing. Full
+  write-up in IMPROVEMENTS.md.
+
 The rest, enumerated 2026-08-19 rather than left as "plus 9 more":
 ~~`app/jobs/page.tsx`~~ (30, done 2026-08-19 — nine mutations; it is the only
 consumer of `components/ui/tabs.tsx`, so both closed together),
@@ -595,7 +628,7 @@ The band is really two. **Under 20% is the zero class wearing a different
 number** — the covered lines are the imports and the export statement, and
 nothing has ever rendered the file: `match-row.tsx` (1.3%, now done),
 `player-card.tsx` (4.3%), `player-context.tsx` (7.1%),
-`join-us-form.tsx` (7.4%), `job-execution-api-calls.tsx` (11.1%),
+~~`join-us-form.tsx`~~ (7.4%, done 2026-08-19), `job-execution-api-calls.tsx` (11.1%),
 `job-execution-logs.tsx` (12.5%), `matchmaking-api.ts` (12.5%),
 `player-api.ts` (14.3%). Treat these as 0%: read and decide, do not mutate.
 Two of them are `validated*` delegation modules and resolve the same way
