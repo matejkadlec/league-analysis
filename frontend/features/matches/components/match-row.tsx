@@ -370,7 +370,12 @@ function MatchTeamCompositions({
               )}
             </div>
           </div>
-          <div className="text-center text-xs text-muted-foreground">Vs</div>
+          {/* text-foreground/75 like the rest of the row: muted-foreground
+              composites to 3.1-4.4:1 on the win/loss tints, under the 4.5:1
+              the earlier contrast fix cites. axe filed these under
+              results.incomplete (alpha-stacked backgrounds), which the spec
+              does not assert, so the green gate proved nothing here. */}
+          <div className="text-center text-xs text-foreground/75">Vs</div>
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-1 bg-red-900/30 rounded px-1 py-0.5">
               {teamComps.red_team.map((champ) =>
@@ -514,14 +519,17 @@ export function MatchRow({ match, playerPuuid }: MatchRowProps) {
                   ? "text-emerald-500"
                   : displayedLpChange < 0
                     ? "text-rose-500"
-                    : "text-muted-foreground"
+                    : // A remake's LP change of exactly 0 is a real outcome,
+                      // rendered on the same tinted row - same contrast
+                      // reasoning as the Vs divider above.
+                      "text-foreground/75"
               }`}
             >
               {formatMatchLpChange(displayedLpChange, isRemake)}
             </span>
           ) : (
             <span
-              className="text-xs font-medium text-muted-foreground"
+              className="text-xs font-medium text-foreground/75"
               aria-label="LP change unavailable"
             >
               {formatMatchLpChange(displayedLpChange, isRemake)}

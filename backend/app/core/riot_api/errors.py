@@ -83,6 +83,17 @@ class ServiceUnavailableError(RiotAPIError):
     pass
 
 
+class NullResponseBodyError(RiotAPIError):
+    """A 200 whose JSON body is `null` - a proxy or cache glitch, retried.
+
+    Riot answers objects and lists, never a bare `null`. Carried as its own
+    type so the retry predicate can treat it as transient without inventing
+    a status code for a response that nominally succeeded.
+    """
+
+    pass
+
+
 class BadRequestError(RiotAPIError):
     """Bad request (400) - invalid parameters."""
 

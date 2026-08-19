@@ -9,22 +9,19 @@ real request path over an ``httpx.MockTransport`` (built by the shared
 implements the waiting.
 """
 
-from collections.abc import Callable
 from typing import Any
 
 import pytest
+from conftest import RiotClientFactory
 
-from app.core.riot_api.client import RiotAPIClient
 from app.core.riot_api.errors import RateLimitError
-
-ClientFactory = Callable[[list[int]], tuple[RiotAPIClient, list[int]]]
 
 MATCH_URL = "https://europe.api.riotgames.com/lol/match/v5/matches/EUN1_1"
 
 
 @pytest.mark.asyncio
 async def test_429_waits_the_header_says_and_then_succeeds(
-    riot_client_answering: ClientFactory, recorded_sleeps: list[float]
+    riot_client_answering: RiotClientFactory, recorded_sleeps: list[float]
 ) -> None:
     client, served = riot_client_answering([429, 429, 200])
 
@@ -39,7 +36,7 @@ async def test_429_waits_the_header_says_and_then_succeeds(
 
 @pytest.mark.asyncio
 async def test_429_exhaustion_raises_with_the_header_evidence(
-    riot_client_answering: ClientFactory, recorded_sleeps: list[float]
+    riot_client_answering: RiotClientFactory, recorded_sleeps: list[float]
 ) -> None:
     client, served = riot_client_answering([429, 429, 429, 429])
 
@@ -57,7 +54,7 @@ async def test_429_exhaustion_raises_with_the_header_evidence(
 
 @pytest.mark.asyncio
 async def test_unretried_request_sends_exactly_once(
-    riot_client_answering: ClientFactory, recorded_sleeps: list[float]
+    riot_client_answering: RiotClientFactory, recorded_sleeps: list[float]
 ) -> None:
     # `retry_on_failure=False` exists for credential probes: an expired key
     # must cost one call, not four, against the shared limit.
