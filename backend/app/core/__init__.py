@@ -5,7 +5,7 @@ Never imports from features - only from external libraries.
 """
 
 from .config import Settings, get_global_settings, get_riot_api_key, get_settings
-from .database import db_manager, get_db, get_session
+from .database import db_manager, get_db
 from .enums import Tier
 from .exceptions import (
     DatabaseError,
@@ -71,7 +71,6 @@ __all__ = [
     "get_db",
     "get_global_settings",
     "get_riot_api_key",
-    "get_session",
     "get_settings",
     "is_empty_or_none",
     "validate_list_items",

@@ -440,3 +440,22 @@ async def test_playstyle_degradations_are_visible() -> None:
     missing = _events(logs, "playstyle_analysis_player_row_missing")
     assert len(missing) == 1
     assert missing[0]["puuid"] == "p" * 78
+
+
+@pytest.mark.asyncio
+async def test_close_disposes_the_engine_the_scripts_shut_down() -> None:
+    # `validate_migrations.py` and `reconcile_admin_account.py` both end with
+    # `await db_manager.close()`; if it stops delegating to dispose, their
+    # connections leak past process intent silently.
+    manager = DatabaseManager.__new__(DatabaseManager)
+    disposed: list[bool] = []
+
+    class Engine:
+        async def dispose(self) -> None:
+            disposed.append(True)
+
+    cast("Any", manager).engine = Engine()
+
+    await manager.close()
+
+    assert disposed == [True]

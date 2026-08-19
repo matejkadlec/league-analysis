@@ -62,8 +62,13 @@ def test_core_shape_validation_rejects_missing_or_invalid_data() -> None:
     assert not validate_required_fields({}, ["id"])
     assert validate_nested_fields({"metadata": {"id": 1}}, {"metadata": ["id"]})
     assert not validate_nested_fields({"metadata": []}, {"metadata": ["id"]})
+    # A nested object that exists but lacks the field inside it — the branch
+    # that recurses, not the one that checks the parent's presence.
+    assert not validate_nested_fields({"metadata": {"other": 1}}, {"metadata": ["id"]})
     assert validate_list_items([{"id": 1}], ["id"])
     assert not validate_list_items([], ["id"])
+    # Same distinction one level down: the item is a dict, the field is not in it.
+    assert not validate_list_items([{"other": 1}], ["id"])
     assert is_empty_or_none(None)
     assert is_empty_or_none("")
     assert not is_empty_or_none(0)

@@ -742,6 +742,29 @@ route shells already resolved by the route-shell row.
   mapper, so the test imports `model_registry.import_all_models()` first —
   third appearance of the registry trap this campaign.
 
+- ~~`backend: app/core/validation.py`~~, ~~`app/core/database.py`~~ and
+  ~~`app/core/riot_api/errors.py`~~ — done 2026-08-19 as one sweep (the
+  remaining mutate-list heads, each missing 1-3 lines), **5 mutations, all
+  killed**, all three files now 100% including branches.
+
+  `validation.py`: the two uncovered lines were the *recursing* halves —
+  a nested object that exists but lacks the field inside it, and a list item
+  that is a dict but missing the field. Both are one assert each in the
+  existing shape test, and both mutations (dropping the inner check) died.
+
+  `database.py`: one deletion and one test. **Deleted the module-level
+  `get_session()`** — zero callers, and broken by design: it `return`s the
+  session from inside its own `async with`, so every caller would receive a
+  session the context manager has already closed. The `db_manager.close()`
+  path is kept and now pinned, because `validate_migrations.py` and
+  `reconcile_admin_account.py` both end with it — if it stops delegating to
+  `engine.dispose`, their connections leak silently.
+
+  `errors.py`: `RiotAPIError.__str__`'s status branch. These strings land in
+  job logs and error toasts; the status code is the difference between "our
+  key is bad" and "Riot is down", and the 429 retry hint is the only
+  actionable part of a rate limit. All three shapes pinned.
+
 The rest, enumerated 2026-08-19 rather than left as "plus 9 more":
 ~~`app/jobs/page.tsx`~~ (30, done 2026-08-19 — nine mutations; it is the only
 consumer of `components/ui/tabs.tsx`, so both closed together),
