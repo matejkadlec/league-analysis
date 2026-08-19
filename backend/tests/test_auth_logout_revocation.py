@@ -1,16 +1,13 @@
 """Logout must revoke even when the access token has already expired."""
 
-from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock
 
-import jwt
 import pytest
 from fastapi import Request, Response
 from sqlalchemy import Select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import get_global_settings
 from app.features.auth.cookies import (
     ACCESS_TOKEN_COOKIE_NAME,
     REFRESH_TOKEN_COOKIE_NAME,
@@ -109,21 +106,13 @@ async def test_logout_blacklists_the_access_token_when_one_is_present() -> None:
 
 @pytest.mark.asyncio
 async def test_the_refresh_cookie_decides_who_is_logged_out() -> None:
-    """A presented access token must not override the refresh cookie.
+    """A presented access token must not name anyone, not even a bystander.
 
     This route is unauthenticated, so both credentials arrive unverified from
-    the same request. Letting the access token win means a leaked one names
-    the victim even when the browser's own refresh cookie says otherwise --
-    turning the fallback into an override.
+    the same request. The bearer here belongs to someone else entirely; only
+    the refresh cookie's owner may be signed out.
     """
     service = _service(user_id=7)
-    resolved: list[str] = []
-
-    async def _resolve(token: str) -> int:
-        resolved.append(token)
-        return 99
-
-    cast(AsyncMock, service).resolve_user_id_for_access_token = _resolve
 
     await logout(
         request=_request_with_cookies(
@@ -137,7 +126,6 @@ async def test_the_refresh_cookie_decides_who_is_logged_out() -> None:
     cast(
         AsyncMock, service
     ).revoke_all_refresh_tokens_for_user.assert_awaited_once_with(7)
-    assert resolved == []
 
 
 @pytest.mark.asyncio
@@ -180,19 +168,19 @@ async def test_refresh_tokens_are_revoked_before_the_access_token() -> None:
 
 
 @pytest.mark.asyncio
-async def test_logout_accepts_a_bearer_token_when_no_cookies_are_present() -> None:
-    """/login returns the pair in its body, so a client can hold only a Bearer.
+async def test_a_bearer_token_is_spent_only_on_itself() -> None:
+    """An access token blacklists itself and signs nobody out everywhere.
 
-    Reading identity from cookies alone made this a 200 that revoked nothing:
-    the caller presents the strongest credential there is and still could not
-    end its own session.
+    It used to name its owner, so that a client holding only the pair
+    `/login` returned could end its own session. That fallback was a
+    session-denial primitive: the route is unauthenticated, naming a user
+    revokes every session they own, an access token rides on every request
+    and lands in logs and crash dumps, and no age bound resolves it -- short
+    enough to be safe is too short to serve the idle client it existed for.
+    Nothing holds only a Bearer here; the browser has the refresh cookie,
+    which wins anyway. So the capability went rather than the window shrank.
     """
     service = _service(user_id=None)
-
-    async def _resolve(_token: str) -> int:
-        return 9
-
-    cast(AsyncMock, service).resolve_user_id_for_access_token = _resolve
 
     await logout(
         request=_request_with_cookies(bearer="access-token"),
@@ -203,121 +191,7 @@ async def test_logout_accepts_a_bearer_token_when_no_cookies_are_present() -> No
     cast(AsyncMock, service).revoke_access_token.assert_awaited_once_with(
         "access-token", reason="logout"
     )
-    cast(
-        AsyncMock, service
-    ).revoke_all_refresh_tokens_for_user.assert_awaited_once_with(9)
-
-
-def _access_token(
-    *,
-    expired_days_ago: float = 0.0,
-    secret: str | None = None,
-    user_id: int = 9,
-    typ: str = "access",
-) -> str:
-    settings = get_global_settings()
-    exp = datetime.now(UTC) - timedelta(days=expired_days_ago)
-    return jwt.encode(
-        {"user_id": user_id, "typ": typ, "jti": "t", "exp": int(exp.timestamp())},
-        secret if secret is not None else settings.jwt_secret_key,
-        algorithm=settings.jwt_algorithm,
-    )
-
-
-def _resolver(revoked: bool = False) -> AuthService:
-    """An AuthService whose only DB answer is the blacklist lookup."""
-    db = AsyncMock()
-    result = MagicMock()
-    result.scalar_one_or_none.return_value = object() if revoked else None
-    db.execute.return_value = result
-    return AuthService(cast("AsyncSession", db))
-
-
-@pytest.mark.asyncio
-async def test_a_recently_expired_access_token_still_names_its_owner() -> None:
-    """The whole reason this resolver exists.
-
-    The access token lives 30 minutes and the refresh token 30 days, so a
-    Bearer client's token is usually already expired by the time it logs out.
-    """
-    assert (
-        await _resolver().resolve_user_id_for_access_token(
-            _access_token(expired_days_ago=1)
-        )
-        == 9
-    )
-
-
-@pytest.mark.asyncio
-async def test_an_access_token_older_than_any_session_names_nobody() -> None:
-    """Otherwise a token leaked once is a permanent session-denial button.
-
-    Logout is unauthenticated and revokes every session the named user owns.
-    A token that expired longer ago than a refresh token lives cannot belong
-    to a session that still exists, so honouring it helps nobody log out — but
-    it does let anyone holding a year-old token from a log or a crash dump
-    sign that user out of every device, repeatedly, leaving no blacklist row
-    behind because an expired token is never blacklisted.
-    """
-    settings = get_global_settings()
-    ancient = _access_token(expired_days_ago=settings.jwt_refresh_token_expire_days + 1)
-
-    assert await _resolver().resolve_user_id_for_access_token(ancient) is None
-
-
-@pytest.mark.asyncio
-async def test_an_unsigned_or_forged_access_token_names_nobody() -> None:
-    """Expiry is relaxed here; the signature is not.
-
-    Nothing else in the suite executes this resolver, so turning signature
-    verification off would otherwise leave every auth test green while anyone
-    could mint `{"user_id": N}` and revoke that user's every session.
-    """
-    forged = _access_token(secret="a-different-but-equally-long-signing-key-32b")
-
-    assert await _resolver().resolve_user_id_for_access_token(forged) is None
-
-
-@pytest.mark.asyncio
-async def test_a_refresh_shaped_token_cannot_be_spent_as_an_access_token() -> None:
-    assert (
-        await _resolver().resolve_user_id_for_access_token(_access_token(typ="refresh"))
-        is None
-    )
-
-
-@pytest.mark.asyncio
-async def test_an_access_token_with_no_expiry_names_nobody() -> None:
-    """And, more to the point, does not crash an unauthenticated endpoint.
-
-    The age bound reads `exp`. Without the type check, a token carrying none
-    reaches `datetime.fromtimestamp(None)`, which raises TypeError -- not
-    InvalidTokenError, so nothing catches it and logout answers 500. The
-    signature is verified first, so this needs a token the server itself
-    signed rather than a forged one; a claim set that changes shape is
-    exactly what a future token-format change would produce.
-    """
-    settings = get_global_settings()
-    no_exp = jwt.encode(
-        {"user_id": 9, "typ": "access", "jti": "t"},
-        settings.jwt_secret_key,
-        algorithm=settings.jwt_algorithm,
-    )
-
-    assert await _resolver().resolve_user_id_for_access_token(no_exp) is None
-
-
-@pytest.mark.asyncio
-async def test_an_already_blacklisted_access_token_names_nobody() -> None:
-    """A token spent on one logout must not authorise a second.
-
-    Logout is unauthenticated and revokes every session the named user owns,
-    so without this a single leaked but still-live token is a replayable
-    "sign this user out of everything" button for the rest of its life.
-    """
-    live = _access_token(expired_days_ago=-0.01)
-
-    assert await _resolver(revoked=True).resolve_user_id_for_access_token(live) is None
+    cast(AsyncMock, service).revoke_all_refresh_tokens_for_user.assert_not_awaited()
 
 
 class _RecordingDb:

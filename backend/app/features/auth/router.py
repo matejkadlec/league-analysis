@@ -277,10 +277,9 @@ async def logout(
     answered rather than rejected: logout is idempotent, and a caller can only
     ever revoke the session their own request already carries.
     """
-    # The Authorization header first, matching `get_request_access_token`:
-    # /login returns the pair in its body, so a non-browser client holds the
-    # strongest credential there is and must still be able to spend it on
-    # ending its own session.
+    # The Authorization header first, matching `get_request_access_token`, so
+    # a non-browser client holding only the pair `/login` returned still gets
+    # that token blacklisted. It is spent on itself and nothing more.
     authorization = request.headers.get("authorization", "")
     bearer_token = (
         authorization[7:].strip() if authorization[:7].lower() == "bearer " else None
@@ -288,14 +287,17 @@ async def logout(
     access_token = bearer_token or request.cookies.get(ACCESS_TOKEN_COOKIE_NAME)
     refresh_token = request.cookies.get(REFRESH_TOKEN_COOKIE_NAME)
 
+    # Only the refresh token names a user, because naming one signs them out
+    # everywhere and this route is unauthenticated. A refresh token is checked
+    # against the table and is single-purpose; an access token rides on every
+    # request and lands in logs and crash dumps, so honouring one here is a
+    # replayable "sign this user out of everything" button for whoever finds
+    # it. There is no bound that fixes that: short enough to be safe is too
+    # short to serve the idle client such a fallback would exist for, and an
+    # expired token is never blacklisted, so a replay collides with nothing.
     user_id: int | None = None
     if refresh_token:
         user_id = await auth_service.resolve_user_id_for_refresh_token(refresh_token)
-    if access_token and user_id is None:
-        # No refresh cookie — a Bearer client, or a browser that lost it.
-        # The access token names its owner and its signature is verified
-        # during decoding, so it is a sound fallback rather than a guess.
-        user_id = await auth_service.resolve_user_id_for_access_token(access_token)
 
     # Refresh tokens first. Each revocation commits on its own, so a failure
     # between the two leaves whatever the earlier call already did. Losing the
