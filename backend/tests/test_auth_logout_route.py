@@ -16,7 +16,11 @@ import pytest
 from fastapi import FastAPI
 from starlette.exceptions import StarletteDeprecationWarning
 
-from app.features.auth.cookies import REFRESH_TOKEN_COOKIE_NAME
+from app.features.auth.cookies import (
+    ACCESS_TOKEN_COOKIE_NAME,
+    AUTH_STATE_COOKIE_NAME,
+    REFRESH_TOKEN_COOKIE_NAME,
+)
 from app.features.auth.router import router
 from app.features.auth.service import AuthService, get_auth_service
 
@@ -110,3 +114,47 @@ def test_logout_with_a_refresh_cookie_still_cleans_up(
 
     assert response.status_code == 200
     cast(AsyncMock, service).cleanup_expired_token_state.assert_awaited()
+
+
+def test_a_credential_less_logout_writes_no_deletion_cookies(
+    client: TestClient,
+) -> None:
+    """Because anyone's website can make this request.
+
+    Dropping the auth dependency was right -- it is what made sign-out work
+    after 30 minutes idle -- but it also opened this route to a top-level form
+    POST from any page on the internet. SameSite=Lax keeps the cookies off
+    that request, so it revokes nothing; the response still arrives in a
+    first-party context, so three deletion Set-Cookies would be applied.
+    The visitor is signed out on someone else's say-so, their refresh row live
+    and unrevoked for the rest of its 30 days with no browser holding it: the
+    stranded session this branch exists to remove, reached from outside.
+
+    A caller carrying no cookie has nothing to clear, so refusing to write
+    them costs nothing.
+    """
+    assert _post(client).headers.get_list("set-cookie") == []
+
+
+def test_a_real_sign_out_still_clears_every_cookie(
+    client: TestClient, service: AuthService
+) -> None:
+    """The other direction, and the reason the guard reads the request.
+
+    Narrowing it further -- to a valid refresh token, say -- would leave the
+    cookies in place for anyone whose token had already expired or been
+    revoked elsewhere, which is a signed-out visitor still holding a hint that
+    `proxy.ts` admits.
+    """
+    cast(AsyncMock, service).resolve_user_id_for_refresh_token.return_value = None
+
+    response = _post(client, cookie=f"{AUTH_STATE_COOKIE_NAME}=1")
+
+    written = {
+        header.split("=", 1)[0] for header in response.headers.get_list("set-cookie")
+    }
+    assert written == {
+        ACCESS_TOKEN_COOKIE_NAME,
+        REFRESH_TOKEN_COOKIE_NAME,
+        AUTH_STATE_COOKIE_NAME,
+    }

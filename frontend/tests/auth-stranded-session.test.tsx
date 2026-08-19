@@ -672,10 +672,10 @@ describe("giving up on a session", () => {
 
     // A refresh already in flight when the user logs out. The server answers
     // 200 and re-sets the cookies, which the browser applies regardless.
-    const calls: { url: string; signal: AbortSignal | null | undefined }[] = [];
+    const calls: { url: string; init: RequestInit | undefined }[] = [];
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
       const url = String(input);
-      calls.push({ url, signal: init?.signal });
+      calls.push({ url, init });
       if (url.includes("/auth/refresh")) {
         removeAuthTokens();
         setHint();
@@ -690,7 +690,13 @@ describe("giving up on a session", () => {
     // Clearing the hint only hides the rotated token; the new refresh cookie
     // is HttpOnly, so the session has to be ended server-side.
     const logoutCall = calls.find((call) => call.url.includes("/auth/logout"));
-    expect(logoutCall).toBeTruthy();
+    // The shape, not just the URL. As a GET this is a 405 and as a request
+    // without cookies the server resolves nobody -- both revoke nothing, and
+    // both leave the assertion "a call happened" perfectly green while the
+    // rotated 30-day token stays live for whoever uses the machine next.
+    expect(logoutCall?.init).toEqual(
+      expect.objectContaining({ method: "POST", credentials: "include" }),
+    );
     // That this logout also has a working deadline is asserted as an effect
     // in "gives up on the post-teardown logout at the deadline, not never";
     // `toBeInstanceOf(AbortSignal)` here was green with the deadline deleted.

@@ -73,12 +73,19 @@ async def test_logout_succeeds_and_clears_cookies_with_no_session_at_all() -> No
     A caller can only ever revoke the session their own request carries, so
     there is nothing to protect by rejecting this — and rejecting it is what
     made the failure silent.
+
+    The request carries the hint and nothing else, which is the state this
+    covers: another tab already signed out, or a page left open until the
+    refresh cookie expired. The cookies are still cleared. A request carrying
+    no cookie at all is a different thing entirely — it can only have come
+    from somewhere that is not this app — and that case lives in
+    `test_auth_logout_route.py`.
     """
     service = _service(user_id=None)
     response = Response()
 
     result = await logout(
-        request=_request_with_cookies(),
+        request=_request_with_cookies(**{AUTH_STATE_COOKIE_NAME: "1"}),
         response=response,
         auth_service=service,
     )

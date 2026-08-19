@@ -378,6 +378,49 @@ describe("a probe that fails right after a refresh the server honoured", () => {
   });
 });
 
+describe("the first probe failing without saying anything", () => {
+  it.each([500, 502, 503, 429])(
+    "keeps the session when the probe answers %i",
+    async (status) => {
+      // The branch the retried-probe test above says it agrees with -- and
+      // nothing held it there. A 5xx is a redeploy, a 429 is the shared
+      // rate-limit bucket every visitor shares behind the rewrite; neither
+      // says a word about this session, and the refresh cookie beside the
+      // hint may be perfectly good for another 30 days. Adding a teardown
+      // here is the natural "make the failure branches consistent" commit,
+      // because the 403 branch beside it does tear down -- and it passed the
+      // whole suite.
+      document.cookie = `${AUTH_STATE_COOKIE_NAME}=${AUTH_STATE_COOKIE_VALUE}; path=/`;
+      vi.spyOn(globalThis, "fetch").mockResolvedValue(
+        new Response("{}", { status }),
+      );
+
+      const { getByTestId } = renderProvider();
+
+      await waitFor(() =>
+        expect(getByTestId("state").textContent).toBe("settled:false"),
+      );
+      expect(document.cookie).toContain(AUTH_STATE_COOKIE_NAME);
+    },
+  );
+
+  it("keeps the session when the probe never reaches the server", async () => {
+    // `fetchCurrentUser` answers null for a rejected fetch, which is the
+    // offline tab, the dropped connection and the deadline expiring. The
+    // visitor gets the retry surface; retracting the hint here would send
+    // them to /sign-in instead, with a live token they cannot spend.
+    document.cookie = `${AUTH_STATE_COOKIE_NAME}=${AUTH_STATE_COOKIE_VALUE}; path=/`;
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("offline"));
+
+    const { getByTestId } = renderProvider();
+
+    await waitFor(() =>
+      expect(getByTestId("state").textContent).toBe("settled:false"),
+    );
+    expect(document.cookie).toContain(AUTH_STATE_COOKIE_NAME);
+  });
+});
+
 describe("a response that arrives but cannot be read", () => {
   it("is not treated as a rejected session", async () => {
     // A body truncated mid-stream, a captive portal answering with HTML, a

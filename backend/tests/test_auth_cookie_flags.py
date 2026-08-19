@@ -1,15 +1,21 @@
 """The auth-state hint must stay readable while the tokens stay HttpOnly."""
 
 from datetime import UTC, datetime, timedelta
+from typing import cast
+from unittest.mock import AsyncMock, MagicMock
 
-from fastapi import Response
+import pytest
+from fastapi import Request, Response
 
 from app.features.auth.cookies import (
     ACCESS_TOKEN_COOKIE_NAME,
     AUTH_STATE_COOKIE_NAME,
+    AUTH_STATE_COOKIE_VALUE,
     REFRESH_TOKEN_COOKIE_NAME,
     set_auth_cookies,
 )
+from app.features.auth.router import login, refresh_access_token
+from app.features.auth.service import AuthService
 
 
 def _set_cookie_headers() -> dict[str, str]:
@@ -81,3 +87,146 @@ def test_the_hint_is_written_host_only() -> None:
     cookies = _set_cookie_headers()
 
     assert "domain=" not in cookies[AUTH_STATE_COOKIE_NAME].lower()
+
+
+def test_the_hint_is_written_exactly_as_the_frontend_hardcodes_it() -> None:
+    """The other half of a coupling with no compiler between its ends.
+
+    `proxy.ts` routes on `request.cookies.get(NAME)?.value === VALUE`, and
+    `auth-state-cookie.ts` deletes by name at `path=/`. Both sides are literal
+    strings in TypeScript; nothing imports them from here, and nothing
+    translates. Rename or revalue this cookie and every signed-in visitor is
+    reported signed out on their next navigation, with the refresh cookie
+    beside it live and unreachable. Narrow its Path and the delete stops
+    matching, so the hint survives every teardown instead -- "can't reach the
+    server" forever.
+
+    SameSite is the third: Lax is what sends the hint on a top-level
+    navigation, so Strict here would report anyone arriving from an external
+    link as signed out, and None would ship it on every cross-site request.
+
+    The literals are duplicated on purpose. This test is the check, and it
+    fails the moment either side moves without the other.
+    """
+    cookies = _set_cookie_headers()
+    hint = cookies[AUTH_STATE_COOKIE_NAME].lower()
+
+    assert AUTH_STATE_COOKIE_NAME == "league_analysis_auth_state"
+    assert AUTH_STATE_COOKIE_VALUE == "1"
+    assert cookies[AUTH_STATE_COOKIE_NAME].startswith(
+        f"{AUTH_STATE_COOKIE_NAME}={AUTH_STATE_COOKIE_VALUE};"
+    )
+    assert "path=/;" in hint or hint.endswith("path=/")
+    assert "samesite=lax" in hint
+    # The names the frontend proxy and the axios client spell out too.
+    assert ACCESS_TOKEN_COOKIE_NAME == "league_analysis_access_token"
+    assert REFRESH_TOKEN_COOKIE_NAME == "league_analysis_refresh_token"
+
+
+def _route_request(cookie: bytes = b"") -> Request:
+    return Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "path": "/api/v1/auth/refresh",
+            "headers": [(b"cookie", cookie)] if cookie else [],
+            "query_string": b"",
+            "client": ("127.0.0.1", 1234),
+        }
+    )
+
+
+def _active_user() -> MagicMock:
+    user = MagicMock()
+    user.id = 5
+    user.email = "user@example.com"
+    user.is_active = True
+    return user
+
+
+@pytest.mark.asyncio
+async def test_a_successful_refresh_installs_the_new_cookies() -> None:
+    """Rotation without the Set-Cookie is a permanent lockout, not a blip.
+
+    The server revokes the old row and commits the new token either way, so a
+    refresh that forgets to install it leaves the browser holding the token
+    that was just revoked. Presenting it is reuse, and reuse detection revokes
+    the entire family -- every device, no way back, and signing in again
+    strands again one rotation later. Nothing else in the suite reaches this:
+    `set_auth_cookies` is tested in isolation above, and deleting the call
+    from the route left all 603 tests green.
+    """
+    now = datetime.now(UTC)
+    service = MagicMock(spec=AuthService)
+    service.rotate_refresh_token = AsyncMock(
+        return_value=(
+            _active_user(),
+            "access",
+            now + timedelta(minutes=30),
+            "refresh",
+            now + timedelta(days=30),
+        )
+    )
+    service.cleanup_expired_token_state = AsyncMock()
+    response = Response()
+
+    await refresh_access_token(
+        request=_route_request(f"{REFRESH_TOKEN_COOKIE_NAME}=old".encode()),
+        response=response,
+        refresh_request=None,
+        auth_service=cast(AuthService, service),
+    )
+
+    written = {
+        header.split("=", 1)[0] for header in response.headers.getlist("set-cookie")
+    }
+    assert written == {
+        ACCESS_TOKEN_COOKIE_NAME,
+        REFRESH_TOKEN_COOKIE_NAME,
+        AUTH_STATE_COOKIE_NAME,
+    }
+
+
+@pytest.mark.asyncio
+async def test_a_successful_login_installs_the_cookies() -> None:
+    """The same for the first pair: no hint, no session, however valid it is.
+
+    `proxy.ts` routes on the hint alone, so a login that issues tokens without
+    writing it bounces the visitor straight back to /sign-in -- signed in on
+    the server, signed out everywhere they can see.
+    """
+    from fastapi.security import OAuth2PasswordRequestForm
+
+    now = datetime.now(UTC)
+    service = MagicMock(spec=AuthService)
+    service.authenticate_user = AsyncMock(return_value=_active_user())
+    service.issue_token_pair = AsyncMock(
+        return_value=(
+            "access",
+            now + timedelta(minutes=30),
+            "refresh",
+            now + timedelta(days=30),
+        )
+    )
+    service.update_last_login = AsyncMock()
+    service.cleanup_expired_token_state = AsyncMock()
+    response = Response()
+
+    await login(
+        request=_route_request(),
+        response=response,
+        form_data=OAuth2PasswordRequestForm(
+            username="user@example.com", password="secret"
+        ),
+        captcha_token=None,
+        auth_service=cast(AuthService, service),
+    )
+
+    written = {
+        header.split("=", 1)[0] for header in response.headers.getlist("set-cookie")
+    }
+    assert written == {
+        ACCESS_TOKEN_COOKIE_NAME,
+        REFRESH_TOKEN_COOKIE_NAME,
+        AUTH_STATE_COOKIE_NAME,
+    }

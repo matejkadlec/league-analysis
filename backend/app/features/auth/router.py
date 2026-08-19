@@ -11,6 +11,7 @@ from app.core.rate_limiter import rate_limit
 
 from .cookies import (
     ACCESS_TOKEN_COOKIE_NAME,
+    AUTH_STATE_COOKIE_NAME,
     REFRESH_TOKEN_COOKIE_NAME,
     clear_auth_cookies,
     set_auth_cookies,
@@ -334,7 +335,18 @@ async def logout(
         # Not `info`: this route is unauthenticated and unrate-limited, so an
         # anonymous POST loop would otherwise be a free way to fill the logs.
         logger.debug("logout_succeeded_without_a_session")
-    clear_auth_cookies(response)
+    # Only for a request that actually carried something. This route is
+    # unauthenticated by design, and a deletion Set-Cookie is applied by the
+    # browser whenever the response arrives in a first-party context -- which a
+    # top-level form POST from any page on the internet is. SameSite=Lax keeps
+    # the cookies off that request, so it revokes nothing; answering it with
+    # three deletions anyway would sign the visitor out with their refresh row
+    # live and unrevoked for the rest of its 30 days, which is exactly the
+    # stranded session this branch exists to remove -- reached, in that case,
+    # from someone else's website. A caller holding no cookie has nothing to
+    # clear, so nothing is lost by asking.
+    if any((access_token, refresh_token, request.cookies.get(AUTH_STATE_COOKIE_NAME))):
+        clear_auth_cookies(response)
     return {"message": "Successfully logged out"}
 
 

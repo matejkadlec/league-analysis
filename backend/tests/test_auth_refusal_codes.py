@@ -205,3 +205,33 @@ async def test_a_database_fault_is_not_laundered_into_a_refusal() -> None:
     service.get_user_by_id = AsyncMock(return_value=user)
     with pytest.raises(DBAPIError):
         await service.rotate_refresh_token(raw_refresh_token="x")
+
+
+@pytest.mark.asyncio
+async def test_a_fault_reaching_the_route_is_not_answered_as_a_refusal() -> None:
+    """The same laundering, one frame up, where the refusal is actually minted.
+
+    The test above drives the database faults through `rotate_refresh_token`;
+    this drives one into the `await` in the route. Wrapping that call so a
+    rotation "never blows up into a 500" is the same defensive edit and reads
+    the same way -- and here it produces a 401 INVALID_REFRESH_TOKEN
+    byte-identical to a real refusal, so every guard on the client behaves
+    correctly and signs the visitor out for the length of the blip with the
+    refresh cookie live and unrevoked. It passed all 603 tests.
+
+    A 500 is the honest answer: nothing was learned about the session.
+    """
+    from sqlalchemy.exc import DBAPIError
+
+    service = _service(None)
+    cast(MagicMock, service).rotate_refresh_token = AsyncMock(
+        side_effect=DBAPIError("SELECT", {}, Exception("connection terminated"))
+    )
+
+    with pytest.raises(DBAPIError):
+        await refresh_access_token(
+            request=_request(),
+            response=Response(),
+            refresh_request=None,
+            auth_service=service,
+        )
