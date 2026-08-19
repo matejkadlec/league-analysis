@@ -1,5 +1,19 @@
 # Improvements
 
+- 2026-08-19 frontend/features/matchmaking/components/matchmaking-analysis-results.tsx:
+  `matches_analyzed === 820 ? 910 : matches_analyzed` is a data migration
+  living in a render function. The backend's basis formula used to be
+  `10 + 90 * (MATCHES_FOR_WINRATE - 1)` = 820 and is now
+  `10 + 90 * MATCHES_FOR_WINRATE` = 910 (`matchmaking_analysis/service.py`,
+  `_build_completion_results`), so rows stored before that fix still read 820
+  and are rewritten on the way to the screen. It works, but it is permanent,
+  it silently rewrites any future analysis that legitimately examined 820
+  matches, and it means the database and the UI disagree about the same row.
+  The fix is a one-statement UPDATE over `matchmaking_analyses` rows created
+  before the formula change, then deleting the ternary and its test. It is now
+  commented and pinned by a test, so it is documented debt rather than a
+  magic number.
+
 - 2026-08-19 frontend/features/jobs/components/system-status.tsx: its private
   `formatRelativeTime` computes `now - date` and its first band is
   `diffMins < 1 -> "Just now"`, but the same function also renders

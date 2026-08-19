@@ -286,9 +286,41 @@ three untested messages in `login-error.ts`.
   The four relative-time bands are the reason the mutation count is high:
   `45m ago` and `45h ago` are both plausible readings of a jobs page, and a
   boundary that slips by a factor of sixty is invisible in review.
+- ~~`features/matchmaking/components/matchmaking-analysis-results.tsx`~~ —
+  done 2026-08-19, fourteen tests, fourteen mutations, all dead. **Six
+  survived the first draft**, every one of them a fixture that never reached
+  the branch it claimed to test. The list is worth keeping because they are
+  all the same mistake in different clothes:
+
+  - `0.53 - 0.5` is `0.030000000000000027`, so the "exactly three points"
+    test was never on the boundary and `>= 0.03` narrowed to `> 0.03` with
+    nothing failing. **A boundary test on a difference has to use a pair
+    whose difference is the literal**, which here means `0.03` and `0`.
+  - The mirror boundary needed its own exact pair (`0` and `0.03`) for the
+    same reason.
+  - The three verdicts are three independent conditions rather than one
+    cascade, so `isFair` losing `!isUnfavorable` prints "matchmaking
+    relatively fair" directly under the sentence saying it was not. Asserting
+    the wrong verdict is absent is not the same as asserting the right one is
+    present.
+  - No fixture was ever at midnight or at noon, which are the only two hours
+    where `hours ? hours : 12` and `>= 12` respectively do anything.
+  - The two table cells carry mirror-image colour ternaries and nothing read
+    their classes, so copying one into the other turned both teams green.
+
+  **The finding:** `matches_analyzed === 820 ? 910 : matches_analyzed` sat in
+  the render with no comment. It is not arbitrary — the backend's basis
+  formula changed from `10 + 90 * (MATCHES_FOR_WINRATE - 1)` to
+  `10 + 90 * MATCHES_FOR_WINRATE`, and rows stored before that still read 820.
+  It is a data migration living in a render function. Resolved by pinning it
+  with a test that says why, adding the comment the line never had, and
+  logging the actual fix (an UPDATE over the old rows) in `IMPROVEMENTS.md`.
+  **A magic number with a real reason is worse than one without**, because the
+  reason dies with whoever knew it and the number looks deletable.
 
 The rest, enumerated 2026-08-19 rather than left as "plus 9 more": `app/jobs/page.tsx` (30),
-`features/matchmaking/components/matchmaking-analysis-results.tsx` (30),
+~~`features/matchmaking/components/matchmaking-analysis-results.tsx`~~ (30,
+done 2026-08-19 — fourteen tests, fourteen mutations; row below),
 ~~`features/profile/components/champion-stats-card.tsx`~~ (30, done 2026-08-19 —
 six tests, nine mutations, **two survivors and both of them the test's
 fault**, one iteration after the same thing happened on `role-stats-card`;

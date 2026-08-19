@@ -106,6 +106,13 @@ export function MatchmakingAnalysisResults({
 
   const { team_avg_winrate, enemy_avg_winrate, matches_analyzed } =
     latestAnalysis.results;
+  // Rows stored before the basis formula was fixed carry 820, because the
+  // backend counted `10 + 90 * (MATCHES_FOR_WINRATE - 1)` where it now counts
+  // `10 + 90 * MATCHES_FOR_WINRATE` (`matchmaking_analysis/service.py`,
+  // `_build_completion_results`). Without this, two analyses that looked at
+  // the same amount disagree about how much that was. The real fix is a
+  // migration of the stored rows; until then this stays, and deleting it
+  // fails `matchmaking-analysis-results.test.tsx`.
   const displayMatchesAnalyzed =
     matches_analyzed === 820 ? 910 : matches_analyzed;
 
