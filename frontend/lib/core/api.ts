@@ -16,6 +16,7 @@ export {
 import type { ApiError } from "./api-error";
 import { notifyRiotCredentialHealthUpdated } from "./riot-credential-health-events";
 import { refreshAccessToken } from "@/features/auth/utils/token-manager";
+import { hasAuthStateCookie } from "@/features/auth/utils/auth-state-cookie";
 
 const API_BASE_URL =
   typeof window === "undefined"
@@ -112,6 +113,28 @@ api.interceptors.response.use(
       // rejected the session or was simply unreachable. Clearing the hint from
       // here left React still believing it was signed in, and that
       // disagreement rendered as a blank page.
+      //
+      // But the hint also answers the question, which is why it is read back
+      // rather than passed down: `refreshAccessToken` retracts it exactly when
+      // the server refused. So a hint still standing means the refresh never
+      // got an answer, and this 401 has stopped describing what went wrong.
+      // Forwarding it labels a redeploy `kind: "authentication"`, and every
+      // reader downstream believes it -- `queryErrorToast` swallows the toast
+      // because "the auth gate already redirects on these", while the gate
+      // does not redirect, because the hint is still there. No message, no
+      // navigation, nothing: the silent failure this branch exists to remove.
+      // It is also the trap laid for whoever writes `if (kind ===
+      // "authentication") logout()` next, which reads as correct code.
+      if (hasAuthStateCookie()) {
+        return Promise.reject(
+          new AxiosError(
+            "The session could not be renewed because the server did not answer.",
+            AxiosError.ERR_NETWORK,
+            originalRequest,
+            error.request,
+          ),
+        );
+      }
       return Promise.reject(error);
     }
 

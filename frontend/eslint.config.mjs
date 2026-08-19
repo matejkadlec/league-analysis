@@ -78,6 +78,14 @@ const eslintConfig = [
   // the effect instead of recognising the shape, and which caught two escapes
   // these rules could not.
   //
+  // But that test file is an enumeration too -- of surfaces, and a new
+  // component with a query and a `logout()` is a fresh hole in it. The third
+  // layer is the only one that scales: `api.ts` no longer forwards a 401 that
+  // a failed refresh could not resolve, so `kind === "authentication"` means
+  // the server actually refused. That makes `if (kind === "authentication")
+  // logout()` -- the shape a future author is most likely to reach for, and
+  // the one nothing here can see -- correct code rather than a trap.
+  //
   // The cookie-mutation rule is deliberately receiver-free, which costs one
   // false positive: a `Map` keyed by the cookie's name is flagged too.
   // Narrowing it to particular receivers is what let `store.delete(NAME)`
@@ -100,6 +108,7 @@ const eslintConfig = [
               group: [
                 "**/auth/utils/token-manager",
                 "../utils/token-manager",
+                "./utils/token-manager",
                 "./token-manager",
               ],
               allowImportNames: ["refreshAccessToken"],
@@ -110,6 +119,7 @@ const eslintConfig = [
               group: [
                 "**/auth/utils/auth-state-cookie",
                 "../utils/auth-state-cookie",
+                "./utils/auth-state-cookie",
                 "./auth-state-cookie",
               ],
               allowImportNames: [

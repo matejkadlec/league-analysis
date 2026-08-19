@@ -3,7 +3,8 @@
 import { cleanup, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { api } from "@/lib/core/api";
+import { api, normalizeApiError } from "@/lib/core/api";
+import { queryErrorToast } from "@/lib/core/hooks";
 import { AuthGate } from "@/components/auth-gate";
 import {
   AUTH_STATE_COOKIE_NAME,
@@ -89,6 +90,58 @@ describe("the axios interceptor", () => {
     await expect(api.get("/players")).rejects.toBeTruthy();
 
     expect(hasAuthStateCookie()).toBe(true);
+  });
+
+  it("stops calling an unreachable server an authentication failure", async () => {
+    // The 401 that started this is true of the expired access token and of
+    // nothing else, so forwarding it makes a redeploy indistinguishable from a
+    // refusal. Every reader downstream then believes it: `queryErrorToast`
+    // stays silent because "the auth gate already redirects on these", and the
+    // gate does not redirect, because the hint is still standing. The viewer
+    // gets no toast, no navigation and no error -- and the next person to
+    // write `if (kind === "authentication") logout()` gets a teardown that
+    // reads as correct code.
+    setHint();
+    markAuthSession(true);
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("{}", { status: 502 }),
+    );
+    api.defaults.adapter = async (config) => {
+      throw Object.assign(new Error("unauthorized"), {
+        isAxiosError: true,
+        config,
+        response: { status: 401, data: {}, headers: {}, config },
+      });
+    };
+
+    const failure = await api.get("/players").catch((error: unknown) => error);
+
+    expect(normalizeApiError(failure).kind).toBe("network");
+    expect(queryErrorToast(failure)).not.toBeNull();
+  });
+
+  it("still calls a refused session an authentication failure", async () => {
+    // The other direction, and the reason the branch above reads the hint
+    // rather than assuming. A server that answers 401 to the refresh has
+    // refused; relabelling that as a network failure would leave a dead
+    // session looking transient and retryable forever.
+    setHint();
+    markAuthSession(true);
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("{}", { status: 401 }),
+    );
+    api.defaults.adapter = async (config) => {
+      throw Object.assign(new Error("unauthorized"), {
+        isAxiosError: true,
+        config,
+        response: { status: 401, data: {}, headers: {}, config },
+      });
+    };
+
+    const failure = await api.get("/players").catch((error: unknown) => error);
+
+    expect(hasAuthStateCookie()).toBe(false);
+    expect(normalizeApiError(failure).kind).toBe("authentication");
   });
 });
 

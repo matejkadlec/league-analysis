@@ -1,18 +1,23 @@
 """Logout must revoke even when the access token has already expired."""
 
+from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock
 
+import jwt
 import pytest
 from fastapi import Request, Response
 from sqlalchemy import Select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_global_settings
 from app.features.auth.cookies import (
     ACCESS_TOKEN_COOKIE_NAME,
     REFRESH_TOKEN_COOKIE_NAME,
 )
 from app.features.auth.router import logout
+from app.features.auth.schemas import RefreshTokenRequest
 from app.features.auth.service import AuthService
 
 
@@ -251,3 +256,76 @@ async def test_a_revoked_refresh_token_names_nobody() -> None:
     # matching on the token at all, which would hand every caller the first
     # unrevoked session in the table.
     assert "token_hash =" in sql
+
+
+@pytest.mark.asyncio
+async def test_a_second_logout_with_the_same_token_does_not_answer_500() -> None:
+    """`token_id` is unique and the existence check is not atomic.
+
+    Two tabs logging out at once, or the auth context's logout racing the one
+    `token-manager` sends after a rotation it could not keep, both reach the
+    insert. Whichever loses the race gets an IntegrityError on a route whose
+    entire premise is that it always succeeds -- and it lost only because the
+    winner had already done exactly what it was asking for.
+    """
+
+    class _LosesTheRace:
+        """Answers "no row yet", then loses the insert to whoever won it."""
+
+        def __init__(self) -> None:
+            self.rolled_back = False
+
+        def add(self, _instance: object) -> None:
+            return None
+
+        async def execute(self, _statement: Select[Any]) -> object:
+            result = MagicMock()
+            result.scalar_one_or_none.return_value = None
+            return result
+
+        async def commit(self) -> None:
+            raise IntegrityError("insert", (), Exception("duplicate"))
+
+        async def rollback(self) -> None:
+            self.rolled_back = True
+
+    db = _LosesTheRace()
+    service = AuthService(cast("AsyncSession", db))
+
+    settings = get_global_settings()
+    live = jwt.encode(
+        {
+            "user_id": 9,
+            "typ": "access",
+            "jti": "t",
+            "exp": int((datetime.now(UTC) + timedelta(minutes=5)).timestamp()),
+        },
+        settings.jwt_secret_key,
+        algorithm=settings.jwt_algorithm,
+    )
+
+    await service.revoke_access_token(live, reason="logout")
+
+    assert db.rolled_back
+
+
+@pytest.mark.asyncio
+async def test_a_refresh_token_in_the_body_logs_the_client_out() -> None:
+    """A non-cookie client is first-class here: `/refresh` reads the body too.
+
+    Reading only the cookie answered such a client "Successfully logged out"
+    while leaving its 30-day refresh token fully spendable -- the same silent
+    non-revocation, on the same route, that this branch exists to close.
+    """
+    service = _service(user_id=9)
+
+    await logout(
+        request=_request_with_cookies(),
+        response=Response(),
+        refresh_request=RefreshTokenRequest(refresh_token="a" * 40),
+        auth_service=service,
+    )
+
+    cast(
+        AsyncMock, service
+    ).revoke_all_refresh_tokens_for_user.assert_awaited_once_with(9)

@@ -213,3 +213,95 @@ describe("AuthProvider login timeout", () => {
     expect(setAuthTokens).toHaveBeenCalled();
   });
 });
+
+function LogoutProbe({
+  onLogout,
+}: {
+  onLogout: (logout: AuthContextType["logout"]) => void;
+}) {
+  const { logout } = useAuth();
+
+  useEffect(() => {
+    onLogout(logout);
+  }, [logout, onLogout]);
+
+  return null;
+}
+
+describe("AuthProvider logout", () => {
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  it("waits for the server before reporting the session over", async () => {
+    // Only the server can revoke; clearing cookies here merely hides the
+    // credential. Reverting this to fire-and-forget passes every other test
+    // in the suite, and it breaks two things at once: it reports "signed out"
+    // while a 30-day refresh token is still live and spendable in this
+    // browser -- on a shared machine, by the next person -- and it settles
+    // the promise both Sign Out buttons drive their pending state from, so
+    // the spinner vanishes while the request is still in flight.
+    removeAuthTokens.mockReset();
+    routerPush.mockReset();
+    getAccessToken.mockReturnValue(null);
+    refreshAccessToken.mockResolvedValue(null);
+
+    let releaseServer: (() => void) | undefined;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        () =>
+          new Promise<Response>((resolve) => {
+            releaseServer = () =>
+              resolve({ ok: true, status: 200 } as Response);
+          }),
+      ),
+    );
+
+    let logout: AuthContextType["logout"] | undefined;
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <LogoutProbe onLogout={(next) => (logout = next)} />
+        </AuthProvider>
+      </QueryClientProvider>,
+    );
+    if (!logout) {
+      throw new Error("Auth logout callback was not initialized");
+    }
+
+    // Let the mount probe settle first; it has its own teardown rules and
+    // this test is only about what `logout` does.
+    await act(async () => {
+      await Promise.resolve();
+    });
+    removeAuthTokens.mockReset();
+    routerPush.mockReset();
+
+    let settled = false;
+    const pending = logout().then(() => {
+      settled = true;
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(settled).toBe(false);
+    expect(removeAuthTokens).not.toHaveBeenCalled();
+    expect(routerPush).not.toHaveBeenCalled();
+
+    await act(async () => {
+      releaseServer?.();
+      await pending;
+    });
+
+    expect(settled).toBe(true);
+    expect(removeAuthTokens).toHaveBeenCalled();
+    expect(routerPush).toHaveBeenCalledWith("/sign-in");
+  });
+});

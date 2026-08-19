@@ -22,6 +22,7 @@ from fastapi.security import OAuth2PasswordBearer
 from jwt import ExpiredSignatureError, InvalidTokenError
 from passlib.context import CryptContext
 from sqlalchemy import delete, func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_global_settings
@@ -873,7 +874,17 @@ class AuthService:
                 reason=reason,
             )
         )
-        await self.db.commit()
+        try:
+            await self.db.commit()
+        except IntegrityError:
+            # `token_id` is unique and the check above is not atomic, so two
+            # logouts carrying the same token -- two tabs, or the context's
+            # logout racing the one token-manager sends after a rotation it
+            # could not keep -- can both reach this insert. The loser would
+            # answer 500 on a route whose whole point is that it always
+            # succeeds, and it lost only because the winner already did the
+            # work it was asking for.
+            await self.db.rollback()
 
     async def is_access_token_revoked(self, token_id: str) -> bool:
         """Return True when token ID exists in blacklist."""

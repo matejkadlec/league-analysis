@@ -261,6 +261,7 @@ async def refresh_access_token(
 async def logout(
     request: Request,
     response: Response,
+    refresh_request: RefreshTokenRequest | None = None,
     auth_service: AuthService = Depends(get_auth_service),
 ) -> dict[str, str]:
     """Revoke whatever session the request still carries, and always succeed.
@@ -285,7 +286,13 @@ async def logout(
         authorization[7:].strip() if authorization[:7].lower() == "bearer " else None
     )
     access_token = bearer_token or request.cookies.get(ACCESS_TOKEN_COOKIE_NAME)
-    refresh_token = request.cookies.get(REFRESH_TOKEN_COOKIE_NAME)
+    # Body first, then the cookie, exactly as `/refresh` reads it. A client
+    # that holds the pair `/login` returned has no cookie jar, and reading only
+    # the cookie answered it "Successfully logged out" while leaving its 30-day
+    # refresh token fully spendable at `/refresh`.
+    refresh_token = (
+        refresh_request.refresh_token if refresh_request is not None else None
+    ) or request.cookies.get(REFRESH_TOKEN_COOKIE_NAME)
 
     # Only the refresh token names a user, because naming one signs them out
     # everywhere and this route is unauthenticated. A refresh token is checked
@@ -316,7 +323,12 @@ async def logout(
         # so running it unconditionally would let anonymous requests drive
         # write transactions at request rate.
         await auth_service.cleanup_expired_token_state()
-    logger.info("logout_succeeded", user_id=user_id)
+    if user_id is not None:
+        logger.info("logout_succeeded", user_id=user_id)
+    else:
+        # Not `info`: this route is unauthenticated and unrate-limited, so an
+        # anonymous POST loop would otherwise be a free way to fill the logs.
+        logger.debug("logout_succeeded_without_a_session")
     clear_auth_cookies(response)
     return {"message": "Successfully logged out"}
 
