@@ -822,6 +822,26 @@ route shells already resolved by the route-shell row.
   script and every mutation "survives" by never being applied — the run is
   only real if each mutation echoes its apply confirmation.
 
+- ~~`backend: app/core/riot_api/client.py` (retry loop)~~ — done 2026-08-19,
+  not a mutation iteration but the library swap the user asked for:
+  **tenacity now owns the retry loop**, and the swap was made provable by
+  freezing an oracle first. `tests/test_riot_client_rate_limit_retry.py`
+  (end-to-end 429: wait exactly what `Retry-After` said, exhaustion carries
+  the header evidence, `retry_on_failure=False` sends exactly once) was
+  committed green against the hand-written loop *before* the loop changed,
+  so the machinery swap is proven against behaviour rather than against
+  tests written for it. The end-to-end logging suites ran unchanged across
+  both implementations; only the helper-signature tests moved (the helpers
+  became pure raisers — the `(should_retry, sleep)` tuple protocol and the
+  `return None` retry sentinel are gone). **4 mutations, all killed
+  red/green** against the new wiring: network errors dropped from the
+  transient predicate, the 429 wait replaced with exponential guessing, one
+  attempt too many, and `retry_on_failure=False` retrying anyway.
+  Two harness traps burned into this row: `git checkout -- <file>` as the
+  mutation-restore step **reverts uncommitted work** — commit the real
+  change before any scripted restore touches its file; and the earlier
+  `docker exec` heredoc note above claimed its third victim in one session.
+
 The rest, enumerated 2026-08-19 rather than left as "plus 9 more":
 ~~`app/jobs/page.tsx`~~ (30, done 2026-08-19 — nine mutations; it is the only
 consumer of `components/ui/tabs.tsx`, so both closed together),
