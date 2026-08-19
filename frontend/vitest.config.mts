@@ -26,7 +26,12 @@ export default defineConfig({
       // branch exists to fix -- left the summary byte-identical, numerator
       // and denominator both. A file nobody tests was invisible rather than
       // zero, and no amount of ratcheting could ever reach it.
-      include: ["app/**", "components/**", "features/**", "lib/**", "proxy.ts"],
+      // Extension-qualified: a bare `app/**` handed `components/CLAUDE.md` and
+      // `components/AGENTS.md` to the parser, which printed a RolldownError
+      // stack for each one and then excluded it. Harmless in itself, but it is
+      // the same message a real source file would produce if it ever failed to
+      // parse, and two guaranteed copies of it are how that one gets ignored.
+      include: ["{app,components,features,lib}/**/*.{ts,tsx}", "proxy.ts"],
       exclude: [
         ...(configDefaults.coverage.exclude ?? []),
         "e2e/**",
@@ -47,11 +52,23 @@ export default defineConfig({
       // denominator. Each floor sits ~2 points under its measurement, so
       // ratchet them up whenever coverage grows -- a floor that stops moving
       // stops catching anything, and now an untested new file moves it down.
+      //
+      // Ratcheted 2026-08-19 after the guard-quality loop: 69.19% statements,
+      // 61.14% branches, 63.68% functions, 69.66% lines over 3,447 statements
+      // and 452 tests. Left at 51/46/48/52 these had fallen ~18 points behind
+      // and every test the loop added could have been deleted without the gate
+      // saying anything -- which is precisely the failure the paragraph above
+      // was written about, repeated by the branch that wrote it.
+      // Ratcheted again at the end of the same sweep: 73.62% statements,
+      // 66.42% branches, 68.21% functions, 73.80% lines over 493 tests, after
+      // the zero-covered class was closed. Ratchet on the way out of a batch
+      // of work, not once per file -- but do ratchet, or the floors drift
+      // eighteen points behind again the way they just did.
       thresholds: {
-        statements: 51,
-        branches: 46,
-        functions: 48,
-        lines: 52,
+        statements: 71,
+        branches: 64,
+        functions: 66,
+        lines: 71,
       },
     },
   },

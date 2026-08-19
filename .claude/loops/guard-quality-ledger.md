@@ -50,8 +50,8 @@ left on the frontend. `proxy.ts` reads 100% / 100% and needs no row.
 
 ### Covered — mutate these
 
-Highest risk first. 27 files sit at ≥80% statements with ≥20 statements; the
-head of that list:
+Highest risk first. **31** files sit at ≥80% statements with ≥20 statements
+(recounted 2026-08-19 from the regenerated summary). The head, worked in order:
 
 1. ~~`features/auth/utils/token-manager.ts`~~ — done 2026-08-19, 2 survivors.
 2. ~~`features/auth/context/auth-context.tsx`~~ — done 2026-08-19. Accepted and
@@ -94,6 +94,25 @@ head of that list:
     behind their wording were not. `smurf-boost-api.ts` remains at 0% across
     all six functions and belongs in the zero-covered list below.
 
+The tail, named rather than counted — the 14 of those 31 no iteration has
+touched, largest first:
+`features/matchmaking/components/matchmaking-analysis-session.tsx` (85, br 88),
+`features/matches/match-history-preferences.ts` (36),
+`features/matches/queue-catalog.ts` (31),
+`features/players/components/track-player-button.tsx` (30),
+`features/players/utils/riot-id.ts` (27),
+`lib/core/relative-time.ts` (27, br 72),
+`components/ui/select.tsx` (25), `components/ui/table.tsx` (24),
+`components/ui/dialog.tsx` (23),
+`features/auth/utils/auth-state-cookie.ts` (23, br 67),
+`lib/core/hooks.ts` (23, br 80),
+`components/toast-host.tsx` (20, br 71),
+`lib/core/data-dragon-version.ts` (20, br 88).
+Branch percentage is the better sort key here than statements: the three
+lowest — `auth-state-cookie.ts`, `toast-host.tsx`, `relative-time.ts` — are all
+small files whose *statements* are near-fully run, which is the shape that hid
+three untested messages in `login-error.ts`.
+
 `proxy.ts` is in the coverage scope; check its number when regenerating.
 
 ### Zero-covered — decide, do not mutate
@@ -132,16 +151,222 @@ head of that list:
   `deleted` row in the ledger. Two validation checks in a row where the second
   is a strict superset of the first: worth looking for wherever a guard was
   added defensively beside one that already covered it.
-- `features/profile/components/role-stats-card.tsx` — 31
+- ~~the three `app/*/page.tsx` entries~~ — done 2026-08-19, resolved as one
+  row because the finding was not in any of them individually. They are not
+  route shells: each is ~200 lines of query wiring. But the only guard in them
+  whose loss is silent is the `<ProtectedRoute>` wrapper, and it was untested
+  on **six** pages — `/`, `/player-overview`, `/match-history`,
+  `/matchmaking-analysis`, `/settings`, `/smurf-boost-detection`. Deleting it
+  from any one of them typechecked, linted, and passed all 451 tests; what
+  ships is a page that renders its own chrome to a signed-out visitor and fills
+  it with 401s. `tests/page-navigation-contract.test.ts` already pinned
+  `requireAdmin` on `/jobs` and nothing else, so the flag on the one admin page
+  was guarded while the wrapper on the other six was not. The new test is
+  written fail-closed — a page is required to be wrapped unless its route is
+  named in `PUBLIC_ROUTES` or its file calls `redirect(`, so a new page is
+  protected by default and making one public is a deliberate edit. Verified
+  red against the mutation on all seven pages, one at a time.
 
-The rest, enumerated 2026-08-19 rather than left as "plus 9 more": `app/jobs/page.tsx` (30),
-`features/matchmaking/components/matchmaking-analysis-results.tsx` (30),
-`features/profile/components/champion-stats-card.tsx` (30),
+  **Accepted, with the reason worth keeping:** `handleRefreshAll` in
+  `player-overview/page.tsx` invalidates seven query keys, and a deleted line
+  leaves one card stale after a refresh. It was checked rather than assumed:
+  every one of the seven maps to a live query in the rendered subtree, nothing
+  the page renders is missing from it, and the one key the subtree uses that is
+  *absent* — `tracking-status`, via `TrackPlayerButton` inside `PlayerCard` —
+  is absent correctly, because whether you follow a player does not change when
+  their Riot data does. A killing test needs five separate fetch mocks and the
+  failure it would catch self-corrects on the next mount.
+
+  The remaining plumbing in all three — skeleton-vs-content ternaries, the
+  `isLoading` three-way, the per-card `null` fallbacks — is accepted as render
+  shape. A mutation there changes which placeholder is on screen for one frame.
+- **Coverage floors ratcheted 2026-08-19**, in the same iteration, because
+  they had fallen 18 points behind (51/46/48/52 against a measured
+  69.19/61.14/63.68/69.66) and every test this loop added could have been
+  deleted with the gate silent — which is the exact failure the comment above
+  those floors was written about, repeated by the campaign that wrote it.
+  Verified the new floors bite by raising one to 99 and watching the run exit
+  non-zero. The coverage `include` was also extension-qualified: a bare
+  `components/**` was handing `CLAUDE.md` and `AGENTS.md` to the parser and
+  printing a RolldownError stack for each, which is how the same message about
+  a *real* file would get ignored.
+- **The `process.env.TZ` trick is safe to copy** — settled by `pitfall-check`
+  rather than assumed, since an earlier row recommended it. Vitest 4's default
+  `pool: "forks"` with `isolate: true` gives every test file its own process
+  (distinct PIDs, confirmed on a probe, and still distinct under
+  `--maxWorkers=1`); nothing in `package.json`, `test.sh` or the config
+  overrides it. Under `--no-isolate` it does leak, and `unstubEnvs: true` does
+  not help — it restores `vi.stubEnv`, not a raw assignment. The one wrong
+  claim in that file's header, that the zone is set "before anything reads
+  `Intl`", has been corrected in place: ESM hoists the imports above it, and
+  the trick works only because `formatDate` builds its formatter per call.
+- ~~`features/profile/components/role-stats-card.tsx`~~ — done 2026-08-19,
+  six tests, nine mutations, and the first row where the loop's own test was
+  the thing that failed the discipline.
+
+  The guard worth having is **cross-language**. Two maps face each other
+  across the API with neither naming the other: the backend turns Riot's
+  `UTILITY` into `Support` (`matches/match_stats.py`), and this card turns
+  `Support` back into `position-utility.svg`. The card's lookup ends in
+  `|| "/positions/position-middle.svg"`, so renaming a lane on *either* side
+  does not fail — it silently draws the mid icon on every support row, under
+  alt text that still reads "Support". The test reads `LANE_DISPLAY_NAMES` out
+  of the Python source and asserts the five names render five *distinct*
+  icons; distinctness is the only workable assertion, because "not the
+  fallback" cannot be checked when Mid's own icon is the fallback. Verified
+  red against a rename on the frontend side and against a rename on the
+  backend side.
+
+  Also worth copying: `next/image` renders a broken image rather than failing
+  the build, and nothing else in the gate opens `public/`, so a renamed asset
+  ships. One `existsSync` per icon closes that.
+
+  **The survivor was in the test, not the source.** Dropping the
+  `totalGames > 0` guard makes the play-rate bar `width: NaN%`, and the first
+  version of the test looped over `container.querySelectorAll("[style*=width]")`
+  asserting each was `"0%"`. It passed against the mutation: React drops the
+  invalid declaration, the attribute disappears, the selector matches nothing,
+  and a loop over nothing asserts nothing. **Any test that reads the DOM by a
+  selector has to pin how many elements it found** — this is the second time a
+  vacuous assertion has appeared in this campaign, and the first time the
+  mutation caught it.
+
+  Logged rather than fixed: `getWinRateColor` / `getWinRateBarColor` /
+  `formatWinRate` exist in three copies, and the same name means a fraction in
+  two of them and a percent in the third.
+- ~~`features/profile/components/champion-stats-card.tsx`~~ — done
+  2026-08-19, six tests, nine mutations. **Two survived, and both were the
+  test's fault rather than an equivalent mutant.** One iteration after the
+  same thing on `role-stats-card`, which makes it the pattern of this stretch
+  and the reason to keep mutating even when the tests look thorough.
+
+  The first: the headline test claimed that reading `paginationState.page`
+  instead of `pageForChampionDataSource(...)` strands someone on an empty
+  card. It does not — `getChampionPage` clamps an out-of-range page back into
+  range, so the empty card is already impossible and the test passed against
+  the mutation. The guard is real but the failure is different: page to
+  champions 11–12 of one player, open a player with twenty champions, and you
+  land on their eleventh-best. The second list has to be **longer** than the
+  page reached in the first for the difference to exist at all. **A test whose
+  stated failure mode is wrong passes for the wrong reason** — the mutation is
+  what tells you, and the comment had to be rewritten, not just the fixture.
+
+  The second: the KDA fixture held 3, 2 and 1.99, so moving the green
+  threshold from 3 to 2.5 recoloured nothing it looked at. Every band needs a
+  value *just under* its threshold as well as one on it, or the test pins only
+  that three bands exist.
+
+  Died cleanly: the rank number restarting per page (the second page opens
+  with another "1", reading as the best champion twice), both ends of the
+  pager, and both off-by-ones available in the "1–5 of 12" label.
+- ~~`features/jobs/components/system-status.tsx`~~ — done 2026-08-19, nine
+  tests, twelve mutations, all died. The file is worth reading for the two
+  things the mutations did *not* find, both of which came out of reading it.
+
+  **A live trap, logged rather than fixed.** The private `formatRelativeTime`
+  computes `now - date`, and its first band is `diffMins < 1 -> "Just now"`.
+  The same function also renders `next_run_time`, which is a time in the
+  future: a negative difference clears every band, so a run fifteen minutes
+  out reads "Next scheduled run: Just now". It is unreachable only because
+  `jobs/router.py:786` hard-codes `next_run_time=None,  # TODO: Get from
+  scheduler`. Whoever does that TODO ships the wrong label in the same change.
+  A test cannot be written for it without first pinning behaviour nobody has
+  decided on, so it is in `IMPROVEMENTS.md` with the line number.
+
+  **Accepted as unreachable, and kept.** The health headline ends in
+  `: "Check Required"`, and no value the backend can produce reaches it:
+  arriving there needs `!isHealthy`, `running_executions <= 0`, and
+  `scheduler_running`, which contradicts `isHealthy`'s own definition unless
+  the count is negative or `NaN`. `z.number()` admits both; a `len()` on the
+  server produces neither. Unlike the two validation patterns deleted from
+  `display-name-field.tsx`, this arm is the *last* branch of a cascade over
+  untrusted numbers, so what it guards against is rendering nothing at all.
+  Kept, and now recorded as deliberate rather than as an untested branch.
+
+  The four relative-time bands are the reason the mutation count is high:
+  `45m ago` and `45h ago` are both plausible readings of a jobs page, and a
+  boundary that slips by a factor of sixty is invisible in review.
+- ~~`features/matchmaking/components/matchmaking-analysis-results.tsx`~~ —
+  done 2026-08-19, fourteen tests, fourteen mutations, all dead. **Six
+  survived the first draft**, every one of them a fixture that never reached
+  the branch it claimed to test. The list is worth keeping because they are
+  all the same mistake in different clothes:
+
+  - `0.53 - 0.5` is `0.030000000000000027`, so the "exactly three points"
+    test was never on the boundary and `>= 0.03` narrowed to `> 0.03` with
+    nothing failing. **A boundary test on a difference has to use a pair
+    whose difference is the literal**, which here means `0.03` and `0`.
+  - The mirror boundary needed its own exact pair (`0` and `0.03`) for the
+    same reason.
+  - The three verdicts are three independent conditions rather than one
+    cascade, so `isFair` losing `!isUnfavorable` prints "matchmaking
+    relatively fair" directly under the sentence saying it was not. Asserting
+    the wrong verdict is absent is not the same as asserting the right one is
+    present.
+  - No fixture was ever at midnight or at noon, which are the only two hours
+    where `hours ? hours : 12` and `>= 12` respectively do anything.
+  - The two table cells carry mirror-image colour ternaries and nothing read
+    their classes, so copying one into the other turned both teams green.
+
+  **The finding:** `matches_analyzed === 820 ? 910 : matches_analyzed` sat in
+  the render with no comment. It is not arbitrary — the backend's basis
+  formula changed from `10 + 90 * (MATCHES_FOR_WINRATE - 1)` to
+  `10 + 90 * MATCHES_FOR_WINRATE`, and rows stored before that still read 820.
+  It is a data migration living in a render function. Resolved by pinning it
+  with a test that says why, adding the comment the line never had, and
+  logging the actual fix (an UPDATE over the old rows) in `IMPROVEMENTS.md`.
+  **A magic number with a real reason is worse than one without**, because the
+  reason dies with whoever knew it and the number looks deletable.
+- ~~`app/jobs/page.tsx`~~ + ~~`components/ui/tabs.tsx`~~ — done 2026-08-19,
+  six tests, nine mutations. Checked before starting, which is what made it
+  one iteration instead of two: `tabs.tsx` has exactly one consumer in the
+  whole app, and it is this page.
+
+  The tab wiring is the guard. `handleExecutionClick` both selects an
+  execution and switches tab, and the two halves are separately deletable:
+  drop the switch and clicking an execution inside a job card selects it in a
+  list nobody is looking at, so the click reads as broken. Both halves were
+  mutated separately and both died.
+
+  One assertion exists purely for `tabs.tsx`: the inactive panel must be
+  *absent*, not hidden. Nothing about the active tab can see a `TabsContent`
+  that has stopped hiding — both panels simply stack.
+
+  **Accepted, because the type already holds it.** Replacing
+  `statusResult?.success ? statusResult.data : null` with
+  `statusResult?.data ?? null` survived the suite, because a failed
+  `validatedGet` carries no `data` and `?? null` reaches the same answer. It
+  is not reachable at all: `ApiResponse` is a discriminated union whose
+  failure arm has no `data` field, so the mutation is a compile error
+  (`TS2339`, verified by running `tsc` against it). This is the loop's own
+  rule landing on the loop — prefer a type where one would catch it — and the
+  right resolution is to record that the type is the guard, not to write a
+  test that duplicates it.
+
+The rest, enumerated 2026-08-19 rather than left as "plus 9 more":
+~~`app/jobs/page.tsx`~~ (30, done 2026-08-19 — nine mutations; it is the only
+consumer of `components/ui/tabs.tsx`, so both closed together),
+~~`features/matchmaking/components/matchmaking-analysis-results.tsx`~~ (30,
+done 2026-08-19 — fourteen tests, fourteen mutations; row below),
+~~`features/profile/components/champion-stats-card.tsx`~~ (30, done 2026-08-19 —
+six tests, nine mutations, **two survivors and both of them the test's
+fault**, one iteration after the same thing happened on `role-stats-card`;
+see the paired row below),
 `app/matchmaking-analysis/page.tsx` (25), `app/player-overview/page.tsx` (24),
-`features/jobs/components/system-status.tsx` (20),
+~~`features/jobs/components/system-status.tsx`~~ (20, done 2026-08-19 — nine
+tests, twelve mutations, all died; the row below carries the two findings),
 ~~`features/players/components/player-card-format.ts`~~ (16, done 2026-08-19),
-`components/ui/tabs.tsx` (11). The three `app/*/page.tsx` entries are route
-shells; check what they actually hold before spending an iteration on one.
+~~`components/ui/tabs.tsx`~~ (11, done 2026-08-19 via its one consumer). The
+three `app/*/page.tsx` entries are **not** route shells — each is ~200 lines
+of query wiring; see the row above for what was worth guarding in them.
+
+**The zero-covered class is closed.** Re-measured 2026-08-19 after this
+sweep: two files remain at 0% with ≥10 statements, `app/matchmaking-analysis/
+page.tsx` (25) and `app/player-overview/page.tsx` (24), and both are already
+resolved by the route-shell row — their `<ProtectedRoute>` wrapper is pinned
+as source text and the rest is render plumbing that was accepted with reasons.
+Frontend coverage over the sweep: **64.72% → 73.62% statements, 57.70% →
+66.42% branches**, 414 → 493 tests.
 
 ### Backend
 
@@ -162,9 +387,24 @@ share is the happy path and the missing lines are the error and edge branches.
 Those are holes, but they are holes of a different shape, and the card's
 "0% coverage is already the finding" rule gives no guidance for them.
 
-**Mutate these** — 38 files at ≥80% with ≥20 statements. The head, with the
-schema/model files set aside (they are largely declarative and Pyright already
-holds their shape):
+**Mutate these** — 38 files at ≥80% with ≥20 statements.
+
+**Accepted as a class, 2026-08-19: the 8 purely declarative files.** Not
+"schemas and models" as a name — that name is wrong, and checking it is what
+produced this row. Filtering the 38 by *no function bodies and no validators*
+leaves exactly eight, all at 100%: `matches/participants_schemas.py` (80),
+`jobs/schemas.py` (67), `smurf_boost_detection/schemas.py` (60),
+`smurf_boost_detection/config.py` (43), `players/schemas.py` (41),
+`core/models.py` (32), `playstyle_analysis/models.py` (26),
+`players/leagues_schemas.py` (24). These declare field names and types and
+nothing else; Pyright holds their shape and a mutation to a type annotation is
+a type error, not a surviving mutant. The other schema files are **not** in
+this class and stay on the list — `settings/schemas.py` carries 14 validators,
+`auth/schemas.py` 6, `matchmaking_analysis/schemas.py` 6. A validator is
+executable input validation at a trust boundary, which is the opposite of
+declarative.
+
+That leaves 30 with logic. The head, worked in order:
 
 1. ~~`app/core/riot_api/rate_limiter.py`~~ — done 2026-08-19, 82% → 96%. The
    lesson for the rest of the backend list: on a file this size, the covered
@@ -183,6 +423,40 @@ holds their shape):
 5. `app/features/jobs/maintenance.py` — 40 stmts, 87.5%.
 6. `app/core/validation.py` — 40 stmts, 93.5%; `app/core/database.py` — 33,
    90.9%; `app/core/riot_api/errors.py` — 32, 94.4%.
+
+The tail, named rather than counted — the remaining 21 of those 30, sorted by
+what is at stake rather than by size:
+
+*Validators (executable rules on untrusted input):*
+`app/features/matchmaking_analysis/schemas.py` (52, **80.4%** — the
+lowest-covered file on the whole list, and six validators),
+`app/features/auth/schemas.py` (74, 90.9%, six validators),
+`app/features/settings/schemas.py` (229, 97.6%, **fourteen** validators —
+biggest file in the covered half of the backend).
+
+*Numerics, all unattacked and all neighbours of the file where two mutants
+survived 620 tests:* `smurf_boost_detection/signals.py` (159, 96.8%),
+`engine.py` (107, 96.9%), `composite.py` (95, 98.2%).
+
+*Riot-API surface:* `core/riot_api/models.py` (261, 95.1% — four validators,
+so not declarative despite the name), `core/riot_api/constants.py` (95, 95.1%),
+`features/matches/schemas.py` (176, 98.9%),
+`features/matches/participants.py` (119, 98.3%).
+
+*Auth plumbing:* `auth/cookies.py` (22, 100%),
+`auth/user_cookie_consent.py` (26), `auth/refresh_token.py` (24),
+`auth/email_change_request.py` (22), `auth/revoked_access_token.py` (20),
+`auth/models.py` (35). The last five are ORM rows with one method each and are
+the closest thing the backend has to the declarative class without qualifying
+for it.
+
+*Remainder:* `core/request_logging.py` (47, 98.4%),
+`core/exceptions.py` (20, 86.4%), `features/jobs/models.py` (80, 97.5%),
+`features/matches/models.py` (38), `features/players/models.py` (31),
+`smurf_boost_detection/models.py` (26).
+
+Recounted 2026-08-19 against a regenerated report (57.52%, 636 tests); the
+57.18% above was measured before the last three iterations landed.
 
 **Thinly covered — decide, do not blind-mutate.** Biggest absolute holes; a
 mutation aimed at a covered line here says little, so read what is missing

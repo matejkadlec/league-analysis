@@ -1,5 +1,32 @@
 # Improvements
 
+- 2026-08-19 frontend/features/matchmaking/components/matchmaking-analysis-results.tsx:
+  `matches_analyzed === 820 ? 910 : matches_analyzed` is a data migration
+  living in a render function. The backend's basis formula used to be
+  `10 + 90 * (MATCHES_FOR_WINRATE - 1)` = 820 and is now
+  `10 + 90 * MATCHES_FOR_WINRATE` = 910 (`matchmaking_analysis/service.py`,
+  `_build_completion_results`), so rows stored before that fix still read 820
+  and are rewritten on the way to the screen. It works, but it is permanent,
+  it silently rewrites any future analysis that legitimately examined 820
+  matches, and it means the database and the UI disagree about the same row.
+  The fix is a one-statement UPDATE over `matchmaking_analyses` rows created
+  before the formula change, then deleting the ternary and its test. It is now
+  commented and pinned by a test, so it is documented debt rather than a
+  magic number.
+
+- 2026-08-19 frontend/features/jobs/components/system-status.tsx: its private
+  `formatRelativeTime` computes `now - date` and its first band is
+  `diffMins < 1 -> "Just now"`, but the same function also renders
+  `next_run_time`, which is a time in the *future*. A negative difference
+  clears every band, so a run scheduled fifteen minutes out renders as
+  "Next scheduled run: Just now". It is unreachable today only because
+  `backend/app/features/jobs/router.py:786` hard-codes
+  `next_run_time=None,  # TODO: Get from scheduler` — so whoever does that TODO
+  ships the wrong label in the same change, with nothing in the gate to say so.
+  The shared `lib/core/relative-time.ts` is no help: it clamps with
+  `Math.max(0, ...)` and would answer "just now" too. Either that TODO comes
+  with a forward-looking formatter, or the `next_run_time` block goes.
+
 - 2026-08-19 frontend/features/players/components/player-card-format.ts:
   `formatWinRate` guesses its own units — `winRate <= 1 ? winRate * 100 :
   winRate` — because its two callers disagree. `PlayerCardWinRate` passes
@@ -9,6 +36,16 @@
   percent therefore renders as 100%. It needs about 100 ranked games with at
   most one win, so it is rare rather than impossible; the fix is to make the
   unit explicit at the call site rather than sharper in the guess.
+
+  Wider than one function, found 2026-08-19 while testing `role-stats-card`:
+  `getWinRateColor`, `getWinRateBarColor` and `formatWinRate` exist in **three**
+  copies — `players/components/player-card-format.ts`,
+  `profile/components/role-stats-card.tsx`,
+  `profile/components/champion-stats-card.tsx` — and the same name means two
+  incompatible things. The profile pair takes a fraction and multiplies by 100;
+  the players copy takes a value already in percent for the colours and guesses
+  for the format, and returns `"52.3"` where the other two return `"52.3%"`.
+  Consolidating needs the unit decided first, so it is one change, not three.
 
 - 2026-08-19 backend/app/features/playstyle_analysis/: the whole feature is
   1,864 lines with no consumer. Its router is mounted at
