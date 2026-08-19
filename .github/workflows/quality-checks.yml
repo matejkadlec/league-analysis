@@ -53,8 +53,20 @@ jobs:
           LGA_GATE_UID="$(id -u)" LGA_GATE_GID="$(id -g)" \
             docker compose --file compose.gate.yml run --rm --build --no-TTY gate
 
+      # Ports derived from the run, because two gate runs really do share this
+      # runner: `concurrency` above is keyed per pull request, so one PR does
+      # not queue behind another. Everything else in container-qa.sh is already
+      # per-run unique -- the compose project, the container names and the
+      # network all come from `lga-qa-$(id -u)-$$` -- and only these two ports
+      # were fixed, so the second run aborted on "Container QA port 18097 is
+      # already in use" and read as a code failure. The script has always
+      # accepted these overrides; nothing was passing them.
       - name: Build and verify isolated production containers
-        run: ./deploy/container-qa.sh
+        run: |
+          port_base=$(( 20000 + (GITHUB_RUN_ID % 5000) * 2 ))
+          LGA_CONTAINER_QA_FRONTEND_PORT="$port_base" \
+          LGA_CONTAINER_QA_BACKEND_PORT="$(( port_base + 1 ))" \
+            ./deploy/container-qa.sh
 
       # This runner is the production host, so the gate has to clean up after
       # itself: every run leaves a rebuilt gate image and its build cache
