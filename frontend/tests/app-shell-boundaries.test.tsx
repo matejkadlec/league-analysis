@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { cleanup, render, screen } from "@testing-library/react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 /**
@@ -63,13 +64,27 @@ describe("the shells shown when there is no page to show", () => {
 
   it("offers a reset when the layout itself throws", () => {
     // `error.tsx` sits inside the layout, so a throw from the providers, the
-    // gate or the sidebar reaches only this one. It replaces the document,
-    // hence its own html/body and inline styles.
+    // gate or the sidebar reaches only this one.
     const reset = vi.fn();
     render(<GlobalError error={thrown} reset={reset} />);
 
     expect(screen.getByText("Something went wrong")).toBeTruthy();
     screen.getByRole("button", { name: "Try again" }).click();
     expect(reset).toHaveBeenCalled();
+  });
+
+  it("brings its own document, because it replaces the one that threw", () => {
+    // Next.js renders `global-error.tsx` in place of the root layout, so
+    // whatever it returns *is* the document: without `html` and `body` of its
+    // own there is nothing to render into, and the boundary of last resort
+    // fails at exactly the moment it is needed. jsdom will not nest an `html`
+    // inside a container div, so this is the one assertion that has to be
+    // made against server markup.
+    const markup = renderToStaticMarkup(
+      <GlobalError error={thrown} reset={() => {}} />,
+    );
+
+    expect(markup.startsWith("<html")).toBe(true);
+    expect(markup).toContain("<body");
   });
 });
