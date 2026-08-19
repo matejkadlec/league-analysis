@@ -30,6 +30,18 @@ import {
  * The rule for this file is simple: the edge may route on the hint, and may
  * never retract it. Only a request to the API can establish that a session is
  * over, and only `refreshAccessToken` makes that call.
+ *
+ * The assertion is deliberately upstream of the teardown rather than on it. A
+ * first version checked two named channels -- no `Set-Cookie` naming the hint,
+ * no redirect -- and a later audit walked straight past both with
+ * `Clear-Site-Data: "cookies"`, which is a third channel and strictly more
+ * destructive: it takes the HttpOnly refresh token too, while the row stays
+ * live server-side. Naming channels is the enumeration that failed six times
+ * over in the lint rules. So what is asserted is that the edge never asks the
+ * API anything: with no answer there is nothing to be wrong about, and every
+ * teardown channel is closed at once, including the ones nobody has thought
+ * of. If the edge ever genuinely needs to make a request, this test should be
+ * rewritten rather than relaxed, because that request is the whole hazard.
  */
 
 // `proxy` is synchronous today, and these `await`s are therefore no-ops.
@@ -48,39 +60,34 @@ afterEach(() => {
 });
 
 describe("the edge and the session hint", () => {
-  it("never retracts the hint when the API cannot be reached", async () => {
-    // A redeploy. Anything here that concluded "signed out" from this would
-    // retract the hint while the 30-day refresh cookie stays live and
-    // HttpOnly, which JavaScript cannot reach and nothing has revoked.
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(() => Promise.reject(new Error("ECONNREFUSED"))),
-    );
+  it("never asks the API whether a session is still good", async () => {
+    // The edge cannot tell a refusal from an outage: it gets one answer, or
+    // none, and no way to retry with a refresh -- that is the browser's job,
+    // and `refreshAccessToken` is where the distinction lives. So an edge that
+    // probes has already lost, whatever it does with the answer. Asserting the
+    // absence of the question closes every channel the answer could be acted
+    // on through.
+    const fetchSpy = vi.fn(() => Promise.reject(new Error("ECONNREFUSED")));
+    vi.stubGlobal("fetch", fetchSpy);
 
-    const response = await proxy(hintedRequest("/player-overview"));
+    await proxy(hintedRequest("/player-overview"));
+    await proxy(hintedRequest("/match-history"));
+    await proxy(new NextRequest(new URL("http://localhost:3000/")));
 
-    expect(response.headers.get("set-cookie") ?? "").not.toContain(
-      AUTH_STATE_COOKIE_NAME,
-    );
-    expect(response.headers.get("location")).toBeNull();
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it("never retracts the hint on an unauthorized answer either", async () => {
-    // A 401 reaching the edge did not necessarily come from the API: a
-    // maintenance Worker sits on both routes. Even when it did, the browser
-    // is the only place that can retry with a refresh, so the edge acting on
-    // it signs out a session that was one rotation away from being fine.
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(() => Promise.resolve(new Response("{}", { status: 401 }))),
-    );
+  it("passes a hinted request through untouched", async () => {
+    // No header that retracts anything, whatever it is called. `Set-Cookie`
+    // was the first channel an audit reached for and `Clear-Site-Data` the
+    // second, so this asserts the whole envelope rather than a list of names.
+    const response = await proxy(hintedRequest("/player-overview"));
 
-    const response = await proxy(hintedRequest("/match-history"));
-
-    expect(response.headers.get("set-cookie") ?? "").not.toContain(
-      AUTH_STATE_COOKIE_NAME,
-    );
-    expect(response.headers.get("location")).toBeNull();
+    // Positive, not a denylist: this is exactly what `NextResponse.next()`
+    // produces. A `rewrite` swaps in `x-middleware-rewrite` and carries no
+    // `location`, so listing forbidden headers missed it -- the same
+    // enumerate-the-spellings mistake the lint rules made six times.
+    expect([...response.headers.entries()]).toEqual([["x-middleware-next", "1"]]);
   });
 
   it("still keeps a visitor without a hint off protected routes", async () => {

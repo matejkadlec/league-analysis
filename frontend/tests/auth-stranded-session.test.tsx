@@ -366,6 +366,15 @@ describe("giving up on a session", () => {
     expect(hasAuthStateCookie()).toBe(false);
   });
 
+  it("keeps the deadline short enough to be a deadline", async () => {
+    // Every other deadline assertion is relative to this constant, so nothing
+    // bounded it above: raising it to ten minutes left all 251 tests green
+    // while a hung backend held the visitor on a spinner for ten minutes,
+    // which is the reported symptom with a nicer message. Ten seconds is
+    // already at the edge of what a person will wait for.
+    expect(AUTH_PROBE_TIMEOUT_MS).toBeLessThanOrEqual(15_000);
+  });
+
   it("gives up on the refresh at the deadline, not never", async () => {
     // Without a deadline a backend that accepts the connection and hangs
     // strands the caller exactly as a probe that never settles would. Asserted

@@ -45,6 +45,8 @@ const auth = vi.hoisted(() => ({
 
 vi.mock("@/features/auth", () => ({ useAuth: () => auth }));
 
+import { CookieConsentManager } from "@/features/cookie-consent";
+
 function setHint() {
   document.cookie = `${AUTH_STATE_COOKIE_NAME}=${AUTH_STATE_COOKIE_VALUE}; path=/`;
 }
@@ -236,5 +238,29 @@ describe("the can't-reach-the-server surface", () => {
     expect(auth.logout).toHaveBeenCalledWith({
       evenIfTheServerCannotBeReached: true,
     });
+  });
+});
+
+describe("cookie consent", () => {
+  // The one file allowed to write cookies by hand, and the gap the lint
+  // config's own header names and then delegates here -- a delegation nothing
+  // enforced until this test existed. An audit made the consent sweep clear
+  // *cookies* as well as localStorage, keeping a list of necessary names that
+  // did not include the session hint. That reads as the safe direction, is
+  // legal in this file by design, and runs from a mount effect whenever the
+  // stored consent is missing or its version is stale -- so bumping
+  // COOKIE_CONSENT_VERSION would have signed out every visitor on their next
+  // page load, with the server perfectly healthy.
+  it("does not take the session hint with it when it clears optional storage", async () => {
+    setHint();
+    // Missing consent: the branch that sweeps.
+    document.cookie = "league_analysis_cookie_consent=; max-age=0; path=/";
+
+    render(<CookieConsentManager />);
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(hasAuthStateCookie()).toBe(true);
   });
 });
