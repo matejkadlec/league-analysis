@@ -221,3 +221,154 @@ def test_method_rate_scope_normalizes_ids_but_keeps_routes_distinct() -> None:
 
     assert detail_one == detail_two
     assert len({detail_one, timeline, match_list}) == 3
+
+
+RATE_LIMITER_CLOCK = "app.core.riot_api.rate_limiter.time.monotonic"
+RATE_LIMITER_SLEEP = "app.core.riot_api.rate_limiter.asyncio.sleep"
+
+MATCH_DETAIL_ENDPOINT = "https://europe.api.riotgames.com/lol/match/v5/matches/EUN1_1"
+
+
+def _app_window_headers(limit: str, count: str) -> dict[str, str]:
+    """Return the header pair Riot sends for one application window."""
+    return {"X-App-Rate-Limit": limit, "X-App-Rate-Limit-Count": count}
+
+
+async def test_saturated_window_waits_out_the_provider_interval() -> None:
+    """A used-up window must hold the next request until the window resets.
+
+    This is the entire point of the limiter and nothing was exercising it.
+    Without the wait the client sends straight into a window Riot has already
+    filled, and the provider answers 429s and escalates a persistent offender
+    to a key ban -- which on this deployment takes ingestion down completely,
+    because there is one key.
+    """
+    limiter = RateLimiter()
+    with patch(RATE_LIMITER_CLOCK, return_value=100.0):
+        limiter.update_limits(
+            _app_window_headers("20:1", "20:1"), MATCH_DETAIL_ENDPOINT
+        )
+
+    slept: list[float] = []
+
+    async def record(seconds: float) -> None:
+        slept.append(seconds)
+
+    with (
+        patch(RATE_LIMITER_CLOCK, return_value=100.4),
+        patch(RATE_LIMITER_SLEEP, side_effect=record),
+    ):
+        await limiter.wait_if_needed(MATCH_DETAIL_ENDPOINT)
+
+    assert slept == [pytest.approx(0.6)]
+
+
+async def test_consecutive_requests_keep_the_burst_spacing() -> None:
+    """Back-to-back calls are spaced even when no window is near its limit.
+
+    The provider counts a burst against a window that has not been observed
+    yet, so the spacing is what keeps a fresh limiter from opening with a
+    salvo. Two calls in the same hundredth of a second must be held apart.
+    """
+    limiter = RateLimiter()
+    slept: list[float] = []
+
+    async def record(seconds: float) -> None:
+        slept.append(seconds)
+
+    with (
+        patch(
+            RATE_LIMITER_CLOCK,
+            side_effect=[1000.0, 1000.0, 1000.01, 1000.01],
+        ),
+        patch(RATE_LIMITER_SLEEP, side_effect=record),
+    ):
+        await limiter.wait_if_needed(MATCH_DETAIL_ENDPOINT)
+        await limiter.wait_if_needed(MATCH_DETAIL_ENDPOINT)
+
+    assert slept == [pytest.approx(limiter.request_spacing - 0.01)]
+
+
+def test_a_count_that_dropped_means_a_new_window_began() -> None:
+    """A lower count is the only signal that the provider window rolled over.
+
+    Riot does not say when a window started; the limiter infers it from the
+    first observation. If a count goes down, the window it belonged to is
+    gone and a new one is running -- so its deadline has to move with it.
+    Anchoring to the old start makes the limiter believe capacity returns
+    sooner than it does, and it resumes sending into a window that is still
+    filling.
+    """
+    limiter = RateLimiter()
+    scope = ("europe.api.riotgames.com", 120)
+
+    with patch(RATE_LIMITER_CLOCK, return_value=200.0):
+        limiter.update_limits(
+            _app_window_headers("100:120", "90:120"), MATCH_DETAIL_ENDPOINT
+        )
+    with patch(RATE_LIMITER_CLOCK, return_value=260.0):
+        limiter.update_limits(
+            _app_window_headers("100:120", "5:120"), MATCH_DETAIL_ENDPOINT
+        )
+
+    assert limiter._app_windows[scope].started_at == 260.0
+
+
+async def test_elapsed_windows_are_dropped_rather_than_carried() -> None:
+    """Windows whose interval has passed are removed, not merely ignored.
+
+    The match fetcher holds one limiter for hours across many endpoints, so a
+    window that is only skipped instead of deleted stays in the dictionary for
+    the life of the process, once per scope it ever saw.
+    """
+    limiter = RateLimiter()
+    with patch(RATE_LIMITER_CLOCK, return_value=300.0):
+        limiter.update_limits(
+            _app_window_headers("10:1", "10:1"), MATCH_DETAIL_ENDPOINT
+        )
+    assert limiter._app_windows
+
+    slept: list[float] = []
+
+    async def record(seconds: float) -> None:
+        slept.append(seconds)
+
+    with (
+        patch(RATE_LIMITER_CLOCK, return_value=305.0),
+        patch(RATE_LIMITER_SLEEP, side_effect=record),
+    ):
+        await limiter.wait_if_needed(MATCH_DETAIL_ENDPOINT)
+
+    assert slept == []
+    assert limiter._app_windows == {}
+
+
+def test_riot_id_lookups_share_one_method_window() -> None:
+    """Both segments of a Riot ID are redacted, so all lookups share a scope.
+
+    A Riot ID is two path segments, `gameName/tagLine`. Redact fewer and every
+    player searched for becomes its own method window: each one looks unused,
+    the shared method budget is never observed, and the limiter waits for a
+    limit it cannot see.
+    """
+    limiter = RateLimiter()
+    base = "https://europe.api.riotgames.com/riot/account/v1/accounts/by-riot-id"
+
+    assert limiter._get_endpoint_key(
+        f"{base}/PlayerOne/EUW", "GET"
+    ) == limiter._get_endpoint_key(f"{base}/PlayerTwo/EUN1", "GET")
+
+
+def test_unreadable_rate_headers_do_not_break_the_request() -> None:
+    """A header the parser cannot read degrades to no window, not an exception.
+
+    `update_limits` is called on the success path of every Riot response. If a
+    provider-side format change raised here, it would fail requests that had
+    already succeeded -- the limiter is advisory, and losing it must not lose
+    the data.
+    """
+    limiter = RateLimiter()
+
+    limiter.update_limits({1: "2:1"}, MATCH_DETAIL_ENDPOINT)  # type: ignore[dict-item]
+
+    assert limiter._app_windows == {}
