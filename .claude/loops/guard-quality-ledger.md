@@ -1,0 +1,64 @@
+# Guard Quality Ledger
+
+State for [`guard-quality.md`](guard-quality.md). One row per file attacked.
+Status is one of `killed` (a new test now fails against the mutation),
+`accepted` (survivor left in place, reason given), `deleted` (dead code
+removed), `bug` (real defect found and fixed), or `clean` (all mutations died,
+guards already real).
+
+Never re-attack a file that already has a row unless the file changed since.
+
+| File | Attacked | Mutations | Status | Evidence / reason |
+|---|---|---|---|---|
+| `features/auth/utils/token-manager.ts` | 2026-08-19 | 5 | `killed` | 3 died (content-type guard, `sessionEpoch` bump, `clearAuthStateCookie` in the post-teardown 200 path). 2 survived the full 342-test suite: `namesTheEndOfTheSession` catch → `return true`, and `refreshAccessToken`'s `!isBrowser()` → `refused`. Both killed by `tests/token-manager-guards.test.ts`, each shown red against its mutation and green against real code. |
+
+## Target list
+
+Seeded 2026-08-19 from `frontend/coverage/coverage-summary.json`
+(53.76% statements / 48.87% branches over `app`, `components`, `features`,
+`lib`, `proxy.ts`). Regenerate before trusting it.
+
+### Covered — mutate these
+
+Highest risk first. 27 files sit at ≥80% statements with ≥20 statements; the
+head of that list:
+
+1. ~~`features/auth/utils/token-manager.ts`~~ — done 2026-08-19, 2 survivors.
+2. `features/auth/context/auth-context.tsx` — 92.4% / 82.6%, 105 stmts.
+3. `features/auth/utils/login-error.ts` — 93.8% / 86.3%.
+4. `features/auth/components/sign-in-form.tsx` — 80.4% / 70.7%.
+5. `components/auth-gate.tsx` — 97.7% / 100%. Expect `clean`; it is the
+   negative control that proves the loop can return nothing.
+6. `components/ui/form.tsx` — 90.5% st but 41.7% br. Widest statement/branch
+   split in the report.
+7. `lib/core/api-error.ts`, `lib/core/schemas.ts` — shared, every caller
+   inherits their bugs.
+8. `features/cookie-consent/utils/consent-storage.ts` — 80.8% / 69.7%.
+9. `features/matches/components/match-history.tsx` — 88.7% / 85.0%.
+10. `features/smurf-boost/components/*` — four files, all ≥90%.
+
+`proxy.ts` is in the coverage scope; check its number when regenerating.
+
+### Zero-covered — decide, do not mutate
+
+19 files at 0% with ≥10 statements. Largest first:
+
+- `app/settings/use-change-email.ts` — 117 stmts, the single biggest untested
+  unit in the frontend, and it mutates account identity.
+- `features/jobs/components/job-executions.tsx` — 61
+- `features/matchmaking/components/matchmaking-analysis-history.tsx` — 58
+- `app/settings/riot-api-settings-card.tsx` — 57. Feeds the key path that took
+  ingestion down for a day.
+- `app/settings/email-code-inputs.tsx` — 56
+- `app/settings/password-change-section.tsx` — 51
+- `features/jobs/components/job-execution-format.ts` — 50
+- `features/profile/components/recent-performance-card.tsx` — 41
+- `app/settings/display-name-field.tsx` — 38
+- `features/profile/components/role-stats-card.tsx` — 31
+- …plus 9 more in the report.
+
+### Backend
+
+Not yet enumerated. Backend coverage is armed by `--cov` in `test.sh` with
+`fail_under = 47`; generate the equivalent report and append the same two
+classes here before starting backend iterations.
