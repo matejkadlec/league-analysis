@@ -11,7 +11,11 @@ import {
 } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { refreshAccessToken, removeAuthTokens } from "../utils/token-manager";
+import {
+  namesTheEndOfTheSession,
+  refreshAccessToken,
+  removeAuthTokens,
+} from "../utils/token-manager";
 import {
   AUTH_PROBE_TIMEOUT_MS,
   createAuthLoginError,
@@ -113,9 +117,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           // credential live with nothing asking the server to revoke it. The
           // first probe's own 5xx branch below already declines to guess;
           // these two agreeing is the point.
+          // The same rule the refresh call uses: a status is not evidence
+          // unless the body names one of this API's session-ending codes.
+          // An edge challenge and a 403 about something other than the
+          // session both arrive here looking identical to a refusal.
           if (
             response &&
-            (response.status === 401 || response.status === 403)
+            (response.status === 401 || response.status === 403) &&
+            (await namesTheEndOfTheSession(response))
           ) {
             removeAuthTokens();
           }
@@ -123,7 +132,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           queryClient.clear();
         }
       } else if (response.status === 403) {
-        removeAuthTokens();
+        // Only if it names the end of the session. A 403 means "not
+        // authorized for this", and a challenge in front of the API means
+        // nothing about the session at all.
+        if (await namesTheEndOfTheSession(response)) {
+          removeAuthTokens();
+        }
         setUser(null);
         queryClient.clear();
       } else {

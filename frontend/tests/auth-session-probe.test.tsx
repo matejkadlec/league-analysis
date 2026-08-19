@@ -245,15 +245,20 @@ describe("a probe that fails right after a refresh the server honoured", () => {
     expect(document.cookie).toContain(AUTH_STATE_COOKIE_NAME);
   });
 
-  it("does end the session when the retried probe is refused", async () => {
+  it("does end the session when the retried probe names a refusal", async () => {
     // The other half, so the branch is pinned in both directions rather than
-    // being satisfied by never tearing down at all.
+    // being satisfied by never tearing down at all. `/auth/me` answers 403
+    // ACCOUNT_INACTIVE for a deactivated account, and that names the end of
+    // the session.
     document.cookie = `${AUTH_STATE_COOKIE_NAME}=${AUTH_STATE_COOKIE_VALUE}; path=/`;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       if (String(input).includes("/auth/refresh")) {
         return new Response("{}", { status: 200 });
       }
-      return new Response("{}", { status: 401 });
+      return new Response(
+        JSON.stringify({ detail: { code: "ACCOUNT_INACTIVE", message: "off" } }),
+        { status: 403, headers: { "content-type": "application/json" } },
+      );
     });
 
     const { getByTestId } = renderProvider();
@@ -262,6 +267,32 @@ describe("a probe that fails right after a refresh the server honoured", () => {
       expect(getByTestId("state").textContent).toBe("settled:false"),
     );
     expect(document.cookie).not.toContain(AUTH_STATE_COOKIE_NAME);
+  });
+
+  it("keeps the session when the retried probe refuses without naming why", async () => {
+    // `/auth/me`'s own 401 carries a plain-string detail, and so does a
+    // challenge in front of it -- and this particular 401 arrives moments
+    // after the server honoured a refresh, so it contradicts what the API
+    // just said. Guessing here would retract the hint and strand the 30-day
+    // token that refresh had just issued. The visitor gets the way out
+    // instead: the "Can't reach the server" surface, with Retry and Sign out.
+    document.cookie = `${AUTH_STATE_COOKIE_NAME}=${AUTH_STATE_COOKIE_VALUE}; path=/`;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      if (String(input).includes("/auth/refresh")) {
+        return new Response("{}", { status: 200 });
+      }
+      return new Response("<html>Access denied</html>", {
+        status: 403,
+        headers: { "content-type": "text/html" },
+      });
+    });
+
+    const { getByTestId } = renderProvider();
+
+    await waitFor(() =>
+      expect(getByTestId("state").textContent).toBe("settled:false"),
+    );
+    expect(document.cookie).toContain(AUTH_STATE_COOKIE_NAME);
   });
 });
 

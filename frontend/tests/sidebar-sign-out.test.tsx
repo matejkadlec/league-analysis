@@ -76,4 +76,38 @@ describe("the sidebar Sign Out button", () => {
       evenIfTheServerCannotBeReached: true,
     });
   });
+
+  it("goes dead while the request is in flight", async () => {
+    // Sign Out waits for the server, because only the server can revoke.
+    // Against a backend that hangs that is the full ten-second deadline with
+    // nothing on screen moving, so without the pending state the button reads
+    // as broken and every further click stacks another request.
+    let releaseServer: (() => void) | undefined;
+    auth.logout.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          releaseServer = resolve;
+        }),
+    );
+
+    render(<SidebarNav />);
+    const button = screen.getByRole("button", { name: /sign out/i });
+    await act(async () => {
+      fireEvent.click(button);
+    });
+
+    expect(
+      screen.getByRole("button", { name: /signing out/i }),
+    ).toHaveProperty("disabled", true);
+    expect(auth.logout).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /signing out/i }));
+    });
+    expect(auth.logout).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      releaseServer?.();
+    });
+  });
 });

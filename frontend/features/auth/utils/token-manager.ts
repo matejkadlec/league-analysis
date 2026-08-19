@@ -38,6 +38,56 @@ export type SessionRefresh =
    *  turned out to be about a session that had already ended. */
   | { outcome: "unreachable" };
 
+/**
+ * The codes this API uses when it means "this session is over".
+ *
+ * A status alone is not evidence of that, and treating it as evidence is a
+ * live hazard rather than a theoretical one. Cloudflare fronts these routes:
+ * a WAF rule, a bot-fight challenge, an access policy or "I'm Under Attack"
+ * mode all answer a background request with 403 and an HTML body, and the
+ * origin never sees it. `logout()` already refuses to trust an edge-minted
+ * status for exactly this reason; the call the whole design rests on was
+ * still trusting one.
+ *
+ * A 403 from our own API is not proof either. It means "not authorized for
+ * this", which is not "your session is over" -- an audit added an
+ * `email_verified` gate to the one dependency every protected route shares,
+ * four ordinary lines completing a half-built feature, and every signed-in
+ * visitor was signed out by it while their refresh token stayed live and
+ * unrevoked. Signing in again worked, and stranded one more token each time.
+ *
+ * So a refusal has to name itself. Both refusals `/auth/refresh` can issue do
+ * (`router.py`), and anything else -- an edge challenge, a new 403 about
+ * something other than the session -- reports as nothing learned, which
+ * leaves the session alone and shows the visitor a way forward.
+ */
+const SESSION_ENDING_CODES = new Set([
+  "INVALID_REFRESH_TOKEN",
+  "ACCOUNT_INACTIVE",
+]);
+
+export async function namesTheEndOfTheSession(
+  response: Response,
+): Promise<boolean> {
+  if (!(response.headers.get("content-type") ?? "").includes("application/json")) {
+    return false;
+  }
+  try {
+    // `clone()` so a caller that also reads this body still can.
+    const body: unknown = await response.clone().json();
+    const detail = (body as { detail?: unknown }).detail;
+    const code =
+      typeof detail === "object" && detail !== null
+        ? (detail as { code?: unknown }).code
+        : undefined;
+    return typeof code === "string" && SESSION_ENDING_CODES.has(code);
+  } catch {
+    // An unreadable body says nothing, and guessing here is what this whole
+    // function exists to stop.
+    return false;
+  }
+}
+
 let refreshInFlight: Promise<SessionRefresh> | null = null;
 // Bumped every time the session is torn down. A refresh that started before
 // the teardown can still land after it, and its Set-Cookie response would
@@ -94,11 +144,13 @@ export async function refreshAccessToken(): Promise<SessionRefresh> {
         // Only the server refusing the token ends a session. A 502 or 503 is
         // the API being restarted or redeployed, and treating that as a
         // rejection signed people out mid-deploy while their refresh cookie
-        // was still perfectly valid.
-        if (
+        // was still perfectly valid. And a 401 or 403 only counts when the
+        // body names one of this API's session-ending codes: see
+        // `namesTheEndOfTheSession` for the two ways a status lies.
+        const refused =
           (response.status === 401 || response.status === 403) &&
-          epoch === sessionEpoch
-        ) {
+          (await namesTheEndOfTheSession(response));
+        if (refused && epoch === sessionEpoch) {
           // Only if this refresh still belongs to the session on screen. A
           // rejection that arrives after a teardown is about the session that
           // ended, and tearing down again would take out whoever signed in
@@ -107,12 +159,20 @@ export async function refreshAccessToken(): Promise<SessionRefresh> {
           removeAuthTokens();
           return { outcome: "refused" };
         }
-        if (response.status === 401 || response.status === 403) {
+        if (refused) {
           // A refusal aimed at a session that has already ended, so it says
           // nothing about the one on screen. Reporting the status here would
           // undo the distinction this type exists for: `api.ts` re-encodes it,
           // `normalizeApiError` reads 401 as `kind: "authentication"`, and the
           // caller is back to treating somebody else's refusal as its own.
+          return { outcome: "unreachable" };
+        }
+        if (response.status === 401 || response.status === 403) {
+          // A status that named nothing. Whoever sent it, it was not this
+          // API's refusal path, so nothing was learned about the session --
+          // and reporting the status would have `normalizeApiError` read it
+          // back as `kind: "authentication"`, which is the same lie one layer
+          // down.
           return { outcome: "unreachable" };
         }
         // Not a refusal at all. The status travels with it so a rate limit is

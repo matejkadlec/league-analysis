@@ -1,5 +1,9 @@
 // @vitest-environment node
 
+import { readdirSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
 import { NextRequest } from "next/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -54,6 +58,42 @@ function hintedRequest(pathname: string): NextRequest {
     },
   });
 }
+
+// Read from `app/` rather than listed by hand. Every earlier version of this
+// table enumerated paths, and an audit walked past each one by picking a path
+// it had not thought to include -- `/settings`, in the last case, with the
+// header name assembled from fragments so no selector saw a literal. A route
+// that exists is a route this asserts about, without anyone remembering to
+// add it.
+const APP_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "app");
+
+function discoverRoutes(): string[] {
+  const routes: string[] = [];
+  const walk = (dir: string, prefix: string) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (entry.isFile() && /^page\.(tsx|ts|jsx|js)$/.test(entry.name)) {
+        routes.push(prefix === "" ? "/" : prefix);
+      }
+      if (
+        entry.isDirectory() &&
+        !entry.name.startsWith("_") &&
+        !entry.name.startsWith("(")
+      ) {
+        walk(join(dir, entry.name), `${prefix}/${entry.name}`);
+      }
+    }
+  };
+  walk(APP_DIR, "");
+  return routes.sort();
+}
+
+const PUBLIC_ROUTES = new Set([
+  "/sign-in",
+  "/join-us",
+  "/privacy-policy",
+  "/cookie-policy",
+  "/license",
+]);
 
 function plainRequest(pathname: string): NextRequest {
   return new NextRequest(new URL(`http://localhost:3000${pathname}`));
@@ -141,9 +181,7 @@ describe("the edge and the session hint", () => {
       // The first branch in the function, and the one taken most often: the
       // matcher only excludes `_next/static`, `_next/image` and the favicon,
       // so every dotted path -- `/background.jpg`, referenced by the global
-      // stylesheet, on every page load -- lands here. It was the one branch
-      // the table did not enumerate, and a header set in it passed the whole
-      // gate.
+      // stylesheet, on every page load -- lands here.
       what: "a hinted visitor loading a static asset",
       path: "/background.jpg",
       hint: true,
@@ -151,9 +189,21 @@ describe("the edge and the session hint", () => {
       headers: [["x-middleware-next", "1"]],
     },
     {
-      what: "a hinted visitor on an internal Next.js path",
-      path: "/_next/data/build/x.json",
-      hint: true,
+      // Without a hint, and this is the case that makes the branch
+      // load-bearing: delete `isStaticOrInternal` and this asset answers a
+      // 307 to /sign-in, on every signed-out page load. Three hinted rows
+      // could not see that, because a hinted request passes through either
+      // way.
+      what: "a visitor with no hint loading a static asset",
+      path: "/background.jpg",
+      hint: false,
+      status: 200,
+      headers: [["x-middleware-next", "1"]],
+    },
+    {
+      what: "a visitor with no hint on an internal Next.js path",
+      path: "/_next/static/chunk.js",
+      hint: false,
       status: 200,
       headers: [["x-middleware-next", "1"]],
     },
@@ -211,6 +261,37 @@ describe("the edge and the session hint", () => {
 
     expect([...response.headers.entries()]).toEqual([["x-middleware-next", "1"]]);
     expect(response.status).toBe(200);
+  });
+
+  const routes = discoverRoutes();
+
+  it("found the app's routes to assert about", () => {
+    // If this ever reads zero, every generated case below silently asserts
+    // nothing -- the failure mode of a table that builds itself.
+    expect(routes.length).toBeGreaterThan(5);
+    expect(routes).toContain("/");
+    expect(routes).toContain("/settings");
+  });
+
+  it.each(routes)("passes a hinted visitor on %s through untouched", async (route) => {
+    const response = await proxy(hintedRequest(route));
+
+    if (route === "/sign-in") {
+      expect([...response.headers.entries()]).toEqual([
+        ["location", "http://localhost:3000/"],
+      ]);
+      return;
+    }
+    expect([...response.headers.entries()]).toEqual([["x-middleware-next", "1"]]);
+  });
+
+  it.each(routes)("routes a visitor with no hint on %s without retracting anything", async (route) => {
+    const response = await proxy(plainRequest(route));
+
+    const expected: [string, string][] = PUBLIC_ROUTES.has(route)
+      ? [["x-middleware-next", "1"]]
+      : [["location", "http://localhost:3000/sign-in"]];
+    expect([...response.headers.entries()]).toEqual(expected);
   });
 
   it("never asks the API whether a session is still good", async () => {

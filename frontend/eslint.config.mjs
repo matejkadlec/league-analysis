@@ -311,6 +311,21 @@ const eslintConfig = [
             "proxy.ts may import only next/server and the session-hint constants. A helper imported here can make the request this file must never make: the edge cannot tell a refusal from an outage.",
         },
         {
+          // `ImportDeclaration` is the static form only. An audit reopened the
+          // helper escape verbatim with `await import("@/lib/auth/edge-session")`
+          // -- a literal specifier naming any other module was matched by
+          // nothing. Every dynamic import here is refused, and so is
+          // `export … from`, which loads a module just as effectively.
+          selector: "ImportExpression",
+          message:
+            "proxy.ts may import only next/server and the session-hint constants, statically. A module loaded here can make the request this file must never make.",
+        },
+        {
+          selector: "ExportNamedDeclaration[source], ExportAllDeclaration",
+          message:
+            "Re-exporting from proxy.ts loads a module the import allowlist never sees. The edge may import only next/server and the session-hint constants.",
+        },
+        {
           // `no-restricted-globals` sees a bare `fetch` and not a member call.
           selector: "MemberExpression[property.name='fetch']",
           message:

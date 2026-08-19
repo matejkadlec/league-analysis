@@ -114,6 +114,10 @@ describe("the axios interceptor", () => {
     const failure = await api.get("/players").catch((error: unknown) => error);
 
     expect(normalizeApiError(failure).kind).toBe("rate-limit");
+    // The code axios itself pairs with a 4xx. Reporting ERR_BAD_RESPONSE for
+    // every unavailable status tells a consumer reading `.code` that a rate
+    // limit came back as a server fault.
+    expect((failure as { code?: string }).code).toBe("ERR_BAD_REQUEST");
     expect(hasAuthStateCookie()).toBe(true);
   });
 
@@ -167,8 +171,16 @@ describe("the axios interceptor", () => {
     // refresh has refused; relabelling that would leave a dead session looking
     // transient and retryable forever.
     setHint();
+    // The refusal this API actually issues, code and all: a bare 401 with no
+    // body is what a challenge in front of the API sends, and the client no
+    // longer takes that for a refusal.
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response("{}", { status: 401 }),
+      new Response(
+        JSON.stringify({
+          detail: { code: "INVALID_REFRESH_TOKEN", message: "expired" },
+        }),
+        { status: 401, headers: { "content-type": "application/json" } },
+      ),
     );
     api.defaults.adapter = async (config) => {
       throw Object.assign(new Error("unauthorized"), {

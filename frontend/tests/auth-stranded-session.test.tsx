@@ -38,6 +38,17 @@ vi.mock("@/features/auth", () => ({
   useAuth: () => auth,
 }));
 
+// The refusals `/auth/refresh` actually issues, body and all. A bodyless
+// `new Response("{}", { status: 401 })` is not one of them, and using it here
+// hid the fact that the client would take an edge-minted 403 -- a Cloudflare
+// challenge, say -- for a refusal from this API.
+function refusal(status: number, code: string): Response {
+  return new Response(JSON.stringify({ detail: { code, message: code } }), {
+    status,
+    headers: { "content-type": "application/json" },
+  });
+}
+
 function setHint() {
   document.cookie = `${AUTH_STATE_COOKIE_NAME}=${AUTH_STATE_COOKIE_VALUE}; path=/`;
 }
@@ -376,6 +387,46 @@ describe("giving up on a session", () => {
     expect(hasAuthStateCookie()).toBe(false);
   });
 
+  it("does not take an edge challenge for a refusal", async () => {
+    // Cloudflare fronts these routes. A WAF rule, a bot-fight challenge or
+    // "I'm Under Attack" mode answers a background request with 403 and an
+    // HTML body, and the origin never sees it. Taking that for a refusal
+    // retracts the hint and strands a 30-day token that nothing has revoked,
+    // for as long as the challenge lasts -- and `logout()` already refuses to
+    // trust an edge-minted status on its own route, so this was the one call
+    // that still did.
+    setHint();
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("<html><title>Access denied</title></html>", {
+        status: 403,
+        headers: { "content-type": "text/html" },
+      }),
+    );
+
+    const result = await refreshAccessToken();
+
+    expect(result).toEqual({ outcome: "unreachable" });
+    expect(hasAuthStateCookie()).toBe(true);
+  });
+
+  it("does not treat a 403 about something else as the end of the session", async () => {
+    // A 403 from this API means "not authorized for this", which is not "your
+    // session is over". An audit added an `email_verified` gate to the one
+    // dependency every protected route shares -- four lines finishing a
+    // half-built feature -- and it signed out every visitor while their
+    // refresh token stayed live. Signing in again worked and stranded one
+    // more token each time.
+    setHint();
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      refusal(403, "EMAIL_NOT_VERIFIED"),
+    );
+
+    const result = await refreshAccessToken();
+
+    expect(result).toEqual({ outcome: "unreachable" });
+    expect(hasAuthStateCookie()).toBe(true);
+  });
+
   it("keeps the deadline short enough to be a deadline", async () => {
     // Every other deadline assertion is relative to this constant, so nothing
     // bounded it above: raising it to ten minutes left all 251 tests green
@@ -459,7 +510,7 @@ describe("giving up on a session", () => {
     // nothing. Deleting it used to pass the entire suite.
     setHint();
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response("{}", { status: 401 }),
+      refusal(401, "INVALID_REFRESH_TOKEN"),
     );
 
     const result = await refreshAccessToken();
@@ -477,7 +528,7 @@ describe("giving up on a session", () => {
     // the backend has already destroyed.
     setHint();
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response("{}", { status: 403 }),
+      refusal(403, "ACCOUNT_INACTIVE"),
     );
 
     const result = await refreshAccessToken();
@@ -530,7 +581,7 @@ describe("giving up on a session", () => {
     setHint();
     const answers: unknown[] = [];
     for (const respond of [
-      () => Promise.resolve(new Response("{}", { status: 401 })),
+      () => Promise.resolve(refusal(401, "INVALID_REFRESH_TOKEN")),
       () => Promise.resolve(new Response("{}", { status: 502 })),
       () => Promise.resolve(new Response("{}", { status: 429 })),
       () => Promise.reject(new Error("offline")),
@@ -555,7 +606,7 @@ describe("giving up on a session", () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
       removeAuthTokens(); // A signs out mid-flight.
       setHint();
-      return new Response("{}", { status: 401 });
+      return refusal(401, "INVALID_REFRESH_TOKEN");
     });
 
     const result = await refreshAccessToken();
