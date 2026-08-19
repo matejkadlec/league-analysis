@@ -1,5 +1,19 @@
 # Improvements
 
+- 2026-08-19 frontend/features/matches/components/match-row.tsx: the row says
+  whether the game was won, lost or remade **by background colour and nothing
+  else** — emerald, rose, or grey, with no text, icon or label anywhere in the
+  row. That is a WCAG 1.4.1 (Use of Colour) failure: a red/green colourblind
+  player cannot tell a victory row from a defeat row in a list that is
+  entirely victory and defeat rows, and emerald-700/30 against rose-600/30 at
+  30% opacity is a small difference even with normal vision. This was found by
+  deleting `getResultInfo`'s `text` field, which computed "VICTORY", "DEFEAT"
+  and "REMAKE" on every render and displayed none of them — the labels the row
+  needs already existed and were being thrown away. The fix is to render one
+  of them (the `w-16` duration column has room beside it), not to restore the
+  dead object property. Tests currently assert the tint because it is the only
+  signal there is; they should assert the text once there is text.
+
 - 2026-08-19 frontend/features/matches/components/match-row.tsx: `getDaysAgo`
   and the date printed directly above it can contradict each other. The date
   comes from `formatDate` (calendar day, local zone); the label comes from
