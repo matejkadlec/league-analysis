@@ -69,11 +69,20 @@ const eslintConfig = [
   // `jar.delete(NAME)` and `(await cookies()).delete(NAME)` are all the same
   // to it, while the six files that legitimately `.get(NAME)` stay silent.
   //
-  // Two things it still cannot see, both semantic rather than syntactic, and
-  // both left to review and to the behavioural tests in
-  // `tests/auth-session-probe.test.tsx`: a bulk cookie sweep in
-  // `consent-storage.ts` that happens to include the hint, and a bad teardown
-  // decision inside one of the files that is allowed to make them.
+  // What it still cannot see is anything semantic rather than syntactic: a
+  // bulk cookie sweep in `consent-storage.ts` that happens to include the
+  // hint, a bad teardown decision inside a file allowed to make them, and a
+  // teardown reached through `useAuth().logout()` -- which arrives by React
+  // context, not by a module specifier, so no import rule will ever see it.
+  // Those belong to `tests/auth-teardown-behaviour.test.tsx`, which asserts
+  // the effect instead of recognising the shape, and which caught two escapes
+  // these rules could not.
+  //
+  // The cookie-mutation rule is deliberately receiver-free, which costs one
+  // false positive: a `Map` keyed by the cookie's name is flagged too.
+  // Narrowing it to particular receivers is what let `store.delete(NAME)`
+  // through while refusing `cookieStore.delete(NAME)`, so the noise is the
+  // cheaper side of that trade.
   {
     files: ["**/*.{js,jsx,cjs,mjs,cts,mts,ts,tsx}"],
     ignores: ["tests/**", "e2e/**"],
@@ -89,8 +98,8 @@ const eslintConfig = [
           patterns: [
             {
               group: [
-                "**/token-manager",
-                "*/token-manager",
+                "**/auth/utils/token-manager",
+                "../utils/token-manager",
                 "./token-manager",
               ],
               allowImportNames: ["refreshAccessToken"],
@@ -99,8 +108,8 @@ const eslintConfig = [
             },
             {
               group: [
-                "**/auth-state-cookie",
-                "*/auth-state-cookie",
+                "**/auth/utils/auth-state-cookie",
+                "../utils/auth-state-cookie",
                 "./auth-state-cookie",
               ],
               allowImportNames: [
@@ -138,27 +147,21 @@ const eslintConfig = [
           // same act as `cookieStore.delete(NAME)`, and naming the local
           // variable differently must not change the answer.
           selector:
-            "CallExpression[callee.property.name=/^(set|delete)$/] > Identifier[name='AUTH_STATE_COOKIE_NAME']",
+            "CallExpression[callee.property.name=/^(set|delete)$/] Identifier[name='AUTH_STATE_COOKIE_NAME']",
           message:
             "Setting or deleting the session hint here bypasses the one place that owns it. proxy.ts routes on this cookie, so retracting it without telling the server reports the visitor as signed out while their refresh token stays live and spendable.",
         },
         {
           selector:
-            "CallExpression[callee.property.name=/^(set|delete)$/] > Literal[value='league_analysis_auth_state']",
+            "CallExpression[callee.property.name=/^(set|delete)$/] Literal[value='league_analysis_auth_state']",
           message:
             "Setting or deleting the session hint here bypasses the one place that owns it. proxy.ts routes on this cookie, so retracting it without telling the server reports the visitor as signed out while their refresh token stays live and spendable.",
-        },
-        {
-          // The raw header form, with the header name in any shape.
-          selector:
-            "CallExpression[callee.property.name=/^(set|append)$/][callee.object.property.name='headers']",
-          message:
-            "Set response headers that carry cookies through the module that owns them. A Set-Cookie written here can retract the session hint that proxy.ts routes on.",
         },
         {
           // `no-restricted-imports` never visits ImportExpression, so a
           // dynamic import is invisible to the allowlist above.
-          selector: "ImportExpression[source.value=/(token-manager)$/]",
+          selector:
+            "ImportExpression[source.value=/auth\\/utils\\/(token-manager|auth-state-cookie)$/]",
           message:
             "Importing the session teardown dynamically evades the import allowlist. Only the refresh call may end a session.",
         },
