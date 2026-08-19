@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import axios from "axios";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   cleanup,
@@ -252,6 +253,53 @@ describe("Match History controls", () => {
       screen.getByRole("combobox", { name: "Match history page size" })
         .textContent,
     ).toContain("100");
+
+    queryClient.clear();
+  });
+
+  it("reports a failed load inline, and retries when asked", async () => {
+    // This query sets `meta: { silenceErrorToast: true }`, so the card below
+    // is the *only* thing that tells the viewer anything went wrong -- and
+    // replacing its condition with `if (false)` kept all 362 tests green,
+    // leaving a failed load looking like a player with no matches.
+    //
+    // The rejection is shaped as a network failure on purpose: the component's
+    // own `retry` predicate stops retrying only for that kind, so this also
+    // pins the predicate that decides how long the viewer waits before being
+    // told.
+    const networkFailure = new axios.AxiosError("Network Error");
+    validatedGet.mockReset();
+    validatedGet.mockRejectedValue(networkFailure);
+
+    const queryClient = renderHistory();
+
+    const retry = await screen.findByRole("button", { name: "Retry" });
+    expect(
+      screen.queryByText("Showing 1 to 25 of 126 matches"),
+    ).toBeNull();
+
+    validatedGet.mockClear();
+    fireEvent.click(retry);
+
+    await waitFor(() => expect(validatedGet).toHaveBeenCalled());
+
+    queryClient.clear();
+  });
+
+  it("caps what the search box will hold", async () => {
+    // 64 characters. Without the cap every keystroke past it still re-renders
+    // and, after the debounce, becomes a query parameter -- an unbounded
+    // string from the viewer straight into a request URL.
+    const queryClient = renderHistory();
+
+    await screen.findByText("Showing 1 to 25 of 126 matches");
+    const searchInput = screen.getByPlaceholderText(
+      "Search for champion or player",
+    ) as HTMLInputElement;
+
+    fireEvent.change(searchInput, { target: { value: "x".repeat(200) } });
+
+    expect(searchInput.value).toHaveLength(64);
 
     queryClient.clear();
   });
