@@ -128,8 +128,17 @@ export function clearOptionalBrowserStorage(): void {
     return;
   }
 
-  for (const key of OPTIONAL_STORAGE_KEYS) {
-    window.localStorage.removeItem(key);
+  // Blocked site data makes every `localStorage` access throw a
+  // SecurityError, and this runs in a mount effect above every error
+  // boundary -- so an unguarded throw here unmounts the whole tree and hands
+  // the visitor a blank page. Failing to clear optional storage is not worth
+  // a dead site, and if storage is blocked there is nothing stored to clear.
+  try {
+    for (const key of OPTIONAL_STORAGE_KEYS) {
+      window.localStorage.removeItem(key);
+    }
+  } catch {
+    // Storage unavailable; nothing to clear.
   }
 }
 

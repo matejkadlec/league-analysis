@@ -5,14 +5,7 @@ import {
   AUTH_STATE_COOKIE_NAME,
   AUTH_STATE_COOKIE_VALUE,
 } from "@/features/auth/utils/auth-state-cookie";
-
-const PUBLIC_ROUTES = [
-  "/sign-in",
-  "/join-us",
-  "/privacy-policy",
-  "/cookie-policy",
-  "/license",
-];
+import { isPublicRoute } from "@/features/auth/utils/public-routes";
 
 function isStaticOrInternal(pathname: string): boolean {
   return (
@@ -20,12 +13,6 @@ function isStaticOrInternal(pathname: string): boolean {
     pathname.startsWith("/api") ||
     pathname.includes(".") ||
     pathname === "/favicon.ico"
-  );
-}
-
-function isPublicRoute(pathname: string): boolean {
-  return PUBLIC_ROUTES.some(
-    (route) => pathname === route || pathname.startsWith(`${route}/`),
   );
 }
 

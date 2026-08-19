@@ -10,6 +10,8 @@ from sqlalchemy import select
 from app.core.rate_limiter import rate_limit
 
 from .cookies import (
+    ACCESS_TOKEN_COOKIE_NAME,
+    AUTH_STATE_COOKIE_NAME,
     REFRESH_TOKEN_COOKIE_NAME,
     clear_auth_cookies,
     set_auth_cookies,
@@ -17,7 +19,6 @@ from .cookies import (
 from .dependencies import (
     get_current_active_user,
     get_current_admin_user,
-    get_request_access_token,
 )
 from .models import User
 from .schemas import (
@@ -251,22 +252,101 @@ async def refresh_access_token(
 
 
 @router.post("/logout")
+# Deliberately not rate limited. `get_remote_address` keys on
+# `request.client.host`, uvicorn runs with --no-proxy-headers, and browser
+# traffic arrives through the Next.js rewrite, so every user shares one
+# bucket. A limit here is therefore globally exhaustible, and its failure mode
+# is the wrong way round: refusing a logout leaves a usable 30-day refresh
+# token in the browser of someone who has been told they are signed out, while
+# the cost of an extra logout is one hash lookup.
+# No body parameter, deliberately. Declaring one makes FastAPI read and
+# validate the body, which turns a malformed or non-JSON body -- a
+# `navigator.sendBeacon` logout sends `text/plain` -- into a 422 on a route
+# whose entire contract is that it cannot fail, and a 422 here means nothing
+# was revoked. `/refresh` accepts a body token and can afford to; this cannot,
+# and no client in this repo sends one. If a non-cookie client ever appears,
+# read the body by hand and ignore whatever does not parse.
 async def logout(
+    request: Request,
     response: Response,
-    token: str = Depends(get_request_access_token),
-    current_user: User = Depends(get_current_active_user),
     auth_service: AuthService = Depends(get_auth_service),
 ) -> dict[str, str]:
-    """Revoke current access token and all active refresh tokens for the user."""
-    await auth_service.revoke_access_token(token, reason="logout")
-    await auth_service.revoke_all_refresh_tokens_for_user(current_user.id)
-    await auth_service.cleanup_expired_token_state()
-    logger.info(
-        "logout_succeeded",
-        user_id=current_user.id,
-        email=current_user.email,
+    """Revoke whatever session the request still carries, and always succeed.
+
+    This deliberately does not depend on a valid access token. It used to, and
+    that made it fail exactly when it mattered: the access token expires after
+    30 minutes while the refresh token lives 30 days, so logging out after any
+    idle period returned 401 and revoked nothing, leaving a usable 30-day
+    credential in the browser of someone who had just been told they were
+    signed out. The client cannot make up the difference — only the server can
+    revoke, and clearing cookies merely hides the credential.
+
+    Identity therefore comes from the refresh cookie, and an unauthenticated
+    call is answered rather than rejected: logout is idempotent, and a caller
+    can only ever revoke the session their own request already carries.
+
+    "Always succeed" means never refusing a caller for lacking credentials. A
+    database fault still propagates as a 500 with the cookies left in place,
+    deliberately: answering 200 there would report a revocation that did not
+    happen, which is the failure this route exists to stop.
+    """
+    # The Authorization header first, matching `get_request_access_token`, so
+    # a non-browser client holding only the pair `/login` returned still gets
+    # that token blacklisted. It is spent on itself and nothing more.
+    authorization = request.headers.get("authorization", "")
+    bearer_token = (
+        authorization[7:].strip() if authorization[:7].lower() == "bearer " else None
     )
-    clear_auth_cookies(response)
+    access_token = bearer_token or request.cookies.get(ACCESS_TOKEN_COOKIE_NAME)
+    refresh_token = request.cookies.get(REFRESH_TOKEN_COOKIE_NAME)
+
+    # Only the refresh token names a user, because naming one signs them out
+    # everywhere and this route is unauthenticated. A refresh token is checked
+    # against the table and is single-purpose; an access token rides on every
+    # request and lands in logs and crash dumps, so honouring one here is a
+    # replayable "sign this user out of everything" button for whoever finds
+    # it. There is no bound that fixes that: short enough to be safe is too
+    # short to serve the idle client such a fallback would exist for, and an
+    # expired token is never blacklisted, so a replay collides with nothing.
+    user_id: int | None = None
+    if refresh_token:
+        user_id = await auth_service.resolve_user_id_for_refresh_token(refresh_token)
+
+    # Refresh tokens first. Each revocation commits on its own, so a failure
+    # between the two leaves whatever the earlier call already did. Losing the
+    # 30-day credential and keeping the 30-minute one is survivable — it dies
+    # by itself. The other order leaves the live refresh cookie in a browser
+    # that has already been told it is signed out, which is the exact state
+    # this whole change exists to remove.
+    if user_id is not None:
+        await auth_service.revoke_all_refresh_tokens_for_user(user_id)
+    if access_token:
+        await auth_service.revoke_access_token(access_token, reason="logout")
+
+    if user_id is not None:
+        # Only for a caller that proved it holds a credential. This issues
+        # table-wide DELETEs and a COMMIT, and the endpoint is unauthenticated,
+        # so running it unconditionally would let anonymous requests drive
+        # write transactions at request rate.
+        await auth_service.cleanup_expired_token_state()
+    if user_id is not None:
+        logger.info("logout_succeeded", user_id=user_id)
+    else:
+        # Not `info`: this route is unauthenticated and unrate-limited, so an
+        # anonymous POST loop would otherwise be a free way to fill the logs.
+        logger.debug("logout_succeeded_without_a_session")
+    # Only for a request that actually carried something. This route is
+    # unauthenticated by design, and a deletion Set-Cookie is applied by the
+    # browser whenever the response arrives in a first-party context -- which a
+    # top-level form POST from any page on the internet is. SameSite=Lax keeps
+    # the cookies off that request, so it revokes nothing; answering it with
+    # three deletions anyway would sign the visitor out with their refresh row
+    # live and unrevoked for the rest of its 30 days, which is exactly the
+    # stranded session this branch exists to remove -- reached, in that case,
+    # from someone else's website. A caller holding no cookie has nothing to
+    # clear, so nothing is lost by asking.
+    if any((access_token, refresh_token, request.cookies.get(AUTH_STATE_COOKIE_NAME))):
+        clear_auth_cookies(response)
     return {"message": "Successfully logged out"}
 
 

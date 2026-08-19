@@ -2,6 +2,16 @@ import type { AuthLoginError } from "../types";
 
 export const LOGIN_REQUEST_TIMEOUT_MS = 30_000;
 
+/**
+ * Deadline for the session probe and the refresh that follows it.
+ *
+ * Shorter than the login deadline on purpose: a sign-in is a deliberate act
+ * whose result is worth waiting for, while this runs before the page can draw
+ * anything. A stalled connection here holds every gated surface at `null`, so
+ * failing quickly and saying so beats waiting quietly.
+ */
+export const AUTH_PROBE_TIMEOUT_MS = 10_000;
+
 type LoginErrorDetail = {
   code?: unknown;
   locked_until?: unknown;

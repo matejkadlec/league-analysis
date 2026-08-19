@@ -28,6 +28,11 @@ const navItems: NavItem[] = [
 export function SidebarNav() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [managePlayersOpen, setManagePlayersOpen] = useState(false);
+  // Sign out awaits the server before clearing anything, because only the
+  // server can revoke. Against a backend that hangs, that is the full probe
+  // deadline with nothing on screen moving -- the button reads as dead and
+  // every further click stacks another request.
+  const [signingOut, setSigningOut] = useState(false);
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const urlPuuid = searchParams.get("puuid");
@@ -185,11 +190,17 @@ export function SidebarNav() {
 
                 <button
                   type="button"
-                  onClick={logout}
-                  className="flex items-center gap-2 px-4 py-2 pb-4 text-white cursor-pointer transition-colors duration-300 hover:text-[#cfa93a] w-full text-left"
+                  onClick={() => {
+                    setSigningOut(true);
+                    void logout({
+                      evenIfTheServerCannotBeReached: true,
+                    }).finally(() => setSigningOut(false));
+                  }}
+                  disabled={signingOut}
+                  className="flex items-center gap-2 px-4 py-2 pb-4 text-white cursor-pointer transition-colors duration-300 hover:text-[#cfa93a] w-full text-left disabled:cursor-default disabled:opacity-60"
                 >
                   <LogOut className="h-4 w-4 text-[#cfa93a] scale-x-[-1]" />
-                  Sign Out
+                  {signingOut ? "Signing out…" : "Sign Out"}
                 </button>
               </div>
             </div>

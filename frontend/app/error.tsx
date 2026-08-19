@@ -1,19 +1,23 @@
 "use client";
 
-import { useAuth } from "@/features/auth";
-
+/**
+ * Rendered for signed-out visitors too.
+ *
+ * This covers the page segment, including /sign-in and every other public
+ * route. Gating it on authentication made a render error there an absorbing
+ * state: the page went blank, the reset button was inside the thing that was
+ * not rendering, and the visitor could not sign in — so they could never
+ * become authenticated and the boundary could never appear.
+ *
+ * It sits inside the layout, so it does not cover the layout itself. That is
+ * `global-error.tsx`.
+ */
 export default function Error({
   reset,
 }: {
   error: Error & { digest?: string };
   reset: () => void;
 }) {
-  const { isAuthenticated, isLoading } = useAuth();
-
-  if (isLoading || !isAuthenticated) {
-    return null;
-  }
-
   return (
     <div className="flex min-h-screen items-center justify-center">
       <div className="text-center">

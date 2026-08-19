@@ -1,15 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { useAuth } from "@/features/auth";
 
+/**
+ * Rendered for signed-out visitors too.
+ *
+ * This used to return null unless authenticated, which made every unmatched
+ * path under a public prefix a blank page — `/sign-in/anything` is reachable
+ * signed out, with no setup, and showed nothing at all. A 404 notice reveals
+ * nothing worth gating.
+ */
 export default function NotFound() {
-  const { isAuthenticated, isLoading } = useAuth();
-
-  if (isLoading || !isAuthenticated) {
-    return null;
-  }
-
   return (
     <div className="flex min-h-screen items-center justify-center">
       <div className="text-center">

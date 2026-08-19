@@ -67,6 +67,5 @@ def downgrade() -> None:
         "ADD COLUMN last_used_at timestamp with time zone"
     )
     op.execute(
-        "ALTER TABLE core.riot_api_keys "
-        "ADD COLUMN times_used bigint DEFAULT 0 NOT NULL"
+        "ALTER TABLE core.riot_api_keys ADD COLUMN times_used bigint DEFAULT 0 NOT NULL"
     )

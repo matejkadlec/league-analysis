@@ -21,7 +21,8 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jwt import ExpiredSignatureError, InvalidTokenError
 from passlib.context import CryptContext
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_global_settings
@@ -709,7 +710,18 @@ class AuthService:
         remote_ip: str | None = None,
         user_agent: str | None = None,
     ) -> tuple[User, str, datetime, str, datetime] | None:
-        """Rotate refresh token and return new access/refresh pair."""
+        """Rotate refresh token and return new access/refresh pair.
+
+        `None` means the server refused: no such token, reuse, expiry, or an
+        unknown user. It must never mean "something went wrong". The router
+        answers `None` with 401 INVALID_REFRESH_TOKEN, and the browser is
+        required to end the session on that -- so an infrastructure failure
+        swallowed into a `None` here is laundered into a refusal that looks
+        byte-identical to a real one, and every visitor is signed out for the
+        length of a database blip while their refresh row stays live and
+        unrevoked. Let those errors raise: a 500 says nothing about the
+        session, which is the truth, and the client keeps it.
+        """
         token_hash = self._hash_refresh_token(raw_refresh_token)
         result = await self.db.execute(
             select(RefreshToken).where(RefreshToken.token_hash == token_hash)
@@ -800,6 +812,49 @@ class AuthService:
 
         await self.db.commit()
 
+    async def resolve_user_id_for_refresh_token(
+        self,
+        raw_refresh_token: str,
+    ) -> int | None:
+        """Identify the owner of a refresh token without rotating it.
+
+        Logout needs this because it must work when the access token has
+        already expired. That is the common case rather than the rare one: the
+        access token lives 30 minutes and the refresh token 30 days, so any
+        logout after a short idle period has nothing but the refresh cookie
+        left to say whose session to end.
+        """
+        result = await self.db.execute(
+            select(RefreshToken).where(
+                RefreshToken.token_hash == self._hash_refresh_token(raw_refresh_token),
+                # A revoked token must not authorise revoking everything else.
+                # Expiry is still allowed through: an old-but-unrevoked token
+                # is the ordinary way to log out of a session left idle, which
+                # is the case this method exists for.
+                #
+                # One revoked token is allowed through: one this server rotated
+                # out itself. The browser composes a request from the jar as it
+                # stands, so a Sign Out clicked while a refresh is in flight --
+                # or after a refresh whose response never arrived, or in a
+                # second tab -- carries the token the replacement supersedes.
+                # Refusing to name its owner there answers "Successfully logged
+                # out" having revoked nothing, and the replacement stays live
+                # for its full 30 days with no browser left holding it to ever
+                # trip reuse detection. That is the state this route exists to
+                # remove. It grants nothing new either: replaying the same
+                # token at /refresh already revokes the whole family through
+                # reuse detection, which is strictly more than this does. A
+                # token revoked by a logout or by that reuse path has no
+                # replacement recorded, so it still names nobody.
+                or_(
+                    RefreshToken.revoked_at.is_(None),
+                    RefreshToken.replaced_by_token_id.is_not(None),
+                ),
+            )
+        )
+        token_record = result.scalar_one_or_none()
+        return None if token_record is None else token_record.user_id
+
     async def revoke_access_token(
         self,
         access_token: str,
@@ -848,7 +903,17 @@ class AuthService:
                 reason=reason,
             )
         )
-        await self.db.commit()
+        try:
+            await self.db.commit()
+        except IntegrityError:
+            # `token_id` is unique and the check above is not atomic, so two
+            # logouts carrying the same token -- two tabs, or the context's
+            # logout racing the one token-manager sends after a rotation it
+            # could not keep -- can both reach this insert. The loser would
+            # answer 500 on a route whose whole point is that it always
+            # succeeds, and it lost only because the winner already did the
+            # work it was asking for.
+            await self.db.rollback()
 
     async def is_access_token_revoked(self, token_id: str) -> bool:
         """Return True when token ID exists in blacklist."""

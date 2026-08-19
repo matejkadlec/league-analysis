@@ -15,10 +15,7 @@ export {
 } from "./api-error";
 import type { ApiError } from "./api-error";
 import { notifyRiotCredentialHealthUpdated } from "./riot-credential-health-events";
-import {
-  refreshAccessToken,
-  removeAuthTokens,
-} from "@/features/auth/utils/token-manager";
+import { refreshAccessToken } from "@/features/auth/utils/token-manager";
 
 const API_BASE_URL =
   typeof window === "undefined"
@@ -109,10 +106,48 @@ api.interceptors.response.use(
     }
 
     originalRequest._retry = true;
-    const refreshed = await refreshAccessToken();
-    if (!refreshed) {
-      removeAuthTokens();
-      return Promise.reject(error);
+    const refresh = await refreshAccessToken();
+    if (refresh.outcome !== "refreshed") {
+      // Teardown belongs to the refresh call, which is the only thing that
+      // knows whether the server rejected the session or was simply
+      // unreachable. Clearing the hint from here left React still believing it
+      // was signed in, and that disagreement rendered as a blank page.
+      //
+      // What it reports is forwarded verbatim, because the original 401 is
+      // true of the expired access token and of nothing else. Passing it on
+      // regardless labelled a redeploy `kind: "authentication"`, and every
+      // reader believed it: `queryErrorToast` swallowed the toast because "the
+      // auth gate already redirects on these", while the gate did not redirect
+      // -- the hint was still standing. No message, no navigation, nothing.
+      if (refresh.outcome === "refused") {
+        return Promise.reject(error);
+      }
+      return Promise.reject(
+        refresh.outcome === "unavailable"
+          ? new AxiosError(
+              "The session could not be renewed.",
+              // What axios itself would pair with each status, so a consumer
+              // reading `.code` is not told a 429 came back as a 5xx.
+              refresh.status >= 500
+                ? AxiosError.ERR_BAD_RESPONSE
+                : AxiosError.ERR_BAD_REQUEST,
+              originalRequest,
+              error.request,
+              {
+                status: refresh.status,
+                statusText: "",
+                data: {},
+                headers: {},
+                config: originalRequest,
+              },
+            )
+          : new AxiosError(
+              "The session could not be renewed because the server did not answer.",
+              AxiosError.ERR_NETWORK,
+              originalRequest,
+              error.request,
+            ),
+      );
     }
 
     return api(originalRequest);

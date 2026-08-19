@@ -17,13 +17,32 @@ export function ProtectedRoute({
     return null;
   }
 
+  // Being refused is a state the visitor can be in for good, so it has to say
+  // so. Rendering nothing left a signed-in non-admin who opened /jobs with a
+  // sidebar and an empty pane, no redirect and no explanation — and unlike a
+  // missing session, nothing they can do will ever change it.
   if (requireAdmin && user && !user.is_admin) {
-    return null;
+    return <AccessDenied reason="This page is limited to administrators." />;
   }
 
   if (user && !user.is_active) {
-    return null;
+    return (
+      <AccessDenied reason="This account is inactive. Contact an administrator to restore access." />
+    );
   }
 
   return <>{children}</>;
+}
+
+function AccessDenied({ reason }: { reason: string }) {
+  return (
+    <div className="flex min-h-[60vh] items-center justify-center p-6">
+      <div className="max-w-md text-center">
+        <h1 className="text-lg font-semibold text-foreground">
+          You don&apos;t have access to this page
+        </h1>
+        <p className="mt-2 text-sm text-muted-foreground">{reason}</p>
+      </div>
+    </div>
+  );
 }

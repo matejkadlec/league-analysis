@@ -1,16 +1,16 @@
 "use client";
 
-import { useAuth } from "@/features/auth";
 import { Skeleton } from "@/components/ui/skeleton";
 
+/**
+ * Shown while a route loads, signed in or not.
+ *
+ * It used to render nothing unless authenticated, on the reasoning that the
+ * gate would redirect anyway — but the redirect needs the session probe to
+ * finish first, so the wait it was meant to cover was exactly the wait it
+ * left blank. A skeleton reveals nothing.
+ */
 export default function Loading() {
-  const { isAuthenticated, isLoading } = useAuth();
-
-  // Don't show loading skeletons if not authenticated (AuthGate will redirect)
-  if (isLoading || !isAuthenticated) {
-    return null;
-  }
-
   return (
     <div className="min-h-screen">
       <div className="container mx-auto px-4 py-8">
