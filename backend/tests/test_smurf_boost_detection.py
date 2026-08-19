@@ -13,6 +13,7 @@ direct handle on `C`.
 
 from __future__ import annotations
 
+import math
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import Any, cast
@@ -67,6 +68,8 @@ from app.features.smurf_boost_detection.statistics import (
     bimodality_coefficient,
     clamp,
     hedges_g,
+    population_variance,
+    sample_variance,
     wilson_lower_bound,
 )
 
@@ -232,6 +235,56 @@ def test_undefined_statistics_report_none_instead_of_raising() -> None:
     assert bimodality_coefficient([1.0] * 20) is None
     assert bimodality_coefficient([1.0, 2.0]) is None
     assert hedges_g([1.0] * 10, [1.0] * 10) is None
+
+
+def test_the_two_variance_denominators_stay_apart() -> None:
+    """`n` and `n - 1` are both used here, deliberately and in different places.
+
+    The module spells every estimator out because library defaults disagree on
+    exactly this, and both denominators appear within twenty lines of each
+    other. Swapping either is a small edit that changes no shape and no type:
+    the composite keeps standardizing, `hedges_g` keeps returning a float, and
+    every threshold in the model quietly means something else. On eight games
+    the two differ by 14 percent, which is the width of a band.
+    """
+    values = [2.0, 4.0, 4.0, 4.0, 5.0, 5.0, 7.0, 9.0]
+
+    assert population_variance(values) == pytest.approx(4.0)
+    assert sample_variance(values) == pytest.approx(32.0 / 7.0)
+
+
+def test_hedges_g_keeps_its_small_sample_correction() -> None:
+    """The correction is the whole difference between Hedges' g and Cohen's d.
+
+    Drop it and the function still returns a plausible effect size, larger
+    than the real one -- by 13 percent on the eight-game windows this model
+    actually sees, which is enough to carry a player across a calibrated
+    threshold and into a stronger accusation than the evidence supports.
+    """
+    recent = [10.0, 12.0, 14.0, 16.0]
+    baseline = [2.0, 4.0, 6.0, 8.0]
+
+    corrected = hedges_g(recent, baseline)
+    assert corrected is not None
+    assert corrected == pytest.approx(2.6942, abs=5e-4)
+
+    # The uncorrected ratio, which is what the mutation returns.
+    uncorrected = 8.0 / math.sqrt(40.0 / 6.0)
+    assert corrected < uncorrected
+
+
+def test_windows_too_small_to_have_spread_report_zero_or_none() -> None:
+    """One observation carries no dispersion, and the model must not invent it.
+
+    A player with a single recent game reaches these helpers the same way as
+    one with fifty. Dividing by `n - 1` would raise on the first and there is
+    no interval to compute on a player with no games at all -- each guard is a
+    real input this model receives, not a defensive flourish.
+    """
+    assert sample_variance([7.0]) == 0.0
+    assert sample_variance([]) == 0.0
+    assert wilson_lower_bound(0, 0) == 0.0
+    assert hedges_g([1.0], [2.0]) is None
 
 
 # ---------------------------------------------------------------------------
