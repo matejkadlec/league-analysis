@@ -21,7 +21,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jwt import ExpiredSignatureError, InvalidTokenError
 from passlib.context import CryptContext
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -831,7 +831,25 @@ class AuthService:
                 # Expiry is still allowed through: an old-but-unrevoked token
                 # is the ordinary way to log out of a session left idle, which
                 # is the case this method exists for.
-                RefreshToken.revoked_at.is_(None),
+                #
+                # One revoked token is allowed through: one this server rotated
+                # out itself. The browser composes a request from the jar as it
+                # stands, so a Sign Out clicked while a refresh is in flight --
+                # or after a refresh whose response never arrived, or in a
+                # second tab -- carries the token the replacement supersedes.
+                # Refusing to name its owner there answers "Successfully logged
+                # out" having revoked nothing, and the replacement stays live
+                # for its full 30 days with no browser left holding it to ever
+                # trip reuse detection. That is the state this route exists to
+                # remove. It grants nothing new either: replaying the same
+                # token at /refresh already revokes the whole family through
+                # reuse detection, which is strictly more than this does. A
+                # token revoked by a logout or by that reuse path has no
+                # replacement recorded, so it still names nobody.
+                or_(
+                    RefreshToken.revoked_at.is_(None),
+                    RefreshToken.replaced_by_token_id.is_not(None),
+                ),
             )
         )
         token_record = result.scalar_one_or_none()

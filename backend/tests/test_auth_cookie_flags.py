@@ -123,6 +123,49 @@ def test_the_hint_is_written_exactly_as_the_frontend_hardcodes_it() -> None:
     assert REFRESH_TOKEN_COOKIE_NAME == "league_analysis_refresh_token"
 
 
+def _assert_the_session_was_installed(response: Response) -> None:
+    """The three cookies, carrying the right tokens, for the right lengths.
+
+    Names alone are not enough, and the ways to get this wrong are all one
+    word: passing the *old* refresh token (the variable is right there in
+    scope) leaves the browser holding what the rotation just revoked, so the
+    next refresh is reuse and reuse detection revokes every device. Passing
+    `access_expires_at` for the refresh cookie gives it and the hint a
+    30-minute life against a 30-day row, so the visitor is reported signed out
+    on the next navigation with a live token nothing holds.
+    """
+    written = {
+        header.split("=", 1)[0]: header
+        for header in response.headers.getlist("set-cookie")
+    }
+    assert set(written) == {
+        ACCESS_TOKEN_COOKIE_NAME,
+        REFRESH_TOKEN_COOKIE_NAME,
+        AUTH_STATE_COOKIE_NAME,
+    }
+    assert written[ACCESS_TOKEN_COOKIE_NAME].startswith(
+        f"{ACCESS_TOKEN_COOKIE_NAME}=access;"
+    )
+    assert written[REFRESH_TOKEN_COOKIE_NAME].startswith(
+        f"{REFRESH_TOKEN_COOKIE_NAME}=refresh;"
+    )
+    assert written[AUTH_STATE_COOKIE_NAME].startswith(
+        f"{AUTH_STATE_COOKIE_NAME}={AUTH_STATE_COOKIE_VALUE};"
+    )
+
+    def max_age(name: str) -> int:
+        for part in written[name].split("; "):
+            if part.lower().startswith("max-age="):
+                return int(part.split("=", 1)[1])
+        raise AssertionError(f"{name} has no Max-Age")
+
+    # Relative, not absolute seconds: the hint has to outlive nothing and
+    # outlast the access token, and it has to match the refresh cookie exactly
+    # -- which is what pairing them to the same expiry is for.
+    assert max_age(AUTH_STATE_COOKIE_NAME) == max_age(REFRESH_TOKEN_COOKIE_NAME)
+    assert max_age(REFRESH_TOKEN_COOKIE_NAME) > max_age(ACCESS_TOKEN_COOKIE_NAME)
+
+
 def _route_request(cookie: bytes = b"") -> Request:
     return Request(
         {
@@ -177,14 +220,7 @@ async def test_a_successful_refresh_installs_the_new_cookies() -> None:
         auth_service=cast(AuthService, service),
     )
 
-    written = {
-        header.split("=", 1)[0] for header in response.headers.getlist("set-cookie")
-    }
-    assert written == {
-        ACCESS_TOKEN_COOKIE_NAME,
-        REFRESH_TOKEN_COOKIE_NAME,
-        AUTH_STATE_COOKIE_NAME,
-    }
+    _assert_the_session_was_installed(response)
 
 
 @pytest.mark.asyncio
@@ -222,11 +258,4 @@ async def test_a_successful_login_installs_the_cookies() -> None:
         auth_service=cast(AuthService, service),
     )
 
-    written = {
-        header.split("=", 1)[0] for header in response.headers.getlist("set-cookie")
-    }
-    assert written == {
-        ACCESS_TOKEN_COOKIE_NAME,
-        REFRESH_TOKEN_COOKIE_NAME,
-        AUTH_STATE_COOKIE_NAME,
-    }
+    _assert_the_session_was_installed(response)
