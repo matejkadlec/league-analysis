@@ -785,6 +785,24 @@ route shells already resolved by the route-shell row.
   on a failed poll — the exact regression the file's original iteration
   guarded — and `tests/job-executions.test.tsx` caught it before commit.
 
+- ~~`backend: app/features/matchmaking_analysis/schemas.py`~~ — done
+  2026-08-19, 4 tests (`tests/test_matchmaking_analysis_schemas.py`),
+  **4 mutations, all killed**. 80.4% → 100%. The missing fifth was exactly
+  the three `@computed_field` bodies — the values every status and history
+  response serialises and the frontend renders directly.
+
+  Killed: `progress` counting enumerated PUUIDs instead of finished ones
+  (the progress bar reads 100% the moment the work is listed, before a
+  single player is analysed), the `gap` subtraction order (the history card
+  prints `|gap|` and encodes the sign as colour alone, so this subtraction
+  is the only thing saying which team was stronger — the same finding as
+  the frontend's `historyFigures` row, now pinned on both sides of the
+  wire), the `le=1.0` bound on winrates (a 0-100 value slipping in renders
+  as 5500% on the results card), and `total_puuids` off by one. The
+  serialisation itself is asserted through `model_dump()` — a
+  `@computed_field` demoted to a plain property vanishes from every
+  response while every in-process test still passes.
+
 The rest, enumerated 2026-08-19 rather than left as "plus 9 more":
 ~~`app/jobs/page.tsx`~~ (30, done 2026-08-19 — nine mutations; it is the only
 consumer of `components/ui/tabs.tsx`, so both closed together),
@@ -935,8 +953,8 @@ The tail, named rather than counted — the remaining 21 of those 30, sorted by
 what is at stake rather than by size:
 
 *Validators (executable rules on untrusted input):*
-`app/features/matchmaking_analysis/schemas.py` (52, **80.4%** — the
-lowest-covered file on the whole list, and six validators),
+~~`app/features/matchmaking_analysis/schemas.py`~~ (52, 80.4% — done
+2026-08-19, row below),
 `app/features/auth/schemas.py` (74, 90.9%, six validators),
 `app/features/settings/schemas.py` (229, 97.6%, **fourteen** validators —
 biggest file in the covered half of the backend).
