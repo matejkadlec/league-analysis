@@ -43,11 +43,18 @@ function getTrendIndicator(
   };
 }
 
-// Get trend indicator for raw values (not percentages)
+// Get trend indicator for raw values (not percentages).
+//
+// `higherIsBetter` has no default on purpose. Every stat on this card except
+// deaths wants `true`, which makes a default the obviously convenient choice
+// and exactly the wrong one: the single call that needs `false` is the one a
+// silent default would get wrong, and getting it wrong tells a player who is
+// dying less that they are declining. Requiring the argument makes each call
+// site say which direction it means.
 function getTrendIndicatorRaw(
   recent: number,
   overall: number,
-  higherIsBetter: boolean = true,
+  higherIsBetter: boolean,
 ): { icon: React.ReactNode; color: string; label: string } {
   const threshold = overall * 0.05; // 5% of overall value
   const diff = recent - overall;
