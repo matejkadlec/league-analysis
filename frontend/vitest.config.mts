@@ -59,11 +59,16 @@ export default defineConfig({
       // and every test the loop added could have been deleted without the gate
       // saying anything -- which is precisely the failure the paragraph above
       // was written about, repeated by the branch that wrote it.
+      // Ratcheted again at the end of the same sweep: 73.62% statements,
+      // 66.42% branches, 68.21% functions, 73.80% lines over 493 tests, after
+      // the zero-covered class was closed. Ratchet on the way out of a batch
+      // of work, not once per file -- but do ratchet, or the floors drift
+      // eighteen points behind again the way they just did.
       thresholds: {
-        statements: 67,
-        branches: 59,
-        functions: 61,
-        lines: 67,
+        statements: 71,
+        branches: 64,
+        functions: 66,
+        lines: 71,
       },
     },
   },

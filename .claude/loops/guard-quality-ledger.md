@@ -317,8 +317,35 @@ three untested messages in `login-error.ts`.
   logging the actual fix (an UPDATE over the old rows) in `IMPROVEMENTS.md`.
   **A magic number with a real reason is worse than one without**, because the
   reason dies with whoever knew it and the number looks deletable.
+- ~~`app/jobs/page.tsx`~~ + ~~`components/ui/tabs.tsx`~~ — done 2026-08-19,
+  six tests, nine mutations. Checked before starting, which is what made it
+  one iteration instead of two: `tabs.tsx` has exactly one consumer in the
+  whole app, and it is this page.
 
-The rest, enumerated 2026-08-19 rather than left as "plus 9 more": `app/jobs/page.tsx` (30),
+  The tab wiring is the guard. `handleExecutionClick` both selects an
+  execution and switches tab, and the two halves are separately deletable:
+  drop the switch and clicking an execution inside a job card selects it in a
+  list nobody is looking at, so the click reads as broken. Both halves were
+  mutated separately and both died.
+
+  One assertion exists purely for `tabs.tsx`: the inactive panel must be
+  *absent*, not hidden. Nothing about the active tab can see a `TabsContent`
+  that has stopped hiding — both panels simply stack.
+
+  **Accepted, because the type already holds it.** Replacing
+  `statusResult?.success ? statusResult.data : null` with
+  `statusResult?.data ?? null` survived the suite, because a failed
+  `validatedGet` carries no `data` and `?? null` reaches the same answer. It
+  is not reachable at all: `ApiResponse` is a discriminated union whose
+  failure arm has no `data` field, so the mutation is a compile error
+  (`TS2339`, verified by running `tsc` against it). This is the loop's own
+  rule landing on the loop — prefer a type where one would catch it — and the
+  right resolution is to record that the type is the guard, not to write a
+  test that duplicates it.
+
+The rest, enumerated 2026-08-19 rather than left as "plus 9 more":
+~~`app/jobs/page.tsx`~~ (30, done 2026-08-19 — nine mutations; it is the only
+consumer of `components/ui/tabs.tsx`, so both closed together),
 ~~`features/matchmaking/components/matchmaking-analysis-results.tsx`~~ (30,
 done 2026-08-19 — fourteen tests, fourteen mutations; row below),
 ~~`features/profile/components/champion-stats-card.tsx`~~ (30, done 2026-08-19 —
@@ -329,8 +356,17 @@ see the paired row below),
 ~~`features/jobs/components/system-status.tsx`~~ (20, done 2026-08-19 — nine
 tests, twelve mutations, all died; the row below carries the two findings),
 ~~`features/players/components/player-card-format.ts`~~ (16, done 2026-08-19),
-`components/ui/tabs.tsx` (11). The three `app/*/page.tsx` entries are route
-shells; check what they actually hold before spending an iteration on one.
+~~`components/ui/tabs.tsx`~~ (11, done 2026-08-19 via its one consumer). The
+three `app/*/page.tsx` entries are **not** route shells — each is ~200 lines
+of query wiring; see the row above for what was worth guarding in them.
+
+**The zero-covered class is closed.** Re-measured 2026-08-19 after this
+sweep: two files remain at 0% with ≥10 statements, `app/matchmaking-analysis/
+page.tsx` (25) and `app/player-overview/page.tsx` (24), and both are already
+resolved by the route-shell row — their `<ProtectedRoute>` wrapper is pinned
+as source text and the rest is render plumbing that was accepted with reasons.
+Frontend coverage over the sweep: **64.72% → 73.62% statements, 57.70% →
+66.42% branches**, 414 → 493 tests.
 
 ### Backend
 
