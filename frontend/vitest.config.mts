@@ -68,11 +68,15 @@ export default defineConfig({
       // statements, 72.02% branches, 72.96% functions, 78.63% lines over 561
       // tests, after `match-row.tsx` (1.33% → 97.33%), `lib/core/api.ts`
       // (49.18% → 98.36%) and `use-job-card-controls.ts` (38.81% → 78.94%).
+      // Ratcheted 2026-08-19 once more, closing the under-20% band: 82.94%
+      // statements, 77.33% branches, 79.29% functions, 83.15% lines over 626
+      // tests. Nothing with ≥10 statements now sits below 20% except the two
+      // route shells the ledger already resolved.
       thresholds: {
-        statements: 76,
-        branches: 70,
-        functions: 70,
-        lines: 76,
+        statements: 80,
+        branches: 74,
+        functions: 76,
+        lines: 80,
       },
     },
   },

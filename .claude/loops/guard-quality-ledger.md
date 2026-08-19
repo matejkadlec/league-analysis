@@ -510,6 +510,168 @@ three untested messages in `login-error.ts`.
   rejection in the file that force-stops production jobs if that contract ever
   changes.
 
+- ~~`features/players/context/player-context.tsx`~~ — done 2026-08-19, 15
+  tests, **14 mutations, six survivors on the first pass and five of them the
+  test's fault**. 7.14% → 95.23% statements, 0% → 100% branches. From the
+  under-20% band, and it is the state every player-centric page reads.
+
+  **This row is mostly about the fixtures, because the first pass was mostly
+  wrong.** The file has two effects that both depend on `contextQuery.data`,
+  and the persist mutation's `onSuccess` *rewrites* `contextQuery.data`. That
+  single feedback edge is what made five assertions vacuous:
+
+  - "the URL wins over the saved player" passed against reading the saved
+    player, because once the PUT resolves the saved player **becomes** the URL
+    player and the two readings agree. The fixture now holds the round-trip
+    open — which is not an artificial state, it is exactly the window in which
+    someone opens a shared link.
+  - the write-once guard (`persistedUrlPuuidRef`) was untestable for the same
+    reason: after the PUT lands, the *other* guard
+    (`current_player?.puuid === urlPuuid`) already stops the second write, so
+    the ref only covers the window before the response. **Two guards where one
+    is enough on the happy path means the fixture has to reproduce the unhappy
+    timing or it tests neither.**
+  - two `expect(replace).not.toHaveBeenCalled()` assertions passed because
+    they ran before the context query had landed. **Waiting for a request to
+    be *issued* proves the test was faster than the fetch, not that the effect
+    declined to run**; they now wait for the data to arrive and then assert.
+  - the picker's `setQueryData` seeding was simply never asserted.
+
+  **The one real equivalent mutant this loop has recorded, and it was
+  measured rather than argued.** `isLoading: … || (!!urlPuuid &&
+  urlPlayerQuery.isLoading)` — the `!!urlPuuid &&` does nothing under React
+  Query v5, where `isLoading` is `isPending && isFetching` and a disabled
+  query therefore reports `false`. Verified with a throwaway render of a
+  disabled `useQuery`: `{isLoading: false, isPending: true, isFetching:
+  false}`. Under v4, where `isLoading === isPending`, dropping it would have
+  left every page permanently in its skeleton, which is why it exists. Left in
+  place and logged; the point is that "equivalent" was established by running
+  the library, not by reading the source.
+
+  Killed and worth naming: the URL-vs-saved precedence (a shared link showing
+  a different player's data under that person's name in the address bar), the
+  `router.replace` restore that must not be `history.replaceState` (the
+  address bar would change without the router knowing, so every sidebar link
+  is built without the player), `isPlayerCentricPath` (a `?puuid=` on the
+  settings page is not a selection), the query-parameter preservation, not
+  persisting a `?puuid=` that failed to load (the URL is user input, and
+  storing an unloadable PUUID makes every later page start by failing), the
+  signed-out `enabled` guard, and `usePlayerContext` throwing outside its
+  provider.
+
+- ~~`features/auth/components/join-us-form.tsx`~~ — done 2026-08-19, 18
+  tests, **18 mutations, no survivors**. 7.4% → 96.29% statements. From the
+  under-20% band; the file behind the only unauthenticated endpoint that
+  sends an email, so every client-side refusal here is the difference between
+  a contact form and an open relay.
+
+  Killed and worth naming: the 300-character minimum measured **after
+  trimming** (without the trim, 300 spaces pass), the boundary itself pinned
+  at exactly 300, the captcha requirement including the empty-token case
+  (`captchaToken !== null` alone accepts `""`, a token the server will
+  reject, spending the submission), the whole-whitespace site key treated as
+  no site key (otherwise the widget never renders and the requirement is
+  unsatisfiable — the form is permanently dead in any environment without a
+  key), the single-use Turnstile token cleared on success **and reset on
+  failure** (without the failure reset the button stays enabled holding a
+  spent token and every retry is rejected for reusing it), the message kept
+  in the form when the send fails (it is 300+ characters; clearing it is
+  "write it again"), the double-submit guard for the window before React
+  re-renders the disabled button, the on-page `role="alert"` beside the
+  transient toast, and the auth hint trusted only **while** the session is
+  loading — a stale cookie hint must not override a resolved `isLoading:
+  false`.
+
+  The finding that outranks the tests, logged rather than fixed because the
+  fix is a product decision: **a message ending in `#nl` turns off the
+  captcha, the 300-character minimum and the 3/hour rate limit server-side,
+  and the suffix ships in the public JS bundle** (`NO_LIMIT_TEST_SUFFIX` is a
+  literal in a `"use client"` file). The email still sends; only the route's
+  `@rate_limit("5/minute")` remains — 300 uncaptcha'd emails per hour per IP
+  against an intended 3. The suite deliberately pins the *protections* and
+  not the bypass, so deleting `#nl` from either half breaks nothing. Full
+  write-up in IMPROVEMENTS.md.
+
+- ~~`features/players/player-api.ts`~~ and
+  ~~`features/matchmaking/matchmaking-api.ts`~~ — done 2026-08-19 together,
+  one suite (`tests/feature-api-wiring.test.ts`), 10 tests, **6 mutations, all
+  killed**. 14.3% and 12.5% → 100% everything. The last two `validated*`
+  delegation modules from the under-20% band, resolved the way the corrected
+  `smurf-boost-api.ts` row said they should be once its premise became true:
+  the helpers themselves are pinned by `api-validated-helpers.test.ts`, and
+  every (path, method) pair is proved against `app.openapi()` by
+  `test_frontend_api_paths.py`.
+
+  What that pair of guards still left open, and what this suite pins, is the
+  rest of the wire shape — the part the backend test deliberately does not
+  read: query parameter **names** (a typo'd optional param is silently
+  ignored and the search quietly spans the wrong platform; `created_at`
+  renamed means polling watches the wrong analysis), the conditional spread
+  in `searchPlayerSuggestions`, the request body (`startMatchmakingAnalysis`
+  with the body dropped), which arguments ride the URL versus `params`
+  (`discoverPlayer` and both DELETEs build their own query strings), and
+  crossed verbs on one route — `trackPlayer` mutated to DELETE stays a
+  registered (path, method) pair, so only this suite catches the track button
+  untracking.
+
+  Deliberately not pinned, with the reason in the file header: schema
+  pairing. A function wired to the wrong schema fails **closed** — the real
+  payload is rejected and the caller sees `success: false` — and the
+  schema-to-return-type link is tsc's job. Asserting it would mean fixture
+  payloads for five response schemas to guard a failure mode that already
+  announces itself.
+
+- ~~`features/players/components/player-card.tsx`~~ — done 2026-08-19, 11
+  tests, **7 mutations, all killed**. 4.3% → 95.65% statements, 92% branches,
+  100% functions; the one line left is the stats queryFn's failure
+  `return null`, the exact mirror of the league one that is covered.
+
+  Killed and worth naming: the freshness label fed by **all three** sync
+  timestamps (drop `match_synced_at` from the list and a player whose matches
+  never synced claims "Updated 3 hours ago" — the exact lie the label
+  exists to prevent), the profile-icon fallback branches (inverted, every
+  player shows icon 29 and the 404 retries the real icon), the failure
+  remembered per puuid+icon rather than per player (a player who picks a new
+  icon after theirs 404'd gets the new one tried, not the fallback carried
+  over), `total_matches > 0` mutated to `>= 0` ("Played 0 games"), the
+  Update button pressable mid-sync, the `{ queue: 420 }` filter dropped from
+  the stats request (the card would blend ARAM and normals into a number
+  labelled as ranked form — this queryFn is inline, so no api-module suite
+  sees it), and `onCompleted: onRefreshAll` dropped (the sync completes and
+  the page never refreshes, so the button visibly does nothing).
+
+- ~~`features/jobs/components/job-execution-api-calls.tsx`~~ and
+  ~~`features/jobs/components/job-execution-logs.tsx`~~ — done 2026-08-19
+  together (one suite, `tests/job-execution-render.test.tsx`), 11 tests,
+  **10 mutations, one survivor on the first pass and it was the fixture's
+  fault**. 11.1% and 12.5% → 100% statements each. The two renderers behind a
+  job execution's expanded view; the format helpers they call were already
+  pinned, so this suite pins only the conditional structure that lives here.
+
+  The survivor, recorded because it is the campaign's recurring shape:
+  `hasMultipleParams = count > 1 && param_key` mutated to `count > 0` — the
+  "single call gets no expander" fixture carried **no `param_key`**, so the
+  mutated conjunction was still falsy and the test proved nothing about the
+  count. The fixture now carries the key, making the count the half that
+  refuses. Same lesson as `player-context` and the Zod-path fixture: **the
+  fixture must make the guard under test the one that does the work.**
+
+  Killed and worth naming: 400 match fetches collapsing into "first, ...,
+  last" rather than rendering any single call's params as if they were all
+  400's, the expand toggle reported under the same `apiCallKey` the parent's
+  Set is checked by (any other string toggles an entry no render reads — the
+  click works, the row never opens), the session-closed line gated on
+  `completedAt`, lowercase backend levels normalised to `[ERROR]`, a
+  malformed level degrading to INFO rather than DEBUG, `event` excluded from
+  the extra-fields dump, and object-valued extras serialised rather than
+  `[object Object]`. Branches on `job-execution-logs` sit at 76.9%: the
+  uncovered arms are the WARNING/DEBUG/else colour classes, presentational
+  by the same reasoning as every prior row's colour-arm acceptance.
+
+**With these, the under-20% sub-band is closed.** Re-measured 2026-08-19:
+the only files under 20% with ≥10 statements are the two `app/*/page.tsx`
+route shells already resolved by the route-shell row.
+
 The rest, enumerated 2026-08-19 rather than left as "plus 9 more":
 ~~`app/jobs/page.tsx`~~ (30, done 2026-08-19 — nine mutations; it is the only
 consumer of `components/ui/tabs.tsx`, so both closed together),
@@ -545,10 +707,10 @@ deferred three times while reading 1.33% instead of 0%.
 The band is really two. **Under 20% is the zero class wearing a different
 number** — the covered lines are the imports and the export statement, and
 nothing has ever rendered the file: `match-row.tsx` (1.3%, now done),
-`player-card.tsx` (4.3%), `player-context.tsx` (7.1%),
-`join-us-form.tsx` (7.4%), `job-execution-api-calls.tsx` (11.1%),
-`job-execution-logs.tsx` (12.5%), `matchmaking-api.ts` (12.5%),
-`player-api.ts` (14.3%). Treat these as 0%: read and decide, do not mutate.
+~~`player-card.tsx`~~ (4.3%, done 2026-08-19), ~~`player-context.tsx`~~ (7.1%, done 2026-08-19),
+~~`join-us-form.tsx`~~ (7.4%, done 2026-08-19), ~~`job-execution-api-calls.tsx`~~ (11.1%, done 2026-08-19),
+~~`job-execution-logs.tsx`~~ (12.5%, done 2026-08-19), ~~`matchmaking-api.ts`~~ (12.5%, done 2026-08-19),
+~~`player-api.ts`~~ (14.3%, done 2026-08-19). Treat these as 0%: read and decide, do not mutate.
 Two of them are `validated*` delegation modules and resolve the same way
 `smurf-boost-api.ts` did — but note *why* they read as 0% rather than as
 covered: every consumer test mocks the module, so a typo'd endpoint path
