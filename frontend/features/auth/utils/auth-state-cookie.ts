@@ -39,12 +39,33 @@ export function clearAuthStateCookie(): void {
     return;
   }
 
-  // Mirror the attributes `set_auth_cookies` writes. Browsers key a cookie on
-  // name, domain and path, so a bare delete usually lands — but "usually" is
-  // the wrong guarantee here: a hint that survives its delete is exactly the
-  // state where `proxy.ts` admits a visitor the API will refuse.
+  // A cookie's identity is its name, domain and path, and a delete that does
+  // not name all three matches nothing. Path is `/` on both sides. Domain is
+  // the one that bites: the backend writes this cookie host-only today, but
+  // the day someone shares the session across subdomains -- a `COOKIE_DOMAIN`
+  // for `dev.` and `www.`, in Python, in another directory -- this delete
+  // starts writing a host-only cookie that expires instantly and matches
+  // nothing, while the real hint sits there untouched. `/auth/refresh`
+  // answers a refusal with no Set-Cookie at all, so this is the only thing
+  // that retracts the hint on the one path that matters, and a hint that
+  // survives its own delete leaves the visitor on "Can't reach the server"
+  // forever with `proxy.ts` still admitting them.
+  //
+  // So it deletes the host-only cookie and every parent domain the current
+  // host could have been given one under. Each is a single expired write that
+  // matches nothing if no such cookie exists; the browser rejects the ones
+  // that are not this host's suffixes, which is also a no-op.
   const secure = location.protocol === "https:" ? "; Secure" : "";
-  document.cookie = `${AUTH_STATE_COOKIE_NAME}=; max-age=0; path=/; SameSite=Lax${secure}`;
+  const base = `${AUTH_STATE_COOKIE_NAME}=; max-age=0; path=/; SameSite=Lax${secure}`;
+  document.cookie = base;
+  const labels = location.hostname.split(".");
+  for (let i = 0; i + 2 <= labels.length; i += 1) {
+    const domain = labels.slice(i).join(".");
+    // A single label is a TLD and browsers refuse it; two or more is the
+    // shortest thing a cookie can legitimately be scoped to.
+    document.cookie = `${base}; domain=${domain}`;
+    document.cookie = `${base}; domain=.${domain}`;
+  }
   for (const listener of hintListeners) {
     listener();
   }

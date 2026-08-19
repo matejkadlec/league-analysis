@@ -60,3 +60,24 @@ def test_the_hint_lives_exactly_as_long_as_the_refresh_token() -> None:
         raise AssertionError(f"{name} has no Max-Age")
 
     assert max_age(AUTH_STATE_COOKIE_NAME) == max_age(REFRESH_TOKEN_COOKIE_NAME)
+
+
+def test_the_hint_is_written_host_only() -> None:
+    """No Domain, because the browser is what has to delete it.
+
+    A refused refresh answers with no Set-Cookie at all, so the only thing
+    that retracts the hint on that path is `clearAuthStateCookie` in the
+    frontend -- a different language in a different directory, with no
+    automated check between them. Domain is part of a cookie's identity, so a
+    `Domain=` here that the delete does not name would leave the hint standing
+    through every teardown: "Can't reach the server" forever, with `proxy.ts`
+    still admitting the visitor and no way out but clearing cookies by hand.
+
+    The delete now expires the hint under every parent domain of the current
+    host as well, so sharing the session across subdomains is survivable --
+    but this test is the tripwire that makes it a decision rather than an
+    accident.
+    """
+    cookies = _set_cookie_headers()
+
+    assert "domain=" not in cookies[AUTH_STATE_COOKIE_NAME].lower()

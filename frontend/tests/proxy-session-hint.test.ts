@@ -300,12 +300,23 @@ describe("the edge and the session hint", () => {
     // `@/proxy` alone, and the lint rules name files too -- so a second
     // entrypoint would be an edge with no rules and no coverage at all.
     const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-    for (const candidate of [
-      "middleware.ts",
-      "middleware.js",
-      "src/proxy.ts",
-      "src/middleware.ts",
-    ]) {
+    // Every name Next can resolve, matching the lint block's file list. The
+    // one that actually shadows is `proxy.tsx`: candidates are sorted so the
+    // preferred extension comes last and overrides, `pageExtensions` puts tsx
+    // first in preference, and the edge bundle then contains `proxy.tsx` with
+    // `proxy.ts` nowhere in it -- while this whole file, which imports
+    // `@/proxy` through Vite, keeps asserting about the source Next no longer
+    // runs.
+    const names = ["proxy", "middleware"];
+    const extensions = ["ts", "tsx", "js", "jsx"];
+    const candidates = names.flatMap((name) =>
+      extensions.flatMap((extension) => [
+        `${name}.${extension}`,
+        `src/${name}.${extension}`,
+      ]),
+    ).filter((candidate) => candidate !== "proxy.ts");
+
+    for (const candidate of candidates) {
       expect(existsSync(join(root, candidate))).toBe(false);
     }
   });

@@ -15,6 +15,7 @@ the right direction -- visitors keep their session and get the retry surface
 """
 
 import re
+from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock
 
@@ -128,24 +129,60 @@ async def test_a_database_fault_is_not_laundered_into_a_refusal() -> None:
 
     `None` from `rotate_refresh_token` becomes 401 INVALID_REFRESH_TOKEN, and
     the browser is required to end the session on that name. Catching a
-    database error in there and returning `None` -- the kind of defensive edit
-    that reads as robustness -- produces a refusal byte-identical to a real
-    one, so every client-side guard behaves correctly and every visitor is
-    signed out for the length of the blip, with their refresh row live and
-    unrevoked and its HttpOnly cookie still in the jar.
+    database error anywhere under it and returning `None` -- the kind of
+    defensive edit that reads as robustness -- produces a refusal
+    byte-identical to a real one, so every client-side guard behaves correctly
+    and every visitor is signed out for the length of the blip, with their
+    refresh row live and unrevoked and its HttpOnly cookie still in the jar.
+
+    Every database touchpoint on the path, not just the first: an earlier
+    version of this test mocked the first `execute` only, and swallowing at
+    the commit or inside `get_user_by_id` passed the whole suite.
     """
     from sqlalchemy.exc import DBAPIError
 
     from app.features.auth.service import AuthService as RealAuthService
 
+    fault = DBAPIError("SELECT", {}, Exception("connection terminated"))
+
+    # 1. The lookup that finds the token record.
     db = MagicMock()
-    db.execute = AsyncMock(
-        side_effect=DBAPIError("SELECT", {}, Exception("connection terminated"))
-    )
+    db.execute = AsyncMock(side_effect=fault)
     db.commit = AsyncMock()
-    service = RealAuthService(db)
-
     with pytest.raises(DBAPIError):
-        await service.rotate_refresh_token(raw_refresh_token="whatever")
-
+        await RealAuthService(db).rotate_refresh_token(raw_refresh_token="x")
     cast(AsyncMock, db.commit).assert_not_awaited()
+
+    # 2. The user lookup, which `rotate_refresh_token` reads as "unknown user"
+    #    when it answers None -- so it must never answer None for a fault.
+    db = MagicMock()
+    db.execute = AsyncMock(side_effect=fault)
+    with pytest.raises(DBAPIError):
+        await RealAuthService(db).get_user_by_id(1)
+
+    # 3. The revocation the reuse branch performs before refusing. Swallowing
+    #    here refuses while the token family stays live.
+    db = MagicMock()
+    db.execute = AsyncMock(side_effect=fault)
+    db.commit = AsyncMock()
+    with pytest.raises(DBAPIError):
+        await RealAuthService(db).revoke_all_refresh_tokens_for_user(1)
+
+    # 4. The commit that stores the rotated token.
+    now = datetime.now(UTC)
+    record = MagicMock()
+    record.revoked_at = None
+    record.expires_at = now + timedelta(days=30)
+    record.user_id = 5
+    user = MagicMock()
+    user.id = 5
+    db = MagicMock()
+    lookup = MagicMock()
+    lookup.scalar_one_or_none = MagicMock(return_value=record)
+    db.execute = AsyncMock(return_value=lookup)
+    db.add = MagicMock()
+    db.commit = AsyncMock(side_effect=fault)
+    service = RealAuthService(db)
+    service.get_user_by_id = AsyncMock(return_value=user)
+    with pytest.raises(DBAPIError):
+        await service.rotate_refresh_token(raw_refresh_token="x")

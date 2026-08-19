@@ -273,15 +273,22 @@ const eslintConfig = [
     // Every name Next will run as the edge, not just the one in the tree:
     // it accepts `proxy`, `middleware` and both under `src/`, and an audit
     // put the probe in `middleware.ts`, where no rule here applied.
+    // `pageExtensions` defaults to tsx, ts, jsx, js and the discovery loop
+    // takes the LAST match, so a `proxy.tsx` beside `proxy.ts` silently
+    // becomes the edge -- and tsconfig drops it from the program, so it lints
+    // as a parse error rather than against these rules. Every name Next can
+    // resolve is listed, and a test asserts none of them exist.
     files: [
       "proxy.ts",
+      "proxy.tsx",
       "proxy.js",
+      "proxy.jsx",
       "middleware.ts",
+      "middleware.tsx",
       "middleware.js",
-      "src/proxy.ts",
-      "src/proxy.js",
-      "src/middleware.ts",
-      "src/middleware.js",
+      "middleware.jsx",
+      "src/proxy.{ts,tsx,js,jsx}",
+      "src/middleware.{ts,tsx,js,jsx}",
     ],
     rules: {
       "no-restricted-globals": [
@@ -346,23 +353,38 @@ const eslintConfig = [
       ],
     },
   },
-  // Route handlers run on the server, where a cookie store is writable and a
+  // Server code under `app/` runs where a cookie store is writable, and a
   // sweep over `getAll()` names nothing the selectors above can see -- and it
-  // takes the HttpOnly refresh cookie with it, not just the hint. Nothing in
-  // the tree has a route handler today, so refusing the store here costs
-  // nothing; the five Server Components that read the hint are untouched.
+  // takes the HttpOnly refresh cookie with it, not just the hint. Scoped to
+  // route handlers first, which was one spelling short: a Server Action does
+  // the same sweep and is not a route handler. So it covers everything under
+  // `app/` except the five pages that read the hint, which are listed because
+  // a sixth reader should be a decision rather than a default.
   {
-    files: ["app/**/route.{ts,tsx,js,jsx}"],
+    files: ["app/**/*.{ts,tsx,js,jsx}"],
+    ignores: [
+      "app/license/page.tsx",
+      "app/sign-in/page.tsx",
+      "app/privacy-policy/page.tsx",
+      "app/cookie-policy/page.tsx",
+      "app/join-us/page.tsx",
+    ],
     rules: {
       "no-restricted-imports": [
         "error",
         {
+          // Spread here too: this block replaces the repo-wide rule for these
+          // files rather than adding to it, and forgetting that is how
+          // `proxy.ts` once became the only file allowed to import the
+          // teardown helpers. `tests/eslint-config-contract.test.ts` now fails
+          // if any block sets this rule without them.
+          patterns: sessionTeardownImports,
           paths: [
             {
               name: "next/headers",
               importNames: ["cookies"],
               message:
-                "A route handler can write cookies, and a sweep here retracts the session hint and the HttpOnly refresh cookie with it while the token stays live server-side. Only the backend ends a session.",
+                "Server code here can write cookies, and a sweep over the store retracts the session hint and the HttpOnly refresh cookie with it while the token stays live server-side. Only the backend ends a session.",
             },
           ],
         },
