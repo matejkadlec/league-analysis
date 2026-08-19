@@ -108,6 +108,11 @@ as `files were modified by this hook` — pointing at whichever unrelated hook
 happened to be running. It looks exactly like a real architecture violation
 and is not one. Observed 2026-08-19.
 
+The git index is shared too, and that one is worse: a plain `git commit`
+sweeps up whatever the other session has staged, so their in-flight edit lands
+under your commit message. Commit with an explicit pathspec —
+`git commit --only <paths>` — whenever a second session might be live.
+
 Run concurrent iterations with `isolation: "worktree"`, or run them one at a
 time. Before believing any gate failure, check `git status` is clean and
 re-run on an untouched tree.
