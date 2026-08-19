@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import TypedDict
 from unittest.mock import AsyncMock, patch
 
+import httpx
 import pytest
 from pydantic import ValidationError as PydanticValidationError
 
@@ -95,6 +96,30 @@ def test_server_retry_boundary_and_queue_normalization() -> None:
     assert client._extract_endpoint_path("https://europe.api.riotgames.com/path") == (
         "path"
     )
+
+
+@pytest.mark.asyncio
+async def test_null_body_raises_instead_of_returning_none() -> None:
+    """A 200 whose JSON body is `null` must raise at the HTTP boundary.
+
+    Callers are typed `dict | list`; letting None through crashes them on a
+    subscript far from the request. Riot answers objects and lists, so a null
+    body is an intermediary glitch, and the retry loop this client had before
+    tenacity already treated it as a failed request.
+    """
+    client = RiotAPIClient(api_key="RGAPI-test-only")
+    client.session = httpx.AsyncClient(
+        transport=httpx.MockTransport(
+            lambda _request: httpx.Response(
+                200, content=b"null", headers={"Content-Type": "application/json"}
+            )
+        )
+    )
+
+    with pytest.raises(RiotAPIError, match="null"):
+        await client._make_request(
+            "https://europe.api.riotgames.com/lol/match/v5/matches/EUN1_1"
+        )
 
 
 def test_product_supported_queue_catalog_is_explicit_and_complete() -> None:

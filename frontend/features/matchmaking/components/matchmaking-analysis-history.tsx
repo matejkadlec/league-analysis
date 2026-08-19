@@ -290,7 +290,15 @@ export function MatchmakingAnalysisHistory({
           ))}
         </ul>
 
-        <div className="hidden sm:block overflow-x-auto overflow-y-auto max-h-[490px]">
+        <div
+          className="hidden sm:block overflow-x-auto overflow-y-auto max-h-[490px]"
+          // Scrollable once history outgrows max-h; without a focus stop its
+          // content is unreachable by keyboard. The axe gate cannot see this:
+          // its fixture serves five rows, which fit without scrolling.
+          role="region"
+          aria-label="Analysis history"
+          tabIndex={0}
+        >
           <Table>
             <TableHeader>
               <TableRow className="h-11 border-b border-border/50">

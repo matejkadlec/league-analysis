@@ -263,7 +263,10 @@ export function PlayerSelector({
         aria-controls={showResults ? listboxId : undefined}
         aria-expanded={showResults}
         aria-activedescendant={
-          suggestions[activeSuggestion]
+          // Gated on showResults: the option ids only exist while the listbox
+          // is mounted, and a dangling reference makes a screen reader
+          // announce a phantom active option after the list closes.
+          showResults && suggestions[activeSuggestion]
             ? `${listboxId}-${activeSuggestion}`
             : undefined
         }

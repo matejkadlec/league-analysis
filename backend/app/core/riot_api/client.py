@@ -343,6 +343,16 @@ class RiotAPIClient:
                 )
 
             response_data = response.json()
+            if response_data is None:
+                # A 200 whose body is JSON `null` (a proxy or cache glitch —
+                # Riot answers objects and lists). The old retry loop turned
+                # this into a raised error; letting None through here returns
+                # it to callers typed `dict | list`, which then crash on a
+                # subscript far from the HTTP layer.
+                raise RiotAPIError(
+                    "Request failed: response body was null",
+                    status_code=response.status_code,
+                )
             return response_data
         finally:
             await response.aclose()
@@ -393,11 +403,15 @@ class RiotAPIClient:
                 error=str(error),
             )
         elif isinstance(error, RiotAPIError):
+            # The logged wait is read off the retryer itself (set before
+            # before_sleep fires), so the backoff policy lives in exactly one
+            # place — _transient_wait — and this line cannot drift from it.
+            next_action = retry_state.next_action
             logger.warning(
                 "riot_api_retrying_server_error",
                 status_code=error.status_code,
                 attempt=attempt,
-                retry_after=2**attempt,
+                retry_after=next_action.sleep if next_action else None,
             )
 
     async def _make_request(
@@ -440,9 +454,9 @@ class RiotAPIClient:
             before_sleep=lambda retry_state: self._log_transient_retry(
                 retry_state, url
             ),
-            # Resolved at call time so tests patching `asyncio.sleep` still
-            # observe every wait, exactly as they did against the old loop.
-            sleep=lambda seconds: asyncio.sleep(seconds),
+            # The retryer is built per call, so this attribute lookup already
+            # happens after any test has patched `asyncio.sleep`.
+            sleep=asyncio.sleep,
             reraise=True,
         )
         try:

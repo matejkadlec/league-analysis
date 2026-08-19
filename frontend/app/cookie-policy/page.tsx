@@ -44,7 +44,14 @@ export default async function CookiePolicyPage() {
       <p className="mb-3 leading-relaxed">
         All listed storage is first-party (League Analysis).
       </p>
-      <div className="overflow-x-auto rounded-md border border-white/10">
+      <div
+        className="overflow-x-auto rounded-md border border-white/10"
+        // Scrolls sideways on narrow screens; a scrollable region without a
+        // focus stop is unreachable by keyboard (this route has no axe scan).
+        role="region"
+        aria-label="Storage we use"
+        tabIndex={0}
+      >
         <table className="w-full text-sm">
           <thead className="bg-white/5">
             <tr>

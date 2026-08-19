@@ -2,38 +2,31 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
 import {
-  installPopulatedPlayerMocks,
-  PUUID,
+  gotoPopulatedRoute,
+  POPULATED_ROUTES,
 } from "./support/populated-player-harness";
 
 /**
  * axe-core over the data-rich player pages. The fixtures matter here for the
  * same reason they matter to the reflow specs: against an empty database the
  * match rows, stat tables and history cards never mount, and a scan of an
- * empty page proves nothing about the surfaces people actually read.
+ * empty page proves nothing about the surfaces people actually read. The
+ * readiness gate lives in `gotoPopulatedRoute`, which waits for populated
+ * content — the skeletons are textless, so no wait on "Loading" can work.
  *
  * What axe can and cannot see: it catches missing labels, roles, names,
  * contrast and structural misuse automatically. It does NOT catch
  * use-of-color (WCAG 1.4.1) — the match rows conveying win/loss by tint
- * alone are a known open finding that no automated rule flags.
+ * alone are a known open finding that no automated rule flags. It also only
+ * grades what the fixtures put on screen: a fallback branch the fixtures
+ * never render is invisible to this gate.
  */
 
-const ROUTES = [
-  ["player overview", `/player-overview?puuid=${PUUID}`],
-  ["match history", `/match-history?puuid=${PUUID}`],
-  ["matchmaking analysis", `/matchmaking-analysis?puuid=${PUUID}`],
-] as const;
-
 test.describe("axe scan of the populated player pages", () => {
-  for (const [name, route] of ROUTES) {
-    test(`${name} has no WCAG A/AA violations`, async ({ page }) => {
+  for (const route of POPULATED_ROUTES) {
+    test(`${route.name} has no WCAG A/AA violations`, async ({ page }) => {
       test.setTimeout(60_000);
-      await installPopulatedPlayerMocks(page);
-
-      await page.goto(route);
-      await page.getByRole("button", { name: "Accept necessary" }).click();
-      await expect(page.locator("main")).not.toContainText("Loading");
-      await page.waitForLoadState("networkidle");
+      await gotoPopulatedRoute(page, route);
 
       const results = await new AxeBuilder({ page })
         .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])

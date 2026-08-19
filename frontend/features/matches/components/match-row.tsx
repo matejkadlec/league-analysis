@@ -335,7 +335,10 @@ function MatchSideColumn({
             {participant.kills} / {participant.deaths} / {participant.assists}
           </span>
         ) : emptyKdaFallback ? (
-          <span className="text-xs text-muted-foreground">—</span>
+          // text-foreground/75 like the other row text: this fallback sits on
+          // the same win/loss tint that failed 4.5:1, it just never rendered
+          // under the axe fixtures, which always serve full participants.
+          <span className="text-xs text-foreground/75">—</span>
         ) : null}
       </div>
     </div>
@@ -382,7 +385,8 @@ function MatchTeamCompositions({
           </div>
         </>
       ) : (
-        <div className="text-xs text-muted-foreground text-center">—</div>
+        // Same contrast reasoning as the KDA fallback above.
+        <div className="text-xs text-foreground/75 text-center">—</div>
       )}
     </div>
   );

@@ -202,3 +202,10 @@
   `getFieldState(fieldContext.name, …)` has already read through it. Vendored
   shadcn code with one consumer, so it was left alone; a guard on
   `fieldContext.name`, moved above that call, would make it mean something.
+
+- 2026-08-20 frontend/features/matches/components/match-history.tsx: the
+  match-list container carries `role="region"` + `tabIndex={0}` at every
+  width but only scrolls at `lg:` (`lg:overflow-x-auto`), so on a phone
+  keyboard users get a focus stop on a region that does not scroll. Removing
+  it below `lg` needs a `matchMedia` hook for one tab stop — left alone as
+  not worth the machinery; revisit if the region's classes change anyway.
