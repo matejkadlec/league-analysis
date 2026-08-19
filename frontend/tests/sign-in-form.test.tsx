@@ -160,11 +160,7 @@ describe("SignInForm", () => {
   });
 
   describe("when the server escalates to a captcha", () => {
-    afterEach(() => {
-      vi.unstubAllEnvs();
-    });
-
-    it("shows the challenge and sends the token with the next attempt", async () => {
+    it("shows the challenge, sends the token, and drops one the server rejects", async () => {
       // Nothing reached this path: the site key is unset in tests, so every
       // existing case took the "not configured" branch and `captchaRequired`
       // was never true. The whole escalation -- widget, gated submit, token on
@@ -195,7 +191,9 @@ describe("SignInForm", () => {
       const submit = await screen.findByRole("button", { name: "Sign In" });
       expect(submit).toHaveProperty("disabled", false);
 
-      login.mockResolvedValueOnce(undefined);
+      login.mockRejectedValueOnce(
+        createAuthLoginError({ detail: { code: "CAPTCHA_INVALID" } }, 403),
+      );
       await user.click(submit);
 
       // The token has to reach the server, or the retry is refused exactly
@@ -204,6 +202,19 @@ describe("SignInForm", () => {
         expect(login).toHaveBeenLastCalledWith(
           expect.objectContaining({ captchaToken: "captcha-token" }),
         ),
+      );
+
+      // And a token the server rejected must not be sent again. Dropping
+      // `setCaptchaToken(null)` from that branch keeps the whole suite green
+      // while the form resubmits the same rejected token on every retry --
+      // a CAPTCHA_INVALID loop with no way out, which is worse than the
+      // challenge it is trying to satisfy. The stubbed widget ignores `ref`,
+      // so `turnstileRef.current?.reset()` does nothing here: this asserts
+      // the state the form owns, which is the half that has to be right.
+      await waitFor(() =>
+        expect(
+          screen.getByRole("button", { name: "Sign In" }),
+        ).toHaveProperty("disabled", true),
       );
     });
 
