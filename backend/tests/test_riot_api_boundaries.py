@@ -24,6 +24,7 @@ from app.core.riot_api.errors import (
     ForbiddenError,
     NotFoundError,
     RateLimitError,
+    RiotAPIError,
     ServiceUnavailableError,
 )
 from app.core.riot_api.rate_limiter import RateLimiter
@@ -75,18 +76,18 @@ def test_retry_after_and_rate_limit_use_safe_bounds() -> None:
     assert client._parse_retry_after({}) == 120
     assert client._parse_retry_after({"retry-after": "invalid"}) == 120
     assert client._parse_retry_after({"retry-after": "0"}) == 1
-    assert client._handle_rate_limit({"retry-after": "3"}, 0, 1) == (True, 3)
-
     with pytest.raises(RateLimitError) as error:
-        client._handle_rate_limit({"retry-after": "3"}, 1, 1)
+        client._handle_rate_limit({"retry-after": "3"})
     assert error.value.retry_after == 3
 
 
 def test_server_retry_boundary_and_queue_normalization() -> None:
     client = RiotAPIClient(api_key="RGAPI-test-only")
-    assert client._handle_server_error(500, 0, 1) == (True, 1)
+    with pytest.raises(RiotAPIError) as server_error:
+        client._handle_server_error(500)
+    assert server_error.value.status_code == 500
     with pytest.raises(ServiceUnavailableError):
-        client._handle_server_error(503, 1, 1)
+        client._handle_server_error(503)
 
     assert client._normalize_queue_type("420") is QueueType.RANKED_SOLO_5X5
     with pytest.raises(ValueError, match="Unsupported Riot queue"):

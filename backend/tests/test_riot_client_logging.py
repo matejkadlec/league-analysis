@@ -25,13 +25,38 @@ def _events(logs: list[EventDict], event_name: str) -> list[EventDict]:
     return [entry for entry in logs if entry.get("event") == event_name]
 
 
-def test_server_error_retry_decision_logs_warning() -> None:
-    """A 5xx retry decision is visible with its backoff before the sleep."""
+def _client_serving(statuses: list[int]) -> RiotAPIClient:
+    """A client whose transport answers each request with the next status."""
+    served = iter(statuses)
+
+    def _handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(next(served), json={"ok": True})
+
     client = _client()
+    client.session = httpx.AsyncClient(transport=httpx.MockTransport(_handler))
+    return client
+
+
+@pytest.fixture
+def no_sleep(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def _skip(_seconds: float) -> None:
+        return None
+
+    monkeypatch.setattr(asyncio, "sleep", _skip)
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("no_sleep")
+async def test_server_error_retry_decision_logs_warning() -> None:
+    """A 5xx retry decision is visible with its backoff before the sleep."""
+    client = _client_serving([500, 200])
 
     with capture_logs() as logs:
-        assert client._handle_server_error(500, 0, 3) == (True, 1)
+        result = await client._make_request(
+            "https://europe.api.riotgames.com/lol/match/v5/matches/EUN1_1"
+        )
 
+    assert result == {"ok": True}
     entries = _events(logs, "riot_api_retrying_server_error")
     assert len(entries) == 1
     assert entries[0]["status_code"] == 500
@@ -40,24 +65,30 @@ def test_server_error_retry_decision_logs_warning() -> None:
     assert entries[0]["log_level"] == "warning"
 
 
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("no_sleep")
 @pytest.mark.parametrize(
     ("status_code", "expected_error"),
     [(503, ServiceUnavailableError), (500, RiotAPIError)],
 )
-def test_exhausted_server_error_logs_final_failure(
+async def test_exhausted_server_error_logs_final_failure(
     status_code: int, expected_error: type[Exception]
 ) -> None:
     """The terminal 5xx raise emits the shared final-failure event so 5xx
     exhaustion is not invisible to riot_api_request_failed consumers."""
-    client = _client()
+    client = _client_serving([status_code] * 4)
 
     with (
         capture_logs() as logs,
         pytest.raises(expected_error),
     ):
-        client._handle_server_error(status_code, 3, 3)
+        await client._make_request(
+            "https://europe.api.riotgames.com/lol/match/v5/matches/EUN1_1"
+        )
 
-    assert _events(logs, "riot_api_retrying_server_error") == []
+    # Three retry decisions precede the terminal failure.
+    retries = _events(logs, "riot_api_retrying_server_error")
+    assert [entry["attempt"] for entry in retries] == [0, 1, 2]
     failures = _events(logs, "riot_api_request_failed")
     assert len(failures) == 1
     assert failures[0]["status_code"] == status_code

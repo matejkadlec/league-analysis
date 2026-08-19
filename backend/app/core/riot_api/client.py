@@ -9,6 +9,12 @@ from typing import Any, Protocol
 
 import httpx
 import structlog
+from tenacity import (
+    AsyncRetrying,
+    RetryCallState,
+    retry_if_exception,
+    stop_after_attempt,
+)
 
 from .constants import MatchType, Platform, QueueType, Region
 from .credential_vocabulary import RiotCredentialStatus
@@ -251,10 +257,8 @@ class RiotAPIClient:
 
         return max(retry_after, 1)
 
-    def _handle_rate_limit(
-        self, headers: dict[str, str], attempt: int, max_retries: int
-    ) -> tuple[bool, int]:
-        """Handle rate limit (429) with retry logic."""
+    def _handle_rate_limit(self, headers: dict[str, str]) -> None:
+        """Raise the 429 as a retryable error carrying the header evidence."""
         retry_after = self._parse_retry_after(headers)
 
         # Log the detailed rate limit headers for debugging
@@ -269,8 +273,6 @@ class RiotAPIClient:
             method_limit=method_limit,
         )
 
-        if attempt < max_retries:
-            return (True, retry_after)
         raise RateLimitError(
             "Rate limit exceeded",
             status_code=429,
@@ -279,61 +281,31 @@ class RiotAPIClient:
             method_rate_limit=headers.get("x-method-rate-limit"),
         )
 
-    def _handle_server_error(
-        self, status: int, attempt: int, max_retries: int
-    ) -> tuple[bool, int]:
-        """Handle server errors (5xx) with exponential backoff."""
-        if attempt < max_retries:
-            retry_after = 2**attempt
-            logger.warning(
-                "riot_api_retrying_server_error",
-                status_code=status,
-                attempt=attempt,
-                retry_after=retry_after,
-            )
-            return (True, retry_after)
-        exhausted_error = (
-            ServiceUnavailableError("Service unavailable", status_code=status)
-            if status == 503
-            else RiotAPIError(f"Server error {status}", status_code=status)
-        )
-        logger.error(
-            "riot_api_request_failed",
-            status_code=status,
-            attempts=max_retries + 1,
-            error_type=type(exhausted_error).__name__,
-        )
-        raise exhausted_error
+    @staticmethod
+    def _handle_server_error(status: int) -> None:
+        """Raise the 5xx as a retryable error; the retry policy owns the rest."""
+        if status == 503:
+            raise ServiceUnavailableError("Service unavailable", status_code=status)
+        raise RiotAPIError(f"Server error {status}", status_code=status)
 
-    async def _handle_http_error_status(
+    def _handle_http_error_status(
         self,
         status: int,
         headers: dict[str, str],
-        attempt: int,
-        max_retries: int,
         riot_message: str | None = None,
-    ) -> tuple[bool, int]:
-        """
-        Handle HTTP error status codes.
+    ) -> None:
+        """Raise the mapped error for a known status; return for anything else.
 
-        Returns:
-            Tuple of (should_retry, sleep_seconds)
-
-        Raises:
-            RiotAPIError: For non-retryable errors
+        429 and 5xx raises are retryable (see `_is_transient_error`); the
+        client errors raised by `_raise_client_error_if_needed` are not.
         """
-        # Non-retryable client errors
         self._raise_client_error_if_needed(status, riot_message)
 
-        # Rate limit - retryable
         if status == 429:
-            return self._handle_rate_limit(headers, attempt, max_retries)
+            self._handle_rate_limit(headers)
 
-        # Server errors - retryable with exponential backoff
         if status >= 500:
-            return self._handle_server_error(status, attempt, max_retries)
-
-        return (False, 0)
+            self._handle_server_error(status)
 
     async def _execute_single_request(
         self,
@@ -341,13 +313,12 @@ class RiotAPIClient:
         method: str,
         params: dict[str, Any] | None,
         data: dict[str, Any] | None,
-        attempt: int,
-        max_retries: int,
-    ) -> dict[str, Any] | list[Any] | None:
-        """Execute a single HTTP request with error handling.
+    ) -> dict[str, Any] | list[Any]:
+        """Execute a single HTTP request, raising mapped errors for bad statuses.
 
-        Returns `None` to signal "retry this attempt"; every other return is
-        Riot's decoded body, which is always a JSON object or array.
+        On success the return is Riot's decoded body, which is always a JSON
+        object or array. An unmapped non-200 status keeps its long-standing
+        behaviour of returning the decoded body rather than raising.
         """
         if self.session is None:
             raise RiotAPIError("Session not initialized")
@@ -364,18 +335,12 @@ class RiotAPIClient:
             await self._record_credential_health(response.status_code, evidence_at)
             self.rate_limiter.update_limits(response_headers, url, method)
 
-            # Handle error status codes
             if response.status_code != 200:
-                should_retry, sleep_seconds = await self._handle_http_error_status(
+                self._handle_http_error_status(
                     response.status_code,
                     response_headers,
-                    attempt,
-                    max_retries,
                     self._extract_riot_status_message(response),
                 )
-                if should_retry:
-                    await asyncio.sleep(sleep_seconds)
-                    return None  # Signal to retry
 
             response_data = response.json()
             return response_data
@@ -395,6 +360,45 @@ class RiotAPIClient:
         else:
             return
         await self.credential_health_callback(status, evidence_at)
+
+    @staticmethod
+    def _is_transient_error(error: BaseException) -> bool:
+        """The retry policy: network failures, 429s and 5xx answers."""
+        if isinstance(error, TimeoutError | httpx.RequestError):
+            return True
+        return isinstance(error, RiotAPIError) and (
+            error.status_code == 429 or (error.status_code or 0) >= 500
+        )
+
+    @staticmethod
+    def _transient_wait(retry_state: RetryCallState) -> float:
+        """A 429 waits what Riot said; everything else backs off 1s, 2s, 4s."""
+        error = retry_state.outcome.exception() if retry_state.outcome else None
+        if isinstance(error, RateLimitError) and error.retry_after:
+            return float(error.retry_after)
+        return float(2 ** (retry_state.attempt_number - 1))
+
+    def _log_transient_retry(self, retry_state: RetryCallState, url: str) -> None:
+        """Keep every retry decision visible before its sleep, as before."""
+        error = retry_state.outcome.exception() if retry_state.outcome else None
+        attempt = retry_state.attempt_number - 1
+        if isinstance(error, RateLimitError):
+            return  # "Rate limit hit" was already logged when the 429 landed.
+        if isinstance(error, TimeoutError | httpx.RequestError):
+            logger.warning(
+                "riot_api_network_retry",
+                endpoint=self._extract_endpoint_path(url),
+                attempt=attempt,
+                error_type=type(error).__name__,
+                error=str(error),
+            )
+        elif isinstance(error, RiotAPIError):
+            logger.warning(
+                "riot_api_retrying_server_error",
+                status_code=error.status_code,
+                attempt=attempt,
+                retry_after=2**attempt,
+            )
 
     async def _make_request(
         self,
@@ -428,37 +432,43 @@ class RiotAPIClient:
         # Rate limiting
         await self.rate_limiter.wait_if_needed(url, method)
 
-        # Retry loop
-        max_retries = 3 if retry_on_failure else 0
-        last_error = None
-
-        for attempt in range(max_retries + 1):
-            try:
-                result = await self._execute_single_request(
-                    url, method, params, data, attempt, max_retries
-                )
-                if result is not None:
-                    return result
-            except (TimeoutError, httpx.RequestError) as e:
-                last_error = e
-                if attempt < max_retries:
-                    logger.warning(
-                        "riot_api_network_retry",
-                        endpoint=self._extract_endpoint_path(url),
-                        attempt=attempt,
-                        error_type=type(e).__name__,
-                        error=str(e),
-                    )
-                    await asyncio.sleep(2**attempt)
-
-        logger.error(
-            "riot_api_request_failed",
-            endpoint=self._extract_endpoint_path(url),
-            attempts=max_retries + 1,
-            error_type=type(last_error).__name__ if last_error else None,
-            error=str(last_error) if last_error else None,
+        max_attempts = 4 if retry_on_failure else 1
+        retryer = AsyncRetrying(
+            retry=retry_if_exception(self._is_transient_error),
+            stop=stop_after_attempt(max_attempts),
+            wait=self._transient_wait,
+            before_sleep=lambda retry_state: self._log_transient_retry(
+                retry_state, url
+            ),
+            # Resolved at call time so tests patching `asyncio.sleep` still
+            # observe every wait, exactly as they did against the old loop.
+            sleep=lambda seconds: asyncio.sleep(seconds),
+            reraise=True,
         )
-        raise RiotAPIError(f"Request failed: {last_error!s}")
+        try:
+            return await retryer(
+                self._execute_single_request, url, method, params, data
+            )
+        except (TimeoutError, httpx.RequestError) as error:
+            logger.error(
+                "riot_api_request_failed",
+                endpoint=self._extract_endpoint_path(url),
+                attempts=max_attempts,
+                error_type=type(error).__name__,
+                error=str(error),
+            )
+            raise RiotAPIError(f"Request failed: {error!s}") from error
+        except RiotAPIError as error:
+            # Exhausted 5xx keeps its terminal log; a 429 raises bare, and the
+            # immediately-raised client errors were never logged here.
+            if (error.status_code or 0) >= 500:
+                logger.error(
+                    "riot_api_request_failed",
+                    status_code=error.status_code,
+                    attempts=max_attempts,
+                    error_type=type(error).__name__,
+                )
+            raise
 
     async def probe_credentials(self, url: str) -> object:
         """Send one un-retried GET purely to observe whether Riot accepts the key.
