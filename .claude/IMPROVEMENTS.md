@@ -10,6 +10,16 @@
   most one win, so it is rare rather than impossible; the fix is to make the
   unit explicit at the call site rather than sharper in the guess.
 
+  Wider than one function, found 2026-08-19 while testing `role-stats-card`:
+  `getWinRateColor`, `getWinRateBarColor` and `formatWinRate` exist in **three**
+  copies — `players/components/player-card-format.ts`,
+  `profile/components/role-stats-card.tsx`,
+  `profile/components/champion-stats-card.tsx` — and the same name means two
+  incompatible things. The profile pair takes a fraction and multiplies by 100;
+  the players copy takes a value already in percent for the colours and guesses
+  for the format, and returns `"52.3"` where the other two return `"52.3%"`.
+  Consolidating needs the unit decided first, so it is one change, not three.
+
 - 2026-08-19 backend/app/features/playstyle_analysis/: the whole feature is
   1,864 lines with no consumer. Its router is mounted at
   `/api/v1/playstyle-analysis` with two endpoints, but nothing in the frontend

@@ -200,7 +200,40 @@ three untested messages in `login-error.ts`.
   claim in that file's header, that the zone is set "before anything reads
   `Intl`", has been corrected in place: ESM hoists the imports above it, and
   the trick works only because `formatDate` builds its formatter per call.
-- `features/profile/components/role-stats-card.tsx` — 31
+- ~~`features/profile/components/role-stats-card.tsx`~~ — done 2026-08-19,
+  six tests, nine mutations, and the first row where the loop's own test was
+  the thing that failed the discipline.
+
+  The guard worth having is **cross-language**. Two maps face each other
+  across the API with neither naming the other: the backend turns Riot's
+  `UTILITY` into `Support` (`matches/match_stats.py`), and this card turns
+  `Support` back into `position-utility.svg`. The card's lookup ends in
+  `|| "/positions/position-middle.svg"`, so renaming a lane on *either* side
+  does not fail — it silently draws the mid icon on every support row, under
+  alt text that still reads "Support". The test reads `LANE_DISPLAY_NAMES` out
+  of the Python source and asserts the five names render five *distinct*
+  icons; distinctness is the only workable assertion, because "not the
+  fallback" cannot be checked when Mid's own icon is the fallback. Verified
+  red against a rename on the frontend side and against a rename on the
+  backend side.
+
+  Also worth copying: `next/image` renders a broken image rather than failing
+  the build, and nothing else in the gate opens `public/`, so a renamed asset
+  ships. One `existsSync` per icon closes that.
+
+  **The survivor was in the test, not the source.** Dropping the
+  `totalGames > 0` guard makes the play-rate bar `width: NaN%`, and the first
+  version of the test looped over `container.querySelectorAll("[style*=width]")`
+  asserting each was `"0%"`. It passed against the mutation: React drops the
+  invalid declaration, the attribute disappears, the selector matches nothing,
+  and a loop over nothing asserts nothing. **Any test that reads the DOM by a
+  selector has to pin how many elements it found** — this is the second time a
+  vacuous assertion has appeared in this campaign, and the first time the
+  mutation caught it.
+
+  Logged rather than fixed: `getWinRateColor` / `getWinRateBarColor` /
+  `formatWinRate` exist in three copies, and the same name means a fraction in
+  two of them and a percent in the third.
 
 The rest, enumerated 2026-08-19 rather than left as "plus 9 more": `app/jobs/page.tsx` (30),
 `features/matchmaking/components/matchmaking-analysis-results.tsx` (30),
