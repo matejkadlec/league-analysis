@@ -201,9 +201,16 @@ describe("the background jobs page", () => {
         expect(screen.getByText(/job card Match Fetcher/)).toBeTruthy(),
       );
 
+      // The window is wide because `shouldAdvanceTime` lets real elapsed time
+      // add to the mocked clock, and the gate runs on a Pi that also runs
+      // deploys. It is still narrow enough to fail on a countdown that does
+      // not move (15) or one that has bottomed out (0), which is the whole
+      // claim.
       await vi.advanceTimersByTimeAsync(3000);
       await waitFor(() =>
-        expect(screen.getByText(/Auto-refresh in 1[12]s/)).toBeTruthy(),
+        expect(
+          screen.getByText(/Auto-refresh in (?:[5-9]|1[0-2])s/),
+        ).toBeTruthy(),
       );
 
       queryClient.clear();
