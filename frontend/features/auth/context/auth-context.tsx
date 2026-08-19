@@ -27,7 +27,9 @@ import type { User, LoginRequest, AuthContextType } from "../types";
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const API_BASE_URL = typeof window === "undefined" ? "" : "";
+// Every auth request goes through the Next.js rewrite, on both sides of
+// hydration. The branch that used to be here chose between "" and "".
+const API_BASE_URL = "";
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
