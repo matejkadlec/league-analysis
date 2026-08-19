@@ -59,6 +59,25 @@ function plainRequest(pathname: string): NextRequest {
   return new NextRequest(new URL(`http://localhost:3000${pathname}`));
 }
 
+// The headers a browser actually sends on a click. An audit gated its
+// teardown on `sec-fetch-dest: document` -- a sensible-looking way to avoid
+// probing on every prefetch -- and the whole table passed, because every
+// request in it was bare. A request shape is as much a case as a path is.
+function navigationRequest(pathname: string, hint: boolean): NextRequest {
+  return new NextRequest(new URL(`http://localhost:3000${pathname}`), {
+    headers: {
+      ...(hint
+        ? { cookie: `${AUTH_STATE_COOKIE_NAME}=${AUTH_STATE_COOKIE_VALUE}` }
+        : {}),
+      "sec-fetch-dest": "document",
+      "sec-fetch-mode": "navigate",
+      "sec-fetch-site": "same-origin",
+      accept: "text/html,application/xhtml+xml",
+      "user-agent": "Mozilla/5.0",
+    },
+  });
+}
+
 afterEach(() => {
   vi.unstubAllGlobals();
 });
@@ -119,6 +138,47 @@ describe("the edge and the session hint", () => {
       headers: [["location", "http://localhost:3000/"]],
     },
     {
+      // The first branch in the function, and the one taken most often: the
+      // matcher only excludes `_next/static`, `_next/image` and the favicon,
+      // so every dotted path -- `/background.jpg`, referenced by the global
+      // stylesheet, on every page load -- lands here. It was the one branch
+      // the table did not enumerate, and a header set in it passed the whole
+      // gate.
+      what: "a hinted visitor loading a static asset",
+      path: "/background.jpg",
+      hint: true,
+      status: 200,
+      headers: [["x-middleware-next", "1"]],
+    },
+    {
+      what: "a hinted visitor on an internal Next.js path",
+      path: "/_next/data/build/x.json",
+      hint: true,
+      status: 200,
+      headers: [["x-middleware-next", "1"]],
+    },
+    {
+      what: "a hinted visitor on an API path",
+      path: "/api/v1/auth/me",
+      hint: true,
+      status: 200,
+      headers: [["x-middleware-next", "1"]],
+    },
+    {
+      what: "a hinted visitor on a sign-in subpath",
+      path: "/sign-in/callback",
+      hint: true,
+      status: 307,
+      headers: [["location", "http://localhost:3000/"]],
+    },
+    {
+      what: "a hinted visitor on a public subpath",
+      path: "/privacy-policy/changes",
+      hint: true,
+      status: 200,
+      headers: [["x-middleware-next", "1"]],
+    },
+    {
       what: "a visitor with no hint on a protected route",
       path: "/player-overview",
       hint: false,
@@ -141,6 +201,16 @@ describe("the edge and the session hint", () => {
 
     expect([...response.headers.entries()]).toEqual(testCase.headers);
     expect(response.status).toBe(testCase.status);
+  });
+
+  it.each([
+    ["a hinted visitor clicking through to a protected route", "/player-overview", true],
+    ["a hinted visitor clicking through to the home page", "/", true],
+  ])("passes %s through untouched", async (_what, path, hint) => {
+    const response = await proxy(navigationRequest(path, hint));
+
+    expect([...response.headers.entries()]).toEqual([["x-middleware-next", "1"]]);
+    expect(response.status).toBe(200);
   });
 
   it("never asks the API whether a session is still good", async () => {

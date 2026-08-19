@@ -9,7 +9,6 @@ ACCESS_TOKEN_COOKIE_NAME = "league_analysis_access_token"
 REFRESH_TOKEN_COOKIE_NAME = "league_analysis_refresh_token"
 AUTH_STATE_COOKIE_NAME = "league_analysis_auth_state"
 AUTH_STATE_COOKIE_VALUE = "1"
-AUTH_STATE_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 30
 
 
 def _cookie_secure() -> bool:
@@ -59,7 +58,14 @@ def set_auth_cookies(
     response.set_cookie(
         AUTH_STATE_COOKIE_NAME,
         AUTH_STATE_COOKIE_VALUE,
-        max_age=AUTH_STATE_COOKIE_MAX_AGE_SECONDS,
+        # The same lifetime as the refresh token beside it, taken from the
+        # same expiry rather than restated. A hardcoded 30 days silently
+        # became wrong the moment `jwt_refresh_token_expire_days` was set to
+        # anything longer: the hint expired first, `proxy.ts` reported the
+        # visitor signed out, and the refresh token stayed live and spendable
+        # for the remainder -- a stranded session with no server refusal
+        # anywhere in it.
+        max_age=_max_age_seconds(refresh_expires_at),
         httponly=False,
         secure=secure,
         samesite="lax",

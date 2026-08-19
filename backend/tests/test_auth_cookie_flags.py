@@ -40,3 +40,23 @@ def test_tokens_are_httponly_and_the_hint_is_not() -> None:
         assert "httponly" in cookies[name].lower(), f"{name} must stay HttpOnly"
 
     assert "httponly" not in cookies[AUTH_STATE_COOKIE_NAME].lower()
+
+
+def test_the_hint_lives_exactly_as_long_as_the_refresh_token() -> None:
+    """Outliving it is fine; expiring first strands the session.
+
+    `proxy.ts` routes on the hint, so once it is gone the visitor is reported
+    signed out -- while the refresh cookie beside it is still there, still
+    valid, and JavaScript cannot reach it to spend it. A hardcoded 30 days
+    made that certain for anyone who set `jwt_refresh_token_expire_days`
+    higher, with no server refusal anywhere in the sequence.
+    """
+    cookies = _set_cookie_headers()
+
+    def max_age(name: str) -> int:
+        for part in cookies[name].split("; "):
+            if part.lower().startswith("max-age="):
+                return int(part.split("=", 1)[1])
+        raise AssertionError(f"{name} has no Max-Age")
+
+    assert max_age(AUTH_STATE_COOKIE_NAME) == max_age(REFRESH_TOKEN_COOKIE_NAME)
