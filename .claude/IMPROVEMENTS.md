@@ -129,24 +129,13 @@
   with a forward-looking formatter, or the `next_run_time` block goes.
 
 - 2026-08-19 frontend/features/players/components/player-card-format.ts:
-  `formatWinRate` guesses its own units — `winRate <= 1 ? winRate * 100 :
-  winRate` — because its two callers disagree. `PlayerCardWinRate` passes
-  `league.win_rate` (already 0-100) and `stats.win_rate` (0-1) into the same
-  function, and passes the stats value *multiplied* to the colour helpers on
-  the neighbouring line. A ranked player whose win rate is between 0 and 1
-  percent therefore renders as 100%. It needs about 100 ranked games with at
-  most one win, so it is rare rather than impossible; the fix is to make the
-  unit explicit at the call site rather than sharper in the guess.
-
-  Wider than one function, found 2026-08-19 while testing `role-stats-card`:
-  `getWinRateColor`, `getWinRateBarColor` and `formatWinRate` exist in **three**
-  copies — `players/components/player-card-format.ts`,
-  `profile/components/role-stats-card.tsx`,
-  `profile/components/champion-stats-card.tsx` — and the same name means two
-  incompatible things. The profile pair takes a fraction and multiplies by 100;
-  the players copy takes a value already in percent for the colours and guesses
-  for the format, and returns `"52.3"` where the other two return `"52.3%"`.
-  Consolidating needs the unit decided first, so it is one change, not three.
+  **RESOLVED 2026-08-20.** The three win-rate helper copies (players, role
+  card, champion card) are one fraction-based module in `lib/core/format.ts`;
+  the unit-guessing `formatWinRate` is deleted (its 0–1%-renders-as-100% bug
+  with it), `league.win_rate` — the one percent-shaped source — converts at
+  its call site, and the KDA color/format pair that was duplicated across
+  both profile cards moved with them. The e2e league fixture was serving a
+  fraction where the API serves percent, masked by the guess; fixed.
 
 - 2026-08-19 backend/app/features/playstyle_analysis/: the whole feature is
   1,864 lines with no consumer. Its router is mounted at
