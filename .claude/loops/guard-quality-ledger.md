@@ -117,7 +117,10 @@ head of that list:
 - ~~`features/jobs/components/job-execution-format.ts`~~ — done 2026-08-19, eight
   tests. The two key builders here are read by `job-executions.tsx` above it,
   so that file is now the cheaper of the remaining jobs targets.
-- `features/profile/components/recent-performance-card.tsx` — 41
+- ~~`features/profile/components/recent-performance-card.tsx`~~ — done
+  2026-08-19. A boolean argument that reverses a verdict is worth finding
+  everywhere: one call site in seven wanted the opposite value, and a default
+  on that parameter would have been the convenient way to get it wrong.
 - ~~`app/settings/display-name-field.tsx`~~ — done 2026-08-19, and the first
   `deleted` row in the ledger. Two validation checks in a row where the second
   is a strict superset of the first: worth looking for wherever a guard was
