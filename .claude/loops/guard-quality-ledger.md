@@ -707,7 +707,7 @@ deferred three times while reading 1.33% instead of 0%.
 The band is really two. **Under 20% is the zero class wearing a different
 number** — the covered lines are the imports and the export statement, and
 nothing has ever rendered the file: `match-row.tsx` (1.3%, now done),
-~~`player-card.tsx`~~ (4.3%, done 2026-08-19), `player-context.tsx` (7.1%),
+~~`player-card.tsx`~~ (4.3%, done 2026-08-19), ~~`player-context.tsx`~~ (7.1%, done 2026-08-19),
 ~~`join-us-form.tsx`~~ (7.4%, done 2026-08-19), ~~`job-execution-api-calls.tsx`~~ (11.1%, done 2026-08-19),
 ~~`job-execution-logs.tsx`~~ (12.5%, done 2026-08-19), ~~`matchmaking-api.ts`~~ (12.5%, done 2026-08-19),
 ~~`player-api.ts`~~ (14.3%, done 2026-08-19). Treat these as 0%: read and decide, do not mutate.
