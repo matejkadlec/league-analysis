@@ -80,42 +80,20 @@ function getDaysAgo(timestamp: number): string {
   return `${diffDays} days ago`;
 }
 
-function getResultInfo(match: MatchWithPlayerData): {
-  text: string;
-  colorClass: string;
-  bgClass: string;
-} {
+/**
+ * The row's background tint, which is the only thing on it that says how the
+ * game went — there is no "VICTORY" or "DEFEAT" text anywhere in the row.
+ *
+ * The remake check comes before the win check on purpose: a remake is
+ * annulled, so neither side won it.
+ */
+function getResultBgClass(match: MatchWithPlayerData): string {
   const participant = match.player_participant;
 
-  if (!participant) {
-    return {
-      text: "Unknown",
-      colorClass: "text-muted-foreground",
-      bgClass: "bg-muted/30",
-    };
-  }
-
-  if (participant.remake || match.early_surrender) {
-    return {
-      text: "REMAKE",
-      colorClass: "text-gray-500",
-      bgClass: "bg-gray-500/50",
-    };
-  }
-
-  if (participant.win) {
-    return {
-      text: "VICTORY",
-      colorClass: "text-emerald-500",
-      bgClass: "bg-emerald-700/30",
-    };
-  }
-
-  return {
-    text: "DEFEAT",
-    colorClass: "text-rose-500",
-    bgClass: "bg-rose-600/30",
-  };
+  if (!participant) return "bg-muted/30";
+  if (participant.remake || match.early_surrender) return "bg-gray-500/50";
+  if (participant.win) return "bg-emerald-700/30";
+  return "bg-rose-600/30";
 }
 
 function renderSummonerSpell(
@@ -270,15 +248,16 @@ function MatchSideStats({
         <span className="font-medium">{kda?.toFixed(2) ?? "Perfect"}</span> KDA
       </span>
       <span className="mt-0.5">
-        <span className="font-medium">{totalCs}</span> CS (
-        {csPerMinute}/min)
+        <span className="font-medium">{totalCs}</span> CS ({csPerMinute}/min)
       </span>
       <span className="mt-0.5">
         <span className="font-medium">{visionScore}</span> Vision Score
       </span>
       <span className="mt-0.5">
         <span className="font-medium">
-          {killParticipation !== null ? `${killParticipation.toFixed(0)}%` : "—"}
+          {killParticipation !== null
+            ? `${killParticipation.toFixed(0)}%`
+            : "—"}
         </span>{" "}
         Kill Particip.
       </span>
@@ -411,7 +390,7 @@ export function MatchRow({ match, playerPuuid }: MatchRowProps) {
   const ddragonVersion = useDDragonVersion();
   const participant = match.player_participant;
   const opponent = match.lane_opponent;
-  const result = getResultInfo(match);
+  const resultBgClass = getResultBgClass(match);
   const teamComps = match.team_compositions;
   const teamStats = match.team_stats;
 
@@ -451,7 +430,7 @@ export function MatchRow({ match, playerPuuid }: MatchRowProps) {
 
   return (
     <div
-      className={`px-3 py-1.5 rounded border-2 mb-1.5 border-t-1 border-b-1 border-amber-400/20 last:border-b-0 last:mb-0 ${result.bgClass}`}
+      className={`px-3 py-1.5 rounded border-2 mb-1.5 border-t-1 border-b-1 border-amber-400/20 last:border-b-0 last:mb-0 ${resultBgClass}`}
     >
       {/*
         Below `lg` the blocks wrap instead of holding their desktop widths, and
