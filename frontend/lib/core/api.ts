@@ -196,9 +196,10 @@ export async function validatedPost<T>(
   schema: z.ZodType<T>,
   url: string,
   data?: unknown,
+  params?: Record<string, unknown>,
 ): Promise<ApiResponse<T>> {
   try {
-    const response = await api.post(url, data);
+    const response = await api.post(url, data, { params });
     return validateResponse(schema, url, response.data);
   } catch (error) {
     return { success: false, error: normalizeApiError(error) };
@@ -221,9 +222,10 @@ export async function validatedPut<T>(
 export async function validatedDelete<T>(
   schema: z.ZodType<T>,
   url: string,
+  params?: Record<string, unknown>,
 ): Promise<ApiResponse<T>> {
   try {
-    const response = await api.delete(url);
+    const response = await api.delete(url, { params });
     return validateResponse(schema, url, response.data);
   } catch (error) {
     return { success: false, error: normalizeApiError(error) };

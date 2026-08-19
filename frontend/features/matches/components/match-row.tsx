@@ -70,14 +70,16 @@ function formatDuration(seconds: number): string {
   return `${mins}:${secs.toString().padStart(2, "0")}`;
 }
 
-function getDaysAgo(timestamp: number): string {
-  const now = Date.now();
-  const diffMs = now - timestamp;
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+// `numeric: "auto"` is what produces "today"/"yesterday" natively; only the
+// capitalisation is ours.
+const dayFormatter = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
 
-  if (diffDays === 0) return "Today";
-  if (diffDays === 1) return "Yesterday";
-  return `${diffDays} days ago`;
+function getDaysAgo(timestamp: number): string {
+  const diffDays = Math.floor((Date.now() - timestamp) / (1000 * 60 * 60 * 24));
+  const formatted = dayFormatter.format(-diffDays, "day");
+  return diffDays < 2
+    ? formatted.charAt(0).toUpperCase() + formatted.slice(1)
+    : formatted;
 }
 
 /**

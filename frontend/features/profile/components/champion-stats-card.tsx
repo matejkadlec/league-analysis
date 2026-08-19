@@ -19,6 +19,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { formatFractionAsPercent } from "@/lib/core/format";
 import {
   ChampionPaginationState,
   getChampionPage,
@@ -47,13 +48,6 @@ function getKDAColor(kda: number): string {
 }
 
 // Format win rate percentage
-function formatWinRate(winRate: number): string {
-  const percent = winRate * 100;
-  return percent % 1 === 0
-    ? `${percent.toFixed(0)}%`
-    : `${percent.toFixed(1)}%`;
-}
-
 // Format KDA
 function formatKDA(kda: number): string {
   return kda.toFixed(2);
@@ -209,7 +203,7 @@ export function ChampionStatsCard({
                 <p
                   className={`text-sm font-bold ${getWinRateColor(champ.win_rate)}`}
                 >
-                  {formatWinRate(champ.win_rate)}
+                  {formatFractionAsPercent(champ.win_rate)}
                 </p>
                 <p className="text-xs text-muted-foreground">
                   {champ.wins}W {champ.losses}L

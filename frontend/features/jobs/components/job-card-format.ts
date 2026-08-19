@@ -51,6 +51,13 @@ export function formatDuration(seconds: number | null | undefined): string {
   return `${minutes}m ${remainingSeconds}s`;
 }
 
+// `style: "narrow"` is byte-identical to the old hand-built templates:
+// "5m ago", "23h ago", "3d ago".
+const narrowRelativeFormatter = new Intl.RelativeTimeFormat("en", {
+  numeric: "always",
+  style: "narrow",
+});
+
 export function formatRelativeTime(timestamp: string): string {
   const date = new Date(timestamp);
   const now = new Date();
@@ -58,11 +65,11 @@ export function formatRelativeTime(timestamp: string): string {
   const diffMins = Math.floor(diffMs / 60000);
 
   if (diffMins < 1) return "Just now";
-  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffMins < 60) return narrowRelativeFormatter.format(-diffMins, "minute");
   const diffHours = Math.floor(diffMins / 60);
-  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffHours < 24) return narrowRelativeFormatter.format(-diffHours, "hour");
   const diffDays = Math.floor(diffHours / 24);
-  return `${diffDays}d ago`;
+  return narrowRelativeFormatter.format(-diffDays, "day");
 }
 
 export function getJobDescription(jobType: string): string {
