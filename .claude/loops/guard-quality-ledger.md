@@ -444,6 +444,40 @@ covered: every consumer test mocks the module, so a typo'd endpoint path
 passes the whole suite. That is a real hole and it is one level up from where
 the row put it.
 
+**Closed 2026-08-19 by `backend/tests/test_frontend_api_paths.py`** — three
+tests, five mutations, all red. The hole was real and it spanned both halves:
+56 `validated*` call sites in the frontend, every one of them mocked out by
+whatever tests its consumer, so no suite on either side ever compared a
+requested path against a served one. Rename a route in `router.py` and both
+gates stay green; the 404 shows up in a browser.
+
+The check lives on the **backend** side, which is the decision worth
+recording. `app.openapi()` *is* the route table rather than a copy of one, so
+there is no snapshot to regenerate and nothing to go stale — the first design
+was a committed `api_routes.json` plus a test on each side, and it was
+strictly worse: two files, a refresh step, and a window where the snapshot is
+wrong. The test reads the frontend sources directly and resolves each call to
+the (path, method) pair it puts on the wire. Method is included because a
+`validatedPut` at a GET-only path answers 405, which is as broken as a wrong
+path and looks nothing like one.
+
+Parsing the second argument needs one real rule rather than a regex: an
+interpolation is a path parameter *until* one contains a `?`, at which point
+it is building a query string and the path has ended
+(`/jobs/${id}/stop${force ? "?force=true" : ""}`). Two call sites in
+`use-job-card-controls.ts` have exactly that shape and a naive regex silently
+dropped both — which is why the suite has **`test_every_frontend_request_
+path_is_a_literal`**: a path this test cannot read is a path it cannot check,
+and it must fail rather than skip. Third test is the guard on the guard, a
+floor of 50 call sites, so a scan that quietly stops matching cannot pass by
+finding nothing. All 56 resolve today and all 56 match; the value is entirely
+forward-looking.
+
+This does **not** raise those three files' line coverage, and should not: the
+delegation bodies are still one expression each, exactly as the
+`smurf-boost-api.ts` row argued. What was wrong was that row's conclusion that
+nothing was left to guard. The string was.
+
 **20–79% is the frontend twin of the backend's thin-service class**: the
 happy path is tested and the error and edge branches are not. Biggest first,
 by missing statements: `use-job-card-controls.ts` (93 missing, 38.8%),
