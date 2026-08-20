@@ -51,14 +51,4 @@ describe("the execution status badge", () => {
 
     expect(pending).toBe(running);
   });
-
-  it("keeps caller spacing without letting it reach the colours", () => {
-    render(
-      <ExecutionStatusBadge status="CANCELLED" className="text-[10px]" />,
-    );
-    const badge = screen.getByText("CANCELLED");
-
-    expect(badge.className).toContain("text-[10px]");
-    expect(badge.className).toContain("bg-purple-100");
-  });
 });

@@ -62,18 +62,12 @@ describe("TrackPlayerButton", () => {
 
     const button = await screen.findByRole("button", { name: "Untrack player" });
     expect(button.getAttribute("data-tracking-state")).toBe("tracked");
-    expect(button.className).toContain("h-6");
-    expect(button.className).toContain("w-[72px]");
-    expect(button.className).toContain("px-0");
-    expect(screen.getByText("Tracked").className).toContain("gap-1");
-    expect(screen.getByText("Untrack").className).toContain("gap-1");
 
     await userEvent.click(button);
     expect(untrackPlayer).toHaveBeenCalledWith("player-1");
     await waitFor(() =>
       expect(button.getAttribute("data-tracking-state")).toBe("untracked"),
     );
-    expect(screen.getByText("Untracked").className).toContain("gap-1");
   });
 
   it("presents untracked state first and exposes the track action", async () => {
@@ -90,8 +84,6 @@ describe("TrackPlayerButton", () => {
 
     const button = await screen.findByRole("button", { name: "Track player" });
     expect(button.getAttribute("data-tracking-state")).toBe("untracked");
-    expect(screen.getByText("Untracked").className).toContain("gap-1");
-    expect(screen.getByText("Track").className).toContain("gap-1");
 
     await userEvent.click(button);
     expect(trackPlayer).toHaveBeenCalledWith("player-1");

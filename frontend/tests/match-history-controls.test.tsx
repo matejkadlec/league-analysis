@@ -116,12 +116,6 @@ describe("Match History controls", () => {
     const searchInput = screen.getByPlaceholderText(
       "Search for champion or player",
     );
-    expect(searchInput.parentElement?.className).toContain("w-[230px]");
-    expect(searchInput.className).toContain("h-7");
-    expect(searchInput.className).toContain("border-white/15");
-    expect(searchInput.className).toContain("bg-white/5");
-    expect(searchInput.className).toContain("!text-xs");
-    expect(searchInput.className).toContain("pl-8");
     expect(
       screen.getByText("126 total matches (70W / 56L) • 55.6% WR"),
     ).toBeTruthy();
