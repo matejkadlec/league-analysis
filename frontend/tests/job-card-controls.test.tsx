@@ -174,10 +174,10 @@ describe("the one button that does five different things", () => {
     await waitFor(() => expect(requestedPaths()).toEqual([path]));
   });
 
-  // The pause control carries its own copy of the paused/running branch that
-  // `handleMainAction` also has, so both copies need their own cases. The
-  // resume half was missing from the first draft and a mutation to it
-  // survived: the main-action test was covering the *other* copy.
+  // handleMainAction's paused branch now delegates to handlePauseResume, so
+  // these cases and the main-action resume cases above exercise one shared
+  // path from two entry points. Both sets stay: they pin that the delegation
+  // itself keeps working from each button.
   it.each([
     ["pauses", "the scheduled job", { is_running: true }, "/jobs/7/pause"],
     [

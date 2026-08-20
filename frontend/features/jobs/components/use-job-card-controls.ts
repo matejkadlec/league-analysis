@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { validatedPost } from "@/lib/core/api";
+import { type ApiResponse, validatedPost } from "@/lib/core/api";
 import { useToast } from "@/lib/core/hooks";
 import {
   JobConfiguration,
+  type JobControlActionResponse,
   JobControlActionResponseSchema,
   JobExecution,
   JobTriggerResponseSchema,
@@ -165,92 +166,72 @@ export function useJobCardControls(
     },
   });
 
-  const pauseMutation = useMutation({
-    mutationFn: () =>
-      validatedPost(JobControlActionResponseSchema, `/jobs/${job.id}/pause`),
-    onSuccess: (result) => {
-      if (result.success && result.data.success) {
-        toast({
-          title: `${job.name} paused`,
-          description: "Scheduled runs will wait until the job is resumed.",
-          variant: "success",
-        });
-        refreshJobsData();
-      } else {
-        toast({
-          title: `${job.name} could not be paused`,
-          description: "Please try again later.",
-          variant: "error",
-        });
-      }
-    },
-    onError: () => {
+  // The six control endpoints answer the same shape and want the same
+  // toast-on-success / try-again-later-on-anything-else handling; only the
+  // request and the wording differ, so those are the only inputs. The
+  // mutationFn stays at each call site because the backend's
+  // test_frontend_api_paths.py reads the validatedPost URL literal there.
+  function useControlMutation<TArg = void>(
+    mutationFn: (arg: TArg) => Promise<ApiResponse<JobControlActionResponse>>,
+    success: { title: string; description: string; variant: "success" | "info" },
+    failureTitle: string,
+    onSuccessExtra?: () => void,
+  ) {
+    const fail = () =>
       toast({
-        title: `${job.name} could not be paused`,
+        title: failureTitle,
         description: "Please try again later.",
         variant: "error",
       });
-    },
-  });
+    return useMutation({
+      mutationFn,
+      onSuccess: (result) => {
+        if (result.success && result.data.success) {
+          toast(success);
+          onSuccessExtra?.();
+          refreshJobsData();
+        } else {
+          fail();
+        }
+      },
+      onError: fail,
+    });
+  }
 
-  const resumeMutation = useMutation({
-    mutationFn: () =>
+  const pauseMutation = useControlMutation(
+    () => validatedPost(JobControlActionResponseSchema, `/jobs/${job.id}/pause`),
+    {
+      title: `${job.name} paused`,
+      description: "Scheduled runs will wait until the job is resumed.",
+      variant: "success",
+    },
+    `${job.name} could not be paused`,
+  );
+
+  const resumeMutation = useControlMutation(
+    () =>
       validatedPost(JobControlActionResponseSchema, `/jobs/${job.id}/resume`),
-    onSuccess: (result) => {
-      if (result.success && result.data.success) {
-        toast({
-          title: `${job.name} resumed`,
-          description: "Scheduled runs are active again.",
-          variant: "success",
-        });
-        refreshJobsData();
-      } else {
-        toast({
-          title: `${job.name} could not be resumed`,
-          description: "Please try again later.",
-          variant: "error",
-        });
-      }
+    {
+      title: `${job.name} resumed`,
+      description: "Scheduled runs are active again.",
+      variant: "success",
     },
-    onError: () => {
-      toast({
-        title: `${job.name} could not be resumed`,
-        description: "Please try again later.",
-        variant: "error",
-      });
-    },
-  });
+    `${job.name} could not be resumed`,
+  );
 
-  const stopMutation = useMutation({
-    mutationFn: (force: boolean) =>
+  const stopMutation = useControlMutation(
+    (force: boolean) =>
       validatedPost(
         JobControlActionResponseSchema,
         `/jobs/${job.id}/stop${force ? "?force=true" : ""}`,
       ),
-    onSuccess: (result) => {
-      if (result.success && result.data.success) {
-        toast({
-          title: `${job.name} stop requested`,
-          description: "The current run is stopping in the background.",
-          variant: "info",
-        });
-        refreshJobsData();
-      } else {
-        toast({
-          title: `${job.name} could not be stopped`,
-          description: "Please try again later.",
-          variant: "error",
-        });
-      }
+    {
+      title: `${job.name} stop requested`,
+      description: "The current run is stopping in the background.",
+      variant: "info",
     },
-    onError: () => {
-      toast({
-        title: `${job.name} could not be stopped`,
-        description: "Please try again later.",
-        variant: "error",
-      });
-    },
-  });
+    `${job.name} could not be stopped`,
+  );
 
   const testTriggerMutation = useMutation({
     mutationFn: (suspendRegular: boolean) =>
@@ -291,99 +272,48 @@ export function useJobCardControls(
     },
   });
 
-  const testStopMutation = useMutation({
-    mutationFn: () =>
+  const testStopMutation = useControlMutation(
+    () =>
       validatedPost(
         JobControlActionResponseSchema,
         `/jobs/${job.id}/test/stop`,
       ),
-    onSuccess: (result) => {
-      if (result.success && result.data.success) {
-        toast({
-          title: `${job.name} test stopped`,
-          description: "The test run is no longer active.",
-          variant: "success",
-        });
-        setOptimisticTestRunning(false);
-        refreshJobsData();
-      } else {
-        toast({
-          title: `${job.name} test could not be stopped`,
-          description: "Please try again later.",
-          variant: "error",
-        });
-      }
+    {
+      title: `${job.name} test stopped`,
+      description: "The test run is no longer active.",
+      variant: "success",
     },
-    onError: () => {
-      toast({
-        title: `${job.name} test could not be stopped`,
-        description: "Please try again later.",
-        variant: "error",
-      });
-    },
-  });
+    `${job.name} test could not be stopped`,
+    () => setOptimisticTestRunning(false),
+  );
 
-  const testPauseMutation = useMutation({
-    mutationFn: () =>
+  const testPauseMutation = useControlMutation(
+    () =>
       validatedPost(
         JobControlActionResponseSchema,
         `/jobs/${job.id}/test/pause`,
       ),
-    onSuccess: (result) => {
-      if (result.success && result.data.success) {
-        toast({
-          title: `${job.name} test paused`,
-          description: "The test run will wait until it is resumed.",
-          variant: "success",
-        });
-        refreshJobsData();
-      } else {
-        toast({
-          title: `${job.name} test could not be paused`,
-          description: "Please try again later.",
-          variant: "error",
-        });
-      }
+    {
+      title: `${job.name} test paused`,
+      description: "The test run will wait until it is resumed.",
+      variant: "success",
     },
-    onError: () => {
-      toast({
-        title: `${job.name} test could not be paused`,
-        description: "Please try again later.",
-        variant: "error",
-      });
-    },
-  });
+    `${job.name} test could not be paused`,
+  );
 
-  const testResumeMutation = useMutation({
-    mutationFn: () =>
+  const testResumeMutation = useControlMutation(
+    () =>
       validatedPost(
         JobControlActionResponseSchema,
         `/jobs/${job.id}/test/resume`,
       ),
-    onSuccess: (result) => {
-      if (result.success && result.data.success) {
-        toast({
-          title: `${job.name} test resumed`,
-          description: "The test run is active again.",
-          variant: "success",
-        });
-        refreshJobsData();
-      } else {
-        toast({
-          title: `${job.name} test could not be resumed`,
-          description: "Please try again later.",
-          variant: "error",
-        });
-      }
+    {
+      title: `${job.name} test resumed`,
+      description: "The test run is active again.",
+      variant: "success",
     },
-    onError: () => {
-      toast({
-        title: `${job.name} test could not be resumed`,
-        description: "Please try again later.",
-        variant: "error",
-      });
-    },
-  });
+    `${job.name} test could not be resumed`,
+  );
 
   const handleTestClick = () => {
     if (isTestRunning) {
@@ -421,11 +351,7 @@ export function useJobCardControls(
 
   const handleMainAction = () => {
     if (isAnyPaused) {
-      if (isTestRunning) {
-        testResumeMutation.mutate();
-      } else {
-        resumeMutation.mutate();
-      }
+      handlePauseResume();
       return;
     }
 
