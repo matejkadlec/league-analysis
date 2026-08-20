@@ -22,62 +22,37 @@ export function PlayerCardWinRate({
   stats,
   leagueFailed = false,
 }: PlayerCardWinRateProps) {
-  if (league) {
-    return (
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Trophy className="h-4 w-4 text-yellow-500" />
-            <span className="text-sm font-medium">Win Rate</span>
-          </div>
-          <span
-            className={`text-lg font-bold ${winRateColors(league.win_rate).text}`}
-          >
-            {formatFractionAsPercent(league.win_rate)}
-          </span>
-        </div>
-        <div className="relative h-2 w-full bg-muted rounded-full overflow-hidden">
-          <div
-            className={`absolute left-0 top-0 h-full duration-300 ${winRateColors(league.win_rate).bar}`}
-            style={{ width: `${Math.min(league.win_rate, 1) * 100}%` }}
-          />
-        </div>
-        <div className="flex justify-between text-xs text-muted-foreground">
-          <span>{league.wins}W</span>
-          <span>{league.losses}L</span>
-        </div>
-      </div>
-    );
-  }
+  const source =
+    league ??
+    (!leagueFailed && stats && stats.total_matches > 0 ? stats : null);
+  if (!source) return null;
 
-  if (!leagueFailed && stats && stats.total_matches > 0) {
-    return (
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Trophy className="h-4 w-4 text-yellow-500" />
-            <span className="text-sm font-medium">Win Rate</span>
+  const colors = winRateColors(source.win_rate);
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Trophy className="h-4 w-4 text-yellow-500" />
+          <span className="text-sm font-medium">Win Rate</span>
+          {!league && (
             <span className="text-xs text-muted-foreground">(unranked)</span>
-          </div>
-          <span
-            className={`text-lg font-bold ${winRateColors(stats.win_rate).text}`}
-          >
-            {formatFractionAsPercent(stats.win_rate)}
-          </span>
+          )}
         </div>
-        <div className="relative h-2 w-full bg-muted rounded-full overflow-hidden">
-          <div
-            className={`absolute left-0 top-0 h-full duration-300 ${winRateColors(stats.win_rate).bar}`}
-            style={{ width: `${Math.min(stats.win_rate, 1) * 100}%` }}
-          />
-        </div>
-        <div className="flex justify-between text-xs text-muted-foreground">
-          <span>{stats.wins}W</span>
-          <span>{stats.losses}L</span>
-        </div>
+        <span className={`text-lg font-bold ${colors.text}`}>
+          {formatFractionAsPercent(source.win_rate)}
+        </span>
       </div>
-    );
-  }
-
-  return null;
+      <div className="relative h-2 w-full bg-muted rounded-full overflow-hidden">
+        <div
+          className={`absolute left-0 top-0 h-full duration-300 ${colors.bar}`}
+          style={{ width: `${Math.min(source.win_rate, 1) * 100}%` }}
+        />
+      </div>
+      <div className="flex justify-between text-xs text-muted-foreground">
+        <span>{source.wins}W</span>
+        <span>{source.losses}L</span>
+      </div>
+    </div>
+  );
 }
