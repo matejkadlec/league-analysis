@@ -79,16 +79,16 @@ export const MatchSchema = z.object({
 
 // Runes Schema for participant data
 export const ParticipantRunesSchema = z.object({
-  primary_style: z.number().optional().nullable(),
-  sub_style: z.number().optional().nullable(),
-  keystone: z.number().optional().nullable(),
-  primary_perks: z.array(z.number()).optional().nullable(),
-  sub_perks: z.array(z.number()).optional().nullable(),
+  primary_style: z.number().int().optional().nullable(),
+  sub_style: z.number().int().optional().nullable(),
+  keystone: z.number().int().optional().nullable(),
+  primary_perks: z.array(z.number().int()).optional().nullable(),
+  sub_perks: z.array(z.number().int()).optional().nullable(),
   stat_perks: z
     .object({
-      defense: z.number().optional().nullable(),
-      flex: z.number().optional().nullable(),
-      offense: z.number().optional().nullable(),
+      defense: z.number().int().optional().nullable(),
+      flex: z.number().int().optional().nullable(),
+      offense: z.number().int().optional().nullable(),
     })
     .optional()
     .nullable(),
