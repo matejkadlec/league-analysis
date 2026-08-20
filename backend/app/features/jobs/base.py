@@ -67,8 +67,6 @@ def _format_api_calls_for_storage(
     api_calls: list[APICallRecord],
 ) -> list[dict[str, Any]]:
     """Format API call records for JSONB storage, grouping similar calls."""
-    from collections import defaultdict
-
     # Group calls by endpoint
     grouped: dict[str, dict[str, Any]] = defaultdict(
         lambda: {

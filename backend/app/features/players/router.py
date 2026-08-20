@@ -28,10 +28,7 @@ from app.features.jobs.player_sync import (
     run_player_sync,
 )
 
-from .dependencies import (
-    PlayerServiceDep,
-    get_player_service,
-)
+from .dependencies import PlayerServiceDep
 from .leagues_schemas import PlayerLeagueResponse
 from .schemas import (
     CurrentPlayerUpdate,
@@ -45,8 +42,6 @@ logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix="/players", tags=["players"])
 
-
-router.get_player_service = get_player_service  # type: ignore[attr-defined]
 
 # Game name and Tag line constants
 GAME_NAME_MAX_LENGTH = 16
