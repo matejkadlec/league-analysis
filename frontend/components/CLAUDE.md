@@ -13,3 +13,10 @@
   - `ui/dialog.tsx` bakes `dialog-white-border` into `DialogContent`, so no
     call site can forget the edge that keeps a dialog visible against the dark
     background (`dialog-white-border.test.tsx`).
+  - `ui/form.tsx` describes a control only by the message actually rendered,
+    and guards `useFormField` on the field name rather than on a context that
+    can never be falsy. Upstream names a `-form-item-description` id nothing
+    renders and checks `!fieldContext` after already reading through it
+    (`form-primitive-patches.test.tsx`). `FormDescription` is deleted rather
+    than left exported and unused; re-add it with its `aria-describedby`
+    wiring if a form ever needs one.

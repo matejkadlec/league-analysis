@@ -56,8 +56,23 @@ function formatDuration(seconds: number): string {
 // capitalisation is ours.
 const dayFormatter = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
 
+function startOfLocalDay(timestamp: number): number {
+  const date = new Date(timestamp);
+  date.setHours(0, 0, 0, 0);
+  return date.getTime();
+}
+
 function getDaysAgo(timestamp: number): string {
-  const diffDays = Math.floor((Date.now() - timestamp) / (1000 * 60 * 60 * 24));
+  // Calendar days apart, not elapsed 24-hour blocks. The absolute date
+  // printed directly above this label is a local calendar day
+  // (`formatDateTime`), and the two are meant to be two readings of one
+  // instant: counting 24-hour blocks made a game played at 23:00 read
+  // "Today" until the following midday, and stretched "Yesterday" into the
+  // day before. Rounding rather than flooring the difference keeps the
+  // 23- and 25-hour days either side of a DST change on whole numbers.
+  const diffDays = Math.round(
+    (startOfLocalDay(Date.now()) - startOfLocalDay(timestamp)) / 86_400_000,
+  );
   const formatted = dayFormatter.format(-diffDays, "day");
   return diffDays < 2
     ? formatted.charAt(0).toUpperCase() + formatted.slice(1)

@@ -367,12 +367,6 @@ describe("a match history row", () => {
     [26, "Yesterday"],
     [24 * 5 + 2, "5 days ago"],
   ])("calls a game %i hours old %s", (hoursAgo, expected) => {
-    // The fixtures sit well inside each band rather than on its edge, because
-    // the edges are not where this function claims to be exact: it counts
-    // elapsed 24-hour blocks, not calendar days, so a game played at 23:00
-    // last night is "Today" until tomorrow morning. That disagreement with
-    // the calendar date printed directly above it is logged rather than
-    // pinned here.
     vi.useFakeTimers();
     vi.setSystemTime(new Date(2026, 2, 10, 12, 0));
     renderRow({
@@ -381,6 +375,26 @@ describe("a match history row", () => {
 
     expect(screen.getByText(expected)).toBeTruthy();
   });
+
+  it.each([
+    [new Date(2026, 2, 10, 0, 30), "Today"],
+    [new Date(2026, 2, 9, 23, 0), "Yesterday"],
+    [new Date(2026, 2, 8, 23, 59), "2 days ago"],
+  ])(
+    "puts a game played at %s in the band its own date is in",
+    (playedAt, expected) => {
+      // The boundary the label used to get wrong. Counting elapsed 24-hour
+      // blocks from 10:00 made last night's 23:00 game "Today" — under a
+      // printed date reading the 9th — and pushed "Yesterday" into the 8th.
+      // The label and the date above it are two readings of one instant, so
+      // they change over at the same local midnight.
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date(2026, 2, 10, 10, 0));
+      renderRow({ game_start_timestamp: playedAt.getTime() });
+
+      expect(screen.getByText(expected)).toBeTruthy();
+    },
+  );
 
   it("shortens the game version to the patch it was played on", () => {
     // Riot sends a four-part build string. Players compare patches, not
