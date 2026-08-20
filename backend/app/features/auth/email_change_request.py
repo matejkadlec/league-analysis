@@ -1,7 +1,7 @@
 """Email-change verification state model."""
 
 from datetime import datetime
-from typing import Final, override
+from typing import Final
 
 from sqlalchemy import (
     DateTime as SQLDateTime,
@@ -60,14 +60,6 @@ class EmailChangeRequest(Base):
     updated_at: Mapped[datetime] = updated_at_column(
         "When this request record was last updated"
     )
-
-    @override
-    def __repr__(self) -> str:
-        """Return string representation of email-change request."""
-        return (
-            f"<EmailChangeRequest(user_id={self.user_id}, pending_email='{self.pending_email}', "
-            f"failed_attempts={self.failed_attempts})>"
-        )
 
 
 Index("idx_email_change_requests_pending_email", EmailChangeRequest.pending_email)

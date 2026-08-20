@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, override
+from typing import Any
 
 from sqlalchemy import (
     CheckConstraint,
@@ -111,11 +111,3 @@ class SmurfBoostAnalysis(Base):
         # newest-run lookup needs no second index.
         {"schema": "core"},
     )
-
-    @override
-    def __repr__(self) -> str:
-        """String representation of the analysis run."""
-        return (
-            f"<SmurfBoostAnalysis(puuid={self.puuid}, "
-            f"created_at={self.created_at}, status={self.status})>"
-        )

@@ -18,35 +18,11 @@ interface RecentPerformanceCardProps {
   lastUpdated?: string | null | undefined;
 }
 
-// Helper function to get performance trend indicator
-function getTrendIndicator(
-  recent: number,
-  overall: number,
-): { icon: React.ReactNode; color: string; label: string } {
-  const diff = recent - overall;
-  const threshold = 0.05; // 5% threshold for "significant" change
-
-  if (diff > threshold) {
-    return {
-      icon: <TrendingUp className="h-4 w-4" />,
-      color: "text-emerald-500",
-      label: "improving",
-    };
-  } else if (diff < -threshold) {
-    return {
-      icon: <TrendingDown className="h-4 w-4" />,
-      color: "text-rose-500",
-      label: "declining",
-    };
-  }
-  return {
-    icon: <Minus className="h-4 w-4" />,
-    color: "text-muted-foreground",
-    label: "stable",
-  };
-}
-
-// Get trend indicator for raw values (not percentages).
+// Get a performance trend indicator.
+//
+// `threshold` defaults to 5% of the overall value, which is what raw stats
+// want -- CS is counted in the hundreds and a fixed number cannot serve both
+// it and a win rate. Fractions already on a 0-1 scale pass their own band.
 //
 // `higherIsBetter` has no default on purpose. Every stat on this card except
 // deaths wants `true`, which makes a default the obviously convenient choice
@@ -54,12 +30,12 @@ function getTrendIndicator(
 // silent default would get wrong, and getting it wrong tells a player who is
 // dying less that they are declining. Requiring the argument makes each call
 // site say which direction it means.
-function getTrendIndicatorRaw(
+function getTrendIndicator(
   recent: number,
   overall: number,
   higherIsBetter: boolean,
+  threshold = overall * 0.05,
 ): { icon: React.ReactNode; color: string; label: string } {
-  const threshold = overall * 0.05; // 5% of overall value
   const diff = recent - overall;
 
   const isImproving = higherIsBetter ? diff > threshold : diff < -threshold;
@@ -97,70 +73,48 @@ function formatNumber(value: number): string {
   return oneDecimalFormatter.format(value);
 }
 
-// Stat comparison row component
+// Stat comparison row. `small` is the 75%-size variant the 3-column row wants;
+// nothing but the size tokens differs between the two.
 function StatComparisonRow({
   label,
   recentValue,
   overallValue,
   trend,
+  small = false,
 }: {
   label: string;
   recentValue: string;
   overallValue: string;
   trend: { icon: React.ReactNode; color: string; label: string };
+  small?: boolean;
 }) {
+  const value = small ? "text-xl" : "text-2xl";
+  const caption = small ? "text-[10px]" : "text-xs";
   return (
-    <div className="space-y-2">
-      <h4 className="text-sm font-medium text-muted-foreground">{label}</h4>
+    <div className={small ? "space-y-1" : "space-y-2"}>
+      <h4
+        className={`${small ? "text-xs" : "text-sm"} font-medium text-muted-foreground`}
+      >
+        {label}
+      </h4>
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-2xl font-bold">{recentValue}</p>
-          <p className="text-xs text-muted-foreground">Recent</p>
+          <p className={`${value} font-bold`}>{recentValue}</p>
+          <p className={`${caption} text-muted-foreground`}>Recent</p>
         </div>
-        <div className={`flex items-center gap-1 ${trend.color}`}>
+        <div
+          className={`flex items-center ${small ? "gap-0.5" : "gap-1"} ${trend.color}`}
+        >
           {trend.icon}
-          <span className="text-sm capitalize">{trend.label}</span>
+          <span className={`${small ? "text-xs" : "text-sm"} capitalize`}>
+            {trend.label}
+          </span>
         </div>
         <div className="text-right">
-          <p className="text-2xl font-bold text-muted-foreground">
+          <p className={`${value} font-bold text-muted-foreground`}>
             {overallValue}
           </p>
-          <p className="text-xs text-muted-foreground">Overall</p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// Smaller stat comparison row for 3-column layout (75% size)
-function SmallStatComparisonRow({
-  label,
-  recentValue,
-  overallValue,
-  trend,
-}: {
-  label: string;
-  recentValue: string;
-  overallValue: string;
-  trend: { icon: React.ReactNode; color: string; label: string };
-}) {
-  return (
-    <div className="space-y-1">
-      <h4 className="text-xs font-medium text-muted-foreground">{label}</h4>
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-xl font-bold">{recentValue}</p>
-          <p className="text-[10px] text-muted-foreground">Recent</p>
-        </div>
-        <div className={`flex items-center gap-0.5 ${trend.color}`}>
-          {trend.icon}
-          <span className="text-xs capitalize">{trend.label}</span>
-        </div>
-        <div className="text-right">
-          <p className="text-xl font-bold text-muted-foreground">
-            {overallValue}
-          </p>
-          <p className="text-[10px] text-muted-foreground">Overall</p>
+          <p className={`${caption} text-muted-foreground`}>Overall</p>
         </div>
       </div>
     </div>
@@ -226,25 +180,30 @@ export function RecentPerformanceCard({
   }
 
   // Calculate trends
-  const winRateTrend = getTrendIndicator(recent.win_rate, overall.win_rate);
-  const kdaTrend = getTrendIndicatorRaw(recent.avg_kda, overall.avg_kda, true);
-  const killsTrend = getTrendIndicatorRaw(
+  const winRateTrend = getTrendIndicator(
+    recent.win_rate,
+    overall.win_rate,
+    true,
+    0.05,
+  );
+  const kdaTrend = getTrendIndicator(recent.avg_kda, overall.avg_kda, true);
+  const killsTrend = getTrendIndicator(
     recent.avg_kills,
     overall.avg_kills,
     true,
   );
-  const csTrend = getTrendIndicatorRaw(recent.avg_cs, overall.avg_cs, true);
-  const deathsTrend = getTrendIndicatorRaw(
+  const csTrend = getTrendIndicator(recent.avg_cs, overall.avg_cs, true);
+  const deathsTrend = getTrendIndicator(
     recent.avg_deaths,
     overall.avg_deaths,
     false,
   );
-  const visionTrend = getTrendIndicatorRaw(
+  const visionTrend = getTrendIndicator(
     recent.avg_vision_score,
     overall.avg_vision_score,
     true,
   );
-  const assistsTrend = getTrendIndicatorRaw(
+  const assistsTrend = getTrendIndicator(
     recent.avg_assists,
     overall.avg_assists,
     true,
@@ -290,19 +249,22 @@ export function RecentPerformanceCard({
 
         {/* Row 2: Avg Kills | Avg Deaths | Avg Assists (smaller) */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 my-4.5">
-          <SmallStatComparisonRow
+          <StatComparisonRow
+            small
             label="Avg Kills"
             recentValue={formatNumber(recent.avg_kills)}
             overallValue={formatNumber(overall.avg_kills)}
             trend={killsTrend}
           />
-          <SmallStatComparisonRow
+          <StatComparisonRow
+            small
             label="Avg Deaths"
             recentValue={formatNumber(recent.avg_deaths)}
             overallValue={formatNumber(overall.avg_deaths)}
             trend={deathsTrend}
           />
-          <SmallStatComparisonRow
+          <StatComparisonRow
+            small
             label="Avg Assists"
             recentValue={formatNumber(recent.avg_assists)}
             overallValue={formatNumber(overall.avg_assists)}

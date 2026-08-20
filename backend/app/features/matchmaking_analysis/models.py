@@ -1,7 +1,7 @@
 """Persisted matchmaking analysis lifecycle and immutable results."""
 
 from datetime import datetime
-from typing import TypedDict, override
+from typing import TypedDict
 
 from sqlalchemy import (
     CheckConstraint,
@@ -130,14 +130,3 @@ class MatchmakingAnalysis(Base):
         Index("ix_matchmaking_analyses_created_at", "created_at"),
         {"schema": "core"},
     )
-
-    @override
-    def __repr__(self) -> str:
-        """String representation of the analysis."""
-        progress_count = len(self.puuid_progress) if self.puuid_progress else 0
-        completed_count = sum(1 for v in (self.puuid_progress or {}).values() if v)
-        return (
-            f"<MatchmakingAnalysis(puuid={self.puuid}, "
-            f"created_at={self.created_at}, "
-            f"progress={completed_count}/{progress_count})>"
-        )

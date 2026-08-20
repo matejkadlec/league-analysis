@@ -1,7 +1,7 @@
 """Match data model for storing League of Legends match information."""
 
 from datetime import datetime
-from typing import Final, Literal, override
+from typing import Final, Literal
 
 from sqlalchemy import (
     BigInteger,
@@ -158,11 +158,6 @@ class Match(Base):
     participants = relationship(
         "MatchParticipant", back_populates="match", cascade="all, delete-orphan"
     )
-
-    @override
-    def __repr__(self) -> str:
-        """Return string representation of the match."""
-        return f"<Match(match_id='{self.match_id}', queue_id={self.queue_id}, game_start_timestamp={self.game_start_timestamp})>"
 
 
 # Create indexes for common queries.

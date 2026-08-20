@@ -6,6 +6,8 @@ export {
   canUseOptionalStorage,
   clearOptionalBrowserStorage,
   readCookieConsentFromBrowser,
+  readOptionalStorage,
   requestCookieConsentPreferences,
+  writeOptionalStorage,
 } from "./utils/consent-storage";
 export type { CookieConsentLevel, CookieConsentState } from "./utils/consent-storage";

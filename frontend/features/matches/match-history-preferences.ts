@@ -1,4 +1,7 @@
-import { canUseOptionalStorage } from "@/features/cookie-consent";
+import {
+  readOptionalStorage,
+  writeOptionalStorage,
+} from "@/features/cookie-consent";
 
 import {
   DEFAULT_MATCH_HISTORY_PAGE_SIZE,
@@ -20,13 +23,6 @@ export const MATCH_HISTORY_QUEUE_FILTERS_STORAGE_KEY =
 export interface MatchHistoryPreferences {
   pageSize: MatchHistoryPageSize;
   queueFilters: MatchHistoryQueueSelection;
-}
-
-function defaultPreferences(): MatchHistoryPreferences {
-  return {
-    pageSize: DEFAULT_MATCH_HISTORY_PAGE_SIZE,
-    queueFilters: [...DEFAULT_MATCH_HISTORY_QUEUE_SELECTION],
-  };
 }
 
 export function parseStoredMatchHistoryPageSize(
@@ -79,54 +75,29 @@ export function parseStoredMatchHistoryQueueFilters(
 }
 
 export function readMatchHistoryPreferences(): MatchHistoryPreferences {
-  if (typeof window === "undefined" || !canUseOptionalStorage()) {
-    return defaultPreferences();
-  }
-
-  try {
-    return {
-      pageSize: parseStoredMatchHistoryPageSize(
-        window.localStorage.getItem(MATCH_HISTORY_PAGE_SIZE_STORAGE_KEY),
-      ),
-      queueFilters: parseStoredMatchHistoryQueueFilters(
-        window.localStorage.getItem(MATCH_HISTORY_QUEUE_FILTERS_STORAGE_KEY),
-      ),
-    };
-  } catch {
-    return defaultPreferences();
-  }
+  // Both parsers answer a missing value with the default, so an unreadable
+  // store needs no separate branch.
+  return {
+    pageSize: parseStoredMatchHistoryPageSize(
+      readOptionalStorage(MATCH_HISTORY_PAGE_SIZE_STORAGE_KEY),
+    ),
+    queueFilters: parseStoredMatchHistoryQueueFilters(
+      readOptionalStorage(MATCH_HISTORY_QUEUE_FILTERS_STORAGE_KEY),
+    ),
+  };
 }
 
 export function persistMatchHistoryPageSize(
   pageSize: MatchHistoryPageSize,
 ): void {
-  if (typeof window === "undefined" || !canUseOptionalStorage()) {
-    return;
-  }
-
-  try {
-    window.localStorage.setItem(
-      MATCH_HISTORY_PAGE_SIZE_STORAGE_KEY,
-      String(pageSize),
-    );
-  } catch {
-    // Keep the in-memory selection when browser storage is unavailable.
-  }
+  writeOptionalStorage(MATCH_HISTORY_PAGE_SIZE_STORAGE_KEY, String(pageSize));
 }
 
 export function persistMatchHistoryQueueFilters(
   queueFilters: ReadonlyArray<MatchHistoryQueueFilter>,
 ): void {
-  if (typeof window === "undefined" || !canUseOptionalStorage()) {
-    return;
-  }
-
-  try {
-    window.localStorage.setItem(
-      MATCH_HISTORY_QUEUE_FILTERS_STORAGE_KEY,
-      JSON.stringify(queueFilters),
-    );
-  } catch {
-    // Keep the in-memory selection when browser storage is unavailable.
-  }
+  writeOptionalStorage(
+    MATCH_HISTORY_QUEUE_FILTERS_STORAGE_KEY,
+    JSON.stringify(queueFilters),
+  );
 }

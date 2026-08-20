@@ -616,7 +616,7 @@ class RiotAPIClient:
         else:
             match_ids = response_data.get("matchIds", [])
 
-        return MatchListDTO(matchIds=match_ids, start=start, count=count, puuid=puuid)
+        return MatchListDTO(match_ids=match_ids, start=start, count=count, puuid=puuid)
 
     async def get_match(self, match_id: str, region: Region | None = None) -> MatchDTO:
         """Get match details by match ID."""

@@ -1,7 +1,6 @@
 """Player data model for storing player information."""
 
 from datetime import datetime
-from typing import override
 
 from sqlalchemy import (
     Boolean,
@@ -119,11 +118,6 @@ class Player(Base):
         nullable=True,
         comment="Last complete successful Match Fetcher match check",
     )
-
-    @override
-    def __repr__(self) -> str:
-        """Return string representation of the player."""
-        return f"<Player(puuid='{self.puuid}', game_name='{self.game_name}#{self.tag_line}', platform='{self.platform}')>"
 
     # Database-only relationships - used by SQLAlchemy ORM but not directly referenced in Python code
     # These relationships enable database queries and cascade operations

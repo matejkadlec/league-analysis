@@ -2,6 +2,7 @@
 
 from datetime import datetime
 from decimal import Decimal
+from typing import override
 
 from sqlalchemy import (
     BigInteger,
@@ -11,6 +12,7 @@ from sqlalchemy import (
     Numeric,
     String,
     func,
+    inspect,
 )
 from sqlalchemy import (
     DateTime as SQLDateTime,
@@ -109,3 +111,13 @@ class Base(DeclarativeBase):
 
     metadata = metadata
     type_annotation_map = type_annotation_map
+
+    @override
+    def __repr__(self) -> str:
+        """Identify the row by class and primary key, without touching a column.
+
+        `InstanceState.identity` reads the already-loaded identity key, so this
+        never emits a lazy load the way a repr spelling out mapped attributes
+        would. Unflushed rows have no identity yet and read as `transient`.
+        """
+        return f"<{type(self).__name__} {inspect(self).identity or 'transient'}>"

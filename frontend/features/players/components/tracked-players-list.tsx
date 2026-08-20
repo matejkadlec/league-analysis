@@ -29,18 +29,12 @@ interface TrackedPlayersListProps {
   onViewPlayerChange?: (player: Player | null) => void;
 }
 
-interface TrackedPlayerRowSharedProps {
+interface TrackedPlayerRowProps {
   player: Player;
-  isUntrackingCurrentPlayer: boolean;
-  onUntrackPlayer: (player: Player) => void;
-}
-
-interface ViewedTrackedPlayerRowProps extends TrackedPlayerRowSharedProps {
-  onHidePlayer: (player: Player) => void;
-}
-
-interface HiddenTrackedPlayerRowProps extends TrackedPlayerRowSharedProps {
-  onViewPlayer: (player: Player) => void;
+  isViewed: boolean;
+  isUntracking: boolean;
+  onToggleView: (player: Player | null) => void;
+  onUntrack: (player: Player) => void;
 }
 
 function getListHeightPx(rowCount: number): number {
@@ -93,34 +87,15 @@ function TrackedPlayerDetails({ player }: { player: Player }) {
   );
 }
 
-function UntrackTrackedPlayerButton({
+function TrackedPlayerRow({
   player,
-  isUntrackingCurrentPlayer,
-  onUntrackPlayer,
-}: TrackedPlayerRowSharedProps) {
-  return (
-    <Button
-      type="button"
-      className="button-medium no-rotation"
-      onClick={() => onUntrackPlayer(player)}
-      disabled={isUntrackingCurrentPlayer}
-    >
-      {isUntrackingCurrentPlayer ? (
-        <Loader2 className="h-4 w-4 animate-spin" />
-      ) : (
-        <UserMinus className="h-4 w-4" />
-      )}
-      Untrack
-    </Button>
-  );
-}
+  isViewed,
+  isUntracking,
+  onToggleView,
+  onUntrack,
+}: TrackedPlayerRowProps) {
+  const ToggleViewIcon = isViewed ? EyeOff : Eye;
 
-function ViewedTrackedPlayerRow({
-  player,
-  isUntrackingCurrentPlayer,
-  onHidePlayer,
-  onUntrackPlayer,
-}: ViewedTrackedPlayerRowProps) {
   return (
     <div
       data-testid={`tracked-player-row-${player.puuid}`}
@@ -131,47 +106,24 @@ function ViewedTrackedPlayerRow({
         <Button
           type="button"
           className="button-medium no-rotation"
-          onClick={() => onHidePlayer(player)}
+          onClick={() => onToggleView(isViewed ? null : player)}
         >
-          <EyeOff className="h-4 w-4" />
-          Hide
+          <ToggleViewIcon className="h-4 w-4" />
+          {isViewed ? "Hide" : "View"}
         </Button>
-        <UntrackTrackedPlayerButton
-          player={player}
-          isUntrackingCurrentPlayer={isUntrackingCurrentPlayer}
-          onUntrackPlayer={onUntrackPlayer}
-        />
-      </div>
-    </div>
-  );
-}
-
-function HiddenTrackedPlayerRow({
-  player,
-  isUntrackingCurrentPlayer,
-  onViewPlayer,
-  onUntrackPlayer,
-}: HiddenTrackedPlayerRowProps) {
-  return (
-    <div
-      data-testid={`tracked-player-row-${player.puuid}`}
-      className="player-management-border flex min-h-[88px] items-center justify-between rounded-lg bg-card p-4 transition-colors hover:bg-accent/50"
-    >
-      <TrackedPlayerDetails player={player} />
-      <div className="flex items-center gap-2">
         <Button
           type="button"
           className="button-medium no-rotation"
-          onClick={() => onViewPlayer(player)}
+          onClick={() => onUntrack(player)}
+          disabled={isUntracking}
         >
-          <Eye className="h-4 w-4" />
-          View
+          {isUntracking ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <UserMinus className="h-4 w-4" />
+          )}
+          Untrack
         </Button>
-        <UntrackTrackedPlayerButton
-          player={player}
-          isUntrackingCurrentPlayer={isUntrackingCurrentPlayer}
-          onUntrackPlayer={onUntrackPlayer}
-        />
       </div>
     </div>
   );
@@ -231,14 +183,6 @@ export function TrackedPlayersList({
     ) {
       untrackMutation.mutate(player.puuid);
     }
-  };
-
-  const handleViewPlayer = (player: Player) => {
-    onViewPlayerChange?.(player);
-  };
-
-  const handleHidePlayer = () => {
-    onViewPlayerChange?.(null);
   };
 
   if (isLoading || (isFetching && !data)) {
@@ -317,31 +261,19 @@ export function TrackedPlayersList({
         }}
       >
         <div className="space-y-3">
-          {data.map((player) =>
-            selectedPlayerPuuid === player.puuid ? (
-              <ViewedTrackedPlayerRow
-                key={player.puuid}
-                player={player}
-                isUntrackingCurrentPlayer={
-                  untrackMutation.isPending &&
-                  untrackMutation.variables === player.puuid
-                }
-                onHidePlayer={handleHidePlayer}
-                onUntrackPlayer={handleUntrack}
-              />
-            ) : (
-              <HiddenTrackedPlayerRow
-                key={player.puuid}
-                player={player}
-                isUntrackingCurrentPlayer={
-                  untrackMutation.isPending &&
-                  untrackMutation.variables === player.puuid
-                }
-                onViewPlayer={handleViewPlayer}
-                onUntrackPlayer={handleUntrack}
-              />
-            ),
-          )}
+          {data.map((player) => (
+            <TrackedPlayerRow
+              key={player.puuid}
+              player={player}
+              isViewed={selectedPlayerPuuid === player.puuid}
+              isUntracking={
+                untrackMutation.isPending &&
+                untrackMutation.variables === player.puuid
+              }
+              onToggleView={(next) => onViewPlayerChange?.(next)}
+              onUntrack={handleUntrack}
+            />
+          ))}
         </div>
       </div>
     </Card>

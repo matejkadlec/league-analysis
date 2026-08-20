@@ -1,7 +1,7 @@
 """User settings model for per-user preferences."""
 
 from datetime import datetime
-from typing import Final, override
+from typing import Final
 
 from sqlalchemy import ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -37,8 +37,3 @@ class UserSettings(Base):
 
     # Relationships
     user = relationship("User", back_populates="settings")
-
-    @override
-    def __repr__(self) -> str:
-        """Return string representation of the user settings."""
-        return f"<UserSettings(user_id={self.user_id})>"

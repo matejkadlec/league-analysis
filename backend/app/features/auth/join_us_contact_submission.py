@@ -1,7 +1,7 @@
 """Join Us contact submission log for anti-spam throttling."""
 
 from datetime import datetime
-from typing import Final, override
+from typing import Final
 
 from sqlalchemy import (
     DateTime as SQLDateTime,
@@ -41,15 +41,6 @@ class JoinUsContactSubmission(Base):
         index=True,
         comment="When the submission was accepted",
     )
-
-    @override
-    def __repr__(self) -> str:
-        """Return string representation of join-us submission row."""
-        return (
-            "<JoinUsContactSubmission("
-            f"id={self.id}, remote_ip='{self.remote_ip}', "
-            f"subject='{self.subject}')>"
-        )
 
 
 Index(
