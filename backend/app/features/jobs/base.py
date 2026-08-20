@@ -51,7 +51,6 @@ class RiotClientOptions(TypedDict, total=False):
 
     region: Region | None
     platform: Platform | None
-    enable_logging: bool
     request_callback: Callable[[str, int], None] | None
 
 

@@ -114,16 +114,6 @@ async def test_ranked_queue_reports_each_stored_match_for_lp_observation() -> No
     assert stored_matches == [(420, "EUN1_123")]
 
 
-def test_explicit_analysis_queue_subset_rejects_unsupported_ids() -> None:
-    service = MatchService(cast(AsyncSession, _QueueSyncSession()))
-
-    assert service._normalize_sync_queue_ids([2400, 999999, 480, 2400]) == [
-        480,
-        2400,
-    ]
-    assert service._normalize_sync_queue_ids([999999]) == []
-
-
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("game_version", "expected_stored"),

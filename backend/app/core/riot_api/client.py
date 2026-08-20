@@ -81,7 +81,6 @@ class RiotAPIClient:
         api_key: str | None = None,
         region: Region | None = None,
         platform: Platform | None = None,
-        enable_logging: bool = True,
         request_callback: Callable[[str, int], None] | None = None,
         credential_health_callback: Callable[
             [RiotCredentialStatus, datetime], Awaitable[None]
@@ -95,7 +94,6 @@ class RiotAPIClient:
             api_key: Riot API key (uses config if None)
             region: Default region for regional endpoints
             platform: Default platform for platform endpoints
-            enable_logging: Enable request/response logging
             request_callback: Optional callback for tracking API requests (metric_name, count)
             credential_health_callback: Durable observer for authenticated provider responses
         """
@@ -108,7 +106,6 @@ class RiotAPIClient:
         # Default to EUN region if not specified
         self.region = region or Region("europe")
         self.platform = platform or Platform("eun1")
-        self.enable_logging = enable_logging
         self.request_callback = request_callback
         self.credential_health_callback = credential_health_callback
 

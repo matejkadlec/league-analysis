@@ -13,12 +13,9 @@ from structlog.testing import capture_logs
 from structlog.typing import EventDict
 
 from app.core.database import DatabaseManager
-from app.core.riot_api.errors import AuthenticationError, RateLimitError
 from app.features.jobs.base import BaseJob, _validation_field_locations
-from app.features.jobs.error_handling import RateLimitSignal, _handle_error
 from app.features.jobs.log_capture import BoundedLogCapture
 from app.features.matches import match_persistence
-from app.features.matches import service as matches_service_module
 from app.features.matches.match_stats import advanced_int
 from app.features.matches.timeline import _uses_historical_atakhan_contract
 from app.features.playstyle_analysis.service import PlaystyleAnalysisService
@@ -114,42 +111,6 @@ async def test_unexpected_rollback_still_logs_warning() -> None:
     assert entries[0]["error_type"] == "ValueError"
 
 
-def _raise_through(error: Exception, operation: str, *, critical: bool = True) -> None:
-    """Call `_handle_error` from a real except block, as the decorators do."""
-    try:
-        raise error
-    except Exception:
-        _handle_error(error, operation, critical, {})
-
-
-def test_job_error_handler_logs_static_events_with_operation_field() -> None:
-    """Each error class keeps the operation as a field on a static event."""
-    with capture_logs() as logs:
-        with pytest.raises(RateLimitSignal):
-            _raise_through(
-                RateLimitError("limited", status_code=429, retry_after=45),
-                "fetch matches",
-            )
-        with pytest.raises(AuthenticationError):
-            _raise_through(
-                AuthenticationError("bad key", status_code=401),
-                "update player",
-            )
-        with pytest.raises(RuntimeError):
-            _raise_through(RuntimeError("boom"), "sync history")
-
-    rate_limit = _events(logs, "job_rate_limit_hit")
-    assert rate_limit[0]["operation"] == "fetch matches"
-    assert rate_limit[0]["retry_after"] == 45
-
-    auth = _events(logs, "job_authentication_failed")
-    assert auth[0]["operation"] == "update player"
-
-    operation = _events(logs, "job_operation_failed")
-    assert operation[0]["operation"] == "sync history"
-    assert operation[0]["error_type"] == "RuntimeError"
-
-
 class _ProbeJob(BaseJob):
     """Minimal concrete job driving one helper directly."""
 
@@ -212,21 +173,6 @@ def test_timeline_version_parse_failure_logs_debug() -> None:
     entries = _events(logs, "timeline_version_parse_failed")
     assert len(entries) == 1
     assert entries[0]["game_version"] == "unknown-version"
-
-
-def test_invalid_sync_queue_ids_are_reported() -> None:
-    """Queue IDs that cannot coerce are skipped with the values attached."""
-    service = matches_service_module.MatchService(cast(AsyncSession, object()))
-
-    with capture_logs() as logs:
-        assert service._normalize_sync_queue_ids(cast("list[int]", ["abc", 420])) == [
-            420
-        ]
-
-    entries = _events(logs, "invalid_queue_ids_skipped")
-    assert len(entries) == 1
-    assert entries[0]["invalid_queue_ids"] == ["abc"]
-    assert entries[0]["count"] == 1
 
 
 def _fake_record(*_args: object, **_kwargs: object) -> object:

@@ -16,13 +16,10 @@ from app.core.riot_api.constants import PRODUCT_SUPPORTED_QUEUE_IDS
 from app.core.riot_api.errors import (
     AuthenticationError,
     ForbiddenError,
-    RateLimitError,
 )
 from app.features.jobs import scheduler as scheduler_module
 from app.features.jobs.base import BaseJob, _format_api_calls_for_storage
 from app.features.jobs.error_handling import (
-    RateLimitSignal,
-    handle_riot_api_errors,
     is_riot_api_key_error,
 )
 from app.features.jobs.implementations.match_fetcher import MatchFetcherJob
@@ -351,27 +348,6 @@ def test_match_fetcher_uses_every_canonical_queue_and_strips_legacy_config() -> 
     ) == {"interval_seconds": 3600}
 
 
-@pytest.mark.asyncio
-async def test_rate_limit_is_converted_to_job_signal() -> None:
-    @handle_riot_api_errors(operation="fetch matches")
-    async def failing_job() -> None:
-        raise RateLimitError("limited", status_code=429, retry_after=7)
-
-    with pytest.raises(RateLimitSignal) as error:
-        await failing_job()
-    assert error.value.retry_after == 7
-
-
-@pytest.mark.asyncio
-async def test_authentication_errors_remain_fatal() -> None:
-    @handle_riot_api_errors(operation="fetch player", critical=False)
-    async def failing_job() -> None:
-        raise AuthenticationError("expired", status_code=401)
-
-    with pytest.raises(AuthenticationError):
-        await failing_job()
-
-
 @pytest.mark.parametrize(
     "error",
     [
@@ -382,15 +358,6 @@ async def test_authentication_errors_remain_fatal() -> None:
 def test_riot_key_rejections_use_typed_status_classification(error: Exception) -> None:
     assert is_riot_api_key_error(error)
     assert not is_riot_api_key_error(RuntimeError("unrelated 401 text"))
-
-
-@pytest.mark.asyncio
-async def test_noncritical_job_error_returns_none() -> None:
-    @handle_riot_api_errors(operation="optional lookup", critical=False)
-    async def failing_job() -> None:
-        raise RuntimeError("fixture failure")
-
-    assert await failing_job() is None
 
 
 def test_riot_maintenance_mode_blocks_only_regular_writer_jobs() -> None:

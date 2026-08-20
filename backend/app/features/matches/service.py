@@ -1233,40 +1233,6 @@ class MatchService:
 
         return total_stored
 
-    def _normalize_sync_queue_ids(self, queue_ids: list[int] | None) -> list[int]:
-        """Normalize an optional explicit queue subset for analysis operations."""
-        if queue_ids is None:
-            return list(self.SUPPORTED_SYNC_QUEUE_IDS)
-
-        if len(queue_ids) == 0:
-            return []
-
-        requested: set[int] = set()
-        invalid_queue_ids: list[object] = []
-
-        for raw_queue_id in queue_ids:
-            try:
-                queue_id = int(raw_queue_id)
-            except TypeError, ValueError:
-                invalid_queue_ids.append(raw_queue_id)
-                continue
-
-            if queue_id in self.SUPPORTED_SYNC_QUEUE_IDS:
-                requested.add(queue_id)
-
-        if invalid_queue_ids:
-            logger.warning(
-                "invalid_queue_ids_skipped",
-                invalid_queue_ids=invalid_queue_ids,
-                count=len(invalid_queue_ids),
-            )
-
-        return [
-            queue_id
-            for queue_id in self.SUPPORTED_SYNC_QUEUE_IDS
-            if queue_id in requested
-        ]
-
     async def _sync_single_queue_for_player(
         self,
         riot_client: RiotAPIClient,
