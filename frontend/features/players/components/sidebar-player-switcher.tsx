@@ -21,7 +21,7 @@ interface SidebarPlayerSwitcherProps {
 }
 
 function playerLabel(player: Player): string {
-  return `${player.game_name ?? "Unknown"}${player.tag_line ? `#${player.tag_line}` : ""}`;
+  return `${player.game_name}${player.tag_line ? `#${player.tag_line}` : ""}`;
 }
 
 export function SidebarPlayerSwitcher({

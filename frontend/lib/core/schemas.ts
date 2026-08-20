@@ -3,11 +3,11 @@ import { z } from "zod";
 // Player Schema
 export const PlayerSchema = z.object({
   puuid: z.string(),
-  game_name: z.string().optional().nullable(),
-  tag_line: z.string().optional().nullable(),
+  game_name: z.string(),
+  tag_line: z.string(),
   platform: z.string(),
-  summoner_level: z.number().int().optional().nullable(),
-  profile_icon_id: z.number().optional().nullable(),
+  summoner_level: z.number().int(),
+  profile_icon_id: z.number().int(),
   is_tracked: z.boolean().optional().default(false),
   analyzed_matches: z.number().int().optional().default(0),
   total_matches: z.number().int().optional().default(0),

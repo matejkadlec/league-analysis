@@ -63,12 +63,12 @@ class Player(Base):
     )
 
     # Player statistics
-    profile_icon_id: Mapped[int | None] = mapped_column(
-        Integer, nullable=True, comment="Profile icon ID"
+    profile_icon_id: Mapped[int] = mapped_column(
+        Integer, nullable=False, comment="Profile icon ID"
     )
 
-    summoner_level: Mapped[int | None] = mapped_column(
-        Integer, nullable=True, comment="Summoner/Account level"
+    summoner_level: Mapped[int] = mapped_column(
+        Integer, nullable=False, comment="Summoner/Account level"
     )
 
     # Tracking & Analysis flags

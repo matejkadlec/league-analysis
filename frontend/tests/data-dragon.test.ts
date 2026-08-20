@@ -140,7 +140,7 @@ describe("Data Dragon asset URLs", () => {
     expect(getChampionIconUrl("Annie", "99.1.2")).toContain(
       "/cdn/99.1.2/img/champion/Annie.png",
     );
-    expect(getProfileIconFallbackUrl(999999, "99.1.2")).toContain(
+    expect(getProfileIconFallbackUrl("99.1.2")).toContain(
       "/cdn/99.1.2/img/profileicon/29.png",
     );
     expect(getSummonerSpellIconUrlById(4, "99.1.2")).toContain(
