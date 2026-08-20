@@ -384,17 +384,28 @@ class JobService:
         self,
         job_id: int,
         paused: bool,
+        *,
+        test_run: bool = False,
     ) -> JobControlActionResponse | None:
-        """Pause or resume a running job execution."""
+        """Pause or resume a running job execution (or its test run).
+
+        Test runs share the job's configuration row but live under the
+        negated config ID in the runtime control registry.
+        """
         job = await self.get_job_configuration_model(job_id)
         if not job:
             return None
 
-        runtime_state = get_runtime_control_snapshot(job_id)
+        runtime_key = -job.id if test_run else job_id
+        runtime_state = get_runtime_control_snapshot(runtime_key)
         if not runtime_state["is_running"]:
             return JobControlActionResponse(
                 success=False,
-                message="Job is not running",
+                message=(
+                    "No test run is active for this job"
+                    if test_run
+                    else "Job is not running"
+                ),
                 is_running=False,
                 is_paused=bool(job.is_paused),
                 is_stopping=runtime_state["stop_requested"],
@@ -407,9 +418,10 @@ class JobService:
         await self.db.refresh(job)
 
         action = "paused" if paused else "resumed"
+        subject = f"Test run for '{job.name}'" if test_run else f"Job '{job.name}'"
         return JobControlActionResponse(
             success=True,
-            message=f"Job '{job.name}' {action}",
+            message=f"{subject} {action}",
             is_running=True,
             is_paused=bool(job.is_paused),
             is_stopping=runtime_state["stop_requested"],
@@ -420,39 +432,51 @@ class JobService:
         self,
         job_id: int,
         force: bool,
+        *,
+        test_run: bool = False,
     ) -> JobControlActionResponse | None:
         """Request graceful or forced stop for a running job execution."""
         job = await self.get_job_configuration_model(job_id)
         if not job:
             return None
 
-        was_applied = request_job_stop(job_id, force=force)
-        runtime_state = get_runtime_control_snapshot(job_id)
+        runtime_key = -job.id if test_run else job_id
+        was_applied = request_job_stop(runtime_key, force=force)
+        runtime_state = get_runtime_control_snapshot(runtime_key)
 
         if not was_applied:
             return JobControlActionResponse(
                 success=False,
-                message="Job is not running",
+                message=(
+                    "No test run is active for this job"
+                    if test_run
+                    else "Job is not running"
+                ),
                 is_running=False,
                 is_paused=bool(job.is_paused),
                 is_stopping=False,
                 is_force_stopping=False,
             )
 
-        # Ensure paused flag does not remain stuck when stopping.
+        # Ensure paused flag does not remain stuck when stopping. The flag
+        # lives on the shared configuration row, so a paused-then-stopped
+        # test run would otherwise block the next scheduled execution too.
         if job.is_paused:
             job.is_paused = False
             job.updated_at = datetime.now(UTC)
             await self.db.commit()
             await self.db.refresh(job)
 
+        subject = f"test run of '{job.name}'" if test_run else f"'{job.name}'"
+        if force:
+            message = f"Force stop requested for {subject}"
+        elif test_run:
+            message = f"Stop requested for {subject}"
+        else:
+            message = f"Graceful stop requested for {subject}"
         return JobControlActionResponse(
             success=True,
-            message=(
-                f"Force stop requested for '{job.name}'"
-                if force
-                else f"Graceful stop requested for '{job.name}'"
-            ),
+            message=message,
             is_running=runtime_state["is_running"],
             is_paused=bool(job.is_paused),
             is_stopping=runtime_state["stop_requested"],

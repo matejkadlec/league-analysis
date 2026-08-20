@@ -4,8 +4,6 @@
 # pyright: reportMissingTypeStubs=false
 """Job management API endpoints."""
 
-from datetime import UTC, datetime
-
 import structlog
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 
@@ -13,7 +11,6 @@ from app.features.auth.dependencies import get_current_admin_user
 
 from .base import BaseJob
 from .control import (
-    get_runtime_control_snapshot,
     is_runtime_job_running,
     request_job_stop,
 )
@@ -31,6 +28,7 @@ from .schemas import (
     JobStatusResponse,
     JobTriggerResponse,
 )
+from .service import JobService
 
 logger = structlog.get_logger(__name__)
 
@@ -567,39 +565,15 @@ async def stop_test_run(
 ):
     """Stop a running test for a job."""
     try:
-        job = await job_service.get_job_configuration(job_id)
-        if not job:
+        state = await job_service.request_job_stop_action(
+            job_id, force=force, test_run=True
+        )
+        if state is None:
             raise HTTPException(
                 status_code=404,
                 detail=f"Job configuration with ID {job_id} not found",
             )
-
-        test_runtime_key = -job.id
-        was_applied = request_job_stop(test_runtime_key, force=force)
-        test_state = get_runtime_control_snapshot(test_runtime_key)
-
-        if not was_applied:
-            return JobControlActionResponse(
-                success=False,
-                message="No test run is active for this job",
-                is_running=False,
-                is_paused=False,
-                is_stopping=False,
-                is_force_stopping=False,
-            )
-
-        return JobControlActionResponse(
-            success=True,
-            message=(
-                f"Force stop requested for test run of '{job.name}'"
-                if force
-                else f"Stop requested for test run of '{job.name}'"
-            ),
-            is_running=test_state["is_running"],
-            is_paused=False,
-            is_stopping=test_state["stop_requested"],
-            is_force_stopping=test_state["force_stop_requested"],
-        )
+        return state
 
     except HTTPException:
         raise
@@ -618,45 +592,18 @@ async def stop_test_run(
 
 async def _set_test_run_paused(
     job_id: int,
-    job_service: JobServiceDep,
+    job_service: JobService,
     *,
     paused: bool,
 ) -> JobControlActionResponse:
     """Flip the pause flag for an active test run; the two routes share this."""
-    job_model = await job_service.get_job_configuration_model(job_id)
-    if not job_model:
+    state = await job_service.set_job_paused(job_id, paused, test_run=True)
+    if state is None:
         raise HTTPException(
             status_code=404,
             detail=f"Job configuration with ID {job_id} not found",
         )
-
-    test_runtime_key = -job_model.id
-    if not is_runtime_job_running(test_runtime_key):
-        return JobControlActionResponse(
-            success=False,
-            message="No test run is active for this job",
-            is_running=False,
-            is_paused=False,
-            is_stopping=False,
-            is_force_stopping=False,
-        )
-
-    job_model.is_paused = paused
-    job_model.updated_at = datetime.now(UTC)
-    await job_service.db.commit()
-    await job_service.db.refresh(job_model)
-
-    test_state = get_runtime_control_snapshot(test_runtime_key)
-    return JobControlActionResponse(
-        success=True,
-        message=(
-            f"Test run for '{job_model.name}' {'paused' if paused else 'resumed'}"
-        ),
-        is_running=test_state["is_running"],
-        is_paused=paused,
-        is_stopping=test_state["stop_requested"],
-        is_force_stopping=test_state["force_stop_requested"],
-    )
+    return state
 
 
 @router.post("/{job_id}/test/pause", response_model=JobControlActionResponse)
