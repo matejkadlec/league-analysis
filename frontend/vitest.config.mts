@@ -73,11 +73,19 @@ export default defineConfig({
       // statements, 77.33% branches, 79.29% functions, 83.15% lines over 626
       // tests. Nothing with ≥10 statements now sits below 20% except the two
       // route shells the ledger already resolved.
+      // Ratcheted 2026-08-20 after a deletion sweep rather than a test sweep:
+      // 83.74% statements, 78.27% branches, 80.62% functions, 83.84% lines
+      // over the same 658 tests. Nothing was covered that was not covered
+      // before -- roughly 620 lines of unreachable source left the
+      // denominator, which is the one way coverage rises without anyone
+      // writing a test. Ratcheting matters more after this kind of batch than
+      // after a testing one: leave the floors where they were and the deleted
+      // code's absence silently buys headroom for the next untested file.
       thresholds: {
-        statements: 80,
-        branches: 74,
-        functions: 76,
-        lines: 80,
+        statements: 81,
+        branches: 76,
+        functions: 78,
+        lines: 81,
       },
     },
   },
