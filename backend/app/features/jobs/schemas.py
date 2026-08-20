@@ -82,6 +82,38 @@ class JobConfigurationResponse(JobConfigurationBase):
     model_config = ConfigDict(from_attributes=True)
 
 
+class JobExecutionApiCall(BaseModel):
+    """One endpoint's grouped calls, as `base.py:StoredAPICall` writes them.
+
+    A single call keeps its whole params dict; a group keeps only the key that
+    varied and its first and last value. Measured against production on
+    2026-08-21: 4,586 stored entries, every field of every one of them this
+    shape.
+    """
+
+    endpoint: str
+    region: str
+    count: int
+    first_timestamp: str | None = None
+    last_timestamp: str | None = None
+    params: dict[str, str] | None = None
+    param_key: str | None = None
+    first_param: str | None = None
+    last_param: str | None = None
+
+
+class JobExecutionDetailedLogs(BaseModel):
+    """The two keys `base.py:log_completion` writes, each only when non-empty.
+
+    Rows written before this shape existed carry other keys; they parse to a
+    document with both fields absent rather than failing, which is what the
+    jobs dialog already did with them.
+    """
+
+    logs: list[dict[str, Any]] | None = None
+    api_calls: list[JobExecutionApiCall] | None = None
+
+
 class JobExecutionResponse(BaseModel):
     """Schema for job execution response data."""
 
@@ -101,7 +133,7 @@ class JobExecutionResponse(BaseModel):
     execution_log: dict[str, Any] | None = Field(
         default=None, description="Detailed execution log"
     )
-    detailed_logs: dict[str, Any] | None = Field(
+    detailed_logs: JobExecutionDetailedLogs | None = Field(
         default=None,
         description="All logs captured during execution (includes logs array and summary)",
     )

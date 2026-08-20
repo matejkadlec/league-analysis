@@ -42,7 +42,11 @@ from app.features.jobs.models import (
     JobType,
 )
 from app.features.jobs.queue_config import normalize_match_fetcher_config
-from app.features.jobs.schemas import JobConfigurationResponse, JobConfigurationUpdate
+from app.features.jobs.schemas import (
+    JobConfigurationResponse,
+    JobConfigurationUpdate,
+    JobExecutionDetailedLogs,
+)
 from app.features.jobs.service import JobService
 
 
@@ -701,3 +705,56 @@ async def test_writer_proceeds_when_no_interlock_is_set() -> None:
     await ensure_riot_writer_maintenance_is_inactive(cast(AsyncSession, session))
 
     assert len(session.statements) == 2
+
+
+def test_detailed_logs_accepts_every_shape_production_stores() -> None:
+    """The three shapes measured in `jobs.job_executions` on 2026-08-21.
+
+    2,620 rows hold an object: 1,806 `{api_calls, logs}`, 811 `{logs}`, and 3
+    a legacy `{message}` written before this contract existed. Naming the
+    shape is only safe while that last one still parses -- a strict model
+    would 500 the executions dialog on those three rows instead.
+    """
+    grouped = JobExecutionDetailedLogs.model_validate(
+        {
+            "logs": [{"event": "started"}],
+            "api_calls": [
+                {
+                    "endpoint": "/lol/match/v5/matches/{matchId}",
+                    "region": "europe",
+                    "count": 2,
+                    "first_timestamp": "2026-08-21T00:00:00Z",
+                    "last_timestamp": "2026-08-21T00:00:09Z",
+                    "param_key": "matchId",
+                    "first_param": "EUN1_1",
+                    "last_param": "EUN1_2",
+                }
+            ],
+        }
+    )
+    assert grouped.api_calls is not None
+    assert grouped.api_calls[0].count == 2
+    assert grouped.api_calls[0].params is None
+
+    single = JobExecutionDetailedLogs.model_validate(
+        {
+            "logs": [],
+            "api_calls": [
+                {
+                    "endpoint": "/lol/summoner/v4/summoners/by-puuid/{puuid}",
+                    "region": "eun1",
+                    "count": 1,
+                    "first_timestamp": "2026-08-21T00:00:00Z",
+                    "last_timestamp": "2026-08-21T00:00:00Z",
+                    "params": {"puuid": "abc"},
+                }
+            ],
+        }
+    )
+    assert single.api_calls is not None
+    assert single.api_calls[0].params == {"puuid": "abc"}
+    assert single.api_calls[0].param_key is None
+
+    legacy = JobExecutionDetailedLogs.model_validate({"message": "no logs captured"})
+    assert legacy.logs is None
+    assert legacy.api_calls is None
