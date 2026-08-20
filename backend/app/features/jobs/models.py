@@ -105,16 +105,6 @@ class JobConfiguration(Base):
         comment="Whether this job is active and should be scheduled",
     )
 
-    # Dormant: pause state moved to the in-memory runtime-control registry
-    # (control.py), where each run carries its own flag. Dropping the column
-    # is a schema migration deferred to its own change.
-    is_paused: Mapped[bool] = mapped_column(
-        Boolean,
-        nullable=False,
-        default=False,
-        comment="Whether a currently running job execution is paused",
-    )
-
     config_json: Mapped[dict[str, Any] | None] = mapped_column(
         JSONB,
         nullable=True,

@@ -124,6 +124,18 @@ describe("what the join-us form refuses to send", () => {
     expect(isSubmitDisabled()).toBe(true);
   });
 
+  it("gives a message ending in #nl no special treatment", () => {
+    // `#nl` used to switch off the minimum length, the captcha and the
+    // hourly rate limit, and the literal shipped in the public bundle.
+    // The suffix is now ordinary text; if it ever buys an exemption again,
+    // this is where it shows up.
+    render(<JoinUsForm />);
+    fillIn({ body: "please let me in #nl" });
+    solveCaptcha();
+
+    expect(isSubmitDisabled()).toBe(true);
+  });
+
   it("accepts a message of exactly the minimum length", () => {
     // The boundary itself: 300 must pass, or the counter says "Requirement
     // met" over a button that stays dead.

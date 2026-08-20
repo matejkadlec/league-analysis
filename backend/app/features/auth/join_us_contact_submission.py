@@ -5,7 +5,6 @@ from typing import Final, override
 
 from sqlalchemy import (
     BigInteger,
-    Boolean,
     Index,
     String,
 )
@@ -41,12 +40,6 @@ class JoinUsContactSubmission(Base):
         nullable=False,
         comment="Submitted subject value",
     )
-    is_test: Mapped[bool] = mapped_column(
-        Boolean,
-        nullable=False,
-        default=False,
-        comment="True when submission used #nl test bypass",
-    )
     submitted_at: Mapped[datetime] = mapped_column(
         SQLDateTime(timezone=True),
         nullable=False,
@@ -61,7 +54,7 @@ class JoinUsContactSubmission(Base):
         return (
             "<JoinUsContactSubmission("
             f"id={self.id}, remote_ip='{self.remote_ip}', "
-            f"subject='{self.subject}', is_test={self.is_test})>"
+            f"subject='{self.subject}')>"
         )
 
 

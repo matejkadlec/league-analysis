@@ -426,7 +426,7 @@ async def submit_join_us_contact(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail={
                 "code": "CONTACT_BODY_TOO_SHORT",
-                "message": "Message must contain at least 300 characters unless it ends with #nl.",
+                "message": "Message must contain at least 300 characters.",
             },
         ) from e
     except JoinUsRateLimitExceededError as e:
