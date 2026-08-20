@@ -1,10 +1,6 @@
 // @vitest-environment jsdom
 
-import {
-  QueryClient,
-  QueryClientProvider,
-  useQuery,
-} from "@tanstack/react-query";
+import { QueryClientProvider, useQuery } from "@tanstack/react-query";
 import {
   cleanup,
   fireEvent,
@@ -43,6 +39,7 @@ vi.mock("@/lib/core/hooks", async (importOriginal) => ({
 import { MatchmakingAnalysisHistory } from "@/features/matchmaking/components/matchmaking-analysis-history";
 import { appToast } from "@/lib/core/hooks";
 import { createProvidersQueryClient } from "@/components/providers";
+import { renderWithQueryClient } from "./render-support";
 
 const PUUID = "puuid-under-test";
 
@@ -76,15 +73,9 @@ function answerWith(items: (typeof AHEAD)[]) {
 }
 
 function renderHistory() {
-  const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-  });
-  render(
-    <QueryClientProvider client={queryClient}>
-      <MatchmakingAnalysisHistory puuid={PUUID} analyzedPlayerLabel="Sett#EUN" />
-    </QueryClientProvider>,
-  );
-  return queryClient;
+  return renderWithQueryClient(
+    <MatchmakingAnalysisHistory puuid={PUUID} analyzedPlayerLabel="Sett#EUN" />,
+  ).queryClient;
 }
 
 /**
@@ -204,10 +195,6 @@ describe("the matchmaking analysis history card", () => {
       data: { success: true, message: "deleted" },
     });
     const resultsQuery = vi.fn().mockResolvedValue("results");
-    const queryClient = new QueryClient({
-      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-    });
-
     function ResultsProbe() {
       // Stands in for the sibling panel: same key, and deliberately never
       // stale on its own, so a refetch can only come from the invalidation.
@@ -219,14 +206,14 @@ describe("the matchmaking analysis history card", () => {
       return null;
     }
 
-    render(
-      <QueryClientProvider client={queryClient}>
+    const { queryClient } = renderWithQueryClient(
+      <>
         <MatchmakingAnalysisHistory
           puuid={PUUID}
           analyzedPlayerLabel="Sett#EUN"
         />
         <ResultsProbe />
-      </QueryClientProvider>,
+      </>,
     );
 
     await waitFor(() => expect(resultsQuery).toHaveBeenCalledTimes(1));

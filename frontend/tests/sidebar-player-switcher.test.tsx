@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, screen, waitFor } from "@testing-library/react";
+
+import { renderWithQueryClient } from "./render-support";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -58,16 +59,11 @@ vi.mock("@/lib/core/hooks", () => ({
 import { SidebarPlayerSwitcher } from "@/features/players/components/sidebar-player-switcher";
 
 function renderSwitcher(manageOpen = false, onManageOpenChange = vi.fn()) {
-  const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
-  });
-  render(
-    <QueryClientProvider client={queryClient}>
-      <SidebarPlayerSwitcher
-        manageOpen={manageOpen}
-        onManageOpenChange={onManageOpenChange}
-      />
-    </QueryClientProvider>,
+  renderWithQueryClient(
+    <SidebarPlayerSwitcher
+      manageOpen={manageOpen}
+      onManageOpenChange={onManageOpenChange}
+    />,
   );
 }
 

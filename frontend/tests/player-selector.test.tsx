@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, screen, waitFor } from "@testing-library/react";
+
+import { renderWithQueryClient } from "./render-support";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -32,17 +33,12 @@ const player = {
 };
 
 function renderSelector(onPlayerSelected = vi.fn()) {
-  const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
-  });
-  render(
-    <QueryClientProvider client={queryClient}>
-      <PlayerSelector
-        id="test-player-selector"
-        ariaLabel="Choose test player"
-        onPlayerSelected={onPlayerSelected}
-      />
-    </QueryClientProvider>,
+  renderWithQueryClient(
+    <PlayerSelector
+      id="test-player-selector"
+      ariaLabel="Choose test player"
+      onPlayerSelected={onPlayerSelected}
+    />,
   );
   return onPlayerSelected;
 }

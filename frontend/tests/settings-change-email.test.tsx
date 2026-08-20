@@ -1,8 +1,6 @@
 // @vitest-environment jsdom
 
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, renderHook, waitFor } from "@testing-library/react";
-import type { ReactNode } from "react";
+import { act, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { validatedPost, checkAuth, toastError, toastSuccess } = vi.hoisted(
@@ -34,6 +32,7 @@ vi.mock("@/lib/core/hooks", () => ({
 
 import type { ApiError } from "@/lib/core/api";
 import { useChangeEmail } from "@/app/settings/use-change-email";
+import { renderHookWithQueryClient } from "./render-support";
 
 /** What `validatedPost` hands back when this API refuses with a code. */
 function refusal(code: string, lockedUntil?: string) {
@@ -49,17 +48,8 @@ function refusal(code: string, lockedUntil?: string) {
   return { success: false as const, error };
 }
 
-function wrapper({ children }: { children: ReactNode }) {
-  const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-  });
-  return (
-    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-  );
-}
-
 function renderChangeEmail() {
-  return renderHook(() => useChangeEmail(), { wrapper });
+  return renderHookWithQueryClient(() => useChangeEmail());
 }
 
 describe("changing the address an account is identified by", () => {

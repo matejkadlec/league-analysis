@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, screen } from "@testing-library/react";
+
+import { renderWithQueryClient } from "./render-support";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const state = vi.hoisted(() => ({
@@ -45,13 +46,8 @@ vi.mock("@/lib/core/api", async (importOriginal) => ({
 import { HeaderMessages } from "@/components/header-messages";
 
 function renderHeader() {
-  const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
-  });
-  render(
-    <QueryClientProvider client={queryClient}>
-      <HeaderMessages />
-    </QueryClientProvider>,
+  renderWithQueryClient(
+    <HeaderMessages />,
   );
 }
 

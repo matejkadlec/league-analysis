@@ -1,13 +1,8 @@
 // @vitest-environment jsdom
 
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import {
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+
+import { renderWithQueryClient } from "./render-support";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { validatedPost, toast } = vi.hoisted(() => ({
@@ -36,13 +31,8 @@ const CURRENT = "Current-1";
 const STRONG = "Str0ng!Pass";
 
 function renderSection() {
-  const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-  });
-  render(
-    <QueryClientProvider client={queryClient}>
-      <PasswordChangeSection />
-    </QueryClientProvider>,
+  const { queryClient } = renderWithQueryClient(
+    <PasswordChangeSection />,
   );
   return queryClient;
 }

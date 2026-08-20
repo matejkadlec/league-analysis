@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, screen, waitFor } from "@testing-library/react";
+
+import { renderWithQueryClient } from "./render-support";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -91,16 +92,8 @@ function preferences(overrides: Record<string, unknown> = {}) {
 }
 
 function renderCard() {
-  const queryClient = new QueryClient({
-    defaultOptions: {
-      queries: { retry: false },
-      mutations: { retry: false },
-    },
-  });
-  render(
-    <QueryClientProvider client={queryClient}>
-      <SmurfBoostSettingsCard />
-    </QueryClientProvider>,
+  const { queryClient } = renderWithQueryClient(
+    <SmurfBoostSettingsCard />,
   );
   return queryClient;
 }

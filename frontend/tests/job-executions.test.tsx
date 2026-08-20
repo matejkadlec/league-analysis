@@ -1,13 +1,6 @@
 // @vitest-environment jsdom
 
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import {
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { validatedGet } = vi.hoisted(() => ({ validatedGet: vi.fn() }));
@@ -23,6 +16,7 @@ import type {
   JobExecution,
   JobExecutionListResponse,
 } from "@/lib/core/schemas";
+import { renderWithQueryClient } from "./render-support";
 
 // The component observes a sentinel div to page in more rows. jsdom never
 // intersects anything, so a no-op keeps the constructor from throwing without
@@ -84,19 +78,16 @@ function renderExecutions(props: {
   jobs?: JobConfiguration[];
   selectedExecutionId?: number | null;
 }) {
-  const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
-  });
   const tree = (selectedExecutionId: number | null) => (
-    <QueryClientProvider client={queryClient}>
-      <JobExecutions
-        executions={props.executions}
-        jobs={props.jobs ?? [MATCH_FETCHER]}
-        selectedExecutionId={selectedExecutionId}
-      />
-    </QueryClientProvider>
+    <JobExecutions
+      executions={props.executions}
+      jobs={props.jobs ?? [MATCH_FETCHER]}
+      selectedExecutionId={selectedExecutionId}
+    />
   );
-  const { rerender } = render(tree(props.selectedExecutionId ?? null));
+  const { queryClient, rerender } = renderWithQueryClient(
+    tree(props.selectedExecutionId ?? null),
+  );
   return {
     queryClient,
     setSelectedExecutionId: (id: number | null) => rerender(tree(id)),

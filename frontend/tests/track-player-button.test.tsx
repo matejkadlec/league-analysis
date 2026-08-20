@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, screen, waitFor } from "@testing-library/react";
+
+import { renderWithQueryClient } from "./render-support";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -31,13 +32,8 @@ vi.mock("@/lib/core/hooks", () => ({
 import { TrackPlayerButton } from "@/features/players/components/track-player-button";
 
 function renderButton() {
-  const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
-  });
-  render(
-    <QueryClientProvider client={queryClient}>
-      <TrackPlayerButton puuid="player-1" playerName="Player One" />
-    </QueryClientProvider>,
+  renderWithQueryClient(
+    <TrackPlayerButton puuid="player-1" playerName="Player One" />,
   );
 }
 

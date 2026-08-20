@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, screen, waitFor } from "@testing-library/react";
+import { renderWithQueryClient } from "./render-support";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -61,15 +61,7 @@ describe("Match Fetcher job card", () => {
   afterEach(() => cleanup());
 
   it("keeps job controls while removing obsolete per-queue checkboxes", async () => {
-    const queryClient = new QueryClient({
-      defaultOptions: { queries: { retry: false } },
-    });
-
-    render(
-      <QueryClientProvider client={queryClient}>
-        <JobCard job={job} />
-      </QueryClientProvider>,
-    );
+    const { queryClient } = renderWithQueryClient(<JobCard job={job} />);
 
     await screen.findByText("Never");
 
@@ -87,16 +79,9 @@ describe("Match Fetcher job card", () => {
       success: true,
       data: { success: true, message: "Job triggered", execution_id: null },
     });
-    const queryClient = new QueryClient({
-      defaultOptions: { queries: { retry: false } },
-    });
     const user = userEvent.setup();
 
-    render(
-      <QueryClientProvider client={queryClient}>
-        <JobCard job={job} />
-      </QueryClientProvider>,
-    );
+    const { queryClient } = renderWithQueryClient(<JobCard job={job} />);
 
     await screen.findByText("Never");
     await user.click(screen.getByRole("button", { name: /trigger now/i }));

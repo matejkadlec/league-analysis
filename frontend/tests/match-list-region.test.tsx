@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, screen } from "@testing-library/react";
+
+import { renderWithQueryClient } from "./render-support";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { validatedGet } = vi.hoisted(() => ({ validatedGet: vi.fn() }));
@@ -72,13 +73,8 @@ function stubMatchMedia(matches: boolean): void {
 }
 
 async function renderHistory(): Promise<void> {
-  const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
-  });
-  render(
-    <QueryClientProvider client={queryClient}>
-      <MatchHistory puuid="player-puuid" />
-    </QueryClientProvider>,
+  renderWithQueryClient(
+    <MatchHistory puuid="player-puuid" />,
   );
   await screen.findByTestId("match-list", undefined, { timeout: 4000 });
 }

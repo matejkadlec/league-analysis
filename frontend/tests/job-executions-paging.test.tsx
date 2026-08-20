@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, screen, waitFor } from "@testing-library/react";
+
+import { renderWithQueryClient } from "./render-support";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { JobExecution, JobExecutionListResponse } from "@/lib/core/schemas";
@@ -82,19 +83,13 @@ beforeEach(() => {
 afterEach(cleanup);
 
 function renderExecutions() {
-  const client = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
-  });
-  const view = render(
-    <QueryClientProvider client={client}>
-      <JobExecutions
-        executions={pageOf(1)}
-        jobs={[]}
-        selectedExecutionId={null}
-      />
-    </QueryClientProvider>,
+  return renderWithQueryClient(
+    <JobExecutions
+      executions={pageOf(1)}
+      jobs={[]}
+      selectedExecutionId={null}
+    />,
   );
-  return { ...view, client };
 }
 
 describe("the executions list's paging", () => {
@@ -168,7 +163,7 @@ describe("the executions list's paging", () => {
     // the good pages with it, truncate the list back to page 1, and stop
     // paging — an operator scrolled to 40 rows loses 20 of them to a deploy
     // blip and they do not come back on the next successful tick.
-    const { client } = renderExecutions();
+    const { queryClient } = renderExecutions();
     await waitFor(() =>
       expect(screen.getByText("Showing 20 of 50 executions")).toBeTruthy(),
     );
@@ -182,7 +177,7 @@ describe("the executions list's paging", () => {
       error: { kind: "server", status: 500, message: "deploying" },
     });
     await act(async () => {
-      await client.refetchQueries({ queryKey: ["job-executions-infinite"] });
+      await queryClient.refetchQueries({ queryKey: ["job-executions-infinite"] });
     });
     expect(screen.getByText("Showing 40 of 50 executions")).toBeTruthy();
 
@@ -192,7 +187,7 @@ describe("the executions list's paging", () => {
       data: pageOf((params as { page: number }).page),
     }));
     await act(async () => {
-      await client.refetchQueries({ queryKey: ["job-executions-infinite"] });
+      await queryClient.refetchQueries({ queryKey: ["job-executions-infinite"] });
     });
     expect(screen.getByText("Showing 40 of 50 executions")).toBeTruthy();
     const refetchedPages = validatedGet.mock.calls
