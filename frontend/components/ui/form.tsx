@@ -119,6 +119,13 @@ const FormControl = React.forwardRef<
   // `error` is set. `FormMessage` renders nothing without a message, so both
   // could name elements that are not in the DOM. Describe the control only
   // by the message that is actually on screen.
+  //
+  // Known gap, deliberately not machinery: `FormMessage` also renders when
+  // given children as static helper text, and `FormControl` is its sibling
+  // so it cannot see them. That case would be visible but unannounced.
+  // No call site passes children -- both use a bare `<FormMessage />` -- and
+  // wiring it properly needs a registration context that costs more than the
+  // case is worth. Pass helper text through a labelled element instead.
   const describedBy = error?.message ? formMessageId : undefined;
 
   return (

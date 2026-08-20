@@ -17,7 +17,6 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { PublicPageFooter } from "@/components/public-page-footer";
 import type { LoginCredentials } from "../types";
@@ -211,12 +210,23 @@ export function SignInForm() {
 
                 {captchaRequired && (
                   <div className="space-y-2">
-                    {/* A heading over the widget, not a form field: there is
-                        no FormField here to register, so FormLabel would
-                        point `htmlFor` at an id nothing renders. */}
-                    <Label className="text-gray-700">Security Check</Label>
+                    {/* A heading over the widget, not a form field. Not a
+                        <label> either: there is no control to label, and a
+                        FormLabel here would point `htmlFor` at an id nothing
+                        renders. The widget is named through aria-labelledby
+                        below. */}
+                    <p
+                      id="sign-in-captcha-heading"
+                      className="text-sm font-medium leading-none text-gray-700"
+                    >
+                      Security Check
+                    </p>
                     {isTurnstileConfigured ? (
-                      <div className="rounded-md border border-gray-200 p-3 bg-gray-50">
+                      <div
+                        role="group"
+                        aria-labelledby="sign-in-captcha-heading"
+                        className="rounded-md border border-gray-200 p-3 bg-gray-50"
+                      >
                         <Turnstile
                           ref={turnstileRef}
                           siteKey={turnstileSiteKey}
