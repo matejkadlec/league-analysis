@@ -6,6 +6,7 @@ import { Star, StarOff, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/lib/core/hooks";
 import { trackPlayer, untrackPlayer, getTrackingStatus } from "../player-api";
+import { invalidateTrackingQueries } from "../player-query";
 import { useAuth } from "@/features/auth";
 import { cn } from "@/lib/core/utils";
 
@@ -46,16 +47,7 @@ export function TrackPlayerButton({
       return unwrap(await trackPlayer(puuid));
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({
-        queryKey: ["tracking-status", userId, puuid],
-      });
-      void queryClient.invalidateQueries({
-        queryKey: ["tracked-players", userId],
-      });
-      void queryClient.invalidateQueries({
-        queryKey: ["player-context", userId],
-      });
-      void queryClient.invalidateQueries({ queryKey: ["player", puuid] });
+      invalidateTrackingQueries(queryClient, userId, puuid);
       toast({
         title: "Player added for tracking",
         description: `${
@@ -78,16 +70,7 @@ export function TrackPlayerButton({
       return unwrap(await untrackPlayer(puuid));
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({
-        queryKey: ["tracking-status", userId, puuid],
-      });
-      void queryClient.invalidateQueries({
-        queryKey: ["tracked-players", userId],
-      });
-      void queryClient.invalidateQueries({
-        queryKey: ["player-context", userId],
-      });
-      void queryClient.invalidateQueries({ queryKey: ["player", puuid] });
+      invalidateTrackingQueries(queryClient, userId, puuid);
       toast({
         title: "Player removed from tracking",
         description: `${playerName || "Player"} is no longer being tracked.`,
