@@ -1,7 +1,7 @@
 import Image from "next/image";
-import Link from "next/link";
 
 import { CookieSettingsTrigger } from "@/components/cookie-settings-trigger";
+import { LEGAL_LINK_CLASS, LegalNotice } from "@/components/legal-notice";
 
 export function PublicPageFooter() {
   return (
@@ -17,32 +17,9 @@ export function PublicPageFooter() {
           />
         </div>
 
-        <p className="text-center text-xs leading-relaxed text-white/70 pl-1">
-          © 2026 All rights reserved.
-          <br />
-          <Link
-            href="/license"
-            className="underline transition-colors duration-300 hover:text-[#cfa93a]"
-          >
-            License
-          </Link>
-          {" | "}
-          <Link
-            href="/privacy-policy"
-            className="underline transition-colors duration-300 hover:text-[#cfa93a]"
-          >
-            Privacy Policy
-          </Link>
-          {" | "}
-          <Link
-            href="/cookie-policy"
-            className="underline transition-colors duration-300 hover:text-[#cfa93a]"
-          >
-            Cookie Policy
-          </Link>
-          {" | "}
-          <CookieSettingsTrigger className="underline transition-colors duration-300 hover:text-[#cfa93a]" />
-        </p>
+        <LegalNotice className="pl-1">
+          <CookieSettingsTrigger className={LEGAL_LINK_CLASS} />
+        </LegalNotice>
 
         <div aria-hidden />
       </div>

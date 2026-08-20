@@ -80,8 +80,6 @@ export const MatchSchema = z.object({
   game_start_datetime: z.string().optional().nullable(),
   game_end_datetime: z.string().optional().nullable(),
   patch_version: z.string().optional().nullable(),
-  is_ranked_match: z.boolean().optional(),
-  is_normal_match: z.boolean().optional(),
 });
 
 // Runes Schema for participant data
@@ -740,5 +738,4 @@ export type SmurfBoostBand = z.infer<typeof SmurfBoostBandSchema>;
 export type SmurfBoostConfidenceBand = z.infer<
   typeof SmurfBoostConfidenceBandSchema
 >;
-export type SmurfBoostFamilyId = z.infer<typeof SmurfBoostFamilyIdSchema>;
 export type SmurfBoostStatus = z.infer<typeof SmurfBoostStatusSchema>;
