@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 
-import { act, cleanup, waitFor } from "@testing-library/react";
+import { act, waitFor } from "@testing-library/react";
 import { renderHookWithQueryClient } from "./render-support";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { validatedPost, toast } = vi.hoisted(() => ({
   validatedPost: vi.fn(),
@@ -93,7 +93,6 @@ beforeEach(() => {
   toast.mockReset();
 });
 
-afterEach(cleanup);
 
 describe("the one button that does five different things", () => {
   // `handleMainAction` is a cascade over four booleans, and the button is a

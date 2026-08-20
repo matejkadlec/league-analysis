@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Player } from "@/lib/core/schemas";
 
@@ -154,7 +154,6 @@ beforeEach(() => {
   usePlayerSyncRun.mockReturnValue({ isUpdating: false, startSync });
 });
 
-afterEach(cleanup);
 
 describe("what the card says about the player", () => {
   it("shows the rank, the LP and the ranked win rate once the league lands", async () => {

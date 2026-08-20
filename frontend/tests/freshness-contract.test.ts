@@ -1,8 +1,8 @@
-import { readdirSync, readFileSync } from "node:fs";
-import { extname, join, relative } from "node:path";
+import { readFileSync } from "node:fs";
+import { relative } from "node:path";
 import { describe, expect, it } from "vitest";
 
-const SOURCE_DIRECTORIES = ["app", "components", "features", "lib"];
+import { allSourceFiles } from "./source-scan-support";
 
 /**
  * Player freshness is `profile_synced_at` / `league_synced_at` /
@@ -24,16 +24,6 @@ const NON_FRESHNESS_UPDATED_AT = new Map([
   ],
 ]);
 
-function sourceFiles(directory: string): string[] {
-  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
-    const path = join(directory, entry.name);
-    if (entry.isDirectory()) {
-      return sourceFiles(path);
-    }
-    return [".ts", ".tsx"].includes(extname(entry.name)) ? [path] : [];
-  });
-}
-
 /** Source with comments removed, so prose about `updated_at` is not a use. */
 function code(path: string): string {
   return readFileSync(path, "utf8")
@@ -42,7 +32,7 @@ function code(path: string): string {
 }
 
 function filesUsingUpdatedAt(): string[] {
-  return SOURCE_DIRECTORIES.flatMap(sourceFiles)
+  return allSourceFiles()
     .filter((path) => /\bupdated_at\b/.test(code(path)))
     .map((path) => relative(process.cwd(), path));
 }

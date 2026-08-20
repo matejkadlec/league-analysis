@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 
-import { cleanup, screen, waitFor } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 
 import { renderWithQueryClient } from "./render-support";
 import userEvent from "@testing-library/user-event";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { discoverPlayer, searchPlayerSuggestions, toast } = vi.hoisted(() => ({
   discoverPlayer: vi.fn(),
@@ -50,7 +50,6 @@ describe("PlayerSelector", () => {
     toast.mockReset();
   });
 
-  afterEach(() => cleanup());
 
   it("selects a saved suggestion through the shared non-tracking contract", async () => {
     searchPlayerSuggestions.mockResolvedValue({

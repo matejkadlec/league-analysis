@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 
-import { cleanup, screen, waitFor } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 
 import { renderWithQueryClient } from "./render-support";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { getLatestCompletedMatchmakingAnalysis } = vi.hoisted(() => ({
   getLatestCompletedMatchmakingAnalysis: vi.fn(),
@@ -57,7 +57,6 @@ beforeEach(() => {
   getLatestCompletedMatchmakingAnalysis.mockReset();
 });
 
-afterEach(cleanup);
 
 describe("the last matchmaking analysis result", () => {
   it("tells a player who has never run one apart from one that failed to load", async () => {

@@ -1,12 +1,11 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { render, screen } from "@testing-library/react";
+import { describe, expect, it } from "vitest";
 
 import { Dialog, DialogContent, DialogTitle } from "../components/ui/dialog";
 
 describe("DialogContent", () => {
-  afterEach(() => cleanup());
 
   it("carries the branded white border without the call site asking", () => {
     render(

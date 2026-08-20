@@ -1,22 +1,12 @@
-import { readdirSync, readFileSync } from "node:fs";
-import { extname, join, relative } from "node:path";
+import { readFileSync } from "node:fs";
+import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
 
-const SOURCE_DIRECTORIES = ["app", "components", "features"];
-
-function sourceFiles(directory: string): string[] {
-  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
-    const path = join(directory, entry.name);
-    if (entry.isDirectory()) {
-      return sourceFiles(path);
-    }
-    return [".ts", ".tsx"].includes(extname(entry.name)) ? [path] : [];
-  });
-}
+import { allSourceFiles } from "./source-scan-support";
 
 /** Every `<DialogTitle …>` element, from the opening tag to the closing one. */
 function dialogTitleElements(): { file: string; element: string }[] {
-  return SOURCE_DIRECTORIES.flatMap(sourceFiles)
+  return allSourceFiles()
     .filter((path) => !path.endsWith(join("ui", "dialog.tsx")))
     .flatMap((path) => {
       const source = readFileSync(path, "utf8");

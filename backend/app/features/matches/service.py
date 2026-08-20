@@ -206,29 +206,10 @@ class MatchService:
         try:
             effective_queue_ids = normalize_match_queue_ids(queue, queue_ids)
 
-            # Get matches from database only
-            db_matches = await self._get_matches_from_db(
+            db_matches, total_count, total_analyzed = await self._fetch_match_page(
                 puuid=puuid,
                 start=start,
                 count=count,
-                queue_ids=effective_queue_ids,
-                start_time=start_time,
-                end_time=end_time,
-                exclude_aram=exclude_aram,
-            )
-
-            # Get total count of matches for pagination
-            total_count = await self._count_matches_from_db(
-                puuid=puuid,
-                queue_ids=effective_queue_ids,
-                start_time=start_time,
-                end_time=end_time,
-                exclude_aram=exclude_aram,
-            )
-
-            # Get total analyzed matches count
-            total_analyzed = await self._count_analyzed_matches_from_db(
-                puuid=puuid,
                 queue_ids=effective_queue_ids,
                 start_time=start_time,
                 end_time=end_time,
@@ -296,23 +277,10 @@ class MatchService:
         """
         try:
             effective_queue_ids = normalize_match_queue_ids(queue, queue_ids)
-            db_matches = await self._get_matches_from_db(
+            db_matches, total_count, total_analyzed = await self._fetch_match_page(
                 puuid=puuid,
                 start=start,
                 count=count,
-                queue_ids=effective_queue_ids,
-                search=search,
-                exclude_aram=exclude_aram,
-            )
-
-            total_count = await self._count_matches_from_db(
-                puuid=puuid,
-                queue_ids=effective_queue_ids,
-                search=search,
-                exclude_aram=exclude_aram,
-            )
-            total_analyzed = await self._count_analyzed_matches_from_db(
-                puuid=puuid,
                 queue_ids=effective_queue_ids,
                 search=search,
                 exclude_aram=exclude_aram,
@@ -587,7 +555,7 @@ class MatchService:
             logger.error("Failed to get player lane stats", puuid=puuid, error=str(e))
             raise
 
-    async def _get_matches_from_db(
+    async def _fetch_match_page(
         self,
         puuid: str,
         start: int,
@@ -597,76 +565,38 @@ class MatchService:
         start_time: int | None = None,
         end_time: int | None = None,
         exclude_aram: bool = False,
-    ) -> list[Match]:
-        """Get matches from database."""
-        query = (
+    ) -> tuple[list[Match], int, int]:
+        """Return one page of matches with its total and analyzed total.
+
+        Both totals come from a single pass: `count(*) FILTER (WHERE ...)`
+        answers "how many are analyzed" from the same scan the plain count
+        already needed, so a page costs two round trips rather than three.
+        """
+        conditions = build_match_history_conditions(
+            puuid=puuid,
+            queue_ids=queue_ids,
+            search=search,
+            start_time=start_time,
+            end_time=end_time,
+            exclude_aram=exclude_aram,
+        )
+
+        page = await self.db.execute(
             select(Match)
-            .where(
-                *build_match_history_conditions(
-                    puuid=puuid,
-                    queue_ids=queue_ids,
-                    search=search,
-                    start_time=start_time,
-                    end_time=end_time,
-                    exclude_aram=exclude_aram,
-                )
-            )
+            .where(*conditions)
             .order_by(desc(Match.game_start_timestamp), desc(Match.match_id))
             .offset(start)
             .limit(count)
         )
-
-        result = await self.db.execute(query)
-        return list(result.scalars().all())
-
-    async def _count_matches_from_db(
-        self,
-        puuid: str,
-        queue_ids: Sequence[int] | None = None,
-        search: str | None = None,
-        start_time: int | None = None,
-        end_time: int | None = None,
-        exclude_aram: bool = False,
-    ) -> int:
-        """Count total matches for a player from database."""
-        query = select(func.count(Match.match_id)).where(
-            *build_match_history_conditions(
-                puuid=puuid,
-                queue_ids=queue_ids,
-                search=search,
-                start_time=start_time,
-                end_time=end_time,
-                exclude_aram=exclude_aram,
-            )
+        totals = await self.db.execute(
+            select(
+                func.count(Match.match_id),
+                func.count(Match.match_id).filter(Match.fully_analyzed.is_(True)),
+            ).where(*conditions)
         )
 
-        result = await self.db.execute(query)
-        return result.scalar_one()
-
-    async def _count_analyzed_matches_from_db(
-        self,
-        puuid: str,
-        queue_ids: Sequence[int] | None = None,
-        search: str | None = None,
-        start_time: int | None = None,
-        end_time: int | None = None,
-        exclude_aram: bool = False,
-    ) -> int:
-        """Count total analyzed matches for a player from database."""
-        query = select(func.count(Match.match_id)).where(
-            *build_match_history_conditions(
-                puuid=puuid,
-                queue_ids=queue_ids,
-                search=search,
-                start_time=start_time,
-                end_time=end_time,
-                exclude_aram=exclude_aram,
-            ),
-            Match.fully_analyzed.is_(True),
-        )
-
-        result = await self.db.execute(query)
-        return result.scalar_one()
+        total, total_analyzed = totals.one()
+        return list(page.scalars().all()), total, total_analyzed
 
     def _get_player_info_for_puuid(
         self, puuid: str, participants: list[dict[str, Any]]

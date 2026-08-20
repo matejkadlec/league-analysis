@@ -1,12 +1,11 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { render, screen } from "@testing-library/react";
+import { describe, expect, it } from "vitest";
 
 import { Card, CardHeader, CardTitle } from "../components/ui/card";
 
 describe("CardTitle", () => {
-  afterEach(() => cleanup());
 
   it("renders a heading so assistive technology can navigate by it", () => {
     render(

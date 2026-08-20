@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, TypedDict
 
 import structlog
-from Levenshtein import distance as levenshtein_distance
+from rapidfuzz.distance.Levenshtein import distance as levenshtein_distance
 from sqlalchemy import and_, delete, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession

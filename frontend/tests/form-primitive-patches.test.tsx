@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { useForm } from "react-hook-form";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   Form,
@@ -54,7 +54,6 @@ function Harness({ error }: { error?: string }) {
 }
 
 describe("the patched form primitives", () => {
-  afterEach(() => cleanup());
 
   it("describes a healthy control by nothing at all", async () => {
     // Upstream points `aria-describedby` at `<id>-form-item-description`

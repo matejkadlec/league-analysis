@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from sqlalchemy import text
+from starlette.middleware.body_limit import RequestBodyLimitMiddleware
 from structlog import contextvars as structlog_contextvars
 
 from app.core import get_global_settings, get_riot_api_key
@@ -189,6 +190,13 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+# No endpoint accepts an upload; every body here is small JSON, so a mebibyte
+# is far above anything legitimate. Without a ceiling a request body is read
+# until it ends, so one client can stream arbitrarily much into memory.
+# Added before the logging middleware so that stays outermost and records the
+# 413 like any other response.
+app.add_middleware(RequestBodyLimitMiddleware, max_body_size=1024 * 1024)
+
 # Added after CORS so it runs outermost of the user middlewares, just inside
 # Starlette's ServerErrorMiddleware, where it observes both response statuses
 # and unhandled exceptions.

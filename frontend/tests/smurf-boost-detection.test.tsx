@@ -4,11 +4,11 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { cleanup, screen, waitFor, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 
 import { renderWithQueryClient } from "./render-support";
 import userEvent from "@testing-library/user-event";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
   getLatestSmurfBoostDetection,
@@ -203,7 +203,6 @@ describe("SmurfBoostDetection", () => {
     Object.values(toast).forEach((mock) => mock.mockReset());
   });
 
-  afterEach(() => cleanup());
 
   it("shows both families with their own band and never a number", async () => {
     getLatestSmurfBoostDetection.mockResolvedValue({

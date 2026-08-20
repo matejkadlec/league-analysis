@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 /**
  * The four files this branch exists for, and nothing was watching them.
@@ -29,7 +29,6 @@ const thrown = new Error("render failed");
 // `global-error.tsx` replaces the document, so its markup lands on
 // document.body rather than a container div. Without this the previous
 // test's "Try again" button is still there and the query finds two.
-afterEach(cleanup);
 
 describe("the shells shown when there is no page to show", () => {
   it("names a 404 and offers the way back, signed out", () => {
