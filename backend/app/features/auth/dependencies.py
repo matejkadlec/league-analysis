@@ -3,6 +3,8 @@
 import structlog
 from fastapi import Depends, HTTPException, Request, status
 
+from app.core.http_errors import http_error
+
 from .cookies import ACCESS_TOKEN_COOKIE_NAME
 from .models import User
 from .service import AuthService, get_auth_service, oauth2_scheme
@@ -44,12 +46,10 @@ async def get_current_active_user(
             "inactive_user_access_denied",
             user_id=current_user.id,
         )
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={
-                "code": "ACCOUNT_INACTIVE",
-                "message": "This account is inactive. Contact an administrator to restore access.",
-            },
+        raise http_error(
+            status.HTTP_403_FORBIDDEN,
+            "ACCOUNT_INACTIVE",
+            "This account is inactive. Contact an administrator to restore access.",
         )
     return current_user
 
@@ -63,11 +63,9 @@ async def get_current_admin_user(
             "admin_access_denied",
             user_id=current_user.id,
         )
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={
-                "code": "ADMIN_REQUIRED",
-                "message": "You need administrator access for this action.",
-            },
+        raise http_error(
+            status.HTTP_403_FORBIDDEN,
+            "ADMIN_REQUIRED",
+            "You need administrator access for this action.",
         )
     return current_user

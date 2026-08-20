@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Request, Response, 
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import select
 
+from app.core.http_errors import http_error
 from app.core.rate_limiter import rate_limit
 
 from .cookies import (
@@ -121,13 +122,11 @@ async def login(
             reason="account_locked",
             email=form_data.username,
         )
-        raise HTTPException(
-            status_code=status.HTTP_423_LOCKED,
-            detail={
-                "code": "ACCOUNT_LOCKED",
-                "message": "Account is temporarily locked after repeated failed sign-in attempts.",
-                "locked_until": e.locked_until.astimezone(UTC).isoformat(),
-            },
+        raise http_error(
+            status.HTTP_423_LOCKED,
+            "ACCOUNT_LOCKED",
+            "Account is temporarily locked after repeated failed sign-in attempts.",
+            locked_until=e.locked_until.astimezone(UTC).isoformat(),
         ) from e
     except CaptchaRequiredError as e:
         logger.warning(
@@ -135,12 +134,10 @@ async def login(
             reason="captcha_required",
             email=form_data.username,
         )
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={
-                "code": "CAPTCHA_REQUIRED",
-                "message": "Complete CAPTCHA verification to continue signing in.",
-            },
+        raise http_error(
+            status.HTTP_403_FORBIDDEN,
+            "CAPTCHA_REQUIRED",
+            "Complete CAPTCHA verification to continue signing in.",
         ) from e
     except CaptchaVerificationError as e:
         logger.warning(
@@ -148,12 +145,10 @@ async def login(
             reason="captcha_verification_failed",
             email=form_data.username,
         )
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={
-                "code": "CAPTCHA_INVALID",
-                "message": "CAPTCHA verification failed. Please try again.",
-            },
+        raise http_error(
+            status.HTTP_403_FORBIDDEN,
+            "CAPTCHA_INVALID",
+            "CAPTCHA verification failed. Please try again.",
         ) from e
 
     if not user:
@@ -170,12 +165,10 @@ async def login(
             user_id=user.id,
             email=user.email,
         )
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={
-                "code": "ACCOUNT_INACTIVE",
-                "message": "This account is inactive. Contact an administrator to restore access.",
-            },
+        raise http_error(
+            status.HTTP_403_FORBIDDEN,
+            "ACCOUNT_INACTIVE",
+            "This account is inactive. Contact an administrator to restore access.",
         )
 
     (
@@ -219,12 +212,10 @@ async def refresh_access_token(
         refresh_request.refresh_token if refresh_request is not None else None
     ) or request.cookies.get(REFRESH_TOKEN_COOKIE_NAME)
     if not raw_refresh_token:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={
-                "code": "INVALID_REFRESH_TOKEN",
-                "message": "Refresh token is invalid, expired, or already revoked.",
-            },
+        raise http_error(
+            status.HTTP_401_UNAUTHORIZED,
+            "INVALID_REFRESH_TOKEN",
+            "Refresh token is invalid, expired, or already revoked.",
         )
     rotated = await auth_service.rotate_refresh_token(
         raw_refresh_token=raw_refresh_token,
@@ -232,23 +223,19 @@ async def refresh_access_token(
         user_agent=request.headers.get("user-agent"),
     )
     if rotated is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={
-                "code": "INVALID_REFRESH_TOKEN",
-                "message": "Refresh token is invalid, expired, or already revoked.",
-            },
+        raise http_error(
+            status.HTTP_401_UNAUTHORIZED,
+            "INVALID_REFRESH_TOKEN",
+            "Refresh token is invalid, expired, or already revoked.",
         )
 
     user, access_token, access_expires_at, refresh_token, refresh_expires_at = rotated
     if not user.is_active:
         await auth_service.revoke_all_refresh_tokens_for_user(user.id)
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={
-                "code": "ACCOUNT_INACTIVE",
-                "message": "This account is inactive. Contact an administrator to restore access.",
-            },
+        raise http_error(
+            status.HTTP_403_FORBIDDEN,
+            "ACCOUNT_INACTIVE",
+            "This account is inactive. Contact an administrator to restore access.",
         )
 
     await auth_service.cleanup_expired_token_state()
@@ -406,28 +393,22 @@ async def submit_join_us_contact(
             remote_ip=request.client.host if request.client else None,
         )
     except JoinUsCaptchaRequiredError as e:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={
-                "code": "CONTACT_CAPTCHA_REQUIRED",
-                "message": "Complete CAPTCHA verification before submitting the form.",
-            },
+        raise http_error(
+            status.HTTP_403_FORBIDDEN,
+            "CONTACT_CAPTCHA_REQUIRED",
+            "Complete CAPTCHA verification before submitting the form.",
         ) from e
     except JoinUsCaptchaVerificationError as e:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={
-                "code": "CONTACT_CAPTCHA_INVALID",
-                "message": "CAPTCHA verification failed. Please try again.",
-            },
+        raise http_error(
+            status.HTTP_403_FORBIDDEN,
+            "CONTACT_CAPTCHA_INVALID",
+            "CAPTCHA verification failed. Please try again.",
         ) from e
     except JoinUsBodyTooShortError as e:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail={
-                "code": "CONTACT_BODY_TOO_SHORT",
-                "message": "Message must contain at least 300 characters.",
-            },
+        raise http_error(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "CONTACT_BODY_TOO_SHORT",
+            "Message must contain at least 300 characters.",
         ) from e
     except JoinUsRateLimitExceededError as e:
         retry_minutes = max(1, (e.retry_after_seconds + 59) // 60)
@@ -444,20 +425,16 @@ async def submit_join_us_contact(
             headers={"Retry-After": str(e.retry_after_seconds)},
         ) from e
     except JoinUsEmailNotConfiguredError as e:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail={
-                "code": "CONTACT_EMAIL_NOT_CONFIGURED",
-                "message": "Contact form email delivery is not configured yet.",
-            },
+        raise http_error(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "CONTACT_EMAIL_NOT_CONFIGURED",
+            "Contact form email delivery is not configured yet.",
         ) from e
     except JoinUsEmailDeliveryError as e:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail={
-                "code": "CONTACT_EMAIL_DELIVERY_FAILED",
-                "message": "Your message could not be sent. Please try again later.",
-            },
+        raise http_error(
+            status.HTTP_502_BAD_GATEWAY,
+            "CONTACT_EMAIL_DELIVERY_FAILED",
+            "Your message could not be sent. Please try again later.",
         ) from e
 
     return MessageResponse(message="Your message has been sent successfully.")
@@ -512,29 +489,23 @@ async def request_email_change_code(
             expires_at=expires_at,
         )
     except EmailUnchangedError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={
-                "code": "EMAIL_UNCHANGED",
-                "message": "New email must be different from your current email.",
-            },
+        raise http_error(
+            status.HTTP_400_BAD_REQUEST,
+            "EMAIL_UNCHANGED",
+            "New email must be different from your current email.",
         ) from e
     except EmailAlreadyRegisteredError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={
-                "code": "EMAIL_ALREADY_REGISTERED",
-                "message": "This email is already registered.",
-            },
+        raise http_error(
+            status.HTTP_400_BAD_REQUEST,
+            "EMAIL_ALREADY_REGISTERED",
+            "This email is already registered.",
         ) from e
     except EmailChangeLockedError as e:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail={
-                "code": "EMAIL_CHANGE_LOCKED",
-                "message": "Too many failed attempts. Try again in 5 minutes.",
-                "locked_until": e.locked_until.astimezone(UTC).isoformat(),
-            },
+        raise http_error(
+            status.HTTP_429_TOO_MANY_REQUESTS,
+            "EMAIL_CHANGE_LOCKED",
+            "Too many failed attempts. Try again in 5 minutes.",
+            locked_until=e.locked_until.astimezone(UTC).isoformat(),
         ) from e
     except Exception as e:
         raise HTTPException(
@@ -559,46 +530,36 @@ async def verify_email_change_code(
             code=payload.code,
         )
     except EmailVerificationRequestNotFoundError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={
-                "code": "EMAIL_CHANGE_REQUEST_NOT_FOUND",
-                "message": "No pending email change request found.",
-            },
+        raise http_error(
+            status.HTTP_400_BAD_REQUEST,
+            "EMAIL_CHANGE_REQUEST_NOT_FOUND",
+            "No pending email change request found.",
         ) from e
     except EmailVerificationCodeExpiredError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={
-                "code": "EMAIL_CHANGE_CODE_EXPIRED",
-                "message": "Verification code expired. Request a new code.",
-            },
+        raise http_error(
+            status.HTTP_400_BAD_REQUEST,
+            "EMAIL_CHANGE_CODE_EXPIRED",
+            "Verification code expired. Request a new code.",
         ) from e
     except InvalidEmailVerificationCodeError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={
-                "code": "EMAIL_CHANGE_INVALID_CODE",
-                "message": "This code is incorrect.",
-                "attempts_remaining": e.attempts_remaining,
-            },
+        raise http_error(
+            status.HTTP_400_BAD_REQUEST,
+            "EMAIL_CHANGE_INVALID_CODE",
+            "This code is incorrect.",
+            attempts_remaining=e.attempts_remaining,
         ) from e
     except EmailChangeLockedError as e:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail={
-                "code": "EMAIL_CHANGE_TOO_MANY_ATTEMPTS",
-                "message": "Too many failed attempts. Try again in 5 minutes.",
-                "locked_until": e.locked_until.astimezone(UTC).isoformat(),
-            },
+        raise http_error(
+            status.HTTP_429_TOO_MANY_REQUESTS,
+            "EMAIL_CHANGE_TOO_MANY_ATTEMPTS",
+            "Too many failed attempts. Try again in 5 minutes.",
+            locked_until=e.locked_until.astimezone(UTC).isoformat(),
         ) from e
     except EmailAlreadyRegisteredError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={
-                "code": "EMAIL_ALREADY_REGISTERED",
-                "message": "This email is already registered.",
-            },
+        raise http_error(
+            status.HTTP_400_BAD_REQUEST,
+            "EMAIL_ALREADY_REGISTERED",
+            "This email is already registered.",
         ) from e
 
 
@@ -619,12 +580,10 @@ async def change_password(
             new_password=payload.new_password,
         )
     except InvalidCurrentPasswordError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={
-                "code": "CURRENT_PASSWORD_INVALID",
-                "message": "Current password is invalid.",
-            },
+        raise http_error(
+            status.HTTP_400_BAD_REQUEST,
+            "CURRENT_PASSWORD_INVALID",
+            "Current password is invalid.",
         ) from e
 
     return MessageResponse(message="Password changed successfully.")

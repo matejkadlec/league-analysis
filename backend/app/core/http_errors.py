@@ -42,3 +42,13 @@ def log_and_raise_http(
     """Log the error with its context and answer a client-safe status."""
     logger.error(event, error=str(e), exc_info=e, **context)
     raise HTTPException(status_code=status_code, detail=detail) from e
+
+
+def http_error(
+    status_code: int, code: str, message: str, **extra: object
+) -> HTTPException:
+    """Build the structured `{code, message}` refusal the web client parses."""
+    return HTTPException(
+        status_code=status_code,
+        detail={"code": code, "message": message, **extra},
+    )
