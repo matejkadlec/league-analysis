@@ -1,8 +1,8 @@
-import { readdirSync, readFileSync } from "node:fs";
-import { extname, join, relative } from "node:path";
+import { readFileSync } from "node:fs";
+import { relative } from "node:path";
 import { describe, expect, it } from "vitest";
 
-const SOURCE_DIRECTORIES = ["app", "components", "features", "lib"];
+import { allSourceFiles } from "./source-scan-support";
 
 /**
  * Query keys that are genuinely global — they describe the service, the
@@ -35,19 +35,9 @@ interface QueryKeyUse {
   carriesPuuid: boolean;
 }
 
-function sourceFiles(directory: string): string[] {
-  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
-    const path = join(directory, entry.name);
-    if (entry.isDirectory()) {
-      return sourceFiles(path);
-    }
-    return [".ts", ".tsx"].includes(extname(entry.name)) ? [path] : [];
-  });
-}
-
 /** Every inline `queryKey: [...]` literal, with the leading namespace string. */
 function queryKeyUses(): QueryKeyUse[] {
-  return SOURCE_DIRECTORIES.flatMap(sourceFiles).flatMap((path) => {
+  return allSourceFiles().flatMap((path) => {
     const source = readFileSync(path, "utf8");
     const uses: QueryKeyUse[] = [];
 

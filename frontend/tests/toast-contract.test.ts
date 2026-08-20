@@ -1,27 +1,18 @@
-import { readdirSync, readFileSync } from "node:fs";
-import { extname, join, relative } from "node:path";
+import { readFileSync, readdirSync } from "node:fs";
+import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
 
-const SOURCE_DIRECTORIES = ["app", "components", "features", "lib"];
+import { allSourceFiles } from "./source-scan-support";
+
 const SONNER_IMPORT_ALLOWLIST = new Set([
   "components/toast-host.tsx",
   "lib/core/hooks.ts",
 ]);
 const GLOBAL_CSS = readFileSync(join(process.cwd(), "app/globals.css"), "utf8");
 
-function sourceFiles(directory: string): string[] {
-  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
-    const path = join(directory, entry.name);
-    if (entry.isDirectory()) {
-      return sourceFiles(path);
-    }
-    return [".ts", ".tsx"].includes(extname(entry.name)) ? [path] : [];
-  });
-}
-
 describe("toast source contract", () => {
   it("routes Sonner usage through the shared typed adapter and host", () => {
-    const directImports = SOURCE_DIRECTORIES.flatMap(sourceFiles)
+    const directImports = allSourceFiles()
       .filter((path) => readFileSync(path, "utf8").includes('from "sonner"'))
       .map((path) => relative(process.cwd(), path));
 
@@ -29,7 +20,7 @@ describe("toast source contract", () => {
   });
 
   it("does not use indefinite loading toasts", () => {
-    const violations = SOURCE_DIRECTORIES.flatMap(sourceFiles).filter((path) =>
+    const violations = allSourceFiles().filter((path) =>
       /(?:toast|sonnerToast)\.loading/.test(readFileSync(path, "utf8")),
     );
 

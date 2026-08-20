@@ -1,8 +1,9 @@
-import { readdirSync, readFileSync } from "node:fs";
-import { extname, join, relative } from "node:path";
+import { readFileSync } from "node:fs";
+import { relative } from "node:path";
 import { describe, expect, it } from "vitest";
 
-const SOURCE_DIRECTORIES = ["app", "components", "features", "lib"];
+import { allSourceFiles } from "./source-scan-support";
+
 const GLOBAL_STYLESHEET = "app/globals.css";
 
 /**
@@ -42,16 +43,6 @@ const HAND_ROLLED_GRADIENTS = new Map([
   ],
 ]);
 
-function sourceFiles(directory: string): string[] {
-  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
-    const path = join(directory, entry.name);
-    if (entry.isDirectory()) {
-      return sourceFiles(path);
-    }
-    return [".ts", ".tsx"].includes(extname(entry.name)) ? [path] : [];
-  });
-}
-
 /** Source with comments removed, so prose about a gradient is not a use. */
 function code(path: string): string {
   return readFileSync(path, "utf8")
@@ -63,7 +54,7 @@ function filesWithHandRolledGradients(): string[] {
   // Tailwind v3 spells it bg-gradient-to-*, v4 bg-linear-to-*; accept both so
   // the check survives the upgrade rather than silently matching nothing.
   const gradient = /\bbg-(?:gradient|linear)-to-[trbl]\b/;
-  return SOURCE_DIRECTORIES.flatMap(sourceFiles)
+  return allSourceFiles()
     .filter((path) => gradient.test(code(path)))
     .map((path) => relative(process.cwd(), path));
 }
