@@ -72,9 +72,8 @@ async def test_empty_page_retains_filtered_total_for_client_clamping() -> None:
     # Every query the service would make is replaced below, so the session is
     # never touched; `AsyncSession` is too large to implement for that.
     service = MatchService(cast(AsyncSession, SimpleNamespace()))
-    service._get_matches_from_db = AsyncMock(return_value=[])
-    service._count_matches_from_db = AsyncMock(return_value=63)
-    service._count_analyzed_matches_from_db = AsyncMock(return_value=40)
+    fetch_page = AsyncMock(return_value=([], 63, 40))
+    service._fetch_match_page = fetch_page
 
     response = await service.get_player_matches_with_data(
         puuid="selected-puuid",
@@ -89,16 +88,11 @@ async def test_empty_page_retains_filtered_total_for_client_clamping() -> None:
     assert response.total_analyzed == 40
     assert response.page == 3
     assert response.pages == 3
-    service._get_matches_from_db.assert_awaited_once_with(
+    # One call now answers page, total and analyzed total together.
+    fetch_page.assert_awaited_once_with(
         puuid="selected-puuid",
         start=75,
         count=25,
-        queue_ids=(420, 440),
-        search="Ahri",
-        exclude_aram=False,
-    )
-    service._count_matches_from_db.assert_awaited_once_with(
-        puuid="selected-puuid",
         queue_ids=(420, 440),
         search="Ahri",
         exclude_aram=False,
