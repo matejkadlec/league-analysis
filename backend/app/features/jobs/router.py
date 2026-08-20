@@ -4,6 +4,7 @@
 # pyright: reportMissingTypeStubs=false
 """Job management API endpoints."""
 
+from collections.abc import Awaitable
 from typing import NoReturn
 
 import structlog
@@ -346,24 +347,41 @@ def _require_control_state(
     return state
 
 
+async def _control_action(
+    action: Awaitable[JobControlActionResponse | None],
+    *,
+    job_id: int,
+    failure: str,
+    # Flags only, not `object`: these are splatted into `log_and_raise_http`,
+    # whose keyword-only `status_code: int` a wider mapping could shadow. Today
+    # this carries stop's `force` and nothing else.
+    **log_context: bool,
+) -> JobControlActionResponse:
+    """Run one control action and answer with the status its outcome earns.
+
+    Only the service call is guarded: a job that does not exist (404) or that
+    refuses (409) is an answer, not a failure, so `_require_control_state`
+    runs outside the `except` rather than needing an `except HTTPException:
+    raise` to escape being relabelled a 500.
+    """
+    try:
+        state = await action
+    except Exception as e:
+        log_and_raise_http(logger, e, failure, job_id=job_id, **log_context)
+    return _require_control_state(state, job_id)
+
+
 @router.post("/{job_id}/pause", response_model=JobControlActionResponse)
 async def pause_job(
     job_id: int,
     job_service: JobServiceDep,
 ):
     """Pause a running job execution."""
-    try:
-        state = await job_service.set_job_paused(job_id, paused=True)
-        return _require_control_state(state, job_id)
-    except HTTPException:
-        raise
-    except Exception as e:
-        log_and_raise_http(
-            logger,
-            e,
-            "Failed to pause job",
-            job_id=job_id,
-        )
+    return await _control_action(
+        job_service.set_job_paused(job_id, paused=True),
+        job_id=job_id,
+        failure="Failed to pause job",
+    )
 
 
 @router.post("/{job_id}/resume", response_model=JobControlActionResponse)
@@ -372,18 +390,11 @@ async def resume_job(
     job_service: JobServiceDep,
 ):
     """Resume a paused running job execution."""
-    try:
-        state = await job_service.set_job_paused(job_id, paused=False)
-        return _require_control_state(state, job_id)
-    except HTTPException:
-        raise
-    except Exception as e:
-        log_and_raise_http(
-            logger,
-            e,
-            "Failed to resume job",
-            job_id=job_id,
-        )
+    return await _control_action(
+        job_service.set_job_paused(job_id, paused=False),
+        job_id=job_id,
+        failure="Failed to resume job",
+    )
 
 
 @router.post("/{job_id}/stop", response_model=JobControlActionResponse)
@@ -393,19 +404,12 @@ async def stop_job(
     force: bool = Query(False, description="Force stop immediately"),
 ):
     """Request graceful or forced stop for a running job execution."""
-    try:
-        state = await job_service.request_job_stop_action(job_id, force=force)
-        return _require_control_state(state, job_id)
-    except HTTPException:
-        raise
-    except Exception as e:
-        log_and_raise_http(
-            logger,
-            e,
-            "Failed to stop job",
-            job_id=job_id,
-            force=force,
-        )
+    return await _control_action(
+        job_service.request_job_stop_action(job_id, force=force),
+        job_id=job_id,
+        failure="Failed to stop job",
+        force=force,
+    )
 
 
 # === Test Run Endpoints ===

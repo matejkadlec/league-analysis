@@ -1,0 +1,140 @@
+"""What the pause/resume/stop routes answer, per outcome of the service call.
+
+The three routes share one shape: ask the service, turn its answer into a
+404/409/200, and turn anything thrown into a 500. Nothing pinned that shape
+before this file, so a refactor could quietly have collapsed "this job does
+not exist" and "this job refused" into the generic server error -- which is
+the one distinction the Jobs page acts on.
+"""
+
+from collections.abc import Awaitable, Callable
+from typing import cast
+
+import pytest
+from fastapi import HTTPException
+
+from app.core.http_errors import SERVICE_ERROR_DETAIL
+from app.features.jobs.router import pause_job, resume_job, stop_job
+from app.features.jobs.schemas import JobControlActionResponse
+from app.features.jobs.service import JobService
+
+JOB_ID = 7
+
+type ControlRoute = Callable[[JobService], Awaitable[JobControlActionResponse]]
+
+
+def _state(*, success: bool, message: str = "ok") -> JobControlActionResponse:
+    return JobControlActionResponse(
+        success=success,
+        message=message,
+        is_running=True,
+        is_paused=False,
+        is_stopping=False,
+        is_force_stopping=False,
+    )
+
+
+class _ServiceDouble:
+    """Answers both control methods with one scripted outcome.
+
+    `result` is returned; an `Exception` instance is raised instead, which is
+    how the 500 path is reached without a database.
+    """
+
+    def __init__(self, result: JobControlActionResponse | Exception | None) -> None:
+        self.result = result
+        self.calls: list[tuple[str, dict[str, object]]] = []
+
+    def _answer(self, name: str, **kwargs: object) -> JobControlActionResponse | None:
+        self.calls.append((name, kwargs))
+        if isinstance(self.result, Exception):
+            raise self.result
+        return self.result
+
+    async def set_job_paused(
+        self, job_id: int, paused: bool
+    ) -> JobControlActionResponse | None:
+        return self._answer("set_job_paused", job_id=job_id, paused=paused)
+
+    async def request_job_stop_action(
+        self, job_id: int, force: bool
+    ) -> JobControlActionResponse | None:
+        return self._answer("request_job_stop_action", job_id=job_id, force=force)
+
+
+def _service(result: JobControlActionResponse | Exception | None) -> JobService:
+    return cast(JobService, _ServiceDouble(result))
+
+
+# Each route reduced to "given a service, call me" so one body covers all three.
+ROUTES: dict[str, ControlRoute] = {
+    "pause": lambda svc: pause_job(JOB_ID, svc),
+    "resume": lambda svc: resume_job(JOB_ID, svc),
+    "stop": lambda svc: stop_job(JOB_ID, svc, force=False),
+}
+
+
+@pytest.mark.parametrize("route", ROUTES.values(), ids=list(ROUTES))
+@pytest.mark.asyncio
+async def test_successful_action_is_returned_unchanged(route: ControlRoute) -> None:
+    state = _state(success=True, message="paused")
+
+    assert await route(_service(state)) is state
+
+
+@pytest.mark.parametrize("route", ROUTES.values(), ids=list(ROUTES))
+@pytest.mark.asyncio
+async def test_missing_job_configuration_is_404(route: ControlRoute) -> None:
+    with pytest.raises(HTTPException) as caught:
+        await route(_service(None))
+
+    assert caught.value.status_code == 404
+
+
+@pytest.mark.parametrize("route", ROUTES.values(), ids=list(ROUTES))
+@pytest.mark.asyncio
+async def test_refusal_is_409_carrying_the_service_message(
+    route: ControlRoute,
+) -> None:
+    """A job that exists and says no is a conflict, not a miss and not a 500."""
+    with pytest.raises(HTTPException) as caught:
+        await route(_service(_state(success=False, message="Job is not running")))
+
+    assert caught.value.status_code == 409
+    assert caught.value.detail == "Job is not running"
+
+
+@pytest.mark.parametrize("route", ROUTES.values(), ids=list(ROUTES))
+@pytest.mark.asyncio
+async def test_unexpected_failure_is_a_client_safe_500(route: ControlRoute) -> None:
+    with pytest.raises(HTTPException) as caught:
+        await route(_service(RuntimeError("connection reset")))
+
+    assert caught.value.status_code == 500
+    assert caught.value.detail == SERVICE_ERROR_DETAIL
+    # The database's words never reach the client.
+    assert "connection reset" not in str(caught.value.detail)
+
+
+@pytest.mark.asyncio
+async def test_stop_passes_its_force_flag_through() -> None:
+    """`force` is the only argument that separates stop from the other two."""
+    service = _ServiceDouble(_state(success=True))
+
+    await stop_job(JOB_ID, cast(JobService, service), force=True)
+
+    assert service.calls == [
+        ("request_job_stop_action", {"job_id": JOB_ID, "force": True})
+    ]
+
+
+@pytest.mark.asyncio
+async def test_pause_and_resume_differ_only_by_the_paused_flag() -> None:
+    paused = _ServiceDouble(_state(success=True))
+    resumed = _ServiceDouble(_state(success=True))
+
+    await pause_job(JOB_ID, cast(JobService, paused))
+    await resume_job(JOB_ID, cast(JobService, resumed))
+
+    assert paused.calls == [("set_job_paused", {"job_id": JOB_ID, "paused": True})]
+    assert resumed.calls == [("set_job_paused", {"job_id": JOB_ID, "paused": False})]
