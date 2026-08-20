@@ -97,7 +97,7 @@ class PlayerMatchParticipant(BaseModel):
     kills: int = Field(default=0, description="Kills")
     deaths: int = Field(default=0, description="Deaths")
     assists: int = Field(default=0, description="Assists")
-    kda: float | None = Field(default=None, description="Computed KDA")
+    kda: float = Field(..., description="Computed KDA")
     total_cs: int = Field(default=0, description="Total CS (minions + monsters)")
     vision_score: int = Field(default=0, description="Vision score")
     total_damage_dealt_to_champions: int = Field(
@@ -129,7 +129,7 @@ class EnemyLaneOpponent(BaseModel):
     kills: int = Field(default=0, description="Enemy kills")
     deaths: int = Field(default=0, description="Enemy deaths")
     assists: int = Field(default=0, description="Enemy assists")
-    kda: float | None = Field(default=None, description="Enemy KDA")
+    kda: float = Field(..., description="Enemy KDA")
     total_cs: int = Field(default=0, description="Enemy total CS")
     vision_score: int = Field(default=0, description="Enemy vision score")
     total_damage_dealt_to_champions: int = Field(

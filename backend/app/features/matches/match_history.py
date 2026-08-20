@@ -78,7 +78,7 @@ def _enemy_lane_opponent(participant: MatchParticipant) -> EnemyLaneOpponent:
         kills=participant.kills or 0,
         deaths=participant.deaths or 0,
         assists=participant.assists or 0,
-        kda=float(participant.kda) if participant.kda else None,
+        kda=float(participant.kda),
         total_cs=opponent_cs,
         vision_score=participant.vision_score or 0,
         total_damage_dealt_to_champions=participant.total_damage_dealt_to_champions
@@ -303,7 +303,7 @@ def build_player_match_participant(
         kills=player_participant.kills,
         deaths=player_participant.deaths,
         assists=player_participant.assists,
-        kda=(float(player_participant.kda) if player_participant.kda else None),
+        kda=float(player_participant.kda),
         total_cs=player_participant.cs,
         vision_score=player_participant.vision_score,
         total_damage_dealt_to_champions=player_participant.total_damage_dealt_to_champions

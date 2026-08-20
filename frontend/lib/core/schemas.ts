@@ -108,7 +108,7 @@ export const PlayerMatchParticipantSchema = z.object({
   kills: z.number().int().default(0),
   deaths: z.number().int().default(0),
   assists: z.number().int().default(0),
-  kda: z.number().optional().nullable(),
+  kda: z.number(),
   total_cs: z.number().int().default(0),
   vision_score: z.number().int().default(0),
   total_damage_dealt_to_champions: z.number().int().default(0),
