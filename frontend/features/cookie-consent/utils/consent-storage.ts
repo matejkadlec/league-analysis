@@ -142,6 +142,34 @@ export function clearOptionalBrowserStorage(): void {
   }
 }
 
+// Optional storage is only readable and writable with current "all" consent,
+// and every access needs the same SecurityError guard as
+// `clearOptionalBrowserStorage` above -- the `window.localStorage` getter
+// itself throws for a visitor with site data blocked.
+export function readOptionalStorage(key: string): string | null {
+  if (!isBrowser() || !canUseOptionalStorage()) {
+    return null;
+  }
+
+  try {
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+export function writeOptionalStorage(key: string, value: string): void {
+  if (!isBrowser() || !canUseOptionalStorage()) {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {
+    // Storage unavailable; the in-memory value stands.
+  }
+}
+
 export function notifyCookieConsentUpdated(
   consent: CookieConsentState | null,
 ): void {

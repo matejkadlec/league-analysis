@@ -1,17 +1,19 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { z } from "zod";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { X, AlertTriangle, AlertOctagon, CircleCheck } from "lucide-react";
 import { useAuth } from "@/features/auth";
+import { COOKIE_CONSENT_UPDATED_EVENT } from "@/features/cookie-consent";
+// Not through the barrel: `tests/header-messages-credential-health.test.tsx`
+// factory-mocks `@/features/cookie-consent` down to the event name.
 import {
-  COOKIE_CONSENT_UPDATED_EVENT,
-  canUseOptionalStorage,
-  type CookieConsentState,
-} from "@/features/cookie-consent";
+  readOptionalStorage,
+  writeOptionalStorage,
+} from "@/features/cookie-consent/utils/consent-storage";
 import { unwrap, validatedGet } from "@/lib/core/api";
 import { cn } from "@/lib/core/utils";
 import { RIOT_CREDENTIAL_HEALTH_UPDATED_EVENT } from "@/lib/core/riot-credential-health-events";
@@ -25,6 +27,8 @@ const ServiceStatusSchema = z.object({
   has_recent_recovery: z.boolean(),
   recovery_notice_key: z.string().nullable(),
 });
+
+const HEADER_MESSAGES_CLOSED_KEY = "header_messages_closed:v1";
 
 // Temporarily disabled while Riot production-key review is pending.
 const SHOW_SIGNED_OUT_RECRUITMENT_BANNER = false;
@@ -89,74 +93,40 @@ function HeaderBanner({
   );
 }
 
+function readClosedMessages(): string[] {
+  try {
+    const parsed: unknown = JSON.parse(
+      readOptionalStorage(HEADER_MESSAGES_CLOSED_KEY) ?? "",
+    );
+    return Array.isArray(parsed)
+      ? parsed.filter((value): value is string => typeof value === "string")
+      : [];
+  } catch {
+    return [];
+  }
+}
+
 export function HeaderMessages() {
   const { user, isAuthenticated, isLoading: isAuthLoading } = useAuth();
   const queryClient = useQueryClient();
   const pathname = usePathname();
-  const optionalStorageEnabledRef = useRef(
-    typeof window !== "undefined" && canUseOptionalStorage(),
-  );
   // Store closed server-revision message identifiers.
-  const [closedMessages, setClosedMessages] = useState<string[]>(() => {
-    if (typeof window === "undefined" || !canUseOptionalStorage()) {
-      return [];
-    }
-
-    try {
-      const stored = localStorage.getItem("header_messages_closed:v1");
-      if (stored) {
-        const parsed: unknown = JSON.parse(stored);
-        if (Array.isArray(parsed)) {
-          return parsed.filter(
-            (value): value is string => typeof value === "string",
-          );
-        }
-      }
-    } catch {
-      return [];
-    }
-
-    return [];
-  });
+  const [closedMessages, setClosedMessages] = useState<string[]>(
+    readClosedMessages,
+  );
   useEffect(() => {
-    const handleConsentUpdated = (event: Event) => {
-      const consent = (event as CustomEvent<CookieConsentState | null>).detail;
-      const hasOptionalConsent = consent?.level === "all";
-
-      optionalStorageEnabledRef.current = hasOptionalConsent;
-
-      if (!hasOptionalConsent) {
-        setClosedMessages([]);
-        return;
-      }
-
-      try {
-        const stored = localStorage.getItem("header_messages_closed:v1");
-        if (!stored) {
-          return;
-        }
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed)) {
-          setClosedMessages(
-            parsed.filter(
-              (value): value is string => typeof value === "string",
-            ),
-          );
-        }
-      } catch {
-        setClosedMessages([]);
-      }
+    // The consent cookie is written before this event fires, so re-reading
+    // storage is enough -- a withdrawal has already cleared the key.
+    const handleConsentUpdated = () => {
+      setClosedMessages(readClosedMessages());
     };
 
-    window.addEventListener(
-      COOKIE_CONSENT_UPDATED_EVENT,
-      handleConsentUpdated as EventListener,
-    );
+    window.addEventListener(COOKIE_CONSENT_UPDATED_EVENT, handleConsentUpdated);
 
     return () => {
       window.removeEventListener(
         COOKIE_CONSENT_UPDATED_EVENT,
-        handleConsentUpdated as EventListener,
+        handleConsentUpdated,
       );
     };
   }, []);
@@ -168,12 +138,7 @@ export function HeaderMessages() {
 
     const newClosed = [...closedMessages, id];
     setClosedMessages(newClosed);
-    if (optionalStorageEnabledRef.current) {
-      localStorage.setItem(
-        "header_messages_closed:v1",
-        JSON.stringify(newClosed),
-      );
-    }
+    writeOptionalStorage(HEADER_MESSAGES_CLOSED_KEY, JSON.stringify(newClosed));
   };
 
   const { data: serviceStatus } = useQuery({
