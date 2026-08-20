@@ -88,7 +88,7 @@ run_repository_hygiene() {
 
 run_backend_sync() {
   cd "$repository_root/backend"
-  uv sync --frozen --all-groups
+  uv sync --locked --all-groups
 }
 
 run_pre_commit_config_validation() {

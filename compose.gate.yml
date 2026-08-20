@@ -68,9 +68,9 @@ services:
       - /workspace/frontend/node_modules
       - /workspace/backend/.venv
       # Package caches survive between runs; downloads happen once per version
-      # bump. CI points these at directories kept by actions/cache.
-      - ${LGA_GATE_NPM_CACHE:-gate_npm_cache}:/tmp/npm-cache
-      - ${LGA_GATE_UV_CACHE:-gate_uv_cache}:/tmp/uv-cache
+      # bump.
+      - gate_npm_cache:/tmp/npm-cache
+      - gate_uv_cache:/tmp/uv-cache
 
 volumes:
   gate_npm_cache:

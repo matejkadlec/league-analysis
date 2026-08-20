@@ -51,7 +51,7 @@ Compose service before an operational change.
 | --- | --- | --- | --- | --- |
 | `frontend` | `league-analysis-frontend` | `league-analysis-frontend:<commit>` | Next.js standalone production server on `3000` | `8097` |
 | `backend` | `league-analysis-backend` | `league-analysis-backend:<commit>` | One production Uvicorn worker on `8000` | `8098` |
-| `postgres` | `league-analysis-postgres` | `postgres:18.4-bookworm` | PostgreSQL `18.4` | none; internal-only |
+| `postgres` | `league-analysis-postgres` | upstream `postgres`, pinned in `compose.production.yml` | PostgreSQL | none; internal-only |
 | `migrate` | one-shot, no fixed name | `league-analysis-backend:<commit>` | locked `migrate.py upgrade head` | none |
 
 Compose service names, container names, and image names are distinct
