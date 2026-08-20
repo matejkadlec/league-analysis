@@ -68,42 +68,56 @@ def _job_execution_double(**attributes: object) -> JobExecution:
     return cast(JobExecution, SimpleNamespace(**attributes))
 
 
-@pytest.mark.asyncio
-@pytest.mark.parametrize("paused", [True, False])
-async def test_test_run_pause_and_resume_flip_the_flag_on_an_active_run(
-    monkeypatch: pytest.MonkeyPatch,
-    paused: bool,
-) -> None:
-    """Both test-run control routes share one path: flip, persist, report."""
-    from app.features.jobs import router as jobs_router
-
-    job_model = SimpleNamespace(id=7, name="Match Fetcher", is_paused=not paused)
-    job_service = SimpleNamespace(
-        get_job_configuration_model=AsyncMock(return_value=job_model),
-        db=SimpleNamespace(commit=AsyncMock(), refresh=AsyncMock()),
+def _job_service_double(job_model: SimpleNamespace) -> JobService:
+    """A real JobService over a double session, looking up `job_model`."""
+    service = JobService(
+        cast(AsyncSession, SimpleNamespace(commit=AsyncMock(), refresh=AsyncMock()))
     )
+    service.get_job_configuration_model = AsyncMock(return_value=job_model)
+    return service
 
-    def runtime_running(key: int) -> bool:
-        return key == -7
 
-    def runtime_snapshot(_key: int) -> dict[str, bool]:
+def _running_snapshot(keys: list[int]) -> Callable[[int], dict[str, bool]]:
+    """A runtime snapshot that records which key each caller asked about."""
+
+    def snapshot(key: int) -> dict[str, bool]:
+        keys.append(key)
         return {
             "is_running": True,
             "stop_requested": False,
             "force_stop_requested": False,
         }
 
-    monkeypatch.setattr(jobs_router, "is_runtime_job_running", runtime_running)
-    monkeypatch.setattr(jobs_router, "get_runtime_control_snapshot", runtime_snapshot)
+    return snapshot
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("paused", [True, False])
+async def test_test_run_pause_and_resume_flip_the_flag_on_an_active_run(
+    monkeypatch: pytest.MonkeyPatch,
+    paused: bool,
+) -> None:
+    """Both test-run control routes share the one service path with /pause."""
+    from app.features.jobs import router as jobs_router
+    from app.features.jobs import service as service_module
+
+    job_model = SimpleNamespace(id=7, name="Match Fetcher", is_paused=not paused)
+    job_service = _job_service_double(job_model)
+    seen_keys: list[int] = []
+    monkeypatch.setattr(
+        service_module, "get_runtime_control_snapshot", _running_snapshot(seen_keys)
+    )
 
     endpoint = jobs_router.pause_test_run if paused else jobs_router.resume_test_run
-    response = await endpoint(7, cast(JobService, job_service))
+    response = await endpoint(7, job_service)
 
     assert response.success is True
     assert response.is_paused is paused
     assert job_model.is_paused is paused
     assert ("paused" if paused else "resumed") in response.message
-    job_service.db.commit.assert_awaited_once()
+    # The test run lives under the negated config ID, not the job's own key.
+    assert seen_keys == [-7]
+    cast(AsyncMock, job_service.db.commit).assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -112,23 +126,60 @@ async def test_test_run_pause_without_an_active_run_changes_nothing(
 ) -> None:
     """No active test run: report failure without touching the pause flag."""
     from app.features.jobs import router as jobs_router
+    from app.features.jobs import service as service_module
 
     job_model = SimpleNamespace(id=7, name="Match Fetcher", is_paused=False)
-    job_service = SimpleNamespace(
-        get_job_configuration_model=AsyncMock(return_value=job_model),
-        db=SimpleNamespace(commit=AsyncMock(), refresh=AsyncMock()),
-    )
+    job_service = _job_service_double(job_model)
 
-    def runtime_not_running(_key: int) -> bool:
-        return False
+    def idle_snapshot(_key: int) -> dict[str, bool]:
+        return {
+            "is_running": False,
+            "stop_requested": False,
+            "force_stop_requested": False,
+        }
 
-    monkeypatch.setattr(jobs_router, "is_runtime_job_running", runtime_not_running)
+    monkeypatch.setattr(service_module, "get_runtime_control_snapshot", idle_snapshot)
 
-    response = await jobs_router.pause_test_run(7, cast(JobService, job_service))
+    response = await jobs_router.pause_test_run(7, job_service)
 
     assert response.success is False
     assert job_model.is_paused is False
-    job_service.db.commit.assert_not_awaited()
+    cast(AsyncMock, job_service.db.commit).assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_stopping_a_paused_test_run_unsticks_the_shared_pause_flag(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The pause flag lives on the shared config row; stop must clear it.
+
+    Left set, the next scheduled execution of the same job reads it and
+    blocks in PAUSED until someone manually resumes.
+    """
+    from app.features.jobs import router as jobs_router
+    from app.features.jobs import service as service_module
+
+    job_model = SimpleNamespace(id=7, name="Match Fetcher", is_paused=True)
+    job_service = _job_service_double(job_model)
+    stop_keys: list[int] = []
+
+    def record_stop(key: int, *, force: bool) -> bool:
+        stop_keys.append(key)
+        return True
+
+    seen_keys: list[int] = []
+    monkeypatch.setattr(service_module, "request_job_stop", record_stop)
+    monkeypatch.setattr(
+        service_module, "get_runtime_control_snapshot", _running_snapshot(seen_keys)
+    )
+
+    response = await jobs_router.stop_test_run(7, job_service, force=False)
+
+    assert response.success is True
+    assert "test run of" in response.message
+    assert job_model.is_paused is False
+    assert stop_keys == [-7]
+    cast(AsyncMock, job_service.db.commit).assert_awaited_once()
 
 
 @pytest.mark.asyncio
