@@ -18,35 +18,11 @@ interface RecentPerformanceCardProps {
   lastUpdated?: string | null | undefined;
 }
 
-// Helper function to get performance trend indicator
-function getTrendIndicator(
-  recent: number,
-  overall: number,
-): { icon: React.ReactNode; color: string; label: string } {
-  const diff = recent - overall;
-  const threshold = 0.05; // 5% threshold for "significant" change
-
-  if (diff > threshold) {
-    return {
-      icon: <TrendingUp className="h-4 w-4" />,
-      color: "text-emerald-500",
-      label: "improving",
-    };
-  } else if (diff < -threshold) {
-    return {
-      icon: <TrendingDown className="h-4 w-4" />,
-      color: "text-rose-500",
-      label: "declining",
-    };
-  }
-  return {
-    icon: <Minus className="h-4 w-4" />,
-    color: "text-muted-foreground",
-    label: "stable",
-  };
-}
-
-// Get trend indicator for raw values (not percentages).
+// Get a performance trend indicator.
+//
+// `threshold` defaults to 5% of the overall value, which is what raw stats
+// want -- CS is counted in the hundreds and a fixed number cannot serve both
+// it and a win rate. Fractions already on a 0-1 scale pass their own band.
 //
 // `higherIsBetter` has no default on purpose. Every stat on this card except
 // deaths wants `true`, which makes a default the obviously convenient choice
@@ -54,12 +30,12 @@ function getTrendIndicator(
 // silent default would get wrong, and getting it wrong tells a player who is
 // dying less that they are declining. Requiring the argument makes each call
 // site say which direction it means.
-function getTrendIndicatorRaw(
+function getTrendIndicator(
   recent: number,
   overall: number,
   higherIsBetter: boolean,
+  threshold = overall * 0.05,
 ): { icon: React.ReactNode; color: string; label: string } {
-  const threshold = overall * 0.05; // 5% of overall value
   const diff = recent - overall;
 
   const isImproving = higherIsBetter ? diff > threshold : diff < -threshold;
@@ -226,25 +202,30 @@ export function RecentPerformanceCard({
   }
 
   // Calculate trends
-  const winRateTrend = getTrendIndicator(recent.win_rate, overall.win_rate);
-  const kdaTrend = getTrendIndicatorRaw(recent.avg_kda, overall.avg_kda, true);
-  const killsTrend = getTrendIndicatorRaw(
+  const winRateTrend = getTrendIndicator(
+    recent.win_rate,
+    overall.win_rate,
+    true,
+    0.05,
+  );
+  const kdaTrend = getTrendIndicator(recent.avg_kda, overall.avg_kda, true);
+  const killsTrend = getTrendIndicator(
     recent.avg_kills,
     overall.avg_kills,
     true,
   );
-  const csTrend = getTrendIndicatorRaw(recent.avg_cs, overall.avg_cs, true);
-  const deathsTrend = getTrendIndicatorRaw(
+  const csTrend = getTrendIndicator(recent.avg_cs, overall.avg_cs, true);
+  const deathsTrend = getTrendIndicator(
     recent.avg_deaths,
     overall.avg_deaths,
     false,
   );
-  const visionTrend = getTrendIndicatorRaw(
+  const visionTrend = getTrendIndicator(
     recent.avg_vision_score,
     overall.avg_vision_score,
     true,
   );
-  const assistsTrend = getTrendIndicatorRaw(
+  const assistsTrend = getTrendIndicator(
     recent.avg_assists,
     overall.avg_assists,
     true,
