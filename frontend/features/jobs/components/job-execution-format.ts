@@ -1,4 +1,4 @@
-import { formatDateTime } from "@/lib/core/format";
+import { formatDateTime, formatSeconds } from "@/lib/core/format";
 
 /** The jobs surfaces all show seconds; this names that policy once. */
 export function formatJobTimestamp(timestamp: string): string {
@@ -12,12 +12,9 @@ export function formatDuration(
   if (!completed) return "N/A";
   const startTime = new Date(started).getTime();
   const endTime = new Date(completed).getTime();
-  const seconds = (endTime - startTime) / 1000;
-
-  if (seconds < 60) return `${seconds.toFixed(1)}s`;
-  const minutes = Math.floor(seconds / 60);
-  const remainingSeconds = Math.floor(seconds % 60);
-  return `${minutes}m ${remainingSeconds}s`;
+  // Shares the grammar with the job cards' formatDuration; a zero-second
+  // run still reads "0.0s" here, not that copy's "N/A".
+  return formatSeconds((endTime - startTime) / 1000);
 }
 
 export function formatRecordsSummary(created: number, updated: number): string {

@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ApiRequestError } from "@/lib/core/api";
 import { TrendingUp, Users } from "lucide-react";
 
-import { formatDateTime } from "@/lib/core/format";
+import { formatDateTime, formatFractionAsPercent } from "@/lib/core/format";
 
 import { getLatestCompletedMatchmakingAnalysis } from "../matchmaking-api";
 
@@ -100,7 +100,7 @@ export function MatchmakingAnalysisResults({
 
   // Calculate the difference to show if matchmaking was fair
   const winrateDiff = team_avg_winrate - enemy_avg_winrate;
-  const winrateDiffPercent = Math.abs(winrateDiff * 100).toFixed(1);
+  const winrateDiffPercent = formatFractionAsPercent(Math.abs(winrateDiff));
   const isFavorable = winrateDiff >= 0.03;
   const isUnfavorable = winrateDiff <= -0.03;
   const isFair = !isFavorable && !isUnfavorable;
@@ -147,7 +147,7 @@ export function MatchmakingAnalysisResults({
                         : ""
                   }
                 >
-                  {(team_avg_winrate * 100).toFixed(1)}%
+                  {formatFractionAsPercent(team_avg_winrate)}
                 </span>
               </TableCell>
             </TableRow>
@@ -168,7 +168,7 @@ export function MatchmakingAnalysisResults({
                         : ""
                   }
                 >
-                  {(enemy_avg_winrate * 100).toFixed(1)}%
+                  {formatFractionAsPercent(enemy_avg_winrate)}
                 </span>
               </TableCell>
             </TableRow>
@@ -184,14 +184,14 @@ export function MatchmakingAnalysisResults({
             <p className="text-sm text-green-600 dark:text-green-400">
               ✓ The analyzed player&apos;s teammates had higher average win
               rates than opponents by{" "}
-              <span className="font-bold">{winrateDiffPercent}%</span>
+              <span className="font-bold">{winrateDiffPercent}</span>
             </p>
           )}
           {isUnfavorable && (
             <p className="text-sm text-red-600 dark:text-red-400">
               ✗ The analyzed player&apos;s opponents had higher average win
               rates than teammates by{" "}
-              <span className="font-bold">{winrateDiffPercent}%</span>
+              <span className="font-bold">{winrateDiffPercent}</span>
             </p>
           )}
           {isFair && (

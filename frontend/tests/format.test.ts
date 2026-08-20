@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   formatDateTime,
   formatFractionAsPercent,
+  formatSeconds,
   winRateColors,
 } from "@/lib/core/format";
 
@@ -36,6 +37,25 @@ describe("the percent formatter", () => {
   it("drops a trailing zero rather than printing it", () => {
     expect(formatFractionAsPercent(0.5)).toBe("50%");
     expect(formatFractionAsPercent(0)).toBe("0%");
+  });
+});
+
+describe("the shared duration grammar", () => {
+  it.each([
+    [0, "0.0s"],
+    [0.5, "0.5s"],
+    [12.34, "12.3s"],
+    // Display-precision rounding decides the unit: 59.97 rounds to 60,
+    // so it rolls over instead of rendering "60.0s".
+    [59.97, "1m 0s"],
+    [60, "1m 0s"],
+    [245, "4m 5s"],
+    // Hours roll over too; test runs regularly exceed an hour.
+    [3604, "1h 0m 4s"],
+    // Clock skew between started/completed clamps rather than reading "-3.0s".
+    [-3, "0.0s"],
+  ])("formats %s seconds as %s", (seconds, expected) => {
+    expect(formatSeconds(seconds)).toBe(expected);
   });
 });
 

@@ -2,10 +2,9 @@ from datetime import UTC, datetime
 from typing import override
 
 import structlog
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.riot_api.client import APICallRecord, RiotAPIClient
+from app.core.riot_api.client import RiotAPIClient
 from app.core.riot_api.db_rate_limiter import DBRateLimiter, RateLimitComponent
 from app.core.riot_api.errors import RateLimitError
 from app.features.jobs.base import BaseJob, JobStopSignal
@@ -34,24 +33,6 @@ class MatchFetcherJob(BaseJob):
 
     recorded_errors_are_fatal = False
 
-    def __init__(
-        self,
-        job_config_id: int,
-        triggered_by: str = "system",
-        target_puuids: set[str] | None = None,
-    ):
-        super().__init__(job_config_id, triggered_by)
-        self.target_puuids = target_puuids
-
-    def _track_api_request(self, metric_name: str, count: int) -> None:
-        """Callback for tracking API requests from RiotAPIClient."""
-        if metric_name == "requests_made":
-            self.metrics["api_requests_made"] += count
-
-    def _store_api_calls(self, api_calls: list[APICallRecord]) -> None:
-        """Store API call records from the RiotAPIClient."""
-        self._api_call_records = api_calls
-
     @override
     async def execute(self, db: AsyncSession) -> None:
         """Execute the match fetcher job."""
@@ -65,11 +46,8 @@ class MatchFetcherJob(BaseJob):
         match_service = MatchService(db)
         rate_limiter = DBRateLimiter(db, RateLimitComponent.MATCH_FETCHER)
 
-        async with await self.get_job_riot_api_client(
-            db,
-            request_callback=self._track_api_request,
-        ) as riot_client:
-            tracked_players = await self._load_tracked_players(db, player_service)
+        async with self.job_riot_client(db) as riot_client:
+            tracked_players = await self._load_tracked_players(db)
             logger.info(
                 "Starting match fetcher job", tracked_count=len(tracked_players)
             )
@@ -84,26 +62,6 @@ class MatchFetcherJob(BaseJob):
                 )
             finally:
                 await rate_limiter.release()
-
-            self._store_api_calls(riot_client.get_api_calls())
-
-    async def _load_tracked_players(
-        self,
-        db: AsyncSession,
-        player_service: PlayerService,
-    ) -> list[PlayerResponse]:
-        """Load the global allowlist or an explicit per-player PUUID set."""
-        if self.target_puuids is None:
-            return await player_service.get_globally_tracked_players()
-
-        result = await db.execute(
-            select(Player).where(Player.puuid.in_(self.target_puuids))
-        )
-        tracked_players = [
-            PlayerResponse.model_validate(player) for player in result.scalars().all()
-        ]
-        self.add_log_entry("target_puuids", sorted(self.target_puuids))
-        return tracked_players
 
     async def _handle_player_processing_error(
         self,
