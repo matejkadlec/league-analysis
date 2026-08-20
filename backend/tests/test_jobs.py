@@ -183,6 +183,46 @@ async def test_stopping_a_paused_test_run_unsticks_the_shared_pause_flag(
 
 
 @pytest.mark.asyncio
+async def test_stopping_a_test_run_keeps_a_live_scheduled_runs_pause(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The unstick must not resume a deliberately paused concurrent run.
+
+    A scheduled run and a test run of the same job may coexist. When the
+    scheduled run is live, the shared flag is its pause — stopping the test
+    run must leave it alone.
+    """
+    from app.features.jobs import router as jobs_router
+    from app.features.jobs import service as service_module
+
+    job_model = SimpleNamespace(id=7, name="Match Fetcher", is_paused=True)
+    job_service = _job_service_double(job_model)
+
+    def record_stop(key: int, *, force: bool) -> bool:
+        return True
+
+    seen_keys: list[int] = []
+    monkeypatch.setattr(service_module, "request_job_stop", record_stop)
+    monkeypatch.setattr(
+        service_module, "get_runtime_control_snapshot", _running_snapshot(seen_keys)
+    )
+
+    # The scheduled run (positive key) is live alongside the test run.
+    def scheduled_run_is_live(key: int) -> bool:
+        return key == 7
+
+    monkeypatch.setattr(service_module, "is_runtime_job_running", scheduled_run_is_live)
+
+    response = await jobs_router.stop_test_run(7, job_service, force=False)
+
+    assert response.success is True
+    assert job_model.is_paused is True
+    # The test-run response must not report the scheduled run's pause as its own.
+    assert response.is_paused is False
+    cast(AsyncMock, job_service.db.commit).assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_status_overview_reports_the_earliest_scheduled_run(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

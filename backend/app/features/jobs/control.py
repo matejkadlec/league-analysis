@@ -18,6 +18,15 @@ class RuntimeJobControl:
 _runtime_controls: dict[int, RuntimeJobControl] = {}
 
 
+def runtime_control_key(job_config_id: int, *, test_run: bool = False) -> int:
+    """The registry key for a run: test runs use the negated config ID.
+
+    This is the one place the convention lives; every pause/stop/status
+    path derives its key here so none of them can target the wrong run.
+    """
+    return -job_config_id if test_run else job_config_id
+
+
 def register_runtime_control(
     job_config_id: int,
     task: asyncio.Task[None] | None,
