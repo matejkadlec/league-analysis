@@ -1,6 +1,6 @@
 import { expect, type Page } from "@playwright/test";
 
-import { seedAuthenticatedSession } from "./auth";
+import { acceptCookieBanner, seedAuthenticatedSession } from "./auth";
 import { blockUpstreamRequests } from "./offline";
 
 /**
@@ -132,7 +132,8 @@ function teamChampion(index: number, teamId: number) {
 function match(index: number) {
   const start = Date.parse(NOW) - index * 3_600_000;
   const [champion_name, champion_id] = CHAMPIONS[index % CHAMPIONS.length]!;
-  const [opponent_name, opponent_id] = CHAMPIONS[(index + 1) % CHAMPIONS.length]!;
+  const [opponent_name, opponent_id] =
+    CHAMPIONS[(index + 1) % CHAMPIONS.length]!;
   return {
     match_id: `EUN1_${7000000000 + index}`,
     platform: "eun1",
@@ -399,7 +400,7 @@ export async function gotoPopulatedRoute(
 ): Promise<void> {
   await installPopulatedPlayerMocks(page);
   await page.goto(route.route);
-  await page.getByRole("button", { name: "Accept necessary" }).click();
+  await acceptCookieBanner(page);
   // Attached rather than visible: the matchmaking gate element is the
   // stacked mobile list, present in the DOM at every viewport.
   await expect(page.locator(route.ready).first()).toBeAttached();

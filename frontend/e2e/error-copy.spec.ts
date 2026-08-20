@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import { seedAuthenticatedSession } from "./support/auth";
+import { acceptCookieBanner, seedAuthenticatedSession } from "./support/auth";
 import { blockUpstreamRequests } from "./support/offline";
 
 /**
@@ -52,14 +52,6 @@ async function signIn(page: Page) {
       }),
     });
   });
-}
-
-/**
- * The consent dialog is modal, so until it is dismissed Radix marks the rest
- * of the page `aria-hidden` and every role query below finds nothing.
- */
-async function acceptCookieBanner(page: Page) {
-  await page.getByRole("button", { name: "Accept necessary" }).click();
 }
 
 test("unknown routes offer a way back home", async ({ page }) => {

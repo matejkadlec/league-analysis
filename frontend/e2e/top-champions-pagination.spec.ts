@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { seedAuthenticatedSession } from "./support/auth";
+import { acceptCookieBanner, seedAuthenticatedSession } from "./support/auth";
 import { blockUpstreamRequests } from "./support/offline";
 
 const NOW = "2026-08-07T10:00:00.000Z";
@@ -135,7 +135,7 @@ test("navigates complete Top Champions results in fixed five-row pages", async (
   page,
 }) => {
   await page.goto(`/player-overview?puuid=${PUUID}`);
-  await page.getByRole("button", { name: "Accept necessary" }).click();
+  await acceptCookieBanner(page);
 
   const previous = page.getByRole("button", { name: "Previous champions" });
   const next = page.getByRole("button", { name: "Next champions" });

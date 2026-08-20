@@ -35,7 +35,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 
 import structlog
-from sqlalchemy import and_, func, select, update
+from sqlalchemy import ColumnElement, and_, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -68,6 +68,21 @@ logger = structlog.get_logger(__name__)
 
 MAX_RATE_LIMIT_WAIT = 120
 ACTIVE_ANALYSIS_STATUSES = ("pending", "in_progress", "waiting_rate_limit")
+
+
+def _active_run_where(
+    puuid: str | None, created_at: datetime | None
+) -> ColumnElement[bool]:
+    """The WHERE clause naming one exact active run.
+
+    Every cancel/progress/finalize path targets a run by this same triple;
+    spelling it once keeps the paths from drifting apart.
+    """
+    return and_(
+        MatchmakingAnalysis.puuid == puuid,
+        MatchmakingAnalysis.created_at == created_at,
+        MatchmakingAnalysis.status.in_(ACTIVE_ANALYSIS_STATUSES),
+    )
 
 
 @dataclass(frozen=True)
@@ -161,26 +176,14 @@ class MatchmakingAnalysisService:
     async def cancel_analysis(self, puuid: str, created_at: datetime) -> bool:
         """Cancel the exact active run while retaining its terminal record."""
         result = await self.db.execute(
-            select(MatchmakingAnalysis).where(
-                and_(
-                    MatchmakingAnalysis.puuid == puuid,
-                    MatchmakingAnalysis.created_at == created_at,
-                    MatchmakingAnalysis.status.in_(ACTIVE_ANALYSIS_STATUSES),
-                )
-            )
+            select(MatchmakingAnalysis).where(_active_run_where(puuid, created_at))
         )
         if result.scalar_one_or_none() is None:
             return False
 
         await self.db.execute(
             update(MatchmakingAnalysis)
-            .where(
-                and_(
-                    MatchmakingAnalysis.puuid == puuid,
-                    MatchmakingAnalysis.created_at == created_at,
-                    MatchmakingAnalysis.status.in_(ACTIVE_ANALYSIS_STATUSES),
-                )
-            )
+            .where(_active_run_where(puuid, created_at))
             .values(
                 status="cancelled",
                 completed_at=datetime.now(UTC),
@@ -410,15 +413,7 @@ class MatchmakingAnalysisService:
                     await _ensure_riot_writer_maintenance_is_inactive(db)
                     await db.execute(
                         update(MatchmakingAnalysis)
-                        .where(
-                            and_(
-                                MatchmakingAnalysis.puuid == puuid,
-                                MatchmakingAnalysis.created_at == created_at,
-                                MatchmakingAnalysis.status.in_(
-                                    ACTIVE_ANALYSIS_STATUSES
-                                ),
-                            )
-                        )
+                        .where(_active_run_where(puuid, created_at))
                         .values(
                             status="failed",
                             rate_limit_reset_at=None,
@@ -527,13 +522,7 @@ class MatchmakingAnalysisService:
         await _ensure_riot_writer_maintenance_is_inactive(self.db)
         await self.db.execute(
             update(MatchmakingAnalysis)
-            .where(
-                and_(
-                    MatchmakingAnalysis.puuid == puuid,
-                    MatchmakingAnalysis.created_at == created_at,
-                    MatchmakingAnalysis.status.in_(ACTIVE_ANALYSIS_STATUSES),
-                )
-            )
+            .where(_active_run_where(puuid, created_at))
             .values(
                 status="in_progress",
                 started_at=func.coalesce(
@@ -704,13 +693,7 @@ class MatchmakingAnalysisService:
         await _ensure_riot_writer_maintenance_is_inactive(self.db)
         await self.db.execute(
             update(MatchmakingAnalysis)
-            .where(
-                and_(
-                    MatchmakingAnalysis.puuid == puuid,
-                    MatchmakingAnalysis.created_at == created_at,
-                    MatchmakingAnalysis.status.in_(ACTIVE_ANALYSIS_STATUSES),
-                )
-            )
+            .where(_active_run_where(puuid, created_at))
             .values(
                 status="completed",
                 results=results,
@@ -1172,11 +1155,9 @@ class MatchmakingAnalysisService:
         try:
             result = await self.db.execute(
                 select(MatchmakingAnalysis.rate_limit_reset_at).where(
-                    and_(
-                        MatchmakingAnalysis.puuid == self._current_analysis_puuid,
-                        MatchmakingAnalysis.created_at
-                        == self._current_analysis_created_at,
-                        MatchmakingAnalysis.status.in_(ACTIVE_ANALYSIS_STATUSES),
+                    _active_run_where(
+                        self._current_analysis_puuid,
+                        self._current_analysis_created_at,
                     )
                 )
             )
@@ -1190,11 +1171,9 @@ class MatchmakingAnalysisService:
             await self.db.execute(
                 update(MatchmakingAnalysis)
                 .where(
-                    and_(
-                        MatchmakingAnalysis.puuid == self._current_analysis_puuid,
-                        MatchmakingAnalysis.created_at
-                        == self._current_analysis_created_at,
-                        MatchmakingAnalysis.status.in_(ACTIVE_ANALYSIS_STATUSES),
+                    _active_run_where(
+                        self._current_analysis_puuid,
+                        self._current_analysis_created_at,
                     )
                 )
                 .values(
@@ -1247,13 +1226,7 @@ class MatchmakingAnalysisService:
         self, puuid: str, created_at: datetime
     ) -> MatchmakingAnalysis:
         result = await self.db.execute(
-            select(MatchmakingAnalysis).where(
-                and_(
-                    MatchmakingAnalysis.puuid == puuid,
-                    MatchmakingAnalysis.created_at == created_at,
-                    MatchmakingAnalysis.status.in_(ACTIVE_ANALYSIS_STATUSES),
-                )
-            )
+            select(MatchmakingAnalysis).where(_active_run_where(puuid, created_at))
         )
         return result.scalar_one()
 
@@ -1263,13 +1236,7 @@ class MatchmakingAnalysisService:
         await _ensure_riot_writer_maintenance_is_inactive(self.db)
         await self.db.execute(
             update(MatchmakingAnalysis)
-            .where(
-                and_(
-                    MatchmakingAnalysis.puuid == puuid,
-                    MatchmakingAnalysis.created_at == created_at,
-                    MatchmakingAnalysis.status.in_(ACTIVE_ANALYSIS_STATUSES),
-                )
-            )
+            .where(_active_run_where(puuid, created_at))
             .values(puuid_progress=progress)
         )
         await self.db.commit()
@@ -1286,13 +1253,7 @@ class MatchmakingAnalysisService:
         await _ensure_riot_writer_maintenance_is_inactive(self.db)
         await self.db.execute(
             update(MatchmakingAnalysis)
-            .where(
-                and_(
-                    MatchmakingAnalysis.puuid == puuid,
-                    MatchmakingAnalysis.created_at == created_at,
-                    MatchmakingAnalysis.status.in_(ACTIVE_ANALYSIS_STATUSES),
-                )
-            )
+            .where(_active_run_where(puuid, created_at))
             .values(
                 status="failed",
                 completed_at=datetime.now(UTC),
