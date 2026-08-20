@@ -49,14 +49,7 @@ class SettingsService:
     async def get_setting(self, key: str) -> SettingResponse | None:
         """Get a setting by key."""
         if key == "riot_api_key":
-            # Determine most recent added key, regardless of active status? Or just active?
-            # Usually we want the active one.
-            stmt = (
-                select(RiotAPIKey)
-                .where(RiotAPIKey.is_active.is_(True))
-                .order_by(RiotAPIKey.added_at.desc())
-                .limit(1)
-            )
+            stmt = select(RiotAPIKey).order_by(RiotAPIKey.added_at.desc()).limit(1)
             result = await self.db.execute(stmt)
             setting = result.scalar_one_or_none()
 
@@ -82,9 +75,6 @@ class SettingsService:
         """Get admin detail from the shared authoritative health state."""
         _credential, health = await synchronize_riot_credential_health(self.db)
         return APIKeyStatusResponse(
-            has_db_key=health.has_db_key,
-            has_env_key=health.has_env_key,
-            active_source=health.source.value,
             credential_status=health.status.value,
             evidence=health.evidence.value,
             observed_at=health.evidence_at,
@@ -112,7 +102,6 @@ class SettingsService:
         return ServiceStatusResponse(
             is_under_maintenance=is_under_maintenance,
             reason=reason,
-            active_source=health.source.value,
             credential_status=health.status.value,
             health_revision=health.revision,
             observed_at=health.evidence_at,
@@ -142,57 +131,30 @@ class SettingsService:
                 raise ValueError(validation.message)
             raise ValueError(f"Invalid Riot API key: {validation.message}")
 
-        # Check if this exact key value already exists
+        # Re-saving the key already stored keeps its row: `added_at` tracks
+        # Riot's own 24h expiry clock, which a re-save does not reset.
         stmt = select(RiotAPIKey).where(RiotAPIKey.key_value == update.value)
         result = await self.db.execute(stmt)
-        existing_key_entry = result.scalar_one_or_none()
+        target_key = result.scalar_one_or_none()
+        if target_key is None:
+            target_key = RiotAPIKey(key_value=update.value)
+            self.db.add(target_key)
+            await self.db.flush()
 
-        if existing_key_entry and existing_key_entry.is_active:
-            # No-op: The key is already active and the same
-            evidence_at = datetime.now(UTC)
-            val = existing_key_entry.key_value
-            masked = f"{val[:6]}...{val[-4:]}"
-            await mark_database_credential_valid(
-                self.db,
-                existing_key_entry,
-                evidence_at=evidence_at,
-            )
-            await self.db.commit()
-            await self.db.refresh(existing_key_entry)
-            return SettingResponse(
-                key="riot_api_key",
-                masked_value=masked,
-                category="riot_api",
-                is_sensitive=True,
-                created_at=existing_key_entry.added_at,
-                updated_at=existing_key_entry.added_at,
-            )
-
-        # Deactivate all currently active keys
-        stmt_active = select(RiotAPIKey).where(RiotAPIKey.is_active.is_(True))
-        result_active = await self.db.execute(stmt_active)
-        active_keys = result_active.scalars().all()
-        for k in active_keys:
-            k.is_active = False
-
-        if existing_key_entry:
-            # Reactivate existing key
-            existing_key_entry.is_active = True
-            target_key = existing_key_entry
-        else:
-            # Create new key
-            new_key = RiotAPIKey(
-                key_value=update.value,
-                is_active=True,
-            )
-            self.db.add(new_key)
-            target_key = new_key
-
-        evidence_at = datetime.now(UTC)
+        # Delete before binding, so this takes its key-row locks before the
+        # health-row lock -- the order `synchronize_riot_credential_health`
+        # already uses. Binding first would lock health then wait on a key row
+        # that a concurrent request holds, and the two would deadlock.
+        #
+        # `db_key_id` is `ON DELETE SET NULL`, so this may blank the binding on
+        # its way past; `mark_database_credential_valid` re-binds it in the
+        # same transaction, and reads the NULL as an identity change, which is
+        # exactly right for a key that just got replaced.
+        await self.db.execute(delete(RiotAPIKey).where(RiotAPIKey.id != target_key.id))
         await mark_database_credential_valid(
             self.db,
             target_key,
-            evidence_at=evidence_at,
+            evidence_at=datetime.now(UTC),
         )
         await self.db.commit()
         await self.db.refresh(target_key)

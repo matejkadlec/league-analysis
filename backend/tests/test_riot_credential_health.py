@@ -10,17 +10,22 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.riot_api.client import RiotAPIClient
 from app.core.riot_api.credential_health import (
+    RiotAPIKey,
     RiotCredentialEvidence,
     RiotCredentialHealth,
-    RiotCredentialSource,
     RiotCredentialStatus,
-    _environment_generation,
     _replace_generation,
     apply_riot_credential_evidence,
 )
 from app.core.riot_api.errors import RateLimitError
 from app.features.settings import service as settings_service_module
+from app.features.settings.schemas import SettingUpdate
 from app.features.settings.service import SettingsService
+from app.model_registry import import_all_models
+
+# Instantiating `RiotAPIKey` configures the ORM mappers, which cannot resolve
+# their relationships until every model module has been imported.
+import_all_models()
 
 
 def _health(
@@ -35,9 +40,7 @@ def _health(
         SimpleNamespace(
             id=1,
             generation=generation,
-            source=RiotCredentialSource.DATABASE.value,
             db_key_id=7,
-            environment_generation=None,
             status=status.value,
             evidence=RiotCredentialEvidence.CONFIGURED.value,
             evidence_at=evidence_at,
@@ -56,13 +59,7 @@ def test_new_generation_resets_old_failure_without_key_fingerprint() -> None:
         revision=4,
     )
 
-    _replace_generation(
-        health,
-        source=RiotCredentialSource.DATABASE,
-        db_key_id=8,
-        environment_generation=None,
-        now=observed_at + timedelta(seconds=1),
-    )
+    _replace_generation(health, db_key_id=8, now=observed_at + timedelta(seconds=1))
 
     assert health.generation != "current-generation"
     assert health.status == RiotCredentialStatus.UNKNOWN.value
@@ -134,23 +131,16 @@ async def test_only_provider_acceptance_or_rejection_changes_health() -> None:
     ]
 
 
-def test_environment_generation_is_explicit_or_runtime_random(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setenv("RIOT_API_KEY_VERSION", "deployment-42")
-    assert _environment_generation("RGAPI-test-one") == "version:deployment-42"
-    with pytest.raises(ValueError, match="must change"):
-        _environment_generation("RGAPI-test-two")
+def test_losing_the_only_key_reports_missing_rather_than_unknown() -> None:
+    """`db_key_id` alone decides status now that there is no `source` column."""
+    observed_at = datetime(2026, 8, 11, tzinfo=UTC)
+    health = _health(status=RiotCredentialStatus.VALID, evidence_at=observed_at)
 
-    monkeypatch.setenv("RIOT_API_KEY_VERSION", "RGAPI-not-a-safe-version")
-    with pytest.raises(ValueError, match="must not contain"):
-        _environment_generation("RGAPI-test-one")
+    _replace_generation(health, db_key_id=None, now=observed_at)
 
-    monkeypatch.delenv("RIOT_API_KEY_VERSION", raising=False)
-    first = _environment_generation("RGAPI-test-one")
-    assert first == _environment_generation("RGAPI-test-one")
-    assert first != _environment_generation("RGAPI-test-two")
-    assert "RGAPI" not in first
+    assert health.db_key_id is None
+    assert health.status == RiotCredentialStatus.MISSING.value
+    assert health.evidence == RiotCredentialEvidence.MISSING.value
 
 
 @pytest.mark.asyncio
@@ -159,9 +149,6 @@ async def test_admin_and_user_status_share_the_same_health_snapshot(
 ) -> None:
     observed_at = datetime(2026, 8, 11, tzinfo=UTC)
     snapshot = SimpleNamespace(
-        has_db_key=True,
-        has_env_key=True,
-        source=RiotCredentialSource.DATABASE,
         status=RiotCredentialStatus.INVALID,
         evidence=RiotCredentialEvidence.CREDENTIAL_REJECTED,
         evidence_at=observed_at,
@@ -179,7 +166,6 @@ async def test_admin_and_user_status_share_the_same_health_snapshot(
     admin_status = await service.get_api_key_status()
     user_status = await service.get_service_status()
 
-    assert admin_status.active_source == user_status.active_source == "db"
     assert admin_status.credential_status == user_status.credential_status == "invalid"
     assert admin_status.health_revision == user_status.health_revision == 9
     assert user_status.is_under_maintenance is True
@@ -210,3 +196,53 @@ async def test_candidate_validation_keeps_transient_failure_distinct(
     assert result.status == "unavailable"
     assert result.message == "Riot API validation is temporarily unavailable"
     candidate_client.close.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_saving_a_key_takes_key_locks_before_the_health_lock(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Saving must lock key rows first, the order every read path uses.
+
+    `synchronize_riot_credential_health` locks the key row and then the health
+    row. Binding health before deleting the old key rows would reverse that
+    here, and a save racing an ordinary request would deadlock.
+    """
+    events: list[str] = []
+    saved_at = datetime(2026, 8, 11, tzinfo=UTC)
+
+    async def _execute(statement: object) -> object:
+        events.append(type(statement).__name__)
+        return SimpleNamespace(scalar_one_or_none=lambda: None)
+
+    async def _flush() -> None:
+        for pending in added:
+            pending.id = 12
+            pending.added_at = saved_at
+
+    added: list[RiotAPIKey] = []
+    database = SimpleNamespace(
+        execute=_execute,
+        add=added.append,
+        flush=_flush,
+        commit=AsyncMock(),
+        refresh=AsyncMock(),
+    )
+
+    async def _mark(*_args: object, **_kwargs: object) -> None:
+        events.append("bind_health")
+
+    monkeypatch.setattr(
+        settings_service_module, "mark_database_credential_valid", _mark
+    )
+    service = SettingsService(cast(AsyncSession, database))
+    service.validate_riot_api_key = AsyncMock(
+        return_value=SimpleNamespace(valid=True, status="valid", message="ok")
+    )
+
+    response = await service.update_setting(
+        "riot_api_key", SettingUpdate(value="RGAPI-" + "z" * 36)
+    )
+
+    assert events == ["Select", "Delete", "bind_health"]
+    assert response.masked_value == "RGAPI-...zzzz"

@@ -511,9 +511,6 @@ class SettingTestResponse(BaseModel):
 class APIKeyStatusResponse(BaseModel):
     """Admin configuration detail backed by the shared credential-health state."""
 
-    has_db_key: bool
-    has_env_key: bool
-    active_source: Literal["db", "env", "none"]
     credential_status: Literal["missing", "unknown", "valid", "invalid"]
     evidence: Literal[
         "missing",
@@ -531,7 +528,6 @@ class ServiceStatusResponse(BaseModel):
 
     is_under_maintenance: bool
     reason: Literal["ok", "api_key_missing", "api_key_invalid"]
-    active_source: Literal["db", "env", "none"]
     credential_status: Literal["missing", "unknown", "valid", "invalid"]
     health_revision: int = Field(..., gt=0)
     observed_at: datetime

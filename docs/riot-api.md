@@ -127,10 +127,13 @@ return an empty history that looks like a legitimate answer.
 ## 2. Credential Precedence and Health Authority
 
 Credential resolution selects the newest active, non-expired row in
-`core.riot_api_keys`, then falls back to the `RIOT_API_KEY` environment
-variable when no usable database key exists. The backend owns one secret-free
-`core.riot_credential_health` record for that effective credential generation.
-Its state is `missing`, `unknown`, `valid`, or `invalid`.
+`core.riot_api_keys`, which holds at most one row: the current key. Saving a
+key replaces the previous one outright, and a key past the 24-hour development
+limit is deleted rather than kept, so an expired secret is never selectable.
+There is no environment fallback -- an operator with no key signs in and saves
+one in Settings. The backend owns one secret-free
+`core.riot_credential_health` record for that credential generation. Its state
+is `missing`, `unknown`, `valid`, or `invalid`.
 
 Saving a provider-validated database key establishes a fresh/current valid
 generation. Replacing the effective key resets old evidence; a request from an
@@ -146,13 +149,8 @@ runtime clients must be created with `create_tracked_riot_api_client()` (or the
 FastAPI dependency that uses it); the candidate-key validation call before a
 save is deliberately separate.
 
-For the environment fallback, `RIOT_API_KEY_VERSION` is an optional non-secret
-deployment generation such as `production-2026-08-11-1`. Change it whenever
-`RIOT_API_KEY` changes, then restart the backend so both values are reloaded. It
-must contain only 1-64 letters, numbers, dots, underscores, or hyphens and must
-never contain the key. Without this variable, each backend process start uses a
-new random generation, safely returning health to `unknown` until Riot directly
-accepts or rejects the credential. No key hash, prefix, suffix, or other
+A credential's identity is its row id, so replacing the key always produces a
+new identity and resets stale evidence. No key hash, prefix, suffix, or other
 key-derived fingerprint is persisted or returned.
 
 Both admin and non-admin headers read `/api/v1/settings/service-status`.

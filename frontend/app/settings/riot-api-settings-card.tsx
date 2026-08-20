@@ -22,9 +22,6 @@ import { notifyRiotCredentialHealthUpdated } from "@/lib/core/riot-credential-he
 import { Check, FlaskConical, Loader2, Save, ShieldCheck, X } from "lucide-react";
 
 const APIKeyStatusSchema = z.object({
-  has_db_key: z.boolean(),
-  has_env_key: z.boolean(),
-  active_source: z.enum(["db", "env", "none"]),
   credential_status: z.enum(["missing", "unknown", "valid", "invalid"]),
   evidence: z.enum([
     "missing",
@@ -53,8 +50,8 @@ export function RiotApiSettingsCard() {
     queryFn: async () => {
       const result = await validatedGet(SettingSchema, "/settings/riot_api_key");
       if (!result.success) {
-        // A deployment whose key lives in the environment has no row here, and
-        // the panels below render that as an ordinary state rather than an error.
+        // No key saved yet is an ordinary state -- the panel below prompts
+        // for one -- not a failure worth a toast.
         if (result.error.status === 404) {
           return null;
         }
@@ -205,21 +202,11 @@ export function RiotApiSettingsCard() {
             </div>
           )}
 
-          {!setting && keyStatus?.active_source === "none" && (
+          {!setting && keyStatus?.credential_status === "missing" && (
             <Alert className="border-red-700 bg-red-950/40 text-red-200">
               <p className="text-sm">
                 No active Riot API Key found, insert a valid key into the field
                 below to restore functionality.
-                {process.env.NODE_ENV === "production" ? "" : " or .env"}.
-              </p>
-            </Alert>
-          )}
-
-          {!setting && keyStatus?.active_source === "env" && (
-            <Alert className="border-amber-700 bg-amber-950/40 text-amber-200">
-              <p className="text-sm">
-                Using Riot API Key from environment variables. Consider adding
-                it to database for better management.
               </p>
             </Alert>
           )}

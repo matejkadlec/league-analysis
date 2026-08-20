@@ -340,7 +340,6 @@ export async function installPopulatedPlayerMocks(page: Page): Promise<void> {
       return json({
         is_under_maintenance: false,
         reason: "ok",
-        active_source: "db",
         credential_status: "valid",
         health_revision: 3,
         observed_at: NOW,

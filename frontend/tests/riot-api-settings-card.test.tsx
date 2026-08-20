@@ -72,9 +72,6 @@ const DB_SETTING = {
 
 function status(overrides: Record<string, unknown> = {}) {
   return {
-    has_db_key: true,
-    has_env_key: false,
-    active_source: "db",
     credential_status: "valid",
     evidence: "provider_success",
     observed_at: "2026-01-02T00:00:00.000Z",
@@ -199,23 +196,19 @@ describe("the card that swaps the Riot API key", () => {
   });
 
   it("treats a missing stored key as a state, not a failure", async () => {
-    // A deployment that keeps its key in the environment has no row here, so
-    // the 404 is the normal answer and the card renders it as one.
+    // Before the first key is ever saved there is no row, so the 404 is the
+    // normal answer and the card renders it as a prompt rather than an error.
     //
     // This runs on the real provider wiring rather than a bare client, because
     // the DOM alone cannot tell the two apart: `setting` ends up null whether
     // the 404 is caught or thrown. What separates them is the global
     // `queryCache.onError`, which announces any failed query to the viewer --
-    // this one sets no `silenceErrorToast`. Let the 404 through and every
-    // settings page load on an env-key deployment raises "Could not load this
-    // data" over a card that is working exactly as intended.
+    // this one sets no `silenceErrorToast`. Let the 404 through and a fresh
+    // deployment raises "Could not load this data" over a card that is working
+    // exactly as intended.
     respondWith({
       setting: { success: false, error: { status: 404, kind: "not_found" } },
-      status: status({
-        has_db_key: false,
-        has_env_key: true,
-        active_source: "env",
-      }),
+      status: status({ credential_status: "missing", evidence: "missing" }),
     });
     const announce = vi.spyOn(appToast, "toast").mockImplementation(() => "");
     const queryClient = createProvidersQueryClient();
@@ -230,7 +223,7 @@ describe("the card that swaps the Riot API key", () => {
     );
 
     expect(
-      await screen.findByText(/Using Riot API Key from environment variables/),
+      await screen.findByText(/No active Riot API Key found/),
     ).toBeTruthy();
     expect(screen.queryByText("Current API Key")).toBeNull();
     expect(announce).not.toHaveBeenCalled();
