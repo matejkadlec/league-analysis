@@ -792,33 +792,3 @@ async def get_job_system_status(
             status_code=500,
             detail="Internal server error retrieving job system status",
         ) from e
-
-
-@router.get("/running-status", response_model=dict)
-async def get_running_jobs_status(
-    job_service: JobServiceDep,
-):
-    """
-    Check which jobs are currently running.
-
-    Returns:
-        Dict with job types and their running status.
-    """
-    try:
-        match_fetcher_running = await job_service.is_job_running(JobType.MATCH_FETCHER)
-        player_updater_running = await job_service.is_job_running(
-            JobType.PLAYER_UPDATER
-        )
-
-        return {
-            "match_fetcher_running": match_fetcher_running,
-            "player_updater_running": player_updater_running,
-            "any_running": match_fetcher_running or player_updater_running,
-        }
-
-    except Exception as e:
-        logger.error("Failed to get running jobs status", error=str(e), exc_info=True)
-        raise HTTPException(
-            status_code=500,
-            detail="Internal server error checking job status",
-        ) from e
