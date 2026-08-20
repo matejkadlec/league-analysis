@@ -150,11 +150,11 @@ describe("the last matchmaking analysis result", () => {
     await waitFor(() =>
       expect(screen.getByText(/teammates had higher average win/)).toBeTruthy(),
     );
-    // Scoped to the verdict sentence: the team's own 3% renders in the table
-    // as well, so a bare `getByText("3.0%")` finds two elements and throws.
+    // Anchored on "by": a bare "3%" would also match a wrong 13% or 23%,
+    // and the team's own 3% renders in the table as well.
     expect(
       screen.getByText(/teammates had higher average win/).textContent,
-    ).toContain("3%");
+    ).toContain("by 3%");
     expect(screen.queryByText(/relatively fair/)).toBeNull();
     queryClient.clear();
   });

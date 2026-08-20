@@ -84,9 +84,11 @@ function getTrendIndicatorRaw(
 }
 
 // One decimal at most; Intl drops a trailing ".0" natively, so the
-// hand-rolled strip this replaced is gone.
+// hand-rolled strip this replaced is gone. Grouping off keeps the swap
+// exact if a four-digit stat ever lands here (no "1,234.6").
 const oneDecimalFormatter = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 1,
+  useGrouping: false,
 });
 
 function formatNumber(value: number): string {
