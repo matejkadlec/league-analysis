@@ -165,10 +165,10 @@ describe("a match history row", () => {
   });
 
   // A Tailwind class is asserted here for the same reason the matchmaking
-  // history row asserts one: the tint is not decoration on top of a label,
-  // it is the *only* thing in the row that says how the game went. There is
-  // no "VICTORY" or "DEFEAT" text anywhere in it — asserting on words was the
-  // first draft of these two tests and it failed against correct code.
+  // history row asserts one: the tint carries the outcome for sighted
+  // players, and `getMatchOutcome` derives it and the text label from one
+  // branch — so the class and the word are pinned together, and a row whose
+  // tint and label disagree cannot pass.
   const tint = (container: HTMLElement) =>
     container.firstElementChild?.className ?? "";
 
@@ -232,11 +232,13 @@ describe("a match history row", () => {
   it("falls back to a neutral tint when the player is not in the match", () => {
     // A row with no `player_participant` is a data gap, not a loss. Without
     // the guard the cascade falls through to the defeat colour and the row
-    // reads as a game the player lost.
+    // reads as a game the player lost — in the tint and, since the outcome
+    // word was added, in text too.
     const { container } = renderRow({ player_participant: null });
 
     expect(tint(container)).toContain("bg-muted/30");
     expect(tint(container)).not.toContain("rose");
+    expect(container.textContent).not.toContain("Defeat");
   });
 
   it("labels a remake's zero as +0 LP rather than a flat 0", () => {

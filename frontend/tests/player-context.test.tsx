@@ -277,9 +277,10 @@ describe("persisting the player named in the URL", () => {
 
 describe("whether the app says it is still loading", () => {
   it("does not wait on a player query that was never asked for", async () => {
-    // With no `?puuid=` the URL player query is disabled, and a disabled query
-    // in React Query reports `isLoading` true forever. Reading it unguarded
-    // leaves every page permanently in its skeleton state.
+    // With no `?puuid=` the URL player query is disabled. React Query v5
+    // derives `isLoading` as `isPending && isFetching`, so a disabled query
+    // reports false and needs no `!!urlPuuid &&` guard in the provider —
+    // this pins that pages still leave their skeleton state without one.
     const { result } = renderContext();
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
