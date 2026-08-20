@@ -347,24 +347,6 @@
     background-color: #e5e7eb !important;
   }
 
-  .match-history-light-input {
-    background-color: #ddd !important;
-    color: #333 !important;
-  }
-
-  .match-history-light-input::placeholder {
-    color: #999 !important;
-  }
-
-  .dark .match-history-light-input {
-    background-color: #ccc !important;
-    color: #333 !important;
-  }
-
-  .dark .match-history-light-input::placeholder {
-    color: #777 !important;
-  }
-
   /* Remove focus outline from logo */
   .sidebar-logo-link {
     outline: none !important;
@@ -486,14 +468,6 @@
     transform: rotate(180deg);
   }
 
-  .button-small.full-rotation svg {
-    transition: transform 0.75s ease;
-  }
-
-  .button-small.full-rotation:hover svg {
-    transform: rotate(360deg);
-  }
-
   .button-small.no-rotation svg {
     transform: none !important;
   }
@@ -560,14 +534,6 @@
 
   .button-medium:hover svg {
     transform: rotate(180deg);
-  }
-
-  .button-medium.full-rotation svg {
-    transition: transform 0.75s ease;
-  }
-
-  .button-medium.full-rotation:hover svg {
-    transform: rotate(360deg);
   }
 
   .button-medium.no-rotation svg {

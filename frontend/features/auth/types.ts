@@ -22,14 +22,6 @@ export interface LoginRequest extends LoginCredentials {
   captchaToken?: string | null;
 }
 
-export interface AuthResponse {
-  access_token: string;
-  refresh_token: string;
-  token_type: string;
-  expires_in_seconds: number;
-  refresh_expires_in_seconds: number;
-}
-
 export interface AuthLoginError extends Error {
   code?: string | undefined;
   lockedUntil?: string | undefined;
