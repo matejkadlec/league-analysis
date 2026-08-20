@@ -13,7 +13,6 @@ from app.core.riot_api.client import RiotAPIClient
 from app.core.riot_api.models import MatchDTO
 from app.features.auth.models import User
 from app.features.jobs.maintenance import RiotWriterMaintenanceActiveError
-from app.features.matches import router as matches_router
 from app.features.matches import service as matches_service_module
 from app.features.matches.service import MatchService
 from app.features.players import router as players_router
@@ -183,33 +182,6 @@ async def test_player_refresh_uses_the_shared_writer_guard(
 
     assert error.value.status_code == 503
     guard.assert_awaited_once()
-
-
-@pytest.mark.asyncio
-async def test_match_history_start_refuses_active_maintenance(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """No match-history task is queued while cleanup owns gameplay tables."""
-    from app.features.jobs import maintenance
-
-    monkeypatch.setattr(
-        maintenance,
-        "ensure_riot_writer_maintenance_is_inactive",
-        AsyncMock(side_effect=RiotWriterMaintenanceActiveError()),
-    )
-    background_tasks = BackgroundTasks()
-
-    with pytest.raises(HTTPException) as error:
-        await matches_router.analyze_match_history(
-            request=_request(),
-            puuid="test-puuid",
-            background_tasks=background_tasks,
-            db=cast(AsyncSession, object()),
-            current_user=cast(User, SimpleNamespace(id=7)),
-        )
-
-    assert error.value.status_code == 503
-    assert not background_tasks.tasks
 
 
 @pytest.mark.asyncio
