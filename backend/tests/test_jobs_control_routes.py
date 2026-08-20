@@ -1,10 +1,10 @@
 """What the pause/resume/stop routes answer, per outcome of the service call.
 
-The three routes share one shape: ask the service, turn its answer into a
-404/409/200, and turn anything thrown into a 500. Nothing pinned that shape
-before this file, so a refactor could quietly have collapsed "this job does
-not exist" and "this job refused" into the generic server error -- which is
-the one distinction the Jobs page acts on.
+The three routes share one shape: ask the service and turn its answer into a
+404/409/200. Nothing pinned that shape before this file, so a refactor could
+quietly have collapsed "this job does not exist" and "this job refused" into
+the generic server error -- which is the one distinction the Jobs page acts
+on.
 """
 
 from collections.abc import Awaitable, Callable
@@ -13,7 +13,6 @@ from typing import cast
 import pytest
 from fastapi import HTTPException
 
-from app.core.http_errors import SERVICE_ERROR_DETAIL
 from app.features.jobs import scheduler as scheduler_module
 from app.features.jobs.router import (
     _set_scheduled_job_suspended,
@@ -112,14 +111,16 @@ async def test_refusal_is_409_carrying_the_service_message(
 
 @pytest.mark.parametrize("route", ROUTES.values(), ids=list(ROUTES))
 @pytest.mark.asyncio
-async def test_unexpected_failure_is_a_client_safe_500(route: ControlRoute) -> None:
-    with pytest.raises(HTTPException) as caught:
-        await route(_service(RuntimeError("connection reset")))
+async def test_an_unexpected_failure_is_not_relabelled(route: ControlRoute) -> None:
+    """The route neither swallows the failure nor turns it into a 404 or 409.
 
-    assert caught.value.status_code == 500
-    assert caught.value.detail == SERVICE_ERROR_DETAIL
-    # The database's words never reach the client.
-    assert "connection reset" not in str(caught.value.detail)
+    What the client sees is the app-level handler's one client-safe body, and
+    `test_unhandled_error_response.py` pins that. What matters here is that the
+    route lets it reach the handler rather than answering for it -- a bare
+    `except Exception` would make every outage look like a refused job.
+    """
+    with pytest.raises(RuntimeError, match="connection reset"):
+        await route(_service(RuntimeError("connection reset")))
 
 
 @pytest.mark.asyncio

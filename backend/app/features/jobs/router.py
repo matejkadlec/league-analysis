@@ -4,13 +4,11 @@
 # pyright: reportMissingTypeStubs=false
 """Job management API endpoints."""
 
-from collections.abc import Awaitable
 from typing import NoReturn
 
 import structlog
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 
-from app.core.http_errors import log_and_raise_http
 from app.features.auth.dependencies import get_current_admin_user
 
 from .base import BaseJob
@@ -116,15 +114,8 @@ async def list_job_configurations(
     active_only: bool = Query(False, description="Filter to active jobs only"),
 ):
     """List all job configurations, optionally filtered to active jobs only."""
-    try:
-        jobs = await job_service.list_job_configurations(active_only=active_only)
-        return jobs
-    except Exception as e:
-        log_and_raise_http(
-            logger,
-            e,
-            "Failed to list job configurations",
-        )
+    jobs = await job_service.list_job_configurations(active_only=active_only)
+    return jobs
 
 
 @router.put("/{job_id}", response_model=JobConfigurationResponse)
@@ -144,17 +135,8 @@ async def update_job_configuration(
 
         await sync_job_configuration(job.id)
         return job
-    except HTTPException:
-        raise
     except RiotWriterMaintenanceConfigurationError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
-    except Exception as e:
-        log_and_raise_http(
-            logger,
-            e,
-            "Failed to update job configuration",
-            job_id=job_id,
-        )
 
 
 # === Job Execution Endpoints ===
@@ -184,22 +166,14 @@ async def get_job_executions(
     Returns:
         Paginated list of job executions.
     """
-    try:
-        executions = await job_service.list_job_executions(
-            job_config_id=job_id,
-            status=status,
-            execution_type=execution_type,
-            page=page,
-            size=size,
-        )
-        return executions
-    except Exception as e:
-        log_and_raise_http(
-            logger,
-            e,
-            "Failed to list job executions",
-            job_id=job_id,
-        )
+    executions = await job_service.list_job_executions(
+        job_config_id=job_id,
+        status=status,
+        execution_type=execution_type,
+        page=page,
+        size=size,
+    )
+    return executions
 
 
 @router.get("/executions/all", response_model=JobExecutionListResponse)
@@ -224,20 +198,13 @@ async def list_all_executions(
     Returns:
         Paginated list of all job executions.
     """
-    try:
-        executions = await job_service.list_job_executions(
-            status=status,
-            execution_type=execution_type,
-            page=page,
-            size=size,
-        )
-        return executions
-    except Exception as e:
-        log_and_raise_http(
-            logger,
-            e,
-            "Failed to list all executions",
-        )
+    executions = await job_service.list_job_executions(
+        status=status,
+        execution_type=execution_type,
+        page=page,
+        size=size,
+    )
+    return executions
 
 
 # === Job Control Endpoints ===
@@ -267,69 +234,57 @@ async def trigger_job(
         400: Job is not active or scheduler is disabled.
         409: Job is already running.
     """
-    try:
-        # Check if job exists and is active
-        job = await job_service.get_job_configuration(job_id)
-        if not job:
-            _raise_job_not_found(job_id)
+    job = await job_service.get_job_configuration(job_id)
+    if not job:
+        _raise_job_not_found(job_id)
 
-        if not job.is_active:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Job '{job.name}' is not active and cannot be triggered",
-            )
+    if not job.is_active:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Job '{job.name}' is not active and cannot be triggered",
+        )
 
-        # If a test run is active (non-suspended), stop it so the real run
-        # can proceed.
-        test_runtime_key = runtime_control_key(job.id, test_run=True)
-        if is_runtime_job_running(test_runtime_key):
-            request_job_stop(test_runtime_key, force=True)
-            logger.info(
-                "Stopped test run to allow regular trigger",
-                job_id=job_id,
-            )
-
-        # Check if job is already running (prevent concurrent runs)
-        is_running = await job_service.is_job_running(job.job_type)
-        if is_running:
-            logger.info(
-                "Job already running, skipping trigger",
-                job_id=job_id,
-                job_name=job.name,
-                job_type=job.job_type.value,
-            )
-            return JobTriggerResponse(
-                success=False,
-                message=f"Job '{job.name}' is already running. Please wait for it to complete.",
-                execution_id=None,
-            )
-
-        # Create and trigger the job instance (triggered by user)
-        job_instance = _create_job_instance(job, triggered_by="user")
-        background_tasks.add_task(job_instance.run)
-
+    # If a test run is active (non-suspended), stop it so the real run
+    # can proceed.
+    test_runtime_key = runtime_control_key(job.id, test_run=True)
+    if is_runtime_job_running(test_runtime_key):
+        request_job_stop(test_runtime_key, force=True)
         logger.info(
-            "Job triggered manually",
+            "Stopped test run to allow regular trigger",
+            job_id=job_id,
+        )
+
+    # Check if job is already running (prevent concurrent runs)
+    is_running = await job_service.is_job_running(job.job_type)
+    if is_running:
+        logger.info(
+            "Job already running, skipping trigger",
             job_id=job_id,
             job_name=job.name,
             job_type=job.job_type.value,
         )
-
         return JobTriggerResponse(
-            success=True,
-            message=f"Job '{job.name}' triggered successfully",
-            execution_id=None,  # Execution ID will be created by the job itself
+            success=False,
+            message=f"Job '{job.name}' is already running. Please wait for it to complete.",
+            execution_id=None,
         )
 
-    except HTTPException:
-        raise
-    except Exception as e:
-        log_and_raise_http(
-            logger,
-            e,
-            "Failed to trigger job",
-            job_id=job_id,
-        )
+    # Create and trigger the job instance (triggered by user)
+    job_instance = _create_job_instance(job, triggered_by="user")
+    background_tasks.add_task(job_instance.run)
+
+    logger.info(
+        "Job triggered manually",
+        job_id=job_id,
+        job_name=job.name,
+        job_type=job.job_type.value,
+    )
+
+    return JobTriggerResponse(
+        success=True,
+        message=f"Job '{job.name}' triggered successfully",
+        execution_id=None,  # Execution ID will be created by the job itself
+    )
 
 
 def _require_control_state(
@@ -347,40 +302,14 @@ def _require_control_state(
     return state
 
 
-async def _control_action(
-    action: Awaitable[JobControlActionResponse | None],
-    *,
-    job_id: int,
-    failure: str,
-    # Flags only, not `object`: these are splatted into `log_and_raise_http`,
-    # whose keyword-only `status_code: int` a wider mapping could shadow. Today
-    # this carries stop's `force` and nothing else.
-    **log_context: bool,
-) -> JobControlActionResponse:
-    """Run one control action and answer with the status its outcome earns.
-
-    Only the service call is guarded: a job that does not exist (404) or that
-    refuses (409) is an answer, not a failure, so `_require_control_state`
-    runs outside the `except` rather than needing an `except HTTPException:
-    raise` to escape being relabelled a 500.
-    """
-    try:
-        state = await action
-    except Exception as e:
-        log_and_raise_http(logger, e, failure, job_id=job_id, **log_context)
-    return _require_control_state(state, job_id)
-
-
 @router.post("/{job_id}/pause", response_model=JobControlActionResponse)
 async def pause_job(
     job_id: int,
     job_service: JobServiceDep,
 ):
     """Pause a running job execution."""
-    return await _control_action(
-        job_service.set_job_paused(job_id, paused=True),
-        job_id=job_id,
-        failure="Failed to pause job",
+    return _require_control_state(
+        await job_service.set_job_paused(job_id, paused=True), job_id
     )
 
 
@@ -390,10 +319,8 @@ async def resume_job(
     job_service: JobServiceDep,
 ):
     """Resume a paused running job execution."""
-    return await _control_action(
-        job_service.set_job_paused(job_id, paused=False),
-        job_id=job_id,
-        failure="Failed to resume job",
+    return _require_control_state(
+        await job_service.set_job_paused(job_id, paused=False), job_id
     )
 
 
@@ -404,11 +331,8 @@ async def stop_job(
     force: bool = Query(False, description="Force stop immediately"),
 ):
     """Request graceful or forced stop for a running job execution."""
-    return await _control_action(
-        job_service.request_job_stop_action(job_id, force=force),
-        job_id=job_id,
-        failure="Failed to stop job",
-        force=force,
+    return _require_control_state(
+        await job_service.request_job_stop_action(job_id, force=force), job_id
     )
 
 
@@ -465,62 +389,51 @@ async def trigger_test_run(
         job_id: Job configuration ID.
         suspend_regular: If True, the scheduled job is paused for the duration.
     """
-    try:
-        job = await job_service.get_job_configuration(job_id)
-        if not job:
-            _raise_job_not_found(job_id)
+    job = await job_service.get_job_configuration(job_id)
+    if not job:
+        _raise_job_not_found(job_id)
 
-        if not job.is_active:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Job '{job.name}' is not active and cannot be tested",
-            )
-
-        # Check if a test run is already active (negative key = test)
-        test_runtime_key = runtime_control_key(job.id, test_run=True)
-        if is_runtime_job_running(test_runtime_key):
-            return JobTriggerResponse(
-                success=False,
-                message=f"A test run for '{job.name}' is already active.",
-                execution_id=None,
-            )
-
-        # Suspend scheduled runs if requested
-        if suspend_regular:
-            _set_scheduled_job_suspended(job.id, suspended=True)
-
-        test_instance = _create_test_job_instance(job)
-        # Store suspend_regular flag so test completion can resume the scheduler
-        test_instance.suspend_regular = suspend_regular
-        background_tasks.add_task(
-            _run_test_job_with_cleanup,
-            test_instance,
-            job.id,
-            suspend_regular,
+    if not job.is_active:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Job '{job.name}' is not active and cannot be tested",
         )
 
-        logger.info(
-            "Test run triggered",
-            job_id=job_id,
-            job_name=job.name,
-            suspend_regular=suspend_regular,
-        )
-
+    # Check if a test run is already active (negative key = test)
+    test_runtime_key = runtime_control_key(job.id, test_run=True)
+    if is_runtime_job_running(test_runtime_key):
         return JobTriggerResponse(
-            success=True,
-            message=f"Test run for '{job.name}' started",
+            success=False,
+            message=f"A test run for '{job.name}' is already active.",
             execution_id=None,
         )
 
-    except HTTPException:
-        raise
-    except Exception as e:
-        log_and_raise_http(
-            logger,
-            e,
-            "Failed to trigger test run",
-            job_id=job_id,
-        )
+    # Suspend scheduled runs if requested
+    if suspend_regular:
+        _set_scheduled_job_suspended(job.id, suspended=True)
+
+    test_instance = _create_test_job_instance(job)
+    # Store suspend_regular flag so test completion can resume the scheduler
+    test_instance.suspend_regular = suspend_regular
+    background_tasks.add_task(
+        _run_test_job_with_cleanup,
+        test_instance,
+        job.id,
+        suspend_regular,
+    )
+
+    logger.info(
+        "Test run triggered",
+        job_id=job_id,
+        job_name=job.name,
+        suspend_regular=suspend_regular,
+    )
+
+    return JobTriggerResponse(
+        success=True,
+        message=f"Test run for '{job.name}' started",
+        execution_id=None,
+    )
 
 
 async def _run_test_job_with_cleanup(
@@ -543,23 +456,12 @@ async def stop_test_run(
     force: bool = Query(False, description="Force stop immediately"),
 ):
     """Stop a running test for a job."""
-    try:
-        state = await job_service.request_job_stop_action(
-            job_id, force=force, test_run=True
-        )
-        if state is None:
-            _raise_job_not_found(job_id)
-        return state
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        log_and_raise_http(
-            logger,
-            e,
-            "Failed to stop test run",
-            job_id=job_id,
-        )
+    state = await job_service.request_job_stop_action(
+        job_id, force=force, test_run=True
+    )
+    if state is None:
+        _raise_job_not_found(job_id)
+    return state
 
 
 async def _set_test_run_paused(
@@ -581,17 +483,7 @@ async def pause_test_run(
     job_service: JobServiceDep,
 ):
     """Pause a running test execution."""
-    try:
-        return await _set_test_run_paused(job_id, job_service, paused=True)
-    except HTTPException:
-        raise
-    except Exception as e:
-        log_and_raise_http(
-            logger,
-            e,
-            "Failed to pause test run",
-            job_id=job_id,
-        )
+    return await _set_test_run_paused(job_id, job_service, paused=True)
 
 
 @router.post("/{job_id}/test/resume", response_model=JobControlActionResponse)
@@ -600,17 +492,7 @@ async def resume_test_run(
     job_service: JobServiceDep,
 ):
     """Resume a paused test execution."""
-    try:
-        return await _set_test_run_paused(job_id, job_service, paused=False)
-    except HTTPException:
-        raise
-    except Exception as e:
-        log_and_raise_http(
-            logger,
-            e,
-            "Failed to resume test run",
-            job_id=job_id,
-        )
+    return await _set_test_run_paused(job_id, job_service, paused=False)
 
 
 @router.get("/status/overview", response_model=JobStatusResponse)
@@ -624,40 +506,32 @@ async def get_job_system_status(
         Job system status including scheduler state, active jobs,
         running executions, and last execution details.
     """
-    try:
-        from .scheduler import get_scheduler
+    from .scheduler import get_scheduler
 
-        # Get metrics
-        active_jobs = await job_service.get_active_job_count()
-        running_executions = await job_service.get_running_execution_count()
-        last_execution = await job_service.get_latest_execution()
+    # Get metrics
+    active_jobs = await job_service.get_active_job_count()
+    running_executions = await job_service.get_running_execution_count()
+    last_execution = await job_service.get_latest_execution()
 
-        # Get actual scheduler status
-        scheduler = get_scheduler()
-        scheduler_running = scheduler is not None and scheduler.running
+    # Get actual scheduler status
+    scheduler = get_scheduler()
+    scheduler_running = scheduler is not None and scheduler.running
 
-        next_run_time = None
-        if scheduler is not None and scheduler_running:
-            next_run_time = min(
-                (
-                    job.next_run_time
-                    for job in scheduler.get_jobs()
-                    if job.next_run_time is not None
-                ),
-                default=None,
-            )
-
-        return JobStatusResponse(
-            scheduler_running=scheduler_running,
-            active_jobs=active_jobs,
-            running_executions=running_executions,
-            last_execution=last_execution,
-            next_run_time=next_run_time,
+    next_run_time = None
+    if scheduler is not None and scheduler_running:
+        next_run_time = min(
+            (
+                job.next_run_time
+                for job in scheduler.get_jobs()
+                if job.next_run_time is not None
+            ),
+            default=None,
         )
 
-    except Exception as e:
-        log_and_raise_http(
-            logger,
-            e,
-            "Failed to get job system status",
-        )
+    return JobStatusResponse(
+        scheduler_running=scheduler_running,
+        active_jobs=active_jobs,
+        running_executions=running_executions,
+        last_execution=last_execution,
+        next_run_time=next_run_time,
+    )
