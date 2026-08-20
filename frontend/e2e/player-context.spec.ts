@@ -474,7 +474,7 @@ test("keeps player routes, sidebar switching, and dialog scroll lock determinist
     ),
   ).toBeVisible();
   await expect(
-    page.getByText("10 total matches (6W / 4L) • 60.0% WR"),
+    page.getByText("10 total matches (6W / 4L) • 60% WR"),
   ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Ranked Solo/Duo" }),

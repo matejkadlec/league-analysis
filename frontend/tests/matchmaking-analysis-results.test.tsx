@@ -123,7 +123,7 @@ describe("the last matchmaking analysis result", () => {
         screen.getByText(/No completed analysis is available/),
       ).toBeTruthy(),
     );
-    expect(screen.queryByText(/90.0%/)).toBeNull();
+    expect(screen.queryByText(/90%/)).toBeNull();
     queryClient.clear();
   });
 
@@ -154,7 +154,7 @@ describe("the last matchmaking analysis result", () => {
     // as well, so a bare `getByText("3.0%")` finds two elements and throws.
     expect(
       screen.getByText(/teammates had higher average win/).textContent,
-    ).toContain("3.0%");
+    ).toContain("3%");
     expect(screen.queryByText(/relatively fair/)).toBeNull();
     queryClient.clear();
   });
@@ -173,7 +173,7 @@ describe("the last matchmaking analysis result", () => {
     );
     const { container, queryClient } = renderResults();
 
-    await waitFor(() => expect(screen.getByText("60.0%")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("60%")).toBeTruthy());
 
     const [team, enemy] = [
       ...container.querySelectorAll("td.text-right span"),
@@ -239,7 +239,7 @@ describe("the last matchmaking analysis result", () => {
     await waitFor(() =>
       expect(screen.getByText(/opponents had higher average win/)).toBeTruthy(),
     );
-    expect(screen.getByText("5.0%")).toBeTruthy();
+    expect(screen.getByText("5%")).toBeTruthy();
     expect(screen.queryByText(/teammates had higher/)).toBeNull();
     // The three verdicts are three independent conditions rather than one
     // cascade, so nothing structural stops two of them rendering at once.

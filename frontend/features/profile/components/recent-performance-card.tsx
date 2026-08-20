@@ -83,10 +83,14 @@ function getTrendIndicatorRaw(
   };
 }
 
-// Format number with 1 decimal (remove .0 if whole)
+// One decimal at most; Intl drops a trailing ".0" natively, so the
+// hand-rolled strip this replaced is gone.
+const oneDecimalFormatter = new Intl.NumberFormat("en-US", {
+  maximumFractionDigits: 1,
+});
+
 function formatNumber(value: number): string {
-  const formatted = value.toFixed(1);
-  return formatted.endsWith(".0") ? Math.round(value).toString() : formatted;
+  return oneDecimalFormatter.format(value);
 }
 
 // Stat comparison row component
