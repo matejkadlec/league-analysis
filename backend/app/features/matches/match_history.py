@@ -107,19 +107,24 @@ def timeline_int_or_zero(timeline: MatchTimeline | None, attr: str) -> int:
     return getattr(timeline, attr)
 
 
-def empty_team_stats(timeline: MatchTimeline | None) -> dict[str, Any]:
-    """Seed team objective totals from timeline rows when they exist."""
-    return {
-        "kills": 0,
-        "deaths": 0,
-        "assists": 0,
-        "turrets": timeline_int_or_none(timeline, "team_turrets_destroyed"),
-        "inhibitors": timeline_int_or_none(timeline, "team_inhibitors_destroyed"),
-        "dragons": timeline_int_or_none(timeline, "team_dragons_slain"),
-        "barons": timeline_int_or_zero(timeline, "team_barons_slain"),
-        "rift_heralds": timeline_int_or_zero(timeline, "team_rift_heralds_slain"),
-        "voidgrubs": timeline_int_or_none(timeline, "team_voidgrubs_slain"),
-    }
+def empty_team_stats(timeline: MatchTimeline | None) -> TeamStats:
+    """Seed team objective totals from timeline rows when they exist.
+
+    The running totals are the response model itself rather than a dict shaped
+    like it: every field below is a field of `TeamStats`, and the accumulators
+    that follow mutate it in place.
+    """
+    return TeamStats(
+        kills=0,
+        deaths=0,
+        assists=0,
+        turrets=timeline_int_or_none(timeline, "team_turrets_destroyed"),
+        inhibitors=timeline_int_or_none(timeline, "team_inhibitors_destroyed"),
+        dragons=timeline_int_or_none(timeline, "team_dragons_slain"),
+        barons=timeline_int_or_zero(timeline, "team_barons_slain"),
+        rift_heralds=timeline_int_or_zero(timeline, "team_rift_heralds_slain"),
+        voidgrubs=timeline_int_or_none(timeline, "team_voidgrubs_slain"),
+    )
 
 
 def participant_objective_counts(
@@ -135,14 +140,14 @@ def participant_objective_counts(
     )
 
 
-def add_combat_totals(stats: dict[str, Any], participant: MatchParticipant) -> None:
-    stats["kills"] += or_zero(participant.kills)
-    stats["deaths"] += or_zero(participant.deaths)
-    stats["assists"] += or_zero(participant.assists)
+def add_combat_totals(stats: TeamStats, participant: MatchParticipant) -> None:
+    stats.kills += or_zero(participant.kills)
+    stats.deaths += or_zero(participant.deaths)
+    stats.assists += or_zero(participant.assists)
 
 
 def apply_participant_objective_fallback(
-    stats: dict[str, Any],
+    stats: TeamStats,
     participant: MatchParticipant,
     dragon_takedowns: int,
     team_baron_kills: int,
@@ -151,13 +156,11 @@ def apply_participant_objective_fallback(
     void_monster_max: int,
 ) -> int:
     """Accumulate participant-level objective fallbacks when timeline data is missing."""
-    stats["turrets"] = or_zero(stats["turrets"]) + or_zero(participant.turret_kills)
-    stats["inhibitors"] = or_zero(stats["inhibitors"]) + or_zero(
-        participant.inhibitor_kills
-    )
-    stats["dragons"] = max(or_zero(stats["dragons"]), dragon_takedowns)
-    stats["barons"] = max(stats["barons"], team_baron_kills)
-    stats["rift_heralds"] = max(stats["rift_heralds"], team_rift_herald_kills)
+    stats.turrets = or_zero(stats.turrets) + or_zero(participant.turret_kills)
+    stats.inhibitors = or_zero(stats.inhibitors) + or_zero(participant.inhibitor_kills)
+    stats.dragons = max(or_zero(stats.dragons), dragon_takedowns)
+    stats.barons = max(stats.barons, team_baron_kills)
+    stats.rift_heralds = max(stats.rift_heralds, team_rift_herald_kills)
     return max(void_monster_max, void_monster_kills)
 
 
@@ -165,8 +168,8 @@ def accumulate_team_participant(
     participant: MatchParticipant,
     blue_team: list[TeamChampion],
     red_team: list[TeamChampion],
-    blue_stats: dict[str, Any],
-    red_stats: dict[str, Any],
+    blue_stats: TeamStats,
+    red_stats: TeamStats,
     blue_has_timeline: bool,
     red_has_timeline: bool,
     blue_void_monster_max: int,
@@ -215,31 +218,14 @@ def accumulate_team_participant(
 
 
 def apply_voidgrub_fallback(
-    stats: dict[str, Any],
+    stats: TeamStats,
     void_monster_max: int,
     has_timeline: bool,
 ) -> None:
     """Derive voidgrubs from combined void-monster stats when timeline is absent."""
     if has_timeline:
         return
-    stats["voidgrubs"] = max(
-        0,
-        void_monster_max - stats["barons"] - stats["rift_heralds"],
-    )
-
-
-def compose_team_stats(stats: dict[str, Any]) -> TeamStats:
-    return TeamStats(
-        kills=stats["kills"],
-        deaths=stats["deaths"],
-        assists=stats["assists"],
-        turrets=stats["turrets"],
-        inhibitors=stats["inhibitors"],
-        dragons=stats["dragons"],
-        barons=stats["barons"],
-        rift_heralds=stats["rift_heralds"],
-        voidgrubs=stats["voidgrubs"],
-    )
+    stats.voidgrubs = max(0, void_monster_max - stats.barons - stats.rift_heralds)
 
 
 def role_sort_key(champion: TeamChampion) -> int:
@@ -280,8 +266,8 @@ def build_team_compositions_and_stats(
     return (
         TeamComposition(blue_team=blue_team, red_team=red_team),
         TeamStatsComposition(
-            blue_team=compose_team_stats(blue_stats),
-            red_team=compose_team_stats(red_stats),
+            blue_team=blue_stats,
+            red_team=red_stats,
         ),
     )
 
