@@ -71,20 +71,24 @@ function getDaysAgo(timestamp: number): string {
  *
  * The remake check comes before the win check on purpose: a remake is
  * annulled, so neither side won it. A missing participant is a data gap,
- * not a loss — neutral tint, and no verdict word to go with it.
+ * not a loss — neutral tint, no verdict word, and not a remake either
+ * (`isRemake` also feeds the LP cell, which must not call a data gap a
+ * played remake).
  */
 function getMatchOutcome(match: MatchWithPlayerData): {
   label: string;
   bgClass: string;
+  isRemake: boolean;
 } {
   const participant = match.player_participant;
 
-  if (!participant) return { label: "—", bgClass: "bg-muted/30" };
+  if (!participant)
+    return { label: "—", bgClass: "bg-muted/30", isRemake: false };
   if (participant.remake || match.early_surrender)
-    return { label: "Remake", bgClass: "bg-gray-500/50" };
+    return { label: "Remake", bgClass: "bg-gray-500/50", isRemake: true };
   if (participant.win)
-    return { label: "Victory", bgClass: "bg-emerald-700/30" };
-  return { label: "Defeat", bgClass: "bg-rose-600/30" };
+    return { label: "Victory", bgClass: "bg-emerald-700/30", isRemake: false };
+  return { label: "Defeat", bgClass: "bg-rose-600/30", isRemake: false };
 }
 
 function renderSummonerSpell(
@@ -415,7 +419,7 @@ export function MatchRow({ match, playerPuuid }: MatchRowProps) {
       : participant?.team_id === 200
         ? blueTeamStats
         : null;
-  const isRemake = Boolean(participant?.remake || match.early_surrender);
+  const isRemake = outcome.isRemake;
   const displayedLpChange = match.lp_change;
 
   const killParticipation =

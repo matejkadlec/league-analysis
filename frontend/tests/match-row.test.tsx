@@ -254,6 +254,21 @@ describe("a match history row", () => {
     expect(screen.getByText("+0 LP")).toBeTruthy();
   });
 
+  it("does not call a data-gap row's zero a remake's +0", () => {
+    // With no participant the row is a data gap, not a played remake — the
+    // outcome cell shows a dash, and the LP cell must agree. Computing the
+    // remake flag outside getMatchOutcome is what let the two disagree:
+    // `early_surrender` alone made isRemake true while the outcome said "—".
+    renderRow({
+      lp_change: 0,
+      early_surrender: true,
+      player_participant: null,
+    });
+
+    expect(screen.getByText("0 LP")).toBeTruthy();
+    expect(screen.queryByText("+0 LP")).toBeNull();
+  });
+
   it("marks an unavailable LP change as unavailable to a screen reader", () => {
     // Sighted readers get a greyed em dash. Without the `aria-label` the
     // accessible name is the dash character alone, which announces as
