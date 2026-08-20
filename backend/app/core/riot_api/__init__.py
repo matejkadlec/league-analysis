@@ -6,13 +6,6 @@ including proper rate limiting, error handling, and authentication.
 """
 
 from .client import RiotAPIClient
-from .db_rate_limiter import (
-    COMPONENT_MAX_WAIT,
-    COMPONENT_PRIORITY,
-    DBRateLimiter,
-    RateLimitComponent,
-    RateLimitState,
-)
 from .endpoints import RiotAPIEndpoints
 from .errors import (
     AuthenticationError,
@@ -35,12 +28,9 @@ from .models import (
 from .rate_limiter import RateLimiter
 
 __all__ = [
-    "COMPONENT_MAX_WAIT",
-    "COMPONENT_PRIORITY",
     "AccountDTO",
     "AuthenticationError",
     "BadRequestError",
-    "DBRateLimiter",
     "ForbiddenError",
     "LeagueEntryDTO",
     "LegacyLeagueEntryDTO",
@@ -48,9 +38,7 @@ __all__ = [
     "MatchListDTO",
     "NotFoundError",
     "PuuidDecryptionError",
-    "RateLimitComponent",
     "RateLimitError",
-    "RateLimitState",
     "RateLimiter",
     "RiotAPIClient",
     "RiotAPIEndpoints",

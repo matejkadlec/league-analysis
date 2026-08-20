@@ -9,13 +9,10 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.riot_api.client import RiotAPIClient
-from app.core.riot_api.db_rate_limiter import DBRateLimiter
-from app.features.jobs.error_handling import RateLimitSignal
 from app.features.jobs.implementations import player_updater as player_updater_module
 from app.features.jobs.implementations.player_updater import PlayerUpdaterJob
 from app.features.players import service as player_service_module
 from app.features.players.models import Player
-from app.features.players.schemas import PlayerResponse
 from app.features.players.service import PlayerService
 
 
@@ -65,11 +62,6 @@ async def test_player_updater_continues_after_a_recoverable_player_error(
             side_effect=[RuntimeError("temporary player failure"), False]
         ),
     )
-    rate_limiter = SimpleNamespace(
-        acquire=AsyncMock(return_value=True),
-        record_request=AsyncMock(),
-        release=AsyncMock(),
-    )
     monkeypatch.setattr(
         PlayerUpdaterJob,
         "get_job_riot_api_client",
@@ -79,18 +71,10 @@ async def test_player_updater_continues_after_a_recoverable_player_error(
     def build_player_service(_db: object) -> SimpleNamespace:
         return player_service
 
-    def build_rate_limiter(*_args: object) -> SimpleNamespace:
-        return rate_limiter
-
     monkeypatch.setattr(
         player_updater_module,
         "PlayerService",
         build_player_service,
-    )
-    monkeypatch.setattr(
-        player_updater_module,
-        "DBRateLimiter",
-        build_rate_limiter,
     )
 
     job = PlayerUpdaterJob(job_config_id=7)
@@ -110,26 +94,6 @@ async def test_player_updater_continues_after_a_recoverable_player_error(
     assert job.execution_log["errors"][0]["context"] == {"puuid": "sanitized-one"}
     db.rollback.assert_awaited_once()
     db.commit.assert_awaited_once()
-    assert rate_limiter.record_request.await_count == 2
-    rate_limiter.release.assert_awaited_once()
-
-
-@pytest.mark.asyncio
-async def test_player_updater_reports_local_capacity_as_rate_limited() -> None:
-    job = PlayerUpdaterJob(job_config_id=7)
-    db = SimpleNamespace(
-        get=AsyncMock(return_value=SimpleNamespace(puuid="sanitized-puuid"))
-    )
-    rate_limiter = SimpleNamespace(acquire=AsyncMock(return_value=False))
-
-    with pytest.raises(RateLimitSignal):
-        await job._update_player_profile(
-            db=cast(AsyncSession, db),
-            player=cast(PlayerResponse, SimpleNamespace(puuid="sanitized-puuid")),
-            player_service=cast(PlayerService, object()),
-            riot_client=cast(RiotAPIClient, object()),
-            rate_limiter=cast(DBRateLimiter, rate_limiter),
-        )
 
 
 @pytest.mark.asyncio

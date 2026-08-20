@@ -60,3 +60,17 @@ def recorded_sleeps(monkeypatch: pytest.MonkeyPatch) -> list[float]:
 
     monkeypatch.setattr(asyncio, "sleep", _record)
     return sleeps
+
+
+@pytest.fixture(autouse=True)
+def reset_shared_burst_clock() -> None:
+    """Reset the process-wide Riot burst clock between tests.
+
+    `RateLimiter` keeps its 20-requests/second spacing on the class, because
+    the ceiling belongs to the API key rather than to one client. That makes
+    it leak across tests: whichever test issued a Riot request last decides
+    whether the next one sleeps.
+    """
+    from app.core.riot_api.rate_limiter import RateLimiter
+
+    RateLimiter._last_request_time = 0.0

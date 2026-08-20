@@ -134,6 +134,11 @@ async def test_null_body_is_retried_then_raises(
     assert served == [b"null", b'{"ok": true}']
     assert recorded_sleeps == [1]
 
+    # Burst spacing is shared process-wide, so the client above just set the
+    # clock this one would wait on. This test measures retry backoff, and
+    # `test_burst_spacing_holds_across_separate_clients` measures the sharing.
+    RateLimiter._last_request_time = 0.0
+
     client, served = _client_with_bodies([b"null"] * 4)
     with pytest.raises(RiotAPIError, match="null"):
         await client._make_request(
@@ -334,6 +339,36 @@ async def test_consecutive_requests_keep_the_burst_spacing() -> None:
         await limiter.wait_if_needed(MATCH_DETAIL_ENDPOINT)
 
     assert slept == [pytest.approx(limiter.request_spacing - 0.01)]
+
+
+async def test_burst_spacing_holds_across_separate_clients() -> None:
+    """Two clients share the ceiling, because Riot counts per key, not per client.
+
+    `RiotAPIClient` builds its own `RateLimiter`, and the API path builds a
+    client per HTTP request. If the spacing were per-instance, N concurrent
+    callers would each get a full allowance and the process would burst at N
+    times the intended rate against one key. This is the guard for that: the
+    second limiter has never issued a request of its own and must still wait
+    on the first one's.
+    """
+    first = RateLimiter()
+    second = RateLimiter()
+    slept: list[float] = []
+
+    async def record(seconds: float) -> None:
+        slept.append(seconds)
+
+    with (
+        patch(
+            RATE_LIMITER_CLOCK,
+            side_effect=[1000.0, 1000.0, 1000.01, 1000.01],
+        ),
+        patch(RATE_LIMITER_SLEEP, side_effect=record),
+    ):
+        await first.wait_if_needed(MATCH_DETAIL_ENDPOINT)
+        await second.wait_if_needed(MATCH_DETAIL_ENDPOINT)
+
+    assert slept == [pytest.approx(first.request_spacing - 0.01)]
 
 
 def test_a_count_that_dropped_means_a_new_window_began() -> None:

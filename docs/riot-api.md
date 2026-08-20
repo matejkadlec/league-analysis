@@ -188,21 +188,20 @@ windows are isolated by routing host; method windows by routing host plus
 normalized service path. Counts update an active window **without moving its
 original observed local start**; a lower count starts a new window.
 
-**Cross-component coordination**
-(`backend/app/core/riot_api/db_rate_limiter.py`): `DBRateLimiter` coordinates
-all Riot-calling components through the `core.rate_limit_state` table.
+**There is no cross-component coordination, deliberately.** A second
+limiter used to arbitrate between Player Updater, Match Fetcher and
+Matchmaking Analysis through a `core.rate_limit_state` table, on a priority
+order; it was deleted in August 2026 along with the table. It coordinated
+across processes on a deployment that runs one container with a single uvicorn
+worker and the scheduler inside it, and the window it enforced was a hardcoded
+guess sitting in front of the limiter above, which reads Riot's real numbers
+off the response headers. A 429 that still lands is retried on Riot's own
+`Retry-After`.
 
-Priority runs Player Updater, then Match Fetcher, then Matchmaking Analysis,
-and each component's maximum wait grows in the same order. That ordering is
-deliberate and follows how much work one run costs: a player update is two
-requests, a match fetch is a few per player, and one matchmaking analysis is
-roughly 1100. The shortest job goes first so it is not starved behind an
-analysis. `COMPONENT_PRIORITY` and `COMPONENT_MAX_WAIT` in that module hold the
-values.
-
-Higher-priority components bump lower ones, which yield and retry. A
-class-level lock enforces a minimum spacing between requests, capping the
-whole process well below Riot's per-second application limit.
+The cost of that is real and accepted: components no longer stand aside for
+each other, so a ~1100-request analysis and a 2-request player update now
+compete. Restoring priority means restoring arbitration, not resurrecting a
+table.
 
 Do not modify Riot API rate-limiting behavior unless a task explicitly scopes
 that work (repository-wide rule).

@@ -41,11 +41,20 @@ class RateLimiter:
     isolated by routing host and normalized endpoint.
     """
 
+    # Riot's requests-per-second application ceiling belongs to the API key,
+    # not to one client -- and `RiotAPIClient` builds a limiter per client,
+    # which in the request path means one per HTTP request. Burst spacing
+    # therefore lives on the class, so concurrent clients queue behind each
+    # other instead of each helping itself to a full 20 requests a second.
+    # The observed windows stay per-instance: those are learned from the
+    # responses one client actually saw.
+    _burst_lock = asyncio.Lock()
+    _last_request_time = 0.0
+
     def __init__(self) -> None:
         """Initialize empty adaptive windows and conservative burst spacing."""
         self._app_windows: dict[tuple[str, int], _RateWindow] = {}
         self._method_windows: dict[tuple[str, int], _RateWindow] = {}
-        self.last_request_time = 0.0
         self.request_spacing = 0.05
         self.lock = asyncio.Lock()
 
@@ -157,11 +166,12 @@ class RateLimiter:
                 relevant_windows, now, routing_scope, endpoint_key
             )
 
-            time_since_last = now - self.last_request_time
-            if time_since_last < self.request_spacing:
-                await asyncio.sleep(self.request_spacing - time_since_last)
+            async with RateLimiter._burst_lock:
+                time_since_last = now - RateLimiter._last_request_time
+                if time_since_last < self.request_spacing:
+                    await asyncio.sleep(self.request_spacing - time_since_last)
 
-            self.last_request_time = time.monotonic()
+                RateLimiter._last_request_time = time.monotonic()
 
     @staticmethod
     def _parse_rate_headers(

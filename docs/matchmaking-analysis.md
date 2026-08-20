@@ -175,20 +175,19 @@ evidence (see [riot-api.md](riot-api.md)).
 
 ## Rate Limiting
 
-The analysis uses `DBRateLimiter` with **priority 3 (lowest)** and a **30
-minute max wait**, yielding to Player Updater (1) and Match Fetcher (2). Every
-call goes through `acquire()`/`record_request()`; a Riot 429 waits
+Rate limiting is entirely reactive. The Riot client waits out the windows
+it reads from Riot's rate-limit response headers; a 429 that still lands waits
 `Retry-After` and retries up to 10 times per call before the run fails with a
-rate-limit error code.
+rate-limit error code. The analysis no longer yields to Player Updater or
+Match Fetcher — the limiter that arranged that was deleted with its table (see
+[riot-api.md](riot-api.md)).
 
 While waiting, the run stays active as `waiting_rate_limit` with
-`rate_limit_reset_at` set (via the acquire wait callback or the 429 wait
-helper); a later successful provider request returns it to `in_progress` and
-clears the timestamp.
+`rate_limit_reset_at` set by the 429 wait helper; a later successful provider
+request returns it to `in_progress` and clears the timestamp.
 
-**Clock caveat:** the DB-limiter window reset can precede the adaptive
-per-client limiter's remaining wait, so `rate_limit_reset_at` must **never be
-presented as an analysis completion clock**. The UI shows one continuous
+**Clock caveat:** `rate_limit_reset_at` is one window's reset, not the run's,
+so it must **never be presented as an analysis completion clock**. The UI shows one continuous
 whole-run ETA that interpolates between backend-authoritative player
 milestones (using the 100-request/120-second long window and a representative
 warm-cache workload) and caps the projection at 99%; only authoritative

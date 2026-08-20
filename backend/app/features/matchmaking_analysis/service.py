@@ -23,7 +23,8 @@ DB-First Strategy:
 - This can save hundreds of API calls if matches are already in DB
 
 Rate Limiting:
-- Uses DBRateLimiter with priority 3 (lowest) to yield to Match Fetcher/Player Updater
+- The Riot client's own limiter waits out the windows it reads from Riot's
+  rate-limit response headers; a 429 that still lands is caught here
 - When rate limited, persists rate_limit_reset_at for lifecycle diagnostics
 - Waits and retries automatically (up to 30 minutes total)
 """
@@ -43,7 +44,6 @@ from app.core import db_manager
 from app.core.db_session import rollback_quietly
 from app.core.riot_api.client import RiotAPIClient
 from app.core.riot_api.credential_health import create_tracked_riot_api_client
-from app.core.riot_api.db_rate_limiter import DBRateLimiter, RateLimitComponent
 from app.core.riot_api.errors import (
     AuthenticationError,
     ForbiddenError,
@@ -123,7 +123,6 @@ class MatchmakingAnalysisService:
     def __init__(self, db: AsyncSession, riot_client: RiotAPIClient):
         self.db = db
         self.riot_client = riot_client
-        self.rate_limiter: DBRateLimiter | None = None
         self.requests_saved: int = 0
         self.api_calls_made: int = 0  # Track actual API calls for savings calculation
         self._is_waiting_for_rate_limit: bool = False
@@ -370,7 +369,6 @@ class MatchmakingAnalysisService:
 
     async def _run_analysis_background(self, puuid: str, created_at: datetime) -> None:
         """Run analysis in background with its own DB session."""
-        rate_limiter = None
         try:
             async with db_manager.get_session() as db:
                 try:
@@ -381,11 +379,7 @@ class MatchmakingAnalysisService:
                     ) from error
 
                 async with riot_client:
-                    rate_limiter = DBRateLimiter(
-                        db, RateLimitComponent.MATCHMAKING_ANALYSIS
-                    )
                     service = MatchmakingAnalysisService(db, riot_client)
-                    service.rate_limiter = rate_limiter
                     await service._run_analysis(puuid, created_at)
         except asyncio.CancelledError:
             # Deliberately leaves the persisted row active. This also fires when
@@ -435,17 +429,6 @@ class MatchmakingAnalysisService:
             running = _running_analyses.get(puuid)
             if running and running.task is asyncio.current_task():
                 _running_analyses.pop(puuid, None)
-            if rate_limiter:
-                try:
-                    async with db_manager.get_session() as db:
-                        rate_limiter.db = db
-                        await rate_limiter.release()
-                except Exception as release_error:
-                    logger.warning(
-                        "riot_rate_limiter_release_failed",
-                        puuid=puuid,
-                        error_type=type(release_error).__name__,
-                    )
 
     @staticmethod
     def _safe_failure_details(error: Exception) -> tuple[str, str]:
@@ -1006,25 +989,6 @@ class MatchmakingAnalysisService:
         max_retries = 10
         for attempt in range(max_retries):
             try:
-                if (
-                    self.rate_limiter
-                    and not await self.rate_limiter.acquire_with_wait_callback(
-                        wait_callback=self._rate_limit_wait_callback,
-                    )
-                ):
-                    logger.warning(
-                        "Rate limit capacity unavailable",
-                        operation=operation,
-                        **log_fields,
-                    )
-                    if required:
-                        raise MatchmakingAnalysisRuntimeError(
-                            "rate_limit_unavailable",
-                            "The analysis is still unable to obtain Riot request "
-                            "capacity. Please try again later.",
-                        )
-                    return None
-
                 result = await fetch()
                 await self._record_successful_api_call()
                 return result
@@ -1090,8 +1054,6 @@ class MatchmakingAnalysisService:
         )
 
     async def _record_successful_api_call(self) -> None:
-        if self.rate_limiter:
-            await self.rate_limiter.record_request()
         self.api_calls_made += 1
         await self._clear_rate_limit_wait_if_active()
 
@@ -1114,18 +1076,6 @@ class MatchmakingAnalysisService:
     # ================================================================
     # Rate Limit Waiting
     # ================================================================
-
-    async def _rate_limit_wait_callback(self, reset_at: datetime | None) -> None:
-        """Callback from DBRateLimiter.acquire_with_wait_callback.
-
-        Called with the absolute window_end datetime when rate limited,
-        or None when the wait-loop iteration ends. We only persist reset times
-        when actively rate-limited, and clear after a successful API call.
-        """
-        if reset_at is None:
-            return
-        self._is_waiting_for_rate_limit = True
-        await self._set_rate_limit_reset(reset_at)
 
     async def _wait_for_rate_limit(self, retry_after: int) -> None:
         """Wait for rate limit reset while persisting lifecycle timing."""
