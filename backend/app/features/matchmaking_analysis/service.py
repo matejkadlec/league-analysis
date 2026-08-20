@@ -1026,7 +1026,6 @@ class MatchmakingAnalysisService:
         *,
         required: bool,
         operation: str,
-        unavailable_message: str,
         **log_fields: object,
     ) -> T | None:
         """Run one Riot call under the shared rate-limit retry policy.
@@ -1034,14 +1033,31 @@ class MatchmakingAnalysisService:
         Returns None when capacity is unavailable, the error is recoverable,
         or retries are exhausted; `required=True` raises instead.
         """
+        # These attempts stack on the Riot client's own tenacity retry of
+        # 429/5xx: the client may sleep through several server retry_afters
+        # inside one `fetch()` before this loop waits again. That is the
+        # intended posture for this long-running analysis — prefer eventually
+        # completing over failing fast.
         max_retries = 10
         for attempt in range(max_retries):
             try:
-                if not await self._acquire_rate_limit_slot(
-                    required=required,
-                    unavailable_message=unavailable_message,
-                    **log_fields,
+                if (
+                    self.rate_limiter
+                    and not await self.rate_limiter.acquire_with_wait_callback(
+                        wait_callback=self._rate_limit_wait_callback,
+                    )
                 ):
+                    logger.warning(
+                        "Rate limit capacity unavailable",
+                        operation=operation,
+                        **log_fields,
+                    )
+                    if required:
+                        raise MatchmakingAnalysisRuntimeError(
+                            "rate_limit_unavailable",
+                            "The analysis is still unable to obtain Riot request "
+                            "capacity. Please try again later.",
+                        )
                     return None
 
                 result = await fetch()
@@ -1051,7 +1067,8 @@ class MatchmakingAnalysisService:
             except RateLimitError as e:
                 retry_after = self._rate_limit_retry_after(e)
                 logger.info(
-                    "Rate limit on " + operation,
+                    "Rate limit during Riot call",
+                    operation=operation,
                     retry_after=retry_after,
                     attempt=attempt + 1,
                     **log_fields,
@@ -1060,7 +1077,8 @@ class MatchmakingAnalysisService:
 
             except RiotAPIError as e:
                 logger.warning(
-                    "Failed " + operation,
+                    "Riot call failed",
+                    operation=operation,
                     error_type=type(e).__name__,
                     **log_fields,
                 )
@@ -1068,7 +1086,7 @@ class MatchmakingAnalysisService:
                     raise
                 return None
 
-        logger.warning("Max retries for " + operation, **log_fields)
+        logger.warning("Riot call retries exhausted", operation=operation, **log_fields)
         self._raise_if_retries_exhausted(required=required)
         return None
 
@@ -1091,7 +1109,6 @@ class MatchmakingAnalysisService:
             ),
             required=required,
             operation="match ID fetch",
-            unavailable_message="Rate limit: cannot fetch match IDs",
             puuid=puuid,
         )
         return match_list.match_ids if match_list else []
@@ -1104,32 +1121,8 @@ class MatchmakingAnalysisService:
             lambda: self.riot_client.get_match(match_id),
             required=required,
             operation="match fetch",
-            unavailable_message="Rate limit: cannot fetch match",
             match_id=match_id,
         )
-
-    async def _acquire_rate_limit_slot(
-        self,
-        *,
-        required: bool,
-        unavailable_message: str,
-        **log_fields: object,
-    ) -> bool:
-        if self.rate_limiter is None:
-            return True
-        acquired = await self.rate_limiter.acquire_with_wait_callback(
-            wait_callback=self._rate_limit_wait_callback,
-        )
-        if acquired:
-            return True
-        logger.warning(unavailable_message, **log_fields)
-        if required:
-            raise MatchmakingAnalysisRuntimeError(
-                "rate_limit_unavailable",
-                "The analysis is still unable to obtain Riot request "
-                "capacity. Please try again later.",
-            )
-        return False
 
     async def _record_successful_api_call(self) -> None:
         if self.rate_limiter:
