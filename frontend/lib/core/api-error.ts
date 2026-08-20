@@ -149,7 +149,7 @@ function responseApiError(
   const trustedStructuredMessage =
     Boolean(extracted.structuredDetail?.code) &&
     isSafeProductMessage(extracted.structuredDetail?.message)
-      ? extracted.structuredDetail?.message
+      ? extracted.structuredDetail.message
       : undefined;
   const safeMessage = isSafeProductMessage(extracted.message)
     ? extracted.message

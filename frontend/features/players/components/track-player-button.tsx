@@ -12,7 +12,7 @@ import { cn } from "@/lib/core/utils";
 
 interface TrackPlayerButtonProps {
   puuid: string;
-  playerName?: string | undefined;
+  playerName: string;
   variant?: "default" | "outline" | "ghost";
   size?: "default" | "sm" | "lg" | "icon";
   className?: string;
@@ -50,9 +50,7 @@ export function TrackPlayerButton({
       invalidateTrackingQueries(queryClient, userId, puuid);
       toast({
         title: "Player added for tracking",
-        description: `${
-          playerName || "Player"
-        } is now being tracked. New matches will be fetched automatically.`,
+        description: `${playerName} is now being tracked. New matches will be fetched automatically.`,
         variant: "success",
       });
     },
@@ -73,7 +71,7 @@ export function TrackPlayerButton({
       invalidateTrackingQueries(queryClient, userId, puuid);
       toast({
         title: "Player removed from tracking",
-        description: `${playerName || "Player"} is no longer being tracked.`,
+        description: `${playerName} is no longer being tracked.`,
         variant: "success",
       });
     },

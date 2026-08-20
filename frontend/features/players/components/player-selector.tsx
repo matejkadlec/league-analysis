@@ -46,7 +46,7 @@ const PLATFORM_ORDER = [
 ];
 
 function playerLabel(player: Player): string {
-  const riotId = `${player.game_name ?? "Unknown"}${
+  const riotId = `${player.game_name}${
     player.tag_line ? `#${player.tag_line}` : ""
   }`;
   return `${riotId} (${getPlatformDisplayName(player.platform)})`;

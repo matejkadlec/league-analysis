@@ -23,13 +23,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 
-function playerLabel(player: Player | null): string | null {
-  if (!player) return null;
-  return `${player.game_name ?? "Unknown"}${
-    player.tag_line ? `#${player.tag_line}` : ""
-  }`;
-}
-
 function MatchmakingAnalysisContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -68,7 +61,9 @@ function MatchmakingAnalysisContent() {
   );
   const isLoadingInitialPlayer =
     isLoadingReferencePlayer || isLoadingAnalyzedPlayer;
-  const analyzedPlayerLabel = playerLabel(analyzedPlayer ?? null);
+  const analyzedPlayerLabel = analyzedPlayer
+    ? `${analyzedPlayer.game_name}${analyzedPlayer.tag_line ? `#${analyzedPlayer.tag_line}` : ""}`
+    : "";
 
   return (
     <>
@@ -102,7 +97,7 @@ function MatchmakingAnalysisContent() {
                   <Skeleton className="h-10 w-full" />
                 </Card>
               ))
-            ) : analyzedPlayer && analyzedPlayerLabel ? (
+            ) : analyzedPlayer ? (
               <>
                 <MatchmakingAnalysis
                   key={analyzedPlayer.puuid}

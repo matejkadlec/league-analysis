@@ -142,7 +142,7 @@ export function MatchHistory({ puuid, lastUpdated }: MatchHistoryProps) {
     placeholderData: (previousData) => previousData,
     staleTime: 60000,
     refetchInterval: (query) =>
-      query.state.data?.matches?.length === 0 ? 5000 : false,
+      query.state.data?.matches.length === 0 ? 5000 : false,
   });
 
   const handleQueueFilterSelect = (
