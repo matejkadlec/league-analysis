@@ -85,7 +85,10 @@ def _format_api_calls_for_storage(
         endpoint = call.endpoint
         group = grouped[endpoint]
         group["count"] += 1
-        group["region"] = call.region
+        # First region wins; overwriting meant an endpoint fanned out across
+        # regions displayed only the last one for the whole group.
+        if group["region"] is None:
+            group["region"] = call.region
         group["params_list"].append(call.params)
 
         if group["first_timestamp"] is None:

@@ -102,4 +102,3 @@
   keyboard users get a focus stop on a region that does not scroll. Removing
   it below `lg` needs a `matchMedia` hook for one tab stop — left alone as
   not worth the machinery; revisit if the region's classes change anyway.
-- 2026-08-20 backend/app/features/jobs/base.py: `_format_api_calls_for_storage` overwrites `group["region"]` on every iteration, so an endpoint called across several regions stores (and renders) only the last region for the whole group. Cosmetic today — prod jobs are single-region (100% eun1/europe) — but the transcript's "Region:" line lies for any future cross-region job; keep the first region or render a set.
