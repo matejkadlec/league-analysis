@@ -3,66 +3,71 @@
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
+from pydantic.alias_generators import to_camel
 
 
-class AccountDTO(BaseModel):
+class RiotDTO(BaseModel):
+    """Riot spells its JSON camelCase; these models spell their fields snake_case.
+
+    The generator does that translation once. Only the fields where Riot's name
+    is not simply the camelCase of ours still carry an explicit alias.
+    """
+
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+
+class AccountDTO(RiotDTO):
     """Riot Account information."""
 
     puuid: str
-    game_name: str | None = Field(default=None, alias="gameName")
-    tag_line: str | None = Field(default=None, alias="tagLine")
-
-    model_config = ConfigDict(populate_by_name=True)
+    game_name: str | None = Field(default=None)
+    tag_line: str | None = Field(default=None)
 
 
-class SummonerDTO(BaseModel):
+class SummonerDTO(RiotDTO):
     """League of Legends Summoner information."""
 
     id: str | None = None
     puuid: str
     name: str | None = None
-    profile_icon_id: int = Field(..., alias="profileIconId")
-    summoner_level: int = Field(..., alias="summonerLevel")
-
-    model_config = ConfigDict(populate_by_name=True)
+    profile_icon_id: int = Field(...)
+    summoner_level: int = Field(...)
 
 
-class MatchListDTO(BaseModel):
+class MatchListDTO(RiotDTO):
     """Match list response."""
 
-    match_ids: list[str] = Field(..., alias="matchIds")
+    match_ids: list[str] = Field(...)
     start: int
     count: int
     total: int | None = None
     puuid: str | None = None
 
-    model_config = ConfigDict(populate_by_name=True)
 
-
-class ParticipantDTO(BaseModel):
+class ParticipantDTO(RiotDTO):
     """Match participant information."""
 
     # Core IDs
-    participant_id: int = Field(..., alias="participantId")
+    participant_id: int = Field(...)
     puuid: str
-    summoner_name: str | None = Field(default=None, alias="summonerName")
-    summoner_id: str | None = Field(default=None, alias="summonerId")
-    summoner_level: int = Field(default=0, alias="summonerLevel")
-    profile_icon: int = Field(default=0, alias="profileIcon")
+    summoner_name: str | None = Field(default=None)
+    summoner_id: str | None = Field(default=None)
+    summoner_level: int = Field(default=0)
+    profile_icon: int = Field(default=0)
 
     # Riot ID fields
     game_name: str | None = Field(default=None, alias="riotIdGameName")
     tag_line: str | None = Field(default=None, alias="riotIdTagline")
 
     # Team & Position
-    team_id: int = Field(..., alias="teamId")
-    team_position: str | None = Field(default=None, alias="teamPosition")
+    team_id: int = Field(...)
+    team_position: str | None = Field(default=None)
 
     # Champions
-    champion_id: int = Field(..., alias="championId")
-    champion_name: str = Field(..., alias="championName")
+    champion_id: int = Field(...)
+    champion_name: str = Field(...)
     champion_level: int = Field(..., alias="champLevel")
-    champion_transform: int = Field(default=0, alias="championTransform")
+    champion_transform: int = Field(default=0)
 
     # KDA & Perf
     win: bool
@@ -73,45 +78,37 @@ class ParticipantDTO(BaseModel):
         default=0.0
     )  # Calculated property in API, but explicit here for validation
 
-    largest_multi_kill: int = Field(default=0, alias="largestMultiKill")
-    largest_killing_spree: int = Field(default=0, alias="largestKillingSpree")
-    first_blood_kill: bool = Field(default=False, alias="firstBloodKill")
-    first_tower_kill: bool = Field(default=False, alias="firstTowerKill")
+    largest_multi_kill: int = Field(default=0)
+    largest_killing_spree: int = Field(default=0)
+    first_blood_kill: bool = Field(default=False)
+    first_tower_kill: bool = Field(default=False)
 
     # Economy & Vision
-    gold_earned: int = Field(default=0, alias="goldEarned")
-    gold_spent: int = Field(default=0, alias="goldSpent")
-    vision_score: float | None = Field(default=None, alias="visionScore")
+    gold_earned: int = Field(default=0)
+    gold_spent: int = Field(default=0)
+    vision_score: float | None = Field(default=None)
     vision_wards_placed: int = Field(default=0, alias="detectorWardsPlaced")
     vision_wards_bought: int = Field(default=0, alias="visionWardsBoughtInGame")
-    wards_placed: int = Field(default=0, alias="wardsPlaced")
-    wards_killed: int = Field(default=0, alias="wardsKilled")
+    wards_placed: int = Field(default=0)
+    wards_killed: int = Field(default=0)
 
     # Farming
-    total_minions_killed: int = Field(default=0, alias="totalMinionsKilled")
-    neutral_minions_killed: int = Field(default=0, alias="neutralMinionsKilled")
+    total_minions_killed: int = Field(default=0)
+    neutral_minions_killed: int = Field(default=0)
 
     # Damage
-    total_damage_dealt: int = Field(default=0, alias="totalDamageDealt")
-    total_damage_dealt_to_champions: int = Field(
-        default=0, alias="totalDamageDealtToChampions"
-    )
-    physical_damage_dealt_to_champions: int = Field(
-        default=0, alias="physicalDamageDealtToChampions"
-    )
-    magic_damage_dealt_to_champions: int = Field(
-        default=0, alias="magicDamageDealtToChampions"
-    )
-    true_damage_dealt_to_champions: int = Field(
-        default=0, alias="trueDamageDealtToChampions"
-    )
-    damage_dealt_to_objectives: int = Field(default=0, alias="damageDealtToObjectives")
-    damage_dealt_to_turrets: int = Field(default=0, alias="damageDealtToTurrets")
+    total_damage_dealt: int = Field(default=0)
+    total_damage_dealt_to_champions: int = Field(default=0)
+    physical_damage_dealt_to_champions: int = Field(default=0)
+    magic_damage_dealt_to_champions: int = Field(default=0)
+    true_damage_dealt_to_champions: int = Field(default=0)
+    damage_dealt_to_objectives: int = Field(default=0)
+    damage_dealt_to_turrets: int = Field(default=0)
 
-    total_damage_taken: int = Field(default=0, alias="totalDamageTaken")
-    physical_damage_taken: int = Field(default=0, alias="physicalDamageTaken")
-    magic_damage_taken: int = Field(default=0, alias="magicDamageTaken")
-    true_damage_taken: int = Field(default=0, alias="trueDamageTaken")
+    total_damage_taken: int = Field(default=0)
+    physical_damage_taken: int = Field(default=0)
+    magic_damage_taken: int = Field(default=0)
+    true_damage_taken: int = Field(default=0)
 
     # Healing & Shielding
     total_self_healing: int = Field(default=0, alias="totalHeal")
@@ -127,31 +124,27 @@ class ParticipantDTO(BaseModel):
     item4: int = Field(default=0)
     item5: int = Field(default=0)
     trinket: int = Field(default=0, alias="item6")
-    items_purchased: int = Field(default=0, alias="itemsPurchased")
-    consumables_purchased: int = Field(default=0, alias="consumablesPurchased")
-    role_bound_item: int = Field(default=0, alias="roleBoundItem")
+    items_purchased: int = Field(default=0)
+    consumables_purchased: int = Field(default=0)
+    role_bound_item: int = Field(default=0)
 
     # Spells/Objectives/Time
-    summoner1_id: int = Field(default=0, alias="summoner1Id")
-    summoner1_casts: int = Field(default=0, alias="summoner1Casts")
-    summoner2_id: int = Field(default=0, alias="summoner2Id")
-    summoner2_casts: int = Field(default=0, alias="summoner2Casts")
+    summoner1_id: int = Field(default=0)
+    summoner1_casts: int = Field(default=0)
+    summoner2_id: int = Field(default=0)
+    summoner2_casts: int = Field(default=0)
 
-    turret_kills: int = Field(default=0, alias="turretKills")
-    inhibitor_kills: int = Field(default=0, alias="inhibitorKills")
-    objectives_stolen: int = Field(default=0, alias="objectivesStolen")
+    turret_kills: int = Field(default=0)
+    inhibitor_kills: int = Field(default=0)
+    objectives_stolen: int = Field(default=0)
 
     time_spent_dead: int = Field(default=0, alias="totalTimeSpentDead")
-    time_played: int = Field(default=0, alias="timePlayed")
+    time_played: int = Field(default=0)
 
     # Flags
-    eligible_for_progression: bool = Field(default=True, alias="eligibleForProgression")
-    game_ended_in_early_surrender: bool | None = Field(
-        default=None, alias="gameEndedInEarlySurrender"
-    )
-    game_ended_in_surrender: bool | None = Field(
-        default=None, alias="gameEndedInSurrender"
-    )
+    eligible_for_progression: bool = Field(default=True)
+    game_ended_in_early_surrender: bool | None = Field(default=None)
+    game_ended_in_surrender: bool | None = Field(default=None)
 
     @property
     def remake(self) -> bool:
@@ -166,40 +159,34 @@ class ParticipantDTO(BaseModel):
 
     # Legacy / Unused in new schema but kept for completeness or other uses
     role: str | None = None
-    individual_position: str | None = Field(default=None, alias="individualPosition")
-
-    model_config = ConfigDict(populate_by_name=True)
+    individual_position: str | None = Field(default=None)
 
 
-class MatchInfoDTO(BaseModel):
+class MatchInfoDTO(RiotDTO):
     """Match information."""
 
     game_creation_timestamp: int = Field(..., alias="gameCreation")
-    game_start_timestamp: int = Field(..., alias="gameStartTimestamp")
-    game_duration: int = Field(..., alias="gameDuration")
-    queue_id: int = Field(..., alias="queueId")
-    map_id: int = Field(..., alias="mapId")
-    game_version: str = Field(..., alias="gameVersion")
-    game_mode: str = Field(..., alias="gameMode")
-    game_type: str = Field(..., alias="gameType")
-    game_end_timestamp: int | None = Field(default=None, alias="gameEndTimestamp")
+    game_start_timestamp: int = Field(...)
+    game_duration: int = Field(...)
+    queue_id: int = Field(...)
+    map_id: int = Field(...)
+    game_version: str = Field(...)
+    game_mode: str = Field(...)
+    game_type: str = Field(...)
+    game_end_timestamp: int | None = Field(default=None)
     game_result: str | None = Field(default=None, alias="endOfGameResult")
     participants: list[ParticipantDTO]
     platform: str = Field(..., alias="platformId")
 
-    model_config = ConfigDict(populate_by_name=True)
 
-
-class MatchMetadataDTO(BaseModel):
+class MatchMetadataDTO(RiotDTO):
     """Match metadata."""
 
-    match_id: str = Field(..., alias="matchId")
+    match_id: str = Field(...)
     participants: list[str]
 
-    model_config = ConfigDict(populate_by_name=True)
 
-
-class MatchDTO(BaseModel):
+class MatchDTO(RiotDTO):
     """Complete match data."""
 
     metadata: MatchMetadataDTO
@@ -210,27 +197,25 @@ class MatchDTO(BaseModel):
         """Get match ID from metadata."""
         return self.metadata.match_id
 
-    model_config = ConfigDict(populate_by_name=True)
 
-
-class LeagueEntryDTO(BaseModel):
+class LeagueEntryDTO(RiotDTO):
     """Current LEAGUE-V4 by-PUUID entry."""
 
     # The live by-PUUID response can omit leagueId even though Riot's portal
     # still lists the field. Keep the remaining ranked fields strict.
-    league_id: str | None = Field(default=None, alias="leagueId")
+    league_id: str | None = Field(default=None)
     # puuid can also be omitted because the requested PUUID is already in the path
     puuid: str | None = Field(default=None, alias="puuid")
-    queue_type: str = Field(..., alias="queueType")
+    queue_type: str = Field(...)
     tier: str
     rank: str
-    league_points: int = Field(..., alias="leaguePoints")
+    league_points: int = Field(...)
     wins: int
     losses: int
     veteran: bool = Field(..., alias="veteran")
     inactive: bool = Field(..., alias="inactive")
-    fresh_blood: bool = Field(..., alias="freshBlood")
-    hot_streak: bool = Field(..., alias="hotStreak")
+    fresh_blood: bool = Field(...)
+    hot_streak: bool = Field(...)
 
     @property
     def win_rate(self) -> float:
@@ -261,226 +246,182 @@ class LeagueEntryDTO(BaseModel):
 # and this codebase has already been bitten by exactly that — see
 # `LeagueEntryDTO.league_id` above. A ValidationError on a field nothing reads
 # would be a regression against the `dict.get()` access this replaces.
-class MatchTimelinePositionDTO(BaseModel):
+class MatchTimelinePositionDTO(RiotDTO):
     """A map coordinate."""
 
     x: int
     y: int
 
-    model_config = ConfigDict(populate_by_name=True)
 
-
-class MatchTimelineChampionStatsDTO(BaseModel):
+class MatchTimelineChampionStatsDTO(RiotDTO):
     """Champion combat stats at one frame."""
 
-    ability_haste: int | None = Field(default=None, alias="abilityHaste")
-    ability_power: int | None = Field(default=None, alias="abilityPower")
+    ability_haste: int | None = Field(default=None)
+    ability_power: int | None = Field(default=None)
     armor: int | None = Field(default=None)
-    armor_pen: int | None = Field(default=None, alias="armorPen")
-    armor_pen_percent: int | None = Field(default=None, alias="armorPenPercent")
-    attack_damage: int | None = Field(default=None, alias="attackDamage")
-    attack_speed: int | None = Field(default=None, alias="attackSpeed")
-    bonus_armor_pen_percent: int | None = Field(
-        default=None, alias="bonusArmorPenPercent"
-    )
-    bonus_magic_pen_percent: int | None = Field(
-        default=None, alias="bonusMagicPenPercent"
-    )
-    cc_reduction: int | None = Field(default=None, alias="ccReduction")
-    cooldown_reduction: int | None = Field(default=None, alias="cooldownReduction")
+    armor_pen: int | None = Field(default=None)
+    armor_pen_percent: int | None = Field(default=None)
+    attack_damage: int | None = Field(default=None)
+    attack_speed: int | None = Field(default=None)
+    bonus_armor_pen_percent: int | None = Field(default=None)
+    bonus_magic_pen_percent: int | None = Field(default=None)
+    cc_reduction: int | None = Field(default=None)
+    cooldown_reduction: int | None = Field(default=None)
     health: int | None = Field(default=None)
-    health_max: int | None = Field(default=None, alias="healthMax")
-    health_regen: int | None = Field(default=None, alias="healthRegen")
+    health_max: int | None = Field(default=None)
+    health_regen: int | None = Field(default=None)
     lifesteal: int | None = Field(default=None)
-    magic_pen: int | None = Field(default=None, alias="magicPen")
-    magic_pen_percent: int | None = Field(default=None, alias="magicPenPercent")
-    magic_resist: int | None = Field(default=None, alias="magicResist")
-    movement_speed: int | None = Field(default=None, alias="movementSpeed")
+    magic_pen: int | None = Field(default=None)
+    magic_pen_percent: int | None = Field(default=None)
+    magic_resist: int | None = Field(default=None)
+    movement_speed: int | None = Field(default=None)
     omnivamp: int | None = Field(default=None)
-    physical_vamp: int | None = Field(default=None, alias="physicalVamp")
+    physical_vamp: int | None = Field(default=None)
     power: int | None = Field(default=None)
-    power_max: int | None = Field(default=None, alias="powerMax")
-    power_regen: int | None = Field(default=None, alias="powerRegen")
-    spell_vamp: int | None = Field(default=None, alias="spellVamp")
-
-    model_config = ConfigDict(populate_by_name=True)
+    power_max: int | None = Field(default=None)
+    power_regen: int | None = Field(default=None)
+    spell_vamp: int | None = Field(default=None)
 
 
-class MatchTimelineDamageStatsDTO(BaseModel):
+class MatchTimelineDamageStatsDTO(RiotDTO):
     """Cumulative damage totals at one frame."""
 
-    magic_damage_done: int | None = Field(default=None, alias="magicDamageDone")
-    magic_damage_done_to_champions: int | None = Field(
-        default=None, alias="magicDamageDoneToChampions"
-    )
-    magic_damage_taken: int | None = Field(default=None, alias="magicDamageTaken")
-    physical_damage_done: int | None = Field(default=None, alias="physicalDamageDone")
-    physical_damage_done_to_champions: int | None = Field(
-        default=None, alias="physicalDamageDoneToChampions"
-    )
-    physical_damage_taken: int | None = Field(default=None, alias="physicalDamageTaken")
-    total_damage_done: int | None = Field(default=None, alias="totalDamageDone")
-    total_damage_done_to_champions: int | None = Field(
-        default=None, alias="totalDamageDoneToChampions"
-    )
-    total_damage_taken: int | None = Field(default=None, alias="totalDamageTaken")
-    true_damage_done: int | None = Field(default=None, alias="trueDamageDone")
-    true_damage_done_to_champions: int | None = Field(
-        default=None, alias="trueDamageDoneToChampions"
-    )
-    true_damage_taken: int | None = Field(default=None, alias="trueDamageTaken")
-
-    model_config = ConfigDict(populate_by_name=True)
+    magic_damage_done: int | None = Field(default=None)
+    magic_damage_done_to_champions: int | None = Field(default=None)
+    magic_damage_taken: int | None = Field(default=None)
+    physical_damage_done: int | None = Field(default=None)
+    physical_damage_done_to_champions: int | None = Field(default=None)
+    physical_damage_taken: int | None = Field(default=None)
+    total_damage_done: int | None = Field(default=None)
+    total_damage_done_to_champions: int | None = Field(default=None)
+    total_damage_taken: int | None = Field(default=None)
+    true_damage_done: int | None = Field(default=None)
+    true_damage_done_to_champions: int | None = Field(default=None)
+    true_damage_taken: int | None = Field(default=None)
 
 
-class MatchTimelineVictimDamageDTO(BaseModel):
+class MatchTimelineVictimDamageDTO(RiotDTO):
     """One damage contribution to a kill."""
 
     basic: bool | None = Field(default=None)
-    magic_damage: int | None = Field(default=None, alias="magicDamage")
+    magic_damage: int | None = Field(default=None)
     name: str | None = Field(default=None)
-    participant_id: int | None = Field(default=None, alias="participantId")
-    physical_damage: int | None = Field(default=None, alias="physicalDamage")
-    spell_name: str | None = Field(default=None, alias="spellName")
-    spell_slot: int | None = Field(default=None, alias="spellSlot")
-    true_damage: int | None = Field(default=None, alias="trueDamage")
+    participant_id: int | None = Field(default=None)
+    physical_damage: int | None = Field(default=None)
+    spell_name: str | None = Field(default=None)
+    spell_slot: int | None = Field(default=None)
+    true_damage: int | None = Field(default=None)
     type: str | None = Field(default=None)
 
-    model_config = ConfigDict(populate_by_name=True)
 
-
-class MatchTimelineParticipantFrameDTO(BaseModel):
+class MatchTimelineParticipantFrameDTO(RiotDTO):
     """Per-participant state at one frame."""
 
-    champion_stats: MatchTimelineChampionStatsDTO | None = Field(
-        default=None, alias="championStats"
-    )
-    current_gold: int | None = Field(default=None, alias="currentGold")
-    damage_stats: MatchTimelineDamageStatsDTO | None = Field(
-        default=None, alias="damageStats"
-    )
-    gold_per_second: int | None = Field(default=None, alias="goldPerSecond")
-    jungle_minions_killed: int | None = Field(default=None, alias="jungleMinionsKilled")
+    champion_stats: MatchTimelineChampionStatsDTO | None = Field(default=None)
+    current_gold: int | None = Field(default=None)
+    damage_stats: MatchTimelineDamageStatsDTO | None = Field(default=None)
+    gold_per_second: int | None = Field(default=None)
+    jungle_minions_killed: int | None = Field(default=None)
     level: int | None = Field(default=None)
-    minions_killed: int | None = Field(default=None, alias="minionsKilled")
-    participant_id: int | None = Field(default=None, alias="participantId")
+    minions_killed: int | None = Field(default=None)
+    participant_id: int | None = Field(default=None)
     position: MatchTimelinePositionDTO | None = Field(default=None)
-    time_enemy_spent_controlled: int | None = Field(
-        default=None, alias="timeEnemySpentControlled"
-    )
-    total_gold: int | None = Field(default=None, alias="totalGold")
+    time_enemy_spent_controlled: int | None = Field(default=None)
+    total_gold: int | None = Field(default=None)
     xp: int | None = Field(default=None)
 
-    model_config = ConfigDict(populate_by_name=True)
 
-
-class MatchTimelineEventDTO(BaseModel):
+class MatchTimelineEventDTO(RiotDTO):
     """A single timeline event.
 
     Events are polymorphic: Riot marks only `timestamp` and `type` as always
     present, and every other field belongs to a subset of event types."""
 
     timestamp: int
-    real_timestamp: int | None = Field(default=None, alias="realTimestamp")
+    real_timestamp: int | None = Field(default=None)
     type: str
-    item_id: int | None = Field(default=None, alias="itemId")
-    participant_id: int | None = Field(default=None, alias="participantId")
-    level_up_type: str | None = Field(default=None, alias="levelUpType")
-    skill_slot: int | None = Field(default=None, alias="skillSlot")
-    creator_id: int | None = Field(default=None, alias="creatorId")
-    ward_type: str | None = Field(default=None, alias="wardType")
+    item_id: int | None = Field(default=None)
+    participant_id: int | None = Field(default=None)
+    level_up_type: str | None = Field(default=None)
+    skill_slot: int | None = Field(default=None)
+    creator_id: int | None = Field(default=None)
+    ward_type: str | None = Field(default=None)
     level: int | None = Field(default=None)
-    assisting_participant_ids: list[int] | None = Field(
-        default=None, alias="assistingParticipantIds"
-    )
+    assisting_participant_ids: list[int] | None = Field(default=None)
     bounty: int | None = Field(default=None)
-    kill_streak_length: int | None = Field(default=None, alias="killStreakLength")
-    killer_id: int | None = Field(default=None, alias="killerId")
+    kill_streak_length: int | None = Field(default=None)
+    killer_id: int | None = Field(default=None)
     position: MatchTimelinePositionDTO | None = Field(default=None)
-    victim_damage_dealt: list[MatchTimelineVictimDamageDTO] | None = Field(
-        default=None, alias="victimDamageDealt"
-    )
+    victim_damage_dealt: list[MatchTimelineVictimDamageDTO] | None = Field(default=None)
     victim_damage_received: list[MatchTimelineVictimDamageDTO] | None = Field(
-        default=None, alias="victimDamageReceived"
+        default=None
     )
-    victim_id: int | None = Field(default=None, alias="victimId")
-    kill_type: str | None = Field(default=None, alias="killType")
-    lane_type: str | None = Field(default=None, alias="laneType")
-    team_id: int | None = Field(default=None, alias="teamId")
-    multi_kill_length: int | None = Field(default=None, alias="multiKillLength")
-    killer_team_id: int | None = Field(default=None, alias="killerTeamId")
-    monster_type: str | None = Field(default=None, alias="monsterType")
-    monster_sub_type: str | None = Field(default=None, alias="monsterSubType")
-    building_type: str | None = Field(default=None, alias="buildingType")
-    tower_type: str | None = Field(default=None, alias="towerType")
-    after_id: int | None = Field(default=None, alias="afterId")
-    before_id: int | None = Field(default=None, alias="beforeId")
-    gold_gain: int | None = Field(default=None, alias="goldGain")
-    game_id: int | None = Field(default=None, alias="gameId")
-    winning_team: int | None = Field(default=None, alias="winningTeam")
-    transform_type: str | None = Field(default=None, alias="transformType")
+    victim_id: int | None = Field(default=None)
+    kill_type: str | None = Field(default=None)
+    lane_type: str | None = Field(default=None)
+    team_id: int | None = Field(default=None)
+    multi_kill_length: int | None = Field(default=None)
+    killer_team_id: int | None = Field(default=None)
+    monster_type: str | None = Field(default=None)
+    monster_sub_type: str | None = Field(default=None)
+    building_type: str | None = Field(default=None)
+    tower_type: str | None = Field(default=None)
+    after_id: int | None = Field(default=None)
+    before_id: int | None = Field(default=None)
+    gold_gain: int | None = Field(default=None)
+    game_id: int | None = Field(default=None)
+    winning_team: int | None = Field(default=None)
+    transform_type: str | None = Field(default=None)
     name: str | None = Field(default=None)
-    shutdown_bounty: int | None = Field(default=None, alias="shutdownBounty")
-    actual_start_time: int | None = Field(default=None, alias="actualStartTime")
-    feat_type: int | None = Field(default=None, alias="featType")
-    feat_value: int | None = Field(default=None, alias="featValue")
+    shutdown_bounty: int | None = Field(default=None)
+    actual_start_time: int | None = Field(default=None)
+    feat_type: int | None = Field(default=None)
+    feat_value: int | None = Field(default=None)
     victim_teamfight_damage_dealt: list[MatchTimelineVictimDamageDTO] | None = Field(
-        default=None, alias="victimTeamfightDamageDealt"
+        default=None
     )
     victim_teamfight_damage_received: list[MatchTimelineVictimDamageDTO] | None = Field(
-        default=None, alias="victimTeamfightDamageReceived"
+        default=None
     )
 
-    model_config = ConfigDict(populate_by_name=True)
 
-
-class MatchTimelineFrameDTO(BaseModel):
+class MatchTimelineFrameDTO(RiotDTO):
     """One timeline frame (default interval 60s)."""
 
     events: list[MatchTimelineEventDTO]
     participant_frames: dict[int, MatchTimelineParticipantFrameDTO] | None = Field(
-        default=None, alias="participantFrames"
+        default=None
     )
     timestamp: int
 
-    model_config = ConfigDict(populate_by_name=True)
 
-
-class MatchTimelineParticipantDTO(BaseModel):
+class MatchTimelineParticipantDTO(RiotDTO):
     """Participant identity within the timeline."""
 
-    participant_id: int = Field(..., alias="participantId")
+    participant_id: int = Field(...)
     puuid: str
 
-    model_config = ConfigDict(populate_by_name=True)
 
-
-class MatchTimelineInfoDTO(BaseModel):
+class MatchTimelineInfoDTO(RiotDTO):
     """Timeline body: frames and participants."""
 
     end_of_game_result: str | None = Field(default=None, alias="endOfGameResult")
-    frame_interval: int = Field(..., alias="frameInterval")
-    game_id: int | None = Field(default=None, alias="gameId")
+    frame_interval: int = Field(...)
+    game_id: int | None = Field(default=None)
     participants: list[MatchTimelineParticipantDTO] | None = Field(default=None)
     frames: list[MatchTimelineFrameDTO]
 
-    model_config = ConfigDict(populate_by_name=True)
 
-
-class MatchTimelineMetadataDTO(BaseModel):
+class MatchTimelineMetadataDTO(RiotDTO):
     """Timeline metadata."""
 
-    data_version: str | None = Field(default=None, alias="dataVersion")
-    match_id: str = Field(..., alias="matchId")
+    data_version: str | None = Field(default=None)
+    match_id: str = Field(...)
     participants: list[str]
 
-    model_config = ConfigDict(populate_by_name=True)
 
-
-class MatchTimelineDTO(BaseModel):
+class MatchTimelineDTO(RiotDTO):
     """Match-V5 timeline response."""
 
     metadata: MatchTimelineMetadataDTO
     info: MatchTimelineInfoDTO
-
-    model_config = ConfigDict(populate_by_name=True)

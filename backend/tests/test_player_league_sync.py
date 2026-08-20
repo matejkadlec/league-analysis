@@ -25,17 +25,17 @@ importlib.import_module("app.main")
 
 def _league_entry(*, league_id: str | None, league_points: int = 42) -> LeagueEntryDTO:
     return LeagueEntryDTO(
-        leagueId=league_id,
-        queueType="RANKED_SOLO_5x5",
+        league_id=league_id,
+        queue_type="RANKED_SOLO_5x5",
         tier="GOLD",
         rank="II",
-        leaguePoints=league_points,
+        league_points=league_points,
         wins=12,
         losses=8,
         veteran=False,
         inactive=False,
-        freshBlood=True,
-        hotStreak=False,
+        fresh_blood=True,
+        hot_streak=False,
     )
 
 
