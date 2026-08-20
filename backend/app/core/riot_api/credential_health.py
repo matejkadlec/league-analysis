@@ -148,13 +148,8 @@ class RiotCredentialHealthSnapshot:
 CredentialHealthCallback = Callable[[RiotCredentialStatus, datetime], Awaitable[None]]
 
 
-async def _stored_database_key(db: AsyncSession) -> RiotAPIKey | None:
-    """Lock and return the stored key, whether or not it is still usable.
-
-    Expiry is decided by the caller: deleting an aged key here would blank
-    `riot_credential_health.db_key_id` through its `ON DELETE SET NULL`
-    foreign key before the caller could notice the credential had changed.
-    """
+async def _lock_newest_key(db: AsyncSession) -> RiotAPIKey | None:
+    """Lock and return the newest key row, or None if the table is empty."""
     result = await db.execute(
         select(RiotAPIKey)
         .order_by(RiotAPIKey.added_at.desc())
@@ -162,6 +157,27 @@ async def _stored_database_key(db: AsyncSession) -> RiotAPIKey | None:
         .with_for_update()
     )
     return result.scalar_one_or_none()
+
+
+async def _stored_database_key(db: AsyncSession) -> RiotAPIKey | None:
+    """Lock and return the stored key, whether or not it is still usable.
+
+    Expiry is decided by the caller: deleting an aged key here would blank
+    `riot_credential_health.db_key_id` through its `ON DELETE SET NULL`
+    foreign key before the caller could notice the credential had changed.
+    """
+    key_record = await _lock_newest_key(db)
+    if key_record is None:
+        # `LIMIT 1 ... FOR UPDATE` chooses its row from the statement's own
+        # snapshot and only then blocks on the lock. When a concurrent save
+        # has deleted that row, the statement returns nothing at all -- not
+        # the replacement the save inserted, which that snapshot never saw.
+        # Reading empty here would report MISSING for a perfectly live key.
+        # A second statement takes a fresh snapshot under READ COMMITTED and
+        # sees the replacement; when the table really is empty it just costs
+        # one extra query on the already-degraded path.
+        key_record = await _lock_newest_key(db)
+    return key_record
 
 
 async def _lock_health_row(
