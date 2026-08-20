@@ -74,7 +74,7 @@ def _format_api_calls_for_storage(
     grouped: dict[str, dict[str, Any]] = defaultdict(
         lambda: {
             "count": 0,
-            "region": None,
+            "regions": {},
             "params_list": [],
             "first_timestamp": None,
             "last_timestamp": None,
@@ -85,7 +85,10 @@ def _format_api_calls_for_storage(
         endpoint = call.endpoint
         group = grouped[endpoint]
         group["count"] += 1
-        group["region"] = call.region
+        # A dict as an ordered set: match jobs genuinely fan one endpoint
+        # across regions, and the label must not pin the whole group on
+        # whichever region happened to come first or last.
+        group["regions"][call.region] = None
         group["params_list"].append(call.params)
 
         if group["first_timestamp"] is None:
@@ -97,7 +100,7 @@ def _format_api_calls_for_storage(
     for endpoint, data in grouped.items():
         entry: dict[str, Any] = {
             "endpoint": endpoint,
-            "region": data["region"],
+            "region": ", ".join(data["regions"]),
             "count": data["count"],
             "first_timestamp": data["first_timestamp"],
             "last_timestamp": data["last_timestamp"],

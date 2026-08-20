@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 import { JobExecutionApiCalls } from "@/features/jobs/components/job-execution-api-calls";
 import { JobExecutionLogs } from "@/features/jobs/components/job-execution-logs";
@@ -28,22 +28,15 @@ function call(overrides: Partial<APICallEntry> = {}): APICallEntry {
 
 function renderCalls(
   calls: APICallEntry[],
-  {
-    expanded = new Set<string>(),
-    completedAt = null as string | null,
-    onToggle = vi.fn(),
-  } = {},
+  { completedAt = null as string | null } = {},
 ) {
-  render(
+  return render(
     <JobExecutionApiCalls
       startedAt={STARTED}
       completedAt={completedAt}
       apiCalls={calls}
-      expandedApiCalls={expanded}
-      onToggleExpanded={onToggle}
     />,
   );
-  return onToggle;
 }
 
 describe("the API calls transcript", () => {
@@ -78,35 +71,24 @@ describe("the API calls transcript", () => {
     expect(screen.queryByText("MatchId: EUN1_1")).toBeNull();
   });
 
-  it("reports the toggle under the same key the expanded set is checked by", () => {
-    // The parent stores expansion in a Set keyed by the endpoint (unique per
-    // execution — the backend groups api_calls by it). A button that reports
-    // any other string toggles an entry no render ever reads — the click
-    // works, the row never opens.
+  it("opens and closes the range detail from its own expander", () => {
+    // Expansion state lives inside the component (the dialog remounts it
+    // per execution), so the behavior under test is the round trip: click
+    // opens the detail, click again closes it.
     const entry = call({
       count: 400,
       param_key: "matchId",
       first_param: "EUN1_1",
       last_param: "EUN1_400",
     });
-    const onToggle = renderCalls([entry]);
+    renderCalls([entry]);
 
     fireEvent.click(screen.getByRole("button"));
-
-    expect(onToggle).toHaveBeenCalledWith(entry.endpoint);
-  });
-
-  it("opens the detail when the parent marks the key expanded", () => {
-    const entry = call({
-      count: 400,
-      param_key: "matchId",
-      first_param: "EUN1_1",
-      last_param: "EUN1_400",
-    });
-    renderCalls([entry], { expanded: new Set([entry.endpoint]) });
-
     expect(screen.getByText("Collapse")).toBeTruthy();
     expect(screen.getByText(/\(400 total calls\)/)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button"));
+    expect(screen.queryByText(/\(400 total calls\)/)).toBeNull();
   });
 
   it("offers no expander for a repeated call with no parameter to range over", () => {

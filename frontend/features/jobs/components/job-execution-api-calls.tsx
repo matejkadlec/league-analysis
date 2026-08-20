@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { ChevronUp } from "lucide-react";
 
 import {
@@ -12,17 +13,31 @@ interface JobExecutionApiCallsProps {
   startedAt: string;
   completedAt: string | null | undefined;
   apiCalls: APICallEntry[];
-  expandedApiCalls: Set<string>;
-  onToggleExpanded: (key: string) => void;
 }
 
 export function JobExecutionApiCalls({
   startedAt,
   completedAt,
   apiCalls,
-  expandedApiCalls,
-  onToggleExpanded,
 }: JobExecutionApiCallsProps) {
+  // The expansion keys are endpoints, unique only within one execution, so
+  // the state lives here and the dialog remounts this component per
+  // execution (`key={execution.id}`) — every dialog starts collapsed on
+  // every selection path, structurally.
+  const [expandedApiCalls, setExpandedApiCalls] = useState<Set<string>>(
+    new Set(),
+  );
+  const onToggleExpanded = (endpoint: string) => {
+    setExpandedApiCalls((prev) => {
+      const next = new Set(prev);
+      if (next.has(endpoint)) {
+        next.delete(endpoint);
+      } else {
+        next.add(endpoint);
+      }
+      return next;
+    });
+  };
   return (
     <div className="rounded-lg border bg-muted/50 p-4">
       <p className="mb-3 font-medium">API Calls</p>
