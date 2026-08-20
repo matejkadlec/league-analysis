@@ -6,9 +6,11 @@ from typing import cast
 from unittest.mock import AsyncMock, Mock
 
 import pytest
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.riot_api.client import RiotAPIClient
+from app.core.riot_api.errors import AuthenticationError
 from app.features.jobs.implementations import player_updater as player_updater_module
 from app.features.jobs.implementations.player_updater import PlayerUpdaterJob
 from app.features.players import service as player_service_module
@@ -190,3 +192,97 @@ async def test_new_player_uses_submitted_riot_id_when_account_omits_it(
         "SAFE",
     )
     assert created_player.profile_synced_at is not None
+
+
+@pytest.mark.asyncio
+async def test_player_updater_stops_the_whole_run_on_an_api_key_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A rejected key ends the run rather than being retried per player.
+
+    The daily development key expires, and every remaining player would spend
+    another rejected call proving it. Nothing covered this branch, so the job
+    could have been made to carry on and the suite would have stayed green.
+    """
+    players = [
+        SimpleNamespace(puuid="sanitized-one"),
+        SimpleNamespace(puuid="sanitized-two"),
+        SimpleNamespace(puuid="sanitized-three"),
+    ]
+    db = SimpleNamespace(
+        get=AsyncMock(return_value=SimpleNamespace(puuid="sanitized-one")),
+        commit=AsyncMock(),
+        rollback=AsyncMock(),
+    )
+    player_service = SimpleNamespace(
+        update_player_profile=AsyncMock(side_effect=AuthenticationError("rejected")),
+    )
+    monkeypatch.setattr(
+        PlayerUpdaterJob,
+        "get_job_riot_api_client",
+        AsyncMock(return_value=_FakeRiotClient()),
+    )
+
+    def build_player_service(_db: object) -> SimpleNamespace:
+        return player_service
+
+    monkeypatch.setattr(player_updater_module, "PlayerService", build_player_service)
+    monkeypatch.setattr(
+        PlayerUpdaterJob,
+        "_load_tracked_players",
+        AsyncMock(return_value=players),
+    )
+
+    job = PlayerUpdaterJob(job_config_id=7)
+    job.check_control_state = AsyncMock()
+
+    await job.execute(cast(AsyncSession, db))
+
+    assert player_service.update_player_profile.await_count == 1
+    assert job.has_api_key_error() is True
+    assert job.execution_log["errors"][0]["operation"] == "player profile update"
+
+
+@pytest.mark.asyncio
+async def test_player_updater_reraises_a_database_error_instead_of_recording_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A broken session cannot be reused, so the error leaves the loop.
+
+    Recording it and continuing would run every later player against a session
+    that is already unusable, turning one failure into a whole failed run
+    reported as a list of unrelated ones.
+    """
+    players = [SimpleNamespace(puuid="sanitized-one")]
+    db = SimpleNamespace(
+        get=AsyncMock(return_value=SimpleNamespace(puuid="sanitized-one")),
+        commit=AsyncMock(),
+        rollback=AsyncMock(),
+    )
+    player_service = SimpleNamespace(
+        update_player_profile=AsyncMock(side_effect=SQLAlchemyError("session is gone")),
+    )
+    monkeypatch.setattr(
+        PlayerUpdaterJob,
+        "get_job_riot_api_client",
+        AsyncMock(return_value=_FakeRiotClient()),
+    )
+
+    def build_player_service(_db: object) -> SimpleNamespace:
+        return player_service
+
+    monkeypatch.setattr(player_updater_module, "PlayerService", build_player_service)
+    monkeypatch.setattr(
+        PlayerUpdaterJob,
+        "_load_tracked_players",
+        AsyncMock(return_value=players),
+    )
+
+    job = PlayerUpdaterJob(job_config_id=7)
+    job.check_control_state = AsyncMock()
+
+    with pytest.raises(SQLAlchemyError):
+        await job.execute(cast(AsyncSession, db))
+
+    assert job.execution_log.get("errors", []) == []
+    db.rollback.assert_awaited_once()

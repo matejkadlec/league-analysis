@@ -33,6 +33,8 @@ from .control import (
 from .error_handling import (
     RateLimitSignal,
     diagnostic_error,
+    is_database_job_error,
+    is_riot_api_key_error,
     is_riot_puuid_binding_error,
 )
 from .log_capture import job_log_capture
@@ -951,6 +953,53 @@ class BaseJob(ABC):
         ]
         self.add_log_entry("target_puuids", sorted(self.target_puuids))
         return tracked_players
+
+    async def handle_player_error(
+        self,
+        db: AsyncSession,
+        error: Exception,
+        *,
+        message: str,
+        operation: str,
+        puuid: str,
+    ) -> bool:
+        """Classify one player's failure and answer whether the run should stop.
+
+        Three loops across two jobs each spelled this out, and each reached a
+        slightly different answer about when to give up -- which is the whole
+        of a job's policy for a failing player, and the part that decides
+        whether a run keeps spending calls on a key Riot has already rejected.
+
+        Returns True when the caller should stop. A database error is re-raised
+        instead: the session cannot be reused, so continuing would run every
+        later player against a session that is already unusable and report one
+        failure as a list of unrelated ones.
+        """
+        is_api_key_err = is_riot_api_key_error(error)
+        logger.error(message, puuid=puuid, error_type=type(error).__name__)
+
+        if is_database_job_error(error):
+            await db.rollback()
+            raise error
+
+        # An API-key error recorded by an inner handler arrives here again as
+        # it propagates. Recording it twice makes one expired key read as a run
+        # full of distinct failures.
+        if is_api_key_err and self.has_api_key_error():
+            return True
+
+        self.record_error(
+            error,
+            operation=operation,
+            context={"puuid": puuid},
+            is_api_key_error=is_api_key_err,
+        )
+        if is_api_key_err:
+            logger.error("API key error detected, stopping job execution")
+            return True
+
+        await db.rollback()
+        return False
 
     def has_errors(self) -> bool:
         """Check if any errors were encountered during execution."""

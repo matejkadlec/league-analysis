@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import ServiceException
 from app.core.riot_api.client import RiotAPIClient
 from app.core.riot_api.constants import PRODUCT_SUPPORTED_QUEUE_IDS, Region
-from app.core.riot_api.errors import RateLimitError
+from app.core.riot_api.errors import AuthenticationError, RateLimitError
 from app.core.riot_api.models import LeagueEntryDTO, MatchTimelineDTO
 from app.features.jobs.base import BaseJob
 from app.features.jobs.error_handling import RateLimitSignal
@@ -430,3 +430,85 @@ def test_job_diagnostics_retain_wrapped_validation_fields() -> None:
         "error_type": "ValidationError",
         "validation_fields": ["queueType"],
     }
+
+
+def _player(puuid: str = "sanitized-puuid") -> PlayerResponse:
+    return cast(
+        PlayerResponse,
+        SimpleNamespace(puuid=puuid, platform="eun1", game_name="Sanitized"),
+    )
+
+
+@pytest.mark.asyncio
+async def test_player_error_handler_asks_the_loop_to_stop_on_an_api_key_error() -> None:
+    """The handler's boolean is the whole stop-vs-continue decision.
+
+    `_process_tracked_players` breaks on True and carries on otherwise, so
+    these three cases are the job's entire policy for a failing player and
+    were previously asserted nowhere.
+    """
+    job = MatchFetcherJob(job_config_id=7)
+    db = SimpleNamespace(rollback=AsyncMock())
+
+    should_stop = await job._handle_player_processing_error(
+        cast(AsyncSession, db), _player(), AuthenticationError("rejected")
+    )
+
+    assert should_stop is True
+    assert job.has_api_key_error() is True
+    assert job.execution_log["errors"][0]["operation"] == "player synchronization"
+    db.rollback.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_player_error_handler_continues_after_a_recoverable_error() -> None:
+    job = MatchFetcherJob(job_config_id=7)
+    db = SimpleNamespace(rollback=AsyncMock())
+
+    should_stop = await job._handle_player_processing_error(
+        cast(AsyncSession, db), _player(), RuntimeError("one bad player")
+    )
+
+    assert should_stop is False
+    assert job.has_api_key_error() is False
+    db.rollback.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_player_error_handler_reraises_a_database_error_without_recording() -> (
+    None
+):
+    job = MatchFetcherJob(job_config_id=7)
+    db = SimpleNamespace(rollback=AsyncMock())
+
+    with pytest.raises(SQLAlchemyError):
+        await job._handle_player_processing_error(
+            cast(AsyncSession, db), _player(), SQLAlchemyError("session is gone")
+        )
+
+    assert job.execution_log.get("errors", []) == []
+    db.rollback.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_a_second_api_key_error_is_not_recorded_twice() -> None:
+    """The inner league handler records first and re-raises into this one.
+
+    Without the short-circuit the same rejected key is written to the
+    execution log twice for one player, which is how a single expired key
+    reads as a run full of distinct failures.
+    """
+    job = MatchFetcherJob(job_config_id=7)
+    db = SimpleNamespace(rollback=AsyncMock())
+    job.record_error(
+        AuthenticationError("rejected"),
+        operation="player league update",
+        is_api_key_error=True,
+    )
+
+    should_stop = await job._handle_player_processing_error(
+        cast(AsyncSession, db), _player(), AuthenticationError("rejected")
+    )
+
+    assert should_stop is True
+    assert len(job.execution_log["errors"]) == 1
