@@ -3,6 +3,8 @@
 import structlog
 from fastapi import APIRouter, HTTPException
 
+from app.core.http_errors import log_and_raise_http
+
 from .dependencies import PlaystyleAnalysisServiceDep
 from .schemas import (
     PlaystyleAnalysisRequest,
@@ -39,13 +41,13 @@ async def analyze_playstyle(
         return result
 
     except Exception as e:
-        logger.error(
+        log_and_raise_http(
+            logger,
+            e,
             "playstyle_analysis_failed",
+            "Playstyle analysis failed",
             puuid=request.puuid,
-            error=str(e),
-            exc_info=True,
         )
-        raise HTTPException(status_code=500, detail="Playstyle analysis failed") from e
 
 
 @router.get("/player/{puuid}", response_model=PlaystyleAnalysisResponse)

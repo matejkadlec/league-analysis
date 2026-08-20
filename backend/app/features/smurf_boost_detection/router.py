@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.core.http_errors import log_and_raise_http
 from app.core.rate_limiter import rate_limit
 from app.features.auth.dependencies import get_current_active_user
 from app.features.auth.models import User
@@ -102,15 +103,13 @@ async def analyze_player(
             detail=error.client_message,
         ) from error
     except Exception as error:
-        logger.error(
+        log_and_raise_http(
+            logger,
+            error,
             "smurf_boost_analysis_start_failed",
+            "The analysis could not be started. Please try again.",
             error_type=type(error).__name__,
-            exc_info=True,
         )
-        raise HTTPException(
-            status_code=500,
-            detail="The analysis could not be started. Please try again.",
-        ) from error
 
 
 @router.get("/player/{puuid}", response_model=SmurfBoostAnalysisResponse)
