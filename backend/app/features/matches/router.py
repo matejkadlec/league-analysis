@@ -9,7 +9,6 @@ from .dependencies import (
 from .schemas import (
     ChampionStatsResponse,
     LaneStatsResponse,
-    MatchListResponse,
     MatchListWithPlayerDataResponse,
     MatchStatsResponse,
 )
@@ -51,31 +50,6 @@ def parse_match_queue_ids(
     if queues is not None:
         return _parse_match_queue_union(queues)
     return (queue,) if queue is not None else None
-
-
-@router.get("/player/{puuid}", response_model=MatchListResponse)
-async def get_player_matches(
-    puuid: str,
-    match_service: MatchServiceDep,
-    queue: int | None = Query(None, description="Queue ID filter"),
-    queues: str | None = Query(
-        None, max_length=200, description="Comma-separated queue ID filters"
-    ),
-    exclude_aram: bool = Query(False, description="Exclude queue 450 (ARAM)"),
-    start: int = Query(0, ge=0, description="Start index"),
-    count: int = Query(20, ge=1, le=1000, description="Number of matches to return"),
-):
-    """
-    Get match history for a player from local database.
-    """
-    queue_ids = parse_match_queue_ids(queue, queues)
-    return await match_service.get_player_matches(
-        puuid=puuid,
-        start=start,
-        count=count,
-        queue_ids=queue_ids,
-        exclude_aram=exclude_aram,
-    )
 
 
 @router.get("/player/{puuid}/detailed", response_model=MatchListWithPlayerDataResponse)
