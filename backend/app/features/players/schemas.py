@@ -17,21 +17,6 @@ class PlayerBase(BaseModel):
     profile_icon_id: int = Field(..., description="Profile icon ID")
 
 
-class PlayerCreate(PlayerBase):
-    """Schema for creating a new player."""
-
-    pass
-
-
-class PlayerUpdate(BaseModel):
-    """Schema for updating an existing player."""
-
-    game_name: str | None = None
-    tag_line: str | None = None
-    summoner_level: int | None = None
-    profile_icon_id: int | None = None
-
-
 class PlayerResponse(PlayerBase):
     """Schema for player response data."""
 
@@ -65,18 +50,6 @@ class PlayerResponse(PlayerBase):
     match_synced_at: datetime | None = Field(
         default=None, description="Last complete successful match-history check"
     )
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class PlayerListResponse(BaseModel):
-    """Schema for paginated Player list response."""
-
-    players: list[PlayerResponse]
-    total: int
-    page: int
-    size: int
-    pages: int
 
     model_config = ConfigDict(from_attributes=True)
 

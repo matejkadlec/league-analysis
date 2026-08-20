@@ -50,31 +50,6 @@ class MatchBase(BaseModel):
     )
 
 
-class MatchCreate(MatchBase):
-    """Schema for creating a new Match."""
-
-    match_id: str = Field(
-        ..., max_length=64, description="Unique match identifier from Riot API"
-    )
-
-
-class MatchUpdate(BaseModel):
-    """Schema for updating a Match."""
-
-    game_duration: int | None = Field(
-        default=None, ge=0, description="Game duration in seconds"
-    )
-    game_end_timestamp: int | None = Field(
-        default=None, description="Game end timestamp in milliseconds since epoch"
-    )
-    game_mode: str | None = Field(default=None, max_length=32, description="Game mode")
-    game_type: str | None = Field(default=None, max_length=32, description="Game type")
-    fully_analyzed: bool | None = Field(
-        default=None,
-        description="Whether this match has been processed for playstyle analysis",
-    )
-
-
 class MatchResponse(MatchBase):
     """Schema for Match response."""
 
