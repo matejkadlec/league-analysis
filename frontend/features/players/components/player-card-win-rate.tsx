@@ -7,9 +7,21 @@ import { formatFractionAsPercent, winRateColors } from "@/lib/core/format";
 interface PlayerCardWinRateProps {
   league: PlayerLeague | null | undefined;
   stats: MatchStatsResponse | null | undefined;
+  /**
+   * Whether the ranked lookup failed, as opposed to answering "no league".
+   *
+   * Both arrive here as a falsy `league`, but only one of them licenses the
+   * "(unranked)" label below: that word is a claim about the player, and a
+   * failed request supports no claim at all. The toast reports the failure.
+   */
+  leagueFailed?: boolean;
 }
 
-export function PlayerCardWinRate({ league, stats }: PlayerCardWinRateProps) {
+export function PlayerCardWinRate({
+  league,
+  stats,
+  leagueFailed = false,
+}: PlayerCardWinRateProps) {
   if (league) {
     return (
       <div className="space-y-2">
@@ -38,7 +50,7 @@ export function PlayerCardWinRate({ league, stats }: PlayerCardWinRateProps) {
     );
   }
 
-  if (stats && stats.total_matches > 0) {
+  if (!leagueFailed && stats && stats.total_matches > 0) {
     return (
       <div className="space-y-2">
         <div className="flex items-center justify-between">
