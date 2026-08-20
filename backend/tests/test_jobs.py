@@ -68,6 +68,69 @@ def _job_execution_double(**attributes: object) -> JobExecution:
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("paused", [True, False])
+async def test_test_run_pause_and_resume_flip_the_flag_on_an_active_run(
+    monkeypatch: pytest.MonkeyPatch,
+    paused: bool,
+) -> None:
+    """Both test-run control routes share one path: flip, persist, report."""
+    from app.features.jobs import router as jobs_router
+
+    job_model = SimpleNamespace(id=7, name="Match Fetcher", is_paused=not paused)
+    job_service = SimpleNamespace(
+        get_job_configuration_model=AsyncMock(return_value=job_model),
+        db=SimpleNamespace(commit=AsyncMock(), refresh=AsyncMock()),
+    )
+
+    def runtime_running(key: int) -> bool:
+        return key == -7
+
+    def runtime_snapshot(_key: int) -> dict[str, bool]:
+        return {
+            "is_running": True,
+            "stop_requested": False,
+            "force_stop_requested": False,
+        }
+
+    monkeypatch.setattr(jobs_router, "is_runtime_job_running", runtime_running)
+    monkeypatch.setattr(jobs_router, "get_runtime_control_snapshot", runtime_snapshot)
+
+    endpoint = jobs_router.pause_test_run if paused else jobs_router.resume_test_run
+    response = await endpoint(7, cast(JobService, job_service))
+
+    assert response.success is True
+    assert response.is_paused is paused
+    assert job_model.is_paused is paused
+    assert ("paused" if paused else "resumed") in response.message
+    job_service.db.commit.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_test_run_pause_without_an_active_run_changes_nothing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """No active test run: report failure without touching the pause flag."""
+    from app.features.jobs import router as jobs_router
+
+    job_model = SimpleNamespace(id=7, name="Match Fetcher", is_paused=False)
+    job_service = SimpleNamespace(
+        get_job_configuration_model=AsyncMock(return_value=job_model),
+        db=SimpleNamespace(commit=AsyncMock(), refresh=AsyncMock()),
+    )
+
+    def runtime_not_running(_key: int) -> bool:
+        return False
+
+    monkeypatch.setattr(jobs_router, "is_runtime_job_running", runtime_not_running)
+
+    response = await jobs_router.pause_test_run(7, cast(JobService, job_service))
+
+    assert response.success is False
+    assert job_model.is_paused is False
+    job_service.db.commit.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_status_overview_reports_the_earliest_scheduled_run(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
