@@ -2,7 +2,6 @@ from datetime import UTC, datetime
 from typing import override
 
 import structlog
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.riot_api.client import RiotAPIClient
@@ -47,11 +46,8 @@ class MatchFetcherJob(BaseJob):
         match_service = MatchService(db)
         rate_limiter = DBRateLimiter(db, RateLimitComponent.MATCH_FETCHER)
 
-        async with await self.get_job_riot_api_client(
-            db,
-            request_callback=self._track_api_request,
-        ) as riot_client:
-            tracked_players = await self._load_tracked_players(db, player_service)
+        async with self.job_riot_client(db) as riot_client:
+            tracked_players = await self._load_tracked_players(db)
             logger.info(
                 "Starting match fetcher job", tracked_count=len(tracked_players)
             )
@@ -66,26 +62,6 @@ class MatchFetcherJob(BaseJob):
                 )
             finally:
                 await rate_limiter.release()
-
-            self._store_api_calls(riot_client.get_api_calls())
-
-    async def _load_tracked_players(
-        self,
-        db: AsyncSession,
-        player_service: PlayerService,
-    ) -> list[PlayerResponse]:
-        """Load the global allowlist or an explicit per-player PUUID set."""
-        if self.target_puuids is None:
-            return await player_service.get_globally_tracked_players()
-
-        result = await db.execute(
-            select(Player).where(Player.puuid.in_(self.target_puuids))
-        )
-        tracked_players = [
-            PlayerResponse.model_validate(player) for player in result.scalars().all()
-        ]
-        self.add_log_entry("target_puuids", sorted(self.target_puuids))
-        return tracked_players
 
     async def _handle_player_processing_error(
         self,

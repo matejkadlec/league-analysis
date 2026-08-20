@@ -75,11 +75,10 @@ class TestMatchFetcherJob(BaseJob):
         region = get_region_by_platform(platform)
         platform_enum = Platform(platform)
 
-        async with await self.get_job_riot_api_client(
+        async with self.job_riot_client(
             db,
             region=region,
             platform=platform_enum,
-            request_callback=self._track_api_request,
         ) as riot_client:
             for iteration in range(_MAX_ITERATIONS):
                 await self.check_control_state(db)
@@ -132,8 +131,6 @@ class TestMatchFetcherJob(BaseJob):
                 if iteration < _MAX_ITERATIONS - 1:
                     await _interruptible_wait(self, db, _WAIT_SECONDS)
 
-            self._store_api_calls(riot_client.get_api_calls())
-
         # Test runs never create/update data records
         self.metrics["records_created"] = 0
         self.metrics["records_updated"] = 0
@@ -167,11 +164,10 @@ class TestPlayerUpdaterJob(BaseJob):
         platform_enum = Platform(platform)
         region = get_region_by_platform(platform)
 
-        async with await self.get_job_riot_api_client(
+        async with self.job_riot_client(
             db,
             region=region,
             platform=platform_enum,
-            request_callback=self._track_api_request,
         ) as riot_client:
             for iteration in range(_MAX_ITERATIONS):
                 await self.check_control_state(db)
@@ -206,8 +202,6 @@ class TestPlayerUpdaterJob(BaseJob):
                 # Wait 60s before next iteration (skip wait on last iteration)
                 if iteration < _MAX_ITERATIONS - 1:
                     await _interruptible_wait(self, db, _WAIT_SECONDS)
-
-            self._store_api_calls(riot_client.get_api_calls())
 
         # Test runs never create/update data records
         self.metrics["records_created"] = 0
