@@ -61,15 +61,19 @@ const narrowRelativeFormatter = new Intl.RelativeTimeFormat("en", {
 export function formatRelativeTime(timestamp: string): string {
   const date = new Date(timestamp);
   const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
+  // Negative for the past, positive for the future: the system-status card
+  // feeds next_run_time through here, and a past-only clock rendered every
+  // upcoming run as "Just now".
+  const signedMins = Math.trunc((date.getTime() - now.getTime()) / 60000);
+  const abs = Math.abs(signedMins);
 
-  if (diffMins < 1) return "Just now";
-  if (diffMins < 60) return narrowRelativeFormatter.format(-diffMins, "minute");
-  const diffHours = Math.floor(diffMins / 60);
-  if (diffHours < 24) return narrowRelativeFormatter.format(-diffHours, "hour");
-  const diffDays = Math.floor(diffHours / 24);
-  return narrowRelativeFormatter.format(-diffDays, "day");
+  if (abs < 1) return "Just now";
+  if (abs < 60) return narrowRelativeFormatter.format(signedMins, "minute");
+  const signedHours = Math.trunc(signedMins / 60);
+  if (Math.abs(signedHours) < 24)
+    return narrowRelativeFormatter.format(signedHours, "hour");
+  const signedDays = Math.trunc(signedHours / 24);
+  return narrowRelativeFormatter.format(signedDays, "day");
 }
 
 export function getJobDescription(jobType: string): string {

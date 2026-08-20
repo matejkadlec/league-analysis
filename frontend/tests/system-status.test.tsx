@@ -146,6 +146,23 @@ describe("the jobs system status", () => {
     }
   });
 
+  it("reads a future next run as upcoming, not as the recent past", () => {
+    // next_run_time goes through the same clock as started_at; before the
+    // sign-aware fix a run scheduled ten minutes out rendered "Just now".
+    const ahead = (minutes: number) =>
+      new Date(NOW.getTime() + minutes * 60_000).toISOString();
+
+    for (const [minutes, expected] of [
+      [10, "in 10m"],
+      [2 * 60, "in 2h"],
+    ] as const) {
+      render(<SystemStatus status={status({ next_run_time: ahead(minutes) })} />);
+
+      expect(screen.getByText(expected), `${minutes} minutes ahead`).toBeTruthy();
+      cleanup();
+    }
+  });
+
   it("says None rather than a date when nothing has ever run", () => {
     render(<SystemStatus status={status({ last_execution: null })} />);
 
