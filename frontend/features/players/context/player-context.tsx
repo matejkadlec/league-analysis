@@ -24,7 +24,6 @@ interface PlayerContextValue {
   trackedPlayers: Player[];
   isLoading: boolean;
   selectPlayer: (player: Player) => Promise<void>;
-  refreshContext: () => Promise<void>;
 }
 
 const PlayerContext = createContext<PlayerContextValue | null>(null);
@@ -122,12 +121,6 @@ export function PlayerContextProvider({
     [pathname, queryClient, router, searchParams, updateCurrentMutation],
   );
 
-  const refreshContext = useCallback(async () => {
-    await queryClient.invalidateQueries({
-      queryKey: [...PLAYER_CONTEXT_QUERY_KEY, user?.id],
-    });
-  }, [queryClient, user?.id]);
-
   const value = useMemo<PlayerContextValue>(
     () => ({
       currentPlayer:
@@ -140,13 +133,11 @@ export function PlayerContextProvider({
       isLoading:
         authLoading || contextQuery.isLoading || urlPlayerQuery.isLoading,
       selectPlayer,
-      refreshContext,
     }),
     [
       authLoading,
       contextQuery.data,
       contextQuery.isLoading,
-      refreshContext,
       selectPlayer,
       urlPlayerQuery.data,
       urlPlayerQuery.isLoading,
