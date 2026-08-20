@@ -40,24 +40,10 @@ import {
   playerTrackingFailureKind,
 } from "../utils/tracking-feedback";
 
-const PLATFORM_OPTIONS = [
-  ["eun1", "EUNE"],
-  ["euw1", "EUW"],
-  ["na1", "NA"],
-  ["kr", "KR"],
-  ["br1", "BR"],
-  ["jp1", "JP"],
-  ["la1", "LAN"],
-  ["la2", "LAS"],
-  ["oc1", "OCE"],
-  ["tr1", "TR"],
-  ["ru", "RU"],
-  ["ph2", "PH"],
-  ["sg2", "SG"],
-  ["th2", "TH"],
-  ["tw2", "TW"],
-  ["vn2", "VN"],
-] as const;
+const PLATFORM_ORDER = [
+  "eun1", "euw1", "na1", "kr", "br1", "jp1", "la1", "la2",
+  "oc1", "tr1", "ru", "ph2", "sg2", "th2", "tw2", "vn2",
+];
 
 function playerLabel(player: Player): string {
   const riotId = `${player.game_name ?? "Unknown"}${
@@ -340,9 +326,9 @@ export function PlayerSelector({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {PLATFORM_OPTIONS.map(([value, label]) => (
+                {PLATFORM_ORDER.map((value) => (
                   <SelectItem key={value} value={value}>
-                    {label}
+                    {getPlatformDisplayName(value)}
                   </SelectItem>
                 ))}
               </SelectContent>
