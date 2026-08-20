@@ -24,9 +24,12 @@ logger = structlog.get_logger(__name__)
 OnFailure = Callable[[str, Exception, dict[str, Any]], None] | None
 OnMatchStored = Callable[[int, str], None] | None
 
+CURRENT_GAME_VERSION_PREFIX = "16."
 
-class EnsureMaintenance(Protocol):
-    async def __call__(self, session: AsyncSession) -> None: ...
+
+def is_current_game_version(game_version: str) -> bool:
+    """Whether a Riot match belongs to the supported current release year."""
+    return game_version.startswith(CURRENT_GAME_VERSION_PREFIX)
 
 
 class ReprocessMatch(Protocol):
@@ -223,7 +226,6 @@ async def backfill_timeline_only_match(
     queue_id: int,
     match_id: str,
     on_failure: OnFailure,
-    ensure_maintenance: EnsureMaintenance,
 ) -> int:
     """Store missing timeline aggregates for an already-analyzed match."""
     timeline_payload, should_skip = await fetch_sync_timeline(
@@ -256,7 +258,9 @@ async def backfill_timeline_only_match(
         select(Match.game_version).where(Match.match_id == match_id)
     )
     game_version = version_result.scalar_one_or_none() or ""
-    await ensure_maintenance(session)
+    from app.features.jobs.maintenance import ensure_riot_writer_maintenance_is_inactive
+
+    await ensure_riot_writer_maintenance_is_inactive(session)
     timeline_rows = await replace_match_timeline_rows(
         session,
         build_synthetic_match_dto(match_id, participants, game_version),
@@ -275,7 +279,6 @@ async def sync_full_queue_match(
     queue_id: int,
     match_id: str,
     on_failure: OnFailure,
-    is_current_game_version: Callable[[str], bool],
     reprocess_match: ReprocessMatch,
     on_match_stored: OnMatchStored,
 ) -> tuple[int, bool]:
@@ -311,8 +314,6 @@ async def process_queue_sync_match(
     match_id: str,
     timeline_only_ids: set[str],
     on_failure: OnFailure,
-    ensure_maintenance: EnsureMaintenance,
-    is_current_game_version: Callable[[str], bool],
     reprocess_match: ReprocessMatch,
     on_match_stored: OnMatchStored,
 ) -> tuple[int, bool]:
@@ -327,7 +328,6 @@ async def process_queue_sync_match(
                 queue_id,
                 match_id,
                 on_failure,
-                ensure_maintenance,
             )
             return stored, False
         return await sync_full_queue_match(
@@ -337,7 +337,6 @@ async def process_queue_sync_match(
             queue_id,
             match_id,
             on_failure,
-            is_current_game_version,
             reprocess_match,
             on_match_stored,
         )
@@ -371,8 +370,6 @@ async def process_queue_sync_batch(
     ids_to_process: list[str],
     timeline_only_ids: set[str],
     on_failure: OnFailure,
-    ensure_maintenance: EnsureMaintenance,
-    is_current_game_version: Callable[[str], bool],
     reprocess_match: ReprocessMatch,
     on_match_stored: OnMatchStored,
     keep_fetching: bool,
@@ -389,8 +386,6 @@ async def process_queue_sync_batch(
             match_id,
             timeline_only_ids,
             on_failure,
-            ensure_maintenance,
-            is_current_game_version,
             reprocess_match,
             on_match_stored,
         )
@@ -407,8 +402,6 @@ async def sync_single_queue_for_player(
     region: Region,
     queue_id: int,
     on_failure: OnFailure,
-    ensure_maintenance: EnsureMaintenance,
-    is_current_game_version: Callable[[str], bool],
     reprocess_match: ReprocessMatch,
     on_match_stored: OnMatchStored = None,
 ) -> int:
@@ -448,8 +441,6 @@ async def sync_single_queue_for_player(
             ids_to_process,
             timeline_only_ids,
             on_failure,
-            ensure_maintenance,
-            is_current_game_version,
             reprocess_match,
             on_match_stored,
             keep_fetching,

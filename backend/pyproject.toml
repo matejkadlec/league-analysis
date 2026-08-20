@@ -217,6 +217,12 @@ paths = ["app"]
 ignore_decorators = ["@router.*", "@app.*"]
 ignore_names = [
     "model_config",
+    # Vulture is whole-program: a name read anywhere counts as used everywhere.
+    # Until this batch, the single `cls.` read in app/ was
+    # `matches/service.py:is_current_game_version`; moving that to a module
+    # function made every `@field_validator` receiver in the codebase look
+    # dead at once. `cls` is a mandatory receiver name, never a dead variable.
+    "cls",
     # Parameters of `Protocol` method stubs. The stubs exist to give types to
     # untyped third-party libraries (passlib's hashing context, APScheduler's
     # scheduler), so their bodies are `...` and Vulture cannot see that the

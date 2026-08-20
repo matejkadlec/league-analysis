@@ -163,16 +163,10 @@ class MatchService:
     """Service for handling match data operations."""
 
     SUPPORTED_SYNC_QUEUE_IDS: tuple[int, ...] = PRODUCT_SUPPORTED_QUEUE_IDS
-    CURRENT_GAME_VERSION_PREFIX = "16."
 
     def __init__(self, db: AsyncSession):
         """Initialize match service with database session only."""
         self.db = db
-
-    @classmethod
-    def is_current_game_version(cls, game_version: str) -> bool:
-        """Whether a Riot match belongs to the supported current release year."""
-        return game_version.startswith(cls.CURRENT_GAME_VERSION_PREFIX)
 
     async def get_player_matches(
         self,
@@ -598,29 +592,6 @@ class MatchService:
         total, total_analyzed = totals.one()
         return list(page.scalars().all()), total, total_analyzed
 
-    def _get_player_info_for_puuid(
-        self, puuid: str, participants: list[dict[str, Any]]
-    ) -> dict[str, Any]:
-        """Extract player info for a PUUID from participant data."""
-        participant = next(
-            (p for p in participants if p["puuid"] == puuid),
-            None,
-        )
-        if not participant:
-            return {
-                "game_name": "Unknown Player",
-                "tag_line": None,
-                "summoner_level": 1,
-                "profile_icon_id": 29,  # Default icon
-            }
-
-        return {
-            "game_name": participant.get("game_name") or "Unknown Player",
-            "tag_line": participant.get("tag_line"),
-            "summoner_level": participant.get("summoner_level", 1),
-            "profile_icon_id": participant.get("profile_icon_id", 29),
-        }
-
     async def _ensure_players_exist(
         self,
         participants: list[dict[str, Any]],
@@ -628,7 +599,8 @@ class MatchService:
     ) -> None:
         """Ensure all participant players exist in database, creating if needed."""
         # Bulk check for existing players
-        participant_puuids = {p["puuid"] for p in participants}
+        participants_by_puuid = {p["puuid"]: p for p in participants}
+        participant_puuids = set(participants_by_puuid)
         existing_players_result = await self.db.execute(
             select(Player.puuid).where(Player.puuid.in_(participant_puuids))
         )
@@ -641,7 +613,7 @@ class MatchService:
 
         new_players: list[Player] = []
         for puuid in missing_puuids:
-            info = self._get_player_info_for_puuid(puuid, participants)
+            info = participants_by_puuid[puuid]
             new_players.append(
                 Player(
                     puuid=puuid,
@@ -827,8 +799,6 @@ class MatchService:
             region=region,
             queue_id=queue_id,
             on_failure=on_failure,
-            ensure_maintenance=_ensure_riot_writer_maintenance_is_inactive,
-            is_current_game_version=self.is_current_game_version,
             reprocess_match=self._reprocess_match,
             on_match_stored=on_match_stored,
         )

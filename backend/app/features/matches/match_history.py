@@ -70,9 +70,7 @@ def find_lane_opponent(
 
 
 def _enemy_lane_opponent(participant: MatchParticipant) -> EnemyLaneOpponent:
-    opponent_cs = or_zero(getattr(participant, "total_minions_killed", 0)) + or_zero(
-        getattr(participant, "neutral_minions_killed", 0)
-    )
+    opponent_cs = participant.cs
     return EnemyLaneOpponent(
         champion_id=participant.champion_id,
         champion_name=participant.champion_name,
@@ -288,16 +286,6 @@ def build_team_compositions_and_stats(
     )
 
 
-def player_total_cs(participant: MatchParticipant) -> int:
-    """Prefer the dedicated CS column when it is populated."""
-    total_cs = or_zero(getattr(participant, "total_minions_killed", 0)) + or_zero(
-        getattr(participant, "neutral_minions_killed", 0)
-    )
-    if hasattr(participant, "cs") and participant.cs:
-        return participant.cs
-    return total_cs
-
-
 def build_player_match_participant(
     player_participant: MatchParticipant | None,
 ) -> PlayerMatchParticipant | None:
@@ -316,7 +304,7 @@ def build_player_match_participant(
         deaths=player_participant.deaths,
         assists=player_participant.assists,
         kda=(float(player_participant.kda) if player_participant.kda else None),
-        total_cs=player_total_cs(player_participant),
+        total_cs=player_participant.cs,
         vision_score=player_participant.vision_score,
         total_damage_dealt_to_champions=player_participant.total_damage_dealt_to_champions
         or 0,
