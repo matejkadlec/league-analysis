@@ -16,14 +16,27 @@ export function formatCronSchedule(schedule: string): string {
 // dropping the zero-minute tail from an exact hour.
 const longDurationFormatter = new Intl.DurationFormat("en", { style: "long" });
 
+// The three interval spellings the scheduler accepts -- "900", "interval:900"
+// and "900s" -- and its `max(n, 1)` clamp, mirrored from
+// backend/app/features/jobs/scheduler.py:_parse_interval_from_schedule.
+// `parseInt` cannot stand in for this: it reads the cron "0 0 * * *" as 0
+// seconds, and "interval:900" and "900s" as NaN and 900 respectively.
+function intervalSeconds(schedule: string): number | null {
+  const normalized = schedule.trim().toLowerCase();
+  const digits = normalized.startsWith("interval:")
+    ? normalized.slice("interval:".length).trim()
+    : normalized.endsWith("s")
+      ? normalized.slice(0, -1)
+      : normalized;
+  return /^[0-9]+$/.test(digits) ? Math.max(Number(digits), 1) : null;
+}
+
 /** A job's schedule: either an interval in seconds, or a cron expression. */
 export function formatScheduleInterval(schedule: string): string {
-  // Whole string or nothing: `parseInt` read the cron "0 0 * * *" as 0 seconds.
-  const trimmed = schedule.trim();
-  if (!/^[0-9]+$/.test(trimmed)) {
+  const totalSeconds = intervalSeconds(schedule);
+  if (totalSeconds === null) {
     return formatCronSchedule(schedule);
   }
-  const totalSeconds = Number(trimmed);
 
   if (totalSeconds < 60) {
     return longDurationFormatter.format({ seconds: totalSeconds });
