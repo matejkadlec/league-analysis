@@ -1,17 +1,15 @@
 import { describe, expect, it } from "vitest";
 
-import { getPlatformDisplayName, getPlatformFlag } from "../lib/core/platform-utils";
+import { getPlatformDisplayName } from "../lib/core/platform-utils";
 import { getRankColors } from "../features/players/utils/rank-colors";
 
 describe("platform presentation", () => {
   it("normalizes known platform codes case-insensitively", () => {
     expect(getPlatformDisplayName("EUN1")).toBe("EUNE");
-    expect(getPlatformFlag("eUn1")).toBe("🇪🇺");
   });
 
   it("uses safe fallbacks for unknown platforms", () => {
     expect(getPlatformDisplayName("test")).toBe("TEST");
-    expect(getPlatformFlag("test")).toBe("🌐");
   });
 });
 

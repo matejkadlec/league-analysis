@@ -32,32 +32,3 @@ export function getPlatformDisplayName(platform: string): string {
     PLATFORM_DISPLAY_NAMES[platform.toLowerCase()] || platform.toUpperCase()
   );
 }
-
-/**
- * Server flags for display
- */
-export const SERVER_FLAGS: Record<string, string> = {
-  euw1: "🇪🇺",
-  eun1: "🇪🇺",
-  na1: "🇺🇸",
-  kr: "🇰🇷",
-  tr1: "🇹🇷",
-  br1: "🇧🇷",
-  la1: "🇲🇽",
-  la2: "🇦🇷",
-  oc1: "🇦🇺",
-  ru: "🇷🇺",
-  jp1: "🇯🇵",
-  tw2: "🇹🇼",
-  vn2: "🇻🇳",
-  ph2: "🇵🇭",
-  sg2: "🇸🇬",
-  th2: "🇹🇭",
-};
-
-/**
- * Get flag emoji for a platform
- */
-export function getPlatformFlag(platform: string): string {
-  return SERVER_FLAGS[platform.toLowerCase()] || "🌐";
-}
