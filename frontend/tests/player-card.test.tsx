@@ -1,7 +1,13 @@
 // @vitest-environment jsdom
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Player } from "@/lib/core/schemas";
@@ -107,19 +113,32 @@ const stats = {
   avg_vision_score: 22,
 };
 
+// `/players/{puuid}/league` answers an unranked player with a 200 carrying
+// `null`, not with an error -- so `leagueData: null` is a *successful* empty
+// response here. Modelling it as a failure was what let the card render a
+// broken request as "unranked"; `failLeagueWith` covers the failure case
+// separately.
 function answerWith({
   leagueData = league as typeof league | null,
   statsData = stats as typeof stats | null,
 } = {}) {
   validatedGet.mockImplementation(async (_schema, url: string) => {
     if (url.endsWith("/league")) {
-      return leagueData === null
-        ? { success: false, error: "down" }
-        : { success: true, data: leagueData };
+      return { success: true, data: leagueData };
     }
-    return statsData === null
-      ? { success: false, error: "down" }
-      : { success: true, data: statsData };
+    return { success: true, data: statsData };
+  });
+}
+
+function failLeagueWith(status: number) {
+  validatedGet.mockImplementation(async (_schema, url: string) => {
+    if (url.endsWith("/league")) {
+      return {
+        success: false,
+        error: { status, message: "The service is unavailable." },
+      };
+    }
+    return { success: true, data: stats };
   });
 }
 
@@ -127,11 +146,14 @@ function renderCard(p: Player = player(), onRefreshAll?: () => void) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
-  return render(
-    <QueryClientProvider client={client}>
-      <PlayerCard player={p} {...(onRefreshAll && { onRefreshAll })} />
-    </QueryClientProvider>,
-  );
+  return {
+    ...render(
+      <QueryClientProvider client={client}>
+        <PlayerCard player={p} {...(onRefreshAll && { onRefreshAll })} />
+      </QueryClientProvider>,
+    ),
+    client,
+  };
 }
 
 function profileIcon() {
@@ -168,6 +190,22 @@ describe("what the card says about the player", () => {
 
     expect(await screen.findByText("(unranked)")).toBeTruthy();
     expect(screen.queryByText(/LP$/)).toBeNull();
+  });
+
+  it("does not pass a failed league request off as unranked", async () => {
+    // The card cannot tell the viewer anything useful here, so the failure has
+    // to reach the QueryCache toast -- which only happens if the query ends in
+    // `error`. Swallowing it to `null` renders the unranked branch instead,
+    // which reads as a fact about the player rather than about the request.
+    failLeagueWith(500);
+    const { client } = renderCard();
+
+    await waitFor(() => {
+      expect(client.getQueryState(["player-league", "p-1"])?.status).toBe(
+        "error",
+      );
+    });
+    expect(screen.queryByText("(unranked)")).toBeNull();
   });
 
   it("counts games only when there are games to count", async () => {

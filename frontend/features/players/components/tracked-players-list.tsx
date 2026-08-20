@@ -8,12 +8,9 @@ import { unwrap, validatedGet } from "@/lib/core/api";
 import { untrackPlayer } from "../player-api";
 import { invalidateTrackingQueries } from "../player-query";
 import { useToast } from "@/lib/core/hooks";
-import {
-  PlayerLeagueSchema,
-  PlayerSchema,
-  type Player,
-} from "@/lib/core/schemas";
+import { PlayerSchema, type Player } from "@/lib/core/schemas";
 import { useAuth } from "@/features/auth";
+import { usePlayerLeague } from "@/features/players/use-player-league";
 import { getRankColors } from "@/features/players/utils/rank-colors";
 import { cn } from "@/lib/core/utils";
 import { getPlatformDisplayName } from "@/lib/core/platform-utils";
@@ -58,23 +55,7 @@ function getListHeightPx(rowCount: number): number {
 }
 
 function TrackedPlayerDetails({ player }: { player: Player }) {
-  const { data: league } = useQuery({
-    queryKey: ["player-league", player.puuid],
-    queryFn: async () => {
-      const result = await validatedGet(
-        PlayerLeagueSchema.nullable(),
-        `/players/${player.puuid}/league`,
-      );
-
-      if (!result.success) {
-        return null;
-      }
-
-      return result.data;
-    },
-    retry: false,
-    staleTime: 60000,
-  });
+  const { data: league } = usePlayerLeague(player.puuid);
 
   const leagueColors = league ? getRankColors(league.tier) : null;
 

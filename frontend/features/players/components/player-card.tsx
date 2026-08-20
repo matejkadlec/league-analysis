@@ -5,7 +5,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Clock, Loader2, RefreshCw, User } from "lucide-react";
 
-import { validatedGet } from "@/lib/core/api";
+import { unwrap, validatedGet } from "@/lib/core/api";
 import { useDDragonVersion } from "@/lib/core/data-dragon-context";
 import {
   getProfileIconFallbackUrl,
@@ -13,17 +13,14 @@ import {
 } from "@/lib/core/data-dragon";
 import { getPlatformDisplayName } from "@/lib/core/platform-utils";
 import { oldestCompleteFreshness } from "@/lib/core/relative-time";
-import {
-  MatchStatsResponseSchema,
-  Player,
-  PlayerLeagueSchema,
-} from "@/lib/core/schemas";
+import { MatchStatsResponseSchema, Player } from "@/lib/core/schemas";
 import { useRelativeTime } from "@/lib/core/use-relative-time";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getRankColors } from "@/features/players/utils/rank-colors";
 import { TrackPlayerButton } from "@/features/players/components/track-player-button";
+import { usePlayerLeague } from "@/features/players/use-player-league";
 import { usePlayerSyncRun } from "@/features/players/use-player-sync-run";
 
 import { PlayerCardStats } from "./player-card-stats";
@@ -56,33 +53,20 @@ export function PlayerCard({ player, onRefreshAll }: PlayerCardProps) {
     onCompleted: onRefreshAll,
   });
 
-  const { data: league } = useQuery({
-    queryKey: ["player-league", player.puuid],
-    queryFn: async () => {
-      const result = await validatedGet(
-        PlayerLeagueSchema.nullable(),
-        `/players/${player.puuid}/league`,
-      );
-      if (!result.success) {
-        return null;
-      }
-      return result.data;
-    },
-    retry: false,
-  });
+  const { data: league, isError: leagueFailed } = usePlayerLeague(
+    player.puuid,
+  );
 
   const { data: stats } = useQuery({
     queryKey: ["player-stats", player.puuid, 420],
     queryFn: async () => {
-      const result = await validatedGet(
-        MatchStatsResponseSchema,
-        `/matches/player/${player.puuid}/stats`,
-        { queue: 420 },
+      return unwrap(
+        await validatedGet(
+          MatchStatsResponseSchema,
+          `/matches/player/${player.puuid}/stats`,
+          { queue: 420 },
+        ),
       );
-      if (!result.success) {
-        return null;
-      }
-      return result.data;
     },
     retry: false,
   });
@@ -186,7 +170,11 @@ export function PlayerCard({ player, onRefreshAll }: PlayerCardProps) {
       </CardHeader>
 
       <CardContent className="space-y-3">
-        <PlayerCardWinRate league={league} stats={stats} />
+        <PlayerCardWinRate
+          league={league}
+          stats={stats}
+          leagueFailed={leagueFailed}
+        />
         <PlayerCardStats player={player} stats={stats} />
       </CardContent>
     </Card>

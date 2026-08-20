@@ -4,6 +4,8 @@ import { useEffect, useEffectEvent, useReducer, useState } from "react";
 import type { ReactNode } from "react";
 import { useQuery, type QueryObserverResult } from "@tanstack/react-query";
 
+import { unwrapOr404 } from "@/lib/core/api";
+
 import { getMatchmakingAnalysisStatus } from "../matchmaking-api";
 import type { MatchmakingAnalysisResponse } from "@/lib/core/schemas";
 
@@ -72,27 +74,36 @@ export function MatchmakingAnalysisSession({
       if (!watchingCreatedAt) {
         return null;
       }
-      const result = await getMatchmakingAnalysisStatus(puuid, watchingCreatedAt);
-      if (!result.success) {
+      // A 404 is the ordinary end of a watch -- the record this poll names was
+      // deleted, or the stored `watchingCreatedAt` outlived it -- so it
+      // resolves to "nothing to report". Every other failure is left to throw
+      // and reach the toast; a status poll that quietly returned null would
+      // leave the card animating a run nobody is still tracking.
+      const status = unwrapOr404(
+        await getMatchmakingAnalysisStatus(puuid, watchingCreatedAt),
+        null,
+      );
+      if (!status) {
         return null;
       }
       if (
-        result.data.status === "in_progress" ||
-        result.data.status === "waiting_rate_limit"
+        status.status === "in_progress" ||
+        status.status === "waiting_rate_limit"
       ) {
         dispatch({
           type: "observe-active-progress",
-          progress: result.data.progress,
+          progress: status.progress,
         });
       }
       dispatch({
         type: "consider-reanchor",
         analysisCreatedAt: watchingCreatedAt,
-        authoritativeProgress: result.data.progress || 0,
-        totalPlayers: result.data.total_puuids || EXPECTED_PLAYERS,
+        authoritativeProgress: status.progress || 0,
+        totalPlayers: status.total_puuids || EXPECTED_PLAYERS,
       });
-      return result.data;
+      return status;
     },
+    meta: { errorTitle: "Analysis progress could not be checked" },
     enabled:
       Boolean(watchingCreatedAt) &&
       (storedWatching ||
