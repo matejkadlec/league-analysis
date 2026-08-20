@@ -51,6 +51,38 @@ const DEVELOPER_BENEFITS = [
   "Potential future profit, though this should not be your primary motivation.",
 ];
 
+const OTHER_IDEAS = [
+  "Documentation and content improvements.",
+  "UI/UX feedback, exploratory testing, and bug triage.",
+  "Data validation, analysis ideas, and process help.",
+  "Anything else worth of discussion.",
+];
+
+function BulletList({ items }: { items: readonly string[] }) {
+  return (
+    <ul className="list-disc space-y-1.5 pl-5 marker:text-amber-400">
+      {items.map((item) => (
+        <li key={item}>{item}</li>
+      ))}
+    </ul>
+  );
+}
+
+function BulletSection({
+  heading,
+  items,
+}: {
+  heading: string;
+  items: readonly string[];
+}) {
+  return (
+    <div>
+      <h3 className="mb-2 font-semibold">{heading}</h3>
+      <BulletList items={items} />
+    </div>
+  );
+}
+
 export function JoinUsRoleCards() {
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 lg:items-start">
@@ -66,41 +98,19 @@ export function JoinUsRoleCards() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-5 text-sm text-white/90">
-          <div>
-            <h3 className="mb-2 font-semibold">You must have experience with</h3>
-            <ul className="list-disc space-y-1.5 pl-5 marker:text-amber-400">
-              {DEVELOPER_REQUIRED.map((item) => (
-                <li key={item}>{item}</li>
-              ))}
-            </ul>
-          </div>
-
-          <div>
-            <h3 className="mb-2 font-semibold">Nice to have experience with</h3>
-            <ul className="list-disc space-y-1.5 pl-5 marker:text-amber-400">
-              {DEVELOPER_NICE_TO_HAVE.map((item) => (
-                <li key={item}>{item}</li>
-              ))}
-            </ul>
-          </div>
-
-          <div>
-            <h3 className="mb-2 font-semibold">The real deal-breaker</h3>
-            <ul className="list-disc space-y-1.5 pl-5 marker:text-amber-400">
-              {DEVELOPER_DEAL_BREAKER.map((item) => (
-                <li key={item}>{item}</li>
-              ))}
-            </ul>
-          </div>
-
-          <div>
-            <h3 className="mb-2 font-semibold">Why join us</h3>
-            <ul className="list-disc space-y-1.5 pl-5 marker:text-amber-400">
-              {DEVELOPER_BENEFITS.map((item) => (
-                <li key={item}>{item}</li>
-              ))}
-            </ul>
-          </div>
+          <BulletSection
+            heading="You must have experience with"
+            items={DEVELOPER_REQUIRED}
+          />
+          <BulletSection
+            heading="Nice to have experience with"
+            items={DEVELOPER_NICE_TO_HAVE}
+          />
+          <BulletSection
+            heading="The real deal-breaker"
+            items={DEVELOPER_DEAL_BREAKER}
+          />
+          <BulletSection heading="Why join us" items={DEVELOPER_BENEFITS} />
 
           <p className="rounded-md border border-red-400/45 bg-red-950/45 p-3 text-xs leading-relaxed text-red-100">
             Note that the project is currently non-profit and only long-term
@@ -121,23 +131,8 @@ export function JoinUsRoleCards() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-5 text-sm text-white/90">
-            <div>
-              <h3 className="mb-2 font-semibold">Must have</h3>
-              <ul className="list-disc space-y-1.5 pl-5 marker:text-amber-400">
-                {BETA_REQUIREMENTS.map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ul>
-            </div>
-
-            <div>
-              <h3 className="mb-2 font-semibold">Nice to have</h3>
-              <ul className="list-disc space-y-1.5 pl-5 marker:text-amber-400">
-                {BETA_NICE_TO_HAVE.map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ul>
-            </div>
+            <BulletSection heading="Must have" items={BETA_REQUIREMENTS} />
+            <BulletSection heading="Nice to have" items={BETA_NICE_TO_HAVE} />
 
             <p className="rounded-md border border-amber-300/45 bg-amber-900/35 p-3 text-xs leading-relaxed text-amber-100">
               The project is currently non-profit. For beta testing, reliable
@@ -164,12 +159,7 @@ export function JoinUsRoleCards() {
               <span className="font-semibold text-amber-400">Other</span> in the
               contact form below and describe how you would like to contribute.
             </p>
-            <ul className="list-disc space-y-1.5 pl-5 marker:text-amber-400">
-              <li>Documentation and content improvements.</li>
-              <li>UI/UX feedback, exploratory testing, and bug triage.</li>
-              <li>Data validation, analysis ideas, and process help.</li>
-              <li>Anything else worth of discussion.</li>
-            </ul>
+            <BulletList items={OTHER_IDEAS} />
             <p className="rounded-md border border-white/20 bg-slate-950/70 p-3 text-xs leading-relaxed text-white/80">
               If you can bring value and communicate clearly, we are open to
               discussing the role with you.

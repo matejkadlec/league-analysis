@@ -29,6 +29,7 @@ from .match_history import (
     build_match_responses,
     load_match_player_data_context,
 )
+from .match_lp import RANKED_SOLO_QUEUE_ID
 from .match_persistence import (
     add_participants_from_dto,
     build_match_record,
@@ -809,7 +810,7 @@ class MatchService:
         riot_api_client: RiotAPIClient,
         puuid: str,
         count: int = 1,
-        queue: int = 420,
+        queue: int = RANKED_SOLO_QUEUE_ID,
         platform: str = "EUN1",
     ) -> int:
         """

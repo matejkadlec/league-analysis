@@ -14,6 +14,8 @@ from pydantic import (
 )
 from pydantic.alias_generators import to_camel
 
+from app.features.matches.match_lp import RANKED_SOLO_QUEUE_ID
+
 
 class ThemeEnum(str, PyEnum):
     """Theme preference enum."""
@@ -346,9 +348,9 @@ _CARD_SETTINGS_WRITE_MODELS: dict[CardId, type[_CardSettingsWriteBase]] = {
 }
 
 _CARD_FIXED_SETTINGS_V1: dict[CardId, dict[str, int]] = {
-    CardId.TOP_CHAMPIONS: {"queue_id": 420, "display_limit": 5},
-    CardId.RECENT_PERFORMANCE: {"queue_id": 420},
-    CardId.SMURF_BOOST_DETECTION: {"queue_id": 420},
+    CardId.TOP_CHAMPIONS: {"queue_id": RANKED_SOLO_QUEUE_ID, "display_limit": 5},
+    CardId.RECENT_PERFORMANCE: {"queue_id": RANKED_SOLO_QUEUE_ID},
+    CardId.SMURF_BOOST_DETECTION: {"queue_id": RANKED_SOLO_QUEUE_ID},
 }
 
 # This map is intentionally explicit even while v1 has no renamed fields. A

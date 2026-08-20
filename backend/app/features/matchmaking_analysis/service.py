@@ -51,6 +51,7 @@ from app.core.riot_api.errors import (
     RiotAPIError,
 )
 from app.core.riot_api.models import MatchDTO
+from app.features.matches.match_lp import RANKED_SOLO_QUEUE_ID
 from app.features.matches.models import Match
 from app.features.matches.participants import MatchParticipant
 
@@ -858,7 +859,7 @@ class MatchmakingAnalysisService:
             .join(Match, MatchParticipant.match_id == Match.match_id)
             .where(
                 MatchParticipant.puuid == puuid,
-                Match.queue_id == 420,
+                Match.queue_id == RANKED_SOLO_QUEUE_ID,
                 Match.game_start_timestamp <= anchor_ms,
                 Match.fully_analyzed.is_(True),
             )
@@ -1085,7 +1086,7 @@ class MatchmakingAnalysisService:
                 puuid=puuid,
                 start=0,
                 count=count,
-                queue=420,
+                queue=RANKED_SOLO_QUEUE_ID,
                 end_time=end_time,
             ),
             required=required,
