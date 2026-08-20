@@ -6,10 +6,4 @@ export const metadata: Metadata = {
     "View detailed League of Legends match history for the selected player.",
 };
 
-export default function MatchHistoryLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  return children;
-}
+export { PassthroughLayout as default } from "@/components/passthrough-layout";

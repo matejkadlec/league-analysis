@@ -6,10 +6,4 @@ export const metadata: Metadata = {
     "Monitor and manage background jobs for player tracking and data updates",
 };
 
-export default function JobsLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  return children;
-}
+export { PassthroughLayout as default } from "@/components/passthrough-layout";

@@ -1,11 +1,9 @@
-import { ReactNode } from "react";
+import type { Metadata } from "next";
 
-export const metadata = {
+export const metadata: Metadata = {
   title: "Player Overview",
   description:
     "Compatibility route for the selected player's League of Legends overview.",
 };
 
-export default function MyProfileLayout({ children }: { children: ReactNode }) {
-  return children;
-}
+export { PassthroughLayout as default } from "@/components/passthrough-layout";

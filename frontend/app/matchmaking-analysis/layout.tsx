@@ -5,10 +5,4 @@ export const metadata: Metadata = {
   description: "Advanced matchmaking analysis for League of Legends",
 };
 
-export default function MatchmakingAnalysisLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  return children;
-}
+export { PassthroughLayout as default } from "@/components/passthrough-layout";
