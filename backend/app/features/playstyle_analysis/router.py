@@ -45,7 +45,6 @@ async def analyze_playstyle(
             logger,
             e,
             "playstyle_analysis_failed",
-            "Playstyle analysis failed",
             puuid=request.puuid,
         )
 
