@@ -24,6 +24,7 @@ import {
   type MatchHistoryPaginationItem,
   type MatchHistoryRecordRange,
 } from "../match-history-pagination";
+import { formatFractionAsPercent } from "@/lib/core/format";
 import { useRelativeTime } from "@/lib/core/use-relative-time";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -275,7 +276,7 @@ export function MatchHistoryHeader({
         {totalMatches > 0 && (
           <div className="shrink-0 text-sm text-right">
             {totalMatches} total matches ({wins}W / {losses}L) •{" "}
-            {(winRate * 100).toFixed(1)}% WR
+            {formatFractionAsPercent(winRate)} WR
           </div>
         )}
       </div>
