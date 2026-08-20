@@ -54,14 +54,9 @@ async def test_new_matchmaking_analysis_refuses_active_maintenance(
 
 
 @pytest.mark.asyncio
-async def test_matchmaking_start_returns_maintenance_status(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+async def test_matchmaking_start_returns_maintenance_status() -> None:
     """The start endpoint reports an active cleanup instead of an internal error."""
     service = MagicMock(spec=MatchmakingAnalysisService)
-    service.check_player_has_enough_matches.side_effect = AssertionError(
-        "start must not wait for Riot preflight"
-    )
     service.start_analysis.side_effect = RiotWriterMaintenanceActiveError()
 
     with pytest.raises(HTTPException) as error:
@@ -72,7 +67,6 @@ async def test_matchmaking_start_returns_maintenance_status(
         )
 
     assert error.value.status_code == 503
-    service.check_player_has_enough_matches.assert_not_awaited()
     service.start_analysis.assert_awaited_once_with("test-puuid")
 
 

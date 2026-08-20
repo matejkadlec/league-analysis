@@ -116,8 +116,7 @@ seeds its state from it and polls that exact identity.
 
 The minimum-match Riot preflight happens inside the background run, so the
 start request stays bounded; an insufficient history becomes a retryable
-`failed` run (`not_enough_matches`), not a start error. The optional
-`check-matches` route is diagnostic only.
+`failed` run (`not_enough_matches`), not a start error.
 
 ### Restart-resume (deliberate, and deliberately not startup recovery)
 

@@ -6,11 +6,9 @@ from typing import Annotated
 
 import structlog
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 
 from app.core.dependencies import get_riot_client
-from app.core.rate_limiter import typed_limit
+from app.core.rate_limiter import rate_limit
 from app.core.riot_api.client import RiotAPIClient
 from app.core.riot_api.constants import Platform
 from app.core.riot_api.errors import (
@@ -43,9 +41,6 @@ from .schemas import (
 
 logger = structlog.get_logger(__name__)
 
-
-# Rate limiter instance
-limiter = Limiter(key_func=get_remote_address)
 
 router = APIRouter(prefix="/players", tags=["players"])
 router.get_player_service = get_player_service  # type: ignore[attr-defined]
@@ -92,7 +87,7 @@ def _validate_tag_line(tag_line: str) -> None:
 
 
 @router.get("/search", response_model=list[PlayerResponse])
-@typed_limit(limiter, "100/minute")
+@rate_limit("100/minute")
 async def search_player(
     request: Request,
     player_service: PlayerServiceDep,
@@ -243,7 +238,7 @@ async def update_current_player(
 
 
 @router.post("/discover", response_model=PlayerResponse)
-@typed_limit(limiter, "30/minute")
+@rate_limit("30/minute")
 async def discover_player(
     request: Request,
     player_service: PlayerServiceDep,
@@ -307,7 +302,7 @@ async def get_player_by_puuid(
 
 
 @router.post("/{puuid}/sync", response_model=PlayerSyncRunResponse)
-@typed_limit(limiter, "10/minute")
+@rate_limit("10/minute")
 async def start_player_sync(
     request: Request,
     puuid: str,
@@ -362,7 +357,7 @@ async def read_player_sync(
 # rate: tracking several players, or cycling untrack/track after each run
 # finishes, would otherwise spend Riot quota past the limit that endpoint was
 # deliberately given.
-@typed_limit(limiter, "10/minute")
+@rate_limit("10/minute")
 async def track_player(
     request: Request,
     puuid: str,
@@ -533,7 +528,7 @@ def _handle_tracking_value_error(e: ValueError) -> None:
 
 
 @router.post("/{puuid}/refresh-league", response_model=PlayerLeagueResponse | None)
-@typed_limit(limiter, "30/minute")
+@rate_limit("30/minute")
 async def refresh_player_league(
     request: Request,
     puuid: str,
