@@ -119,12 +119,12 @@ class RiotAPIEndpoints:
 
 def parse_rate_limit_header(header_value: str) -> list[dict[str, int]]:
     """
-    Parse rate limit header value.
+    Parse a rate limit or rate count header value; both share the grammar.
 
     Example: "20:1,100:120" -> [{"requests": 20, "window": 1}, {"requests": 100, "window": 120}]
 
     Args:
-        header_value: Rate limit header value
+        header_value: Rate limit or rate count header value
 
     Returns:
         List of rate limit dictionaries
@@ -144,18 +144,3 @@ def parse_rate_limit_header(header_value: str) -> list[dict[str, int]]:
             continue
 
     return limits
-
-
-def parse_rate_count_header(header_value: str) -> list[dict[str, int]]:
-    """
-    Parse rate count header value.
-
-    Example: "15:1,80:120" -> [{"requests": 15, "window": 1}, {"requests": 80, "window": 120}]
-
-    Args:
-        header_value: Rate count header value
-
-    Returns:
-        List of rate count dictionaries
-    """
-    return parse_rate_limit_header(header_value)

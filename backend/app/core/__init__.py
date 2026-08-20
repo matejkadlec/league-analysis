@@ -4,7 +4,7 @@ This module exports core utilities used across features.
 Never imports from features - only from external libraries.
 """
 
-from .config import Settings, get_global_settings, get_riot_api_key
+from .config import Settings, get_global_settings
 from .database import db_manager, get_db
 from .enums import Tier
 from .exceptions import (
@@ -24,5 +24,4 @@ __all__ = [
     "db_manager",
     "get_db",
     "get_global_settings",
-    "get_riot_api_key",
 ]

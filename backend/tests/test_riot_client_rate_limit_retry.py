@@ -48,8 +48,6 @@ async def test_429_exhaustion_raises_with_the_header_evidence(
     assert served == [429, 429, 429, 429]
     assert recorded_sleeps == [3, 3, 3]
     assert error.value.retry_after == 3
-    assert error.value.app_rate_limit == "20:1,100:120"
-    assert error.value.method_rate_limit == "2000:10"
 
 
 @pytest.mark.asyncio

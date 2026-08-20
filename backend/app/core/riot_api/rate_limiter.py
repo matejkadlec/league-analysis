@@ -7,7 +7,7 @@ from urllib.parse import urlsplit
 
 import structlog
 
-from .endpoints import parse_rate_count_header, parse_rate_limit_header
+from .endpoints import parse_rate_limit_header
 
 logger = structlog.get_logger(__name__)
 
@@ -182,7 +182,7 @@ class RateLimiter:
             return None
 
         limits = parse_rate_limit_header(limit_header)
-        counts = parse_rate_count_header(count_header)
+        counts = parse_rate_limit_header(count_header)
         if not limits or not counts:
             return None
         return limits, counts

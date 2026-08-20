@@ -98,7 +98,7 @@ class RiotAPIClient:
         """
         if not api_key:
             raise ValueError(
-                "api_key is required - retrieve from database using get_riot_api_key()"
+                "api_key is required - build the client with create_tracked_riot_api_client()"
             )
 
         self.api_key = api_key
@@ -176,8 +176,6 @@ class RiotAPIClient:
         self, endpoint_template: str, region: str, params: dict[str, Any]
     ) -> None:
         """Record an API call for job logging."""
-        from datetime import datetime
-
         self._api_calls.append(
             APICallRecord(
                 endpoint=endpoint_template,
@@ -255,7 +253,7 @@ class RiotAPIClient:
         return max(retry_after, 1)
 
     def _handle_rate_limit(self, headers: dict[str, str]) -> None:
-        """Raise the 429 as a retryable error carrying the header evidence."""
+        """Log the header evidence, then raise the 429 as a retryable error."""
         retry_after = self._parse_retry_after(headers)
 
         # Log the detailed rate limit headers for debugging
@@ -274,8 +272,6 @@ class RiotAPIClient:
             "Rate limit exceeded",
             status_code=429,
             retry_after=retry_after,
-            app_rate_limit=headers.get("x-app-rate-limit"),
-            method_rate_limit=headers.get("x-method-rate-limit"),
         )
 
     @staticmethod

@@ -9,7 +9,6 @@ from pathlib import Path
 from dotenv import load_dotenv
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from sqlalchemy.ext.asyncio import AsyncSession
 
 # Load environment variables from .env file in project root
 # Get the project root (4 levels up from this file: backend/app/core/config.py -> root)
@@ -224,15 +223,3 @@ def get_global_settings() -> Settings:
     # The five postgres fields arrive via env/env_file; pyright only sees the
     # generated __init__ signature.
     return Settings()  # pyright: ignore[reportCallIssue]
-
-
-async def get_riot_api_key(db: AsyncSession) -> str:
-    """Return the database-first effective key and synchronize its health identity."""
-    from app.core.riot_api.credential_health import (
-        synchronize_riot_credential_health,
-    )
-
-    credential, _health = await synchronize_riot_credential_health(db)
-    if credential is None:
-        raise ValueError("No active Riot API key configured")
-    return credential.value

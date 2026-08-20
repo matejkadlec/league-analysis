@@ -6,7 +6,6 @@ from json import loads
 from types import SimpleNamespace
 
 import pytest
-from fastapi import Response
 from starlette import status
 from starlette.responses import JSONResponse
 
@@ -67,12 +66,10 @@ async def test_readiness_requires_a_database_round_trip(
         yield Session()
 
     monkeypatch.setattr(app_main.db_manager, "get_session", get_session)
-    response = Response()
 
-    result = await app_main.readiness_check(response)
+    result = await app_main.readiness_check()
 
     assert result == {"status": "ready", "database": "ready"}
-    assert response.status_code == status.HTTP_200_OK
 
 
 @pytest.mark.asyncio
@@ -86,7 +83,7 @@ async def test_readiness_fails_closed_without_leaking_database_errors(
 
     monkeypatch.setattr(app_main.db_manager, "get_session", get_session)
 
-    result = await app_main.readiness_check(Response())
+    result = await app_main.readiness_check()
 
     assert isinstance(result, JSONResponse)
     assert result.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
