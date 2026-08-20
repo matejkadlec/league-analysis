@@ -34,6 +34,7 @@ const JOB: JobConfiguration = {
   is_stopping: false,
   is_force_stopping: false,
   is_test_running: false,
+  is_test_paused: false,
   is_test_stopping: false,
   is_test_force_stopping: false,
   config_json: null,
@@ -172,6 +173,23 @@ describe("the one button that does five different things", () => {
     act(() => result.current.handleMainAction());
 
     await waitFor(() => expect(requestedPaths()).toEqual([path]));
+  });
+
+  it("sees a paused test run even while the scheduled job reports unpaused", async () => {
+    // Pause is per run: `is_paused` belongs to the scheduled run and
+    // `is_test_paused` to the test run. Deriving the card's paused state
+    // from `is_paused` alone leaves a paused test run looking active, with
+    // a stop button where the resume belongs.
+    const { result } = renderControls({
+      is_test_running: true,
+      is_test_paused: true,
+    });
+
+    act(() => result.current.handleMainAction());
+
+    await waitFor(() =>
+      expect(requestedPaths()).toEqual(["/jobs/7/test/resume"]),
+    );
   });
 
   // handleMainAction's paused branch now delegates to handlePauseResume, so

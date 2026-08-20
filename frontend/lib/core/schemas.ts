@@ -307,6 +307,7 @@ export const JobConfigurationSchema = z.object({
   is_stopping: z.boolean().default(false),
   is_force_stopping: z.boolean().default(false),
   is_test_running: z.boolean().default(false),
+  is_test_paused: z.boolean().default(false),
   is_test_stopping: z.boolean().default(false),
   is_test_force_stopping: z.boolean().default(false),
   config_json: z.record(z.string(), z.any()).nullable().optional(),

@@ -72,6 +72,7 @@ const MATCH_FETCHER: JobConfiguration = {
   is_stopping: false,
   is_force_stopping: false,
   is_test_running: false,
+  is_test_paused: false,
   is_test_stopping: false,
   is_test_force_stopping: false,
   created_at: "2026-01-01T00:00:00.000Z",
