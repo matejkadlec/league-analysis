@@ -723,8 +723,12 @@ class BaseJob(ABC):
             )
 
     async def check_control_state(self, db: AsyncSession) -> None:
-        """Check pause/stop state and block while paused."""
-        await self._refresh_config(db)
+        """Check pause/stop state and block while paused.
+
+        Reads only the in-memory runtime registry — jobs call this once per
+        work item (and the test runner once per second), so a DB round-trip
+        here multiplies into thousands of SELECTs per long run.
+        """
         runtime_state = get_runtime_control_snapshot(self.runtime_key)
 
         if runtime_state["force_stop_requested"]:

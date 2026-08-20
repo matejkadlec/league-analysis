@@ -55,7 +55,11 @@ completed progress intact; writing a terminal row would discard that work on
 every deployment. Explicit user cancellation is unaffected — it commits the
 `cancelled` row before cancelling the worker.
 
-Pause is runtime-only: persisted `is_paused` flags are reset at startup.
+Pause is runtime-only: each run carries its own flag on its in-memory
+runtime-control entry (test runs under the negated config ID), so the flag
+dies with the run — nothing is persisted and nothing needs a startup reset.
+The `job_configurations.is_paused` column is dormant, kept only until its
+drop gets its own migration.
 Shutdown stops APScheduler with `wait=False` — it stops future dispatches but
 never drains long-running Riot work, so a deployment has a bounded shutdown
 instead of waiting through provider rate-limit windows.

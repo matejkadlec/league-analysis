@@ -161,14 +161,16 @@ describe("the one button that does five different things", () => {
   });
 
   it.each([
-    ["the scheduled job", { is_running: true }, "/jobs/7/resume"],
+    ["the scheduled job", { is_running: true, is_paused: true }, "/jobs/7/resume"],
     [
+      // The test run resumes on its own flag; the scheduled run's is_paused
+      // must not be what routes a click to /test/resume.
       "the test run",
-      { is_running: true, is_test_running: true },
+      { is_test_running: true, is_test_paused: true },
       "/jobs/7/test/resume",
     ],
   ])("resumes %s when it is paused", async (_label, flags, path) => {
-    const { result } = renderControls({ ...flags, is_paused: true });
+    const { result } = renderControls(flags);
 
     act(() => result.current.handleMainAction());
 
@@ -213,8 +215,17 @@ describe("the one button that does five different things", () => {
     [
       "resumes",
       "the test run",
-      { is_running: true, is_test_running: true, is_paused: true },
+      { is_test_running: true, is_test_paused: true },
       "/jobs/7/test/resume",
+    ],
+    [
+      // A paused scheduled run stays reachable while an unpaused test run
+      // is live — routing by isTestRunning alone sent this to /test/resume
+      // and left the scheduled run parked behind every test run.
+      "resumes",
+      "the paused scheduled run behind a live test run",
+      { is_running: true, is_paused: true, is_test_running: true },
+      "/jobs/7/resume",
     ],
   ])("%s %s from the pause control", async (_verb, _label, flags, path) => {
     const { result } = renderControls(flags);

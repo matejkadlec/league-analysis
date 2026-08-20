@@ -130,30 +130,6 @@ async def test_test_run_pause_without_an_active_run_changes_nothing(
 
 
 @pytest.mark.asyncio
-async def test_a_runs_pause_dies_with_the_run(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A paused-then-stopped test run cannot strand its pause anywhere.
-
-    The flag lives on the run's registry entry, so unregistering the run
-    (what every stop path ends with) removes it — the next scheduled
-    execution starts unpaused with no clear-on-stop or startup reset.
-    """
-    from app.features.jobs import control as control_module
-
-    monkeypatch.setattr(control_module, "_runtime_controls", {})
-    control_module.register_runtime_control(-7, None)
-    assert control_module.set_runtime_job_paused(-7, True) is True
-
-    control_module.unregister_runtime_control(-7)
-
-    assert control_module.get_runtime_control_snapshot(-7)["is_paused"] is False
-    # A later run registers fresh and starts unpaused.
-    control_module.register_runtime_control(-7, None)
-    assert control_module.get_runtime_control_snapshot(-7)["is_paused"] is False
-
-
-@pytest.mark.asyncio
 async def test_stopping_one_run_leaves_the_other_runs_pause_alone(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -170,6 +146,7 @@ async def test_stopping_one_run_leaves_the_other_runs_pause_alone(
     control_module.register_runtime_control(7, None)
     control_module.set_runtime_job_paused(7, True)
     control_module.register_runtime_control(-7, None)
+    control_module.set_runtime_job_paused(-7, True)
 
     job_model = SimpleNamespace(id=7, name="Match Fetcher")
     job_service = _job_service_double(job_model)
@@ -178,9 +155,12 @@ async def test_stopping_one_run_leaves_the_other_runs_pause_alone(
 
     assert response.success is True
     assert "test run of" in response.message
-    # The test run is the one stopping; its own flag was never set.
+    # Stopping clears the run's own pause: a stopping run must not report
+    # paused-and-stopping, which the card would render as "Resume".
     assert response.is_paused is False
-    assert control_module.get_runtime_control_snapshot(-7)["stop_requested"] is True
+    test_state = control_module.get_runtime_control_snapshot(-7)
+    assert test_state["stop_requested"] is True
+    assert test_state["is_paused"] is False
     # The scheduled run stays paused, and was not asked to stop.
     scheduled = control_module.get_runtime_control_snapshot(7)
     assert scheduled["is_paused"] is True

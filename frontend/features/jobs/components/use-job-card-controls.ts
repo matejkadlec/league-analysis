@@ -337,7 +337,10 @@ export function useJobCardControls(
 
   const handlePauseResume = () => {
     if (isAnyPaused) {
-      if (isTestRunning) {
+      // Resume the run whose own flag is set — routing by isTestRunning
+      // alone would resume the (unpaused) test run and leave a paused
+      // scheduled run unreachable for as long as any test run exists.
+      if (isTestRunning && job.is_test_paused) {
         testResumeMutation.mutate();
       } else {
         resumeMutation.mutate();
