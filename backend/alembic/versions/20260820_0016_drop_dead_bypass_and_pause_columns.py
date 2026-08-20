@@ -26,20 +26,30 @@ depends_on = None
 # database bit cannot describe a regular run and a test run paused
 # independently. Every reader already goes through the runtime snapshot.
 DEAD_COLUMNS = (
-    ("join_us_contact_submissions", "auth", "is_test"),
-    ("job_configurations", "jobs", "is_paused"),
+    (
+        "join_us_contact_submissions",
+        "auth",
+        "is_test",
+        "True when submission used #nl test bypass",
+    ),
+    (
+        "job_configurations",
+        "jobs",
+        "is_paused",
+        "Whether a currently running job execution is paused",
+    ),
 )
 
 
 def upgrade() -> None:
     """Drop both dormant boolean columns."""
-    for table, schema, column in DEAD_COLUMNS:
+    for table, schema, column, _comment in DEAD_COLUMNS:
         op.drop_column(table, column, schema=schema)
 
 
 def downgrade() -> None:
-    """Recreate both columns defaulting to False, as they were."""
-    for table, schema, column in DEAD_COLUMNS:
+    """Recreate both columns as they were, comments included."""
+    for table, schema, column, comment in DEAD_COLUMNS:
         op.add_column(
             table,
             sa.Column(
@@ -47,6 +57,7 @@ def downgrade() -> None:
                 sa.Boolean(),
                 nullable=False,
                 server_default=sa.false(),
+                comment=comment,
             ),
             schema=schema,
         )

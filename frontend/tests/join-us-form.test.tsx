@@ -124,14 +124,23 @@ describe("what the join-us form refuses to send", () => {
     expect(isSubmitDisabled()).toBe(true);
   });
 
-  it("gives a message ending in #nl no special treatment", () => {
+  it("gives a short message ending in #nl no length exemption", () => {
     // `#nl` used to switch off the minimum length, the captcha and the
-    // hourly rate limit, and the literal shipped in the public bundle.
-    // The suffix is now ordinary text; if it ever buys an exemption again,
-    // this is where it shows up.
+    // hourly rate limit at once, and the literal shipped in the public
+    // bundle. The suffix is now ordinary text.
     render(<JoinUsForm />);
     fillIn({ body: "please let me in #nl" });
     solveCaptcha();
+
+    expect(isSubmitDisabled()).toBe(true);
+  });
+
+  it("gives a long message ending in #nl no captcha exemption", () => {
+    // The other half of the old bypass, and the half a length-only test
+    // would miss: a body long enough to clear the minimum still cannot be
+    // sent without solving the captcha.
+    render(<JoinUsForm />);
+    fillIn({ body: `${"a".repeat(300)} #nl` });
 
     expect(isSubmitDisabled()).toBe(true);
   });

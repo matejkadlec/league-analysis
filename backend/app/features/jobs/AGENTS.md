@@ -23,8 +23,10 @@ changes. Module responsibilities live in the code under this directory.
 - Persisted execution lifecycle is:
   `PENDING` -> `RUNNING` <-> `PAUSED` ->
   `SUCCESS` / `FAILED` / `CANCELLED` / `RATE_LIMITED`.
-- `jobs.job_configurations` owns schedules, active state, pause state, and
-  `config_json`.
+- `jobs.job_configurations` owns schedules, active state, and `config_json`.
+  Not pause state: that lives only in the in-memory runtime registry in
+  `control.py`, per run, because one database bit cannot describe a regular
+  run and a test run paused independently.
 - `jobs.job_executions` owns per-run status, timing, metrics, errors, logs,
   key-error flag, and execution type.
 - APScheduler stores its own state in `jobs.apscheduler_jobs`.
