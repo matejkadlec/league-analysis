@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
+from structlog import contextvars as structlog_contextvars
 from structlog.testing import capture_logs
 from structlog.typing import EventDict
 
@@ -72,7 +73,9 @@ async def test_failure_state_persist_failure_is_logged(
         cast(AsyncSession, _unused_database()), cast(RiotAPIClient, SimpleNamespace())
     )
 
-    with capture_logs() as logs:
+    # `capture_logs` swaps out the whole configured chain, so the run's bound
+    # contextvars only reach the entries if this one processor is put back.
+    with capture_logs([structlog_contextvars.merge_contextvars]) as logs:
         await service._run_analysis_background(_PUUID, datetime.now(UTC))
 
     entries = _events(logs, "matchmaking_failure_state_persist_failed")
