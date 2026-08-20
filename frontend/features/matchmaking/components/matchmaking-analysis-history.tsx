@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { ApiRequestError } from "@/lib/core/api";
+import { unwrap, unwrapOr404 } from "@/lib/core/api";
+import { AnalyzedPlayerResultLabel } from "./analyzed-player-result-label";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { History, X } from "lucide-react";
 import { formatDateTime, formatFractionAsPercent } from "@/lib/core/format";
@@ -26,19 +27,6 @@ import {
 interface MatchmakingAnalysisHistoryProps {
   puuid: string;
   analyzedPlayerLabel: string;
-}
-
-function AnalyzedPlayerResultLabel({ playerLabel }: { playerLabel: string }) {
-  return (
-    <p className="text-sm">
-      <span style={{ color: "var(--color-muted-foreground)" }}>
-        Results for player{" "}
-      </span>
-      <span style={{ color: "var(--color-card-foreground)" }}>
-        {playerLabel}
-      </span>
-    </p>
-  );
 }
 
 const HISTORY_FETCH_LIMIT = 100;
@@ -161,17 +149,10 @@ export function MatchmakingAnalysisHistory({
   const { data, isLoading, error } = useQuery({
     queryKey: ["matchmaking-analysis-history", puuid],
     queryFn: async () => {
-      const result = await getMatchmakingAnalysisHistory(
-        puuid,
-        HISTORY_FETCH_LIMIT,
+      return unwrapOr404(
+        await getMatchmakingAnalysisHistory(puuid, HISTORY_FETCH_LIMIT),
+        { items: [] },
       );
-      if (!result.success) {
-        if (result.error.status === 404) {
-          return { items: [] };
-        }
-        throw new ApiRequestError(result.error);
-      }
-      return result.data;
     },
     retry: false,
     staleTime: 30000,
@@ -179,10 +160,7 @@ export function MatchmakingAnalysisHistory({
 
   const deleteMutation = useMutation({
     mutationFn: async (createdAt: string) => {
-      const result = await deleteMatchmakingAnalysisRecord(puuid, createdAt);
-      if (!result.success) {
-        throw new ApiRequestError(result.error);
-      }
+      unwrap(await deleteMatchmakingAnalysisRecord(puuid, createdAt));
       return createdAt;
     },
     onSuccess: () => {

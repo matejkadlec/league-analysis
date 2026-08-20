@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { ApiRequestError, validatedPost } from "@/lib/core/api";
+import { unwrap, validatedPost } from "@/lib/core/api";
 import {
   EmailChangeCodeResponseSchema,
   UserResponseSchema,
@@ -85,15 +85,13 @@ export function useChangeEmail() {
 
   const requestEmailCodeMutation = useMutation({
     mutationFn: async (targetEmail: string) => {
-      const result = await validatedPost(
-        EmailChangeCodeResponseSchema,
-        "/auth/change-email/request-code",
-        { new_email: targetEmail },
+      return unwrap(
+        await validatedPost(
+          EmailChangeCodeResponseSchema,
+          "/auth/change-email/request-code",
+          { new_email: targetEmail },
+        ),
       );
-      if (!result.success) {
-        throw new ApiRequestError(result.error);
-      }
-      return result.data;
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: USER_QUERY_KEY });
@@ -136,17 +134,11 @@ export function useChangeEmail() {
 
   const verifyEmailCodeMutation = useMutation({
     mutationFn: async (code: string) => {
-      const result = await validatedPost(
-        UserResponseSchema,
-        "/auth/change-email/verify",
-        {
+      return unwrap(
+        await validatedPost(UserResponseSchema, "/auth/change-email/verify", {
           code,
-        },
+        }),
       );
-      if (!result.success) {
-        throw new ApiRequestError(result.error);
-      }
-      return result.data;
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: USER_QUERY_KEY });

@@ -3,7 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import { Eye, EyeOff, Loader2, UserMinus, Users } from "lucide-react";
-import { ApiRequestError, unwrap, validatedGet } from "@/lib/core/api";
+import { unwrap, validatedGet } from "@/lib/core/api";
 
 import { untrackPlayer } from "../player-api";
 import { invalidateTrackingQueries } from "../player-query";
@@ -209,16 +209,9 @@ export function TrackedPlayersList({
   const { data, isLoading, isFetching, error, refetch } = useQuery({
     queryKey: ["tracked-players", userId],
     queryFn: async () => {
-      const result = await validatedGet(
-        TrackedPlayersSchema,
-        "/players/tracked/list",
+      return unwrap(
+        await validatedGet(TrackedPlayersSchema, "/players/tracked/list"),
       );
-
-      if (!result.success) {
-        throw new ApiRequestError(result.error);
-      }
-
-      return result.data;
     },
     enabled: !!userId,
     refetchInterval: 10000,

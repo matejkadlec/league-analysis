@@ -50,6 +50,21 @@ export function unwrap<T>(result: ApiResponse<T>): T {
   return result.data;
 }
 
+/**
+ * `unwrap`, except a 404 is an ordinary empty state rather than a failure.
+ *
+ * Several resources only exist once something has happened -- a player who has
+ * never been analysed, a deployment with no key saved yet -- so their absence
+ * is what the surface is there to render. Every other status still throws, so
+ * a real failure keeps reaching the `QueryCache` toast.
+ */
+export function unwrapOr404<T, F>(result: ApiResponse<T>, fallback: F): T | F {
+  if (!result.success && result.error.status === 404) {
+    return fallback;
+  }
+  return unwrap(result);
+}
+
 // Standard error code returned by backend when Riot API key is invalid
 const RIOT_API_KEY_INVALID_CODE = "RIOT_API_KEY_INVALID";
 

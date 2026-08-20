@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { ApiRequestError, validatedPost } from "@/lib/core/api";
+import { unwrap, validatedPost } from "@/lib/core/api";
 import { MessageResponseSchema } from "@/lib/core/schemas";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -53,21 +53,13 @@ export function PasswordChangeSection() {
 
   const changePasswordMutation = useMutation({
     mutationFn: async () => {
-      const result = await validatedPost(
-        MessageResponseSchema,
-        "/auth/change-password",
-        {
+      return unwrap(
+        await validatedPost(MessageResponseSchema, "/auth/change-password", {
           current_password: currentPassword,
           new_password: newPassword,
           repeat_password: repeatPassword,
-        },
+        }),
       );
-
-      if (!result.success) {
-        throw new ApiRequestError(result.error);
-      }
-
-      return result.data;
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: USER_QUERY_KEY });

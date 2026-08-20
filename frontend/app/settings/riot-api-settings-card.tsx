@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import {
-  ApiRequestError,
+  unwrapOr404,
   apiErrorMessage,
   unwrap,
   validatedGet,
@@ -48,16 +48,11 @@ export function RiotApiSettingsCard() {
   const { data: setting = null, isLoading } = useQuery({
     queryKey: ["settings", "riot_api_key"],
     queryFn: async () => {
-      const result = await validatedGet(SettingSchema, "/settings/riot_api_key");
-      if (!result.success) {
-        // No key saved yet is an ordinary state -- the panel below prompts
-        // for one -- not a failure worth a toast.
-        if (result.error.status === 404) {
-          return null;
-        }
-        throw new ApiRequestError(result.error);
-      }
-      return result.data;
+      // No key saved yet is an ordinary state: the panel below prompts for one.
+      return unwrapOr404(
+        await validatedGet(SettingSchema, "/settings/riot_api_key"),
+        null,
+      );
     },
   });
 
