@@ -14,7 +14,6 @@ from app.core.riot_api.constants import (
     get_region_by_platform,
     normalize_platform,
 )
-from app.core.riot_api.db_rate_limiter import DBRateLimiter
 from app.core.riot_api.errors import (
     AuthenticationError,
     ForbiddenError,
@@ -1169,7 +1168,6 @@ class MatchService:
         self,
         riot_client: RiotAPIClient,
         player: SyncablePlayer,
-        rate_limiter: DBRateLimiter | None = None,
         on_failure: Callable[[str, Exception, dict[str, Any]], None] | None = None,
         on_match_stored: Callable[[int, str], None] | None = None,
     ) -> int:
@@ -1180,7 +1178,6 @@ class MatchService:
         Args:
             riot_client: The Riot API client
             player: Player object with puuid and platform
-            rate_limiter: Optional DB rate limiter for coordinated rate limiting
         """
         puuid = getattr(player, "puuid", None)
         platform = getattr(player, "platform", None)
@@ -1207,7 +1204,6 @@ class MatchService:
                     puuid=puuid,
                     region=region,
                     queue_id=queue_id,
-                    rate_limiter=rate_limiter,
                     on_failure=on_failure,
                     on_match_stored=on_match_stored,
                 )
@@ -1239,7 +1235,6 @@ class MatchService:
         puuid: str,
         region: Region,
         queue_id: int,
-        rate_limiter: DBRateLimiter | None,
         on_failure: Callable[[str, Exception, dict[str, Any]], None] | None,
         on_match_stored: Callable[[int, str], None] | None = None,
     ) -> int:
@@ -1250,7 +1245,6 @@ class MatchService:
             puuid=puuid,
             region=region,
             queue_id=queue_id,
-            rate_limiter=rate_limiter,
             on_failure=on_failure,
             ensure_maintenance=_ensure_riot_writer_maintenance_is_inactive,
             is_current_game_version=self.is_current_game_version,

@@ -12,7 +12,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.riot_api.client import RiotAPIClient
 from app.core.riot_api.constants import Region
-from app.core.riot_api.db_rate_limiter import DBRateLimiter
 from app.core.riot_api.errors import AuthenticationError, ForbiddenError, RateLimitError
 from app.core.riot_api.models import MatchDTO, MatchListDTO, MatchTimelineDTO
 
@@ -48,27 +47,6 @@ def must_abort_writer_sync(error: Exception) -> bool:
     )
 
 
-async def acquire_rate_limiter_or_raise(
-    rate_limiter: DBRateLimiter | None,
-) -> None:
-    """Raise the same RateLimitError the queue-sync path used for a blocked slot."""
-    if rate_limiter:
-        can_proceed = await rate_limiter.acquire()
-        if not can_proceed:
-            raise RateLimitError(
-                "Local rate limiter capacity unavailable",
-                status_code=429,
-            )
-
-
-async def record_rate_limiter_request(
-    rate_limiter: DBRateLimiter | None,
-    requested: bool,
-) -> None:
-    if rate_limiter and requested:
-        await rate_limiter.record_request()
-
-
 async def fetch_queue_match_list(
     riot_client: RiotAPIClient,
     puuid: str,
@@ -76,11 +54,9 @@ async def fetch_queue_match_list(
     queue_id: int,
     start: int,
     count: int,
-    rate_limiter: DBRateLimiter | None,
 ) -> MatchListDTO:
     """Fetch one page of match IDs for a supported queue."""
     try:
-        await acquire_rate_limiter_or_raise(rate_limiter)
         match_list_dto = await riot_client.get_match_list_by_puuid(
             puuid=puuid,
             region=region,
@@ -88,8 +64,6 @@ async def fetch_queue_match_list(
             count=count,
             queue=queue_id,
         )
-        if rate_limiter:
-            await rate_limiter.record_request()
         return match_list_dto
     except AuthenticationError, ForbiddenError, RateLimitError:
         raise
@@ -206,7 +180,6 @@ async def fetch_sync_timeline(
     region: Region,
     queue_id: int,
     match_id: str,
-    rate_limiter: DBRateLimiter | None,
     on_failure: OnFailure,
     *,
     operation: str,
@@ -215,10 +188,7 @@ async def fetch_sync_timeline(
 ) -> tuple[MatchTimelineDTO | None, bool]:
     """Fetch a timeline during queue sync. The bool is True when the match should be skipped."""
     timeline_payload: MatchTimelineDTO | None = None
-    timeline_request_attempted = False
     try:
-        await acquire_rate_limiter_or_raise(rate_limiter)
-        timeline_request_attempted = True
         timeline_payload = await riot_client.get_match_timeline(
             match_id,
             region=region,
@@ -242,8 +212,6 @@ async def fetch_sync_timeline(
                 {"queue_id": queue_id, "match_id": match_id},
             )
         return None, skip_match_on_error
-    finally:
-        await record_rate_limiter_request(rate_limiter, timeline_request_attempted)
     return timeline_payload, False
 
 
@@ -254,7 +222,6 @@ async def backfill_timeline_only_match(
     region: Region,
     queue_id: int,
     match_id: str,
-    rate_limiter: DBRateLimiter | None,
     on_failure: OnFailure,
     ensure_maintenance: EnsureMaintenance,
 ) -> int:
@@ -265,7 +232,6 @@ async def backfill_timeline_only_match(
         region,
         queue_id,
         match_id,
-        rate_limiter,
         on_failure,
         operation="timeline-only backfill",
         log_message="Timeline-only fetch failed",
@@ -308,17 +274,13 @@ async def sync_full_queue_match(
     region: Region,
     queue_id: int,
     match_id: str,
-    rate_limiter: DBRateLimiter | None,
     on_failure: OnFailure,
     is_current_game_version: Callable[[str], bool],
     reprocess_match: ReprocessMatch,
     on_match_stored: OnMatchStored,
 ) -> tuple[int, bool]:
     """Fetch and store one current-season match. The bool is True when the queue is done."""
-    await acquire_rate_limiter_or_raise(rate_limiter)
     match_dto = await riot_client.get_match(match_id, region=region)
-    if rate_limiter:
-        await rate_limiter.record_request()
     if not match_dto:
         return 0, False
     if not is_current_game_version(match_dto.info.game_version):
@@ -329,7 +291,6 @@ async def sync_full_queue_match(
         region,
         queue_id,
         match_id,
-        rate_limiter,
         on_failure,
         operation="match timeline fetch",
         log_message="Timeline fetch failed, storing match without timeline",
@@ -349,7 +310,6 @@ async def process_queue_sync_match(
     queue_id: int,
     match_id: str,
     timeline_only_ids: set[str],
-    rate_limiter: DBRateLimiter | None,
     on_failure: OnFailure,
     ensure_maintenance: EnsureMaintenance,
     is_current_game_version: Callable[[str], bool],
@@ -366,7 +326,6 @@ async def process_queue_sync_match(
                 region,
                 queue_id,
                 match_id,
-                rate_limiter,
                 on_failure,
                 ensure_maintenance,
             )
@@ -377,7 +336,6 @@ async def process_queue_sync_match(
             region,
             queue_id,
             match_id,
-            rate_limiter,
             on_failure,
             is_current_game_version,
             reprocess_match,
@@ -412,7 +370,6 @@ async def process_queue_sync_batch(
     queue_id: int,
     ids_to_process: list[str],
     timeline_only_ids: set[str],
-    rate_limiter: DBRateLimiter | None,
     on_failure: OnFailure,
     ensure_maintenance: EnsureMaintenance,
     is_current_game_version: Callable[[str], bool],
@@ -431,7 +388,6 @@ async def process_queue_sync_batch(
             queue_id,
             match_id,
             timeline_only_ids,
-            rate_limiter,
             on_failure,
             ensure_maintenance,
             is_current_game_version,
@@ -450,7 +406,6 @@ async def sync_single_queue_for_player(
     puuid: str,
     region: Region,
     queue_id: int,
-    rate_limiter: DBRateLimiter | None,
     on_failure: OnFailure,
     ensure_maintenance: EnsureMaintenance,
     is_current_game_version: Callable[[str], bool],
@@ -471,7 +426,6 @@ async def sync_single_queue_for_player(
             queue_id,
             start,
             count,
-            rate_limiter,
         )
         if not match_list_dto or not match_list_dto.match_ids:
             break
@@ -493,7 +447,6 @@ async def sync_single_queue_for_player(
             queue_id,
             ids_to_process,
             timeline_only_ids,
-            rate_limiter,
             on_failure,
             ensure_maintenance,
             is_current_game_version,

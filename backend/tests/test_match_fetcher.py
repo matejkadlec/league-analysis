@@ -13,7 +13,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import ServiceException
 from app.core.riot_api.client import RiotAPIClient
 from app.core.riot_api.constants import PRODUCT_SUPPORTED_QUEUE_IDS, Region
-from app.core.riot_api.db_rate_limiter import DBRateLimiter
 from app.core.riot_api.errors import RateLimitError
 from app.core.riot_api.models import LeagueEntryDTO, MatchTimelineDTO
 from app.features.jobs.base import BaseJob
@@ -104,7 +103,6 @@ async def test_ranked_queue_reports_each_stored_match_for_lp_observation() -> No
         puuid="test-puuid",
         region=Region.EUROPE,
         queue_id=420,
-        rate_limiter=None,
         on_failure=None,
         on_match_stored=lambda queue_id, match_id: stored_matches.append(
             (queue_id, match_id)
@@ -131,7 +129,6 @@ async def test_queue_sync_accepts_current_release_and_stops_at_historical_match(
         puuid="test-puuid",
         region=Region.EUROPE,
         queue_id=420,
-        rate_limiter=None,
         on_failure=None,
     )
 
@@ -150,7 +147,6 @@ async def test_queue_sync_records_recoverable_match_failure_with_safe_context() 
         puuid="test-puuid",
         region=Region.EUROPE,
         queue_id=420,
-        rate_limiter=None,
         on_failure=lambda operation, error, context: failures.append(
             (operation, error, context)
         ),
@@ -218,7 +214,6 @@ async def test_match_fetcher_converts_rate_limit_to_a_non_failure_signal() -> No
             ),
             match_service=cast(MatchService, match_service),
             riot_client=cast(RiotAPIClient, object()),
-            rate_limiter=cast(DBRateLimiter, object()),
         )
 
     assert error.value.retry_after == 7
@@ -241,7 +236,6 @@ async def test_match_fetcher_execute_propagates_rate_limit_to_base_job(
         def get_api_calls(self) -> list[object]:
             return []
 
-    rate_limiter = SimpleNamespace(release=AsyncMock())
     match_service = SimpleNamespace(
         sync_matches_for_player=AsyncMock(
             side_effect=RateLimitError("limited", status_code=429, retry_after=7)
@@ -261,12 +255,8 @@ async def test_match_fetcher_execute_propagates_rate_limit_to_base_job(
     def build_match_service(_db: AsyncSession) -> SimpleNamespace:
         return match_service
 
-    def build_rate_limiter(*_args: object) -> SimpleNamespace:
-        return rate_limiter
-
     monkeypatch.setattr(match_fetcher_module, "PlayerService", build_player_service)
     monkeypatch.setattr(match_fetcher_module, "MatchService", build_match_service)
-    monkeypatch.setattr(match_fetcher_module, "DBRateLimiter", build_rate_limiter)
 
     job = MatchFetcherJob(job_config_id=7)
     job.job_config = cast(
@@ -283,8 +273,6 @@ async def test_match_fetcher_execute_propagates_rate_limit_to_base_job(
 
     with pytest.raises(RateLimitSignal):
         await job.execute(cast(AsyncSession, object()))
-
-    rate_limiter.release.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -305,10 +293,6 @@ async def test_match_fetcher_processes_the_player_league_refresh_path() -> None:
         update_player_league=AsyncMock(return_value=False),
     )
     match_service = SimpleNamespace(sync_matches_for_player=AsyncMock(return_value=0))
-    rate_limiter = SimpleNamespace(
-        acquire=AsyncMock(return_value=True),
-        record_request=AsyncMock(),
-    )
     player = SimpleNamespace(
         puuid="sanitized-puuid",
         platform="eun1",
@@ -321,14 +305,12 @@ async def test_match_fetcher_processes_the_player_league_refresh_path() -> None:
         player_service=cast(PlayerService, player_service),
         match_service=cast(MatchService, match_service),
         riot_client=cast(RiotAPIClient, object()),
-        rate_limiter=cast(DBRateLimiter, rate_limiter),
     )
 
     player_service.update_player_league.assert_awaited_once()
     assert db.commit.await_count == 2
     assert player_model.match_synced_at is not None
     assert player_model.league_synced_at is not None
-    rate_limiter.record_request.assert_awaited_once()
     assert not job.has_errors()
 
 
@@ -365,10 +347,6 @@ async def test_recoverable_match_failure_does_not_claim_match_freshness() -> Non
         get_player_league=AsyncMock(return_value=None),
         update_player_league=AsyncMock(return_value=False),
     )
-    rate_limiter = SimpleNamespace(
-        acquire=AsyncMock(return_value=True),
-        record_request=AsyncMock(),
-    )
 
     await job._process_player(
         db=cast(AsyncSession, db),
@@ -383,7 +361,6 @@ async def test_recoverable_match_failure_does_not_claim_match_freshness() -> Non
         player_service=cast(PlayerService, player_service),
         match_service=cast(MatchService, match_service),
         riot_client=cast(RiotAPIClient, object()),
-        rate_limiter=cast(DBRateLimiter, rate_limiter),
     )
 
     assert player_model.match_synced_at is None

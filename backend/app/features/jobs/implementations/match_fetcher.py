@@ -5,7 +5,6 @@ import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.riot_api.client import RiotAPIClient
-from app.core.riot_api.db_rate_limiter import DBRateLimiter, RateLimitComponent
 from app.core.riot_api.errors import RateLimitError
 from app.features.jobs.base import BaseJob, JobStopSignal
 from app.features.jobs.error_handling import (
@@ -44,24 +43,19 @@ class MatchFetcherJob(BaseJob):
 
         player_service = PlayerService(db)
         match_service = MatchService(db)
-        rate_limiter = DBRateLimiter(db, RateLimitComponent.MATCH_FETCHER)
 
         async with self.job_riot_client(db) as riot_client:
             tracked_players = await self._load_tracked_players(db)
             logger.info(
                 "Starting match fetcher job", tracked_count=len(tracked_players)
             )
-            try:
-                await self._process_tracked_players(
-                    db,
-                    tracked_players,
-                    player_service,
-                    match_service,
-                    riot_client,
-                    rate_limiter,
-                )
-            finally:
-                await rate_limiter.release()
+            await self._process_tracked_players(
+                db,
+                tracked_players,
+                player_service,
+                match_service,
+                riot_client,
+            )
 
     async def _handle_player_processing_error(
         self,
@@ -100,7 +94,6 @@ class MatchFetcherJob(BaseJob):
         player_service: PlayerService,
         match_service: MatchService,
         riot_client: RiotAPIClient,
-        rate_limiter: DBRateLimiter,
     ) -> None:
         """Process each tracked player, converting stop conditions to signals."""
         for player in tracked_players:
@@ -112,7 +105,6 @@ class MatchFetcherJob(BaseJob):
                     player_service,
                     match_service,
                     riot_client,
-                    rate_limiter,
                 )
             except RateLimitSignal:
                 raise
@@ -135,7 +127,6 @@ class MatchFetcherJob(BaseJob):
         player_service: PlayerService,
         match_service: MatchService,
         riot_client: RiotAPIClient,
-        rate_limiter: DBRateLimiter,
     ) -> None:
         """Fetch and sync matches for a single player, then update their league.
 
@@ -167,7 +158,6 @@ class MatchFetcherJob(BaseJob):
             count = await match_service.sync_matches_for_player(
                 riot_client,
                 player,
-                rate_limiter,
                 on_failure=record_match_sync_failure,
                 on_match_stored=record_stored_match,
             )
@@ -195,7 +185,6 @@ class MatchFetcherJob(BaseJob):
                 player_model,
                 player_service,
                 riot_client,
-                rate_limiter,
                 ranked_match_ids,
                 league_before,
             )
@@ -233,16 +222,10 @@ class MatchFetcherJob(BaseJob):
         player_model: Player,
         player_service: PlayerService,
         riot_client: RiotAPIClient,
-        rate_limiter: DBRateLimiter,
         ranked_match_ids: set[str],
         league_before: PlayerLeague | None,
     ) -> tuple[bool, int]:
         """Close one Match Fetcher observation window and commit its evidence."""
-        can_proceed = await rate_limiter.acquire()
-        if not can_proceed:
-            raise RateLimitSignal(
-                message="Local rate limiter capacity unavailable during league update"
-            )
         league_updated = await player_service.update_player_league(
             player_model, riot_client
         )
@@ -258,7 +241,6 @@ class MatchFetcherJob(BaseJob):
         )
         player_model.league_synced_at = datetime.now(UTC)
         await db.commit()
-        await rate_limiter.record_request()
         return league_updated, lp_observations
 
     def _record_league_refresh_result(

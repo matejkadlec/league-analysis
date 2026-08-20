@@ -32,7 +32,7 @@ from __future__ import annotations
 
 def import_all_models() -> None:
     """Import every module that defines a mapped model."""
-    from app.core.riot_api import credential_health, db_rate_limiter  # noqa: F401
+    from app.core.riot_api import credential_health  # noqa: F401
     from app.features.auth import (  # noqa: F401
         email_change_request,
         join_us_contact_submission,
