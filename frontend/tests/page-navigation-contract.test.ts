@@ -3,10 +3,18 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const APP_DIRECTORY = join(process.cwd(), "app");
-const SIDEBAR_NAV = readFileSync(
-  join(process.cwd(), "components/sidebar-nav.tsx"),
-  "utf8",
-);
+// The sidebar plus the modules it renders its links out of. This is a text
+// search rather than an import so that a route deleted from the JSX fails
+// here even when it is still a valid string elsewhere; extracting a link list
+// into its own module is fine, but the module has to be listed here or the
+// guard silently stops covering those routes.
+const SIDEBAR_SOURCES = [
+  "components/sidebar-nav.tsx",
+  "components/legal-notice.tsx",
+  "lib/core/legal-pages.ts",
+]
+  .map((file) => readFileSync(join(process.cwd(), file), "utf8"))
+  .join("\n");
 
 // The root route is the shell itself rather than a navigation target, and the
 // rest are PUUID-preserving compatibility redirects kept for old links. The
@@ -48,7 +56,7 @@ describe("page navigation contract", () => {
     const unregistered = pageRoutes(APP_DIRECTORY).filter(
       (route) =>
         !NOT_NAVIGATION_TARGETS.has(route) &&
-        !SIDEBAR_NAV.includes(`"${route}"`),
+        !SIDEBAR_SOURCES.includes(`"${route}"`),
     );
 
     expect(unregistered).toEqual([]);

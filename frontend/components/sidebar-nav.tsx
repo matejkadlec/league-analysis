@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import { Menu, X, User, LogOut, Settings, Users, Wrench } from "lucide-react";
+import { LegalNotice } from "@/components/legal-notice";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/features/auth";
 import {
@@ -208,30 +209,7 @@ export function SidebarNav() {
 
           {/* Footer */}
           <div className="border-t border-white/10 p-6">
-            <p className="text-center text-xs leading-relaxed text-white/70">
-              © 2026 All rights reserved.
-              <br />
-              <Link
-                href="/license"
-                className="underline transition-colors duration-300 hover:text-[#cfa93a]"
-              >
-                License
-              </Link>
-              {" | "}
-              <Link
-                href="/privacy-policy"
-                className="underline transition-colors duration-300 hover:text-[#cfa93a]"
-              >
-                Privacy Policy
-              </Link>
-              {" | "}
-              <Link
-                href="/cookie-policy"
-                className="underline transition-colors duration-300 hover:text-[#cfa93a]"
-              >
-                Cookie Policy
-              </Link>
-            </p>
+            <LegalNotice />
           </div>
         </div>
       </aside>
