@@ -34,7 +34,7 @@ def extract_store_participant_identity(participant: ParticipantDTO) -> dict[str,
         "game_name": game_name,
         "tag_line": tag_line or "RIOT",
         "summoner_level": participant.summoner_level,
-        "profile_icon_id": getattr(participant, "profile_icon", 29),
+        "profile_icon_id": participant.profile_icon,
     }
 
 
