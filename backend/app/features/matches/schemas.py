@@ -182,7 +182,6 @@ class TeamStats(BaseModel):
     kills: int = Field(default=0, description="Total team kills")
     deaths: int = Field(default=0, description="Total team deaths")
     assists: int = Field(default=0, description="Total team assists")
-    kda: float | None = Field(default=None, description="Team KDA")
     turrets: int | None = Field(
         default=None,
         description="Total turrets destroyed (null when timeline data is missing)",

@@ -8,7 +8,6 @@ export const PlayerSchema = z.object({
   platform: z.string(),
   summoner_level: z.number().int().optional().nullable(),
   profile_icon_id: z.number().optional().nullable(),
-  id: z.coerce.number().optional().nullable(),
   is_tracked: z.boolean().optional().default(false),
   analyzed_matches: z.number().int().optional().default(0),
   total_matches: z.number().int().optional().default(0),
@@ -74,12 +73,8 @@ export const MatchSchema = z.object({
   surrender: z.boolean().optional().nullable(),
   game_result: z.string().optional().nullable(),
   fully_analyzed: z.boolean(),
-  processing_error: z.string().optional().nullable(),
   created_at: z.string(),
   updated_at: z.string(),
-  game_start_datetime: z.string().optional().nullable(),
-  game_end_datetime: z.string().optional().nullable(),
-  patch_version: z.string().optional().nullable(),
 });
 
 // Runes Schema for participant data

@@ -230,19 +230,11 @@ def apply_voidgrub_fallback(
     )
 
 
-def calc_team_kda(kills: int, deaths: int, assists: int) -> float | None:
-    """Team KDA is None when the team has no kills, deaths, or assists."""
-    if deaths == 0:
-        return float(kills + assists) if kills + assists > 0 else None
-    return round((kills + assists) / deaths, 2)
-
-
 def compose_team_stats(stats: dict[str, Any]) -> TeamStats:
     return TeamStats(
         kills=stats["kills"],
         deaths=stats["deaths"],
         assists=stats["assists"],
-        kda=calc_team_kda(stats["kills"], stats["deaths"], stats["assists"]),
         turrets=stats["turrets"],
         inhibitors=stats["inhibitors"],
         dragons=stats["dragons"],
