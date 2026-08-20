@@ -43,12 +43,18 @@ export function formatScheduleInterval(schedule: string): string {
   return `${minutes} minute${minutes !== 1 ? "s" : ""}`;
 }
 
-export function formatDuration(seconds: number | null | undefined): string {
-  if (!seconds) return "N/A";
+/** The one duration grammar on the jobs pages: "12.3s" under a minute,
+ * "4m 5s" above. Callers keep their own absent-value guards. */
+export function formatSeconds(seconds: number): string {
   if (seconds < 60) return `${seconds.toFixed(1)}s`;
   const minutes = Math.floor(seconds / 60);
   const remainingSeconds = Math.floor(seconds % 60);
   return `${minutes}m ${remainingSeconds}s`;
+}
+
+export function formatDuration(seconds: number | null | undefined): string {
+  if (!seconds) return "N/A";
+  return formatSeconds(seconds);
 }
 
 // `style: "narrow"` is byte-identical to the old hand-built templates:
