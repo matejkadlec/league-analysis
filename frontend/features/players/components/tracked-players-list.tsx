@@ -6,6 +6,7 @@ import { Eye, EyeOff, Loader2, UserMinus, Users } from "lucide-react";
 import { ApiRequestError, unwrap, validatedGet } from "@/lib/core/api";
 
 import { untrackPlayer } from "../player-api";
+import { invalidateTrackingQueries } from "../player-query";
 import { useToast } from "@/lib/core/hooks";
 import {
   PlayerLeagueSchema,
@@ -228,16 +229,7 @@ export function TrackedPlayersList({
       return unwrap(await untrackPlayer(puuid));
     },
     onSuccess: (_, puuid) => {
-      void queryClient.invalidateQueries({
-        queryKey: ["tracked-players", userId],
-      });
-      void queryClient.invalidateQueries({
-        queryKey: ["player-context", userId],
-      });
-      void queryClient.invalidateQueries({
-        queryKey: ["tracking-status", userId, puuid],
-      });
-      void queryClient.invalidateQueries({ queryKey: ["player", puuid] });
+      invalidateTrackingQueries(queryClient, userId, puuid);
 
       const player = data?.find(
         (trackedPlayer) => trackedPlayer.puuid === puuid,

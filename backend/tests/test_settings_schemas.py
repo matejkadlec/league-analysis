@@ -6,6 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 from pydantic import BaseModel, ConfigDict, ValidationError
+from pydantic.alias_generators import to_camel
 
 from app.features.settings import schemas
 from app.features.settings.schemas import (
@@ -89,9 +90,7 @@ def test_strict_write_models_spell_every_alias_explicitly() -> None:
     # generator too, so checking it for None guards nothing at all; only
     # `alias_priority` separates a generated alias (1) from an explicit one (2).
     class _Probe(BaseModel):
-        model_config = ConfigDict(
-            alias_generator=schemas._to_camel_case, populate_by_name=False
-        )
+        model_config = ConfigDict(alias_generator=to_camel, populate_by_name=False)
 
         generated_field: int = 1
 
@@ -106,7 +105,7 @@ def test_strict_write_models_spell_every_alias_explicitly() -> None:
     for model in models:
         for name, info in model.model_fields.items():
             # A field whose camelCase form equals its own name is unambiguous.
-            if info.alias_priority != 2 and schemas._to_camel_case(name) != name:
+            if info.alias_priority != 2 and to_camel(name) != name:
                 missing.append(f"{model.__name__}.{name}")
 
     assert not missing, (
