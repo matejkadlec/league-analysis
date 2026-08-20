@@ -115,6 +115,8 @@ async def _ensure_riot_writer_maintenance_is_inactive(session: AsyncSession) -> 
 class MatchmakingAnalysisService:
     """Service for analyzing matchmaking fairness."""
 
+    MAX_RATE_LIMIT_ATTEMPTS = 10
+
     MATCHES_TO_ANALYZE = 10
     MATCHES_FOR_WINRATE = 10
     MIN_MATCHES_REQUIRED = 10
@@ -986,8 +988,7 @@ class MatchmakingAnalysisService:
         # inside one `fetch()` before this loop waits again. That is the
         # intended posture for this long-running analysis — prefer eventually
         # completing over failing fast.
-        max_retries = 10
-        for attempt in range(max_retries):
+        for attempt in range(self.MAX_RATE_LIMIT_ATTEMPTS):
             try:
                 result = await fetch()
                 await self._record_successful_api_call()
@@ -1002,6 +1003,8 @@ class MatchmakingAnalysisService:
                     attempt=attempt + 1,
                     **log_fields,
                 )
+                if attempt + 1 == self.MAX_RATE_LIMIT_ATTEMPTS:
+                    break
                 await self._wait_for_rate_limit(retry_after)
 
             except RiotAPIError as e:
@@ -1016,6 +1019,7 @@ class MatchmakingAnalysisService:
                 return None
 
         logger.warning("Riot call retries exhausted", operation=operation, **log_fields)
+        await self._clear_rate_limit_wait_if_active()
         self._raise_if_retries_exhausted(required=required)
         return None
 
