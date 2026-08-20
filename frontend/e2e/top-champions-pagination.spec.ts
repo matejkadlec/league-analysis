@@ -1,10 +1,19 @@
 import { expect, test } from "@playwright/test";
 
 import { acceptCookieBanner, seedAuthenticatedSession } from "./support/auth";
+import { qaUser, trackedPlayer } from "./support/fixtures";
 import { blockUpstreamRequests } from "./support/offline";
 
 const NOW = "2026-08-07T10:00:00.000Z";
 const PUUID = "test-player-puuid";
+
+const player = trackedPlayer(NOW, {
+  puuid: PUUID,
+  game_name: "QA",
+  tag_line: "TEST",
+  analyzed_matches: 40,
+  total_matches: 40,
+});
 
 const champions = Array.from({ length: 12 }, (_, index) => ({
   avg_assists: 4.5,
@@ -29,20 +38,9 @@ test.beforeEach(async ({ page }) => {
     if (path.endsWith("/auth/me")) {
       await route.fulfill({
         contentType: "application/json",
-        body: JSON.stringify({
-          id: 1,
-          email: "qa@example.test",
-          display_name: "QA User",
-          is_active: true,
-          is_admin: false,
-          email_verified: true,
-          email_verified_at: NOW,
-          last_login: NOW,
-          riot_account_connected: true,
-          puuid: PUUID,
-          created_at: NOW,
-          updated_at: NOW,
-        }),
+        body: JSON.stringify(
+          qaUser(NOW, { id: 1, riot_account_connected: true, puuid: PUUID }),
+        ),
       });
       return;
     }
@@ -50,17 +48,7 @@ test.beforeEach(async ({ page }) => {
     if (path.endsWith(`/players/${PUUID}`)) {
       await route.fulfill({
         contentType: "application/json",
-        body: JSON.stringify({
-          puuid: PUUID,
-          game_name: "QA",
-          tag_line: "TEST",
-          platform: "eun1",
-          is_tracked: true,
-          analyzed_matches: 40,
-          total_matches: 40,
-          created_at: NOW,
-          updated_at: NOW,
-        }),
+        body: JSON.stringify(player),
       });
       return;
     }
@@ -69,17 +57,7 @@ test.beforeEach(async ({ page }) => {
       await route.fulfill({
         contentType: "application/json",
         body: JSON.stringify({
-          current_player: {
-            puuid: PUUID,
-            game_name: "QA",
-            tag_line: "TEST",
-            platform: "eun1",
-            is_tracked: true,
-            analyzed_matches: 40,
-            total_matches: 40,
-            created_at: NOW,
-            updated_at: NOW,
-          },
+          current_player: player,
           tracked_players: [],
         }),
       });
@@ -90,17 +68,7 @@ test.beforeEach(async ({ page }) => {
       await route.fulfill({
         contentType: "application/json",
         body: JSON.stringify({
-          current_player: {
-            puuid: PUUID,
-            game_name: "QA",
-            tag_line: "TEST",
-            platform: "eun1",
-            is_tracked: true,
-            analyzed_matches: 40,
-            total_matches: 40,
-            created_at: NOW,
-            updated_at: NOW,
-          },
+          current_player: player,
           tracked_players: [],
         }),
       });

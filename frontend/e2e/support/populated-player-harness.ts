@@ -1,6 +1,7 @@
 import { expect, type Page } from "@playwright/test";
 
 import { acceptCookieBanner, seedAuthenticatedSession } from "./auth";
+import { qaUser, trackedPlayer } from "./fixtures";
 import { blockUpstreamRequests } from "./offline";
 
 /**
@@ -31,22 +32,18 @@ const CHAMPIONS = [
 const LANES = ["TOP", "JUNGLE", "MIDDLE", "BOTTOM", "UTILITY"] as const;
 
 export const player = {
-  puuid: PUUID,
-  // Riot IDs run to 16 characters, and a long one is what pushes a name column
-  // out; a short fixture name would hide the very thing being measured.
-  game_name: "Longest Name Here",
-  tag_line: "EUNE1",
-  platform: "eun1",
+  ...trackedPlayer(NOW, {
+    puuid: PUUID,
+    // Riot IDs run to 16 characters, and a long one is what pushes a name
+    // column out; a short fixture name would hide the very thing being
+    // measured.
+    game_name: "Longest Name Here",
+    tag_line: "EUNE1",
+    analyzed_matches: 126,
+    total_matches: 126,
+  }),
   summoner_level: 412,
   profile_icon_id: 4568,
-  is_tracked: true,
-  analyzed_matches: 126,
-  total_matches: 126,
-  profile_synced_at: NOW,
-  league_synced_at: NOW,
-  match_synced_at: NOW,
-  created_at: NOW,
-  updated_at: NOW,
 };
 
 const league = {
@@ -265,20 +262,7 @@ export async function installPopulatedPlayerMocks(page: Page): Promise<void> {
       });
 
     if (path.endsWith("/auth/me")) {
-      return json({
-        id: 7,
-        email: "qa@example.test",
-        display_name: "QA User",
-        is_active: true,
-        is_admin: false,
-        email_verified: true,
-        email_verified_at: NOW,
-        last_login: NOW,
-        riot_account_connected: false,
-        puuid: null,
-        created_at: NOW,
-        updated_at: NOW,
-      });
+      return json(qaUser(NOW));
     }
 
     if (

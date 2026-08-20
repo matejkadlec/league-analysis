@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 import { seedAuthenticatedSession } from "./support/auth";
+import { qaUser, trackedPlayer } from "./support/fixtures";
 import { blockUpstreamRequests } from "./support/offline";
 
 const NOW = "2026-08-09T10:00:00.000Z";
@@ -12,91 +13,20 @@ const FIFTH_PUUID = "fifth-player-puuid";
 const SIXTH_PUUID = "sixth-player-puuid";
 const ANALYZED_PUUID = "analyzed-player-puuid";
 
+const player = (
+  puuid: string,
+  game_name: string,
+  tag_line: string,
+  platform = "eun1",
+) => trackedPlayer(NOW, { puuid, game_name, tag_line, platform });
+
 const players = {
-  [CURRENT_PUUID]: {
-    puuid: CURRENT_PUUID,
-    game_name: "Current",
-    tag_line: "ONE",
-    platform: "eun1",
-    is_tracked: true,
-    analyzed_matches: 0,
-    total_matches: 0,
-    profile_synced_at: NOW,
-    league_synced_at: NOW,
-    match_synced_at: NOW,
-    created_at: NOW,
-    updated_at: NOW,
-  },
-  [RECENT_PUUID]: {
-    puuid: RECENT_PUUID,
-    game_name: "Recent",
-    tag_line: "TWO",
-    platform: "euw1",
-    is_tracked: true,
-    analyzed_matches: 0,
-    total_matches: 0,
-    profile_synced_at: NOW,
-    league_synced_at: NOW,
-    match_synced_at: NOW,
-    created_at: NOW,
-    updated_at: NOW,
-  },
-  [THIRD_PUUID]: {
-    puuid: THIRD_PUUID,
-    game_name: "Third",
-    tag_line: "THR",
-    platform: "eun1",
-    is_tracked: true,
-    analyzed_matches: 0,
-    total_matches: 0,
-    profile_synced_at: NOW,
-    league_synced_at: NOW,
-    match_synced_at: NOW,
-    created_at: NOW,
-    updated_at: NOW,
-  },
-  [FOURTH_PUUID]: {
-    puuid: FOURTH_PUUID,
-    game_name: "Fourth",
-    tag_line: "FOR",
-    platform: "eun1",
-    is_tracked: true,
-    analyzed_matches: 0,
-    total_matches: 0,
-    profile_synced_at: NOW,
-    league_synced_at: NOW,
-    match_synced_at: NOW,
-    created_at: NOW,
-    updated_at: NOW,
-  },
-  [FIFTH_PUUID]: {
-    puuid: FIFTH_PUUID,
-    game_name: "Fifth",
-    tag_line: "FIV",
-    platform: "eun1",
-    is_tracked: true,
-    analyzed_matches: 0,
-    total_matches: 0,
-    profile_synced_at: NOW,
-    league_synced_at: NOW,
-    match_synced_at: NOW,
-    created_at: NOW,
-    updated_at: NOW,
-  },
-  [SIXTH_PUUID]: {
-    puuid: SIXTH_PUUID,
-    game_name: "Sixth",
-    tag_line: "SIX",
-    platform: "eun1",
-    is_tracked: true,
-    analyzed_matches: 0,
-    total_matches: 0,
-    profile_synced_at: NOW,
-    league_synced_at: NOW,
-    match_synced_at: NOW,
-    created_at: NOW,
-    updated_at: NOW,
-  },
+  [CURRENT_PUUID]: player(CURRENT_PUUID, "Current", "ONE"),
+  [RECENT_PUUID]: player(RECENT_PUUID, "Recent", "TWO", "euw1"),
+  [THIRD_PUUID]: player(THIRD_PUUID, "Third", "THR"),
+  [FOURTH_PUUID]: player(FOURTH_PUUID, "Fourth", "FOR"),
+  [FIFTH_PUUID]: player(FIFTH_PUUID, "Fifth", "FIV"),
+  [SIXTH_PUUID]: player(SIXTH_PUUID, "Sixth", "SIX"),
 };
 
 const analyzedPlayer = {
@@ -130,20 +60,7 @@ test("keeps player routes, sidebar switching, and dialog scroll lock determinist
     if (path.endsWith("/auth/me")) {
       await route.fulfill({
         contentType: "application/json",
-        body: JSON.stringify({
-          id: 7,
-          email: "qa@example.test",
-          display_name: "QA User",
-          is_active: true,
-          is_admin: false,
-          email_verified: true,
-          email_verified_at: NOW,
-          last_login: NOW,
-          riot_account_connected: false,
-          puuid: null,
-          created_at: NOW,
-          updated_at: NOW,
-        }),
+        body: JSON.stringify(qaUser(NOW)),
       });
       return;
     }
