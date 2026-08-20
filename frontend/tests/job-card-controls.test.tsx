@@ -34,6 +34,7 @@ const JOB: JobConfiguration = {
   is_stopping: false,
   is_force_stopping: false,
   is_test_running: false,
+  is_test_paused: false,
   is_test_stopping: false,
   is_test_force_stopping: false,
   config_json: null,
@@ -160,18 +161,37 @@ describe("the one button that does five different things", () => {
   });
 
   it.each([
-    ["the scheduled job", { is_running: true }, "/jobs/7/resume"],
+    ["the scheduled job", { is_running: true, is_paused: true }, "/jobs/7/resume"],
     [
+      // The test run resumes on its own flag; the scheduled run's is_paused
+      // must not be what routes a click to /test/resume.
       "the test run",
-      { is_running: true, is_test_running: true },
+      { is_test_running: true, is_test_paused: true },
       "/jobs/7/test/resume",
     ],
   ])("resumes %s when it is paused", async (_label, flags, path) => {
-    const { result } = renderControls({ ...flags, is_paused: true });
+    const { result } = renderControls(flags);
 
     act(() => result.current.handleMainAction());
 
     await waitFor(() => expect(requestedPaths()).toEqual([path]));
+  });
+
+  it("sees a paused test run even while the scheduled job reports unpaused", async () => {
+    // Pause is per run: `is_paused` belongs to the scheduled run and
+    // `is_test_paused` to the test run. Deriving the card's paused state
+    // from `is_paused` alone leaves a paused test run looking active, with
+    // a stop button where the resume belongs.
+    const { result } = renderControls({
+      is_test_running: true,
+      is_test_paused: true,
+    });
+
+    act(() => result.current.handleMainAction());
+
+    await waitFor(() =>
+      expect(requestedPaths()).toEqual(["/jobs/7/test/resume"]),
+    );
   });
 
   // handleMainAction's paused branch now delegates to handlePauseResume, so
@@ -195,8 +215,17 @@ describe("the one button that does five different things", () => {
     [
       "resumes",
       "the test run",
-      { is_running: true, is_test_running: true, is_paused: true },
+      { is_test_running: true, is_test_paused: true },
       "/jobs/7/test/resume",
+    ],
+    [
+      // A paused scheduled run stays reachable while an unpaused test run
+      // is live — routing by isTestRunning alone sent this to /test/resume
+      // and left the scheduled run parked behind every test run.
+      "resumes",
+      "the paused scheduled run behind a live test run",
+      { is_running: true, is_paused: true, is_test_running: true },
+      "/jobs/7/resume",
     ],
   ])("%s %s from the pause control", async (_verb, _label, flags, path) => {
     const { result } = renderControls(flags);

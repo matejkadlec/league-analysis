@@ -45,7 +45,6 @@ class JobConfigurationUpdate(BaseModel):
     description: str | None = Field(default=None)
     schedule: str | None = Field(default=None, min_length=1, max_length=256)
     is_active: bool | None = None
-    is_paused: bool | None = None
     config_json: dict[str, Any] | None = None
 
 
@@ -70,6 +69,10 @@ class JobConfigurationResponse(JobConfigurationBase):
     is_test_running: bool = Field(
         default=False,
         description="Whether a test run is currently active for this job",
+    )
+    is_test_paused: bool = Field(
+        default=False,
+        description="Whether the test run is paused",
     )
     is_test_stopping: bool = Field(
         default=False,

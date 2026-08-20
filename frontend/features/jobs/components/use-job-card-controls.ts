@@ -39,7 +39,10 @@ export function useJobCardControls(
   }
 
   const isAnyRunning = isRunning || isTestRunning;
-  const isAnyPaused = isAnyRunning && job.is_paused;
+  // Pause is per run: the scheduled run and a test run each carry their own
+  // flag, mirroring how the stopping flags below are paired.
+  const isAnyPaused =
+    (isRunning && job.is_paused) || (isTestRunning && job.is_test_paused);
   const isAnyStopping =
     (isRunning && job.is_stopping) || (isTestRunning && job.is_test_stopping);
   const isAnyForceStopping =
@@ -334,7 +337,10 @@ export function useJobCardControls(
 
   const handlePauseResume = () => {
     if (isAnyPaused) {
-      if (isTestRunning) {
+      // Resume the run whose own flag is set — routing by isTestRunning
+      // alone would resume the (unpaused) test run and leave a paused
+      // scheduled run unreachable for as long as any test run exists.
+      if (isTestRunning && job.is_test_paused) {
         testResumeMutation.mutate();
       } else {
         resumeMutation.mutate();

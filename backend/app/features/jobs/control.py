@@ -13,6 +13,7 @@ class RuntimeJobControl:
     task: asyncio.Task[None] | None = None
     stop_requested: bool = False
     force_stop_requested: bool = False
+    paused: bool = False
 
 
 _runtime_controls: dict[int, RuntimeJobControl] = {}
@@ -40,6 +41,19 @@ def unregister_runtime_control(job_config_id: int) -> None:
     _runtime_controls.pop(job_config_id, None)
 
 
+def set_runtime_job_paused(job_config_id: int, paused: bool) -> bool:
+    """Pause or resume one run. Registry-scoped, so the flag dies with the run.
+
+    Returns:
+        bool: True when runtime control exists and the flag was applied.
+    """
+    control = _runtime_controls.get(job_config_id)
+    if control is None:
+        return False
+    control.paused = paused
+    return True
+
+
 def is_runtime_job_running(job_config_id: int) -> bool:
     """Return True if runtime control exists for the given job configuration."""
     return job_config_id in _runtime_controls
@@ -56,6 +70,10 @@ def request_job_stop(job_config_id: int, force: bool = False) -> bool:
         return False
 
     control.stop_requested = True
+    # A stopping run is no longer paused: leaving the flag set makes the
+    # control snapshot report paused-and-stopping, and the job card's
+    # paused-first precedence would show "Resume" for a run already exiting.
+    control.paused = False
     if force:
         control.force_stop_requested = True
         if control.task and not control.task.done():
@@ -70,12 +88,14 @@ def get_runtime_control_snapshot(job_config_id: int) -> dict[str, bool]:
     if control is None:
         return {
             "is_running": False,
+            "is_paused": False,
             "stop_requested": False,
             "force_stop_requested": False,
         }
 
     return {
         "is_running": True,
+        "is_paused": control.paused,
         "stop_requested": control.stop_requested,
         "force_stop_requested": control.force_stop_requested,
     }

@@ -307,7 +307,7 @@ class BaseJob(ABC):
         """Load fresh job configuration from database.
 
         Expires any cached ORM state first so changes committed by other
-        sessions (e.g. the API router setting is_paused) are visible.
+        sessions (e.g. a config update from the API router) are visible.
 
         Args:
             db: Database session for querying configuration.
@@ -723,8 +723,12 @@ class BaseJob(ABC):
             )
 
     async def check_control_state(self, db: AsyncSession) -> None:
-        """Check pause/stop state and block while paused."""
-        await self._refresh_config(db)
+        """Check pause/stop state and block while paused.
+
+        Reads only the in-memory runtime registry — jobs call this once per
+        work item (and the test runner once per second), so a DB round-trip
+        here multiplies into thousands of SELECTs per long run.
+        """
         runtime_state = get_runtime_control_snapshot(self.runtime_key)
 
         if runtime_state["force_stop_requested"]:
@@ -733,7 +737,7 @@ class BaseJob(ABC):
         if runtime_state["stop_requested"]:
             raise JobStopSignal(force=False)
 
-        if not self.job_config or not self.job_config.is_paused:
+        if not runtime_state["is_paused"]:
             return
 
         logger.info(
@@ -747,7 +751,6 @@ class BaseJob(ABC):
 
         while True:
             await asyncio.sleep(1)
-            await self._refresh_config(db)
             runtime_state = get_runtime_control_snapshot(self.runtime_key)
 
             if runtime_state["force_stop_requested"]:
@@ -756,7 +759,7 @@ class BaseJob(ABC):
             if runtime_state["stop_requested"]:
                 raise JobStopSignal(force=False)
 
-            if self.job_config and not self.job_config.is_paused:
+            if not runtime_state["is_paused"]:
                 logger.info(
                     "Job resumed",
                     job_config_id=self.job_config_id,

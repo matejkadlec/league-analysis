@@ -13,6 +13,7 @@ from .control import (
     is_runtime_job_running,
     request_job_stop,
     runtime_control_key,
+    set_runtime_job_paused,
 )
 from .maintenance import (
     lock_riot_writer_tables,
@@ -73,8 +74,8 @@ class JobService:
         response.is_test_running = test_runtime_state["is_running"]
         response.is_test_stopping = test_runtime_state["stop_requested"]
         response.is_test_force_stopping = test_runtime_state["force_stop_requested"]
-        # Re-read is_paused from the ORM model to reflect current DB state
-        response.is_paused = bool(job.is_paused)
+        response.is_paused = runtime_state["is_paused"]
+        response.is_test_paused = test_runtime_state["is_paused"]
 
         return response
 
@@ -393,17 +394,12 @@ class JobService:
 
     @staticmethod
     def _idle_control_response(
-        job: JobConfiguration,
         *,
         test_run: bool,
         is_stopping: bool = False,
         is_force_stopping: bool = False,
     ) -> JobControlActionResponse:
-        """The control response when no matching run is active.
-
-        The shared flag describes the scheduled run; a test-run response
-        must not report the scheduled run's pause as its own.
-        """
+        """The control response when no matching run is active."""
         return JobControlActionResponse(
             success=False,
             message=(
@@ -412,7 +408,7 @@ class JobService:
                 else "Job is not running"
             ),
             is_running=False,
-            is_paused=False if test_run else bool(job.is_paused),
+            is_paused=False,
             is_stopping=is_stopping,
             is_force_stopping=is_force_stopping,
         )
@@ -426,27 +422,24 @@ class JobService:
     ) -> JobControlActionResponse | None:
         """Pause or resume a running job execution (or its test run).
 
-        Test runs share the job's configuration row but live under the
-        negated config ID in the runtime control registry.
+        Pause lives on the run's own runtime-control entry (test runs under
+        the negated config ID), so a test run's pause and a concurrent
+        scheduled run's pause cannot interfere — and the flag dies with the
+        run instead of needing a clear-on-stop or a startup reset.
         """
         job = await self.get_job_configuration_model(job_id)
         if not job:
             return None
 
         runtime_key = runtime_control_key(job.id, test_run=test_run)
+        was_applied = set_runtime_job_paused(runtime_key, paused)
         runtime_state = get_runtime_control_snapshot(runtime_key)
-        if not runtime_state["is_running"]:
+        if not was_applied:
             return self._idle_control_response(
-                job,
                 test_run=test_run,
                 is_stopping=runtime_state["stop_requested"],
                 is_force_stopping=runtime_state["force_stop_requested"],
             )
-
-        job.is_paused = paused
-        job.updated_at = datetime.now(UTC)
-        await self.db.commit()
-        await self.db.refresh(job)
 
         action = "paused" if paused else "resumed"
         subject = f"Test run for '{job.name}'" if test_run else f"Job '{job.name}'"
@@ -454,7 +447,7 @@ class JobService:
             success=True,
             message=f"{subject} {action}",
             is_running=True,
-            is_paused=bool(job.is_paused),
+            is_paused=paused,
             is_stopping=runtime_state["stop_requested"],
             is_force_stopping=runtime_state["force_stop_requested"],
         )
@@ -476,27 +469,13 @@ class JobService:
         runtime_state = get_runtime_control_snapshot(runtime_key)
 
         if not was_applied:
-            return self._idle_control_response(job, test_run=test_run)
-
-        # Ensure paused flag does not remain stuck when stopping. The flag
-        # lives on the shared configuration row, so a paused-then-stopped
-        # test run would otherwise block the next scheduled execution too.
-        # But when a scheduled run is live right now, the pause is its:
-        # stopping a concurrent test run must not silently resume it.
-        # ponytail: shared-row coupling; a per-runtime-key pause field on
-        # RuntimeJobControl is the real fix if this grows more cases.
-        flag_belongs_to_live_scheduled_run = test_run and is_runtime_job_running(job.id)
-        if job.is_paused and not flag_belongs_to_live_scheduled_run:
-            job.is_paused = False
-            job.updated_at = datetime.now(UTC)
-            await self.db.commit()
-            await self.db.refresh(job)
+            return self._idle_control_response(test_run=test_run)
 
         return JobControlActionResponse(
             success=True,
             message=_stop_request_message(job.name, force=force, test_run=test_run),
             is_running=runtime_state["is_running"],
-            is_paused=False if test_run else bool(job.is_paused),
+            is_paused=runtime_state["is_paused"],
             is_stopping=runtime_state["stop_requested"],
             is_force_stopping=runtime_state["force_stop_requested"],
         )

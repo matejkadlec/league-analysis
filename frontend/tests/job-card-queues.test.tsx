@@ -36,6 +36,7 @@ const job: JobConfiguration = {
   is_stopping: false,
   is_force_stopping: false,
   is_test_running: false,
+  is_test_paused: false,
   is_test_stopping: false,
   is_test_force_stopping: false,
   config_json: { enabled_queue_ids: [] },
