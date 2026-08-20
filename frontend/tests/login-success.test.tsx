@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 
-import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { act, cleanup, screen, waitFor } from "@testing-library/react";
+
+import { renderWithQueryClient } from "./render-support";
 import { useEffect } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -87,16 +88,11 @@ describe("signing in", () => {
       );
     });
 
-    const queryClient = new QueryClient({
-      defaultOptions: { queries: { retry: false } },
-    });
-    render(
-      <QueryClientProvider client={queryClient}>
-        <AuthProvider>
-          <LoginProbe />
-          <AuthGate>protected content</AuthGate>
-        </AuthProvider>
-      </QueryClientProvider>,
+    renderWithQueryClient(
+      <AuthProvider>
+        <LoginProbe />
+        <AuthGate>protected content</AuthGate>
+      </AuthProvider>,
     );
     await waitFor(() => expect(startLogin).not.toBeNull());
 

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { act, cleanup, render, waitFor } from "@testing-library/react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { renderWithQueryClient } from "./render-support";
 import { useEffect } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -40,19 +40,11 @@ function AuthStateProbe() {
 }
 
 function renderProvider() {
-  const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
-  });
-  return {
-    queryClient,
-    ...render(
-      <QueryClientProvider client={queryClient}>
-        <AuthProvider>
-          <AuthStateProbe />
-        </AuthProvider>
-      </QueryClientProvider>,
-    ),
-  };
+  return renderWithQueryClient(
+    <AuthProvider>
+      <AuthStateProbe />
+    </AuthProvider>,
+  );
 }
 
 function clearCookies() {

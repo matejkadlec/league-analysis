@@ -1,15 +1,9 @@
 // @vitest-environment jsdom
 
 import axios from "axios";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import {
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-  within,
-} from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
+
+import { renderWithQueryClient } from "./render-support";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -70,17 +64,8 @@ function hasDetailedRequest(expectedParams: Record<string, unknown>): boolean {
   );
 }
 
-function renderHistory(): QueryClient {
-  const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
-  });
-
-  render(
-    <QueryClientProvider client={queryClient}>
-      <MatchHistory puuid="player-puuid" />
-    </QueryClientProvider>,
-  );
-  return queryClient;
+function renderHistory() {
+  return renderWithQueryClient(<MatchHistory puuid="player-puuid" />).queryClient;
 }
 
 describe("Match History controls", () => {

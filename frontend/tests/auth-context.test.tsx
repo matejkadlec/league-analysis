@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 
 import { useEffect } from "react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, cleanup, render } from "@testing-library/react";
+import { act, cleanup } from "@testing-library/react";
+
+import { renderWithQueryClient } from "./render-support";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { refreshAccessToken, removeAuthTokens, routerPush } = vi.hoisted(() => ({
@@ -59,16 +60,10 @@ describe("AuthProvider login timeout", () => {
   });
 
   function renderAuthProvider() {
-    const queryClient = new QueryClient({
-      defaultOptions: { queries: { retry: false } },
-    });
-
-    render(
-      <QueryClientProvider client={queryClient}>
-        <AuthProvider>
-          <AuthProbe onLogin={(nextLogin) => (login = nextLogin)} />
-        </AuthProvider>
-      </QueryClientProvider>,
+    renderWithQueryClient(
+      <AuthProvider>
+        <AuthProbe onLogin={(nextLogin) => (login = nextLogin)} />
+      </AuthProvider>,
     );
 
     if (!login) {
@@ -226,15 +221,10 @@ describe("AuthProvider logout", () => {
 
   function renderLogout(): AuthContextType["logout"] {
     let logout: AuthContextType["logout"] | undefined;
-    const queryClient = new QueryClient({
-      defaultOptions: { queries: { retry: false } },
-    });
-    render(
-      <QueryClientProvider client={queryClient}>
-        <AuthProvider>
-          <LogoutProbe onLogout={(next) => (logout = next)} />
-        </AuthProvider>
-      </QueryClientProvider>,
+    renderWithQueryClient(
+      <AuthProvider>
+        <LogoutProbe onLogout={(next) => (logout = next)} />
+      </AuthProvider>,
     );
     if (!logout) {
       throw new Error("Auth logout callback was not initialized");

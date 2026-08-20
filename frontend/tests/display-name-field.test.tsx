@@ -1,13 +1,8 @@
 // @vitest-environment jsdom
 
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import {
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+
+import { renderWithQueryClient } from "./render-support";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { validatedPatch, checkAuth, toast } = vi.hoisted(() => ({
@@ -42,13 +37,8 @@ vi.mock("@/features/auth", async (importOriginal) => ({
 import { DisplayNameField } from "@/app/settings/display-name-field";
 
 function renderField() {
-  const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-  });
-  render(
-    <QueryClientProvider client={queryClient}>
-      <DisplayNameField />
-    </QueryClientProvider>,
+  const { queryClient } = renderWithQueryClient(
+    <DisplayNameField />,
   );
   return queryClient;
 }

@@ -1,6 +1,5 @@
 // @vitest-environment jsdom
 
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -40,6 +39,7 @@ import {
   PlayerContextProvider,
   usePlayerContext,
 } from "@/features/players/context/player-context";
+import { renderHookWithQueryClient } from "./render-support";
 
 function player(puuid: string, name: string) {
   return {
@@ -93,17 +93,9 @@ function holdThePut() {
 }
 
 function renderContext() {
-  const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  return renderHookWithQueryClient(() => usePlayerContext(), {
+    wrap: (children) => <PlayerContextProvider>{children}</PlayerContextProvider>,
   });
-  const view = renderHook(() => usePlayerContext(), {
-    wrapper: ({ children }) => (
-      <QueryClientProvider client={queryClient}>
-        <PlayerContextProvider>{children}</PlayerContextProvider>
-      </QueryClientProvider>
-    ),
-  });
-  return { ...view, queryClient };
 }
 
 beforeEach(() => {

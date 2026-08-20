@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, screen, waitFor } from "@testing-library/react";
+
+import { renderWithQueryClient } from "./render-support";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { validatedGet } = vi.hoisted(() => ({
@@ -37,14 +38,8 @@ vi.mock("sonner", () => ({
 import { TrackedPlayersList } from "@/features/players/components/tracked-players-list";
 
 function renderList() {
-  const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
-  });
-
-  render(
-    <QueryClientProvider client={queryClient}>
-      <TrackedPlayersList selectedPlayerPuuid="player-1" />
-    </QueryClientProvider>,
+  renderWithQueryClient(
+    <TrackedPlayersList selectedPlayerPuuid="player-1" />,
   );
 }
 

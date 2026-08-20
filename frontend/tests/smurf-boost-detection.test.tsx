@@ -4,14 +4,9 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import {
-  cleanup,
-  render,
-  screen,
-  waitFor,
-  within,
-} from "@testing-library/react";
+import { cleanup, screen, waitFor, within } from "@testing-library/react";
+
+import { renderWithQueryClient } from "./render-support";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -167,16 +162,8 @@ function shortHistory() {
 }
 
 function renderCard(puuid = "test-puuid") {
-  const queryClient = new QueryClient({
-    defaultOptions: {
-      queries: { retry: false },
-      mutations: { retry: false },
-    },
-  });
-  render(
-    <QueryClientProvider client={queryClient}>
-      <SmurfBoostDetection puuid={puuid} />
-    </QueryClientProvider>,
+  const { queryClient } = renderWithQueryClient(
+    <SmurfBoostDetection puuid={puuid} />,
   );
   return queryClient;
 }

@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, screen, waitFor } from "@testing-library/react";
+
+import { renderWithQueryClient } from "./render-support";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { getLatestCompletedMatchmakingAnalysis } = vi.hoisted(() => ({
@@ -47,15 +48,9 @@ const EVEN = {
 };
 
 function renderResults() {
-  const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
-  });
-  const view = render(
-    <QueryClientProvider client={queryClient}>
-      <MatchmakingAnalysisResults puuid="puuid" analyzedPlayerLabel="Faker" />
-    </QueryClientProvider>,
+  return renderWithQueryClient(
+    <MatchmakingAnalysisResults puuid="puuid" analyzedPlayerLabel="Faker" />,
   );
-  return { ...view, queryClient };
 }
 
 beforeEach(() => {

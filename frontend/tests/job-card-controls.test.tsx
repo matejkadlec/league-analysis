@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
+import { act, cleanup, waitFor } from "@testing-library/react";
+import { renderHookWithQueryClient } from "./render-support";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { validatedPost, toast } = vi.hoisted(() => ({
@@ -72,21 +72,9 @@ function renderControls(
   lastExecutionId: number | null = null,
   recentExecutions: JobExecution[] = [],
 ) {
-  const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-  });
-  const view = renderHook(
-    () =>
-      useJobCardControls({ ...JOB, ...job }, lastExecutionId, recentExecutions),
-    {
-      wrapper: ({ children }) => (
-        <QueryClientProvider client={queryClient}>
-          {children}
-        </QueryClientProvider>
-      ),
-    },
+  return renderHookWithQueryClient(() =>
+    useJobCardControls({ ...JOB, ...job }, lastExecutionId, recentExecutions),
   );
-  return { ...view, queryClient };
 }
 
 beforeEach(() => {
@@ -345,23 +333,10 @@ describe("the manually triggered run's finishing notice", () => {
   // `renderHook` starts with `awaitingManualRun` false and every assertion
   // below would pass against any implementation at all.
   async function triggerThenReport(executions: JobExecution[]) {
-    const queryClient = new QueryClient({
-      defaultOptions: {
-        queries: { retry: false },
-        mutations: { retry: false },
-      },
-    });
-    const { result, rerender } = renderHook(
+    const { result, rerender } = renderHookWithQueryClient(
       ({ recent }: { recent: JobExecution[] }) =>
         useJobCardControls(JOB, 99, recent),
-      {
-        initialProps: { recent: [] as JobExecution[] },
-        wrapper: ({ children }) => (
-          <QueryClientProvider client={queryClient}>
-            {children}
-          </QueryClientProvider>
-        ),
-      },
+      { initialProps: { recent: [] as JobExecution[] } },
     );
 
     await act(async () => {

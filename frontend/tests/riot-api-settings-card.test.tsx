@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
 import {
   cleanup,
   fireEvent,
@@ -38,6 +38,7 @@ import { RiotApiSettingsCard } from "@/app/settings/riot-api-settings-card";
 import { appToast } from "@/lib/core/hooks";
 import { createProvidersQueryClient } from "@/components/providers";
 import { RIOT_CREDENTIAL_HEALTH_UPDATED_EVENT } from "@/lib/core/riot-credential-health-events";
+import { renderWithQueryClient } from "./render-support";
 
 /**
  * A key of the right shape, assembled rather than written out.
@@ -94,15 +95,7 @@ function respondWith(options: {
 }
 
 function renderCard() {
-  const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-  });
-  render(
-    <QueryClientProvider client={queryClient}>
-      <RiotApiSettingsCard />
-    </QueryClientProvider>,
-  );
-  return queryClient;
+  return renderWithQueryClient(<RiotApiSettingsCard />).queryClient;
 }
 
 async function typeKey(value: string) {

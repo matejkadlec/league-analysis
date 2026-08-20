@@ -1,13 +1,6 @@
 // @vitest-environment jsdom
 
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import {
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Player } from "@/lib/core/schemas";
@@ -56,6 +49,7 @@ vi.mock("next/image", () => ({
 }));
 
 import { PlayerCard } from "@/features/players/components/player-card";
+import { renderWithQueryClient } from "./render-support";
 
 function player(overrides: Partial<Player> = {}): Player {
   return {
@@ -143,17 +137,9 @@ function failLeagueWith(status: number) {
 }
 
 function renderCard(p: Player = player(), onRefreshAll?: () => void) {
-  const client = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
-  });
-  return {
-    ...render(
-      <QueryClientProvider client={client}>
-        <PlayerCard player={p} {...(onRefreshAll && { onRefreshAll })} />
-      </QueryClientProvider>,
-    ),
-    client,
-  };
+  return renderWithQueryClient(
+    <PlayerCard player={p} {...(onRefreshAll && { onRefreshAll })} />,
+  );
 }
 
 function profileIcon() {
@@ -198,10 +184,10 @@ describe("what the card says about the player", () => {
     // `error`. Swallowing it to `null` renders the unranked branch instead,
     // which reads as a fact about the player rather than about the request.
     failLeagueWith(500);
-    const { client } = renderCard();
+    const { queryClient } = renderCard();
 
     await waitFor(() => {
-      expect(client.getQueryState(["player-league", "p-1"])?.status).toBe(
+      expect(queryClient.getQueryState(["player-league", "p-1"])?.status).toBe(
         "error",
       );
     });
@@ -266,14 +252,7 @@ describe("the profile icon", () => {
     fireEvent.error(profileIcon());
     expect(profileIcon().src).toContain("/29.png");
 
-    const client = new QueryClient({
-      defaultOptions: { queries: { retry: false } },
-    });
-    view.rerender(
-      <QueryClientProvider client={client}>
-        <PlayerCard player={player({ profile_icon_id: 456 })} />
-      </QueryClientProvider>,
-    );
+    view.rerender(<PlayerCard player={player({ profile_icon_id: 456 })} />);
     expect(profileIcon().src).toContain("/img/profileicon/456.png");
   });
 
