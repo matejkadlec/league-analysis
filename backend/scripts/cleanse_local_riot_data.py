@@ -60,7 +60,6 @@ PRESERVED_TABLES = (
     ("auth", "user_cookie_consents"),
     ("auth", "subject_counts"),
     ("auth", "join_us_contact_submissions"),
-    ("core", "rate_limit_state"),
     ("core", "riot_api_keys"),
     ("jobs", "job_configurations"),
     ("jobs", "job_executions"),

@@ -37,28 +37,68 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    """Recreate the table as the baseline declared it, without its rows."""
+    """Recreate the table as revision 0017 left it, without its rows.
+
+    Not the baseline shape: 0014 renamed the unique constraint from
+    `rate_limit_state_component_key` to `uq_rate_limit_state_component`, and
+    rebuilding the older name would strand 0014's own downgrade -- it drops
+    `uq_rate_limit_state_component`, which would not be there.
+    """
     op.create_table(
         "rate_limit_state",
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
-        sa.Column("component", sa.String(length=50), nullable=False),
-        sa.Column("priority", sa.Integer(), server_default="3", nullable=False),
-        sa.Column("requests_made", sa.Integer(), server_default="0", nullable=False),
+        sa.Column(
+            "component",
+            sa.String(length=50),
+            nullable=False,
+            comment=(
+                "Component name: MATCH_FETCHER, PLAYER_UPDATER, MATCHMAKING_ANALYSIS"
+            ),
+        ),
+        sa.Column(
+            "priority",
+            sa.Integer(),
+            server_default="3",
+            nullable=False,
+            comment=(
+                "Priority level: 1=highest (PLAYER_UPDATER), 2=medium "
+                "(MATCH_FETCHER), 3=lowest (MATCHMAKING_ANALYSIS)"
+            ),
+        ),
+        sa.Column(
+            "requests_made",
+            sa.Integer(),
+            server_default="0",
+            nullable=False,
+            comment="Number of requests made in current window",
+        ),
         sa.Column(
             "window_start",
             sa.DateTime(timezone=True),
             server_default=sa.text("now()"),
             nullable=False,
+            comment="Start time of current rate limit window",
         ),
         sa.Column(
-            "window_size_seconds", sa.Integer(), server_default="120", nullable=False
+            "window_size_seconds",
+            sa.Integer(),
+            server_default="120",
+            nullable=False,
+            comment="Size of rate limit window in seconds (Riot: 120s)",
         ),
-        sa.Column("max_requests", sa.Integer(), server_default="100", nullable=False),
+        sa.Column(
+            "max_requests",
+            sa.Integer(),
+            server_default="100",
+            nullable=False,
+            comment="Maximum requests per window (Riot dev: 100)",
+        ),
         sa.Column(
             "is_waiting",
             sa.Boolean(),
             server_default=sa.text("false"),
             nullable=False,
+            comment="True if this component is waiting for higher priority components",
         ),
         sa.Column(
             "created_at",
@@ -73,7 +113,7 @@ def downgrade() -> None:
             nullable=False,
         ),
         sa.PrimaryKeyConstraint("id", name="rate_limit_state_pkey"),
-        sa.UniqueConstraint("component", name="rate_limit_state_component_key"),
+        sa.UniqueConstraint("component", name="uq_rate_limit_state_component"),
         schema="core",
         comment="Central rate limit state for all Riot API components",
     )

@@ -51,8 +51,6 @@ class PlayerUpdaterJob(BaseJob):
                     await self._update_player_profile(
                         db, player, player_service, riot_client
                     )
-                except RateLimitSignal:
-                    raise
                 except RateLimitError as error:
                     raise RateLimitSignal(
                         retry_after=error.retry_after,

@@ -45,16 +45,6 @@ class _SessionStub:
         return None
 
 
-class _FakeClient:
-    """Async-context stand-in for the tracked Riot client."""
-
-    async def __aenter__(self) -> _FakeClient:
-        return self
-
-    async def __aexit__(self, *_exc: object) -> None:
-        return None
-
-
 def _unused_database() -> object:
     """A placeholder session; these paths open their own sessions."""
     return object()

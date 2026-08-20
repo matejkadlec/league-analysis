@@ -131,7 +131,7 @@ finish `SUCCESS` without recoverable warnings.
   future runs. A newly approved queue is enabled by adding it to that single
   allowlist.
 - Sleeps 1.2 s between match-detail requests to respect the development-key
-  100-requests/2-minutes budget, alongside the shared `DBRateLimiter` and
+  100-requests/2-minutes budget, on top of the client's own
   response-reported window adaptation. Do not change throttling outside an
   explicitly scoped task (see [`riot-api.md`](riot-api.md)).
 - Only current release-year matches (game version `16.*` for 2026) are

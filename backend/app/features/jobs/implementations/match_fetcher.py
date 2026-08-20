@@ -193,7 +193,7 @@ class MatchFetcherJob(BaseJob):
                 league_updated,
                 lp_observations,
             )
-        except RateLimitError, RateLimitSignal:
+        except RateLimitError:
             raise
         except Exception as e:
             is_api_key_err = is_riot_api_key_error(e)
