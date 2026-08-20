@@ -63,6 +63,9 @@ export function apiCallKey(call: APICallEntry): string {
   return [
     call.endpoint,
     call.region,
+    // Without count, two entries differing only in it collide as React keys
+    // and the second row keeps the first one's rendered numbers.
+    String(call.count),
     call.param_key ?? "",
     call.first_timestamp ?? "",
     call.first_param ?? "",

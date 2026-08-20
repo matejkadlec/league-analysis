@@ -186,8 +186,22 @@ describe("a match history row", () => {
       expect(tint(container)).toContain(
         flags.win ? "bg-emerald-700/30" : "bg-rose-600/30",
       );
+      // The outcome must also exist as text - the tint alone is a WCAG 1.4.1
+      // (colour-only meaning) failure for red/green colourblind players.
+      expect(
+        container.textContent?.includes(flags.win ? "Victory" : "Defeat"),
+      ).toBe(true);
     },
   );
+
+  it("labels a remake with the word, not only the grey tint", () => {
+    const { container } = renderRow({
+      player_participant: { ...PARTICIPANT, win: true, remake: true },
+    });
+
+    expect(container.textContent).toContain("Remake");
+    expect(container.textContent).not.toContain("Victory");
+  });
 
   it("tints a won remake as a remake, not as a victory", () => {
     // `remake` is checked before `win`, and the order is the whole point: a
