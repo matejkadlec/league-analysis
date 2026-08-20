@@ -1,7 +1,7 @@
 """Revoked access token model for JWT blacklist support."""
 
 from datetime import datetime
-from typing import Final, override
+from typing import Final
 
 from sqlalchemy import DateTime as SQLDateTime
 from sqlalchemy import Index, String
@@ -47,11 +47,6 @@ class RevokedAccessToken(Base):
         default="logout",
         comment="Reason for revocation (logout, admin, security, etc.)",
     )
-
-    @override
-    def __repr__(self) -> str:
-        """Return string representation of revoked token."""
-        return f"<RevokedAccessToken(id={self.id}, token_id='{self.token_id}', user_id={self.user_id})>"
 
 
 Index("idx_revoked_access_tokens_expires_at", RevokedAccessToken.expires_at)

@@ -1,7 +1,7 @@
 """Refresh token model for rotating long-lived sessions."""
 
 from datetime import datetime
-from typing import Final, override
+from typing import Final
 
 from sqlalchemy import (
     DateTime as SQLDateTime,
@@ -73,11 +73,6 @@ class RefreshToken(Base):
         nullable=True,
         comment="Request user-agent when token was created",
     )
-
-    @override
-    def __repr__(self) -> str:
-        """Return string representation of refresh token."""
-        return f"<RefreshToken(id={self.id}, user_id={self.user_id}, token_id='{self.token_id}')>"
 
 
 # `user_id` carries no `index=True`: this index leads with it, so it already

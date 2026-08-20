@@ -1,7 +1,6 @@
 """Player league model for storing ranked information."""
 
 from datetime import datetime
-from typing import override
 
 from sqlalchemy import (
     Boolean,
@@ -113,11 +112,6 @@ class PlayerLeague(Base):
 
     # Relationships
     player = relationship("Player", back_populates="leagues")
-
-    @override
-    def __repr__(self) -> str:
-        """Return string representation of the player league."""
-        return f"<PlayerLeague(puuid='{self.puuid}', queue='{self.queue_type}', tier='{self.tier}', rank='{self.rank}')>"
 
     @property
     def win_rate(self) -> float:

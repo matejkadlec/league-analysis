@@ -2,7 +2,7 @@
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, Final, override
+from typing import Any, Final
 
 from sqlalchemy import (
     Boolean,
@@ -293,11 +293,6 @@ class MatchParticipant(Base):
     # Relationships
     match = relationship("Match", back_populates="participants")
     player = relationship("Player", back_populates="match_participations")
-
-    @override
-    def __repr__(self) -> str:
-        """Return string representation of the match participant."""
-        return f"<MatchParticipant({self.match_id}, {self.participant_id}, {self.game_name})>"
 
 
 # Create composite indexes for common queries

@@ -1,6 +1,6 @@
 """Singleton counters for Join Us contact subject sequencing."""
 
-from typing import Final, override
+from typing import Final
 
 from sqlalchemy import CheckConstraint, Integer, SmallInteger
 from sqlalchemy.orm import Mapped, mapped_column
@@ -46,12 +46,3 @@ class SubjectCounts(Base):
         default=0,
         comment="How many Other contact emails have been submitted",
     )
-
-    @override
-    def __repr__(self) -> str:
-        """Return string representation of subject counters."""
-        return (
-            "<SubjectCounts("
-            f"id={self.id}, beta_tester={self.beta_tester}, "
-            f"full_stack_developer={self.full_stack_developer}, other={self.other})>"
-        )

@@ -2,7 +2,7 @@
 
 from datetime import datetime
 from enum import Enum as PyEnum
-from typing import Final, override
+from typing import Final
 
 from sqlalchemy import (
     DateTime as SQLDateTime,
@@ -83,14 +83,3 @@ class UserCookieConsent(Base):
     )
 
     user = relationship("User", back_populates="cookie_consent")
-
-    @override
-    def __repr__(self) -> str:
-        """Return string representation of cookie consent."""
-        return (
-            "<UserCookieConsent("
-            f"user_id={self.user_id}, "
-            f"consent_level='{self.consent_level.value}', "
-            f"consent_version='{self.consent_version}'"
-            ")>"
-        )

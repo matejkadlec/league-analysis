@@ -1,7 +1,7 @@
 """User model for authentication and authorization."""
 
 from datetime import datetime
-from typing import TYPE_CHECKING, Final, override
+from typing import TYPE_CHECKING, Final
 
 from sqlalchemy import (
     Boolean,
@@ -144,11 +144,6 @@ class User(Base):
         uselist=False,
         cascade="all, delete-orphan",
     )
-
-    @override
-    def __repr__(self) -> str:
-        """Return string representation of the user."""
-        return f"<User(id={self.id}, email='{self.email}', display_name='{self.display_name}', is_admin={self.is_admin})>"
 
 
 # Create composite indexes for common queries
