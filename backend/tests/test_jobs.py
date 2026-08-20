@@ -732,7 +732,6 @@ def test_detailed_logs_accepts_every_shape_production_stores() -> None:
             ],
         }
     )
-    assert grouped.api_calls is not None
     assert grouped.api_calls[0].count == 2
     assert grouped.api_calls[0].params is None
 
@@ -751,10 +750,11 @@ def test_detailed_logs_accepts_every_shape_production_stores() -> None:
             ],
         }
     )
-    assert single.api_calls is not None
     assert single.api_calls[0].params == {"puuid": "abc"}
     assert single.api_calls[0].param_key is None
 
+    # A legacy row parses to two empty lists, never to `None`: the response
+    # never puts a `null` where the frontend expects an array.
     legacy = JobExecutionDetailedLogs.model_validate({"message": "no logs captured"})
-    assert legacy.logs is None
-    assert legacy.api_calls is None
+    assert legacy.logs == []
+    assert legacy.api_calls == []

@@ -105,13 +105,17 @@ class JobExecutionApiCall(BaseModel):
 class JobExecutionDetailedLogs(BaseModel):
     """The two keys `base.py:log_completion` writes, each only when non-empty.
 
-    Rows written before this shape existed carry other keys; they parse to a
-    document with both fields absent rather than failing, which is what the
-    jobs dialog already did with them.
+    Empty rather than absent, on purpose: a missing key and an empty list mean
+    the same thing to the dialog that reads them, and `| None` would put a
+    `null` on the wire for every execution that has one of the two but not the
+    other. Rows written before this shape existed carry other keys and parse
+    to two empty lists, which is what the jobs dialog already did with them.
     """
 
-    logs: list[dict[str, Any]] | None = None
-    api_calls: list[JobExecutionApiCall] | None = None
+    logs: list[dict[str, Any]] = Field(default_factory=list[dict[str, Any]])
+    api_calls: list[JobExecutionApiCall] = Field(
+        default_factory=list[JobExecutionApiCall]
+    )
 
 
 class JobExecutionResponse(BaseModel):

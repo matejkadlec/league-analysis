@@ -310,8 +310,10 @@ export const JobExecutionApiCallSchema = z.object({
   count: z.number().int(),
   first_timestamp: z.string().nullable(),
   last_timestamp: z.string().nullable(),
-  params: z.record(z.string(), z.string()).optional(),
-  param_key: z.string().optional(),
+  // Null, not absent: the API declares all four `str | None`, so Pydantic
+  // serialises the variant this entry is not as `null`.
+  params: z.record(z.string(), z.string()).nullable().optional(),
+  param_key: z.string().nullable().optional(),
   first_param: z.string().nullable().optional(),
   last_param: z.string().nullable().optional(),
 });
@@ -327,12 +329,12 @@ export const JobExecutionSchema = z.object({
   records_updated: z.number().int().default(0),
   error_message: z.string().nullable().optional(),
   execution_log: z.record(z.string(), z.unknown()).nullable().optional(),
-  // Written by base.py:log_completion, which sets each key only when it has
-  // something to put there.
+  // The column is nullable -- an execution can have no detailed logs at all --
+  // but when it has them both lists are always present, empty or not.
   detailed_logs: z
     .object({
-      logs: z.array(z.record(z.string(), z.unknown())).optional(),
-      api_calls: z.array(JobExecutionApiCallSchema).optional(),
+      logs: z.array(z.record(z.string(), z.unknown())),
+      api_calls: z.array(JobExecutionApiCallSchema),
     })
     .nullable()
     .optional(),

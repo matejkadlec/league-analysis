@@ -79,3 +79,17 @@ the `pitfall-check` agent.
   the time and then indistinguishable from real freshness afterwards — the data
   is stale and the UI swears it is current. Check any write to a `*_synced_at`
   column that is not guarded by the success of the check that owns it.
+
+- **An unhandled route failure answers without CORS headers.** The
+  `@app.exception_handler(Exception)` in `main.py` becomes Starlette's
+  `ServerErrorMiddleware` handler, which sits *outside* every middleware the
+  app adds -- so the JSON 500 it emits never passes through `CORSMiddleware`.
+  A cross-origin browser client sees an opaque network failure instead of the
+  500. Unreachable today: `lib/core/api.ts` resolves `API_BASE_URL` to `""` in
+  the browser, so every request the frontend makes is same-origin through the
+  Next.js `rewrites()` proxy, and `CORS_ORIGINS` is configured for a client
+  that does not exist yet. If one ever does, the fix is a middleware added
+  *before* `CORSMiddleware` (the last `add_middleware` call is the outermost),
+  not another exception handler. The same seam means `DEBUG=true` shows
+  Starlette's traceback page rather than the client-safe body -- production
+  and the gate both set `DEBUG=false` explicitly, and `run.sh` clears it.

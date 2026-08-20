@@ -30,7 +30,7 @@ export function formatRecordsSummary(created: number, updated: number): string {
   return `${updated} records updated`;
 }
 
-export function formatApiCallParamLabel(paramKey?: string): string {
+export function formatApiCallParamLabel(paramKey?: string | null): string {
   if (!paramKey) {
     return "Parameters";
   }
