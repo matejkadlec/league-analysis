@@ -18,7 +18,6 @@ from app.features.jobs.base import BaseJob, _validation_field_locations
 from app.features.jobs.error_handling import RateLimitSignal, _handle_error
 from app.features.jobs.log_capture import BoundedLogCapture
 from app.features.matches import match_persistence
-from app.features.matches import router as matches_router
 from app.features.matches import service as matches_service_module
 from app.features.matches.match_stats import advanced_int
 from app.features.matches.timeline import _uses_historical_atakhan_contract
@@ -265,55 +264,6 @@ async def test_upsert_match_failure_logs_error(
     assert len(entries) == 1
     assert entries[0]["match_id"] == "EUN1_1"
     database.rollback.assert_awaited_once()
-
-
-@pytest.mark.asyncio
-async def test_analysis_background_task_failure_logs_structlog_error(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """The router background task reports failures through structlog only."""
-    from app.core import database as core_database
-    from app.core.riot_api import credential_health
-
-    class _SessionStub:
-        async def __aenter__(self) -> _SessionStub:
-            return self
-
-        async def __aexit__(self, *_exc: object) -> None:
-            return None
-
-    monkeypatch.setattr(core_database.db_manager, "get_session", lambda: _SessionStub())
-
-    async def _no_credential(_db: object) -> None:
-        raise RuntimeError("no credential")
-
-    monkeypatch.setattr(
-        credential_health, "create_tracked_riot_api_client", _no_credential
-    )
-
-    job_id = "job-logging-1"
-    matches_router.analysis_jobs[job_id] = {
-        "user_id": 1,
-        "status": "pending",
-        "progress": 0,
-        "total": 0,
-        "message": "x",
-    }
-    final_status: object = None
-
-    try:
-        with capture_logs() as logs:
-            await matches_router._run_analysis_task(job_id, "p" * 78)
-        final_status = matches_router.analysis_jobs[job_id]["status"]
-    finally:
-        matches_router.analysis_jobs.pop(job_id, None)
-
-    entries = _events(logs, "analysis_task_failed")
-    assert len(entries) == 1
-    assert entries[0]["job_id"] == job_id
-    assert entries[0]["error_type"] == "RuntimeError"
-    assert entries[0]["log_level"] == "error"
-    assert final_status == "failed"
 
 
 @pytest.mark.asyncio

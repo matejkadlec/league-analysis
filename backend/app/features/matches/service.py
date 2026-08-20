@@ -25,14 +25,6 @@ from app.core.riot_api.errors import (
 from app.core.riot_api.models import MatchDTO, MatchTimelineDTO
 from app.features.players.models import Player
 
-from .match_analysis import (
-    CancelCheck,
-    ProgressCallback,
-    collect_analysis_api_match_ids,
-    load_analysis_process_sets,
-    order_analysis_matches,
-    run_analysis_processing_loop,
-)
 from .match_history import (
     build_match_responses,
     load_match_player_data_context,
@@ -1158,112 +1150,6 @@ class MatchService:
         )
 
         return new_match_ids
-
-    async def analyze_match_history(
-        self,
-        riot_api_client: RiotAPIClient,
-        puuid: str,
-        progress_callback: ProgressCallback | None = None,
-        should_cancel: CancelCheck | None = None,
-        queue_ids: list[int] | None = None,
-        rate_limiter: DBRateLimiter | None = None,
-    ) -> int:
-        """
-        Smart match history analysis: fetches only NEW matches and re-analyzes failed ones.
-
-        Workflow:
-        1. Get match IDs from Riot API for target queues (count=100 per queue)
-        2. Get existing analyzed match IDs from DB for this player
-        3. Get match IDs with fully_analyzed=false from DB
-        4. Detect matches missing timeline aggregates for this player
-        5. Fetch only: new + needs_reanalysis + missing_timeline
-        6. Skip Season 15 matches (gameVersion not starting with "16.")
-
-        Args:
-            riot_api_client: Initialized client
-            puuid: Player PUUID
-            progress_callback: Optional async callback(current, total)
-            should_cancel: Optional callable returning bool. If True, stops processing.
-            rate_limiter: Optional DB-backed limiter for coordinated API throttling.
-
-        Returns:
-            Number of matches processed
-        """
-        try:
-            if should_cancel and should_cancel():
-                logger.info("Analysis cancelled before fetching list", puuid=puuid)
-                return 0
-
-            target_queue_ids = self._normalize_sync_queue_ids(queue_ids)
-            if not target_queue_ids:
-                logger.info("No supported queues requested for analysis", puuid=puuid)
-                return 0
-
-            api_match_ids = await collect_analysis_api_match_ids(
-                riot_api_client,
-                puuid,
-                target_queue_ids,
-                rate_limiter,
-            )
-            logger.debug(
-                "analysis_match_ids_fetched",
-                puuid=puuid,
-                queue_ids=target_queue_ids,
-                api_matches=len(api_match_ids),
-            )
-            if not api_match_ids:
-                logger.info("No matches found in Riot API", puuid=puuid)
-                return 0
-
-            (
-                new_match_ids,
-                existing_analyzed_ids,
-                needs_reanalysis_ids,
-                missing_timeline_ids,
-            ) = await load_analysis_process_sets(self.db, puuid, api_match_ids)
-            ordered_to_process = order_analysis_matches(
-                api_match_ids,
-                new_match_ids,
-                needs_reanalysis_ids,
-                missing_timeline_ids,
-            )
-            logger.info(
-                "Smart match analysis starting",
-                puuid=puuid,
-                queue_ids=target_queue_ids,
-                api_matches=len(api_match_ids),
-                already_analyzed=len(existing_analyzed_ids),
-                new_matches=len(new_match_ids),
-                needs_reanalysis=len(needs_reanalysis_ids),
-                missing_timeline=len(missing_timeline_ids),
-                to_process=len(ordered_to_process),
-            )
-            if not ordered_to_process:
-                logger.info("No new or incomplete matches to process", puuid=puuid)
-                if progress_callback:
-                    await progress_callback(0, 0)
-                return 0
-
-            processed, skipped_season = await run_analysis_processing_loop(
-                ordered_to_process,
-                puuid,
-                should_cancel,
-                progress_callback,
-                riot_api_client,
-                rate_limiter,
-                self.is_current_game_version,
-                self._reprocess_match,
-            )
-            logger.info(
-                "Match analysis completed",
-                puuid=puuid,
-                processed=processed,
-                skipped_season=skipped_season,
-            )
-            return processed
-        except Exception as e:
-            logger.error("Match history analysis failed", puuid=puuid, error=str(e))
-            raise
 
     async def _reprocess_match(
         self,

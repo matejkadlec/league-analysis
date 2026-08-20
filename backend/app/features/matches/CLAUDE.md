@@ -15,7 +15,7 @@ Two declared interfaces; nothing else is public.
   DB-first rules in [`docs/matchmaking-analysis.md`](../../../../docs/matchmaking-analysis.md)
   (`queue_id` and `fully_analyzed` filtering).
 
-The remaining modules (match_analysis, match_history, match_sync,
+The remaining modules (match_history, match_sync,
 match_stats, timeline, transformers, rune_transform) are MatchService's
 private decomposition — importing them from another feature couples it to
 internals that reshuffle without notice.
