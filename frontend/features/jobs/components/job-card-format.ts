@@ -12,35 +12,33 @@ export function formatCronSchedule(schedule: string): string {
   }
 }
 
-/**
- * Format schedule from seconds to human-readable format
- * Rules:
- * - If <60 seconds: show only seconds
- * - If >=3600 (1 hour): show hours, and minutes if not exact hours (no seconds)
- * - Otherwise: show minutes only (round seconds to nearest minute)
- */
+// Owns the English: plurals, and -- `minutesDisplay` defaulting to "auto" --
+// dropping the zero-minute tail from an exact hour.
+const longDurationFormatter = new Intl.DurationFormat("en", { style: "long" });
+
+/** A job's schedule: either an interval in seconds, or a cron expression. */
 export function formatScheduleInterval(schedule: string): string {
-  const totalSeconds = parseInt(schedule, 10);
-  if (isNaN(totalSeconds)) {
+  // Whole string or nothing: `parseInt` read the cron "0 0 * * *" as 0 seconds.
+  const trimmed = schedule.trim();
+  if (!/^[0-9]+$/.test(trimmed)) {
     return formatCronSchedule(schedule);
   }
+  const totalSeconds = Number(trimmed);
 
   if (totalSeconds < 60) {
-    return `${totalSeconds} second${totalSeconds !== 1 ? "s" : ""}`;
+    return longDurationFormatter.format({ seconds: totalSeconds });
   }
 
   if (totalSeconds >= 3600) {
-    const hours = Math.floor(totalSeconds / 3600);
-    const remainingMinutes = Math.round((totalSeconds % 3600) / 60);
-
-    if (remainingMinutes === 0) {
-      return `${hours} hour${hours !== 1 ? "s" : ""}`;
-    }
-    return `${hours} hour${hours !== 1 ? "s" : ""} ${remainingMinutes} minute${remainingMinutes !== 1 ? "s" : ""}`;
+    return longDurationFormatter.format({
+      hours: Math.floor(totalSeconds / 3600),
+      minutes: Math.round((totalSeconds % 3600) / 60),
+    });
   }
 
-  const minutes = Math.round(totalSeconds / 60);
-  return `${minutes} minute${minutes !== 1 ? "s" : ""}`;
+  return longDurationFormatter.format({
+    minutes: Math.round(totalSeconds / 60),
+  });
 }
 
 // `style: "narrow"` is byte-identical to the old hand-built templates:
