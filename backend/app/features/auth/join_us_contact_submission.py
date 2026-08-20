@@ -4,17 +4,16 @@ from datetime import datetime
 from typing import Final, override
 
 from sqlalchemy import (
-    BigInteger,
-    Index,
-    String,
+    DateTime as SQLDateTime,
 )
 from sqlalchemy import (
-    DateTime as SQLDateTime,
+    Index,
+    String,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
-from app.core.models import Base
+from app.core.models import Base, id_column
 
 
 class JoinUsContactSubmission(Base):
@@ -23,12 +22,7 @@ class JoinUsContactSubmission(Base):
     __tablename__ = "join_us_contact_submissions"
     __table_args__: Final = {"schema": "auth"}
 
-    id: Mapped[int] = mapped_column(
-        BigInteger,
-        primary_key=True,
-        autoincrement=True,
-        comment="Auto-incrementing primary key",
-    )
+    id: Mapped[int] = id_column()
     remote_ip: Mapped[str] = mapped_column(
         String(45),
         nullable=False,

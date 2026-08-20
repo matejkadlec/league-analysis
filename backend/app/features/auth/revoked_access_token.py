@@ -3,12 +3,14 @@
 from datetime import datetime
 from typing import Final, override
 
-from sqlalchemy import BigInteger, ForeignKey, Index, String
 from sqlalchemy import DateTime as SQLDateTime
+from sqlalchemy import Index, String
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
-from app.core.models import Base
+from app.core.models import Base, id_column
+
+from .user_reference import user_id_column
 
 
 class RevokedAccessToken(Base):
@@ -17,19 +19,8 @@ class RevokedAccessToken(Base):
     __tablename__ = "revoked_access_tokens"
     __table_args__: Final = {"schema": "auth"}
 
-    id: Mapped[int] = mapped_column(
-        BigInteger,
-        primary_key=True,
-        autoincrement=True,
-        comment="Auto-incrementing primary key",
-    )
-    user_id: Mapped[int] = mapped_column(
-        BigInteger,
-        ForeignKey("auth.users.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
-        comment="Reference to auth.users.id",
-    )
+    id: Mapped[int] = id_column()
+    user_id: Mapped[int] = user_id_column("Reference to auth.users.id", index=True)
     token_id: Mapped[str] = mapped_column(
         String(36),
         nullable=False,

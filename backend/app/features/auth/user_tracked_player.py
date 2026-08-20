@@ -2,12 +2,14 @@
 
 from datetime import datetime
 
-from sqlalchemy import BigInteger, ForeignKey, Index, String
 from sqlalchemy import DateTime as SQLDateTime
+from sqlalchemy import ForeignKey, Index, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from app.core.models import Base
+
+from .user_reference import user_id_column
 
 
 class UserTrackedPlayer(Base):
@@ -22,11 +24,8 @@ class UserTrackedPlayer(Base):
         {"schema": "auth"},
     )
 
-    user_id: Mapped[int] = mapped_column(
-        BigInteger,
-        ForeignKey("auth.users.id", ondelete="CASCADE"),
-        primary_key=True,
-        comment="User who tracks the player",
+    user_id: Mapped[int] = user_id_column(
+        "User who tracks the player", primary_key=True
     )
     puuid: Mapped[str] = mapped_column(
         String(78),
