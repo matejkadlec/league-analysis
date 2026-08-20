@@ -43,14 +43,6 @@ export function formatScheduleInterval(schedule: string): string {
   return `${minutes} minute${minutes !== 1 ? "s" : ""}`;
 }
 
-export function formatDuration(seconds: number | null | undefined): string {
-  if (!seconds) return "N/A";
-  if (seconds < 60) return `${seconds.toFixed(1)}s`;
-  const minutes = Math.floor(seconds / 60);
-  const remainingSeconds = Math.floor(seconds % 60);
-  return `${minutes}m ${remainingSeconds}s`;
-}
-
 // `style: "narrow"` is byte-identical to the old hand-built templates:
 // "5m ago", "23h ago", "3d ago".
 const narrowRelativeFormatter = new Intl.RelativeTimeFormat("en", {

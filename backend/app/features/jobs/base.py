@@ -20,6 +20,8 @@ from app.core import db_manager
 # get_type_hints) would raise NameError under PEP 649 lazy annotations.
 from app.core.riot_api.client import APICallRecord, RiotAPIClient
 from app.core.riot_api.constants import Platform, Region
+from app.features.players.models import Player
+from app.features.players.schemas import PlayerResponse
 
 from .control import (
     get_runtime_control_snapshot,
@@ -204,18 +206,37 @@ class BaseJob(ABC):
         self,
         job_config_id: int,
         triggered_by: str = "system",
+        *,
         execution_type: ExecutionType = ExecutionType.REGULAR,
+        target_puuids: set[str] | None = None,
     ):
         """Initialize the job with its configuration ID.
 
         Args:
             job_config_id: ID of job configuration from database.
             triggered_by: Who triggered the job: 'system' (scheduler) or 'user' (manual).
-            execution_type: Type of execution: REGULAR or TEST.
+            execution_type: Type of execution: REGULAR or TEST. Keyword-only —
+                the writers' old third positional argument was target_puuids,
+                and a positional set landing here must be a TypeError, not a
+                corrupted execution_type.
+            target_puuids: Restrict the run to these players; None means every
+                globally tracked player. Honored by jobs that resolve their
+                players through _load_tracked_players.
         """
         self.job_config_id = job_config_id
         self.triggered_by = triggered_by
         self.execution_type = execution_type
+        self.target_puuids = target_puuids
+        self._reset_run_state()
+
+    def _reset_run_state(self) -> None:
+        """Zero every per-run accumulator.
+
+        The scheduler builds one instance per job and re-runs it on an
+        interval, so run() must call this: without it, metrics, error
+        diagnostics and API-call records carry over and every scheduled
+        execution row reports process-lifetime totals instead of its own.
+        """
         self.job_config: JobConfiguration | None = None
         self.job_execution: JobExecution | None = None
         # Plain copies of the identity and start time. A rollback expires every
@@ -247,6 +268,15 @@ class BaseJob(ABC):
         self.skipped_as_already_running: bool = False
         # Track API call records for detailed logging
         self._api_call_records: list[APICallRecord] = []
+
+    def _track_api_request(self, metric_name: str, count: int) -> None:
+        """Callback for tracking API requests from RiotAPIClient."""
+        if metric_name == "requests_made":
+            self.increment_metric("api_requests_made", count)
+
+    def _store_api_calls(self, api_calls: list[APICallRecord]) -> None:
+        """Store API call records from the RiotAPIClient."""
+        self._api_call_records = api_calls
 
     @property
     def runtime_key(self) -> int:
@@ -495,6 +525,9 @@ class BaseJob(ABC):
 
     async def run(self) -> None:
         """Execute the job with proper error handling and logging."""
+        # The scheduler re-runs one instance forever; stale accumulators from
+        # the previous tick must not leak into this execution's row.
+        self._reset_run_state()
         async with self._db_session() as db:
             if not await self._begin_run(db):
                 return
@@ -872,6 +905,47 @@ class BaseJob(ABC):
                 is_api_key_error=True,
             )
             raise AuthenticationError("No active Riot API key configured") from error
+
+    @asynccontextmanager
+    async def job_riot_client(
+        self,
+        db: AsyncSession,
+        **client_options: Unpack[RiotClientOptions],
+    ):
+        """A job's Riot client with its bookkeeping wired on, not remembered.
+
+        Every job used to pass request_callback by hand and store the call
+        records after its happy path — so a job that raised lost its records,
+        and a job that forgot the kwarg silently reported zero API requests.
+        This wires the request counter in and stores the records on exit,
+        failure included.
+        """
+        client_options.setdefault("request_callback", self._track_api_request)
+        async with await self.get_job_riot_api_client(db, **client_options) as client:
+            try:
+                yield client
+            finally:
+                self._store_api_calls(client.get_api_calls())
+
+    async def _load_tracked_players(self, db: AsyncSession) -> list[PlayerResponse]:
+        """Load the global allowlist or the explicit target_puuids set.
+
+        Both writers resolve their player list through this; a job that
+        ignores target_puuids simply never calls it.
+        """
+        from app.features.players.service import PlayerService
+
+        if self.target_puuids is None:
+            return await PlayerService(db).get_globally_tracked_players()
+
+        result = await db.execute(
+            select(Player).where(Player.puuid.in_(self.target_puuids))
+        )
+        tracked_players = [
+            PlayerResponse.model_validate(player) for player in result.scalars().all()
+        ]
+        self.add_log_entry("target_puuids", sorted(self.target_puuids))
+        return tracked_players
 
     def has_errors(self) -> bool:
         """Check if any errors were encountered during execution."""
