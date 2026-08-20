@@ -24,6 +24,13 @@ from .models import JobConfiguration, JobExecution, JobStatus, JobType
 logger = structlog.get_logger(__name__)
 
 
+class ScheduledJobLike(Protocol):
+    """The slice of an APScheduler job the status endpoint reads."""
+
+    @property
+    def next_run_time(self) -> datetime | None: ...
+
+
 class SchedulerLike(Protocol):
     """The slice of APScheduler's scheduler this module and the router drive.
 
@@ -57,6 +64,8 @@ class SchedulerLike(Protocol):
         seconds: int | None = None,
         run_date: datetime | None = None,
     ) -> object: ...
+
+    def get_jobs(self) -> list[ScheduledJobLike]: ...
 
     # `jobstore` is deliberately absent from these four. APScheduler accepts it,
     # but nothing here passes it, and a Protocol is meant to state what this
@@ -351,7 +360,7 @@ async def _mark_stale_jobs_as_failed(db: AsyncSession) -> None:
                 .where(JobExecution.status.in_([JobStatus.RUNNING, JobStatus.PAUSED]))
                 .values(
                     status=JobStatus.CANCELLED,
-                    completed_at=datetime.now(),
+                    completed_at=datetime.now(UTC),
                     error_message="Job cancelled - was still running during application startup (likely ungraceful shutdown or crash)",
                 )
             )

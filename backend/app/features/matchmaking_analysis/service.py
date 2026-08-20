@@ -29,7 +29,7 @@ Rate Limiting:
 """
 
 import asyncio
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any, cast
@@ -1001,6 +1001,76 @@ class MatchmakingAnalysisService:
     # Rate-Limited API Calls
     # ================================================================
 
+    async def _api_call_with_retries[T](
+        self,
+        fetch: Callable[[], Awaitable[T]],
+        *,
+        required: bool,
+        operation: str,
+        **log_fields: object,
+    ) -> T | None:
+        """Run one Riot call under the shared rate-limit retry policy.
+
+        Returns None when capacity is unavailable, the error is recoverable,
+        or retries are exhausted; `required=True` raises instead.
+        """
+        # These attempts stack on the Riot client's own tenacity retry of
+        # 429/5xx: the client may sleep through several server retry_afters
+        # inside one `fetch()` before this loop waits again. That is the
+        # intended posture for this long-running analysis — prefer eventually
+        # completing over failing fast.
+        max_retries = 10
+        for attempt in range(max_retries):
+            try:
+                if (
+                    self.rate_limiter
+                    and not await self.rate_limiter.acquire_with_wait_callback(
+                        wait_callback=self._rate_limit_wait_callback,
+                    )
+                ):
+                    logger.warning(
+                        "Rate limit capacity unavailable",
+                        operation=operation,
+                        **log_fields,
+                    )
+                    if required:
+                        raise MatchmakingAnalysisRuntimeError(
+                            "rate_limit_unavailable",
+                            "The analysis is still unable to obtain Riot request "
+                            "capacity. Please try again later.",
+                        )
+                    return None
+
+                result = await fetch()
+                await self._record_successful_api_call()
+                return result
+
+            except RateLimitError as e:
+                retry_after = self._rate_limit_retry_after(e)
+                logger.info(
+                    "Rate limit during Riot call",
+                    operation=operation,
+                    retry_after=retry_after,
+                    attempt=attempt + 1,
+                    **log_fields,
+                )
+                await self._wait_for_rate_limit(retry_after)
+
+            except RiotAPIError as e:
+                logger.warning(
+                    "Riot call failed",
+                    operation=operation,
+                    error_type=type(e).__name__,
+                    **log_fields,
+                )
+                if self._should_reraise_riot_error(e, required=required):
+                    raise
+                return None
+
+        logger.warning("Riot call retries exhausted", operation=operation, **log_fields)
+        self._raise_if_retries_exhausted(required=required)
+        return None
+
     async def _api_fetch_match_ids(
         self,
         puuid: str,
@@ -1010,114 +1080,30 @@ class MatchmakingAnalysisService:
         required: bool = False,
     ) -> list[str]:
         """Fetch match IDs from Riot API with rate limit handling."""
-        max_retries = 10
-        for attempt in range(max_retries):
-            try:
-                if not await self._acquire_rate_limit_slot(
-                    required=required,
-                    unavailable_message="Rate limit: cannot fetch match IDs",
-                    puuid=puuid,
-                ):
-                    return []
-
-                match_list = await self.riot_client.get_match_list_by_puuid(
-                    puuid=puuid,
-                    start=0,
-                    count=count,
-                    queue=420,
-                    end_time=end_time,
-                )
-                await self._record_successful_api_call()
-                return match_list.match_ids
-
-            except RateLimitError as e:
-                retry_after = self._rate_limit_retry_after(e)
-                logger.info(
-                    "Rate limit on match ID fetch",
-                    puuid=puuid,
-                    retry_after=retry_after,
-                    attempt=attempt + 1,
-                )
-                await self._wait_for_rate_limit(retry_after)
-
-            except RiotAPIError as e:
-                logger.error(
-                    "Failed to fetch match IDs",
-                    puuid=puuid,
-                    error_type=type(e).__name__,
-                )
-                if self._should_reraise_riot_error(e, required=required):
-                    raise
-                return []
-
-        logger.warning("Max retries for match ID fetch", puuid=puuid)
-        self._raise_if_retries_exhausted(required=required)
-        return []
+        match_list = await self._api_call_with_retries(
+            lambda: self.riot_client.get_match_list_by_puuid(
+                puuid=puuid,
+                start=0,
+                count=count,
+                queue=420,
+                end_time=end_time,
+            ),
+            required=required,
+            operation="match ID fetch",
+            puuid=puuid,
+        )
+        return match_list.match_ids if match_list else []
 
     async def _api_fetch_match(
         self, match_id: str, *, required: bool = False
     ) -> MatchDTO | None:
         """Fetch a single match from API. Returns MatchDTO or None."""
-        max_retries = 10
-        for attempt in range(max_retries):
-            try:
-                if not await self._acquire_rate_limit_slot(
-                    required=required,
-                    unavailable_message="Rate limit: cannot fetch match",
-                    match_id=match_id,
-                ):
-                    return None
-
-                dto = await self.riot_client.get_match(match_id)
-                await self._record_successful_api_call()
-                return dto
-
-            except RateLimitError as e:
-                retry_after = self._rate_limit_retry_after(e)
-                logger.info(
-                    "Rate limit on match fetch",
-                    match_id=match_id,
-                    retry_after=retry_after,
-                    attempt=attempt + 1,
-                )
-                await self._wait_for_rate_limit(retry_after)
-
-            except RiotAPIError as e:
-                logger.warning(
-                    "Failed to fetch match",
-                    match_id=match_id,
-                    error_type=type(e).__name__,
-                )
-                if self._should_reraise_riot_error(e, required=required):
-                    raise
-                return None
-
-        logger.warning("Max retries for match fetch", match_id=match_id)
-        self._raise_if_retries_exhausted(required=required)
-        return None
-
-    async def _acquire_rate_limit_slot(
-        self,
-        *,
-        required: bool,
-        unavailable_message: str,
-        **log_fields: object,
-    ) -> bool:
-        if self.rate_limiter is None:
-            return True
-        acquired = await self.rate_limiter.acquire_with_wait_callback(
-            wait_callback=self._rate_limit_wait_callback,
+        return await self._api_call_with_retries(
+            lambda: self.riot_client.get_match(match_id),
+            required=required,
+            operation="match fetch",
+            match_id=match_id,
         )
-        if acquired:
-            return True
-        logger.warning(unavailable_message, **log_fields)
-        if required:
-            raise MatchmakingAnalysisRuntimeError(
-                "rate_limit_unavailable",
-                "The analysis is still unable to obtain Riot request "
-                "capacity. Please try again later.",
-            )
-        return False
 
     async def _record_successful_api_call(self) -> None:
         if self.rate_limiter:

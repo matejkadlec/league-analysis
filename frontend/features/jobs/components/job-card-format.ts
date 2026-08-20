@@ -43,14 +43,6 @@ export function formatScheduleInterval(schedule: string): string {
   return `${minutes} minute${minutes !== 1 ? "s" : ""}`;
 }
 
-export function formatDuration(seconds: number | null | undefined): string {
-  if (!seconds) return "N/A";
-  if (seconds < 60) return `${seconds.toFixed(1)}s`;
-  const minutes = Math.floor(seconds / 60);
-  const remainingSeconds = Math.floor(seconds % 60);
-  return `${minutes}m ${remainingSeconds}s`;
-}
-
 // `style: "narrow"` is byte-identical to the old hand-built templates:
 // "5m ago", "23h ago", "3d ago".
 const narrowRelativeFormatter = new Intl.RelativeTimeFormat("en", {
@@ -58,11 +50,14 @@ const narrowRelativeFormatter = new Intl.RelativeTimeFormat("en", {
   style: "narrow",
 });
 
+// Both clocks clamp toward "Just now" across the present: the past clock so a
+// browser running behind the DB never reads a fresh run as the future, the
+// upcoming clock so an overdue schedule never reads as history.
+
 export function formatRelativeTime(timestamp: string): string {
   const date = new Date(timestamp);
   const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
+  const diffMins = Math.floor((now.getTime() - date.getTime()) / 60000);
 
   if (diffMins < 1) return "Just now";
   if (diffMins < 60) return narrowRelativeFormatter.format(-diffMins, "minute");
@@ -70,6 +65,20 @@ export function formatRelativeTime(timestamp: string): string {
   if (diffHours < 24) return narrowRelativeFormatter.format(-diffHours, "hour");
   const diffDays = Math.floor(diffHours / 24);
   return narrowRelativeFormatter.format(-diffDays, "day");
+}
+
+/** The future-facing sibling for next_run_time: "in 10m", "in 2h". */
+export function formatNextRun(timestamp: string): string {
+  const date = new Date(timestamp);
+  const now = new Date();
+  const diffMins = Math.floor((date.getTime() - now.getTime()) / 60000);
+
+  if (diffMins < 1) return "Just now";
+  if (diffMins < 60) return narrowRelativeFormatter.format(diffMins, "minute");
+  const diffHours = Math.floor(diffMins / 60);
+  if (diffHours < 24) return narrowRelativeFormatter.format(diffHours, "hour");
+  const diffDays = Math.floor(diffHours / 24);
+  return narrowRelativeFormatter.format(diffDays, "day");
 }
 
 export function getJobDescription(jobType: string): string {

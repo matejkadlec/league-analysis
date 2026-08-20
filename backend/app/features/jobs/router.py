@@ -749,12 +749,23 @@ async def get_job_system_status(
         scheduler = get_scheduler()
         scheduler_running = scheduler is not None and scheduler.running
 
+        next_run_time = None
+        if scheduler is not None and scheduler_running:
+            next_run_time = min(
+                (
+                    job.next_run_time
+                    for job in scheduler.get_jobs()
+                    if job.next_run_time is not None
+                ),
+                default=None,
+            )
+
         return JobStatusResponse(
             scheduler_running=scheduler_running,
             active_jobs=active_jobs,
             running_executions=running_executions,
             last_execution=last_execution,
-            next_run_time=None,  # TODO: Get from scheduler
+            next_run_time=next_run_time,
         )
 
     except Exception as e:
