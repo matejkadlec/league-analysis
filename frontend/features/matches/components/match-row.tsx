@@ -65,19 +65,26 @@ function getDaysAgo(timestamp: number): string {
 }
 
 /**
- * The row's background tint, which is the only thing on it that says how the
- * game went — there is no "VICTORY" or "DEFEAT" text anywhere in the row.
+ * How the game went, decided once for both signals the row shows: the
+ * background tint and the outcome word next to the duration (WCAG 1.4.1 —
+ * colour is never the only carrier of meaning).
  *
  * The remake check comes before the win check on purpose: a remake is
- * annulled, so neither side won it.
+ * annulled, so neither side won it. A missing participant is a data gap,
+ * not a loss — neutral tint, and no verdict word to go with it.
  */
-function getResultBgClass(match: MatchWithPlayerData): string {
+function getMatchOutcome(match: MatchWithPlayerData): {
+  label: string;
+  bgClass: string;
+} {
   const participant = match.player_participant;
 
-  if (!participant) return "bg-muted/30";
-  if (participant.remake || match.early_surrender) return "bg-gray-500/50";
-  if (participant.win) return "bg-emerald-700/30";
-  return "bg-rose-600/30";
+  if (!participant) return { label: "—", bgClass: "bg-muted/30" };
+  if (participant.remake || match.early_surrender)
+    return { label: "Remake", bgClass: "bg-gray-500/50" };
+  if (participant.win)
+    return { label: "Victory", bgClass: "bg-emerald-700/30" };
+  return { label: "Defeat", bgClass: "bg-rose-600/30" };
 }
 
 function renderSummonerSpell(
@@ -383,7 +390,7 @@ export function MatchRow({ match, playerPuuid }: MatchRowProps) {
   const ddragonVersion = useDDragonVersion();
   const participant = match.player_participant;
   const opponent = match.lane_opponent;
-  const resultBgClass = getResultBgClass(match);
+  const outcome = getMatchOutcome(match);
   const teamComps = match.team_compositions;
   const teamStats = match.team_stats;
 
@@ -423,7 +430,7 @@ export function MatchRow({ match, playerPuuid }: MatchRowProps) {
 
   return (
     <div
-      className={`px-3 py-1.5 rounded border-2 mb-1.5 border-t-1 border-b-1 border-amber-400/20 last:border-b-0 last:mb-0 ${resultBgClass}`}
+      className={`px-3 py-1.5 rounded border-2 mb-1.5 border-t-1 border-b-1 border-amber-400/20 last:border-b-0 last:mb-0 ${outcome.bgClass}`}
     >
       {/*
         Below `lg` the blocks wrap instead of holding their desktop widths, and
@@ -493,7 +500,7 @@ export function MatchRow({ match, playerPuuid }: MatchRowProps) {
           {/* The row's tint is the only other outcome signal; colourblind
               players need the word (WCAG 1.4.1: no colour-only meaning). */}
           <span className="text-[10px] font-semibold uppercase text-foreground/75">
-            {isRemake ? "Remake" : participant?.win ? "Victory" : "Defeat"}
+            {outcome.label}
           </span>
           <span className="">{formatDuration(match.game_duration)}</span>
         </div>
