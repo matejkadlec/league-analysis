@@ -4,7 +4,7 @@ import { useState } from "react";
 import { ApiRequestError } from "@/lib/core/api";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { History, X } from "lucide-react";
-import { formatDateTime } from "@/lib/core/format";
+import { formatDateTime, formatFractionAsPercent } from "@/lib/core/format";
 import { useToast } from "@/lib/core/hooks";
 
 import {
@@ -69,17 +69,17 @@ function historyFigures(item: MatchmakingAnalysisHistoryItem) {
   return [
     {
       label: "Ally Team WR",
-      value: `${(item.team_avg_winrate * 100).toFixed(1)}%`,
+      value: formatFractionAsPercent(item.team_avg_winrate),
       colorClass: allyColor,
     },
     {
       label: "Enemy Team WR",
-      value: `${(item.enemy_avg_winrate * 100).toFixed(1)}%`,
+      value: formatFractionAsPercent(item.enemy_avg_winrate),
       colorClass: enemyColor,
     },
     {
       label: "Win Rates Gap",
-      value: `${Math.abs(gap).toFixed(1)}%`,
+      value: formatFractionAsPercent(Math.abs(item.gap)),
       colorClass: allyColor,
     },
   ];
