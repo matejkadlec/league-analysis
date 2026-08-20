@@ -14,11 +14,7 @@ import type { JobExecution } from "@/lib/core/schemas";
 import { ExecutionStatusBadge } from "./execution-status-badge";
 import { JobExecutionApiCalls } from "./job-execution-api-calls";
 import { JobExecutionLogs } from "./job-execution-logs";
-import {
-  type APICallEntry,
-  formatDuration,
-  formatJobTimestamp,
-} from "./job-execution-format";
+import { formatDuration, formatJobTimestamp } from "./job-execution-format";
 
 interface JobExecutionDetailsDialogProps {
   execution: JobExecution | null;
@@ -29,10 +25,8 @@ export function JobExecutionDetailsDialog({
   execution,
   onOpenChange,
 }: JobExecutionDetailsDialogProps) {
-  const apiCalls = execution?.detailed_logs?.api_calls as
-    APICallEntry[] | undefined;
-  const logs = execution?.detailed_logs?.logs as
-    Array<Record<string, unknown>> | undefined;
+  const apiCalls = execution?.detailed_logs?.api_calls;
+  const logs = execution?.detailed_logs?.logs;
 
   return (
     <Dialog open={!!execution} onOpenChange={onOpenChange}>

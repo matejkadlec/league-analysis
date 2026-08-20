@@ -66,8 +66,8 @@ class APICallRecord:
 
     endpoint: str  # Template like "/lol/match/v5/matches/{matchId}"
     region: str
-    params: dict[str, Any] = field(
-        default_factory=dict[str, Any]
+    params: dict[str, str] = field(
+        default_factory=dict[str, str]
     )  # e.g., {"matchId": "EUN1_123"}
     timestamp: str = ""  # ISO timestamp
 
@@ -173,7 +173,7 @@ class RiotAPIClient:
         return self._api_calls.copy()
 
     def _record_api_call(
-        self, endpoint_template: str, region: str, params: dict[str, Any]
+        self, endpoint_template: str, region: str, params: dict[str, str]
     ) -> None:
         """Record an API call for job logging."""
         self._api_calls.append(

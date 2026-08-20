@@ -47,18 +47,6 @@ export function formatApiCallParamLabel(paramKey?: string): string {
   return `${spacedKey.charAt(0).toUpperCase()}${spacedKey.slice(1)}s`;
 }
 
-export interface APICallEntry {
-  endpoint: string;
-  region: string;
-  count: number;
-  first_timestamp?: string;
-  last_timestamp?: string;
-  params?: Record<string, string>;
-  param_key?: string;
-  first_param?: string;
-  last_param?: string;
-}
-
 export function detailedLogKey(log: Record<string, unknown>): string {
   const level = typeof log.level === "string" ? log.level : "INFO";
   const timestamp = String(log.timestamp ?? "");

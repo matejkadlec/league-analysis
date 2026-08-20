@@ -296,12 +296,26 @@ export const JobConfigurationSchema = z.object({
   is_test_paused: z.boolean().default(false),
   is_test_stopping: z.boolean().default(false),
   is_test_force_stopping: z.boolean().default(false),
-  config_json: z.record(z.string(), z.any()).nullable().optional(),
+  config_json: z.record(z.string(), z.unknown()).nullable().optional(),
   created_at: z.string(),
   updated_at: z.string(),
 });
 
 // Job Execution Schema
+// The other half of backend/app/features/jobs/base.py:StoredAPICall. A single
+// call keeps its whole params dict; a group keeps only the key that varied.
+export const JobExecutionApiCallSchema = z.object({
+  endpoint: z.string(),
+  region: z.string(),
+  count: z.number().int(),
+  first_timestamp: z.string().nullable(),
+  last_timestamp: z.string().nullable(),
+  params: z.record(z.string(), z.string()).optional(),
+  param_key: z.string().optional(),
+  first_param: z.string().nullable().optional(),
+  last_param: z.string().nullable().optional(),
+});
+
 export const JobExecutionSchema = z.object({
   id: z.number().int(),
   job_config_id: z.number().int(),
@@ -312,8 +326,16 @@ export const JobExecutionSchema = z.object({
   records_created: z.number().int().default(0),
   records_updated: z.number().int().default(0),
   error_message: z.string().nullable().optional(),
-  execution_log: z.record(z.string(), z.any()).nullable().optional(),
-  detailed_logs: z.record(z.string(), z.any()).nullable().optional(),
+  execution_log: z.record(z.string(), z.unknown()).nullable().optional(),
+  // Written by base.py:log_completion, which sets each key only when it has
+  // something to put there.
+  detailed_logs: z
+    .object({
+      logs: z.array(z.record(z.string(), z.unknown())).optional(),
+      api_calls: z.array(JobExecutionApiCallSchema).optional(),
+    })
+    .nullable()
+    .optional(),
   triggered_by: z.string().default("system"),
   has_api_key_error: z.boolean().default(false),
   execution_type: ExecutionTypeSchema.default("REGULAR"),
@@ -356,6 +378,7 @@ export type JobStatus = z.infer<typeof JobStatusSchema>;
 export type ExecutionType = z.infer<typeof ExecutionTypeSchema>;
 export type JobConfiguration = z.infer<typeof JobConfigurationSchema>;
 export type JobExecution = z.infer<typeof JobExecutionSchema>;
+export type JobExecutionApiCall = z.infer<typeof JobExecutionApiCallSchema>;
 export type JobStatusResponse = z.infer<typeof JobStatusResponseSchema>;
 export type JobTriggerResponse = z.infer<typeof JobTriggerResponseSchema>;
 export type JobControlActionResponse = z.infer<

@@ -6,7 +6,7 @@ from collections import defaultdict
 from collections.abc import Callable, Mapping, MutableMapping, Sequence
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
-from typing import Any, TypedDict, Unpack, cast
+from typing import Any, NotRequired, TypedDict, Unpack, cast
 
 import structlog
 from sqlalchemy import Update, select, update
@@ -65,9 +65,29 @@ class JobStopSignal(Exception):
         super().__init__(f"Job stopped: {reason}")
 
 
+class StoredAPICall(TypedDict):
+    """One endpoint's grouped calls, as the jobs UI reads them back out of JSONB.
+
+    `frontend/lib/core/schemas.ts:JobExecutionApiCallSchema` is the other half
+    of this shape; keep the two in step. The four optional keys are the split
+    below: a single call keeps its whole params dict, a group keeps only the
+    key that varied and its first and last value.
+    """
+
+    endpoint: str
+    region: str
+    count: int
+    first_timestamp: str | None
+    last_timestamp: str | None
+    params: NotRequired[dict[str, str]]
+    param_key: NotRequired[str]
+    first_param: NotRequired[str | None]
+    last_param: NotRequired[str | None]
+
+
 def _format_api_calls_for_storage(
     api_calls: list[APICallRecord],
-) -> list[dict[str, Any]]:
+) -> list[StoredAPICall]:
     """Format API call records for JSONB storage, grouping similar calls."""
     # Group calls by endpoint
     grouped: dict[str, dict[str, Any]] = defaultdict(
@@ -95,9 +115,9 @@ def _format_api_calls_for_storage(
         group["last_timestamp"] = call.timestamp
 
     # Convert to list format for storage
-    result: list[dict[str, Any]] = []
+    result: list[StoredAPICall] = []
     for endpoint, data in grouped.items():
-        entry: dict[str, Any] = {
+        entry: StoredAPICall = {
             "endpoint": endpoint,
             "region": ", ".join(data["regions"]),
             "count": data["count"],
