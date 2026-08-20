@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import { acceptCookieBanner, seedAuthenticatedSession } from "./support/auth";
+import { qaUser, trackedPlayer } from "./support/fixtures";
 import { blockUpstreamRequests } from "./support/offline";
 
 /**
@@ -11,20 +12,11 @@ import { blockUpstreamRequests } from "./support/offline";
 const NOW = "2026-08-16T10:00:00.000Z";
 const PUUID = "error-copy-player-puuid";
 
-const player = {
+const player = trackedPlayer(NOW, {
   puuid: PUUID,
   game_name: "Comparison",
   tag_line: "ONE",
-  platform: "eun1",
-  is_tracked: true,
-  analyzed_matches: 0,
-  total_matches: 0,
-  profile_synced_at: NOW,
-  league_synced_at: NOW,
-  match_synced_at: NOW,
-  created_at: NOW,
-  updated_at: NOW,
-};
+});
 
 async function signIn(page: Page) {
   // The app gates routes on an httpOnly cookie, not on anything in
@@ -36,20 +28,7 @@ async function signIn(page: Page) {
   await page.route("**/api/v1/auth/me", async (route) => {
     await route.fulfill({
       contentType: "application/json",
-      body: JSON.stringify({
-        id: 7,
-        email: "qa@example.test",
-        display_name: "QA User",
-        is_active: true,
-        is_admin: false,
-        email_verified: true,
-        email_verified_at: NOW,
-        last_login: NOW,
-        riot_account_connected: false,
-        puuid: null,
-        created_at: NOW,
-        updated_at: NOW,
-      }),
+      body: JSON.stringify(qaUser(NOW)),
     });
   });
 }

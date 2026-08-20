@@ -1,6 +1,7 @@
 import type { Page } from "@playwright/test";
 
 import { seedAuthenticatedSession } from "./auth";
+import { qaUser, trackedPlayer } from "./fixtures";
 import { blockUpstreamRequests } from "./offline";
 
 /**
@@ -15,20 +16,11 @@ import { blockUpstreamRequests } from "./offline";
 export const NOW = "2026-08-14T10:00:00.000Z";
 export const PUUID = "smurf-boost-player-puuid";
 
-export const player = {
+export const player = trackedPlayer(NOW, {
   puuid: PUUID,
   game_name: "Comparison",
   tag_line: "ONE",
-  platform: "eun1",
-  is_tracked: true,
-  analyzed_matches: 0,
-  total_matches: 0,
-  profile_synced_at: NOW,
-  league_synced_at: NOW,
-  match_synced_at: NOW,
-  created_at: NOW,
-  updated_at: NOW,
-};
+});
 
 export const CONSERVATIVE = {
   recentWindowSize: 20,
@@ -208,20 +200,7 @@ export async function installSmurfBoostMocks(page: Page): Promise<HarnessState> 
     if (path.endsWith("/auth/me")) {
       await route.fulfill({
         contentType: "application/json",
-        body: JSON.stringify({
-          id: 7,
-          email: "qa@example.test",
-          display_name: "QA User",
-          is_active: true,
-          is_admin: false,
-          email_verified: true,
-          email_verified_at: NOW,
-          last_login: NOW,
-          riot_account_connected: false,
-          puuid: null,
-          created_at: NOW,
-          updated_at: NOW,
-        }),
+        body: JSON.stringify(qaUser(NOW)),
       });
       return;
     }
