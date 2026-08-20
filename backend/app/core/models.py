@@ -4,6 +4,7 @@ from datetime import datetime
 from decimal import Decimal
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     Integer,
     MetaData,
@@ -49,6 +50,24 @@ type_annotation_map = {
     Decimal | None: Numeric(),
     datetime | None: SQLDateTime(),
 }
+
+
+def id_column(
+    comment: str | None = "Auto-incrementing primary key",
+) -> MappedColumn[int]:
+    """A surrogate `BIGINT` primary key.
+
+    Four tables spelled this out identically and a fifth -- `jobs.user_jobs`
+    -- wrote the same column as a one-liner with no comment at all, which is
+    the drift a shared declaration removes. That one passes `None` rather than
+    silently gaining a comment, so the emitted DDL does not move.
+    """
+    return mapped_column(
+        BigInteger,
+        primary_key=True,
+        autoincrement=True,
+        comment=comment,
+    )
 
 
 def created_at_column(comment: str | None = None) -> MappedColumn[datetime]:

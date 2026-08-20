@@ -4,9 +4,7 @@ from datetime import datetime
 from typing import Any
 
 from sqlalchemy import (
-    BigInteger,
     CheckConstraint,
-    ForeignKey,
     Index,
     Integer,
     String,
@@ -16,6 +14,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.models import Base, created_at_column, updated_at_column
 from app.core.riot_api.credential_health import RiotAPIKey as RiotAPIKey
+from app.features.auth.user_reference import user_id_column
 
 
 class UserCardPreference(Base):
@@ -28,11 +27,8 @@ class UserCardPreference(Base):
         {"schema": "auth"},
     )
 
-    user_id: Mapped[int] = mapped_column(
-        BigInteger,
-        ForeignKey("auth.users.id", ondelete="CASCADE"),
-        primary_key=True,
-        comment="Authenticated viewer that owns this preference",
+    user_id: Mapped[int] = user_id_column(
+        "Authenticated viewer that owns this preference", primary_key=True
     )
     card_id: Mapped[str] = mapped_column(
         String(64),

@@ -4,18 +4,18 @@ from datetime import datetime
 from typing import Final, override
 
 from sqlalchemy import (
-    BigInteger,
-    ForeignKey,
+    DateTime as SQLDateTime,
+)
+from sqlalchemy import (
     Index,
     Integer,
     String,
 )
-from sqlalchemy import (
-    DateTime as SQLDateTime,
-)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.models import Base, created_at_column, updated_at_column
+
+from .user_reference import user_id_column
 
 
 class EmailChangeRequest(Base):
@@ -24,11 +24,8 @@ class EmailChangeRequest(Base):
     __tablename__ = "email_change_requests"
     __table_args__: Final = {"schema": "auth"}
 
-    user_id: Mapped[int] = mapped_column(
-        BigInteger,
-        ForeignKey("auth.users.id", ondelete="CASCADE"),
-        primary_key=True,
-        comment="Reference to auth.users.id",
+    user_id: Mapped[int] = user_id_column(
+        "Reference to auth.users.id", primary_key=True
     )
     pending_email: Mapped[str | None] = mapped_column(
         String(255),

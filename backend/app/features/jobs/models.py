@@ -5,7 +5,6 @@ from enum import Enum as PyEnum
 from typing import Any, Final, override
 
 from sqlalchemy import (
-    BigInteger,
     Boolean,
     CheckConstraint,
     ForeignKey,
@@ -24,7 +23,8 @@ from sqlalchemy.dialects.postgresql import ENUM, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
-from app.core.models import Base, created_at_column, updated_at_column
+from app.core.models import Base, created_at_column, id_column, updated_at_column
+from app.features.auth.user_reference import user_id_column
 
 
 class JobType(str, PyEnum):
@@ -280,12 +280,8 @@ class PlayerSyncRun(Base):
         {"schema": "jobs"},
     )
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    user_id: Mapped[int] = mapped_column(
-        BigInteger,
-        ForeignKey("auth.users.id", ondelete="CASCADE"),
-        nullable=False,
-    )
+    id: Mapped[int] = id_column(None)
+    user_id: Mapped[int] = user_id_column()
     puuid: Mapped[str] = mapped_column(
         String(78),
         ForeignKey("core.players.puuid", ondelete="CASCADE"),

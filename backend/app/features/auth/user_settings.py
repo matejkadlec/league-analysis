@@ -3,10 +3,12 @@
 from datetime import datetime
 from typing import Final, override
 
-from sqlalchemy import BigInteger, ForeignKey, String
+from sqlalchemy import ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.models import Base, created_at_column, updated_at_column
+
+from .user_reference import user_id_column
 
 
 class UserSettings(Base):
@@ -16,12 +18,7 @@ class UserSettings(Base):
     __table_args__: Final = {"schema": "auth"}
 
     # Primary key (also FK to users)
-    user_id: Mapped[int] = mapped_column(
-        BigInteger,
-        ForeignKey("auth.users.id", ondelete="CASCADE"),
-        primary_key=True,
-        comment="Reference to the user",
-    )
+    user_id: Mapped[int] = user_id_column("Reference to the user", primary_key=True)
 
     current_player_puuid: Mapped[str | None] = mapped_column(
         String(78),

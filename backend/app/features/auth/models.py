@@ -4,7 +4,6 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Final, override
 
 from sqlalchemy import (
-    BigInteger,
     Boolean,
     Index,
     String,
@@ -15,7 +14,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.core.models import Base, created_at_column, updated_at_column
+from app.core.models import Base, created_at_column, id_column, updated_at_column
 
 if TYPE_CHECKING:
     from .email_change_request import EmailChangeRequest
@@ -31,12 +30,7 @@ class User(Base):
     __table_args__: Final = {"schema": "auth"}
 
     # Primary key
-    id: Mapped[int] = mapped_column(
-        BigInteger,
-        primary_key=True,
-        autoincrement=True,
-        comment="Auto-incrementing primary key",
-    )
+    id: Mapped[int] = id_column()
 
     # Authentication fields
     email: Mapped[str] = mapped_column(

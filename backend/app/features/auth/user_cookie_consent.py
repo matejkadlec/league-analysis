@@ -5,18 +5,18 @@ from enum import Enum as PyEnum
 from typing import Final, override
 
 from sqlalchemy import (
-    BigInteger,
-    Enum,
-    ForeignKey,
-    String,
+    DateTime as SQLDateTime,
 )
 from sqlalchemy import (
-    DateTime as SQLDateTime,
+    Enum,
+    String,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from app.core.models import Base, updated_at_column
+
+from .user_reference import user_id_column
 
 
 class CookieConsentLevel(PyEnum):
@@ -41,11 +41,8 @@ class UserCookieConsent(Base):
     __tablename__ = "user_cookie_consents"
     __table_args__: Final = {"schema": "auth"}
 
-    user_id: Mapped[int] = mapped_column(
-        BigInteger,
-        ForeignKey("auth.users.id", ondelete="CASCADE"),
-        primary_key=True,
-        comment="Reference to the user who submitted cookie consent",
+    user_id: Mapped[int] = user_id_column(
+        "Reference to the user who submitted cookie consent", primary_key=True
     )
 
     consent_level: Mapped[CookieConsentLevel] = mapped_column(
