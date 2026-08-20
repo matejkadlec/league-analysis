@@ -8,11 +8,12 @@ each call site passes its own module logger to keep the log origin.
 
 from typing import Any, NoReturn
 
+import structlog
 from fastapi import HTTPException
 
 
 def log_and_raise_http(
-    logger: Any,
+    logger: structlog.stdlib.BoundLogger,
     e: Exception,
     event: str,
     # Usually a plain sentence; structured {code, message} details pass

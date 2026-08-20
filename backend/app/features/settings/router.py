@@ -193,15 +193,13 @@ async def get_card_preferences(
     try:
         return await settings_service.get_card_preferences(current_user.id)
     except Exception as error:
-        logger.error(
+        log_and_raise_http(
+            logger,
+            error,
             "failed_to_get_card_preferences",
+            "Card preferences could not be loaded. Please try again later.",
             error_type=type(error).__name__,
-            exc_info=True,
         )
-        raise HTTPException(
-            status_code=500,
-            detail="Card preferences could not be loaded. Please try again later.",
-        ) from error
 
 
 @router.put(
@@ -222,15 +220,13 @@ async def update_card_preference(
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
     except Exception as error:
-        logger.error(
+        log_and_raise_http(
+            logger,
+            error,
             "failed_to_update_card_preference",
+            "The card preference could not be updated. Please try again later.",
             error_type=type(error).__name__,
-            exc_info=True,
         )
-        raise HTTPException(
-            status_code=500,
-            detail="The card preference could not be updated. Please try again later.",
-        ) from error
 
 
 @router.delete(
@@ -246,15 +242,13 @@ async def reset_card_preference(
     try:
         return await settings_service.reset_card_preference(current_user.id, card_id)
     except Exception as error:
-        logger.error(
+        log_and_raise_http(
+            logger,
+            error,
             "failed_to_reset_card_preference",
+            "The card preference could not be reset. Please try again later.",
             error_type=type(error).__name__,
-            exc_info=True,
         )
-        raise HTTPException(
-            status_code=500,
-            detail="The card preference could not be reset. Please try again later.",
-        ) from error
 
 
 @router.post(
@@ -270,16 +264,14 @@ async def reset_all_card_preferences(
     try:
         return await settings_service.reset_all_card_preferences(current_user.id)
     except Exception as error:
-        logger.error(
+        log_and_raise_http(
+            logger,
+            error,
             "failed_to_reset_all_card_preferences",
+            "Card preferences could not be reset. Please try again later.",
             confirmed_card_count=len(confirmation.card_ids),
             error_type=type(error).__name__,
-            exc_info=True,
         )
-        raise HTTPException(
-            status_code=500,
-            detail="Card preferences could not be reset. Please try again later.",
-        ) from error
 
 
 @router.get("/user", response_model=UserSettingsResponse)
