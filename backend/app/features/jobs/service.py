@@ -479,26 +479,3 @@ class JobService:
             is_stopping=runtime_state["stop_requested"],
             is_force_stopping=runtime_state["force_stop_requested"],
         )
-
-    async def get_job_config_by_type(
-        self, job_type: JobType
-    ) -> JobConfigurationResponse | None:
-        """Get job configuration by job type.
-
-        Args:
-            job_type: The type of job to find.
-
-        Returns:
-            Job configuration if found, None otherwise.
-        """
-        query = (
-            select(JobConfiguration)
-            .where(JobConfiguration.job_type == job_type)
-            .limit(1)
-        )
-        result = await self.db.execute(query)
-        job = result.scalar_one_or_none()
-
-        if job:
-            return self._to_job_response(job)
-        return None

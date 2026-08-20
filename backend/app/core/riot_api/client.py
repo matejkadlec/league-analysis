@@ -33,7 +33,6 @@ from .errors import (
 from .models import (
     AccountDTO,
     LeagueEntryDTO,
-    LegacyLeagueEntryDTO,
     MatchDTO,
     MatchListDTO,
     MatchTimelineDTO,
@@ -648,27 +647,6 @@ class RiotAPIClient:
         )
 
     # League endpoints
-    async def get_league_entries_by_summoner_id(
-        self, summoner_id: str, platform: Platform | None = None
-    ) -> list[LegacyLeagueEntryDTO]:
-        """Get league entries by encrypted Summoner ID."""
-        used_platform = platform or self.platform
-        self._record_api_call(
-            "/lol/league/v4/entries/by-summoner/{summonerId}",
-            self._enum_str(used_platform),
-            {"summonerId": summoner_id},
-        )
-        url = self.endpoints.league_entries_by_summoner_id(summoner_id, platform)
-        response: dict[str, Any] | list[dict[str, Any]] = await self._make_request(url)
-
-        # API returns a list of league entries
-        if not isinstance(response, list):
-            raise RiotAPIError(
-                f"Expected list response for league entries, got {type(response)}"
-            )
-
-        return [LegacyLeagueEntryDTO(**entry) for entry in response]
-
     async def get_league_entries_by_puuid(
         self, puuid: str, platform: Platform | None = None
     ) -> list[LeagueEntryDTO]:

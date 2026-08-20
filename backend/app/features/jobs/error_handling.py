@@ -12,7 +12,6 @@ from collections.abc import Iterator
 import structlog
 from sqlalchemy.exc import SQLAlchemyError
 
-from app.core.exceptions import DatabaseError
 from app.core.riot_api.errors import (
     AuthenticationError,
     ForbiddenError,
@@ -87,7 +86,4 @@ def is_riot_puuid_binding_error(error: Exception) -> bool:
 
 def is_database_job_error(error: Exception) -> bool:
     """Return whether continuing would reuse a failed or unavailable DB session."""
-    return any(
-        isinstance(item, (DatabaseError, SQLAlchemyError))
-        for item in iter_error_chain(error)
-    )
+    return any(isinstance(item, SQLAlchemyError) for item in iter_error_chain(error))

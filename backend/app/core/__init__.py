@@ -8,7 +8,6 @@ from .config import Settings, get_global_settings, get_riot_api_key, get_setting
 from .database import db_manager, get_db
 from .enums import Tier
 from .exceptions import (
-    DatabaseError,
     PlayerServiceError,
     ServiceException,
 )
@@ -18,7 +17,6 @@ from .models import (
 
 __all__ = [
     "Base",
-    "DatabaseError",
     "PlayerServiceError",
     "ServiceException",
     "Settings",

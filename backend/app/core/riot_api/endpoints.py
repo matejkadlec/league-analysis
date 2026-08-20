@@ -109,16 +109,6 @@ class RiotAPIEndpoints:
         return f"{base_url}/lol/match/v5/matches/{quote(match_id, safe='')}/timeline"
 
     # League endpoints (Platform)
-    def league_entries_by_summoner_id(
-        self, summoner_id: str, platform: Platform | None = None
-    ) -> str:
-        """Get league entries by encrypted Summoner ID endpoint."""
-        platform_url = self.get_platform_url(platform)
-        return (
-            f"{platform_url}/lol/league/v4/entries/by-summoner/"
-            f"{quote(summoner_id, safe='')}"
-        )
-
     def league_entries_by_puuid(
         self, puuid: str, platform: Platform | None = None
     ) -> str:

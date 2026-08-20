@@ -181,11 +181,6 @@ class AuthService:
         """Hash a password using Argon2id."""
         return pwd_context.hash(password)
 
-    async def get_user_by_email(self, email: str) -> User | None:
-        """Get a user by email address."""
-        result = await self.db.execute(select(User).where(User.email == email))
-        return result.scalar_one_or_none()
-
     async def get_user_by_email_case_insensitive(self, email: str) -> User | None:
         """Get a user by email address using case-insensitive comparison."""
         normalized_email = email.strip().lower()

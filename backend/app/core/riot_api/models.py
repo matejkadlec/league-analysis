@@ -168,13 +168,6 @@ class ParticipantDTO(BaseModel):
     role: str | None = None
     individual_position: str | None = Field(default=None, alias="individualPosition")
 
-    @property
-    def calculated_kda(self) -> float:
-        """Calculate KDA (kills + assists) / deaths."""
-        if self.deaths == 0:
-            return self.kills + self.assists
-        return (self.kills + self.assists) / self.deaths
-
     model_config = ConfigDict(populate_by_name=True)
 
 
@@ -250,13 +243,6 @@ class LeagueEntryDTO(BaseModel):
     # miniSeries is intentionally ignored: no current feature displays or
     # analyzes promotion-series state, and Pydantic ignores extra provider keys.
     model_config = ConfigDict(populate_by_name=True, extra="ignore")
-
-
-class LegacyLeagueEntryDTO(LeagueEntryDTO):
-    """Legacy by-summoner response kept separate from the PUUID contract."""
-
-    summoner_id: str | None = Field(default=None, alias="summonerId")
-    summoner_name: str | None = Field(default=None, alias="summonerName")
 
 
 # ---------------------------------------------------------------------------

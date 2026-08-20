@@ -141,24 +141,3 @@ class MatchmakingAnalysis(Base):
             f"created_at={self.created_at}, "
             f"progress={completed_count}/{progress_count})>"
         )
-
-    @property
-    def is_completed(self) -> bool:
-        """Check if analysis is completed."""
-        return self.status == "completed"
-
-    @property
-    def is_in_progress(self) -> bool:
-        """Check if analysis is in progress."""
-        return self.status in {"pending", "in_progress", "waiting_rate_limit"}
-
-    @property
-    def progress_percentage(self) -> float:
-        """Calculate progress percentage based on analyzed PUUIDs."""
-        if not self.puuid_progress:
-            return 0.0
-        total = len(self.puuid_progress)
-        if total == 0:
-            return 0.0
-        completed = sum(1 for v in self.puuid_progress.values() if v)
-        return (completed / total) * 100
