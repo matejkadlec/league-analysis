@@ -42,18 +42,12 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    """Put the pre-fix basis back on rows that carry the current one.
+    """Deliberately nothing.
 
-    Not exact: a row that genuinely completed after the fix is
-    indistinguishable from one this migration moved, so downgrading sends
-    both back. The render-time ternary this replaces had the same blind spot.
+    This revision corrects data, not schema, so there is no structure for a
+    downgrade to undo -- and a reverse `UPDATE` could not be selective: a row
+    that genuinely completed after the fix is indistinguishable from one this
+    migration moved, so putting 820 back would corrupt every correct analysis
+    to unwind a handful of stale ones. Leaving 910 in place is right under
+    either revision; the constant only ever moves one way.
     """
-    op.execute(
-        f"""
-        UPDATE core.matchmaking_analyses
-        SET results = jsonb_set(
-            results, '{{matches_analyzed}}', '{OLD_BASIS}'::jsonb
-        )
-        WHERE results ->> 'matches_analyzed' = '{NEW_BASIS}'
-        """
-    )

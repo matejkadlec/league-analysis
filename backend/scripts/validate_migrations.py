@@ -250,7 +250,13 @@ def seed_legacy_match(database: str) -> None:
 
 
 def seed_legacy_matchmaking_analyses(database: str) -> None:
-    """Exercise lifecycle backfill and active-run deduplication."""
+    """Exercise lifecycle backfill, active-run dedup and the 0017 basis rewrite.
+
+    The completed row carries 820 because that is what the pre-fix formula
+    stored; seeding the post-fix 910 here would be an anachronism, and it would
+    also leave revision 0017's `UPDATE` matching nothing, so emptying that
+    revision would pass this gate unnoticed.
+    """
     url = administration_url().set(database=database)
     engine = create_engine(url)
     try:
@@ -272,7 +278,7 @@ def seed_legacy_matchmaking_analyses(database: str) -> None:
                     "('LIFECYCLE_VALIDATION', '2026-08-09T00:02:00Z', "
                     " '2026-08-09T00:02:01Z', '2026-08-09T00:02:02Z', "
                     ' \'{"team_avg_winrate": 0.51, "enemy_avg_winrate": 0.49, '
-                    '"matches_analyzed": 910}\'::jsonb), '
+                    '"matches_analyzed": 820}\'::jsonb), '
                     "('LIFECYCLE_VALIDATION', '2026-08-09T00:03:00Z', "
                     " '2026-08-09T00:03:01Z', '2026-08-09T00:03:02Z', "
                     ' \'{"team_avg_winrate": 0, "enemy_avg_winrate": 0, '
@@ -376,6 +382,34 @@ def validate_revision_0014_repaired_the_seeded_rows(database: str) -> None:
         raise RuntimeError(
             "revision 0014 did not reduce the duplicate playstyle analyses to "
             f"the newest row: {surviving}"
+        )
+
+
+def validate_revision_0017_rewrote_the_seeded_basis(database: str) -> None:
+    """Assert 0017 moved the pre-fix basis onto the current one."""
+    url = administration_url().set(database=database)
+    engine = create_engine(url)
+    try:
+        with engine.connect() as connection:
+            bases = (
+                connection.execute(
+                    text(
+                        "SELECT results->>'matches_analyzed' "
+                        "FROM core.matchmaking_analyses "
+                        "WHERE puuid = 'LIFECYCLE_VALIDATION' "
+                        "AND results IS NOT NULL "
+                        "ORDER BY created_at"
+                    )
+                )
+                .scalars()
+                .all()
+            )
+    finally:
+        engine.dispose()
+    if bases != ["910", "0"]:
+        raise RuntimeError(
+            "revision 0017 did not rewrite the pre-fix matchmaking basis "
+            f"(expected ['910', '0'], got {bases})"
         )
 
 
@@ -714,6 +748,7 @@ def main() -> int:
         run_upgrade(database)
         validate_revision(database)
         validate_revision_0014_repaired_the_seeded_rows(database)
+        validate_revision_0017_rewrote_the_seeded_basis(database)
         asyncio.run(verify_application_database_access(database))
         with tempfile.TemporaryDirectory(
             prefix="league-analysis-restore-validation-"
