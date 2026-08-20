@@ -490,6 +490,11 @@ export function MatchRow({ match, playerPuuid }: MatchRowProps) {
         )}
 
         <div className="w-16 shrink-0 text-center flex flex-col justify-center">
+          {/* The row's tint is the only other outcome signal; colourblind
+              players need the word (WCAG 1.4.1: no colour-only meaning). */}
+          <span className="text-[10px] font-semibold uppercase text-foreground/75">
+            {isRemake ? "Remake" : participant?.win ? "Victory" : "Defeat"}
+          </span>
           <span className="">{formatDuration(match.game_duration)}</span>
         </div>
 

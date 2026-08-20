@@ -135,10 +135,10 @@ export function PlayerContextProvider({
           ? (urlPlayerQuery.data ?? null)
           : (contextQuery.data?.current_player ?? null),
       trackedPlayers: contextQuery.data?.tracked_players ?? [],
+      // No `!!urlPuuid &&` guard: React Query v5 derives isLoading as
+      // isPending && isFetching, so the disabled query already reports false.
       isLoading:
-        authLoading ||
-        contextQuery.isLoading ||
-        (!!urlPuuid && urlPlayerQuery.isLoading),
+        authLoading || contextQuery.isLoading || urlPlayerQuery.isLoading,
       selectPlayer,
       refreshContext,
     }),
