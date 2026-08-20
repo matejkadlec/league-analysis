@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 
 import { renderWithQueryClient } from "./render-support";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { validatedGet, useAuth } = vi.hoisted(() => ({
   validatedGet: vi.fn(),
@@ -78,7 +78,6 @@ beforeEach(() => {
   });
 });
 
-afterEach(cleanup);
 
 describe("the background jobs page", () => {
   it("shows nothing at all to an account that is not an admin", async () => {

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { render, screen } from "@testing-library/react";
+import { describe, expect, it } from "vitest";
 
 import { OBJECTIVE_DEFINITIONS } from "../features/matches/components/objective-definitions";
 import { TeamObjectiveStats } from "../features/matches/components/objective-icons";
@@ -19,7 +19,6 @@ const stats = {
 };
 
 describe("Match History objective icons", () => {
-  afterEach(() => cleanup());
 
   it("keeps the semantic order and exposes every count accessibly", () => {
     const { container } = render(

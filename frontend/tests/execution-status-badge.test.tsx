@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { ExecutionStatusBadge } from "@/features/jobs/components/execution-status-badge";
 import type { JobStatus } from "@/lib/core/schemas";
@@ -11,7 +11,6 @@ import type { JobStatus } from "@/lib/core/schemas";
 // CANCELLED and PAUSED colours, so a cancelled run there looked identical to a
 // pending one. Nothing failed, because no test read the badge. These do.
 
-afterEach(cleanup);
 
 function badgeFor(status: JobStatus) {
   render(<ExecutionStatusBadge status={status} />);

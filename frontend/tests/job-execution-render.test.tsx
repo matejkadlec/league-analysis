@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { JobExecutionApiCalls } from "@/features/jobs/components/job-execution-api-calls";
 import { JobExecutionLogs } from "@/features/jobs/components/job-execution-logs";
@@ -12,7 +12,6 @@ import { type APICallEntry } from "@/features/jobs/components/job-execution-form
 // here and nowhere else is the conditional structure — which call gets an
 // expander, which params are shown, and how a malformed log line degrades.
 
-afterEach(cleanup);
 
 const STARTED = "2026-08-19T10:00:00Z";
 

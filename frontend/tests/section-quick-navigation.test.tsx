@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SectionQuickNavigation } from "@/components/section-quick-navigation";
 
@@ -14,7 +14,6 @@ describe("SectionQuickNavigation", () => {
     Element.prototype.scrollIntoView = scrollIntoView;
   });
 
-  afterEach(() => cleanup());
 
   it("stays off viewports too narrow to spare its fixed 40px", () => {
     render(

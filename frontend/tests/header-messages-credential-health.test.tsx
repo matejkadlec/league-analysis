@@ -3,7 +3,7 @@
 import { cleanup, screen } from "@testing-library/react";
 
 import { renderWithQueryClient } from "./render-support";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const state = vi.hoisted(() => ({
   isAdmin: true,
@@ -56,7 +56,6 @@ describe("HeaderMessages credential health", () => {
     state.isAdmin = true;
   });
 
-  afterEach(() => cleanup());
 
   it("projects the same invalid backend state for admin and non-admin users", async () => {
     renderHeader();

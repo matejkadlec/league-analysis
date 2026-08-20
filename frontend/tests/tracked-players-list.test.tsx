@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 
-import { cleanup, screen, waitFor } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 
 import { renderWithQueryClient } from "./render-support";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { validatedGet } = vi.hoisted(() => ({
   validatedGet: vi.fn(),
@@ -54,7 +54,6 @@ describe("TrackedPlayersList", () => {
     );
   });
 
-  afterEach(() => cleanup());
 
   it("renders players directly and scrolls after five rows", async () => {
     renderList();

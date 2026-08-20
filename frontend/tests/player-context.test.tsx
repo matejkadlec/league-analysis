@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
-import { cleanup, renderHook, waitFor } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { renderHook, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { validatedGet, validatedPut, useAuth, replace, push, pathname, search } =
   vi.hoisted(() => ({
@@ -119,7 +119,6 @@ beforeEach(() => {
   });
 });
 
-afterEach(cleanup);
 
 describe("which player the app thinks you are looking at", () => {
   it("lets the URL win over the saved player", async () => {

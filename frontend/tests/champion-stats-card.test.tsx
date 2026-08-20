@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, it } from "vitest";
 
 import { ChampionStatsCard } from "@/features/profile/components/champion-stats-card";
 import type {
@@ -61,7 +61,6 @@ function visibleRanks(container: HTMLElement): string[] {
   );
 }
 
-afterEach(cleanup);
 
 describe("the top champions card", () => {
   it("returns to the first page when the data behind it changes", () => {

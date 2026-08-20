@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { act } from "react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
   cancelMatchmakingAnalysis,
@@ -102,7 +102,6 @@ describe("MatchmakingAnalysis lifecycle", () => {
     Object.values(toast).forEach((mock) => mock.mockReset());
   });
 
-  afterEach(() => cleanup());
 
   it("switches to authoritative running state after the first fast start response", async () => {
     let resolveStart: ((value: unknown) => void) | undefined;

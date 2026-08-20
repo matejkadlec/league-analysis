@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 
-import { act, cleanup, screen, waitFor } from "@testing-library/react";
+import { act, screen, waitFor } from "@testing-library/react";
 
 import { renderWithQueryClient } from "./render-support";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { JobExecution, JobExecutionListResponse } from "@/lib/core/schemas";
 
@@ -80,7 +80,6 @@ beforeEach(() => {
   }));
 });
 
-afterEach(cleanup);
 
 function renderExecutions() {
   return renderWithQueryClient(

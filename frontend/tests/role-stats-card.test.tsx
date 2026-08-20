@@ -4,7 +4,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { RoleStatsCard } from "@/features/profile/components/role-stats-card";
 import type { LaneStatsItem, LaneStatsResponse } from "@/lib/core/schemas";
@@ -52,7 +52,6 @@ function iconSources(): string[] {
     .map((image) => image.getAttribute("src") ?? "");
 }
 
-afterEach(cleanup);
 
 describe("the role performance card", () => {
   it("gives every lane the backend can send its own icon", () => {

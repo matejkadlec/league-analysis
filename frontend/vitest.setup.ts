@@ -1,4 +1,14 @@
+import { afterEach } from "vitest";
+import { cleanup } from "@testing-library/react";
 import { configure } from "@testing-library/dom";
+
+// Unmount between tests once, here, rather than in every file that renders.
+// Vitest runs without `globals`, so Testing Library's own auto-cleanup -- which
+// only engages when it finds a global `afterEach` -- never fires: this file is
+// what stands in for it. A suite that leaves its tree mounted leaks it into the
+// next test's queries, where the failure reads as a duplicate element rather
+// than as missing teardown.
+afterEach(cleanup);
 
 // jsdom implements no CSS engine and therefore no `window.matchMedia`, so any
 // component reading a breakpoint throws on render. Stub it once here rather

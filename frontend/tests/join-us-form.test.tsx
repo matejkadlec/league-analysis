@@ -2,13 +2,12 @@
 
 import {
   act,
-  cleanup,
   fireEvent,
   render,
   screen,
   waitFor,
 } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
   post,
@@ -102,7 +101,6 @@ beforeEach(() => {
   useAuth.mockReturnValue({ isAuthenticated: false, isLoading: false });
 });
 
-afterEach(cleanup);
 
 describe("what the join-us form refuses to send", () => {
   // The endpoint is unauthenticated and sends an email, so every one of these
