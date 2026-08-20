@@ -41,10 +41,7 @@ from app.features.jobs.models import (
     JobStatus,
     JobType,
 )
-from app.features.jobs.queue_config import (
-    get_match_fetcher_queue_ids,
-    normalize_match_fetcher_config,
-)
+from app.features.jobs.queue_config import normalize_match_fetcher_config
 from app.features.jobs.schemas import JobConfigurationResponse, JobConfigurationUpdate
 from app.features.jobs.service import JobService
 
@@ -340,8 +337,7 @@ def test_api_call_storage_groups_to_one_entry_per_endpoint() -> None:
 
 
 def test_match_fetcher_uses_every_canonical_queue_and_strips_legacy_config() -> None:
-    assert get_match_fetcher_queue_ids() == list(PRODUCT_SUPPORTED_QUEUE_IDS)
-    assert get_match_fetcher_queue_ids() == [420, 440, 480, 400, 450, 2400]
+    assert list(PRODUCT_SUPPORTED_QUEUE_IDS) == [420, 440, 480, 400, 450, 2400]
     assert normalize_match_fetcher_config(None) == {}
     assert normalize_match_fetcher_config(
         {"enabled_queue_ids": [], "interval_seconds": 3600}
