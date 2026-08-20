@@ -3,7 +3,8 @@
 import { Badge } from "@/components/ui/badge";
 import type { JobExecution } from "@/lib/core/schemas";
 
-import { formatDuration, formatRelativeTime } from "./job-card-format";
+import { formatRelativeTime } from "./job-card-format";
+import { formatDuration } from "./job-execution-format";
 
 interface JobCardHistoryProps {
   recentExecutions: JobExecution[];
@@ -56,13 +57,7 @@ export function JobCardHistory({
                 )}
               </div>
               <span className="text-muted-foreground">
-                {execution.started_at && execution.completed_at
-                  ? formatDuration(
-                      (new Date(execution.completed_at).getTime() -
-                        new Date(execution.started_at).getTime()) /
-                        1000,
-                    )
-                  : "N/A"}
+                {formatDuration(execution.started_at, execution.completed_at)}
               </span>
             </button>
           ))}
