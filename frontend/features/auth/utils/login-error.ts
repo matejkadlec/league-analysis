@@ -2,6 +2,15 @@ import { formatDateTime } from "@/lib/core/format";
 
 import type { AuthLoginError } from "../types";
 
+/**
+ * Said by the sign-in form and by every gated surface a deactivated session
+ * still reaches, so it is written once. The two used to disagree on whether
+ * the administrator could restore the account; this is the wording that says
+ * what the visitor can actually do about it.
+ */
+export const ACCOUNT_INACTIVE_MESSAGE =
+  "This account is inactive. Contact an administrator to restore access.";
+
 export const LOGIN_REQUEST_TIMEOUT_MS = 30_000;
 
 /**
@@ -97,7 +106,7 @@ export function getLoginErrorMessage(error: unknown): string {
 
   switch (error.code) {
     case "ACCOUNT_INACTIVE":
-      return "This account is inactive. Please contact an administrator.";
+      return ACCOUNT_INACTIVE_MESSAGE;
     case "ACCOUNT_LOCKED": {
       const lockoutTime = error.lockedUntil
         ? formatLockoutTime(error.lockedUntil)

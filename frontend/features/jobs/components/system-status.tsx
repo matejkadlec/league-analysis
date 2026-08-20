@@ -3,7 +3,7 @@
 import { JobStatusResponse } from "@/lib/core/schemas";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { formatNextRun, formatRelativeTime } from "./job-card-format";
+import { formatNextRun, formatLastRun } from "./job-card-format";
 import {
   CheckCircle2,
   XCircle,
@@ -121,7 +121,7 @@ export function SystemStatus({ status }: SystemStatusProps) {
               {status.last_execution ? (
                 <>
                   <p className="mt-1 text-sm font-semibold">
-                    {formatRelativeTime(status.last_execution.started_at)}
+                    {formatLastRun(status.last_execution.started_at)}
                   </p>
                   <Badge
                     variant={

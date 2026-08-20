@@ -26,7 +26,7 @@ import {
 import { JobCardHistory } from "./job-card-history";
 import { JobCardTestDialog } from "./job-card-test-dialog";
 import {
-  formatRelativeTime,
+  formatLastRun,
   formatScheduleInterval,
   getJobDescription,
 } from "./job-card-format";
@@ -167,7 +167,7 @@ export function JobCard({ job, onExecutionClick }: JobCardProps) {
                       {lastExecution.status}
                     </Badge>
                     <span className="text-muted-foreground">
-                      {formatRelativeTime(lastExecution.started_at)}
+                      {formatLastRun(lastExecution.started_at)}
                     </span>
                     {lastExecution.completed_at && (
                       <span className="text-muted-foreground">

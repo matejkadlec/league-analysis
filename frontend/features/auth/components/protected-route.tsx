@@ -1,6 +1,7 @@
 "use client";
 
 import { useAuth } from "../context/auth-context";
+import { ACCOUNT_INACTIVE_MESSAGE } from "../utils/login-error";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -27,7 +28,7 @@ export function ProtectedRoute({
 
   if (user && !user.is_active) {
     return (
-      <AccessDenied reason="This account is inactive. Contact an administrator to restore access." />
+      <AccessDenied reason={ACCOUNT_INACTIVE_MESSAGE} />
     );
   }
 

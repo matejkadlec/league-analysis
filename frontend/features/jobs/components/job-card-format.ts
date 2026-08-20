@@ -75,7 +75,17 @@ function formatMinuteLadder(diffMins: number, direction: -1 | 1): string {
   return narrowRelativeFormatter.format(direction * diffDays, "day");
 }
 
-export function formatRelativeTime(timestamp: string): string {
+/**
+ * The narrow, always-relative clock the job surfaces run on: "2h ago", and
+ * never anything else however old the run is.
+ *
+ * Deliberately not `lib/core/relative-time`'s `formatRelativeTime`, which the
+ * shared name used to imply it was a copy of. That one answers "Never" for a
+ * missing value and switches to an absolute date past a week — right for a
+ * freshness stamp that may have no value at all, wrong for an execution row,
+ * which always has a start time and reads as a log.
+ */
+export function formatLastRun(timestamp: string): string {
   const elapsedMins = Math.floor(
     (Date.now() - new Date(timestamp).getTime()) / 60000,
   );

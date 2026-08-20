@@ -83,7 +83,7 @@ describe("sign-in error mapping", () => {
       getLoginErrorMessage(
         createAuthLoginError({ detail: { code: "ACCOUNT_INACTIVE" } }, 403),
       ),
-    ).toBe("This account is inactive. Please contact an administrator.");
+    ).toBe("This account is inactive. Contact an administrator to restore access.");
     expect(
       getLoginErrorMessage(
         createAuthLoginError(
