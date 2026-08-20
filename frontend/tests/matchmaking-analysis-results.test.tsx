@@ -249,18 +249,12 @@ describe("the last matchmaking analysis result", () => {
     queryClient.clear();
   });
 
-  it("still reports 910 for analyses stored under the old formula", async () => {
-    // Not a magic number: the backend used to compute the basis as
-    // `10 + 90 * (MATCHES_FOR_WINRATE - 1)` = 820 and now computes
-    // `10 + 90 * MATCHES_FOR_WINRATE` = 910 (see `_build_completion_results`
-    // in `matchmaking_analysis/service.py`). The stored rows from before that
-    // fix still carry 820, and this substitution is what stops two analyses
-    // of the same size disagreeing about how much they looked at.
-    //
-    // It is pinned rather than left bare because an unexplained `=== 820` in
-    // a render function is exactly the line a future reader deletes. The
-    // right fix is a migration of the stored rows; until then, deleting this
-    // has to fail.
+  it("reports the stored count without rewriting it", async () => {
+    // A render function used to substitute 910 for 820, because the backend
+    // once computed the basis as `10 + 90 * (MATCHES_FOR_WINRATE - 1)` and
+    // now computes `10 + 90 * MATCHES_FOR_WINRATE`. Migration 20260820_0017
+    // moved the stored rows instead, so the card shows what the database
+    // holds and the two no longer disagree about the same row.
     getLatestCompletedMatchmakingAnalysis.mockResolvedValue(
       completed({
         team_avg_winrate: 0.5,
@@ -271,7 +265,7 @@ describe("the last matchmaking analysis result", () => {
     const { queryClient } = renderResults();
 
     await waitFor(() =>
-      expect(screen.getByText(/Based on 910 ranked matches/)).toBeTruthy(),
+      expect(screen.getByText(/Based on 820 ranked matches/)).toBeTruthy(),
     );
     queryClient.clear();
   });
