@@ -73,70 +73,48 @@ function formatNumber(value: number): string {
   return oneDecimalFormatter.format(value);
 }
 
-// Stat comparison row component
+// Stat comparison row. `small` is the 75%-size variant the 3-column row wants;
+// nothing but the size tokens differs between the two.
 function StatComparisonRow({
   label,
   recentValue,
   overallValue,
   trend,
+  small = false,
 }: {
   label: string;
   recentValue: string;
   overallValue: string;
   trend: { icon: React.ReactNode; color: string; label: string };
+  small?: boolean;
 }) {
+  const value = small ? "text-xl" : "text-2xl";
+  const caption = small ? "text-[10px]" : "text-xs";
   return (
-    <div className="space-y-2">
-      <h4 className="text-sm font-medium text-muted-foreground">{label}</h4>
+    <div className={small ? "space-y-1" : "space-y-2"}>
+      <h4
+        className={`${small ? "text-xs" : "text-sm"} font-medium text-muted-foreground`}
+      >
+        {label}
+      </h4>
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-2xl font-bold">{recentValue}</p>
-          <p className="text-xs text-muted-foreground">Recent</p>
+          <p className={`${value} font-bold`}>{recentValue}</p>
+          <p className={`${caption} text-muted-foreground`}>Recent</p>
         </div>
-        <div className={`flex items-center gap-1 ${trend.color}`}>
+        <div
+          className={`flex items-center ${small ? "gap-0.5" : "gap-1"} ${trend.color}`}
+        >
           {trend.icon}
-          <span className="text-sm capitalize">{trend.label}</span>
+          <span className={`${small ? "text-xs" : "text-sm"} capitalize`}>
+            {trend.label}
+          </span>
         </div>
         <div className="text-right">
-          <p className="text-2xl font-bold text-muted-foreground">
+          <p className={`${value} font-bold text-muted-foreground`}>
             {overallValue}
           </p>
-          <p className="text-xs text-muted-foreground">Overall</p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// Smaller stat comparison row for 3-column layout (75% size)
-function SmallStatComparisonRow({
-  label,
-  recentValue,
-  overallValue,
-  trend,
-}: {
-  label: string;
-  recentValue: string;
-  overallValue: string;
-  trend: { icon: React.ReactNode; color: string; label: string };
-}) {
-  return (
-    <div className="space-y-1">
-      <h4 className="text-xs font-medium text-muted-foreground">{label}</h4>
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-xl font-bold">{recentValue}</p>
-          <p className="text-[10px] text-muted-foreground">Recent</p>
-        </div>
-        <div className={`flex items-center gap-0.5 ${trend.color}`}>
-          {trend.icon}
-          <span className="text-xs capitalize">{trend.label}</span>
-        </div>
-        <div className="text-right">
-          <p className="text-xl font-bold text-muted-foreground">
-            {overallValue}
-          </p>
-          <p className="text-[10px] text-muted-foreground">Overall</p>
+          <p className={`${caption} text-muted-foreground`}>Overall</p>
         </div>
       </div>
     </div>
@@ -271,19 +249,22 @@ export function RecentPerformanceCard({
 
         {/* Row 2: Avg Kills | Avg Deaths | Avg Assists (smaller) */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 my-4.5">
-          <SmallStatComparisonRow
+          <StatComparisonRow
+            small
             label="Avg Kills"
             recentValue={formatNumber(recent.avg_kills)}
             overallValue={formatNumber(overall.avg_kills)}
             trend={killsTrend}
           />
-          <SmallStatComparisonRow
+          <StatComparisonRow
+            small
             label="Avg Deaths"
             recentValue={formatNumber(recent.avg_deaths)}
             overallValue={formatNumber(overall.avg_deaths)}
             trend={deathsTrend}
           />
-          <SmallStatComparisonRow
+          <StatComparisonRow
+            small
             label="Avg Assists"
             recentValue={formatNumber(recent.avg_assists)}
             overallValue={formatNumber(overall.avg_assists)}
