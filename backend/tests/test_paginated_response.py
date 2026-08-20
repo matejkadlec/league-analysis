@@ -1,0 +1,52 @@
+"""The page envelope's field names, which three endpoints now share.
+
+`PaginatedResponse` is a win and a risk: one edit moves every paginated
+endpoint at once. Before it existed, renaming a counter was caught by exactly
+one test, on the matches side only -- the jobs list would have changed its wire
+contract with the suite green. These are the names the client reads.
+"""
+
+import pytest
+from pydantic import BaseModel
+
+from app.core.schemas import PaginatedResponse
+from app.features.jobs.schemas import JobExecutionListResponse
+from app.features.matches.schemas import (
+    MatchListResponse,
+    MatchListWithPlayerDataResponse,
+)
+
+PAGE_FIELDS = {"total", "page", "size", "pages"}
+
+ENVELOPES = [
+    JobExecutionListResponse,
+    MatchListResponse,
+    MatchListWithPlayerDataResponse,
+]
+
+
+def test_the_envelope_is_exactly_these_four_counters() -> None:
+    assert set(PaginatedResponse.model_fields) == PAGE_FIELDS
+
+
+def test_every_counter_is_required() -> None:
+    """A missing counter must be a parse failure, not a silent zero."""
+    assert all(
+        PaginatedResponse.model_fields[name].is_required() for name in PAGE_FIELDS
+    )
+
+
+@pytest.mark.parametrize("envelope", ENVELOPES, ids=lambda e: e.__name__)
+def test_each_list_response_carries_the_envelope(
+    envelope: type[BaseModel],
+) -> None:
+    assert set(envelope.model_fields) >= PAGE_FIELDS
+    assert issubclass(envelope, PaginatedResponse)
+
+
+@pytest.mark.parametrize("envelope", ENVELOPES, ids=lambda e: e.__name__)
+def test_each_list_response_still_reads_from_orm_attributes(
+    envelope: type[BaseModel],
+) -> None:
+    """Inherited from the base -- the subclasses no longer declare it."""
+    assert envelope.model_config.get("from_attributes") is True

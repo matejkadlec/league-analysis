@@ -185,14 +185,21 @@ export const MatchWithPlayerDataSchema = MatchSchema.extend({
   team_stats: TeamStatsCompositionSchema.optional().nullable(),
 });
 
-// Detailed Match List Response Schema
-export const MatchListWithPlayerDataResponseSchema = z.object({
-  matches: z.array(MatchWithPlayerDataSchema),
+// The four counters every paginated endpoint answers with, mirroring the
+// backend's `PaginatedResponse`. Spelled once so a page cannot mean `size`
+// here and `page_size` there.
+const paginationFields = {
   total: z.number(),
-  total_analyzed: z.number().optional().default(0),
   page: z.number(),
   size: z.number(),
   pages: z.number(),
+};
+
+// Detailed Match List Response Schema
+export const MatchListWithPlayerDataResponseSchema = z.object({
+  matches: z.array(MatchWithPlayerDataSchema),
+  total_analyzed: z.number().optional().default(0),
+  ...paginationFields,
 });
 
 // The win/loss and per-game averages the backend returns for every stats
@@ -354,10 +361,7 @@ export const JobControlActionResponseSchema = z.object({
 // Job Execution List Response Schema
 export const JobExecutionListResponseSchema = z.object({
   executions: z.array(JobExecutionSchema),
-  total: z.number(),
-  page: z.number(),
-  size: z.number(),
-  pages: z.number(),
+  ...paginationFields,
 });
 
 // Infer TypeScript types for Jobs

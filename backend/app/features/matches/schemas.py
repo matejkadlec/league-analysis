@@ -5,6 +5,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.core.schemas import PaginatedResponse
 from app.features.matches.rune_transform import transform_runes_payload
 
 
@@ -248,34 +249,22 @@ class MatchWithPlayerData(MatchResponse):
     model_config = ConfigDict(from_attributes=True)
 
 
-class MatchListResponse(BaseModel):
+class MatchListResponse(PaginatedResponse):
     """Schema for paginated Match list response."""
 
     matches: list[MatchResponse]
-    total: int = Field(..., description="Total matches available")
     total_analyzed: int = Field(
         default=0, description="Total number of fully analyzed matches"
     )
-    page: int = Field(..., description="Current page number")
-    size: int = Field(..., description="Number of matches per page")
-    pages: int = Field(..., description="Total number of pages")
-
-    model_config = ConfigDict(from_attributes=True)
 
 
-class MatchListWithPlayerDataResponse(BaseModel):
+class MatchListWithPlayerDataResponse(PaginatedResponse):
     """Schema for paginated Match list with player participation data."""
 
     matches: list[MatchWithPlayerData]
-    total: int = Field(..., description="Total matches available")
     total_analyzed: int = Field(
         default=0, description="Total number of fully analyzed matches"
     )
-    page: int = Field(..., description="Current page number")
-    size: int = Field(..., description="Number of matches per page")
-    pages: int = Field(..., description="Total number of pages")
-
-    model_config = ConfigDict(from_attributes=True)
 
 
 class MatchStatsResponse(BaseModel):
