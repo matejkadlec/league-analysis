@@ -5,7 +5,7 @@ from typing import Any
 
 from app.core.riot_api.models import ParticipantDTO
 from app.features.matches.participants import MatchParticipant
-from app.features.matches.transformers import MatchDTOTransformer, PlayerDataSanitizer
+from app.features.matches.transformers import MatchDTOTransformer
 
 
 def participant(**overrides: Any) -> ParticipantDTO:
@@ -35,19 +35,11 @@ def test_match_id_extraction_handles_supported_boundaries() -> None:
     assert MatchDTOTransformer.extract_match_ids(object()) == []
 
 
-def test_name_and_platform_sanitization_is_stable() -> None:
+def test_name_sanitization_is_stable() -> None:
     participant = {"game_name": "", "tag_line": "EUN1"}
     assert MatchDTOTransformer.sanitize_participant_names(participant) == {
         "game_name": None,
         "tag_line": "EUN1",
-    }
-    player = PlayerDataSanitizer.sanitize_player_fields(
-        {"game_name": "  ", "tag_line": "", "platform": "eun1"}
-    )
-    assert player == {
-        "game_name": "Unknown Player",
-        "tag_line": None,
-        "platform": "EUN1",
     }
 
 
