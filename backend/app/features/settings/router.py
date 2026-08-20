@@ -3,6 +3,7 @@
 import structlog
 from fastapi import APIRouter, Depends, HTTPException
 
+from app.core.http_errors import log_and_raise_http
 from app.features.auth.dependencies import (
     get_current_active_user,
     get_current_admin_user,
@@ -53,11 +54,12 @@ async def get_service_status(
     try:
         return await settings_service.get_service_status()
     except Exception as e:
-        logger.error("failed_to_get_service_status", error=str(e), exc_info=True)
-        raise HTTPException(
-            status_code=500,
-            detail="The service status could not be loaded. Please try again later.",
-        ) from e
+        log_and_raise_http(
+            logger,
+            e,
+            "failed_to_get_service_status",
+            "The service status could not be loaded. Please try again later.",
+        )
 
 
 @router.get("/riot_api_key", response_model=SettingResponse)
@@ -80,11 +82,12 @@ async def get_riot_api_key(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("failed_to_get_riot_api_key", error=str(e), exc_info=True)
-        raise HTTPException(
-            status_code=500,
-            detail="The Riot API key could not be loaded. Please try again later.",
-        ) from e
+        log_and_raise_http(
+            logger,
+            e,
+            "failed_to_get_riot_api_key",
+            "The Riot API key could not be loaded. Please try again later.",
+        )
 
 
 @router.put("/riot_api_key", response_model=SettingResponse)
@@ -130,11 +133,12 @@ async def update_riot_api_key(
         raise HTTPException(status_code=400, detail=str(e)) from e
 
     except Exception as e:
-        logger.error("failed_to_update_riot_api_key", error=str(e), exc_info=True)
-        raise HTTPException(
-            status_code=500,
-            detail="The Riot API key could not be updated. Please try again later.",
-        ) from e
+        log_and_raise_http(
+            logger,
+            e,
+            "failed_to_update_riot_api_key",
+            "The Riot API key could not be updated. Please try again later.",
+        )
 
 
 @router.post("/riot_api_key/test", response_model=SettingTestResponse)
@@ -163,11 +167,12 @@ async def test_riot_api_key(
         return test_result
 
     except Exception as e:
-        logger.error("failed_to_test_riot_api_key", error=str(e), exc_info=True)
-        raise HTTPException(
-            status_code=500,
-            detail="The Riot API key could not be tested. Please try again later.",
-        ) from e
+        log_and_raise_http(
+            logger,
+            e,
+            "failed_to_test_riot_api_key",
+            "The Riot API key could not be tested. Please try again later.",
+        )
 
 
 # ===== USER SETTINGS ENDPOINTS =====
@@ -292,11 +297,12 @@ async def get_user_settings(
         settings = await settings_service.get_or_create_user_settings(current_user.id)
         return settings
     except Exception as e:
-        logger.error("failed_to_get_user_settings", error=str(e), exc_info=True)
-        raise HTTPException(
-            status_code=500,
-            detail="Your settings could not be loaded. Please try again later.",
-        ) from e
+        log_and_raise_http(
+            logger,
+            e,
+            "failed_to_get_user_settings",
+            "Your settings could not be loaded. Please try again later.",
+        )
 
 
 @router.put("/user", response_model=UserSettingsResponse)
@@ -314,11 +320,12 @@ async def update_user_settings(
         settings = await settings_service.update_user_settings(current_user.id, update)
         return settings
     except Exception as e:
-        logger.error("failed_to_update_user_settings", error=str(e), exc_info=True)
-        raise HTTPException(
-            status_code=500,
-            detail="Your settings could not be saved. Please try again later.",
-        ) from e
+        log_and_raise_http(
+            logger,
+            e,
+            "failed_to_update_user_settings",
+            "Your settings could not be saved. Please try again later.",
+        )
 
 
 @router.get("/user/cookie-consent", response_model=UserCookieConsentResponse | None)
@@ -331,11 +338,12 @@ async def get_user_cookie_consent(
         consent = await settings_service.get_user_cookie_consent(current_user.id)
         return consent
     except Exception as e:
-        logger.error("failed_to_get_user_cookie_consent", error=str(e), exc_info=True)
-        raise HTTPException(
-            status_code=500,
-            detail="Your cookie preferences could not be loaded. Please try again later.",
-        ) from e
+        log_and_raise_http(
+            logger,
+            e,
+            "failed_to_get_user_cookie_consent",
+            "Your cookie preferences could not be loaded. Please try again later.",
+        )
 
 
 @router.put("/user/cookie-consent", response_model=UserCookieConsentResponse)
@@ -351,12 +359,9 @@ async def update_user_cookie_consent(
         )
         return consent
     except Exception as e:
-        logger.error(
+        log_and_raise_http(
+            logger,
+            e,
             "failed_to_update_user_cookie_consent",
-            error=str(e),
-            exc_info=True,
+            "Your cookie preferences could not be saved. Please try again later.",
         )
-        raise HTTPException(
-            status_code=500,
-            detail="Your cookie preferences could not be saved. Please try again later.",
-        ) from e

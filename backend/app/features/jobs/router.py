@@ -7,6 +7,7 @@
 import structlog
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 
+from app.core.http_errors import log_and_raise_http
 from app.features.auth.dependencies import get_current_admin_user
 
 from .base import BaseJob
@@ -103,11 +104,12 @@ async def list_job_configurations(
         jobs = await job_service.list_job_configurations(active_only=active_only)
         return jobs
     except Exception as e:
-        logger.error("Failed to list job configurations", error=str(e), exc_info=True)
-        raise HTTPException(
-            status_code=500,
-            detail="Internal server error retrieving job configurations",
-        ) from e
+        log_and_raise_http(
+            logger,
+            e,
+            "Failed to list job configurations",
+            "Internal server error retrieving job configurations",
+        )
 
 
 @router.put("/{job_id}", response_model=JobConfigurationResponse)
@@ -135,16 +137,13 @@ async def update_job_configuration(
     except RiotWriterMaintenanceConfigurationError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
     except Exception as e:
-        logger.error(
+        log_and_raise_http(
+            logger,
+            e,
             "Failed to update job configuration",
+            "Internal server error updating job configuration",
             job_id=job_id,
-            error=str(e),
-            exc_info=True,
         )
-        raise HTTPException(
-            status_code=500,
-            detail="Internal server error updating job configuration",
-        ) from e
 
 
 # === Job Execution Endpoints ===
@@ -184,16 +183,13 @@ async def get_job_executions(
         )
         return executions
     except Exception as e:
-        logger.error(
+        log_and_raise_http(
+            logger,
+            e,
             "Failed to list job executions",
+            "Internal server error retrieving job executions",
             job_id=job_id,
-            error=str(e),
-            exc_info=True,
         )
-        raise HTTPException(
-            status_code=500,
-            detail="Internal server error retrieving job executions",
-        ) from e
 
 
 @router.get("/executions/all", response_model=JobExecutionListResponse)
@@ -227,11 +223,12 @@ async def list_all_executions(
         )
         return executions
     except Exception as e:
-        logger.error("Failed to list all executions", error=str(e), exc_info=True)
-        raise HTTPException(
-            status_code=500,
-            detail="Internal server error retrieving all job executions",
-        ) from e
+        log_and_raise_http(
+            logger,
+            e,
+            "Failed to list all executions",
+            "Internal server error retrieving all job executions",
+        )
 
 
 # === Job Control Endpoints ===
@@ -321,16 +318,13 @@ async def trigger_job(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(
+        log_and_raise_http(
+            logger,
+            e,
             "Failed to trigger job",
+            "Internal server error triggering job",
             job_id=job_id,
-            error=str(e),
-            exc_info=True,
         )
-        raise HTTPException(
-            status_code=500,
-            detail="Internal server error triggering job",
-        ) from e
 
 
 @router.post("/{job_id}/pause", response_model=JobControlActionResponse)
@@ -352,16 +346,13 @@ async def pause_job(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(
+        log_and_raise_http(
+            logger,
+            e,
             "Failed to pause job",
+            "Internal server error pausing job",
             job_id=job_id,
-            error=str(e),
-            exc_info=True,
         )
-        raise HTTPException(
-            status_code=500,
-            detail="Internal server error pausing job",
-        ) from e
 
 
 @router.post("/{job_id}/resume", response_model=JobControlActionResponse)
@@ -383,16 +374,13 @@ async def resume_job(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(
+        log_and_raise_http(
+            logger,
+            e,
             "Failed to resume job",
+            "Internal server error resuming job",
             job_id=job_id,
-            error=str(e),
-            exc_info=True,
         )
-        raise HTTPException(
-            status_code=500,
-            detail="Internal server error resuming job",
-        ) from e
 
 
 @router.post("/{job_id}/stop", response_model=JobControlActionResponse)
@@ -415,17 +403,14 @@ async def stop_job(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(
+        log_and_raise_http(
+            logger,
+            e,
             "Failed to stop job",
+            "Internal server error stopping job",
             job_id=job_id,
             force=force,
-            error=str(e),
-            exc_info=True,
         )
-        raise HTTPException(
-            status_code=500,
-            detail="Internal server error stopping job",
-        ) from e
 
 
 # === Test Run Endpoints ===
@@ -519,16 +504,13 @@ async def trigger_test_run(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(
+        log_and_raise_http(
+            logger,
+            e,
             "Failed to trigger test run",
+            "Internal server error triggering test run",
             job_id=job_id,
-            error=str(e),
-            exc_info=True,
         )
-        raise HTTPException(
-            status_code=500,
-            detail="Internal server error triggering test run",
-        ) from e
 
 
 async def _run_test_job_with_cleanup(
@@ -579,16 +561,13 @@ async def stop_test_run(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(
+        log_and_raise_http(
+            logger,
+            e,
             "Failed to stop test run",
+            "Internal server error stopping test run",
             job_id=job_id,
-            error=str(e),
-            exc_info=True,
         )
-        raise HTTPException(
-            status_code=500,
-            detail="Internal server error stopping test run",
-        ) from e
 
 
 async def _set_test_run_paused(
@@ -618,16 +597,13 @@ async def pause_test_run(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(
+        log_and_raise_http(
+            logger,
+            e,
             "Failed to pause test run",
+            "Internal server error pausing test run",
             job_id=job_id,
-            error=str(e),
-            exc_info=True,
         )
-        raise HTTPException(
-            status_code=500,
-            detail="Internal server error pausing test run",
-        ) from e
 
 
 @router.post("/{job_id}/test/resume", response_model=JobControlActionResponse)
@@ -641,16 +617,13 @@ async def resume_test_run(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(
+        log_and_raise_http(
+            logger,
+            e,
             "Failed to resume test run",
+            "Internal server error resuming test run",
             job_id=job_id,
-            error=str(e),
-            exc_info=True,
         )
-        raise HTTPException(
-            status_code=500,
-            detail="Internal server error resuming test run",
-        ) from e
 
 
 @router.get("/status/overview", response_model=JobStatusResponse)
@@ -696,8 +669,9 @@ async def get_job_system_status(
         )
 
     except Exception as e:
-        logger.error("Failed to get job system status", error=str(e), exc_info=True)
-        raise HTTPException(
-            status_code=500,
-            detail="Internal server error retrieving job system status",
-        ) from e
+        log_and_raise_http(
+            logger,
+            e,
+            "Failed to get job system status",
+            "Internal server error retrieving job system status",
+        )

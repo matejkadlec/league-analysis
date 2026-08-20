@@ -2,12 +2,13 @@
 
 import re
 from datetime import UTC
-from typing import Annotated, NoReturn
+from typing import Annotated
 
 import structlog
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 
 from app.core.dependencies import get_riot_client
+from app.core.http_errors import log_and_raise_http
 from app.core.rate_limiter import rate_limit
 from app.core.riot_api.client import RiotAPIClient
 from app.core.riot_api.constants import Platform
@@ -43,14 +44,6 @@ logger = structlog.get_logger(__name__)
 
 
 router = APIRouter(prefix="/players", tags=["players"])
-
-
-def _log_and_raise_500(
-    e: Exception, event: str, detail: str, **context: object
-) -> NoReturn:
-    """Log the unexpected error with its context and answer a client-safe 500."""
-    logger.error(event, error=str(e), exc_info=e, **context)
-    raise HTTPException(status_code=500, detail=detail) from e
 
 
 router.get_player_service = get_player_service  # type: ignore[attr-defined]
@@ -136,7 +129,8 @@ async def search_player(
         return results
 
     except Exception as e:
-        _log_and_raise_500(
+        log_and_raise_http(
+            logger,
             e,
             "player_search_failed",
             "Player search could not be completed. Please try again later.",
@@ -207,7 +201,8 @@ async def get_player_suggestions(
         return results
 
     except Exception as e:
-        _log_and_raise_500(
+        log_and_raise_http(
+            logger,
             e,
             "player_suggestions_failed",
             "Player suggestions could not be loaded. Please try again later.",
@@ -399,7 +394,8 @@ async def track_player(
             # Tracking limit reached or other validation error
             raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
-        _log_and_raise_500(
+        log_and_raise_http(
+            logger,
             e,
             "track_player_failed",
             "The player could not be tracked. Please try again later.",
@@ -455,7 +451,8 @@ async def untrack_player(
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
-        _log_and_raise_500(
+        log_and_raise_http(
+            logger,
             e,
             "untrack_player_failed",
             "The player could not be untracked. Please try again later.",
@@ -486,7 +483,8 @@ async def get_tracking_status(
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
-        _log_and_raise_500(
+        log_and_raise_http(
+            logger,
             e,
             "get_tracking_status_failed",
             "The tracking status could not be loaded. Please try again later.",
@@ -509,7 +507,8 @@ async def get_tracked_players(
         players = await player_service.get_tracked_players(current_user.id)
         return players
     except Exception as e:
-        _log_and_raise_500(
+        log_and_raise_http(
+            logger,
             e,
             "get_tracked_players_failed",
             "Tracked players could not be loaded. Please try again later.",
@@ -592,22 +591,21 @@ async def refresh_player_league(
             detail="Riot data maintenance is in progress. Try again after it completes.",
         ) from e
     except (AuthenticationError, ForbiddenError) as e:
-        logger.error(
+        log_and_raise_http(
+            logger,
+            e,
             "refresh_player_league_failed",
-            error=str(e),
-            puuid=puuid,
-            exc_info=True,
-        )
-        raise HTTPException(
+            RIOT_API_KEY_INVALID_DETAIL,
             status_code=503,
-            detail=RIOT_API_KEY_INVALID_DETAIL,
-        ) from e
+            puuid=puuid,
+        )
     except Exception as e:
         # ValueError deliberately lands here too: nothing in this path raises
         # it to mean "not found" (that case returns 404 explicitly above), and
         # mapping it to 404 leaked raw platform/validation errors as missing
         # players.
-        _log_and_raise_500(
+        log_and_raise_http(
+            logger,
             e,
             "refresh_player_league_failed",
             "The player's rank could not be refreshed. Please try again later.",
@@ -643,7 +641,8 @@ async def get_player_current_league(
             return PlayerLeagueResponse.model_validate(league)
         return None
     except Exception as e:
-        _log_and_raise_500(
+        log_and_raise_http(
+            logger,
             e,
             "get_player_league_failed",
             "The player's rank could not be loaded. Please try again later.",
