@@ -616,6 +616,49 @@ async def stop_test_run(
         ) from e
 
 
+async def _set_test_run_paused(
+    job_id: int,
+    job_service: JobServiceDep,
+    *,
+    paused: bool,
+) -> JobControlActionResponse:
+    """Flip the pause flag for an active test run; the two routes share this."""
+    job_model = await job_service.get_job_configuration_model(job_id)
+    if not job_model:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Job configuration with ID {job_id} not found",
+        )
+
+    test_runtime_key = -job_model.id
+    if not is_runtime_job_running(test_runtime_key):
+        return JobControlActionResponse(
+            success=False,
+            message="No test run is active for this job",
+            is_running=False,
+            is_paused=False,
+            is_stopping=False,
+            is_force_stopping=False,
+        )
+
+    job_model.is_paused = paused
+    job_model.updated_at = datetime.now(UTC)
+    await job_service.db.commit()
+    await job_service.db.refresh(job_model)
+
+    test_state = get_runtime_control_snapshot(test_runtime_key)
+    return JobControlActionResponse(
+        success=True,
+        message=(
+            f"Test run for '{job_model.name}' {'paused' if paused else 'resumed'}"
+        ),
+        is_running=test_state["is_running"],
+        is_paused=paused,
+        is_stopping=test_state["stop_requested"],
+        is_force_stopping=test_state["force_stop_requested"],
+    )
+
+
 @router.post("/{job_id}/test/pause", response_model=JobControlActionResponse)
 async def pause_test_run(
     job_id: int,
@@ -623,39 +666,7 @@ async def pause_test_run(
 ):
     """Pause a running test execution."""
     try:
-        job_model = await job_service.get_job_configuration_model(job_id)
-        if not job_model:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Job configuration with ID {job_id} not found",
-            )
-
-        test_runtime_key = -job_model.id
-        if not is_runtime_job_running(test_runtime_key):
-            return JobControlActionResponse(
-                success=False,
-                message="No test run is active for this job",
-                is_running=False,
-                is_paused=False,
-                is_stopping=False,
-                is_force_stopping=False,
-            )
-
-        job_model.is_paused = True
-        job_model.updated_at = datetime.now(UTC)
-        await job_service.db.commit()
-        await job_service.db.refresh(job_model)
-
-        test_state = get_runtime_control_snapshot(test_runtime_key)
-        return JobControlActionResponse(
-            success=True,
-            message=f"Test run for '{job_model.name}' paused",
-            is_running=test_state["is_running"],
-            is_paused=True,
-            is_stopping=test_state["stop_requested"],
-            is_force_stopping=test_state["force_stop_requested"],
-        )
-
+        return await _set_test_run_paused(job_id, job_service, paused=True)
     except HTTPException:
         raise
     except Exception as e:
@@ -678,39 +689,7 @@ async def resume_test_run(
 ):
     """Resume a paused test execution."""
     try:
-        job_model = await job_service.get_job_configuration_model(job_id)
-        if not job_model:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Job configuration with ID {job_id} not found",
-            )
-
-        test_runtime_key = -job_model.id
-        if not is_runtime_job_running(test_runtime_key):
-            return JobControlActionResponse(
-                success=False,
-                message="No test run is active for this job",
-                is_running=False,
-                is_paused=False,
-                is_stopping=False,
-                is_force_stopping=False,
-            )
-
-        job_model.is_paused = False
-        job_model.updated_at = datetime.now(UTC)
-        await job_service.db.commit()
-        await job_service.db.refresh(job_model)
-
-        test_state = get_runtime_control_snapshot(test_runtime_key)
-        return JobControlActionResponse(
-            success=True,
-            message=f"Test run for '{job_model.name}' resumed",
-            is_running=test_state["is_running"],
-            is_paused=False,
-            is_stopping=test_state["stop_requested"],
-            is_force_stopping=test_state["force_stop_requested"],
-        )
-
+        return await _set_test_run_paused(job_id, job_service, paused=False)
     except HTTPException:
         raise
     except Exception as e:
