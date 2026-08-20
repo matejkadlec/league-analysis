@@ -9,8 +9,6 @@ from app.core.riot_api.errors import RateLimitError
 from app.features.jobs.base import BaseJob, JobStopSignal
 from app.features.jobs.error_handling import (
     RateLimitSignal,
-    is_database_job_error,
-    is_riot_api_key_error,
 )
 from app.features.jobs.maintenance import RiotWriterMaintenanceActiveError
 from app.features.jobs.queue_config import get_match_fetcher_queue_ids
@@ -64,28 +62,13 @@ class MatchFetcherJob(BaseJob):
         error: Exception,
     ) -> bool:
         """Record a recoverable player error. Return True to stop the job."""
-        is_api_key_err = is_riot_api_key_error(error)
-        logger.error(
-            "Error processing player",
-            puuid=player.puuid,
-            error_type=type(error).__name__,
-        )
-        if is_database_job_error(error):
-            await db.rollback()
-            raise
-        if is_api_key_err and self.has_api_key_error():
-            return True
-        self.record_error(
+        return await self.handle_player_error(
+            db,
             error,
+            message="Error processing player",
             operation="player synchronization",
-            context={"puuid": player.puuid},
-            is_api_key_error=is_api_key_err,
+            puuid=player.puuid,
         )
-        if is_api_key_err:
-            logger.error("API key error detected, stopping job execution")
-            return True
-        await db.rollback()
-        return False
 
     async def _process_tracked_players(
         self,
@@ -196,24 +179,18 @@ class MatchFetcherJob(BaseJob):
         except RateLimitError:
             raise
         except Exception as e:
-            is_api_key_err = is_riot_api_key_error(e)
-            logger.error(
-                "Error updating player league",
-                puuid=player.puuid,
-                error_type=type(e).__name__,
-            )
-            if is_database_job_error(e):
-                await db.rollback()
-                raise
-            self.record_error(
+            # This one re-raises rather than returning, because its caller is
+            # `_process_player`, which has no stop channel of its own: the
+            # exception is how the decision reaches the loop, via
+            # `_handle_player_processing_error`.
+            if await self.handle_player_error(
+                db,
                 e,
+                message="Error updating player league",
                 operation="player league update",
-                context={"puuid": player.puuid},
-                is_api_key_error=is_api_key_err,
-            )
-            if is_api_key_err:
-                raise  # Re-raise to stop processing
-            await db.rollback()
+                puuid=player.puuid,
+            ):
+                raise
 
     async def _refresh_league_and_lp(
         self,

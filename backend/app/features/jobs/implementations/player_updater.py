@@ -10,8 +10,6 @@ from app.core.riot_api.errors import RateLimitError
 from app.features.jobs.base import BaseJob, JobStopSignal
 from app.features.jobs.error_handling import (
     RateLimitSignal,
-    is_database_job_error,
-    is_riot_api_key_error,
 )
 from app.features.jobs.maintenance import RiotWriterMaintenanceActiveError
 from app.features.players.models import Player
@@ -60,27 +58,14 @@ class PlayerUpdaterJob(BaseJob):
                     await db.rollback()
                     raise JobStopSignal(reason="riot_maintenance") from error
                 except Exception as e:
-                    is_api_key_err = is_riot_api_key_error(e)
-                    logger.error(
-                        "Error updating player profile",
-                        puuid=player.puuid,
-                        error_type=type(e).__name__,
-                    )
-                    if is_database_job_error(e):
-                        await db.rollback()
-                        raise
-                    self.record_error(
+                    if await self.handle_player_error(
+                        db,
                         e,
+                        message="Error updating player profile",
                         operation="player profile update",
-                        context={"puuid": player.puuid},
-                        is_api_key_error=is_api_key_err,
-                    )
-                    # If it's an API key error, stop processing more players
-                    if is_api_key_err:
-                        logger.error("API key error detected, stopping job execution")
+                        puuid=player.puuid,
+                    ):
                         break
-                    await db.rollback()
-                    continue
 
     async def _update_player_profile(
         self,
