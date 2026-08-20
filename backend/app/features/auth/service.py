@@ -616,6 +616,38 @@ class AuthService:
         )
         return encoded_jwt, expire, token_id
 
+    def _stage_refresh_token(
+        self,
+        *,
+        user_id: int,
+        now: datetime,
+        expires_at: datetime,
+        remote_ip: str | None,
+        user_agent: str | None,
+    ) -> tuple[RefreshToken, str]:
+        """Stage one `refresh_tokens` row and hand back its raw secret.
+
+        Deliberately does not commit. A rotation has to revoke the old row and
+        insert its replacement in a single transaction, so it cannot simply
+        call `create_refresh_token`: that would split the rotation in two and
+        leave a window with the caller's token revoked and no replacement
+        written -- a visitor signed out with nothing to refresh with.
+        """
+        raw_token = secrets.token_urlsafe(64)
+        record = RefreshToken(
+            user_id=user_id,
+            token_id=self._generate_token_id(),
+            token_hash=self._hash_refresh_token(raw_token),
+            issued_at=now,
+            expires_at=expires_at,
+            created_from_ip=remote_ip,
+            # `user_agent` is String(255); an untruncated header is a write
+            # error, and this is the only place that rule is spelled.
+            user_agent=user_agent[:255] if user_agent else None,
+        )
+        self.db.add(record)
+        return record, raw_token
+
     async def create_refresh_token(
         self,
         user_id: int,
@@ -625,27 +657,20 @@ class AuthService:
     ) -> tuple[str, datetime, str]:
         """Create and persist a refresh token, returning the raw token once."""
         now = datetime.now(UTC)
-        refresh_token = secrets.token_urlsafe(64)
-        token_id = self._generate_token_id()
-        token_hash = self._hash_refresh_token(refresh_token)
-
-        if expires_delta:
-            expires_at = now + expires_delta
-        else:
-            expires_at = now + timedelta(
-                days=self.settings.jwt_refresh_token_expire_days
-            )
-
-        record = RefreshToken(
-            user_id=user_id,
-            token_id=token_id,
-            token_hash=token_hash,
-            issued_at=now,
-            expires_at=expires_at,
-            created_from_ip=remote_ip,
-            user_agent=user_agent[:255] if user_agent else None,
+        expires_at = now + (
+            expires_delta or timedelta(days=self.settings.jwt_refresh_token_expire_days)
         )
-        self.db.add(record)
+        record, refresh_token = self._stage_refresh_token(
+            user_id=user_id,
+            now=now,
+            expires_at=expires_at,
+            remote_ip=remote_ip,
+            user_agent=user_agent,
+        )
+        # Read before the commit so this does not rely on the session factory's
+        # `expire_on_commit=False`; a refreshed attribute here would be a lazy
+        # load on an async session.
+        token_id = record.token_id
         await self.db.commit()
 
         return refresh_token, expires_at, token_id
@@ -726,24 +751,20 @@ class AuthService:
 
         token_record.revoked_at = now
 
-        new_refresh_token = secrets.token_urlsafe(64)
-        new_token_id = self._generate_token_id()
-        new_token_hash = self._hash_refresh_token(new_refresh_token)
+        # No `expires_delta`: a rotation restarts the configured lifetime.
         refresh_expires_at = now + timedelta(
             days=self.settings.jwt_refresh_token_expire_days
         )
-
-        token_record.replaced_by_token_id = new_token_id
-        replacement = RefreshToken(
+        replacement, new_refresh_token = self._stage_refresh_token(
             user_id=user.id,
-            token_id=new_token_id,
-            token_hash=new_token_hash,
-            issued_at=now,
+            now=now,
             expires_at=refresh_expires_at,
-            created_from_ip=remote_ip,
-            user_agent=user_agent[:255] if user_agent else None,
+            remote_ip=remote_ip,
+            user_agent=user_agent,
         )
-        self.db.add(replacement)
+        token_record.replaced_by_token_id = replacement.token_id
+        # One commit: the revocation above, the replaced-by link and the new
+        # row land together or not at all.
         await self.db.commit()
 
         access_token, access_expires_at, _ = self.create_access_token(user)
