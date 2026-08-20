@@ -6,10 +6,4 @@ export const metadata: Metadata = {
     "View the selected League of Legends player's profile and aggregate statistics.",
 };
 
-export default function PlayerOverviewLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  return children;
-}
+export { PassthroughLayout as default } from "@/components/passthrough-layout";

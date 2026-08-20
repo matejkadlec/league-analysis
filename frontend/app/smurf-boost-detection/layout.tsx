@@ -6,10 +6,4 @@ export const metadata: Metadata = {
     "Compare the selected League of Legends player's recent ranked games against their own earlier games.",
 };
 
-export default function SmurfBoostDetectionLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  return children;
-}
+export { PassthroughLayout as default } from "@/components/passthrough-layout";

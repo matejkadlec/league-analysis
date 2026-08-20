@@ -6,10 +6,4 @@ export const metadata: Metadata = {
     "Track League of Legends players for automated match history updates and continuous monitoring",
 };
 
-export default function TrackedPlayersLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  return children;
-}
+export { PassthroughLayout as default } from "@/components/passthrough-layout";

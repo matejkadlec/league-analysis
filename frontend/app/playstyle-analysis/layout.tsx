@@ -6,10 +6,4 @@ export const metadata: Metadata = {
     "Compatibility route for the selected player's League of Legends overview.",
 };
 
-export default function PlaystyleAnalysisLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  return children;
-}
+export { PassthroughLayout as default } from "@/components/passthrough-layout";
