@@ -73,7 +73,6 @@ EMAIL_CHANGE_CODE_EXPIRY_MINUTES = 10
 EMAIL_CHANGE_MAX_FAILED_ATTEMPTS = 3
 EMAIL_CHANGE_LOCK_MINUTES = 5
 JOIN_US_CONTACT_RECIPIENT = "contact@example.com"
-JOIN_US_TEST_SUFFIX = "#nl"
 JOIN_US_MIN_BODY_LENGTH = 300
 JOIN_US_MAX_REGULAR_PER_HOUR = 3
 
@@ -341,18 +340,6 @@ class AuthService:
         await self.db.commit()
         return sequence_number
 
-    @staticmethod
-    def _is_join_us_test_submission(body: str) -> bool:
-        """Return True when payload ends with #nl test suffix."""
-        return body.lower().endswith(JOIN_US_TEST_SUFFIX)
-
-    @staticmethod
-    def _strip_join_us_test_suffix(body: str) -> str:
-        """Remove #nl suffix used for test submissions."""
-        if not body.lower().endswith(JOIN_US_TEST_SUFFIX):
-            return body
-        return body[: -len(JOIN_US_TEST_SUFFIX)].rstrip()
-
     async def _enforce_join_us_regular_rate_limit(self, remote_ip: str | None) -> None:
         """Allow at most N regular submissions per hour for one IP."""
         if not remote_ip:
@@ -361,12 +348,13 @@ class AuthService:
         now = datetime.now(UTC)
         window_start = now - timedelta(hours=1)
 
+        in_window = (
+            JoinUsContactSubmission.remote_ip == remote_ip,
+            JoinUsContactSubmission.submitted_at >= window_start,
+        )
+
         recent_count_result = await self.db.execute(
-            select(func.count(JoinUsContactSubmission.id)).where(
-                JoinUsContactSubmission.remote_ip == remote_ip,
-                JoinUsContactSubmission.is_test.is_(False),
-                JoinUsContactSubmission.submitted_at >= window_start,
-            )
+            select(func.count(JoinUsContactSubmission.id)).where(*in_window)
         )
         recent_count = int(recent_count_result.scalar_one() or 0)
         if recent_count < JOIN_US_MAX_REGULAR_PER_HOUR:
@@ -374,11 +362,7 @@ class AuthService:
 
         oldest_in_window_result = await self.db.execute(
             select(JoinUsContactSubmission.submitted_at)
-            .where(
-                JoinUsContactSubmission.remote_ip == remote_ip,
-                JoinUsContactSubmission.is_test.is_(False),
-                JoinUsContactSubmission.submitted_at >= window_start,
-            )
+            .where(*in_window)
             .order_by(JoinUsContactSubmission.submitted_at.asc())
             .limit(1)
         )
@@ -396,7 +380,6 @@ class AuthService:
         *,
         remote_ip: str | None,
         subject: JoinUsSubject,
-        is_test: bool,
     ) -> None:
         """Persist accepted Join Us submissions for anti-spam accounting."""
         if not remote_ip:
@@ -406,7 +389,6 @@ class AuthService:
             JoinUsContactSubmission(
                 remote_ip=remote_ip,
                 subject=subject.value,
-                is_test=is_test,
             )
         )
         await self.db.commit()
@@ -415,23 +397,17 @@ class AuthService:
     def _build_join_us_email_subject(
         subject: JoinUsSubject,
         *,
-        sequence_number: int | None,
-        is_test: bool,
+        sequence_number: int,
     ) -> str:
         """Build mailbox subject line for Join Us requests."""
         subject_label = JOIN_US_SUBJECT_LABELS[subject]
-        if is_test:
-            return f"League Analysis {subject_label} [TEST]"
-        if sequence_number is None:
-            raise ValueError("sequence_number is required for non-test submissions")
         return f"League Analysis {subject_label} #{sequence_number}"
 
     async def _send_join_us_contact_email(
         self,
         *,
         subject: JoinUsSubject,
-        sequence_number: int | None,
-        is_test: bool,
+        sequence_number: int,
         body: str,
         remote_ip: str | None,
     ) -> str:
@@ -444,10 +420,9 @@ class AuthService:
         subject_line = self._build_join_us_email_subject(
             subject,
             sequence_number=sequence_number,
-            is_test=is_test,
         )
         subject_label = JOIN_US_SUBJECT_LABELS[subject]
-        sequence_label = "[TEST]" if is_test else f"#{sequence_number}"
+        sequence_label = f"#{sequence_number}"
         message_body = (
             "New Join Us submission\n\n"
             f"Position: {subject_label}\n"
@@ -482,49 +457,40 @@ class AuthService:
     ) -> str:
         """Validate and deliver Join Us contact submissions."""
         normalized_body = body.strip()
-        is_test_submission = self._is_join_us_test_submission(normalized_body)
-        message_body = self._strip_join_us_test_suffix(normalized_body)
 
-        if not is_test_submission and len(normalized_body) < JOIN_US_MIN_BODY_LENGTH:
+        if len(normalized_body) < JOIN_US_MIN_BODY_LENGTH:
             raise JoinUsBodyTooShortError
 
-        sequence_number: int | None = None
-        if not is_test_submission:
-            await self._enforce_join_us_regular_rate_limit(remote_ip)
+        await self._enforce_join_us_regular_rate_limit(remote_ip)
 
-            if self.is_captcha_enabled():
-                if not captcha_token:
-                    raise JoinUsCaptchaRequiredError
-                captcha_valid = await self.verify_turnstile_token(
-                    captcha_token,
-                    remote_ip,
-                )
-                if not captcha_valid:
-                    raise JoinUsCaptchaVerificationError
+        if self.is_captcha_enabled():
+            if not captcha_token:
+                raise JoinUsCaptchaRequiredError
+            captcha_valid = await self.verify_turnstile_token(
+                captcha_token,
+                remote_ip,
+            )
+            if not captcha_valid:
+                raise JoinUsCaptchaVerificationError
 
-            sequence_number = await self._reserve_join_us_sequence_number(subject)
+        sequence_number = await self._reserve_join_us_sequence_number(subject)
 
         subject_line = await self._send_join_us_contact_email(
             subject=subject,
             sequence_number=sequence_number,
-            is_test=is_test_submission,
-            body=message_body,
+            body=normalized_body,
             remote_ip=remote_ip,
         )
 
         await self._record_join_us_submission(
             remote_ip=remote_ip,
             subject=subject,
-            is_test=is_test_submission,
         )
 
         logger.info(
             "join_us_contact_submitted",
             subject=subject.value,
-            sequence_number=(
-                sequence_number if sequence_number is not None else "[TEST]"
-            ),
-            is_test=is_test_submission,
+            sequence_number=sequence_number,
             recipient=JOIN_US_CONTACT_RECIPIENT,
         )
         return subject_line

@@ -25,7 +25,6 @@ import { JoinUsRoleCards } from "./join-us-role-cards";
 type JoinUsSubject = "beta_tester" | "full_stack_developer" | "other";
 
 const MESSAGE_MIN_LENGTH = 300;
-const NO_LIMIT_TEST_SUFFIX = "#nl";
 
 const SUBJECT_OPTIONS: { value: JoinUsSubject; label: string }[] = [
   { value: "full_stack_developer", label: "Full-Stack Developer" },
@@ -61,15 +60,9 @@ export function JoinUsForm({ isAuthenticatedHint = false }: JoinUsFormProps) {
   const trimmedBody = body.trim();
   const bodyLength = trimmedBody.length;
   const remainingChars = Math.max(0, MESSAGE_MIN_LENGTH - bodyLength);
-  const isNoLimitTestSubmission = trimmedBody
-    .toLowerCase()
-    .endsWith(NO_LIMIT_TEST_SUFFIX);
-
   const isSubjectValid = subject !== "";
-  const isBodyValid =
-    isNoLimitTestSubmission || bodyLength >= MESSAGE_MIN_LENGTH;
+  const isBodyValid = bodyLength >= MESSAGE_MIN_LENGTH;
   const isCaptchaSatisfied =
-    isNoLimitTestSubmission ||
     !isTurnstileConfigured ||
     (captchaToken !== null && captchaToken.length > 0);
   const canSubmit = isSubjectValid && isBodyValid && isCaptchaSatisfied;
@@ -208,26 +201,17 @@ export function JoinUsForm({ isAuthenticatedHint = false }: JoinUsFormProps) {
                         isBodyValid ? "text-emerald-300" : "text-white/65",
                       )}
                     >
-                      {isNoLimitTestSubmission
-                        ? "Test mode enabled (#nl detected): minimum length and captcha checks are bypassed."
-                        : `Message must be at least ${MESSAGE_MIN_LENGTH} characters.${
-                            remainingChars > 0
-                              ? ` ${remainingChars} more required.`
-                              : " Requirement met."
-                          }`}
+                      {`Message must be at least ${MESSAGE_MIN_LENGTH} characters.${
+                        remainingChars > 0
+                          ? ` ${remainingChars} more required.`
+                          : " Requirement met."
+                      }`}
                     </p>
                   </div>
 
                   <div className="space-y-2">
                     <Label className="text-white">Captcha</Label>
-                    {isNoLimitTestSubmission ? (
-                      <Alert className="border-sky-400/70 bg-sky-900/30 text-sky-100">
-                        <AlertDescription>
-                          Test mode is enabled via #nl, so captcha is bypassed
-                          for this submission.
-                        </AlertDescription>
-                      </Alert>
-                    ) : isTurnstileConfigured ? (
+                    {isTurnstileConfigured ? (
                       <div className="rounded-md border border-white/20 bg-slate-950/75 p-3">
                         <Turnstile
                           ref={turnstileRef}
