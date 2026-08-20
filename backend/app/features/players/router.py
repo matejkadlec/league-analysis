@@ -133,7 +133,6 @@ async def search_player(
             logger,
             e,
             "player_search_failed",
-            "Player search could not be completed. Please try again later.",
             query=query,
             platform=platform.value if platform else None,
         )
@@ -205,7 +204,6 @@ async def get_player_suggestions(
             logger,
             e,
             "player_suggestions_failed",
-            "Player suggestions could not be loaded. Please try again later.",
             platform=platform.value if platform else None,
         )
 
@@ -398,7 +396,6 @@ async def track_player(
             logger,
             e,
             "track_player_failed",
-            "The player could not be tracked. Please try again later.",
             puuid=puuid,
         )
 
@@ -455,7 +452,6 @@ async def untrack_player(
             logger,
             e,
             "untrack_player_failed",
-            "The player could not be untracked. Please try again later.",
             puuid=puuid,
         )
 
@@ -487,7 +483,6 @@ async def get_tracking_status(
             logger,
             e,
             "get_tracking_status_failed",
-            "The tracking status could not be loaded. Please try again later.",
             puuid=puuid,
         )
 
@@ -511,7 +506,6 @@ async def get_tracked_players(
             logger,
             e,
             "get_tracked_players_failed",
-            "Tracked players could not be loaded. Please try again later.",
         )
 
 
@@ -608,7 +602,6 @@ async def refresh_player_league(
             logger,
             e,
             "refresh_player_league_failed",
-            "The player's rank could not be refreshed. Please try again later.",
             puuid=puuid,
         )
 
@@ -645,7 +638,6 @@ async def get_player_current_league(
             logger,
             e,
             "get_player_league_failed",
-            "The player's rank could not be loaded. Please try again later.",
             puuid=puuid,
             queue_type=queue_type,
         )

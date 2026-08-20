@@ -58,7 +58,6 @@ async def get_service_status(
             logger,
             e,
             "failed_to_get_service_status",
-            "The service status could not be loaded. Please try again later.",
         )
 
 
@@ -86,7 +85,6 @@ async def get_riot_api_key(
             logger,
             e,
             "failed_to_get_riot_api_key",
-            "The Riot API key could not be loaded. Please try again later.",
         )
 
 
@@ -137,7 +135,6 @@ async def update_riot_api_key(
             logger,
             e,
             "failed_to_update_riot_api_key",
-            "The Riot API key could not be updated. Please try again later.",
         )
 
 
@@ -171,7 +168,6 @@ async def test_riot_api_key(
             logger,
             e,
             "failed_to_test_riot_api_key",
-            "The Riot API key could not be tested. Please try again later.",
         )
 
 
@@ -197,7 +193,6 @@ async def get_card_preferences(
             logger,
             error,
             "failed_to_get_card_preferences",
-            "Card preferences could not be loaded. Please try again later.",
             error_type=type(error).__name__,
         )
 
@@ -224,7 +219,6 @@ async def update_card_preference(
             logger,
             error,
             "failed_to_update_card_preference",
-            "The card preference could not be updated. Please try again later.",
             error_type=type(error).__name__,
         )
 
@@ -246,7 +240,6 @@ async def reset_card_preference(
             logger,
             error,
             "failed_to_reset_card_preference",
-            "The card preference could not be reset. Please try again later.",
             error_type=type(error).__name__,
         )
 
@@ -268,7 +261,6 @@ async def reset_all_card_preferences(
             logger,
             error,
             "failed_to_reset_all_card_preferences",
-            "Card preferences could not be reset. Please try again later.",
             confirmed_card_count=len(confirmation.card_ids),
             error_type=type(error).__name__,
         )
@@ -293,7 +285,6 @@ async def get_user_settings(
             logger,
             e,
             "failed_to_get_user_settings",
-            "Your settings could not be loaded. Please try again later.",
         )
 
 
@@ -316,7 +307,6 @@ async def update_user_settings(
             logger,
             e,
             "failed_to_update_user_settings",
-            "Your settings could not be saved. Please try again later.",
         )
 
 
@@ -334,7 +324,6 @@ async def get_user_cookie_consent(
             logger,
             e,
             "failed_to_get_user_cookie_consent",
-            "Your cookie preferences could not be loaded. Please try again later.",
         )
 
 
@@ -355,5 +344,4 @@ async def update_user_cookie_consent(
             logger,
             e,
             "failed_to_update_user_cookie_consent",
-            "Your cookie preferences could not be saved. Please try again later.",
         )

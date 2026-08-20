@@ -108,7 +108,6 @@ async def list_job_configurations(
             logger,
             e,
             "Failed to list job configurations",
-            "Internal server error retrieving job configurations",
         )
 
 
@@ -141,7 +140,6 @@ async def update_job_configuration(
             logger,
             e,
             "Failed to update job configuration",
-            "Internal server error updating job configuration",
             job_id=job_id,
         )
 
@@ -187,7 +185,6 @@ async def get_job_executions(
             logger,
             e,
             "Failed to list job executions",
-            "Internal server error retrieving job executions",
             job_id=job_id,
         )
 
@@ -227,7 +224,6 @@ async def list_all_executions(
             logger,
             e,
             "Failed to list all executions",
-            "Internal server error retrieving all job executions",
         )
 
 
@@ -322,7 +318,6 @@ async def trigger_job(
             logger,
             e,
             "Failed to trigger job",
-            "Internal server error triggering job",
             job_id=job_id,
         )
 
@@ -350,7 +345,6 @@ async def pause_job(
             logger,
             e,
             "Failed to pause job",
-            "Internal server error pausing job",
             job_id=job_id,
         )
 
@@ -378,7 +372,6 @@ async def resume_job(
             logger,
             e,
             "Failed to resume job",
-            "Internal server error resuming job",
             job_id=job_id,
         )
 
@@ -407,7 +400,6 @@ async def stop_job(
             logger,
             e,
             "Failed to stop job",
-            "Internal server error stopping job",
             job_id=job_id,
             force=force,
         )
@@ -508,7 +500,6 @@ async def trigger_test_run(
             logger,
             e,
             "Failed to trigger test run",
-            "Internal server error triggering test run",
             job_id=job_id,
         )
 
@@ -565,7 +556,6 @@ async def stop_test_run(
             logger,
             e,
             "Failed to stop test run",
-            "Internal server error stopping test run",
             job_id=job_id,
         )
 
@@ -601,7 +591,6 @@ async def pause_test_run(
             logger,
             e,
             "Failed to pause test run",
-            "Internal server error pausing test run",
             job_id=job_id,
         )
 
@@ -621,7 +610,6 @@ async def resume_test_run(
             logger,
             e,
             "Failed to resume test run",
-            "Internal server error resuming test run",
             job_id=job_id,
         )
 
@@ -673,5 +661,4 @@ async def get_job_system_status(
             logger,
             e,
             "Failed to get job system status",
-            "Internal server error retrieving job system status",
         )

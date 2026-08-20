@@ -107,7 +107,6 @@ async def analyze_player(
             logger,
             error,
             "smurf_boost_analysis_start_failed",
-            "The analysis could not be started. Please try again.",
             error_type=type(error).__name__,
         )
 
