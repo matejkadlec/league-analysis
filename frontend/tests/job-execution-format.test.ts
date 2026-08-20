@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  apiCallKey,
   detailedLogKey,
   formatApiCallParamLabel,
   formatDuration,
@@ -54,16 +53,6 @@ describe("keys for rows React will reuse", () => {
   // These are React list keys. Two entries that differ must not collide, or
   // React keeps the first row mounted and the second one's numbers never
   // appear -- a wrong reading on screen, with nothing failing.
-
-  it("separates API calls that differ only in their window", () => {
-    const base = { endpoint: "/lol/match/v5/matches", region: "eun1", count: 2 };
-
-    expect(
-      apiCallKey({ ...base, first_timestamp: "1", last_timestamp: "2" }),
-    ).not.toBe(
-      apiCallKey({ ...base, first_timestamp: "1", last_timestamp: "3" }),
-    );
-  });
 
   it("separates log lines that differ only in a field neither names", () => {
     const base = { timestamp: "2026-01-02T03:04:05Z", level: "INFO", event: "fetched" };

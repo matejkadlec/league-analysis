@@ -5,10 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { JobExecutionApiCalls } from "@/features/jobs/components/job-execution-api-calls";
 import { JobExecutionLogs } from "@/features/jobs/components/job-execution-logs";
-import {
-  apiCallKey,
-  type APICallEntry,
-} from "@/features/jobs/components/job-execution-format";
+import { type APICallEntry } from "@/features/jobs/components/job-execution-format";
 
 // The two renderers behind a job execution's expanded view. The format
 // helpers they call are pinned by job-execution-format tests; what lives
@@ -82,9 +79,10 @@ describe("the API calls transcript", () => {
   });
 
   it("reports the toggle under the same key the expanded set is checked by", () => {
-    // The parent stores expansion in a Set keyed by apiCallKey. A button that
-    // reports any other string toggles an entry no render ever reads — the
-    // click works, the row never opens.
+    // The parent stores expansion in a Set keyed by the endpoint (unique per
+    // execution — the backend groups api_calls by it). A button that reports
+    // any other string toggles an entry no render ever reads — the click
+    // works, the row never opens.
     const entry = call({
       count: 400,
       param_key: "matchId",
@@ -95,7 +93,7 @@ describe("the API calls transcript", () => {
 
     fireEvent.click(screen.getByRole("button"));
 
-    expect(onToggle).toHaveBeenCalledWith(apiCallKey(entry));
+    expect(onToggle).toHaveBeenCalledWith(entry.endpoint);
   });
 
   it("opens the detail when the parent marks the key expanded", () => {
@@ -105,7 +103,7 @@ describe("the API calls transcript", () => {
       first_param: "EUN1_1",
       last_param: "EUN1_400",
     });
-    renderCalls([entry], { expanded: new Set([apiCallKey(entry)]) });
+    renderCalls([entry], { expanded: new Set([entry.endpoint]) });
 
     expect(screen.getByText("Collapse")).toBeTruthy();
     expect(screen.getByText(/\(400 total calls\)/)).toBeTruthy();

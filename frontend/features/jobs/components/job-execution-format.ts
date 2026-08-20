@@ -59,18 +59,6 @@ export interface APICallEntry {
   last_param?: string;
 }
 
-export function apiCallKey(call: APICallEntry): string {
-  return [
-    call.endpoint,
-    call.region,
-    call.param_key ?? "",
-    call.first_timestamp ?? "",
-    call.first_param ?? "",
-    call.last_timestamp ?? "",
-    call.last_param ?? "",
-  ].join("|");
-}
-
 export function detailedLogKey(log: Record<string, unknown>): string {
   const level = typeof log.level === "string" ? log.level : "INFO";
   const timestamp = String(log.timestamp ?? "");
