@@ -804,8 +804,8 @@ class PlayerService:
             self.db.add(settings)
             await self.db.flush()
 
-        if puuid is not None and await self.db.get(Player, puuid) is None:
-            raise ValueError("Player not found")
+        if puuid is not None:
+            await self._require_player(puuid)
 
         settings.current_player_puuid = puuid
         if puuid is not None:

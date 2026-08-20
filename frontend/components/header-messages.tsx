@@ -13,6 +13,7 @@ import {
   type CookieConsentState,
 } from "@/features/cookie-consent";
 import { unwrap, validatedGet } from "@/lib/core/api";
+import { cn } from "@/lib/core/utils";
 import { RIOT_CREDENTIAL_HEALTH_UPDATED_EVENT } from "@/lib/core/riot-credential-health-events";
 
 const ServiceStatusSchema = z.object({
@@ -29,26 +30,28 @@ const ServiceStatusSchema = z.object({
 // Temporarily disabled while Riot production-key review is pending.
 const SHOW_SIGNED_OUT_RECRUITMENT_BANNER = false;
 
-// Tailwind needs literal class strings, so each tone spells its classes out.
+// Layout lives in the bases; tones carry only color, weight and shadow.
+// Every class stays a literal so Tailwind's scanner sees it.
+const BANNER_SHELL =
+  "w-full h-[40px] fixed top-0 left-0 z-[100] flex items-center justify-center backdrop-blur-sm border-b";
+const BANNER_TEXT = "flex items-center gap-2 text-sm px-4 text-center";
+const BANNER_DISMISS =
+  "cursor-pointer absolute right-4 top-1/2 -translate-y-1/2 p-2 rounded-full transition-colors hover:text-white";
+
 const BANNER_TONES = {
   amber: {
-    shell:
-      "w-full h-[40px] fixed top-0 left-0 z-[100] flex items-center justify-center bg-amber-500/75 backdrop-blur-sm border-b border-amber-800/50 shadow-sm",
-    text: "flex items-center gap-2 text-sm font-medium text-amber-100 px-4 text-center",
-    dismiss:
-      "cursor-pointer absolute right-4 top-1/2 -translate-y-1/2 p-2 hover:bg-amber-900/50 rounded-full transition-colors text-amber-100/80 hover:text-white",
+    shell: "bg-amber-500/75 border-amber-800/50 shadow-sm",
+    text: "font-medium text-amber-100",
+    dismiss: "hover:bg-amber-900/50 text-amber-100/80",
   },
   emerald: {
-    shell:
-      "w-full h-[40px] fixed top-0 left-0 z-[100] flex items-center justify-center bg-emerald-600/70 backdrop-blur-sm border-b border-emerald-800/50 shadow-sm",
-    text: "flex items-center gap-2 text-sm font-medium text-emerald-100 px-4 text-center",
-    dismiss:
-      "cursor-pointer absolute right-4 top-1/2 -translate-y-1/2 p-2 hover:bg-emerald-900/50 rounded-full transition-colors text-emerald-100/80 hover:text-white",
+    shell: "bg-emerald-600/70 border-emerald-800/50 shadow-sm",
+    text: "font-medium text-emerald-100",
+    dismiss: "hover:bg-emerald-900/50 text-emerald-100/80",
   },
   red: {
-    shell:
-      "w-full h-[40px] fixed top-0 left-0 z-[100] flex items-center justify-center bg-red-600/75 backdrop-blur-sm shadow-md border-b border-red-800/50",
-    text: "flex items-center gap-2 text-sm font-semibold text-red-100 px-4 text-center",
+    shell: "bg-red-600/75 border-red-800/50 shadow-md",
+    text: "font-semibold text-red-100",
     dismiss: "",
   },
 } as const;
@@ -68,8 +71,8 @@ function HeaderBanner({
 }) {
   const classes = BANNER_TONES[tone];
   return (
-    <div className={classes.shell}>
-      <div className={classes.text}>
+    <div className={cn(BANNER_SHELL, classes.shell)}>
+      <div className={cn(BANNER_TEXT, classes.text)}>
         {icon}
         <span>{children}</span>
       </div>
@@ -78,7 +81,7 @@ function HeaderBanner({
           type="button"
           aria-label={dismissLabel}
           onClick={onDismiss}
-          className={classes.dismiss}
+          className={cn(BANNER_DISMISS, classes.dismiss)}
         >
           <X className="h-4 w-4" />
         </button>
