@@ -2,12 +2,9 @@
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Annotated
 
 from sqlalchemy import (
-    BigInteger,
     Boolean,
-    ForeignKey,
     Integer,
     MetaData,
     Numeric,
@@ -16,7 +13,7 @@ from sqlalchemy import (
 from sqlalchemy import (
     DateTime as SQLDateTime,
 )
-from sqlalchemy.orm import DeclarativeBase, mapped_column
+from sqlalchemy.orm import DeclarativeBase
 
 # Create a base class for declarative models using SQLAlchemy 2.0 style
 # Use a custom naming convention for constraints and indexes
@@ -60,38 +57,3 @@ class Base(DeclarativeBase):
 
     metadata = metadata
     type_annotation_map = type_annotation_map
-
-
-# Common Annotated types for basic field patterns
-AutoIncrementPK = Annotated[int, mapped_column(Integer, primary_key=True)]
-PrimaryKeyStr = Annotated[str, mapped_column(primary_key=True)]
-PrimaryKeyInt = Annotated[int, mapped_column(primary_key=True)]
-
-RequiredString = Annotated[str, mapped_column(nullable=False)]
-OptionalString = Annotated[str | None, mapped_column()]
-
-RequiredInt = Annotated[int, mapped_column(nullable=False)]
-OptionalInt = Annotated[int | None, mapped_column()]
-
-RequiredBool = Annotated[bool, mapped_column(nullable=False)]
-OptionalBool = Annotated[bool | None, mapped_column()]
-
-RequiredDecimal = Annotated[Decimal, mapped_column(nullable=False)]
-OptionalDecimal = Annotated[Decimal | None, mapped_column()]
-
-RequiredBigInt = Annotated[int, mapped_column(BigInteger, nullable=False)]
-OptionalBigInt = Annotated[int | None, mapped_column(BigInteger)]
-
-RequiredDateTime = Annotated[datetime, mapped_column(nullable=False)]
-OptionalDateTime = Annotated[datetime | None, mapped_column()]
-
-# Common field patterns with specific constraints
-PUUIDField = Annotated[str, mapped_column(String(78), primary_key=True, index=True)]
-PUUIDForeignKey = Annotated[
-    str, mapped_column(String(78), ForeignKey("core.players.puuid", ondelete="CASCADE"))
-]
-MatchIDField = Annotated[str, mapped_column(String(64), primary_key=True, index=True)]
-MatchIDForeignKey = Annotated[
-    str,
-    mapped_column(String(64), ForeignKey("core.matches.match_id", ondelete="CASCADE")),
-]

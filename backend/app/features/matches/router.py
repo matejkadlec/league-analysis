@@ -2,10 +2,7 @@
 
 from fastapi import APIRouter, HTTPException, Query
 
-from .dependencies import (
-    MatchServiceDep,
-    get_match_service,
-)
+from .dependencies import MatchServiceDep
 from .schemas import (
     ChampionStatsResponse,
     LaneStatsResponse,
@@ -14,7 +11,6 @@ from .schemas import (
 )
 
 router = APIRouter(prefix="/matches", tags=["matches"])
-router.get_match_service = get_match_service  # type: ignore[attr-defined]
 
 
 def _parse_match_queue_union(queues: str) -> tuple[int, ...]:

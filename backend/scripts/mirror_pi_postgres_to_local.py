@@ -218,17 +218,24 @@ def child_environment(config: LocalDatabaseConfig) -> dict[str, str]:
     return environment
 
 
+def connection_args(config: LocalDatabaseConfig) -> list[str]:
+    """Spell the local server's connection flags once for every client call."""
+    return [
+        "--host",
+        config.host,
+        "--port",
+        str(config.port),
+        "--username",
+        config.user,
+    ]
+
+
 def psql_query(config: LocalDatabaseConfig, database: str, sql: str) -> str:
     """Run one fail-closed local SQL query without exposing credentials."""
     result = subprocess.run(
         [
             "psql",
-            "--host",
-            config.host,
-            "--port",
-            str(config.port),
-            "--username",
-            config.user,
+            *connection_args(config),
             "--dbname",
             database,
             "--no-psqlrc",
@@ -254,12 +261,7 @@ def psql_snapshot(
     result = subprocess.run(
         [
             "psql",
-            "--host",
-            config.host,
-            "--port",
-            str(config.port),
-            "--username",
-            config.user,
+            *connection_args(config),
             "--dbname",
             database,
             "--no-psqlrc",
@@ -465,12 +467,7 @@ def create_database(config: LocalDatabaseConfig, database: str) -> None:
     subprocess.run(
         [
             "createdb",
-            "--host",
-            config.host,
-            "--port",
-            str(config.port),
-            "--username",
-            config.user,
+            *connection_args(config),
             "--owner",
             config.user,
             "--template",
@@ -490,12 +487,7 @@ def drop_database(config: LocalDatabaseConfig, database: str) -> None:
     subprocess.run(
         [
             "dropdb",
-            "--host",
-            config.host,
-            "--port",
-            str(config.port),
-            "--username",
-            config.user,
+            *connection_args(config),
             "--force",
             "--if-exists",
             database,
@@ -511,12 +503,7 @@ def restore_archive(config: LocalDatabaseConfig, database: str, archive: Path) -
     subprocess.run(
         [
             "pg_restore",
-            "--host",
-            config.host,
-            "--port",
-            str(config.port),
-            "--username",
-            config.user,
+            *connection_args(config),
             "--dbname",
             database,
             "--no-owner",

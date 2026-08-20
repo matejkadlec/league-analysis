@@ -872,7 +872,6 @@ class MatchService:
         puuid: str,
         start: int,
         count: int,
-        queue: int | None = None,
         queue_ids: Sequence[int] | None = None,
         search: str | None = None,
         start_time: int | None = None,
@@ -880,13 +879,12 @@ class MatchService:
         exclude_aram: bool = False,
     ) -> list[Match]:
         """Get matches from database."""
-        effective_queue_ids = normalize_match_queue_ids(queue, queue_ids)
         query = (
             select(Match)
             .where(
                 *build_match_history_conditions(
                     puuid=puuid,
-                    queue_ids=effective_queue_ids,
+                    queue_ids=queue_ids,
                     search=search,
                     start_time=start_time,
                     end_time=end_time,
@@ -904,7 +902,6 @@ class MatchService:
     async def _count_matches_from_db(
         self,
         puuid: str,
-        queue: int | None = None,
         queue_ids: Sequence[int] | None = None,
         search: str | None = None,
         start_time: int | None = None,
@@ -912,11 +909,10 @@ class MatchService:
         exclude_aram: bool = False,
     ) -> int:
         """Count total matches for a player from database."""
-        effective_queue_ids = normalize_match_queue_ids(queue, queue_ids)
         query = select(func.count(Match.match_id)).where(
             *build_match_history_conditions(
                 puuid=puuid,
-                queue_ids=effective_queue_ids,
+                queue_ids=queue_ids,
                 search=search,
                 start_time=start_time,
                 end_time=end_time,
@@ -930,7 +926,6 @@ class MatchService:
     async def _count_analyzed_matches_from_db(
         self,
         puuid: str,
-        queue: int | None = None,
         queue_ids: Sequence[int] | None = None,
         search: str | None = None,
         start_time: int | None = None,
@@ -938,11 +933,10 @@ class MatchService:
         exclude_aram: bool = False,
     ) -> int:
         """Count total analyzed matches for a player from database."""
-        effective_queue_ids = normalize_match_queue_ids(queue, queue_ids)
         query = select(func.count(Match.match_id)).where(
             *build_match_history_conditions(
                 puuid=puuid,
-                queue_ids=effective_queue_ids,
+                queue_ids=queue_ids,
                 search=search,
                 start_time=start_time,
                 end_time=end_time,

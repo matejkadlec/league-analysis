@@ -31,15 +31,7 @@ async def create_or_get_player_sync(
     if await db.get(Player, puuid) is None:
         raise ValueError("Player not found")
 
-    active = await db.scalar(
-        select(PlayerSyncRun)
-        .where(
-            PlayerSyncRun.puuid == puuid,
-            PlayerSyncRun.status.in_(ACTIVE_SYNC_STATUSES),
-        )
-        .order_by(PlayerSyncRun.created_at.desc())
-        .limit(1)
-    )
+    active = await get_active_player_sync(db, puuid)
     if active is not None:
         return active, False
 
@@ -51,15 +43,7 @@ async def create_or_get_player_sync(
         return sync_run, True
     except IntegrityError:
         await db.rollback()
-        concurrent = await db.scalar(
-            select(PlayerSyncRun)
-            .where(
-                PlayerSyncRun.puuid == puuid,
-                PlayerSyncRun.status.in_(ACTIVE_SYNC_STATUSES),
-            )
-            .order_by(PlayerSyncRun.created_at.desc())
-            .limit(1)
-        )
+        concurrent = await get_active_player_sync(db, puuid)
         if concurrent is None:
             raise
         return concurrent, False

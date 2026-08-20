@@ -322,6 +322,24 @@ async def trigger_job(
         )
 
 
+def _require_control_state(
+    state: JobControlActionResponse | None, job_id: int
+) -> JobControlActionResponse:
+    """Turn a control-action result into the 404/409 the three routes share.
+
+    `None` means the job configuration does not exist; a present-but-unsuccessful
+    state means it exists and refused, which is a conflict rather than a miss.
+    """
+    if state is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Job configuration with ID {job_id} not found",
+        )
+    if not state.success:
+        raise HTTPException(status_code=409, detail=state.message)
+    return state
+
+
 @router.post("/{job_id}/pause", response_model=JobControlActionResponse)
 async def pause_job(
     job_id: int,
@@ -330,14 +348,7 @@ async def pause_job(
     """Pause a running job execution."""
     try:
         state = await job_service.set_job_paused(job_id, paused=True)
-        if not state:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Job configuration with ID {job_id} not found",
-            )
-        if not state.success:
-            raise HTTPException(status_code=409, detail=state.message)
-        return state
+        return _require_control_state(state, job_id)
     except HTTPException:
         raise
     except Exception as e:
@@ -357,14 +368,7 @@ async def resume_job(
     """Resume a paused running job execution."""
     try:
         state = await job_service.set_job_paused(job_id, paused=False)
-        if not state:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Job configuration with ID {job_id} not found",
-            )
-        if not state.success:
-            raise HTTPException(status_code=409, detail=state.message)
-        return state
+        return _require_control_state(state, job_id)
     except HTTPException:
         raise
     except Exception as e:
@@ -385,14 +389,7 @@ async def stop_job(
     """Request graceful or forced stop for a running job execution."""
     try:
         state = await job_service.request_job_stop_action(job_id, force=force)
-        if not state:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Job configuration with ID {job_id} not found",
-            )
-        if not state.success:
-            raise HTTPException(status_code=409, detail=state.message)
-        return state
+        return _require_control_state(state, job_id)
     except HTTPException:
         raise
     except Exception as e:
