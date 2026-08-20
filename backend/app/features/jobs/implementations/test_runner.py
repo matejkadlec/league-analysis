@@ -6,13 +6,15 @@ execution record (with execution_type=TEST) is persisted.
 """
 
 import asyncio
+from dataclasses import dataclass
 from typing import override
 
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import TEST_PUUID
-from app.core.riot_api.constants import Platform, get_region_by_platform
+from app.core.riot_api.client import RiotAPIClient
+from app.core.riot_api.constants import Platform, Region, get_region_by_platform
 from app.features.jobs.base import BaseJob
 from app.features.jobs.error_handling import is_riot_api_key_error
 from app.features.jobs.models import ExecutionType
@@ -45,7 +47,97 @@ async def _resolve_test_puuid(db: AsyncSession) -> tuple[str, str]:
     return TEST_PUUID, "eun1"
 
 
-class TestMatchFetcherJob(BaseJob):
+@dataclass(frozen=True)
+class RunnerTarget:
+    """The one player every endpoint in a test iteration is asked about.
+
+    Not named `TestTarget`: pytest tries to collect any class whose name starts
+    with `Test`, and warns rather than fails, so the name would quietly cost
+    coverage in any test module that imported it.
+    """
+
+    puuid: str
+    region: Region
+    platform: Platform
+
+
+class _TestRunnerJob(BaseJob):
+    """The loop both test runners share: call endpoints, log, wait, repeat.
+
+    A test run exercises exactly the endpoints its real counterpart uses and
+    keeps none of the answers, so everything except *which* endpoints to call
+    was written out twice -- puuid resolution, the client, the iteration loop,
+    the control-state check, the error classification, the wait, and the final
+    metrics reset. Subclasses supply a label and `call_endpoints`.
+    """
+
+    #: Human name used in this job's log lines, e.g. "Test Match Fetcher".
+    label: str
+
+    # Set by the test-trigger endpoint to record whether it paused the regular
+    # schedule for the duration of this run.
+    suspend_regular: bool = False
+
+    def __init__(self, job_config_id: int):
+        super().__init__(
+            job_config_id,
+            triggered_by="user",
+            execution_type=ExecutionType.TEST,
+        )
+
+    async def call_endpoints(
+        self, riot_client: RiotAPIClient, target: RunnerTarget
+    ) -> None:
+        """Call one iteration's worth of endpoints. Results are discarded."""
+        raise NotImplementedError
+
+    @override
+    async def execute(self, db: AsyncSession) -> None:
+        if not self.job_config:
+            raise RuntimeError(f"{self.label} missing job configuration")
+
+        puuid, platform = await _resolve_test_puuid(db)
+        platform_enum = Platform(platform)
+        region = get_region_by_platform(platform)
+        target = RunnerTarget(puuid=puuid, region=region, platform=platform_enum)
+
+        async with self.job_riot_client(
+            db,
+            region=region,
+            platform=platform_enum,
+        ) as riot_client:
+            for iteration in range(_MAX_ITERATIONS):
+                await self.check_control_state(db)
+
+                try:
+                    await self.call_endpoints(riot_client, target)
+                    logger.info(
+                        f"{self.label} iteration completed",
+                        iteration=iteration + 1,
+                        puuid=puuid,
+                        api_requests=self.metrics["api_requests_made"],
+                    )
+
+                except Exception as e:
+                    is_key_err = is_riot_api_key_error(e)
+                    self.record_error(e, is_api_key_error=is_key_err)
+                    logger.error(
+                        f"{self.label} API call failed",
+                        iteration=iteration + 1,
+                        error=str(e),
+                    )
+                    break  # stop on first failure
+
+                # Wait 60s before next iteration (skip wait on last iteration)
+                if iteration < _MAX_ITERATIONS - 1:
+                    await _interruptible_wait(self, db, _WAIT_SECONDS)
+
+        # Test runs never create/update data records
+        self.metrics["records_created"] = 0
+        self.metrics["records_updated"] = 0
+
+
+class TestMatchFetcherJob(_TestRunnerJob):
     """Test runner for Match Fetcher — calls 4 endpoints once per minute.
 
     Endpoints per iteration:
@@ -55,88 +147,39 @@ class TestMatchFetcherJob(BaseJob):
       4. league entries by puuid
     """
 
-    # Set by the test-trigger endpoint to record whether it paused the regular
-    # schedule for the duration of this run.
-    suspend_regular: bool = False
-
-    def __init__(self, job_config_id: int):
-        super().__init__(
-            job_config_id,
-            triggered_by="user",
-            execution_type=ExecutionType.TEST,
-        )
+    label = "Test Match Fetcher"
 
     @override
-    async def execute(self, db: AsyncSession) -> None:
-        if not self.job_config:
-            raise RuntimeError("Test Match Fetcher missing job configuration")
+    async def call_endpoints(
+        self, riot_client: RiotAPIClient, target: RunnerTarget
+    ) -> None:
+        # 1. Match list
+        match_list = await riot_client.get_match_list_by_puuid(
+            target.puuid,
+            start=0,
+            count=1,
+            region=target.region,
+        )
 
-        puuid, platform = await _resolve_test_puuid(db)
-        region = get_region_by_platform(platform)
-        platform_enum = Platform(platform)
+        match_id: str | None = None
+        if match_list.match_ids:
+            match_id = match_list.match_ids[0]
 
-        async with self.job_riot_client(
-            db,
-            region=region,
-            platform=platform_enum,
-        ) as riot_client:
-            for iteration in range(_MAX_ITERATIONS):
-                await self.check_control_state(db)
+        # 2. Match detail (if we have a match)
+        if match_id:
+            await riot_client.get_match(match_id, region=target.region)
 
-                try:
-                    # 1. Match list
-                    match_list = await riot_client.get_match_list_by_puuid(
-                        puuid,
-                        start=0,
-                        count=1,
-                        region=region,
-                    )
+        # 3. Match timeline
+        if match_id:
+            await riot_client.get_match_timeline(match_id, region=target.region)
 
-                    match_id: str | None = None
-                    if match_list.match_ids:
-                        match_id = match_list.match_ids[0]
-
-                    # 2. Match detail (if we have a match)
-                    if match_id:
-                        await riot_client.get_match(match_id, region=region)
-
-                    # 3. Match timeline
-                    if match_id:
-                        await riot_client.get_match_timeline(match_id, region=region)
-
-                    # 4. League entries
-                    await riot_client.get_league_entries_by_puuid(
-                        puuid,
-                        platform=platform_enum,
-                    )
-
-                    logger.info(
-                        "Test Match Fetcher iteration completed",
-                        iteration=iteration + 1,
-                        puuid=puuid,
-                        api_requests=self.metrics["api_requests_made"],
-                    )
-
-                except Exception as e:
-                    is_key_err = is_riot_api_key_error(e)
-                    self.record_error(e, is_api_key_error=is_key_err)
-                    logger.error(
-                        "Test Match Fetcher API call failed",
-                        iteration=iteration + 1,
-                        error=str(e),
-                    )
-                    break  # stop on first failure
-
-                # Wait 60s before next iteration (skip wait on last iteration)
-                if iteration < _MAX_ITERATIONS - 1:
-                    await _interruptible_wait(self, db, _WAIT_SECONDS)
-
-        # Test runs never create/update data records
-        self.metrics["records_created"] = 0
-        self.metrics["records_updated"] = 0
+        # 4. League entries
+        await riot_client.get_league_entries_by_puuid(
+            target.puuid, platform=target.platform
+        )
 
 
-class TestPlayerUpdaterJob(BaseJob):
+class TestPlayerUpdaterJob(_TestRunnerJob):
     """Test runner for Player Updater — calls 2 endpoints once per minute.
 
     Endpoints per iteration:
@@ -144,65 +187,14 @@ class TestPlayerUpdaterJob(BaseJob):
       2. account by puuid
     """
 
-    # Set by the test-trigger endpoint to record whether it paused the regular
-    # schedule for the duration of this run.
-    suspend_regular: bool = False
-
-    def __init__(self, job_config_id: int):
-        super().__init__(
-            job_config_id,
-            triggered_by="user",
-            execution_type=ExecutionType.TEST,
-        )
+    label = "Test Player Updater"
 
     @override
-    async def execute(self, db: AsyncSession) -> None:
-        if not self.job_config:
-            raise RuntimeError("Test Player Updater missing job configuration")
+    async def call_endpoints(
+        self, riot_client: RiotAPIClient, target: RunnerTarget
+    ) -> None:
+        # 1. Summoner by puuid
+        await riot_client.get_summoner_by_puuid(target.puuid, platform=target.platform)
 
-        puuid, platform = await _resolve_test_puuid(db)
-        platform_enum = Platform(platform)
-        region = get_region_by_platform(platform)
-
-        async with self.job_riot_client(
-            db,
-            region=region,
-            platform=platform_enum,
-        ) as riot_client:
-            for iteration in range(_MAX_ITERATIONS):
-                await self.check_control_state(db)
-
-                try:
-                    # 1. Summoner by puuid
-                    await riot_client.get_summoner_by_puuid(
-                        puuid,
-                        platform=platform_enum,
-                    )
-
-                    # 2. Account by puuid
-                    await riot_client.get_account_by_puuid(puuid, region=region)
-
-                    logger.info(
-                        "Test Player Updater iteration completed",
-                        iteration=iteration + 1,
-                        puuid=puuid,
-                        api_requests=self.metrics["api_requests_made"],
-                    )
-
-                except Exception as e:
-                    is_key_err = is_riot_api_key_error(e)
-                    self.record_error(e, is_api_key_error=is_key_err)
-                    logger.error(
-                        "Test Player Updater API call failed",
-                        iteration=iteration + 1,
-                        error=str(e),
-                    )
-                    break  # stop on first failure
-
-                # Wait 60s before next iteration (skip wait on last iteration)
-                if iteration < _MAX_ITERATIONS - 1:
-                    await _interruptible_wait(self, db, _WAIT_SECONDS)
-
-        # Test runs never create/update data records
-        self.metrics["records_created"] = 0
-        self.metrics["records_updated"] = 0
+        # 2. Account by puuid
+        await riot_client.get_account_by_puuid(target.puuid, region=target.region)
