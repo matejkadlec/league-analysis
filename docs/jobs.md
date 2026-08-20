@@ -151,10 +151,8 @@ force-stops an active test run of the same job first.
 
 ## API Key Handling
 
-Key lookup is database-first (newest active `core.riot_api_keys` row), falling
-back to `RIOT_API_KEY` from `.env`. Job history is diagnostic only and never
+The key is the single `core.riot_api_keys` row. Job history is diagnostic only and never
 decides current credential health: a new credential generation immediately
 invalidates an old run's failure, and `429`s, upstream failures, and network
 errors never mark a credential invalid (generation contract:
-[`database.md`](database.md)). Resolve by updating the key in Settings, or
-`RIOT_API_KEY` plus its non-secret `RIOT_API_KEY_VERSION` with a restart.
+[`database.md`](database.md)). Resolve by updating the key in Settings.

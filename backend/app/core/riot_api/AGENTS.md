@@ -33,8 +33,8 @@ Inherits repository-wide rules from
   cross-component priority. Do not bypass acquisition/recording, spacing,
   `Retry-After`, or 429 behavior.
 - Resolve effective runtime credentials with
-  `create_tracked_riot_api_client()`: an active, non-expired
-  `core.riot_api_keys` row has priority, with `RIOT_API_KEY` as the fallback.
+  `create_tracked_riot_api_client()`: the credential is the single
+  non-expired `core.riot_api_keys` row, with no environment fallback.
   Direct `2xx`/`404` responses validate the current generation; `401`/`403`
   invalidate it. Rate limits, upstream/network failures, cached reads, and
   application lifecycle results are neutral. Keep generation and timestamp

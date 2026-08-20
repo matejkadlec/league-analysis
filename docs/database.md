@@ -99,6 +99,10 @@ because these values drive staleness decisions.
   `game_start_timestamp` with a `game_start_timestamp_source` marker
   (`riot_game_start` vs `legacy_game_creation`), so the provenance of every
   ordering/analysis anchor is inspectable without a bulk provider refetch.
+- `core.riot_api_keys` holds at most one row (revision `20260820_0019`). Past
+  keys are secrets with no diagnostic value, and the surviving row's `id` is
+  what `riot_credential_health.db_key_id` binds to, so replacing the key
+  necessarily changes the credential identity and resets stale evidence.
 - `core.riot_credential_health` (revision `20260812_0008`) is a singleton,
   secret-free record: it stores no key value or key-derived fingerprint, and
   provider evidence is accepted only for the current random `generation` and

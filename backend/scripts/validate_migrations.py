@@ -289,6 +289,92 @@ def seed_legacy_matchmaking_analyses(database: str) -> None:
         engine.dispose()
 
 
+# Three keys, because the row revision 0019 must keep is not the newest one.
+# The pre-0019 save path could reactivate an older row, so an inactive key can
+# carry a *later* `added_at` than the active one -- and the new lookup takes
+# the newest row outright. Seeding only an active key would let the revision
+# skip its DELETE and still pass.
+_VALIDATION_ACTIVE_KEY = "RGAPI-" + "validation-active".ljust(36, "0")
+_VALIDATION_STALE_KEYS = (
+    ("RGAPI-" + "validation-older".ljust(36, "0"), "2026-08-01T00:00:00Z"),
+    ("RGAPI-" + "validation-newer".ljust(36, "0"), "2026-08-03T00:00:00Z"),
+)
+
+
+def seed_riot_keys_revision_0019_must_collapse(database: str) -> None:
+    """Seed the key history and the health binding revision 0019 collapses.
+
+    `riot_credential_health` only exists from revision 0008, so this seeds at
+    0018 rather than alongside the baseline fixtures. The health row points at
+    the active key through an `ON DELETE SET NULL` foreign key: if the revision
+    deletes rows in the wrong order the binding silently becomes NULL, which
+    reads to the application as "no key configured".
+    """
+    url = administration_url().set(database=database)
+    engine = create_engine(url)
+    try:
+        with engine.begin() as connection:
+            for key_value, added_at in _VALIDATION_STALE_KEYS:
+                connection.execute(
+                    text(
+                        "INSERT INTO core.riot_api_keys "
+                        "(key_value, is_active, added_at) "
+                        "VALUES (:key_value, false, :added_at)"
+                    ),
+                    {"key_value": key_value, "added_at": added_at},
+                )
+            connection.execute(
+                text(
+                    "INSERT INTO core.riot_api_keys "
+                    "(key_value, is_active, added_at) "
+                    "VALUES (:key_value, true, '2026-08-02T00:00:00Z')"
+                ),
+                {"key_value": _VALIDATION_ACTIVE_KEY},
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO core.riot_credential_health "
+                    "(id, generation, source, db_key_id, status, evidence, "
+                    " evidence_at, revision) "
+                    "VALUES (1, 'validationgeneration', 'db', "
+                    " (SELECT id FROM core.riot_api_keys WHERE key_value = :key_value), "
+                    " 'valid', 'provider_success', '2026-08-02T00:00:00Z', 3)"
+                ),
+                {"key_value": _VALIDATION_ACTIVE_KEY},
+            )
+    finally:
+        engine.dispose()
+
+
+def validate_revision_0019_kept_one_bound_key(database: str) -> None:
+    """Assert only the active key survived and health still points at it."""
+    url = administration_url().set(database=database)
+    engine = create_engine(url)
+    try:
+        with engine.connect() as connection:
+            survivors = (
+                connection.execute(text("SELECT key_value, id FROM core.riot_api_keys"))
+                .tuples()
+                .all()
+            )
+            bound = connection.execute(
+                text("SELECT db_key_id FROM core.riot_credential_health WHERE id = 1")
+            ).scalar_one()
+    finally:
+        engine.dispose()
+
+    if [key_value for key_value, _ in survivors] != [_VALIDATION_ACTIVE_KEY]:
+        raise RuntimeError(
+            "revision 0019 did not collapse the key table to the active key "
+            f"(survivors: {[key for key, _ in survivors]})"
+        )
+    if bound != survivors[0][1]:
+        raise RuntimeError(
+            "revision 0019 broke the credential-health binding "
+            f"(db_key_id is {bound}, surviving key id is {survivors[0][1]})"
+        )
+
+
 def tightened_participant_columns() -> tuple[str, ...]:
     """Read the column list straight out of the revision that tightens them.
 
@@ -730,6 +816,56 @@ async def verify_application_database_access(database: str) -> None:
             os.environ["POSTGRES_DB"] = original_database
 
 
+async def verify_expired_key_turns_health_missing(database: str) -> None:
+    """Drive the real credential sync over the real foreign key.
+
+    `riot_credential_health.db_key_id` is `ON DELETE SET NULL`, so deleting an
+    aged key blanks the binding as a side effect. A version of this code that
+    deleted before comparing left health reading `valid` for a credential that
+    no longer existed -- and because no client can be built without a key, no
+    Riot response could ever correct it. Mocked sessions cannot show that: it
+    only exists when a real foreign key fires. The fixture seeded for revision
+    0019 is already the failing shape, an aged key with `valid` health bound
+    to it.
+    """
+    original_database = os.environ.get("POSTGRES_DB")
+    os.environ["POSTGRES_DB"] = database
+    try:
+        from app.core.database import db_manager
+        from app.core.riot_api.credential_health import (
+            synchronize_riot_credential_health,
+        )
+        from app.model_registry import import_all_models
+
+        # This path goes through the ORM rather than raw SQL, so the mappers
+        # have to be able to resolve their relationships.
+        import_all_models()
+
+        async with db_manager.get_session() as session:
+            credential, snapshot = await synchronize_riot_credential_health(session)
+            remaining = (
+                await session.execute(text("SELECT COUNT(*) FROM core.riot_api_keys"))
+            ).scalar_one()
+
+        if credential is not None:
+            raise RuntimeError("an expired Riot key was still handed to a client")
+        if snapshot.status.value != "missing":
+            raise RuntimeError(
+                "credential health did not fall to missing when the only key "
+                f"expired (status is {snapshot.status.value!r})"
+            )
+        if remaining != 0:
+            raise RuntimeError(
+                f"the expired Riot key was not deleted ({remaining} rows remain)"
+            )
+        await db_manager.close()
+    finally:
+        if original_database is None:
+            del os.environ["POSTGRES_DB"]
+        else:
+            os.environ["POSTGRES_DB"] = original_database
+
+
 def main() -> int:
     """Validate migration plus full backup/restore in isolated databases."""
     database = temporary_database_name()
@@ -745,11 +881,15 @@ def main() -> int:
         seed_legacy_match(database)
         seed_legacy_matchmaking_analyses(database)
         seed_rows_revision_0014_must_repair(database)
+        run_upgrade(database, "20260820_0018")
+        seed_riot_keys_revision_0019_must_collapse(database)
         run_upgrade(database)
         validate_revision(database)
         validate_revision_0014_repaired_the_seeded_rows(database)
         validate_revision_0017_rewrote_the_seeded_basis(database)
+        validate_revision_0019_kept_one_bound_key(database)
         asyncio.run(verify_application_database_access(database))
+        asyncio.run(verify_expired_key_turns_health_missing(database))
         with tempfile.TemporaryDirectory(
             prefix="league-analysis-restore-validation-"
         ) as temporary_directory:

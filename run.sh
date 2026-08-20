@@ -41,7 +41,6 @@ backend_configuration_variables=(
     SMTP_FROM_EMAIL
     SMTP_USE_TLS
     SMTP_USE_SSL
-    RIOT_API_KEY
 )
 
 if [ "$use_process_environment" != "1" ]; then

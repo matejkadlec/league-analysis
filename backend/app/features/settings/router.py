@@ -73,7 +73,7 @@ async def get_riot_api_key(
         if not setting:
             raise HTTPException(
                 status_code=404,
-                detail="No Riot API key has been saved here yet. The key from the server configuration is in use.",
+                detail="No Riot API key has been saved yet.",
             )
 
         return setting

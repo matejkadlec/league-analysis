@@ -89,9 +89,9 @@ instead of resetting or recreating schemas.
 ## Riot API development key
 
 Obtain a Riot development key through the authorized Riot Developer Portal.
-Development keys expire every 24 hours. Configure it only through the existing
-secret-safe settings or `RIOT_API_KEY` environment fallback; never put the key
-in a commit, issue, documentation example, or chat message. The key precedence,
+Development keys expire every 24 hours. Configure it only through the Settings
+page, which is the sole place the key is ever entered; never put the key in a
+commit, issue, documentation example, or chat message. The key handling,
 routing, rate limits, and endpoint constraints are maintained in
 [`docs/riot-api.md`](docs/riot-api.md).
 

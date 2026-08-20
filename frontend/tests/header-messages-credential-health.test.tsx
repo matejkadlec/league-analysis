@@ -9,7 +9,6 @@ const state = vi.hoisted(() => ({
   serviceStatus: {
     is_under_maintenance: true,
     reason: "api_key_invalid" as const,
-    active_source: "db" as const,
     credential_status: "invalid" as const,
     health_revision: 7,
     observed_at: "2026-08-11T20:00:00Z",

@@ -17,13 +17,10 @@ package has its own guide ([riot_api/AGENTS.md](riot_api/AGENTS.md)).
 
 ## Configuration and Credential Boundaries
 
-Riot API key lookup prefers an active, non-expired row in
-`core.riot_api_keys` and falls back to `RIOT_API_KEY` from `.env` only when no
-valid database key exists. Runtime callers use the tracked client factory so
-direct Riot acceptance/rejection updates the secret-free current-generation
-health record. `RIOT_API_KEY_VERSION` may identify an environment deployment
-generation; it must never contain or derive from the key. Never expose either
-credential value.
+The Riot API key is the single non-expired row in `core.riot_api_keys`; there
+is no environment fallback, and no past key is retained. Runtime callers use
+the tracked client factory so direct Riot acceptance/rejection updates the
+secret-free current-generation health record. Never expose the key value.
 
 Settings load from the repository-root `.env` through Pydantic settings
 (`app/core/config.py` is the field inventory). For normal local `./run.sh`

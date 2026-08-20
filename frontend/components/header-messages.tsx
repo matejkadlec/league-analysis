@@ -19,7 +19,6 @@ import { RIOT_CREDENTIAL_HEALTH_UPDATED_EVENT } from "@/lib/core/riot-credential
 const ServiceStatusSchema = z.object({
   is_under_maintenance: z.boolean(),
   reason: z.enum(["ok", "api_key_missing", "api_key_invalid"]),
-  active_source: z.enum(["db", "env", "none"]),
   credential_status: z.enum(["missing", "unknown", "valid", "invalid"]),
   health_revision: z.number(),
   observed_at: z.string(),
@@ -317,9 +316,7 @@ export function HeaderMessages() {
           icon={<AlertOctagon className="h-4 w-4 shrink-0" />}
         >
           No active Riot API Key found! System cannot function. Please configure
-          it in settings
-          {process.env.NODE_ENV === "production" ? " " : " or .env "}
-          immediately.
+          it in settings immediately.
         </HeaderBanner>
       );
     }
@@ -332,30 +329,6 @@ export function HeaderMessages() {
         >
           Riot API Key is configured but has not yet been verified by a direct
           Riot API response.
-        </HeaderBanner>
-      );
-    }
-
-    // YELLOW: Env Key (Closable - Unique per credential-health revision)
-    const envKeyId = `env_key_${serviceStatus.health_revision}`;
-    const isClosed = closedMessages.includes(envKeyId);
-
-    // Hide env warning in production (env is standard there)
-    if (
-      serviceStatus.active_source === "env" &&
-      !isClosed &&
-      process.env.NODE_ENV !== "production"
-    ) {
-      return (
-        <HeaderBanner
-          tone="amber"
-          icon={<AlertTriangle className="h-4 w-4 shrink-0" />}
-          onDismiss={() => closeMessage(envKeyId)}
-          dismissLabel="Dismiss environment API key warning"
-        >
-          Using Riot API Key from environment variables. Consider adding it to
-          database for better management. Also note that local server{" "}
-          <b>needs a restart</b> after environment variable change.
         </HeaderBanner>
       );
     }
