@@ -637,10 +637,7 @@ class PlayerService:
             ValueError: If player not found.
         """
         await _ensure_riot_writer_maintenance_is_inactive(self.db)
-        player = await self.db.get(Player, puuid)
-
-        if not player:
-            raise ValueError("Player not found.")
+        player = await self._require_player(puuid)
 
         existing = await self._is_player_tracked_by_user(puuid, user_id)
         if existing:
@@ -703,10 +700,7 @@ class PlayerService:
         Raises:
             ValueError: If player not found.
         """
-        player = await self.db.get(Player, puuid)
-
-        if not player:
-            raise ValueError("Player not found.")
+        player = await self._require_player(puuid)
 
         stmt = delete(UserTrackedPlayer).where(
             UserTrackedPlayer.user_id == user_id,
@@ -730,11 +724,16 @@ class PlayerService:
         response.is_tracked = False
         return response
 
-    async def get_player_tracking_status(self, puuid: str, user_id: int) -> bool:
-        """Get user-specific tracking status for a player."""
+    async def _require_player(self, puuid: str) -> Player:
+        """Fetch a player or raise the ValueError the routers translate to 404."""
         player = await self.db.get(Player, puuid)
         if not player:
             raise ValueError("Player not found.")
+        return player
+
+    async def get_player_tracking_status(self, puuid: str, user_id: int) -> bool:
+        """Get user-specific tracking status for a player."""
+        await self._require_player(puuid)
 
         return await self._is_player_tracked_by_user(puuid, user_id)
 

@@ -179,70 +179,58 @@ async function validateResponse<T>(
   return { success: true, data: parsed.data };
 }
 
-export async function validatedGet<T>(
+async function validatedRequest<T>(
   schema: z.ZodType<T>,
   url: string,
-  params?: Record<string, unknown>,
+  request: () => Promise<{ data: unknown }>,
 ): Promise<ApiResponse<T>> {
   try {
-    const response = await api.get(url, { params });
+    const response = await request();
     return validateResponse(schema, url, response.data);
   } catch (error) {
     return { success: false, error: normalizeApiError(error) };
   }
 }
 
-export async function validatedPost<T>(
+export function validatedGet<T>(
+  schema: z.ZodType<T>,
+  url: string,
+  params?: Record<string, unknown>,
+): Promise<ApiResponse<T>> {
+  return validatedRequest(schema, url, () => api.get(url, { params }));
+}
+
+export function validatedPost<T>(
   schema: z.ZodType<T>,
   url: string,
   data?: unknown,
   params?: Record<string, unknown>,
 ): Promise<ApiResponse<T>> {
-  try {
-    const response = await api.post(url, data, { params });
-    return validateResponse(schema, url, response.data);
-  } catch (error) {
-    return { success: false, error: normalizeApiError(error) };
-  }
+  return validatedRequest(schema, url, () => api.post(url, data, { params }));
 }
 
-export async function validatedPut<T>(
+export function validatedPut<T>(
   schema: z.ZodType<T>,
   url: string,
   data?: unknown,
 ): Promise<ApiResponse<T>> {
-  try {
-    const response = await api.put(url, data);
-    return validateResponse(schema, url, response.data);
-  } catch (error) {
-    return { success: false, error: normalizeApiError(error) };
-  }
+  return validatedRequest(schema, url, () => api.put(url, data));
 }
 
-export async function validatedDelete<T>(
+export function validatedDelete<T>(
   schema: z.ZodType<T>,
   url: string,
   params?: Record<string, unknown>,
 ): Promise<ApiResponse<T>> {
-  try {
-    const response = await api.delete(url, { params });
-    return validateResponse(schema, url, response.data);
-  } catch (error) {
-    return { success: false, error: normalizeApiError(error) };
-  }
+  return validatedRequest(schema, url, () => api.delete(url, { params }));
 }
 
-export async function validatedPatch<T>(
+export function validatedPatch<T>(
   schema: z.ZodType<T>,
   url: string,
   data?: unknown,
 ): Promise<ApiResponse<T>> {
-  try {
-    const response = await api.patch(url, data);
-    return validateResponse(schema, url, response.data);
-  } catch (error) {
-    return { success: false, error: normalizeApiError(error) };
-  }
+  return validatedRequest(schema, url, () => api.patch(url, data));
 }
 
 // Feature endpoint functions live with their features (e.g.
