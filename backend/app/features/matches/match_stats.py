@@ -125,28 +125,6 @@ def accumulate_lane_stats(
     )
 
 
-def averages_from_totals(
-    data: dict[str, int],
-) -> tuple[int, int, int, float, float, float, float, float]:
-    """Turn accumulated combat totals into per-game averages."""
-    games = data["games"]
-    wins = data["wins"]
-    losses = games - wins
-    avg_kda = calculate_kda(data["kills"], data["deaths"], data["assists"])
-    if games > 0:
-        return (
-            games,
-            wins,
-            losses,
-            wins / games,
-            data["kills"] / games,
-            data["deaths"] / games,
-            data["assists"] / games,
-            avg_kda,
-        )
-    return games, wins, losses, 0.0, 0.0, 0.0, 0.0, avg_kda
-
-
 def champion_stats_sort_key(champion: ChampionStatsItem) -> tuple[int, str]:
     return (-champion.games_played, champion.champion_name)
 
@@ -166,18 +144,22 @@ class CommonStatFields(TypedDict):
 
 def common_stat_fields(data: dict[str, int]) -> CommonStatFields:
     """Shape accumulated totals into the fields both response items share."""
-    games, wins, losses, win_rate, kills, deaths, assists, kda = averages_from_totals(
-        data
-    )
+    games = data["games"]
+    wins = data["wins"]
+
+    def per_game(total: int) -> float:
+        """Nobody has averages over no games; that is 0.0, not a division."""
+        return total / games if games else 0.0
+
     return {
         "games_played": games,
         "wins": wins,
-        "losses": losses,
-        "win_rate": win_rate,
-        "avg_kills": kills,
-        "avg_deaths": deaths,
-        "avg_assists": assists,
-        "avg_kda": kda,
+        "losses": games - wins,
+        "win_rate": per_game(wins),
+        "avg_kills": per_game(data["kills"]),
+        "avg_deaths": per_game(data["deaths"]),
+        "avg_assists": per_game(data["assists"]),
+        "avg_kda": calculate_kda(data["kills"], data["deaths"], data["assists"]),
     }
 
 
