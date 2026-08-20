@@ -11,6 +11,7 @@ import pytest
 from sqlalchemy import Select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.riot_api.client import APICallRecord
 from app.core.riot_api.constants import PRODUCT_SUPPORTED_QUEUE_IDS
 from app.core.riot_api.errors import (
     AuthenticationError,
@@ -18,7 +19,7 @@ from app.core.riot_api.errors import (
     RateLimitError,
 )
 from app.features.jobs import scheduler as scheduler_module
-from app.features.jobs.base import BaseJob
+from app.features.jobs.base import BaseJob, _format_api_calls_for_storage
 from app.features.jobs.error_handling import (
     RateLimitSignal,
     handle_riot_api_errors,
@@ -265,6 +266,39 @@ async def test_overdue_startup_job_is_queued_without_awaiting_execution(
         "name": "Match Fetcher startup catch-up",
         "replace_existing": True,
     }
+
+
+def test_api_call_storage_groups_to_one_entry_per_endpoint() -> None:
+    # The frontend keys its API-call rows by the endpoint alone
+    # (job-execution-api-calls.tsx), so this grouping is a cross-package
+    # contract: regroup by anything finer — region, batch, time window —
+    # and those React keys collide, freezing the first row's numbers on
+    # every later row.
+    calls = [
+        APICallRecord(
+            endpoint="/lol/match/v5/matches/{matchId}",
+            region="europe",
+            params={"matchId": "EUN1_1"},
+            timestamp="2026-01-01T00:00:00Z",
+        ),
+        APICallRecord(
+            endpoint="/lol/match/v5/matches/{matchId}",
+            region="americas",
+            params={"matchId": "NA1_2"},
+            timestamp="2026-01-01T00:00:01Z",
+        ),
+        APICallRecord(
+            endpoint="/lol/summoner/v4/summoners/by-puuid/{puuid}",
+            region="eun1",
+            params={"puuid": "p1"},
+            timestamp="2026-01-01T00:00:02Z",
+        ),
+    ]
+
+    stored = _format_api_calls_for_storage(calls)
+
+    endpoints = [entry["endpoint"] for entry in stored]
+    assert len(endpoints) == len(set(endpoints)) == 2
 
 
 def test_match_fetcher_uses_every_canonical_queue_and_strips_legacy_config() -> None:

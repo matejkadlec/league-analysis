@@ -4,7 +4,6 @@ import { ChevronUp } from "lucide-react";
 
 import {
   type APICallEntry,
-  apiCallKey,
   formatApiCallParamLabel,
   formatJobTimestamp,
 } from "./job-execution-format";
@@ -35,7 +34,11 @@ export function JobExecutionApiCalls({
           </div>
 
           {apiCalls.map((call) => {
-            const callKey = apiCallKey(call);
+            // The backend groups api_calls by endpoint before storing them
+            // (_format_api_calls_for_storage), so the endpoint alone is
+            // unique within one execution — pinned by
+            // test_api_call_storage_groups_to_one_entry_per_endpoint.
+            const callKey = call.endpoint;
             const countText = call.count === 1 ? "once" : `${call.count} times`;
             const isExpanded = expandedApiCalls.has(callKey);
             const hasMultipleParams = call.count > 1 && call.param_key;
