@@ -34,10 +34,7 @@ const FormField = <
 >({
   ...props
 }: ControllerProps<TFieldValues, TName>) => {
-  const fieldValue = React.useMemo(
-    () => ({ name: props.name }),
-    [props.name],
-  );
+  const fieldValue = React.useMemo(() => ({ name: props.name }), [props.name]);
 
   return (
     <FormFieldContext.Provider value={fieldValue}>
@@ -51,19 +48,21 @@ const useFormField = () => {
   const itemContext = React.useContext(FormItemContext);
   const { getFieldState, formState } = useFormContext();
 
-  const fieldState = getFieldState(fieldContext.name, formState);
-
-  if (!fieldContext) {
+  // PATCHED (see components/CLAUDE.md): upstream tests `!fieldContext`, which
+  // is never true because the context defaults to `{}`, and tests it *after*
+  // `getFieldState` has already read through it. Checking the field name
+  // first is what makes the message the developer actually sees.
+  if (!fieldContext.name) {
     throw new Error("useFormField should be used within <FormField>");
   }
 
+  const fieldState = getFieldState(fieldContext.name, formState);
   const { id } = itemContext;
 
   return {
     id,
     name: fieldContext.name,
     formItemId: `${id}-form-item`,
-    formDescriptionId: `${id}-form-item-description`,
     formMessageId: `${id}-form-item-message`,
     ...fieldState,
   };
@@ -113,41 +112,33 @@ const FormControl = React.forwardRef<
   React.ElementRef<typeof Slot>,
   React.ComponentPropsWithoutRef<typeof Slot>
 >(({ ...props }, ref) => {
-  const { error, formItemId, formDescriptionId, formMessageId } =
-    useFormField();
+  const { error, formItemId, formMessageId } = useFormField();
+
+  // PATCHED (see components/CLAUDE.md): upstream always describes the control
+  // by a `-form-item-description` id, and points at a message id whenever
+  // `error` is set. `FormMessage` renders nothing without a message, so both
+  // could name elements that are not in the DOM. Describe the control only
+  // by the message that is actually on screen.
+  //
+  // Known gap, deliberately not machinery: `FormMessage` also renders when
+  // given children as static helper text, and `FormControl` is its sibling
+  // so it cannot see them. That case would be visible but unannounced.
+  // No call site passes children -- both use a bare `<FormMessage />` -- and
+  // wiring it properly needs a registration context that costs more than the
+  // case is worth. Pass helper text through a labelled element instead.
+  const describedBy = error?.message ? formMessageId : undefined;
 
   return (
     <Slot
       ref={ref}
       id={formItemId}
-      aria-describedby={
-        !error
-          ? `${formDescriptionId}`
-          : `${formDescriptionId} ${formMessageId}`
-      }
+      aria-describedby={describedBy}
       aria-invalid={!!error}
       {...props}
     />
   );
 });
 FormControl.displayName = "FormControl";
-
-const FormDescription = React.forwardRef<
-  HTMLParagraphElement,
-  React.HTMLAttributes<HTMLParagraphElement>
->(({ className, ...props }, ref) => {
-  const { formDescriptionId } = useFormField();
-
-  return (
-    <p
-      ref={ref}
-      id={formDescriptionId}
-      className={cn("text-[0.8rem] text-muted-foreground", className)}
-      {...props}
-    />
-  );
-});
-FormDescription.displayName = "FormDescription";
 
 const FormMessage = React.forwardRef<
   HTMLParagraphElement,
@@ -179,7 +170,6 @@ export {
   FormItem,
   FormLabel,
   FormControl,
-  FormDescription,
   FormMessage,
   FormField,
 };

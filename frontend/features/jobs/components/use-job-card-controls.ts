@@ -125,6 +125,13 @@ export function useJobCardControls(
     });
   }, [job.name, recentExecutions, toast]);
 
+  // No `onError` on any mutation in this file, deliberately: every
+  // mutationFn here is a bare `validatedPost`, and `validatedPost` catches
+  // its own failures and *resolves* with `{ success: false }` rather than
+  // rejecting — a contract pinned by tests/api-validated-helpers.test.ts.
+  // The failure is therefore always announced by the else-arm below, and an
+  // `onError` beside it is code that cannot run. If a mutationFn ever grows
+  // an `unwrap()` or a `throw`, it needs one again.
   const triggerMutation = useMutation({
     mutationFn: () =>
       validatedPost(JobTriggerResponseSchema, `/jobs/${job.id}/trigger`),
@@ -160,13 +167,6 @@ export function useJobCardControls(
         });
       }
     },
-    onError: () => {
-      toast({
-        title: `${job.name} run could not start`,
-        description: "Please try again later.",
-        variant: "error",
-      });
-    },
   });
 
   // The six control endpoints answer the same shape and want the same
@@ -176,7 +176,11 @@ export function useJobCardControls(
   // test_frontend_api_paths.py reads the validatedPost URL literal there.
   function useControlMutation<TArg = void>(
     mutationFn: (arg: TArg) => Promise<ApiResponse<JobControlActionResponse>>,
-    success: { title: string; description: string; variant: "success" | "info" },
+    success: {
+      title: string;
+      description: string;
+      variant: "success" | "info";
+    },
     failureTitle: string,
     onSuccessExtra?: () => void,
   ) {
@@ -197,12 +201,12 @@ export function useJobCardControls(
           fail();
         }
       },
-      onError: fail,
     });
   }
 
   const pauseMutation = useControlMutation(
-    () => validatedPost(JobControlActionResponseSchema, `/jobs/${job.id}/pause`),
+    () =>
+      validatedPost(JobControlActionResponseSchema, `/jobs/${job.id}/pause`),
     {
       title: `${job.name} paused`,
       description: "Scheduled runs will wait until the job is resumed.",
@@ -265,13 +269,6 @@ export function useJobCardControls(
           variant: "error",
         });
       }
-    },
-    onError: () => {
-      toast({
-        title: `${job.name} test could not start`,
-        description: "Please try again later.",
-        variant: "error",
-      });
     },
   });
 

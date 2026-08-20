@@ -1,0 +1,142 @@
+// @vitest-environment jsdom
+
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { cleanup, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const { validatedGet } = vi.hoisted(() => ({ validatedGet: vi.fn() }));
+
+vi.mock("@/lib/core/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/core/api")>()),
+  validatedGet,
+}));
+
+vi.mock("@/lib/core/hooks", () => ({
+  useToast: () => ({ error: vi.fn(), info: vi.fn(), warning: vi.fn() }),
+}));
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ refresh: vi.fn() }),
+}));
+
+vi.mock("@/lib/core/data-dragon-context", () => ({
+  useDDragonVersion: () => "16.1.1",
+}));
+
+vi.mock("@/lib/core/use-relative-time", () => ({
+  useRelativeTime: () => "just now",
+}));
+
+// The rows themselves are not the subject; the container around them is.
+// Stubbing them keeps this test off a 40-field match fixture while leaving
+// the real `match-history.tsx` -- where the conditional lives -- under test.
+vi.mock("@/features/matches/components/match-row", () => ({
+  MatchRow: () => <div data-testid="match-row" />,
+}));
+
+import { MatchHistory } from "@/features/matches/components/match-history";
+import { installMemoryLocalStorage } from "./test-browser-storage";
+
+const CONSENT_COOKIE = "league_analysis_cookie_consent";
+
+installMemoryLocalStorage();
+
+// The detailed-matches query is gated on stored preferences being ready,
+// which is gated on optional-storage consent.
+function setOptionalConsent(): void {
+  const value = encodeURIComponent(
+    `v1|all|${new Date("2026-08-15T00:00:00Z").toISOString()}`,
+  );
+  document.cookie = `${CONSENT_COOKIE}=${value}; Path=/`;
+}
+
+// The match list scrolls sideways only from `lg` up (`lg:overflow-x-auto`),
+// so only from `lg` up does it need to be a named, keyboard-reachable region.
+// Below that a row reflows to fit and the container cannot move, which made
+// `tabIndex={0}` a focus stop on a phone that led nowhere.
+//
+// These render the real `MatchHistory`: pinning a local copy of the JSX would
+// stay green through exactly the revert they exist to catch.
+
+function stubMatchMedia(matches: boolean): void {
+  vi.stubGlobal("matchMedia", (query: string) => ({
+    matches,
+    media: query,
+    onchange: null,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    addListener: () => {},
+    removeListener: () => {},
+    dispatchEvent: () => false,
+  }));
+}
+
+async function renderHistory(): Promise<void> {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  render(
+    <QueryClientProvider client={queryClient}>
+      <MatchHistory puuid="player-puuid" />
+    </QueryClientProvider>,
+  );
+  await screen.findByTestId("match-list", undefined, { timeout: 4000 });
+}
+
+describe("the match list scroll region", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    setOptionalConsent();
+    validatedGet.mockReset();
+    validatedGet.mockImplementation(async (_schema: unknown, path: string) => ({
+      success: true,
+      data: path.endsWith("/stats")
+        ? {
+            puuid: "player-puuid",
+            total_matches: 1,
+            wins: 1,
+            losses: 0,
+            win_rate: 1,
+            avg_kills: 7,
+            avg_deaths: 5,
+            avg_assists: 9,
+            avg_kda: 3.2,
+            avg_cs: 180,
+            avg_vision_score: 22,
+          }
+        : {
+            matches: [{ match_id: "EUN1_1" }],
+            total: 1,
+            total_analyzed: 1,
+            page: 0,
+            size: 25,
+            pages: 1,
+          },
+    }));
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+    window.localStorage.clear();
+    document.cookie = `${CONSENT_COOKIE}=; Path=/; Max-Age=0`;
+  });
+
+  it("is a keyboard-reachable named region at the width it scrolls at", async () => {
+    stubMatchMedia(true);
+    await renderHistory();
+
+    const region = screen.getByRole("region", { name: "Match list" });
+    expect(region.getAttribute("tabindex")).toBe("0");
+  });
+
+  it("is no region and no focus stop at the widths it cannot scroll", async () => {
+    stubMatchMedia(false);
+    await renderHistory();
+
+    expect(screen.queryByRole("region")).toBeNull();
+    expect(
+      screen.getByTestId("match-list").getAttribute("tabindex"),
+    ).toBeNull();
+  });
+});

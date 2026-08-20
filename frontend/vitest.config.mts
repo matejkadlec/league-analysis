@@ -9,6 +9,7 @@ export default defineConfig({
   },
   test: {
     exclude: [...configDefaults.exclude, "e2e/**"],
+    setupFiles: ["./vitest.setup.ts"],
     // Restore `vi.stubEnv` after every test rather than trusting each one to
     // unstub itself. A test that stubs an environment variable and then fails
     // an assertion never reaches its own cleanup line, so the stub survives

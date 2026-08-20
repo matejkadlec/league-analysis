@@ -9,6 +9,7 @@ import {
   MatchStatsResponseSchema,
 } from "@/lib/core/schemas";
 import { normalizeApiError, unwrap, validatedGet } from "@/lib/core/api";
+import { LG_BREAKPOINT_QUERY, useMediaQuery } from "@/lib/core/use-media-query";
 import { usePlayerSyncRun } from "@/features/players";
 import { getMatchHistoryErrorMessage } from "../utils/match-history-error";
 import { Card, CardContent } from "@/components/ui/card";
@@ -47,6 +48,7 @@ const MATCH_HISTORY_SEARCH_DEBOUNCE_MS = 300;
 
 export function MatchHistory({ puuid, lastUpdated }: MatchHistoryProps) {
   const router = useRouter();
+  const isDesktopLayout = useMediaQuery(LG_BREAKPOINT_QUERY);
   const { isUpdating, startSync } = usePlayerSyncRun(puuid, {
     // Queries keyed by the PUUID are refreshed by the hook; the server
     // components behind this page need their own refresh.
@@ -250,11 +252,18 @@ export function MatchHistory({ puuid, lastUpdated }: MatchHistoryProps) {
           <div
             data-testid="match-list"
             className="min-w-0 rounded-md border lg:overflow-x-auto"
-            // A region that scrolls sideways on laptop widths must be
-            // reachable without a mouse, and a focusable region needs a name.
-            role="region"
-            aria-label="Match list"
-            tabIndex={0}
+            // A region that scrolls sideways must be reachable without a
+            // mouse, and a focusable region needs a name — but only from
+            // `lg` up, because that is the only width this container
+            // scrolls at. Applying them unconditionally put a keyboard stop
+            // on a phone in front of a region that cannot move.
+            {...(isDesktopLayout
+              ? {
+                  role: "region",
+                  "aria-label": "Match list",
+                  tabIndex: 0,
+                }
+              : {})}
           >
             <div className="lg:w-max lg:min-w-full">
               {matches.map((match) => (

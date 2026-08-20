@@ -30,7 +30,8 @@ export function SignInForm() {
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const submissionInFlight = useRef(false);
   const turnstileRef = useRef<TurnstileInstance | undefined>(undefined);
-  const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim() ?? "";
+  const turnstileSiteKey =
+    process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim() ?? "";
   const isTurnstileConfigured = turnstileSiteKey.length > 0;
 
   const form = useForm<LoginCredentials>({
@@ -184,11 +185,15 @@ export function SignInForm() {
                         <button
                           type="button"
                           aria-label={
-                            isPasswordVisible ? "Hide password" : "Show password"
+                            isPasswordVisible
+                              ? "Hide password"
+                              : "Show password"
                           }
                           aria-pressed={isPasswordVisible}
                           onPointerDown={(event) => event.preventDefault()}
-                          onClick={() => setIsPasswordVisible((visible) => !visible)}
+                          onClick={() =>
+                            setIsPasswordVisible((visible) => !visible)
+                          }
                           className="password-visibility-toggle absolute inset-y-0 right-0 flex w-10 items-center justify-center text-gray-600 hover:text-gray-900"
                         >
                           {isPasswordVisible ? (
@@ -205,11 +210,23 @@ export function SignInForm() {
 
                 {captchaRequired && (
                   <div className="space-y-2">
-                    <FormLabel className="text-gray-700">
+                    {/* A heading over the widget, not a form field. Not a
+                        <label> either: there is no control to label, and a
+                        FormLabel here would point `htmlFor` at an id nothing
+                        renders. The widget is named through aria-labelledby
+                        below. */}
+                    <p
+                      id="sign-in-captcha-heading"
+                      className="text-sm font-medium leading-none text-gray-700"
+                    >
                       Security Check
-                    </FormLabel>
+                    </p>
                     {isTurnstileConfigured ? (
-                      <div className="rounded-md border border-gray-200 p-3 bg-gray-50">
+                      <div
+                        role="group"
+                        aria-labelledby="sign-in-captcha-heading"
+                        className="rounded-md border border-gray-200 p-3 bg-gray-50"
+                      >
                         <Turnstile
                           ref={turnstileRef}
                           siteKey={turnstileSiteKey}
@@ -252,9 +269,7 @@ export function SignInForm() {
 
                 <Button
                   type="submit"
-                  disabled={
-                    isSubmitting || !isFormValid || !isCaptchaSatisfied
-                  }
+                  disabled={isSubmitting || !isFormValid || !isCaptchaSatisfied}
                   className="w-full button-medium"
                 >
                   {isSubmitting ? "Signing in..." : "Sign In"}
