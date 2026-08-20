@@ -212,8 +212,9 @@ completion reaches 100% and triggers result/history refresh.
 - **DB-only fast flow** detection: a run that completes without ever being
   observed `in_progress`/`waiting_rate_limit`, or with backend progress still
   < 10, plays the artificial fast animation
-  (`const isFast = !sawInProgressRef.current || lastBackendProgressRef.current < 10`,
-  `matchmaking-analysis.tsx` ~lines 288–289). There is no status-string check
+  (`!state.sawInProgress || state.lastBackendProgress < 10` in
+  `matchmaking-analysis-session.tsx`, state in
+  `matchmaking-analysis-state.ts`). There is no status-string check
   against a previous `pending` value.
 - `failed` runs stay visibly retryable; provider rate-limit terminology is not
   exposed.

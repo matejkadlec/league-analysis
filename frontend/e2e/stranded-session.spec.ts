@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { seedAuthenticatedSession } from "./support/auth";
+import { acceptCookieBanner, seedAuthenticatedSession } from "./support/auth";
 import { blockUpstreamRequests } from "./support/offline";
 
 /**
@@ -51,7 +51,7 @@ test.describe("a session the API no longer honours", () => {
     // everything behind it out of the accessibility tree — so the form is
     // present but unreachable by role until this is dismissed. Every other
     // spec here does the same.
-    await page.getByRole("button", { name: "Accept necessary" }).click();
+    await acceptCookieBanner(page);
 
     await expect(page.getByRole("button", { name: "Sign In" })).toBeVisible();
     // The hint has to be gone, not merely ignored: while it survives,

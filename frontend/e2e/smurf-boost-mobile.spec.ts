@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 
+import { acceptCookieBanner } from "./support/auth";
 import { installSmurfBoostMocks, PUUID } from "./support/smurf-boost-harness";
 
 /**
@@ -26,7 +27,7 @@ test.describe("smurf and boost detection on a phone", () => {
     await installSmurfBoostMocks(page);
 
     await page.goto(`/smurf-boost-detection?puuid=${PUUID}`);
-    await page.getByRole("button", { name: "Accept necessary" }).click();
+    await acceptCookieBanner(page);
 
     const documentWidth = () =>
       page.evaluate(() => ({
@@ -55,7 +56,7 @@ test.describe("smurf and boost detection on a phone", () => {
     await installSmurfBoostMocks(page);
 
     await page.goto(`/smurf-boost-detection?puuid=${PUUID}`);
-    await page.getByRole("button", { name: "Accept necessary" }).click();
+    await acceptCookieBanner(page);
     await page.getByRole("button", { name: "Run the comparison" }).click();
 
     const result = page.locator("#smurf-boost-result");
@@ -103,7 +104,7 @@ test.describe("smurf and boost detection on a phone", () => {
     await installSmurfBoostMocks(page);
 
     await page.goto(`/smurf-boost-detection?puuid=${PUUID}`);
-    await page.getByRole("button", { name: "Accept necessary" }).click();
+    await acceptCookieBanner(page);
 
     const field = page.getByLabel("Recent games compared");
     await expect(field).toBeVisible();

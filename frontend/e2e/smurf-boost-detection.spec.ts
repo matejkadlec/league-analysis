@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 
+import { acceptCookieBanner } from "./support/auth";
 import { installSmurfBoostMocks, PUUID } from "./support/smurf-boost-harness";
 
 /** Words the model's result wording forbids in the rendered page. */
@@ -23,7 +24,7 @@ test("runs a comparison and reports both families without accusing anyone", asyn
   const api = await installSmurfBoostMocks(page);
 
   await page.goto("/player-overview");
-  await page.getByRole("button", { name: "Accept necessary" }).click();
+  await acceptCookieBanner(page);
 
   // The sidebar entry keeps the selected player, like the other player pages.
   const navigationLink = page.getByRole("link", {
