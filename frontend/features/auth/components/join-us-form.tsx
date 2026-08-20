@@ -1,7 +1,6 @@
 "use client";
 
-import { useRef, useState, type FormEvent } from "react";
-import { Turnstile, type TurnstileInstance } from "@marsidev/react-turnstile";
+import { useState, type FormEvent } from "react";
 import { Users } from "lucide-react";
 
 import { api, apiErrorMessage, normalizeApiError } from "@/lib/core/api";
@@ -21,6 +20,7 @@ import { PublicBackButton } from "@/components/public-back-button";
 import { PublicPageFooter } from "@/components/public-page-footer";
 import { useAuth } from "../context/auth-context";
 import { JoinUsRoleCards } from "./join-us-role-cards";
+import { useTurnstileCaptcha } from "./use-turnstile-captcha";
 
 type JoinUsSubject = "beta_tester" | "full_stack_developer" | "other";
 
@@ -48,14 +48,14 @@ export function JoinUsForm({ isAuthenticatedHint = false }: JoinUsFormProps) {
   const { isAuthenticated, isLoading } = useAuth();
   const [subject, setSubject] = useState<JoinUsSubject | "">("");
   const [body, setBody] = useState("");
-  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  const turnstileRef = useRef<TurnstileInstance | undefined>(undefined);
-  const turnstileSiteKey =
-    process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim() ?? "";
-  const isTurnstileConfigured = turnstileSiteKey.length > 0;
+  const captcha = useTurnstileCaptcha({
+    action: "join_us_contact",
+    theme: "dark",
+    appearance: "always",
+  });
 
   const trimmedBody = body.trim();
   const bodyLength = trimmedBody.length;
@@ -63,8 +63,8 @@ export function JoinUsForm({ isAuthenticatedHint = false }: JoinUsFormProps) {
   const isSubjectValid = subject !== "";
   const isBodyValid = bodyLength >= MESSAGE_MIN_LENGTH;
   const isCaptchaSatisfied =
-    !isTurnstileConfigured ||
-    (captchaToken !== null && captchaToken.length > 0);
+    !captcha.isConfigured ||
+    (captcha.token !== null && captcha.token.length > 0);
   const canSubmit = isSubjectValid && isBodyValid && isCaptchaSatisfied;
   const isAuthenticatedForBackButton =
     isAuthenticated || (isLoading && isAuthenticatedHint);
@@ -88,7 +88,7 @@ export function JoinUsForm({ isAuthenticatedHint = false }: JoinUsFormProps) {
       await api.post("/auth/join-us/contact", {
         subject: selectedSubject,
         body: trimmedBody,
-        captcha_token: captchaToken,
+        captcha_token: captcha.token,
       });
 
       toast.success("Application sent", {
@@ -97,13 +97,11 @@ export function JoinUsForm({ isAuthenticatedHint = false }: JoinUsFormProps) {
 
       setSubject("");
       setBody("");
-      setCaptchaToken(null);
-      turnstileRef.current?.reset();
+      captcha.reset();
     } catch (error) {
       const message = resolveApiErrorMessage(error);
       setSubmitError(message);
-      setCaptchaToken(null);
-      turnstileRef.current?.reset();
+      captcha.reset();
       toast.error("Could not send your application", {
         description: message,
       });
@@ -211,28 +209,9 @@ export function JoinUsForm({ isAuthenticatedHint = false }: JoinUsFormProps) {
 
                   <div className="space-y-2">
                     <Label className="text-white">Captcha</Label>
-                    {isTurnstileConfigured ? (
+                    {captcha.isConfigured ? (
                       <div className="rounded-md border border-white/20 bg-slate-950/75 p-3">
-                        <Turnstile
-                          ref={turnstileRef}
-                          siteKey={turnstileSiteKey}
-                          onSuccess={(token) => {
-                            setCaptchaToken(token);
-                          }}
-                          onExpire={() => {
-                            setCaptchaToken(null);
-                          }}
-                          onError={() => {
-                            setCaptchaToken(null);
-                          }}
-                          options={{
-                            action: "join_us_contact",
-                            theme: "dark",
-                            size: "flexible",
-                            appearance: "always",
-                            refreshExpired: "auto",
-                          }}
-                        />
+                        {captcha.widget}
                       </div>
                     ) : (
                       <Alert className="border-amber-400/70 bg-amber-900/35 text-amber-100">

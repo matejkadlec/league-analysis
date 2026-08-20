@@ -3,9 +3,9 @@
 import { useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import Image from "next/image";
-import { Turnstile, type TurnstileInstance } from "@marsidev/react-turnstile";
 import { Eye, EyeOff } from "lucide-react";
 import { useAuth } from "../context/auth-context";
+import { useTurnstileCaptcha } from "./use-turnstile-captcha";
 import { getLoginErrorMessage, isAuthLoginError } from "../utils/login-error";
 import { Button } from "@/components/ui/button";
 import {
@@ -27,12 +27,12 @@ export function SignInForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [captchaRequired, setCaptchaRequired] = useState(false);
-  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const submissionInFlight = useRef(false);
-  const turnstileRef = useRef<TurnstileInstance | undefined>(undefined);
-  const turnstileSiteKey =
-    process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim() ?? "";
-  const isTurnstileConfigured = turnstileSiteKey.length > 0;
+  const captcha = useTurnstileCaptcha({
+    action: "sign_in",
+    theme: "light",
+    appearance: "interaction-only",
+  });
 
   const form = useForm<LoginCredentials>({
     defaultValues: {
@@ -49,7 +49,7 @@ export function SignInForm() {
   const password = form.watch("password");
   const isFormValid = email.trim().length > 0 && password.trim().length > 0;
   const isCaptchaSatisfied =
-    !captchaRequired || (isTurnstileConfigured && captchaToken !== null);
+    !captchaRequired || (captcha.isConfigured && captcha.token !== null);
 
   const onSubmit = async (data: LoginCredentials) => {
     if (submissionInFlight.current) {
@@ -63,7 +63,7 @@ export function SignInForm() {
     try {
       await login({
         ...data,
-        captchaToken,
+        captchaToken: captcha.token,
       });
     } catch (err) {
       const authError = isAuthLoginError(err) ? err : null;
@@ -73,8 +73,7 @@ export function SignInForm() {
         authError?.code === "CAPTCHA_INVALID"
       ) {
         setCaptchaRequired(true);
-        setCaptchaToken(null);
-        turnstileRef.current?.reset();
+        captcha.reset();
       }
 
       if (authError?.code === "ACCOUNT_LOCKED" && authError.lockedUntil) {
@@ -82,7 +81,7 @@ export function SignInForm() {
       } else if (
         (authError?.code === "CAPTCHA_REQUIRED" ||
           authError?.code === "CAPTCHA_INVALID") &&
-        !isTurnstileConfigured
+        !captcha.isConfigured
       ) {
         setError("Sign-in is temporarily unavailable. Please try again later.");
       } else {
@@ -221,32 +220,13 @@ export function SignInForm() {
                     >
                       Security Check
                     </p>
-                    {isTurnstileConfigured ? (
+                    {captcha.isConfigured ? (
                       <div
                         role="group"
                         aria-labelledby="sign-in-captcha-heading"
                         className="rounded-md border border-gray-200 p-3 bg-gray-50"
                       >
-                        <Turnstile
-                          ref={turnstileRef}
-                          siteKey={turnstileSiteKey}
-                          onSuccess={(token) => {
-                            setCaptchaToken(token);
-                          }}
-                          onExpire={() => {
-                            setCaptchaToken(null);
-                          }}
-                          onError={() => {
-                            setCaptchaToken(null);
-                          }}
-                          options={{
-                            action: "sign_in",
-                            theme: "light",
-                            size: "flexible",
-                            appearance: "interaction-only",
-                            refreshExpired: "auto",
-                          }}
-                        />
+                        {captcha.widget}
                         <p className="text-xs text-gray-500 mt-2">
                           Only shown after repeated failed sign-in attempts.
                         </p>
