@@ -42,24 +42,13 @@ function showToast({
     ...(id !== undefined && { id }),
   };
 
-  switch (variant) {
-    case "success":
-      return Object.keys(options).length > 0
-        ? sonnerToast.success(title, options)
-        : sonnerToast.success(title);
-    case "error":
-      return Object.keys(options).length > 0
-        ? sonnerToast.error(title, options)
-        : sonnerToast.error(title);
-    case "warning":
-      return Object.keys(options).length > 0
-        ? sonnerToast.warning(title, options)
-        : sonnerToast.warning(title);
-    case "info":
-      return Object.keys(options).length > 0
-        ? sonnerToast.info(title, options)
-        : sonnerToast.info(title);
-  }
+  // Sonner names one method per variant and `ToastVariant` is exactly that set
+  // of names, so the four-armed switch this replaces was spelling out an
+  // identity. The second argument is still withheld when there is nothing to
+  // put in it, which is what callers asserting a bare `(title)` expect.
+  return Object.keys(options).length > 0
+    ? sonnerToast[variant](title, options)
+    : sonnerToast[variant](title);
 }
 
 function method(

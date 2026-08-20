@@ -1,8 +1,8 @@
 "use client";
 
-import { Badge } from "@/components/ui/badge";
 import type { JobExecution } from "@/lib/core/schemas";
 
+import { ExecutionStatusBadge } from "./execution-status-badge";
 import { formatRelativeTime } from "./job-card-format";
 import { formatDuration } from "./job-execution-format";
 
@@ -30,22 +30,10 @@ export function JobCardHistory({
               onClick={() => onExecutionClick?.(execution.id)}
             >
               <div className="flex items-center gap-2">
-                <Badge
-                  variant={
-                    execution.status === "SUCCESS"
-                      ? "default"
-                      : execution.status === "FAILED"
-                        ? "destructive"
-                        : "secondary"
-                  }
-                  className={`text-[10px] min-w-17.5 justify-center ${
-                    execution.status === "RATE_LIMITED"
-                      ? "bg-yellow-100 text-yellow-800 border-yellow-300 dark:bg-yellow-900/30 dark:text-yellow-200 dark:border-yellow-800"
-                      : ""
-                  }`}
-                >
-                  {execution.status.replace("_", " ")}
-                </Badge>
+                <ExecutionStatusBadge
+                  status={execution.status}
+                  className="text-[10px] min-w-17.5 justify-center"
+                />
                 <span className="text-muted-foreground min-w-15">
                   API: {execution.api_requests_made}
                 </span>

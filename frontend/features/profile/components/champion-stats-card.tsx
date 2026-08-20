@@ -9,10 +9,12 @@ import {
 } from "@/lib/core/data-dragon";
 import { useDDragonVersion } from "@/lib/core/data-dragon-context";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+
+import { ProfileCardEmptyState } from "./profile-card-empty-state";
+import { UpdatedStamp } from "./updated-stamp";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { useRelativeTime } from "@/lib/core/use-relative-time";
-import { Swords, Clock, ChevronLeft, ChevronRight } from "lucide-react";
+import { Swords, ChevronLeft, ChevronRight } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
@@ -45,23 +47,14 @@ export function ChampionStatsCard({
   const ddragonVersion = useDDragonVersion();
   const [paginationState, setPaginationState] =
     useState<ChampionPaginationState>({ dataSourceKey, page: 0 });
-  const relativeUpdatedAt = useRelativeTime(lastUpdated);
 
   if (!stats.champions || stats.champions.length === 0) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Swords className="h-5 w-5 text-primary" />
-            Top Champions
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-muted-foreground text-sm">
-            Not enough match data to analyze champion performance.
-          </p>
-        </CardContent>
-      </Card>
+      <ProfileCardEmptyState
+        icon={Swords}
+        title="Top Champions"
+        message="Not enough match data to analyze champion performance."
+      />
     );
   }
 
@@ -90,14 +83,7 @@ export function ChampionStatsCard({
           </Badge>
         </div>
         <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
-          {lastUpdated ? (
-            <div className="flex items-center gap-1">
-              <Clock className="h-3 w-3" />
-              <span>Updated {relativeUpdatedAt}</span>
-            </div>
-          ) : (
-            <span />
-          )}
+          {lastUpdated ? <UpdatedStamp lastUpdated={lastUpdated} /> : <span />}
           <div className="ml-auto flex items-center gap-1">
             <Button
               aria-label="Previous champions"

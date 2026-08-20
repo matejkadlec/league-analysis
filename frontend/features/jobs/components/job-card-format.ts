@@ -54,31 +54,40 @@ const narrowRelativeFormatter = new Intl.RelativeTimeFormat("en", {
 // browser running behind the DB never reads a fresh run as the future, the
 // upcoming clock so an overdue schedule never reads as history.
 
-export function formatRelativeTime(timestamp: string): string {
-  const date = new Date(timestamp);
-  const now = new Date();
-  const diffMins = Math.floor((now.getTime() - date.getTime()) / 60000);
-
+/**
+ * A minute count laddered up into hours and days, signed for `Intl`.
+ *
+ * `direction` is the only thing that separated the two clocks below: -1 reads
+ * the count as elapsed, +1 as upcoming. The clamp stays on `diffMins` -- the
+ * count in each clock's own direction -- rather than on the signed value, so
+ * each keeps its own side of "Just now" and neither crosses into the other's.
+ */
+function formatMinuteLadder(diffMins: number, direction: -1 | 1): string {
   if (diffMins < 1) return "Just now";
-  if (diffMins < 60) return narrowRelativeFormatter.format(-diffMins, "minute");
+  if (diffMins < 60) {
+    return narrowRelativeFormatter.format(direction * diffMins, "minute");
+  }
   const diffHours = Math.floor(diffMins / 60);
-  if (diffHours < 24) return narrowRelativeFormatter.format(-diffHours, "hour");
+  if (diffHours < 24) {
+    return narrowRelativeFormatter.format(direction * diffHours, "hour");
+  }
   const diffDays = Math.floor(diffHours / 24);
-  return narrowRelativeFormatter.format(-diffDays, "day");
+  return narrowRelativeFormatter.format(direction * diffDays, "day");
+}
+
+export function formatRelativeTime(timestamp: string): string {
+  const elapsedMins = Math.floor(
+    (Date.now() - new Date(timestamp).getTime()) / 60000,
+  );
+  return formatMinuteLadder(elapsedMins, -1);
 }
 
 /** The future-facing sibling for next_run_time: "in 10m", "in 2h". */
 export function formatNextRun(timestamp: string): string {
-  const date = new Date(timestamp);
-  const now = new Date();
-  const diffMins = Math.floor((date.getTime() - now.getTime()) / 60000);
-
-  if (diffMins < 1) return "Just now";
-  if (diffMins < 60) return narrowRelativeFormatter.format(diffMins, "minute");
-  const diffHours = Math.floor(diffMins / 60);
-  if (diffHours < 24) return narrowRelativeFormatter.format(diffHours, "hour");
-  const diffDays = Math.floor(diffHours / 24);
-  return narrowRelativeFormatter.format(diffDays, "day");
+  const upcomingMins = Math.floor(
+    (new Date(timestamp).getTime() - Date.now()) / 60000,
+  );
+  return formatMinuteLadder(upcomingMins, 1);
 }
 
 export function getJobDescription(jobType: string): string {
