@@ -14,9 +14,8 @@ from sqlalchemy import (
     DateTime as SQLDateTime,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy.sql import func
 
-from app.core.models import Base
+from app.core.models import Base, created_at_column, updated_at_column
 
 if TYPE_CHECKING:
     from .email_change_request import EmailChangeRequest
@@ -120,19 +119,12 @@ class User(Base):
     )
 
     # Timestamps
-    created_at: Mapped[datetime] = mapped_column(
-        SQLDateTime(timezone=True),
-        nullable=False,
-        server_default=func.now(),
-        comment="When this user account was created",
+    created_at: Mapped[datetime] = created_at_column(
+        "When this user account was created"
     )
 
-    updated_at: Mapped[datetime] = mapped_column(
-        SQLDateTime(timezone=True),
-        nullable=False,
-        server_default=func.now(),
-        onupdate=func.now(),
-        comment="When this user account was last updated",
+    updated_at: Mapped[datetime] = updated_at_column(
+        "When this user account was last updated"
     )
 
     # Relationships

@@ -24,7 +24,7 @@ from sqlalchemy.dialects.postgresql import ENUM, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
-from app.core.models import Base
+from app.core.models import Base, created_at_column, updated_at_column
 
 
 class JobType(str, PyEnum):
@@ -112,19 +112,12 @@ class JobConfiguration(Base):
     )
 
     # Timestamps
-    created_at: Mapped[datetime] = mapped_column(
-        SQLDateTime(timezone=True),
-        nullable=False,
-        server_default=func.now(),
-        comment="When this job configuration was created",
+    created_at: Mapped[datetime] = created_at_column(
+        "When this job configuration was created"
     )
 
-    updated_at: Mapped[datetime] = mapped_column(
-        SQLDateTime(timezone=True),
-        nullable=False,
-        server_default=func.now(),
-        onupdate=func.now(),
-        comment="When this job configuration was last updated",
+    updated_at: Mapped[datetime] = updated_at_column(
+        "When this job configuration was last updated"
     )
 
     # Relationships
@@ -313,21 +306,14 @@ class PlayerSyncRun(Base):
     )
     error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
     error_message: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(
-        SQLDateTime(timezone=True), nullable=False, server_default=func.now()
-    )
+    created_at: Mapped[datetime] = created_at_column()
     started_at: Mapped[datetime | None] = mapped_column(
         SQLDateTime(timezone=True), nullable=True
     )
     completed_at: Mapped[datetime | None] = mapped_column(
         SQLDateTime(timezone=True), nullable=True
     )
-    updated_at: Mapped[datetime] = mapped_column(
-        SQLDateTime(timezone=True),
-        nullable=False,
-        server_default=func.now(),
-        onupdate=func.now(),
-    )
+    updated_at: Mapped[datetime] = updated_at_column()
 
 
 # Create composite indexes for common queries

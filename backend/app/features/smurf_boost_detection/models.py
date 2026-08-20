@@ -18,9 +18,8 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy.sql import func
 
-from app.core.models import Base
+from app.core.models import Base, created_at_column
 
 
 class SmurfBoostAnalysis(Base):
@@ -34,11 +33,8 @@ class SmurfBoostAnalysis(Base):
         comment="Player PUUID this analysis is for",
     )
 
-    created_at: Mapped[datetime] = mapped_column(
-        SQLDateTime(timezone=True),
-        nullable=False,
-        server_default=func.now(),
-        comment="When this analysis run was created",
+    created_at: Mapped[datetime] = created_at_column(
+        "When this analysis run was created"
     )
 
     status: Mapped[str] = mapped_column(

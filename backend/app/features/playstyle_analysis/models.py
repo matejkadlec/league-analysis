@@ -10,14 +10,10 @@ from sqlalchemy import (
     ForeignKey,
     String,
 )
-from sqlalchemy import (
-    DateTime as SQLDateTime,
-)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy.sql import func
 
-from app.core.models import Base
+from app.core.models import Base, created_at_column, updated_at_column
 
 
 class AnalysisStatus(str, PyEnum):
@@ -83,20 +79,9 @@ class PlaystyleAnalysis(Base):
     )
 
     # Timestamps
-    created_at: Mapped[datetime] = mapped_column(
-        SQLDateTime(timezone=True),
-        nullable=False,
-        server_default=func.now(),
-        comment="Analysis creation time",
-    )
+    created_at: Mapped[datetime] = created_at_column("Analysis creation time")
 
-    updated_at: Mapped[datetime] = mapped_column(
-        SQLDateTime(timezone=True),
-        nullable=False,
-        server_default=func.now(),
-        onupdate=func.now(),
-        comment="Last update time",
-    )
+    updated_at: Mapped[datetime] = updated_at_column("Last update time")
 
     # Relationship to Player
     player = relationship("Player", back_populates="playstyle_analysis")

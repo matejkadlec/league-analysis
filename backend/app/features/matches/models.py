@@ -12,13 +12,9 @@ from sqlalchemy import (
     String,
     text,
 )
-from sqlalchemy import (
-    DateTime as SQLDateTime,
-)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy.sql import func
 
-from app.core.models import Base
+from app.core.models import Base, created_at_column, updated_at_column
 
 
 class Match(Base):
@@ -142,19 +138,12 @@ class Match(Base):
     )
 
     # Timestamps
-    created_at: Mapped[datetime] = mapped_column(
-        SQLDateTime(timezone=True),
-        nullable=False,
-        server_default=func.now(),
-        comment="When this match record was created in our database",
+    created_at: Mapped[datetime] = created_at_column(
+        "When this match record was created in our database"
     )
 
-    updated_at: Mapped[datetime] = mapped_column(
-        SQLDateTime(timezone=True),
-        nullable=False,
-        server_default=func.now(),
-        onupdate=func.now(),
-        comment="When this match record was last updated",
+    updated_at: Mapped[datetime] = updated_at_column(
+        "When this match record was last updated"
     )
 
     # Processing flags
