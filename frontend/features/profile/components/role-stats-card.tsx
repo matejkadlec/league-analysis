@@ -3,8 +3,10 @@
 import Image from "next/image";
 import { LaneStatsResponse } from "@/lib/core/schemas";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Map, Clock } from "lucide-react";
-import { useRelativeTime } from "@/lib/core/use-relative-time";
+
+import { ProfileCardEmptyState } from "./profile-card-empty-state";
+import { UpdatedStamp } from "./updated-stamp";
+import { Map } from "lucide-react";
 import {
   formatFractionAsPercent,
   formatKDA,
@@ -30,22 +32,13 @@ function getPositionIconPath(lane: string): string {
 }
 
 export function RoleStatsCard({ stats, lastUpdated }: RoleStatsCardProps) {
-  const relativeUpdatedAt = useRelativeTime(lastUpdated);
   if (!stats.lanes || stats.lanes.length === 0) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Map className="h-5 w-5 text-primary" />
-            Role Performance
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-muted-foreground text-sm">
-            Not enough match data to analyze role performance.
-          </p>
-        </CardContent>
-      </Card>
+      <ProfileCardEmptyState
+        icon={Map}
+        title="Role Performance"
+        message="Not enough match data to analyze role performance."
+      />
     );
   }
 
@@ -62,12 +55,10 @@ export function RoleStatsCard({ stats, lastUpdated }: RoleStatsCardProps) {
           <Map className="h-5 w-5 text-primary" />
           Role Performance
         </CardTitle>
-        {lastUpdated && (
-          <div className="flex items-center gap-1 text-xs text-muted-foreground mt-2">
-            <Clock className="h-3 w-3" />
-            <span>Updated {relativeUpdatedAt}</span>
-          </div>
-        )}
+        <UpdatedStamp
+          lastUpdated={lastUpdated}
+          className="text-xs text-muted-foreground mt-2"
+        />
       </CardHeader>
       <CardContent>
         <div className="space-y-4">

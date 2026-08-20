@@ -4,11 +4,13 @@ import { useQuery } from "@tanstack/react-query";
 import { MatchStatsResponseSchema } from "@/lib/core/schemas";
 import { unwrap, validatedGet } from "@/lib/core/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+
+import { ProfileCardEmptyState } from "./profile-card-empty-state";
+import { UpdatedStamp } from "./updated-stamp";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { TrendingUp, TrendingDown, Minus, Activity, Clock } from "lucide-react";
+import { TrendingUp, TrendingDown, Minus, Activity } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
-import { useRelativeTime } from "@/lib/core/use-relative-time";
 import { formatFractionAsPercent, formatKDA } from "@/lib/core/format";
 
 interface RecentPerformanceCardProps {
@@ -169,7 +171,6 @@ export function RecentPerformanceCard({
   puuid,
   lastUpdated,
 }: RecentPerformanceCardProps) {
-  const relativeUpdatedAt = useRelativeTime(lastUpdated);
   // Fetch recent stats (last 10 games for comparison)
   const { data: recent = null, isLoading: isRecentLoading } = useQuery({
     queryKey: ["recent-stats", puuid, 10],
@@ -216,19 +217,11 @@ export function RecentPerformanceCard({
 
   if (!recent || !overall || overall.total_matches === 0) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Activity className="h-5 w-5 text-primary" />
-            Recent Performance
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-muted-foreground text-sm">
-            Not enough match data to analyze performance trends.
-          </p>
-        </CardContent>
-      </Card>
+      <ProfileCardEmptyState
+        icon={Activity}
+        title="Recent Performance"
+        message="Not enough match data to analyze performance trends."
+      />
     );
   }
 
@@ -270,12 +263,10 @@ export function RecentPerformanceCard({
             {overall.total_matches} games)
           </Badge>
         </div>
-        {lastUpdated && (
-          <div className="flex items-center gap-1 text-xs text-muted-foreground mt-2">
-            <Clock className="h-3 w-3" />
-            <span>Updated {relativeUpdatedAt}</span>
-          </div>
-        )}
+        <UpdatedStamp
+          lastUpdated={lastUpdated}
+          className="text-xs text-muted-foreground mt-2"
+        />
       </CardHeader>
       <CardContent>
         {/* Row 1: Win Rate | KDA */}

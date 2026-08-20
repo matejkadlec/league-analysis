@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import type { JobExecution } from "@/lib/core/schemas";
 
+import { ExecutionStatusBadge } from "./execution-status-badge";
 import { JobExecutionApiCalls } from "./job-execution-api-calls";
 import { JobExecutionLogs } from "./job-execution-logs";
 import {
@@ -48,26 +49,7 @@ export function JobExecutionDetailsDialog({
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2">
                 <span className="font-medium">Status</span>
-                <Badge
-                  variant={
-                    execution.status === "SUCCESS"
-                      ? "default"
-                      : execution.status === "FAILED"
-                        ? "destructive"
-                        : "secondary"
-                  }
-                  className={
-                    execution.status === "RATE_LIMITED"
-                      ? "bg-yellow-100 text-yellow-800 border-yellow-300 dark:bg-yellow-900/30 dark:text-yellow-200 dark:border-yellow-800"
-                      : execution.status === "CANCELLED"
-                        ? "bg-purple-100 text-primary-foreground border-purple-300 dark:bg-purple-900/30 dark:text-white dark:border-purple-800"
-                        : execution.status === "PAUSED"
-                          ? "bg-orange-100 text-white border-orange-300 dark:bg-orange-900/30 dark:text-white dark:border-orange-800"
-                          : ""
-                  }
-                >
-                  {execution.status.replace("_", " ")}
-                </Badge>
+                <ExecutionStatusBadge status={execution.status} />
               </div>
               <div className="flex items-center gap-2">
                 <span className="font-medium">Triggered By</span>
