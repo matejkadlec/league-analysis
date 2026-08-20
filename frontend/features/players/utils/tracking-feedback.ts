@@ -1,35 +1,13 @@
 import type { ApiError } from "@/lib/core/api";
+import { getPlatformDisplayName } from "@/lib/core/platform-utils";
 
 import type { RiotIdParts } from "./riot-id";
-
-const SERVER_DISPLAY_NAMES: Record<string, string> = {
-  br1: "BR",
-  eun1: "EUNE",
-  euw1: "EUW",
-  jp1: "JP",
-  kr: "KR",
-  la1: "LAN",
-  la2: "LAS",
-  na1: "NA",
-  oc1: "OCE",
-  ph2: "PH",
-  ru: "RU",
-  sg2: "SG",
-  th2: "TH",
-  tr1: "TR",
-  tw2: "TW",
-  vn2: "VN",
-};
-
-export function getServerDisplayName(platform: string): string {
-  return SERVER_DISPLAY_NAMES[platform.toLowerCase()] ?? platform.toUpperCase();
-}
 
 export function playerNotFoundMessage(
   riotId: RiotIdParts,
   platform: string,
 ): string {
-  return `Player ${riotId.gameName}#${riotId.tagLine} wasn't found on server ${getServerDisplayName(platform)}.`;
+  return `Player ${riotId.gameName}#${riotId.tagLine} wasn't found on server ${getPlatformDisplayName(platform)}.`;
 }
 
 export type PlayerTrackingFailureKind =
