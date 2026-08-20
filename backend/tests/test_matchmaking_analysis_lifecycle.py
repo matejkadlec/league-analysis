@@ -1,15 +1,12 @@
 """Matchmaking-analysis lifecycle regressions."""
 
 import asyncio
-import inspect
-from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from typing import cast
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import ClauseElement
 from starlette.requests import Request
@@ -36,11 +33,6 @@ def _request() -> Request:
             "client": ("127.0.0.1", 12345),
         }
     )
-
-
-def _unwrapped[**P, R](endpoint: Callable[P, R]) -> Callable[P, R]:
-    """Reach the endpoint under slowapi's rate-limit wrapper, signature intact."""
-    return cast(Callable[P, R], inspect.unwrap(endpoint))
 
 
 def _analysis(status: str = "pending") -> MatchmakingAnalysis:
@@ -71,12 +63,9 @@ def _compiled_values(statement: ClauseElement) -> list[object]:
 
 @pytest.mark.asyncio
 async def test_start_route_returns_without_riot_preflight() -> None:
-    """The start request never owns the long Riot minimum-match check."""
+    """The start request never owns any long Riot work; it only enqueues."""
     expected = _analysis()
     service = MagicMock(spec=MatchmakingAnalysisService)
-    service.check_player_has_enough_matches.side_effect = AssertionError(
-        "preflight must run in the background"
-    )
     service.start_analysis.return_value = expected
 
     result = await analysis_router.start_analysis(
@@ -86,27 +75,7 @@ async def test_start_route_returns_without_riot_preflight() -> None:
     )
 
     assert result is expected
-    service.check_player_has_enough_matches.assert_not_awaited()
     service.start_analysis.assert_awaited_once_with(_PUUID)
-
-
-@pytest.mark.asyncio
-async def test_match_check_preserves_the_shared_invalid_key_signal() -> None:
-    """The diagnostic route keeps the global banner's established error code."""
-    service = MagicMock(spec=MatchmakingAnalysisService)
-    service.check_player_has_enough_matches.side_effect = ForbiddenError(
-        "provider detail", status_code=403
-    )
-
-    with pytest.raises(HTTPException) as error:
-        await _unwrapped(analysis_router.check_player_matches)(
-            request=_request(),
-            payload=MatchmakingAnalysisRequest(puuid=_PUUID),
-            service=cast(MatchmakingAnalysisService, service),
-        )
-
-    assert error.value.status_code == 503
-    assert cast(dict[str, str], error.value.detail)["code"] == "RIOT_API_KEY_INVALID"
 
 
 @pytest.mark.asyncio

@@ -380,24 +380,6 @@ class JobService:
         count = result.scalar() or 0
         return count > 0
 
-    async def get_job_control_state(
-        self, job_id: int
-    ) -> JobControlActionResponse | None:
-        """Get runtime control state for a specific job configuration."""
-        job = await self.get_job_configuration_model(job_id)
-        if not job:
-            return None
-
-        runtime_state = get_runtime_control_snapshot(job_id)
-        return JobControlActionResponse(
-            success=True,
-            message="Job control state loaded",
-            is_running=runtime_state["is_running"],
-            is_paused=bool(job.is_paused),
-            is_stopping=runtime_state["stop_requested"],
-            is_force_stopping=runtime_state["force_stop_requested"],
-        )
-
     async def set_job_paused(
         self,
         job_id: int,

@@ -119,25 +119,6 @@ class MatchmakingAnalysisService:
     # Public API
     # ================================================================
 
-    async def check_player_has_enough_matches(self, puuid: str) -> tuple[bool, int]:
-        """Check if player has at least MIN_MATCHES_REQUIRED ranked matches."""
-        try:
-            match_list = await self.riot_client.get_match_list_by_puuid(
-                puuid=puuid,
-                start=0,
-                count=self.MIN_MATCHES_REQUIRED,
-                queue=420,
-            )
-            count = len(match_list.match_ids)
-            return count >= self.MIN_MATCHES_REQUIRED, count
-        except RiotAPIError as e:
-            logger.error(
-                "Failed to check player match count",
-                puuid=puuid,
-                error_type=type(e).__name__,
-            )
-            raise
-
     async def start_analysis(self, puuid: str) -> MatchmakingAnalysisResponse:
         """Create or attach to one active analysis and return immediately."""
         await _ensure_riot_writer_maintenance_is_inactive(self.db)
