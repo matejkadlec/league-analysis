@@ -2,17 +2,13 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from typing import ParamSpec, Protocol, TypeVar
-
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.core.rate_limiter import rate_limit
 from app.features.auth.dependencies import get_current_active_user
 from app.features.auth.models import User
 from app.features.settings.models import UserCardPreference
@@ -34,30 +30,7 @@ from .service import SmurfBoostDetectionError, resolve_thresholds
 # failure, and blaming the caller's valid payload for it would be wrong.
 ERROR_STATUS_CODES = {"analysis_in_progress": 409, "analysis_missing": 500}
 
-limiter = Limiter(key_func=get_remote_address)
 logger = structlog.get_logger(__name__)
-
-_P = ParamSpec("_P")
-_R = TypeVar("_R")
-
-
-class _RateLimiter(Protocol):
-    """The one slowapi capability this module uses, with a usable signature.
-
-    slowapi annotates the decorator `limit` returns as a bare `Callable`, which
-    erases the parameter and return types of every endpoint underneath it.
-    """
-
-    def limit(
-        self, limit_value: str
-    ) -> Callable[[Callable[_P, _R]], Callable[_P, _R]]: ...
-
-
-def rate_limit(
-    rule: str, rate_limiter: _RateLimiter = limiter
-) -> Callable[[Callable[_P, _R]], Callable[_P, _R]]:
-    """Apply slowapi's rate limit while keeping the endpoint's own signature."""
-    return rate_limiter.limit(rule)
 
 
 router = APIRouter(

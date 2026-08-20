@@ -68,6 +68,41 @@ def _job_execution_double(**attributes: object) -> JobExecution:
 
 
 @pytest.mark.asyncio
+async def test_status_overview_reports_the_earliest_scheduled_run(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The overview surfaces the soonest next_run_time across scheduled jobs."""
+    from app.features.jobs import router as jobs_router
+
+    soon = datetime.now(UTC) + timedelta(minutes=5)
+    later = soon + timedelta(hours=1)
+
+    class SchedulerDouble:
+        running = True
+
+        def get_jobs(self) -> list[SimpleNamespace]:
+            return [
+                SimpleNamespace(next_run_time=later),
+                SimpleNamespace(next_run_time=soon),
+                SimpleNamespace(next_run_time=None),
+            ]
+
+    monkeypatch.setattr(scheduler_module, "_scheduler", SchedulerDouble())
+    job_service = SimpleNamespace(
+        get_active_job_count=AsyncMock(return_value=2),
+        get_running_execution_count=AsyncMock(return_value=0),
+        get_latest_execution=AsyncMock(return_value=None),
+    )
+
+    response = await jobs_router.get_job_system_status(
+        job_service=cast(JobService, job_service)
+    )
+
+    assert response.next_run_time == soon
+    assert response.scheduler_running is True
+
+
+@pytest.mark.asyncio
 async def test_scheduler_shutdown_does_not_drain_running_jobs(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -334,35 +334,6 @@ async def trigger_job(
         ) from e
 
 
-@router.get("/{job_id}/control-state", response_model=JobControlActionResponse)
-async def get_job_control_state(
-    job_id: int,
-    job_service: JobServiceDep,
-):
-    """Get pause/stop runtime state for a job."""
-    try:
-        state = await job_service.get_job_control_state(job_id)
-        if not state:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Job configuration with ID {job_id} not found",
-            )
-        return state
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(
-            "Failed to get job control state",
-            job_id=job_id,
-            error=str(e),
-            exc_info=True,
-        )
-        raise HTTPException(
-            status_code=500,
-            detail="Internal server error retrieving job control state",
-        ) from e
-
-
 @router.post("/{job_id}/pause", response_model=JobControlActionResponse)
 async def pause_job(
     job_id: int,
@@ -778,12 +749,23 @@ async def get_job_system_status(
         scheduler = get_scheduler()
         scheduler_running = scheduler is not None and scheduler.running
 
+        next_run_time = None
+        if scheduler is not None and scheduler_running:
+            next_run_time = min(
+                (
+                    job.next_run_time
+                    for job in scheduler.get_jobs()
+                    if job.next_run_time is not None
+                ),
+                default=None,
+            )
+
         return JobStatusResponse(
             scheduler_running=scheduler_running,
             active_jobs=active_jobs,
             running_executions=running_executions,
             last_execution=last_execution,
-            next_run_time=None,  # TODO: Get from scheduler
+            next_run_time=next_run_time,
         )
 
     except Exception as e:

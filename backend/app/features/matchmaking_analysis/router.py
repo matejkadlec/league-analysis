@@ -1,19 +1,11 @@
 """Matchmaking analysis API endpoints."""
 
-from collections.abc import Callable
 from datetime import datetime
-from typing import ParamSpec, Protocol, TypeVar
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 
-from app.core.riot_api.errors import (
-    RIOT_API_KEY_INVALID_DETAIL,
-    AuthenticationError,
-    ForbiddenError,
-)
+from app.core.rate_limiter import rate_limit
 from app.features.auth.dependencies import get_current_active_user
 from app.features.jobs.maintenance import RiotWriterMaintenanceActiveError
 
@@ -23,33 +15,9 @@ from .schemas import (
     MatchmakingAnalysisRequest,
     MatchmakingAnalysisResponse,
     MatchmakingAnalysisStatusResponse,
-    NotEnoughMatchesResponse,
 )
 
-limiter = Limiter(key_func=get_remote_address)
 logger = structlog.get_logger(__name__)
-
-_P = ParamSpec("_P")
-_R = TypeVar("_R")
-
-
-class _RateLimiter(Protocol):
-    """The one slowapi capability this module uses, with a usable signature.
-
-    slowapi annotates the decorator `limit` returns as a bare `Callable`, which
-    erases the parameter and return types of every endpoint underneath it.
-    """
-
-    def limit(
-        self, limit_value: str
-    ) -> Callable[[Callable[_P, _R]], Callable[_P, _R]]: ...
-
-
-def rate_limit(
-    rule: str, rate_limiter: _RateLimiter = limiter
-) -> Callable[[Callable[_P, _R]], Callable[_P, _R]]:
-    """Apply slowapi's rate limit while keeping the endpoint's own signature."""
-    return rate_limiter.limit(rule)
 
 
 router = APIRouter(
@@ -57,49 +25,6 @@ router = APIRouter(
     tags=["matchmaking-analysis"],
     dependencies=[Depends(get_current_active_user)],
 )
-
-
-@router.post(
-    "/check-matches",
-    response_model=dict | NotEnoughMatchesResponse,
-)
-@rate_limit("20/minute")
-async def check_player_matches(
-    request: Request,
-    payload: MatchmakingAnalysisRequest,
-    service: MatchmakingServiceDep,
-):
-    """
-    Check if player has enough matches for analysis.
-
-    Returns success=true if player has at least 10 ranked matches.
-    """
-    try:
-        has_enough, match_count = await service.check_player_has_enough_matches(
-            payload.puuid
-        )
-        if has_enough:
-            return {"success": True, "matches_found": match_count}
-        return NotEnoughMatchesResponse(matches_found=match_count)
-    except (AuthenticationError, ForbiddenError) as error:
-        logger.warning(
-            "matchmaking_match_check_api_key_invalid",
-            error_type=type(error).__name__,
-        )
-        raise HTTPException(
-            status_code=503,
-            detail=RIOT_API_KEY_INVALID_DETAIL,
-        ) from error
-    except Exception as error:
-        logger.warning(
-            "matchmaking_match_check_failed",
-            error_type=type(error).__name__,
-            exc_info=True,
-        )
-        raise HTTPException(
-            status_code=502,
-            detail="Match availability could not be checked. Please try again.",
-        ) from error
 
 
 @router.post("/start", response_model=MatchmakingAnalysisResponse)

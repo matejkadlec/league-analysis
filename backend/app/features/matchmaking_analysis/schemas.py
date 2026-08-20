@@ -118,11 +118,3 @@ class MatchmakingAnalysisHistoryResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     items: list[MatchmakingAnalysisHistoryItem]
-
-
-class NotEnoughMatchesResponse(BaseModel):
-    """Response when player doesn't have enough matches."""
-
-    message: str = "Player doesn't have enough matches for this analysis."
-    matches_found: int
-    matches_required: int = 10
