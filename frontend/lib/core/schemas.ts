@@ -118,20 +118,11 @@ export const PlayerMatchParticipantSchema = z.object({
 });
 
 // Enemy Lane Opponent Schema
-export const EnemyLaneOpponentSchema = z.object({
-  champion_id: z.number().int(),
-  champion_name: z.string(),
-  champion_level: z.number().int(),
-  kills: z.number().int().default(0),
-  deaths: z.number().int().default(0),
-  assists: z.number().int().default(0),
-  kda: z.number().optional().nullable(),
-  total_cs: z.number().int().default(0),
-  vision_score: z.number().int().default(0),
-  total_damage_dealt_to_champions: z.number().int().default(0),
-  summoner1_id: z.number().int().optional().nullable(),
-  summoner2_id: z.number().int().optional().nullable(),
-  runes: ParticipantRunesSchema.optional().nullable(),
+export const EnemyLaneOpponentSchema = PlayerMatchParticipantSchema.omit({
+  team_position: true,
+  team_id: true,
+  win: true,
+  remake: true,
 });
 
 // Team Stats Schema
