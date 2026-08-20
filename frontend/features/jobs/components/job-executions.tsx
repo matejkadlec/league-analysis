@@ -133,6 +133,10 @@ export function JobExecutions({
   };
 
   const handleSelectExecution = (execution: JobExecution) => {
+    // The expansion keys are endpoints, unique only within one execution —
+    // carried over, execution A's expanded rows would render pre-expanded
+    // in execution B. Every dialog starts collapsed.
+    setExpandedApiCalls(new Set());
     setSelectedExecutionState(execution);
     onExecutionSelect?.(execution.id);
   };
