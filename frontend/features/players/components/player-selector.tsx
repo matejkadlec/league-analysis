@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ApiRequestError, normalizeApiError, unwrap } from "@/lib/core/api";
+import { normalizeApiError, unwrap } from "@/lib/core/api";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Search, StopCircle } from "lucide-react";
 
@@ -151,15 +151,13 @@ export function PlayerSelector({
   // the specific "wasn't found on <server>" wording for the generic message.
   const discoverMutation = useMutation({
     mutationFn: async ({ riotId, platform }: DiscoverAttempt) => {
-      const result = await discoverPlayer({
-        game_name: riotId.gameName,
-        tag_line: riotId.tagLine,
-        platform,
-      });
-      if (!result.success) {
-        throw new ApiRequestError(result.error);
-      }
-      return result.data;
+      return unwrap(
+        await discoverPlayer({
+          game_name: riotId.gameName,
+          tag_line: riotId.tagLine,
+          platform,
+        }),
+      );
     },
     onSuccess: async (player) => {
       setPendingRiotId(null);

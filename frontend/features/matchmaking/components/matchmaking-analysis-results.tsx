@@ -1,7 +1,8 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { ApiRequestError } from "@/lib/core/api";
+import { unwrapOr404 } from "@/lib/core/api";
+import { AnalyzedPlayerResultLabel } from "./analyzed-player-result-label";
 import { TrendingUp, Users } from "lucide-react";
 
 import { formatDateTime, formatFractionAsPercent } from "@/lib/core/format";
@@ -23,19 +24,6 @@ interface MatchmakingAnalysisResultsProps {
   analyzedPlayerLabel: string;
 }
 
-function AnalyzedPlayerResultLabel({ playerLabel }: { playerLabel: string }) {
-  return (
-    <p className="text-sm">
-      <span style={{ color: "var(--color-muted-foreground)" }}>
-        Results for player{" "}
-      </span>
-      <span style={{ color: "var(--color-card-foreground)" }}>
-        {playerLabel}
-      </span>
-    </p>
-  );
-}
-
 export function MatchmakingAnalysisResults({
   puuid,
   analyzedPlayerLabel,
@@ -47,14 +35,10 @@ export function MatchmakingAnalysisResults({
   } = useQuery({
     queryKey: ["matchmaking-analysis-results", puuid],
     queryFn: async () => {
-      const result = await getLatestCompletedMatchmakingAnalysis(puuid);
-      if (!result.success) {
-        if (result.error.status === 404) {
-          return null;
-        }
-        throw new ApiRequestError(result.error);
-      }
-      return result.data;
+      return unwrapOr404(
+        await getLatestCompletedMatchmakingAnalysis(puuid),
+        null,
+      );
     },
     retry: false,
     staleTime: 30000,

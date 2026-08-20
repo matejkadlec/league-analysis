@@ -197,10 +197,10 @@ export const MatchListWithPlayerDataResponseSchema = z.object({
   pages: z.number(),
 });
 
-// Match Stats Response Schema
-export const MatchStatsResponseSchema = z.object({
-  puuid: z.string(),
-  total_matches: z.number(),
+// The win/loss and per-game averages the backend returns for every stats
+// grouping -- overall, per champion, per lane. Spelled once so a new metric
+// cannot land on two of the three.
+const performanceStatsFields = {
   wins: z.number(),
   losses: z.number(),
   win_rate: z.number(),
@@ -208,6 +208,13 @@ export const MatchStatsResponseSchema = z.object({
   avg_deaths: z.number(),
   avg_assists: z.number(),
   avg_kda: z.number(),
+} as const;
+
+// Match Stats Response Schema
+export const MatchStatsResponseSchema = z.object({
+  puuid: z.string(),
+  total_matches: z.number(),
+  ...performanceStatsFields,
   avg_cs: z.number(),
   avg_vision_score: z.number(),
 });
@@ -217,13 +224,7 @@ export const ChampionStatsItemSchema = z.object({
   champion_name: z.string(),
   champion_id: z.number(),
   games_played: z.number(),
-  wins: z.number(),
-  losses: z.number(),
-  win_rate: z.number(),
-  avg_kills: z.number(),
-  avg_deaths: z.number(),
-  avg_assists: z.number(),
-  avg_kda: z.number(),
+  ...performanceStatsFields,
 });
 
 export type ChampionStatsItem = z.infer<typeof ChampionStatsItemSchema>;
@@ -241,13 +242,7 @@ export type ChampionStatsResponse = z.infer<typeof ChampionStatsResponseSchema>;
 export const LaneStatsItemSchema = z.object({
   lane: z.string(),
   games_played: z.number(),
-  wins: z.number(),
-  losses: z.number(),
-  win_rate: z.number(),
-  avg_kills: z.number(),
-  avg_deaths: z.number(),
-  avg_assists: z.number(),
-  avg_kda: z.number(),
+  ...performanceStatsFields,
 });
 
 export type LaneStatsItem = z.infer<typeof LaneStatsItemSchema>;

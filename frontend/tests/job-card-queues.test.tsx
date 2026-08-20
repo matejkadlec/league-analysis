@@ -11,7 +11,10 @@ const { toast, validatedGet, validatedPost } = vi.hoisted(() => ({
   validatedPost: vi.fn(),
 }));
 
-vi.mock("@/lib/core/api", () => ({
+// Spread the real module: a literal factory silently omits any export the
+// components start importing later, and the failure reads as a render timeout.
+vi.mock("@/lib/core/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/core/api")>()),
   validatedGet,
   validatedPost,
 }));

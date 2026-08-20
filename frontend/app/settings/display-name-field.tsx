@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { ApiRequestError, validatedPatch } from "@/lib/core/api";
+import { unwrap, validatedPatch } from "@/lib/core/api";
 import {
   UserResponseSchema,
   type UserProfileUpdate,
@@ -30,15 +30,7 @@ export function DisplayNameField() {
 
   const updateDisplayNameMutation = useMutation({
     mutationFn: async (update: UserProfileUpdate) => {
-      const result = await validatedPatch(
-        UserResponseSchema,
-        "/auth/me",
-        update,
-      );
-      if (!result.success) {
-        throw new ApiRequestError(result.error);
-      }
-      return result.data;
+      return unwrap(await validatedPatch(UserResponseSchema, "/auth/me", update));
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: USER_QUERY_KEY });

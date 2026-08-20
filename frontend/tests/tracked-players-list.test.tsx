@@ -21,7 +21,11 @@ vi.mock("@/features/auth", () => ({
   useAuth: () => ({ user: { id: 7 } }),
 }));
 
-vi.mock("@/lib/core/api", () => ({
+// Spread the real module rather than listing exports: a literal factory omits
+// anything the component starts importing later -- `unwrap` was already such a
+// straggler, and its absence surfaced as a render timeout rather than an error.
+vi.mock("@/lib/core/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/core/api")>()),
   api: { delete: vi.fn() },
   validatedGet,
 }));

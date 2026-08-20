@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { ApiRequestError } from "@/lib/core/api";
+import { unwrapOr404 } from "@/lib/core/api";
 import { useQuery } from "@tanstack/react-query";
 
 import { getLatestMatchmakingAnalysis } from "../matchmaking-api";
@@ -27,18 +27,7 @@ export function MatchmakingAnalysis({
   } = useQuery({
     queryKey: ["matchmaking-analysis", puuid],
     queryFn: async () => {
-      const result = await getLatestMatchmakingAnalysis(puuid);
-      if (!result.success) {
-        // A player who has never been analysed is an ordinary empty state,
-        // not a failure the card should report as an error. Every other
-        // failure must throw so the shared query handler can announce it
-        // and record it.
-        if (result.error.status === 404) {
-          return null;
-        }
-        throw new ApiRequestError(result.error);
-      }
-      return result.data;
+      return unwrapOr404(await getLatestMatchmakingAnalysis(puuid), null);
     },
     retry: false,
     staleTime: 1000,

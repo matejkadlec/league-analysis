@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { validatedGet } from "@/lib/core/api";
+import { unwrap, validatedGet } from "@/lib/core/api";
 import {
   JobExecutionListResponse,
   JobExecution,
@@ -48,20 +48,19 @@ export function JobExecutions({
   // single failed 15-second poll would *replace* every loaded page and
   // truncate the list to page 1 until someone scrolls it back in. Thrown,
   // React Query keeps the previous pages (and their pageParams) stale and
-  // retries on the next tick.
+  // retries on the next tick. It throws through `unwrap` rather than a bare
+  // `Error` so the toast keeps the curated message -- see `ApiRequestError`.
   const { data, isLoading, isFetching, hasNextPage, fetchNextPage } =
     useInfiniteQuery({
       queryKey: ["job-executions-infinite"],
       queryFn: async ({ pageParam }) => {
-        const result = await validatedGet(
-          JobExecutionListResponseSchema,
-          "/jobs/executions/all",
-          { page: pageParam, size: PAGE_SIZE },
+        return unwrap(
+          await validatedGet(
+            JobExecutionListResponseSchema,
+            "/jobs/executions/all",
+            { page: pageParam, size: PAGE_SIZE },
+          ),
         );
-        if (!result.success) {
-          throw new Error(result.error.message);
-        }
-        return result.data;
       },
       initialPageParam: 1,
       getNextPageParam: (lastPage, allPages) => {
