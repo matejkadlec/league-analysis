@@ -45,23 +45,3 @@ class PlayerServiceError(ServiceException):
             context=context,
             original_error=original_error,
         )
-
-
-class DatabaseError(ServiceException):
-    """Exception for database errors."""
-
-    def __init__(
-        self,
-        message: str,
-        service: str | None = None,
-        operation: str | None = None,
-        context: dict[str, Any] | None = None,
-        original_error: Exception | None = None,
-    ):
-        super().__init__(
-            message=f"Database error: {message}",
-            service=service,
-            operation=operation,
-            context=context,
-            original_error=original_error,
-        )

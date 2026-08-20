@@ -76,9 +76,6 @@ EVIDENCE_GROUPS: Final[dict[str, str]] = {
     "B3": "shape",
 }
 
-FAMILY_A_SIGNALS: Final[tuple[str, ...]] = ("A1", "A2", "A3", "A4")
-FAMILY_B_SIGNALS: Final[tuple[str, ...]] = ("B1", "B2", "B3", "B4")
-
 # Band thresholds.
 NOTABLE_SCORE: Final[float] = 0.40
 NOTABLE_EVIDENCE: Final[int] = 2

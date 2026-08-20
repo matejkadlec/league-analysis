@@ -20,7 +20,6 @@ from .errors import (
 from .models import (
     AccountDTO,
     LeagueEntryDTO,
-    LegacyLeagueEntryDTO,
     MatchDTO,
     MatchListDTO,
     SummonerDTO,
@@ -33,7 +32,6 @@ __all__ = [
     "BadRequestError",
     "ForbiddenError",
     "LeagueEntryDTO",
-    "LegacyLeagueEntryDTO",
     "MatchDTO",
     "MatchListDTO",
     "NotFoundError",
