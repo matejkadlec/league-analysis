@@ -497,7 +497,6 @@ async def create_tracked_riot_api_client(
     *,
     region: Region | None = None,
     platform: Platform | None = None,
-    enable_logging: bool = True,
     request_callback: Callable[[str, int], None] | None = None,
 ) -> RiotAPIClient:
     """Build a client bound to the current durable credential generation."""
@@ -508,7 +507,6 @@ async def create_tracked_riot_api_client(
         api_key=credential.value,
         region=region,
         platform=platform,
-        enable_logging=enable_logging,
         request_callback=request_callback,
         credential_health_callback=credential_health_callback(credential.generation),
     )

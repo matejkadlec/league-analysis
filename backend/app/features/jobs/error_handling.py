@@ -1,17 +1,13 @@
-"""Error handling utilities for job execution.
+"""Error classification shared by the job implementations.
 
-Provides decorators to handle common Riot API errors consistently
-across all job types, reducing code duplication and improving maintainability.
-
-Error Handling Strategy:
-- Rate limit errors: Convert to RateLimitSignal for graceful handling
-- Authentication errors: Always re-raise (critical)
-- General errors: Re-raise if critical=True, log and return None otherwise
+`RateLimitSignal` plus a handful of predicates that answer what a caught
+exception means -- an expired Riot key, a PUUID minted under a different key,
+a database failure that must abort the run. Each job decides for itself what
+to do about the answer; there is no shared handler, because the three jobs
+disagree about which errors are fatal.
 """
 
-from collections.abc import Callable, Coroutine, Iterator
-from functools import wraps
-from typing import Any, Protocol, overload
+from collections.abc import Iterator
 
 import structlog
 from sqlalchemy.exc import SQLAlchemyError
@@ -21,29 +17,9 @@ from app.core.riot_api.errors import (
     AuthenticationError,
     ForbiddenError,
     PuuidDecryptionError,
-    RateLimitError,
 )
 
 logger = structlog.get_logger(__name__)
-
-#: Callback that turns a decorated function's own arguments into log fields.
-LogContextExtractor = Callable[..., dict[str, Any]]
-
-
-class ErrorHandlingDecorator(Protocol):
-    """Decorator returned by :func:`handle_riot_api_errors`.
-
-    The wrapper keeps the wrapped function's parameters and may return ``None``
-    instead of the wrapped result when a non-critical error is swallowed.
-    """
-
-    @overload
-    def __call__[**P, R](
-        self, func: Callable[P, Coroutine[Any, Any, R]], /
-    ) -> Callable[P, Coroutine[Any, Any, R | None]]: ...
-
-    @overload
-    def __call__[**P, R](self, func: Callable[P, R], /) -> Callable[P, R | None]: ...
 
 
 class RateLimitSignal(Exception):
@@ -115,161 +91,3 @@ def is_database_job_error(error: Exception) -> bool:
         isinstance(item, (DatabaseError, SQLAlchemyError))
         for item in iter_error_chain(error)
     )
-
-
-def handle_riot_api_errors(
-    *,
-    operation: str,
-    critical: bool = True,
-    log_context: LogContextExtractor | None = None,
-) -> ErrorHandlingDecorator:
-    """Decorator to handle common Riot API errors with consistent behavior.
-
-    :param operation: Description of the operation (e.g., "fetch matches").
-    :param critical: If True, re-raise all exceptions. If False, log and return None.
-    :param log_context: Optional function extracting context from args for logging.
-                        Example: lambda self, player: {"puuid": player.puuid}
-
-    Error handling logic:
-    - RateLimitError: Convert to RateLimitSignal for graceful job termination
-    - AuthenticationError/ForbiddenError: Always re-raise (critical auth failures)
-    - Other exceptions: Log error, re-raise if critical=True, otherwise return None
-
-    Usage example::
-
-        @handle_riot_api_errors(
-            operation="update player",
-            critical=False,
-            log_context=lambda self, player: {"puuid": player.puuid}
-        )
-        async def _sync_tracked_player(self, db: AsyncSession, player: Player):
-            # Your implementation here
-            pass
-    """
-
-    @overload
-    def decorator[**P, R](
-        func: Callable[P, Coroutine[Any, Any, R]], /
-    ) -> Callable[P, Coroutine[Any, Any, R | None]]: ...
-
-    @overload
-    def decorator[**P, R](func: Callable[P, R], /) -> Callable[P, R | None]: ...
-
-    def decorator(func: Callable[..., Any], /) -> Callable[..., Any]:
-        import inspect
-
-        # Choose wrapper based on function type
-        if inspect.iscoroutinefunction(func):
-            return _create_async_wrapper(func, operation, critical, log_context)
-        return _create_sync_wrapper(func, operation, critical, log_context)
-
-    return decorator
-
-
-def _extract_log_context(
-    log_context: LogContextExtractor | None,
-    args: tuple[Any, ...],
-    kwargs: dict[str, Any],
-    func_name: str,
-) -> dict[str, Any]:
-    """Extract logging context from function arguments."""
-    if not log_context:
-        return {}
-
-    try:
-        return log_context(*args, **kwargs)
-    except Exception as e:
-        logger.warning(
-            "Failed to extract log context",
-            error=str(e),
-            function=func_name,
-        )
-        return {}
-
-
-def _handle_error(
-    error: Exception, operation: str, critical: bool, context: dict[str, Any]
-) -> None:
-    """Handle exceptions with consistent logging and re-raise logic."""
-    if isinstance(error, RateLimitError):
-        retry_after = getattr(error, "retry_after", None)
-        logger.warning(
-            "job_rate_limit_hit",
-            operation=operation,
-            retry_after=retry_after,
-            **context,
-        )
-        # Convert to RateLimitSignal for graceful job termination
-        raise RateLimitSignal(
-            retry_after=retry_after, message=f"Rate limit hit during {operation}"
-        )
-
-    if isinstance(error, (AuthenticationError, ForbiddenError)):
-        logger.error(
-            "job_authentication_failed",
-            operation=operation,
-            error=str(error),
-            error_type=type(error).__name__,
-            **context,
-        )
-        raise
-
-    logger.error(
-        "job_operation_failed",
-        operation=operation,
-        error=str(error),
-        error_type=type(error).__name__,
-        **context,
-    )
-    if critical:
-        raise
-
-
-def _create_async_wrapper[**P, R](
-    func: Callable[P, Coroutine[Any, Any, R]],
-    operation: str,
-    critical: bool,
-    log_context: LogContextExtractor | None,
-) -> Callable[P, Coroutine[Any, Any, R | None]]:
-    """Create async wrapper for error handling."""
-
-    @wraps(func)
-    async def async_wrapper(*args: P.args, **kwargs: P.kwargs) -> R | None:
-        # ``@wraps`` has already copied the wrapped function's ``__name__``.
-        context = _extract_log_context(
-            log_context, args, kwargs, async_wrapper.__name__
-        )
-        try:
-            return await func(*args, **kwargs)
-        except RateLimitSignal:
-            # Always let RateLimitSignal propagate - it's not an error!
-            raise
-        except Exception as error:
-            _handle_error(error, operation, critical, context)
-            return None  # For non-critical errors that don't re-raise
-
-    return async_wrapper
-
-
-def _create_sync_wrapper[**P, R](
-    func: Callable[P, R],
-    operation: str,
-    critical: bool,
-    log_context: LogContextExtractor | None,
-) -> Callable[P, R | None]:
-    """Create sync wrapper for error handling."""
-
-    @wraps(func)
-    def sync_wrapper(*args: P.args, **kwargs: P.kwargs) -> R | None:
-        # ``@wraps`` has already copied the wrapped function's ``__name__``.
-        context = _extract_log_context(log_context, args, kwargs, sync_wrapper.__name__)
-        try:
-            return func(*args, **kwargs)
-        except RateLimitSignal:
-            # Always let RateLimitSignal propagate - it's not an error!
-            raise
-        except Exception as error:
-            _handle_error(error, operation, critical, context)
-            return None  # For non-critical errors that don't re-raise
-
-    return sync_wrapper
