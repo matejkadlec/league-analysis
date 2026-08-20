@@ -21,16 +21,12 @@ import {
 
 interface JobExecutionDetailsDialogProps {
   execution: JobExecution | null;
-  expandedApiCalls: Set<string>;
   onOpenChange: (open: boolean) => void;
-  onToggleApiCall: (key: string) => void;
 }
 
 export function JobExecutionDetailsDialog({
   execution,
-  expandedApiCalls,
   onOpenChange,
-  onToggleApiCall,
 }: JobExecutionDetailsDialogProps) {
   const apiCalls = execution?.detailed_logs?.api_calls as
     APICallEntry[] | undefined;
@@ -146,11 +142,12 @@ export function JobExecutionDetailsDialog({
 
             {apiCalls && (
               <JobExecutionApiCalls
+                // Remount per execution: the expansion state inside starts
+                // collapsed for every selection, whichever path opened it.
+                key={execution.id}
                 startedAt={execution.started_at}
                 completedAt={execution.completed_at}
                 apiCalls={apiCalls}
-                expandedApiCalls={expandedApiCalls}
-                onToggleExpanded={onToggleApiCall}
               />
             )}
 

@@ -30,9 +30,6 @@ export function JobExecutions({
 }: JobExecutionsProps) {
   const [selectedExecutionState, setSelectedExecutionState] =
     useState<JobExecution | null>(null);
-  const [expandedApiCalls, setExpandedApiCalls] = useState<Set<string>>(
-    new Set(),
-  );
   const PAGE_SIZE = 20;
   const loadMoreRef = useRef<HTMLDivElement>(null);
 
@@ -133,10 +130,6 @@ export function JobExecutions({
   };
 
   const handleSelectExecution = (execution: JobExecution) => {
-    // The expansion keys are endpoints, unique only within one execution —
-    // carried over, execution A's expanded rows would render pre-expanded
-    // in execution B. Every dialog starts collapsed.
-    setExpandedApiCalls(new Set());
     setSelectedExecutionState(execution);
     onExecutionSelect?.(execution.id);
   };
@@ -144,18 +137,6 @@ export function JobExecutions({
   const handleCloseDialog = () => {
     setSelectedExecutionState(null);
     onExecutionSelect?.(null);
-  };
-
-  const toggleApiCallExpanded = (endpoint: string) => {
-    setExpandedApiCalls((prev) => {
-      const newSet = new Set(prev);
-      if (newSet.has(endpoint)) {
-        newSet.delete(endpoint);
-      } else {
-        newSet.add(endpoint);
-      }
-      return newSet;
-    });
   };
 
   if (isLoading && allExecutions.length === 0) {
@@ -219,9 +200,7 @@ export function JobExecutions({
 
       <JobExecutionDetailsDialog
         execution={internalSelectedExecution}
-        expandedApiCalls={expandedApiCalls}
         onOpenChange={(open) => !open && handleCloseDialog()}
-        onToggleApiCall={toggleApiCallExpanded}
       />
     </>
   );

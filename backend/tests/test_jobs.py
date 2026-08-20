@@ -336,10 +336,10 @@ def test_api_call_storage_groups_to_one_entry_per_endpoint() -> None:
 
     endpoints = [entry["endpoint"] for entry in stored]
     assert len(endpoints) == len(set(endpoints)) == 2
-    # The group reports the first call's region, not whichever came last —
+    # A cross-region group names every region it spanned, in call order —
     # the fixture's match endpoint deliberately spans two regions.
     match_entry = next(e for e in stored if e["endpoint"].startswith("/lol/match"))
-    assert match_entry["region"] == "europe"
+    assert match_entry["region"] == "europe, americas"
 
 
 def test_match_fetcher_uses_every_canonical_queue_and_strips_legacy_config() -> None:
