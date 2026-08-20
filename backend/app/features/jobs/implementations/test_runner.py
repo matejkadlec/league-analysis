@@ -12,7 +12,6 @@ import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import TEST_PUUID
-from app.core.riot_api.client import APICallRecord
 from app.core.riot_api.constants import Platform, get_region_by_platform
 from app.features.jobs.base import BaseJob
 from app.features.jobs.error_handling import is_riot_api_key_error
@@ -66,13 +65,6 @@ class TestMatchFetcherJob(BaseJob):
             triggered_by="user",
             execution_type=ExecutionType.TEST,
         )
-
-    def _track_api_request(self, metric_name: str, count: int) -> None:
-        if metric_name == "requests_made":
-            self.metrics["api_requests_made"] += count
-
-    def _store_api_calls(self, api_calls: list[APICallRecord]) -> None:
-        self._api_call_records = api_calls
 
     @override
     async def execute(self, db: AsyncSession) -> None:
@@ -165,13 +157,6 @@ class TestPlayerUpdaterJob(BaseJob):
             triggered_by="user",
             execution_type=ExecutionType.TEST,
         )
-
-    def _track_api_request(self, metric_name: str, count: int) -> None:
-        if metric_name == "requests_made":
-            self.metrics["api_requests_made"] += count
-
-    def _store_api_calls(self, api_calls: list[APICallRecord]) -> None:
-        self._api_call_records = api_calls
 
     @override
     async def execute(self, db: AsyncSession) -> None:

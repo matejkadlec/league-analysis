@@ -205,6 +205,7 @@ class BaseJob(ABC):
         job_config_id: int,
         triggered_by: str = "system",
         execution_type: ExecutionType = ExecutionType.REGULAR,
+        target_puuids: set[str] | None = None,
     ):
         """Initialize the job with its configuration ID.
 
@@ -212,10 +213,12 @@ class BaseJob(ABC):
             job_config_id: ID of job configuration from database.
             triggered_by: Who triggered the job: 'system' (scheduler) or 'user' (manual).
             execution_type: Type of execution: REGULAR or TEST.
+            target_puuids: Restrict the run to these players; None means all.
         """
         self.job_config_id = job_config_id
         self.triggered_by = triggered_by
         self.execution_type = execution_type
+        self.target_puuids = target_puuids
         self.job_config: JobConfiguration | None = None
         self.job_execution: JobExecution | None = None
         # Plain copies of the identity and start time. A rollback expires every
@@ -247,6 +250,15 @@ class BaseJob(ABC):
         self.skipped_as_already_running: bool = False
         # Track API call records for detailed logging
         self._api_call_records: list[APICallRecord] = []
+
+    def _track_api_request(self, metric_name: str, count: int) -> None:
+        """Callback for tracking API requests from RiotAPIClient."""
+        if metric_name == "requests_made":
+            self.metrics["api_requests_made"] += count
+
+    def _store_api_calls(self, api_calls: list[APICallRecord]) -> None:
+        """Store API call records from the RiotAPIClient."""
+        self._api_call_records = api_calls
 
     @property
     def runtime_key(self) -> int:

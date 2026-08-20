@@ -5,7 +5,7 @@ import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.riot_api.client import APICallRecord, RiotAPIClient
+from app.core.riot_api.client import RiotAPIClient
 from app.core.riot_api.db_rate_limiter import DBRateLimiter, RateLimitComponent
 from app.core.riot_api.errors import RateLimitError
 from app.features.jobs.base import BaseJob, JobStopSignal
@@ -33,24 +33,6 @@ class MatchFetcherJob(BaseJob):
     """Job to fetch matches for tracked players and update their leagues."""
 
     recorded_errors_are_fatal = False
-
-    def __init__(
-        self,
-        job_config_id: int,
-        triggered_by: str = "system",
-        target_puuids: set[str] | None = None,
-    ):
-        super().__init__(job_config_id, triggered_by)
-        self.target_puuids = target_puuids
-
-    def _track_api_request(self, metric_name: str, count: int) -> None:
-        """Callback for tracking API requests from RiotAPIClient."""
-        if metric_name == "requests_made":
-            self.metrics["api_requests_made"] += count
-
-    def _store_api_calls(self, api_calls: list[APICallRecord]) -> None:
-        """Store API call records from the RiotAPIClient."""
-        self._api_call_records = api_calls
 
     @override
     async def execute(self, db: AsyncSession) -> None:
