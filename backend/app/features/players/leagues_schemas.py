@@ -41,12 +41,6 @@ class PlayerLeagueBase(BaseModel):
     )
 
 
-class PlayerLeagueCreate(PlayerLeagueBase):
-    """Schema for creating a new PlayerLeague snapshot."""
-
-    pass
-
-
 class PlayerLeagueResponse(PlayerLeagueBase):
     """Schema for PlayerLeague response."""
 

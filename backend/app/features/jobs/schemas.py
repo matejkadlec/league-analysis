@@ -32,12 +32,6 @@ class JobConfigurationBase(BaseModel):
     )
 
 
-class JobConfigurationCreate(JobConfigurationBase):
-    """Schema for creating a new job configuration."""
-
-    pass
-
-
 class JobConfigurationUpdate(BaseModel):
     """Schema for updating an existing job configuration."""
 
