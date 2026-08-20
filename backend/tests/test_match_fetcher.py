@@ -266,10 +266,7 @@ async def test_match_fetcher_execute_propagates_rate_limit_to_base_job(
     )
 
     def build_player_service(_db: AsyncSession) -> SimpleNamespace:
-        return SimpleNamespace(
-            get_globally_tracked_players=AsyncMock(return_value=[player]),
-            get_player_league=AsyncMock(return_value=None),
-        )
+        return SimpleNamespace(get_player_league=AsyncMock(return_value=None))
 
     def build_match_service(_db: AsyncSession) -> SimpleNamespace:
         return match_service
@@ -286,6 +283,13 @@ async def test_match_fetcher_execute_propagates_rate_limit_to_base_job(
         JobConfiguration, SimpleNamespace(config_json={"enabled_queue_ids": []})
     )
     job.check_control_state = AsyncMock()
+    # Player resolution lives on BaseJob._load_tracked_players now; this test
+    # is about rate-limit propagation, not about resolution.
+    monkeypatch.setattr(
+        MatchFetcherJob,
+        "_load_tracked_players",
+        AsyncMock(return_value=[player]),
+    )
 
     with pytest.raises(RateLimitSignal):
         await job.execute(cast(AsyncSession, object()))
