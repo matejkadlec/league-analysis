@@ -27,6 +27,7 @@ from .control import (
     get_runtime_control_snapshot,
     is_runtime_job_running,
     register_runtime_control,
+    runtime_control_key,
     unregister_runtime_control,
 )
 from .error_handling import (
@@ -281,9 +282,10 @@ class BaseJob(ABC):
     @property
     def runtime_key(self) -> int:
         """Runtime control key. Negative for TEST runs to avoid conflicts with regular runs."""
-        if self.execution_type == ExecutionType.TEST:
-            return -self.job_config_id
-        return self.job_config_id
+        return runtime_control_key(
+            self.job_config_id,
+            test_run=self.execution_type == ExecutionType.TEST,
+        )
 
     @abstractmethod
     async def execute(self, db: AsyncSession) -> None:

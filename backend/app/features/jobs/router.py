@@ -13,6 +13,7 @@ from .base import BaseJob
 from .control import (
     is_runtime_job_running,
     request_job_stop,
+    runtime_control_key,
 )
 from .dependencies import JobServiceDep
 from .implementations.match_fetcher import MatchFetcherJob
@@ -277,7 +278,7 @@ async def trigger_job(
 
         # If a test run is active (non-suspended), stop it so the real run
         # can proceed.
-        test_runtime_key = -job.id
+        test_runtime_key = runtime_control_key(job.id, test_run=True)
         if is_runtime_job_running(test_runtime_key):
             request_job_stop(test_runtime_key, force=True)
             logger.info(
@@ -465,7 +466,7 @@ async def trigger_test_run(
             )
 
         # Check if a test run is already active (negative key = test)
-        test_runtime_key = -job.id
+        test_runtime_key = runtime_control_key(job.id, test_run=True)
         if is_runtime_job_running(test_runtime_key):
             return JobTriggerResponse(
                 success=False,
