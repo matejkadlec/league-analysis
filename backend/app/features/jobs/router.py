@@ -4,6 +4,8 @@
 # pyright: reportMissingTypeStubs=false
 """Job management API endpoints."""
 
+from typing import NoReturn
+
 import structlog
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 
@@ -39,6 +41,19 @@ router = APIRouter(
     tags=["jobs"],
     dependencies=[Depends(get_current_admin_user)],
 )
+
+
+def _raise_job_not_found(job_id: int) -> NoReturn:
+    """The one 404 this router has, raised from six places.
+
+    `NoReturn` is what lets the call sites keep narrowing: after
+    `if not job: _raise_job_not_found(job_id)` the type checker still knows
+    `job` is not None on the next line, exactly as the inline `raise` did.
+    """
+    raise HTTPException(
+        status_code=404,
+        detail=f"Job configuration with ID {job_id} not found",
+    )
 
 
 def _create_job_instance(
@@ -121,10 +136,7 @@ async def update_job_configuration(
     try:
         job = await job_service.update_job_configuration(job_id, job_update)
         if not job:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Job configuration with ID {job_id} not found",
-            )
+            _raise_job_not_found(job_id)
 
         # Keep APScheduler in sync with DB changes immediately.
         from .scheduler import sync_job_configuration
@@ -258,10 +270,7 @@ async def trigger_job(
         # Check if job exists and is active
         job = await job_service.get_job_configuration(job_id)
         if not job:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Job configuration with ID {job_id} not found",
-            )
+            _raise_job_not_found(job_id)
 
         if not job.is_active:
             raise HTTPException(
@@ -331,10 +340,7 @@ def _require_control_state(
     state means it exists and refused, which is a conflict rather than a miss.
     """
     if state is None:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Job configuration with ID {job_id} not found",
-        )
+        _raise_job_not_found(job_id)
     if not state.success:
         raise HTTPException(status_code=409, detail=state.message)
     return state
@@ -428,10 +434,7 @@ async def trigger_test_run(
     try:
         job = await job_service.get_job_configuration(job_id)
         if not job:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Job configuration with ID {job_id} not found",
-            )
+            _raise_job_not_found(job_id)
 
         if not job.is_active:
             raise HTTPException(
@@ -540,10 +543,7 @@ async def stop_test_run(
             job_id, force=force, test_run=True
         )
         if state is None:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Job configuration with ID {job_id} not found",
-            )
+            _raise_job_not_found(job_id)
         return state
 
     except HTTPException:
@@ -566,10 +566,7 @@ async def _set_test_run_paused(
     """Flip the pause flag for an active test run; the two routes share this."""
     state = await job_service.set_job_paused(job_id, paused, test_run=True)
     if state is None:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Job configuration with ID {job_id} not found",
-        )
+        _raise_job_not_found(job_id)
     return state
 
 

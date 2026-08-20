@@ -36,6 +36,7 @@ from .schemas import (
     PlayerResponse,
     PlayerSyncRunResponse,
 )
+from .service import PlayerService
 
 logger = structlog.get_logger(__name__)
 
@@ -84,6 +85,41 @@ def _validate_tag_line(tag_line: str) -> None:
         )
 
 
+async def _fuzzy_search(
+    player_service: PlayerService,
+    *,
+    query: str,
+    platform: Platform | None,
+    limit: int,
+    user_id: int,
+    empty_event: str,
+    failure_event: str,
+) -> list[PlayerResponse]:
+    """Run one fuzzy player search and report it the same way both routes do.
+
+    `/search` and `/suggestions` differ only in their query parameter names and
+    their result limit -- the search itself, the empty-result debug line and the
+    failure tail were written twice. They had already drifted: the suggestions
+    failure log omitted `query=`, so an outage there recorded which platform was
+    asked but not what for.
+    """
+    platform_value = platform.value if platform else None
+    try:
+        results = await player_service.fuzzy_search_players(
+            query=query,
+            platform=platform_value,
+            limit=limit,
+            user_id=user_id,
+        )
+        if not results:
+            logger.debug(empty_event, query=query, platform=platform_value)
+        return results
+    except Exception as e:
+        log_and_raise_http(
+            logger, e, failure_event, query=query, platform=platform_value
+        )
+
+
 @router.get("/search", response_model=list[PlayerResponse])
 @rate_limit("100/minute")
 async def search_player(
@@ -108,29 +144,15 @@ async def search_player(
     - "#TAG" → Tag only
     - "Name" → Game name
     """
-    try:
-        results = await player_service.fuzzy_search_players(
-            query=query,
-            platform=platform.value if platform else None,
-            limit=10,
-            user_id=current_user.id,
-        )
-        if not results:
-            logger.debug(
-                "No player search results",
-                query=query,
-                platform=platform.value if platform else None,
-            )
-        return results
-
-    except Exception as e:
-        log_and_raise_http(
-            logger,
-            e,
-            "player_search_failed",
-            query=query,
-            platform=platform.value if platform else None,
-        )
+    return await _fuzzy_search(
+        player_service,
+        query=query,
+        platform=platform,
+        limit=10,
+        user_id=current_user.id,
+        empty_event="No player search results",
+        failure_event="player_search_failed",
+    )
 
 
 @router.get("/suggestions", response_model=list[PlayerResponse])
@@ -179,28 +201,15 @@ async def get_player_suggestions(
         GET /api/v1/players/suggestions?q=John Doe#EUNE&platform=eun1&limit=3
         GET /api/v1/players/suggestions?q=#EUNE&platform=eun1&limit=10
     """
-    try:
-        results = await player_service.fuzzy_search_players(
-            query=q,
-            platform=platform.value if platform else None,
-            limit=limit,
-            user_id=current_user.id,
-        )
-        if not results:
-            logger.debug(
-                "No player suggestions found",
-                query=q,
-                platform=platform.value if platform else None,
-            )
-        return results
-
-    except Exception as e:
-        log_and_raise_http(
-            logger,
-            e,
-            "player_suggestions_failed",
-            platform=platform.value if platform else None,
-        )
+    return await _fuzzy_search(
+        player_service,
+        query=q,
+        platform=platform,
+        limit=limit,
+        user_id=current_user.id,
+        empty_event="No player suggestions found",
+        failure_event="player_suggestions_failed",
+    )
 
 
 @router.get("/context", response_model=PlayerContextResponse)

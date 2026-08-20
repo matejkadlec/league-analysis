@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
-from typing import Any, TypeIs
+from collections.abc import Callable, Iterable
+from typing import Any, TypedDict, TypeIs
 
 import structlog
 
@@ -67,55 +67,62 @@ def page_window(start: int, count: int, total_count: int) -> tuple[int, int]:
     return 0, 0
 
 
-def accumulate_champion_stats(
+def _accumulate_group_stats(
     participants: Iterable[MatchParticipant],
+    group_of: Callable[[MatchParticipant], str | None],
+    first_seen: Callable[[MatchParticipant], dict[str, int]] | None = None,
 ) -> dict[str, dict[str, int]]:
-    """Aggregate combat stats grouped by champion name."""
-    champion_data: dict[str, dict[str, int]] = {}
+    """Total wins and combat scores per group, however the caller groups them.
+
+    `first_seen` supplies any fields copied off the first participant in a
+    group rather than summed -- champion stats carry the champion id that way.
+    A participant whose group key is empty is skipped: a lane is genuinely
+    optional, and an empty champion name is a data defect that would otherwise
+    become a nameless row in the response.
+    """
+    grouped: dict[str, dict[str, int]] = {}
     for participant in participants:
-        champ_name = participant.champion_name
-        if champ_name not in champion_data:
-            champion_data[champ_name] = {
-                "champion_id": participant.champion_id,
+        group = group_of(participant)
+        if not group:
+            continue
+        totals = grouped.get(group)
+        if totals is None:
+            totals = {
+                **(first_seen(participant) if first_seen is not None else {}),
                 "games": 0,
                 "wins": 0,
                 "kills": 0,
                 "deaths": 0,
                 "assists": 0,
             }
-        champion_data[champ_name]["games"] += 1
+            grouped[group] = totals
+        totals["games"] += 1
         if participant.win:
-            champion_data[champ_name]["wins"] += 1
-        champion_data[champ_name]["kills"] += participant.kills
-        champion_data[champ_name]["deaths"] += participant.deaths
-        champion_data[champ_name]["assists"] += participant.assists
-    return champion_data
+            totals["wins"] += 1
+        totals["kills"] += participant.kills
+        totals["deaths"] += participant.deaths
+        totals["assists"] += participant.assists
+    return grouped
+
+
+def accumulate_champion_stats(
+    participants: Iterable[MatchParticipant],
+) -> dict[str, dict[str, int]]:
+    """Aggregate combat stats grouped by champion name."""
+    return _accumulate_group_stats(
+        participants,
+        lambda participant: participant.champion_name,
+        lambda participant: {"champion_id": participant.champion_id},
+    )
 
 
 def accumulate_lane_stats(
     participants: Iterable[MatchParticipant],
 ) -> dict[str, dict[str, int]]:
     """Aggregate combat stats grouped by assigned lane."""
-    lane_data: dict[str, dict[str, int]] = {}
-    for participant in participants:
-        lane = participant.team_position
-        if not lane:
-            continue
-        if lane not in lane_data:
-            lane_data[lane] = {
-                "games": 0,
-                "wins": 0,
-                "kills": 0,
-                "deaths": 0,
-                "assists": 0,
-            }
-        lane_data[lane]["games"] += 1
-        if participant.win:
-            lane_data[lane]["wins"] += 1
-        lane_data[lane]["kills"] += participant.kills
-        lane_data[lane]["deaths"] += participant.deaths
-        lane_data[lane]["assists"] += participant.assists
-    return lane_data
+    return _accumulate_group_stats(
+        participants, lambda participant: participant.team_position
+    )
 
 
 def averages_from_totals(
@@ -144,52 +151,60 @@ def champion_stats_sort_key(champion: ChampionStatsItem) -> tuple[int, str]:
     return (-champion.games_played, champion.champion_name)
 
 
+class CommonStatFields(TypedDict):
+    """The eight figures every statistics row carries, whatever it groups by."""
+
+    games_played: int
+    wins: int
+    losses: int
+    win_rate: float
+    avg_kills: float
+    avg_deaths: float
+    avg_assists: float
+    avg_kda: float
+
+
+def common_stat_fields(data: dict[str, int]) -> CommonStatFields:
+    """Shape accumulated totals into the fields both response items share."""
+    games, wins, losses, win_rate, kills, deaths, assists, kda = averages_from_totals(
+        data
+    )
+    return {
+        "games_played": games,
+        "wins": wins,
+        "losses": losses,
+        "win_rate": win_rate,
+        "avg_kills": kills,
+        "avg_deaths": deaths,
+        "avg_assists": assists,
+        "avg_kda": kda,
+    }
+
+
 def build_champion_stat_items(
     champion_data: dict[str, dict[str, int]],
 ) -> list[ChampionStatsItem]:
     """Build the complete ordered champion-statistics population."""
-    champions: list[ChampionStatsItem] = []
-    for champ_name, data in champion_data.items():
-        games, wins, losses, win_rate, avg_kills, avg_deaths, avg_assists, avg_kda = (
-            averages_from_totals(data)
+    champions = [
+        ChampionStatsItem(
+            champion_name=champ_name,
+            champion_id=data["champion_id"],
+            **common_stat_fields(data),
         )
-        champions.append(
-            ChampionStatsItem(
-                champion_name=champ_name,
-                champion_id=data["champion_id"],
-                games_played=games,
-                wins=wins,
-                losses=losses,
-                win_rate=win_rate,
-                avg_kills=avg_kills,
-                avg_deaths=avg_deaths,
-                avg_assists=avg_assists,
-                avg_kda=avg_kda,
-            )
-        )
+        for champ_name, data in champion_data.items()
+    ]
     champions.sort(key=champion_stats_sort_key)
     return champions
 
 
 def build_lane_stat_items(lane_data: dict[str, dict[str, int]]) -> list[LaneStatsItem]:
     """Build per-lane statistics sorted by games played."""
-    lanes: list[LaneStatsItem] = []
-    for lane, data in lane_data.items():
-        games, wins, losses, win_rate, avg_kills, avg_deaths, avg_assists, avg_kda = (
-            averages_from_totals(data)
+    lanes = [
+        LaneStatsItem(
+            lane=LANE_DISPLAY_NAMES.get(lane, lane),
+            **common_stat_fields(data),
         )
-        lanes.append(
-            LaneStatsItem(
-                lane=LANE_DISPLAY_NAMES.get(lane, lane),
-                games_played=games,
-                wins=wins,
-                losses=losses,
-                win_rate=win_rate,
-                avg_kills=avg_kills,
-                avg_deaths=avg_deaths,
-                avg_assists=avg_assists,
-                avg_kda=avg_kda,
-            )
-        )
+        for lane, data in lane_data.items()
+    ]
     lanes.sort(key=lambda item: item.games_played, reverse=True)
     return lanes
