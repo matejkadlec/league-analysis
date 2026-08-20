@@ -19,7 +19,7 @@ import alembic_postgresql_enum  # noqa: F401
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
-from app.core.config import get_settings
+from app.core.config import get_global_settings
 from app.core.models import Base
 from app.model_registry import import_all_models
 
@@ -69,7 +69,7 @@ def include_object(
 
 def migration_database_url() -> str:
     """Build Alembic's synchronous URL without logging credential values."""
-    return get_settings().database_url.replace(
+    return get_global_settings().database_url.replace(
         "postgresql+asyncpg://", "postgresql+psycopg2://", 1
     )
 

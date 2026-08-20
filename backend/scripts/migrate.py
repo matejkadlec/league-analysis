@@ -13,7 +13,7 @@ from alembic.runtime.migration import MigrationContext
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Connection
 
-from app.core.config import get_settings
+from app.core.config import get_global_settings
 
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
 MIGRATION_LOCK_KEY = 812_219_604_746_203
@@ -21,7 +21,7 @@ MIGRATION_LOCK_KEY = 812_219_604_746_203
 
 def synchronous_database_url() -> str:
     """Return a sync driver URL without printing any secret-bearing values."""
-    return get_settings().database_url.replace(
+    return get_global_settings().database_url.replace(
         "postgresql+asyncpg://", "postgresql+psycopg2://", 1
     )
 

@@ -231,7 +231,7 @@ def test_main_refuses_a_remote_target_before_creating_an_engine(
         postgres_db="league_analysis_local_dev",
     )
     engine_factory = Mock()
-    monkeypatch.setattr(cleanup, "get_settings", lambda: settings)
+    monkeypatch.setattr(cleanup, "get_global_settings", lambda: settings)
     monkeypatch.setattr(cleanup, "create_engine", engine_factory)
 
     assert cleanup.main(["--database", "league_analysis_local_dev"]) == 1
@@ -542,7 +542,7 @@ def test_apply_locks_tables_before_creating_the_backup(
     def fake_normalize_qa_accounts(*_args: object) -> bool:
         return False
 
-    monkeypatch.setattr(cleanup, "get_settings", lambda: settings)
+    monkeypatch.setattr(cleanup, "get_global_settings", lambda: settings)
     monkeypatch.setattr(cleanup, "validate_configured_target", ignore_arguments)
     monkeypatch.setattr(cleanup, "connection_url", fake_connection_url)
     monkeypatch.setattr(cleanup, "create_engine", fake_create_engine)
