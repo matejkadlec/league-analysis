@@ -69,7 +69,13 @@ describe("a page the visitor may not have", () => {
     expect(
       screen.getByText("You don't have access to this page"),
     ).toBeTruthy();
-    expect(screen.getByText(/account is inactive/)).toBeTruthy();
+    // The exact wording, not a substring: this surface and the sign-in form
+    // answer the same condition, and a loose match let them drift apart.
+    expect(
+      screen.getByText(
+        "This account is inactive. Contact an administrator to restore access.",
+      ),
+    ).toBeTruthy();
     expect(screen.queryByText("member content")).toBeNull();
   });
 

@@ -3,7 +3,7 @@
 import type { JobExecution } from "@/lib/core/schemas";
 
 import { ExecutionStatusBadge } from "./execution-status-badge";
-import { formatRelativeTime } from "./job-card-format";
+import { formatLastRun } from "./job-card-format";
 import { formatDuration } from "./job-execution-format";
 
 interface JobCardHistoryProps {
@@ -38,7 +38,7 @@ export function JobCardHistory({
                   API: {execution.api_requests_made}
                 </span>
                 <span className="text-muted-foreground">
-                  {formatRelativeTime(execution.started_at)}
+                  {formatLastRun(execution.started_at)}
                 </span>
                 {isAnyForceStopping && execution.status === "RUNNING" && (
                   <span className="text-amber-600">force stopping</span>
