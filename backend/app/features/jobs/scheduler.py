@@ -351,7 +351,7 @@ async def _mark_stale_jobs_as_failed(db: AsyncSession) -> None:
                 .where(JobExecution.status.in_([JobStatus.RUNNING, JobStatus.PAUSED]))
                 .values(
                     status=JobStatus.CANCELLED,
-                    completed_at=datetime.now(),
+                    completed_at=datetime.now(UTC),
                     error_message="Job cancelled - was still running during application startup (likely ungraceful shutdown or crash)",
                 )
             )

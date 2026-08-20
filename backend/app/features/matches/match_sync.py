@@ -22,8 +22,6 @@ from .timeline import MatchTimeline, replace_match_timeline_rows
 
 logger = structlog.get_logger(__name__)
 
-AnalysisMatchResult = str
-
 OnFailure = Callable[[str, Exception, dict[str, Any]], None] | None
 OnMatchStored = Callable[[int, str], None] | None
 

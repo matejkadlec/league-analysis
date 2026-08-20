@@ -12,6 +12,7 @@ from pydantic import (
     field_validator,
     model_validator,
 )
+from pydantic.alias_generators import to_camel
 
 
 class ThemeEnum(str, PyEnum):
@@ -19,12 +20,6 @@ class ThemeEnum(str, PyEnum):
 
     LIGHT = "LIGHT"
     DARK = "DARK"
-
-
-def _to_camel_case(value: str) -> str:
-    """Convert an internal snake_case field name into an API field name."""
-    head, *tail = value.split("_")
-    return head + "".join(part.capitalize() for part in tail)
 
 
 class CardId(str, PyEnum):
@@ -49,7 +44,7 @@ class _CardSettingsBase(BaseModel):
     """Shared API compatibility settings for the versioned card contract."""
 
     model_config = ConfigDict(
-        alias_generator=_to_camel_case,
+        alias_generator=to_camel,
         populate_by_name=True,
         extra="forbid",
     )
@@ -59,7 +54,7 @@ class _CardSettingsWriteBase(BaseModel):
     """Strict external request contract that accepts canonical aliases only."""
 
     model_config = ConfigDict(
-        alias_generator=_to_camel_case,
+        alias_generator=to_camel,
         populate_by_name=False,
         extra="forbid",
     )
@@ -428,7 +423,7 @@ def validate_card_preference_update(
     parsed = model_type.model_validate(settings)
     missing_fields = set(model_type.model_fields) - parsed.model_fields_set
     if missing_fields:
-        missing = ", ".join(sorted(_to_camel_case(field) for field in missing_fields))
+        missing = ", ".join(sorted(to_camel(field) for field in missing_fields))
         raise ValueError(f"Missing required settings for {card_id.value}: {missing}")
     return parsed.model_dump(mode="json")
 
@@ -463,7 +458,7 @@ def normalize_stored_card_preference(
 
 def serialize_card_preference_settings(settings: dict[str, Any]) -> dict[str, Any]:
     """Serialize normalized internal fields using the approved API field names."""
-    return {_to_camel_case(name): value for name, value in settings.items()}
+    return {to_camel(name): value for name, value in settings.items()}
 
 
 class SettingUpdate(BaseModel):

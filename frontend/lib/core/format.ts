@@ -39,6 +39,21 @@ export function formatKDA(kda: number): string {
   return kda.toFixed(2);
 }
 
+/** The one duration grammar: "12.3s" under a minute, "4m 5s" under an hour,
+ * "1h 0m 4s" above. Negative input (clock skew) clamps to "0.0s". */
+export function formatSeconds(seconds: number): string {
+  const clamped = Math.max(0, seconds);
+  // Round to the displayed precision first so 59.97 rolls over to "1m 0s"
+  // instead of rendering "60.0s".
+  const rounded = Math.round(clamped * 10) / 10;
+  if (rounded < 60) return `${rounded.toFixed(1)}s`;
+  const whole = Math.floor(rounded);
+  const remainingSeconds = whole % 60;
+  const minutes = Math.floor(whole / 60);
+  if (minutes < 60) return `${minutes}m ${remainingSeconds}s`;
+  return `${Math.floor(minutes / 60)}h ${minutes % 60}m ${remainingSeconds}s`;
+}
+
 // One copy of the local-time timestamp. Four hand-rolled versions of this
 // clock existed, disagreeing only on the date separator; dots were the
 // majority and are now the app-wide shape. Hand-rolled rather than Intl
