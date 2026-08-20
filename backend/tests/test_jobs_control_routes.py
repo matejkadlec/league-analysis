@@ -14,7 +14,13 @@ import pytest
 from fastapi import HTTPException
 
 from app.core.http_errors import SERVICE_ERROR_DETAIL
-from app.features.jobs.router import pause_job, resume_job, stop_job
+from app.features.jobs import scheduler as scheduler_module
+from app.features.jobs.router import (
+    _set_scheduled_job_suspended,
+    pause_job,
+    resume_job,
+    stop_job,
+)
 from app.features.jobs.schemas import JobControlActionResponse
 from app.features.jobs.service import JobService
 
@@ -138,3 +144,54 @@ async def test_pause_and_resume_differ_only_by_the_paused_flag() -> None:
 
     assert paused.calls == [("set_job_paused", {"job_id": JOB_ID, "paused": True})]
     assert resumed.calls == [("set_job_paused", {"job_id": JOB_ID, "paused": False})]
+
+
+class _SchedulerDouble:
+    """Records which suspend method the helper picked, or raises JobLookupError."""
+
+    def __init__(self, *, running: bool = True, missing: bool = False) -> None:
+        self.running = running
+        self._missing = missing
+        self.calls: list[tuple[str, str]] = []
+
+    def _record(self, method: str, job_id: str) -> None:
+        from apscheduler.jobstores.base import JobLookupError
+
+        if self._missing:
+            raise JobLookupError(job_id)
+        self.calls.append((method, job_id))
+
+    def pause_job(self, job_id: str) -> None:
+        self._record("pause_job", job_id)
+
+    def resume_job(self, job_id: str) -> None:
+        self._record("resume_job", job_id)
+
+
+@pytest.mark.parametrize(
+    ("suspended", "expected"),
+    [(True, "pause_job"), (False, "resume_job")],
+)
+def test_suspending_a_scheduled_job_picks_the_matching_scheduler_call(
+    monkeypatch: pytest.MonkeyPatch, *, suspended: bool, expected: str
+) -> None:
+    double = _SchedulerDouble()
+    monkeypatch.setattr(scheduler_module, "get_scheduler", lambda: double)
+
+    _set_scheduled_job_suspended(JOB_ID, suspended=suspended)
+
+    assert double.calls == [(expected, f"job_{JOB_ID}")]
+
+
+@pytest.mark.parametrize(
+    "double",
+    [_SchedulerDouble(running=False), _SchedulerDouble(missing=True)],
+)
+def test_a_job_the_scheduler_does_not_hold_is_not_an_error(
+    monkeypatch: pytest.MonkeyPatch, double: _SchedulerDouble
+) -> None:
+    monkeypatch.setattr(scheduler_module, "get_scheduler", lambda: double)
+
+    _set_scheduled_job_suspended(JOB_ID, suspended=True)
+
+    assert double.calls == []

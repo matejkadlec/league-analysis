@@ -415,6 +415,36 @@ async def stop_job(
 # === Test Run Endpoints ===
 
 
+def _set_scheduled_job_suspended(job_id: int, *, suspended: bool) -> None:
+    """Pause or resume `job_id`'s scheduled run around a test run.
+
+    The scheduler import stays local, as both call sites had it. A job the
+    scheduler never held raises `JobLookupError` — nothing to restore.
+    """
+    from apscheduler.jobstores.base import JobLookupError
+
+    from .scheduler import get_scheduler
+
+    scheduler = get_scheduler()
+    scheduler_job_id = f"job_{job_id}"
+    if not (scheduler and scheduler.running):
+        return
+    try:
+        if suspended:
+            scheduler.pause_job(scheduler_job_id)
+        else:
+            scheduler.resume_job(scheduler_job_id)
+        logger.info(
+            "Suspended scheduled runs for test"
+            if suspended
+            else "Resumed scheduled runs after test",
+            job_id=job_id,
+            scheduler_job_id=scheduler_job_id,
+        )
+    except JobLookupError:
+        pass
+
+
 @router.post("/{job_id}/test", response_model=JobTriggerResponse)
 async def trigger_test_run(
     job_id: int,
@@ -457,22 +487,7 @@ async def trigger_test_run(
 
         # Suspend scheduled runs if requested
         if suspend_regular:
-            from apscheduler.jobstores.base import JobLookupError
-
-            from .scheduler import get_scheduler
-
-            scheduler = get_scheduler()
-            scheduler_job_id = f"job_{job.id}"
-            if scheduler and scheduler.running:
-                try:
-                    scheduler.pause_job(scheduler_job_id)
-                    logger.info(
-                        "Suspended scheduled runs for test",
-                        job_id=job_id,
-                        scheduler_job_id=scheduler_job_id,
-                    )
-                except JobLookupError:
-                    pass  # job not in scheduler — nothing to suspend
+            _set_scheduled_job_suspended(job.id, suspended=True)
 
         test_instance = _create_test_job_instance(job)
         # Store suspend_regular flag so test completion can resume the scheduler
@@ -518,21 +533,7 @@ async def _run_test_job_with_cleanup(
         await test_instance.run()
     finally:
         if suspend_regular:
-            from apscheduler.jobstores.base import JobLookupError
-
-            from .scheduler import get_scheduler
-
-            scheduler = get_scheduler()
-            scheduler_job_id = f"job_{job_id}"
-            if scheduler and scheduler.running:
-                try:
-                    scheduler.resume_job(scheduler_job_id)
-                    logger.info(
-                        "Resumed scheduled runs after test",
-                        job_id=job_id,
-                    )
-                except JobLookupError:
-                    pass
+            _set_scheduled_job_suspended(job_id, suspended=False)
 
 
 @router.post("/{job_id}/test/stop", response_model=JobControlActionResponse)
