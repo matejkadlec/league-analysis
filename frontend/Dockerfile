@@ -24,9 +24,12 @@ ENV API_INTERNAL_URL=$API_INTERNAL_URL \
     NEXT_PUBLIC_TURNSTILE_SITE_KEY=$NEXT_PUBLIC_TURNSTILE_SITE_KEY
 
 COPY . .
-RUN test -n "$NEXT_PUBLIC_API_URL" \
-    && test -n "$NEXT_PUBLIC_SITE_URL" \
-    && npm run build
+# Both are baked into the static payload at build time, so an empty one ships
+# a site that points nowhere. Say which is missing rather than exiting 1.
+RUN set -eu; \
+    : "${NEXT_PUBLIC_API_URL:?must be passed as a build arg}"; \
+    : "${NEXT_PUBLIC_SITE_URL:?must be passed as a build arg}"; \
+    npm run build
 
 FROM node:26.7.0-bookworm-slim AS runtime
 

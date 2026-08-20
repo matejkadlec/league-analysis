@@ -16,13 +16,13 @@ COPY --from=uv /uv /uvx /bin/
 
 WORKDIR /app
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev --no-install-project
+RUN uv sync --locked --no-dev --no-install-project
 
 COPY alembic.ini ./alembic.ini
 COPY alembic ./alembic
 COPY app ./app
 COPY scripts/migrate.py ./scripts/migrate.py
-RUN uv sync --frozen --no-dev
+RUN uv sync --locked --no-dev
 
 FROM python:3.14.7-slim-bookworm AS runtime
 
