@@ -26,11 +26,11 @@ import {
 import { JobCardHistory } from "./job-card-history";
 import { JobCardTestDialog } from "./job-card-test-dialog";
 import {
-  formatDuration,
   formatRelativeTime,
   formatScheduleInterval,
   getJobDescription,
 } from "./job-card-format";
+import { formatDuration } from "./job-execution-format";
 import { useJobCardControls } from "./use-job-card-controls";
 
 interface JobCardProps {
@@ -63,13 +63,6 @@ export function JobCard({ job, onExecutionClick }: JobCardProps) {
   );
   const lastExecution =
     recentExecutions.length > 0 ? recentExecutions[0] : null;
-
-  const duration =
-    lastExecution?.started_at && lastExecution?.completed_at
-      ? (new Date(lastExecution.completed_at).getTime() -
-          new Date(lastExecution.started_at).getTime()) /
-        1000
-      : null;
 
   const {
     showTestDialog,
@@ -176,9 +169,13 @@ export function JobCard({ job, onExecutionClick }: JobCardProps) {
                     <span className="text-muted-foreground">
                       {formatRelativeTime(lastExecution.started_at)}
                     </span>
-                    {duration && (
+                    {lastExecution.completed_at && (
                       <span className="text-muted-foreground">
-                        • {formatDuration(duration)}
+                        •{" "}
+                        {formatDuration(
+                          lastExecution.started_at,
+                          lastExecution.completed_at,
+                        )}
                       </span>
                     )}
                   </div>

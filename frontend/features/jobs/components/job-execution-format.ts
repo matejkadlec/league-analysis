@@ -1,6 +1,4 @@
-import { formatDateTime } from "@/lib/core/format";
-
-import { formatSeconds } from "./job-card-format";
+import { formatDateTime, formatSeconds } from "@/lib/core/format";
 
 /** The jobs surfaces all show seconds; this names that policy once. */
 export function formatJobTimestamp(timestamp: string): string {
