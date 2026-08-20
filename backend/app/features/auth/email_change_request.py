@@ -14,9 +14,8 @@ from sqlalchemy import (
     DateTime as SQLDateTime,
 )
 from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy.sql import func
 
-from app.core.models import Base
+from app.core.models import Base, created_at_column, updated_at_column
 
 
 class EmailChangeRequest(Base):
@@ -58,18 +57,11 @@ class EmailChangeRequest(Base):
         index=True,
         comment="Email-change lock expiration after too many failed attempts",
     )
-    created_at: Mapped[datetime] = mapped_column(
-        SQLDateTime(timezone=True),
-        nullable=False,
-        server_default=func.now(),
-        comment="When this request record was created",
+    created_at: Mapped[datetime] = created_at_column(
+        "When this request record was created"
     )
-    updated_at: Mapped[datetime] = mapped_column(
-        SQLDateTime(timezone=True),
-        nullable=False,
-        server_default=func.now(),
-        onupdate=func.now(),
-        comment="When this request record was last updated",
+    updated_at: Mapped[datetime] = updated_at_column(
+        "When this request record was last updated"
     )
 
     @override

@@ -11,14 +11,10 @@ from sqlalchemy import (
     Integer,
     String,
 )
-from sqlalchemy import (
-    DateTime as SQLDateTime,
-)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy.sql import func
 
-from app.core.models import Base
+from app.core.models import Base, created_at_column, updated_at_column
 from app.core.riot_api.credential_health import RiotAPIKey as RiotAPIKey
 
 
@@ -53,16 +49,9 @@ class UserCardPreference(Base):
         nullable=False,
         comment="Validated mutable settings only; fixed defaults are normalized on read",
     )
-    created_at: Mapped[datetime] = mapped_column(
-        SQLDateTime(timezone=True),
-        nullable=False,
-        server_default=func.now(),
-        comment="When this versioned override was first stored",
+    created_at: Mapped[datetime] = created_at_column(
+        "When this versioned override was first stored"
     )
-    updated_at: Mapped[datetime] = mapped_column(
-        SQLDateTime(timezone=True),
-        nullable=False,
-        server_default=func.now(),
-        onupdate=func.now(),
-        comment="When this versioned override was most recently updated",
+    updated_at: Mapped[datetime] = updated_at_column(
+        "When this versioned override was most recently updated"
     )

@@ -16,7 +16,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
-from app.core.models import Base
+from app.core.models import Base, updated_at_column
 
 
 class CookieConsentLevel(PyEnum):
@@ -81,12 +81,8 @@ class UserCookieConsent(Base):
         comment="When cookie consent was last explicitly set",
     )
 
-    updated_at: Mapped[datetime] = mapped_column(
-        SQLDateTime(timezone=True),
-        nullable=False,
-        server_default=func.now(),
-        onupdate=func.now(),
-        comment="When this consent record was last updated",
+    updated_at: Mapped[datetime] = updated_at_column(
+        "When this consent record was last updated"
     )
 
     user = relationship("User", back_populates="cookie_consent")

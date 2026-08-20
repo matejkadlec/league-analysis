@@ -17,15 +17,11 @@ from sqlalchemy import (
     delete,
     text,
 )
-from sqlalchemy import (
-    DateTime as SQLDateTime,
-)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy.sql import func
 
-from app.core.models import Base
+from app.core.models import Base, created_at_column, updated_at_column
 from app.core.riot_api.models import (
     MatchTimelineDTO,
     MatchTimelineEventDTO,
@@ -255,17 +251,8 @@ class MatchTimeline(Base):
         ),
     )
 
-    created_at: Mapped[datetime] = mapped_column(
-        SQLDateTime(timezone=True),
-        nullable=False,
-        server_default=func.now(),
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        SQLDateTime(timezone=True),
-        nullable=False,
-        server_default=func.now(),
-        onupdate=func.now(),
-    )
+    created_at: Mapped[datetime] = created_at_column()
+    updated_at: Mapped[datetime] = updated_at_column()
 
     match = relationship("Match")
     player = relationship("Player")

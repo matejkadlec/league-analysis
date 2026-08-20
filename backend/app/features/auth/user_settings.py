@@ -4,13 +4,9 @@ from datetime import datetime
 from typing import Final, override
 
 from sqlalchemy import BigInteger, ForeignKey, String
-from sqlalchemy import (
-    DateTime as SQLDateTime,
-)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy.sql import func
 
-from app.core.models import Base
+from app.core.models import Base, created_at_column, updated_at_column
 
 
 class UserSettings(Base):
@@ -36,19 +32,10 @@ class UserSettings(Base):
     )
 
     # Timestamps
-    created_at: Mapped[datetime] = mapped_column(
-        SQLDateTime(timezone=True),
-        nullable=False,
-        server_default=func.now(),
-        comment="When these settings were created",
-    )
+    created_at: Mapped[datetime] = created_at_column("When these settings were created")
 
-    updated_at: Mapped[datetime] = mapped_column(
-        SQLDateTime(timezone=True),
-        nullable=False,
-        server_default=func.now(),
-        onupdate=func.now(),
-        comment="When these settings were last updated",
+    updated_at: Mapped[datetime] = updated_at_column(
+        "When these settings were last updated"
     )
 
     # Relationships

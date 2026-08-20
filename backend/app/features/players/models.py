@@ -14,9 +14,8 @@ from sqlalchemy import (
     DateTime as SQLDateTime,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy.sql import func
 
-from app.core.models import Base
+from app.core.models import Base, created_at_column, updated_at_column
 
 
 class Player(Base):
@@ -95,19 +94,12 @@ class Player(Base):
         comment="Time of the last matchmaking analysis",
     )
 
-    created_at: Mapped[datetime] = mapped_column(
-        SQLDateTime(timezone=True),
-        nullable=False,
-        server_default=func.now(),
-        comment="When this player record was first created",
+    created_at: Mapped[datetime] = created_at_column(
+        "When this player record was first created"
     )
 
-    updated_at: Mapped[datetime] = mapped_column(
-        SQLDateTime(timezone=True),
-        nullable=False,
-        server_default=func.now(),
-        onupdate=func.now(),
-        comment="When this player record was last updated",
+    updated_at: Mapped[datetime] = updated_at_column(
+        "When this player record was last updated"
     )
 
     profile_synced_at: Mapped[datetime | None] = mapped_column(

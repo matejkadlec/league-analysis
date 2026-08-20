@@ -9,11 +9,12 @@ from sqlalchemy import (
     MetaData,
     Numeric,
     String,
+    func,
 )
 from sqlalchemy import (
     DateTime as SQLDateTime,
 )
-from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.orm import DeclarativeBase, MappedColumn, mapped_column
 
 # Create a base class for declarative models using SQLAlchemy 2.0 style
 # Use a custom naming convention for constraints and indexes
@@ -48,6 +49,38 @@ type_annotation_map = {
     Decimal | None: Numeric(),
     datetime | None: SQLDateTime(),
 }
+
+
+def created_at_column(comment: str | None = None) -> MappedColumn[datetime]:
+    """The row's creation stamp, written by the database.
+
+    Twelve tables declared this identically and differed only in what their
+    `comment` said, so the comment is the argument. Passing `None` is what
+    SQLAlchemy already does when `comment` is omitted, which keeps the three
+    tables that never had one byte-identical in the emitted DDL.
+    """
+    return mapped_column(
+        SQLDateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        comment=comment,
+    )
+
+
+def updated_at_column(comment: str | None = None) -> MappedColumn[datetime]:
+    """The row's last-modified stamp, advanced by the database on UPDATE.
+
+    `onupdate` is the only thing separating this from `created_at_column`, and
+    it is a SQLAlchemy-side default: it fires on ORM and Core updates, not on a
+    hand-written `UPDATE` run against the database directly.
+    """
+    return mapped_column(
+        SQLDateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+        comment=comment,
+    )
 
 
 class Base(DeclarativeBase):
