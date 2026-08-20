@@ -25,12 +25,6 @@ export function playerRoute(
   return `${targetPath}?${nextParams.toString()}`;
 }
 
-export function playerOverviewRoute(puuid?: string | null): string {
-  return puuid
-    ? `${PLAYER_OVERVIEW_PATH}?puuid=${encodeURIComponent(puuid)}`
-    : PLAYER_OVERVIEW_PATH;
-}
-
 export function playerNavigationRoute(
   pathname: string,
   puuid?: string | null,

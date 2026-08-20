@@ -17,11 +17,10 @@ frontend rules from [`../AGENTS.md`](../AGENTS.md).
 - Player Overview and Match History consume the shared current-player context;
   they must not restore duplicated large Player Search cards. Preserve
   `?puuid=` for deep links, history, and independent browser tabs — the
-  explicit URL PUUID is authoritative for the current tab. Keep `/my-profile`
-  and `/playstyle-analysis` as PUUID-preserving compatibility redirects rather
-  than normal destinations.
-- Tracked-player management lives in the sidebar dialog. Keep the retired
-  `/tracked-players` route as a safe redirect and preserve a supplied PUUID.
+  explicit URL PUUID is authoritative for the current tab.
+- Tracked-player management lives in the sidebar dialog. The retired
+  `/my-profile`, `/playstyle-analysis` and `/tracked-players` routes stay
+  reachable as `redirects()` entries in `next.config.ts`, not as pages.
 - `/jobs` is admin-only. Public routes (`/license`, `/privacy-policy`,
   `/cookie-policy`) serve signed-in and signed-out layouts at the same URL;
   signed-in users are redirected away from `/sign-in`.

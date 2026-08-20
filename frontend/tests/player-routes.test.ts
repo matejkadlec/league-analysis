@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import {
   isPlayerCentricPath,
   playerNavigationRoute,
-  playerOverviewRoute,
   playerRoute,
 } from "../features/players/player-routes";
 
@@ -21,14 +20,10 @@ describe("player routes", () => {
     expect(isPlayerCentricPath("/smurf-boost-detection")).toBe(true);
   });
 
-  it("uses Player Overview outside a player page and for compatibility", () => {
+  it("uses Player Overview outside a player page", () => {
     expect(
       playerRoute("/settings", new URLSearchParams(), "player-1"),
     ).toBe("/player-overview?puuid=player-1");
-    expect(playerOverviewRoute("player/1")).toBe(
-      "/player-overview?puuid=player%2F1",
-    );
-    expect(playerOverviewRoute()).toBe("/player-overview");
   });
 
   it("keeps the URL-selected PUUID in both player navigation targets", () => {

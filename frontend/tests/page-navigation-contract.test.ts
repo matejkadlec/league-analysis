@@ -16,16 +16,10 @@ const SIDEBAR_SOURCES = [
   .map((file) => readFileSync(join(process.cwd(), file), "utf8"))
   .join("\n");
 
-// The root route is the shell itself rather than a navigation target, and the
-// rest are PUUID-preserving compatibility redirects kept for old links. The
-// test below proves each one still only redirects, so this list cannot quietly
-// become a way to ship an unreachable page.
-const NOT_NAVIGATION_TARGETS = new Set([
-  "/",
-  "/my-profile",
-  "/playstyle-analysis",
-  "/tracked-players",
-]);
+// The root route is the shell itself rather than a navigation target. The
+// retired compatibility routes are `redirects()` entries in next.config.ts, so
+// they have no page.tsx and cannot appear here at all.
+const NOT_NAVIGATION_TARGETS = new Set(["/"]);
 
 // Routes a signed-out visitor is meant to reach. Everything else in app/ that
 // is not a redirect has to be wrapped, and the test below is written so that
@@ -93,19 +87,5 @@ describe("page navigation contract", () => {
     // it is the only admin-only page. Dropping `requireAdmin` still renders,
     // still typechecks, and shows all of it to any signed-in account.
     expect(page).toMatch(/<ProtectedRoute\s+requireAdmin\b/);
-  });
-
-  it("keeps every exempt route a redirect rather than a destination", () => {
-    const destinations = [...NOT_NAVIGATION_TARGETS]
-      .filter((route) => route !== "/")
-      .filter((route) => {
-        const page = readFileSync(
-          join(APP_DIRECTORY, route, "page.tsx"),
-          "utf8",
-        );
-        return !page.includes("redirect(");
-      });
-
-    expect(destinations).toEqual([]);
   });
 });

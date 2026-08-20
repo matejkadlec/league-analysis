@@ -15,6 +15,5 @@ export {
   SMURF_BOOST_DETECTION_PATH,
   isPlayerCentricPath,
   playerNavigationRoute,
-  playerOverviewRoute,
   playerRoute,
 } from "./player-routes";
