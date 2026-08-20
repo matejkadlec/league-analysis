@@ -86,6 +86,27 @@ def _active_run_where(
     )
 
 
+def _one_run_where(puuid: str, created_at: datetime) -> ColumnElement[bool]:
+    """The WHERE clause naming one run by identity, whatever state it is in."""
+    return and_(
+        MatchmakingAnalysis.puuid == puuid,
+        MatchmakingAnalysis.created_at == created_at,
+    )
+
+
+def _completed_run_where(puuid: str) -> ColumnElement[bool]:
+    """The WHERE clause for a player's runs that finished and kept results.
+
+    "Completed" without the results check is a lie the history and latest
+    endpoints must not tell separately.
+    """
+    return and_(
+        MatchmakingAnalysis.puuid == puuid,
+        MatchmakingAnalysis.status == "completed",
+        MatchmakingAnalysis.results.isnot(None),
+    )
+
+
 @dataclass(frozen=True)
 class RunningAnalysis:
     """Process-local handle for one persisted analysis run."""
@@ -218,20 +239,14 @@ class MatchmakingAnalysisService:
         """Get the latest completed analysis for a player (excluding errors)."""
         result = await self.db.execute(
             select(MatchmakingAnalysis)
-            .where(
-                and_(
-                    MatchmakingAnalysis.puuid == puuid,
-                    MatchmakingAnalysis.status == "completed",
-                    MatchmakingAnalysis.results.isnot(None),
-                )
-            )
+            .where(_completed_run_where(puuid))
             .order_by(MatchmakingAnalysis.created_at.desc())
-            .limit(10)
+            .limit(1)
         )
-        analyses = result.scalars().all()
-        for analysis in analyses:
-            return MatchmakingAnalysisResponse.model_validate(analysis)
-        return None
+        analysis = result.scalar_one_or_none()
+        if not analysis:
+            return None
+        return MatchmakingAnalysisResponse.model_validate(analysis)
 
     async def get_latest_analysis(
         self, puuid: str
@@ -253,12 +268,7 @@ class MatchmakingAnalysisService:
     ) -> MatchmakingAnalysisStatusResponse | None:
         """Get status of a specific analysis."""
         result = await self.db.execute(
-            select(MatchmakingAnalysis).where(
-                and_(
-                    MatchmakingAnalysis.puuid == puuid,
-                    MatchmakingAnalysis.created_at == created_at,
-                )
-            )
+            select(MatchmakingAnalysis).where(_one_run_where(puuid, created_at))
         )
         analysis = result.scalar_one_or_none()
         if not analysis:
@@ -299,13 +309,7 @@ class MatchmakingAnalysisService:
         """Get history of completed analyses for a player."""
         result = await self.db.execute(
             select(MatchmakingAnalysis)
-            .where(
-                and_(
-                    MatchmakingAnalysis.puuid == puuid,
-                    MatchmakingAnalysis.status == "completed",
-                    MatchmakingAnalysis.results.isnot(None),
-                )
-            )
+            .where(_completed_run_where(puuid))
             .order_by(MatchmakingAnalysis.created_at.desc())
             .limit(limit)
         )
@@ -326,11 +330,8 @@ class MatchmakingAnalysisService:
         """Delete a specific completed analysis record by puuid and created_at."""
         result = await self.db.execute(
             select(MatchmakingAnalysis).where(
-                and_(
-                    MatchmakingAnalysis.puuid == puuid,
-                    MatchmakingAnalysis.created_at == created_at,
-                    MatchmakingAnalysis.status == "completed",
-                )
+                _one_run_where(puuid, created_at),
+                MatchmakingAnalysis.status == "completed",
             )
         )
         analysis = result.scalar_one_or_none()
@@ -680,12 +681,7 @@ class MatchmakingAnalysisService:
         )
 
         completion_status = await self.db.execute(
-            select(MatchmakingAnalysis.status).where(
-                and_(
-                    MatchmakingAnalysis.puuid == puuid,
-                    MatchmakingAnalysis.created_at == created_at,
-                )
-            )
+            select(MatchmakingAnalysis.status).where(_one_run_where(puuid, created_at))
         )
         if completion_status.scalar_one_or_none() != "completed":
             await self.db.rollback()
