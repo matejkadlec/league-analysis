@@ -93,31 +93,23 @@ async def _fuzzy_search(
     limit: int,
     user_id: int,
     empty_event: str,
-    failure_event: str,
 ) -> list[PlayerResponse]:
     """Run one fuzzy player search and report it the same way both routes do.
 
     `/search` and `/suggestions` differ only in their query parameter names and
-    their result limit -- the search itself, the empty-result debug line and the
-    failure tail were written twice. They had already drifted: the suggestions
-    failure log omitted `query=`, so an outage there recorded which platform was
-    asked but not what for.
+    their result limit -- the search itself and the empty-result debug line were
+    written twice.
     """
     platform_value = platform.value if platform else None
-    try:
-        results = await player_service.fuzzy_search_players(
-            query=query,
-            platform=platform_value,
-            limit=limit,
-            user_id=user_id,
-        )
-        if not results:
-            logger.debug(empty_event, query=query, platform=platform_value)
-        return results
-    except Exception as e:
-        log_and_raise_http(
-            logger, e, failure_event, query=query, platform=platform_value
-        )
+    results = await player_service.fuzzy_search_players(
+        query=query,
+        platform=platform_value,
+        limit=limit,
+        user_id=user_id,
+    )
+    if not results:
+        logger.debug(empty_event, query=query, platform=platform_value)
+    return results
 
 
 @router.get("/search", response_model=list[PlayerResponse])
@@ -151,7 +143,6 @@ async def search_player(
         limit=10,
         user_id=current_user.id,
         empty_event="No player search results",
-        failure_event="player_search_failed",
     )
 
 
@@ -208,7 +199,6 @@ async def get_player_suggestions(
         limit=limit,
         user_id=current_user.id,
         empty_event="No player suggestions found",
-        failure_event="player_suggestions_failed",
     )
 
 
@@ -269,20 +259,6 @@ async def discover_player(
         ) from error
     except ValueError as error:
         _handle_tracking_value_error(error)
-    except HTTPException:
-        raise
-    except Exception as error:
-        logger.error(
-            "discover_player_failed",
-            game_name=game_name,
-            platform=platform.value,
-            error_type=type(error).__name__,
-            exc_info=True,
-        )
-        raise HTTPException(
-            status_code=500,
-            detail="Player lookup failed. Please try again later.",
-        ) from error
 
 
 @router.get("/{puuid}", response_model=PlayerResponse)
@@ -395,13 +371,6 @@ async def track_player(
         else:
             # Tracking limit reached or other validation error
             raise HTTPException(status_code=400, detail=str(e)) from e
-    except Exception as e:
-        log_and_raise_http(
-            logger,
-            e,
-            "track_player_failed",
-            puuid=puuid,
-        )
 
     # The tracking row is committed by here, so claiming the run sits outside
     # the block above on purpose. The sync only saves the viewer from waiting
@@ -447,17 +416,9 @@ async def untrack_player(
         404: Player not found
     """
     try:
-        player = await player_service.untrack_player(puuid, current_user.id)
-        return player
+        return await player_service.untrack_player(puuid, current_user.id)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
-    except Exception as e:
-        log_and_raise_http(
-            logger,
-            e,
-            "untrack_player_failed",
-            puuid=puuid,
-        )
 
 
 @router.get("/{puuid}/tracking-status")
@@ -482,13 +443,6 @@ async def get_tracking_status(
         return {"is_tracked": is_tracked}
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
-    except Exception as e:
-        log_and_raise_http(
-            logger,
-            e,
-            "get_tracking_status_failed",
-            puuid=puuid,
-        )
 
 
 @router.get("/tracked/list", response_model=list[PlayerResponse])
@@ -502,15 +456,7 @@ async def get_tracked_players(
     Returns:
         List of tracked players with their current data
     """
-    try:
-        players = await player_service.get_tracked_players(current_user.id)
-        return players
-    except Exception as e:
-        log_and_raise_http(
-            logger,
-            e,
-            "get_tracked_players_failed",
-        )
+    return await player_service.get_tracked_players(current_user.id)
 
 
 def _handle_tracking_value_error(e: ValueError) -> None:
@@ -577,12 +523,7 @@ async def refresh_player_league(
         await player_service.db.commit()
 
         # Return the updated league
-        league = await player_service.get_player_league(puuid, queue_type)
-        if league:
-            return PlayerLeagueResponse.model_validate(league)
-        return None
-    except HTTPException:
-        raise
+        return await player_service.get_player_league(puuid, queue_type)
     except RiotWriterMaintenanceActiveError as e:
         raise HTTPException(
             status_code=503,
@@ -595,17 +536,6 @@ async def refresh_player_league(
             "refresh_player_league_failed",
             RIOT_API_KEY_INVALID_DETAIL,
             status_code=503,
-            puuid=puuid,
-        )
-    except Exception as e:
-        # ValueError deliberately lands here too: nothing in this path raises
-        # it to mean "not found" (that case returns 404 explicitly above), and
-        # mapping it to 404 leaked raw platform/validation errors as missing
-        # players.
-        log_and_raise_http(
-            logger,
-            e,
-            "refresh_player_league_failed",
             puuid=puuid,
         )
 
@@ -631,17 +561,4 @@ async def get_player_current_league(
     Raises:
         500: Database error
     """
-    try:
-        league = await player_service.get_player_league(puuid, queue_type)
-
-        if league:
-            return PlayerLeagueResponse.model_validate(league)
-        return None
-    except Exception as e:
-        log_and_raise_http(
-            logger,
-            e,
-            "get_player_league_failed",
-            puuid=puuid,
-            queue_type=queue_type,
-        )
+    return await player_service.get_player_league(puuid, queue_type)

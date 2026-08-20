@@ -2,10 +2,8 @@
 
 from datetime import datetime
 
-import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from app.core.http_errors import log_and_raise_http
 from app.core.rate_limiter import rate_limit
 from app.features.auth.dependencies import get_current_active_user
 from app.features.jobs.maintenance import RiotWriterMaintenanceActiveError
@@ -17,9 +15,6 @@ from .schemas import (
     MatchmakingAnalysisResponse,
     MatchmakingAnalysisStatusResponse,
 )
-
-logger = structlog.get_logger(__name__)
-
 
 router = APIRouter(
     prefix="/matchmaking-analysis",
@@ -44,20 +39,11 @@ async def start_analysis(
     """
     try:
         return await service.start_analysis(payload.puuid)
-    except HTTPException:
-        raise
     except RiotWriterMaintenanceActiveError as error:
         raise HTTPException(
             status_code=503,
             detail="Riot data maintenance is in progress. Try again after it completes.",
         ) from error
-    except Exception as error:
-        log_and_raise_http(
-            logger,
-            error,
-            "matchmaking_analysis_start_failed",
-            error_type=type(error).__name__,
-        )
 
 
 @router.get("/player/{puuid}", response_model=MatchmakingAnalysisResponse)

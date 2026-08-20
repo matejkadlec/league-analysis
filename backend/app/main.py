@@ -4,7 +4,7 @@ import logging
 from contextlib import asynccontextmanager
 
 import structlog
-from fastapi import FastAPI, status
+from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from slowapi import _rate_limit_exceeded_handler
@@ -15,6 +15,7 @@ from structlog import contextvars as structlog_contextvars
 
 from app.core import get_global_settings
 from app.core.database import db_manager
+from app.core.http_errors import SERVICE_ERROR_DETAIL
 from app.core.rate_limiter import limiter
 from app.core.request_logging import RequestLoggingMiddleware
 from app.features.auth import auth_router
@@ -149,6 +150,17 @@ app = FastAPI(
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception(_request: Request, _exc: Exception) -> JSONResponse:
+    """Answer one client-safe body for every error a route did not map.
+
+    Routes used to repeat this tail themselves; the exception still reaches
+    the request-logging middleware, which records it with its traceback.
+    """
+    return JSONResponse(status_code=500, content={"detail": SERVICE_ERROR_DETAIL})
+
 
 app.add_middleware(
     CORSMiddleware,
