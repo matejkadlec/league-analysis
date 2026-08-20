@@ -308,110 +308,32 @@ class PlayerService:
         if search_type == "full_id" and game_name and tag_line:
             # Search for exact or partial Full ID (GameName # TagLine)
             return select(Player).where(
-                and_(
-                    *platform_filter,
-                    or_(
-                        # Exact match
-                        and_(
-                            Player.game_name.ilike(game_name),
-                            Player.tag_line.ilike(tag_line),
-                        ),
-                        # Partial matches
-                        Player.game_name.ilike(f"%{game_name}%"),
-                        Player.tag_line.ilike(f"%{tag_line}%"),
+                *platform_filter,
+                or_(
+                    # Exact match
+                    and_(
+                        Player.game_name.ilike(game_name),
+                        Player.tag_line.ilike(tag_line),
                     ),
-                )
+                    # Partial matches
+                    Player.game_name.ilike(f"%{game_name}%"),
+                    Player.tag_line.ilike(f"%{tag_line}%"),
+                ),
             )
 
         if search_type == "tag" and tag_line:
             # Search tags only
             return select(Player).where(
-                and_(
-                    *platform_filter,
-                    Player.tag_line.ilike(f"%{tag_line}%"),
-                )
+                *platform_filter,
+                Player.tag_line.ilike(f"%{tag_line}%"),
             )
 
         # name or all - search game names
         search_term = game_name if game_name else query_lower
         return select(Player).where(
-            and_(
-                *platform_filter,
-                Player.game_name.ilike(f"%{search_term}%"),
-            )
+            *platform_filter,
+            Player.game_name.ilike(f"%{search_term}%"),
         )
-
-    @staticmethod
-    def _check_exact_match(player: Player, game_name: str, tag_line: str) -> bool:
-        """Check if player is an exact match."""
-        return (
-            player.game_name.lower() == game_name.lower()
-            and player.tag_line.lower() == tag_line.lower()
-        )
-
-    @staticmethod
-    def _score_game_name(
-        player: Player, search_type: str, query_lower: str
-    ) -> int | None:
-        """Calculate distance for game name if applicable."""
-        if player.game_name and (search_type in ["name", "all"]):
-            return levenshtein_distance(query_lower, player.game_name.lower())
-        return None
-
-    @staticmethod
-    def _score_composite_id(
-        player: Player, search_type: str, query_lower: str
-    ) -> int | None:
-        """Calculate distance for full_id (game_name + tag) if applicable."""
-        if player.game_name and (search_type in ["name", "full_id", "all"]):
-            target = (
-                (f"{player.game_name}#{player.tag_line}").lower()
-                if player.tag_line
-                else player.game_name.lower()
-            )
-            return levenshtein_distance(query_lower, target)
-        return None
-
-    @staticmethod
-    def _score_tag_line(
-        player: Player, search_type: str, query_lower: str, tag_line: str | None
-    ) -> int | None:
-        """Calculate distance for tag_line if applicable."""
-        if player.tag_line and (search_type in ["tag", "full_id"]):
-            tag_query = tag_line.lower() if tag_line else query_lower
-            return levenshtein_distance(tag_query, player.tag_line.lower())
-        return None
-
-    @staticmethod
-    def _calculate_levenshtein_distances(
-        player: Player,
-        search_type: str,
-        query_lower: str,
-        tag_line: str | None,
-    ) -> list[int]:
-        """Calculate Levenshtein distances for all relevant fields."""
-        distances: list[int] = []
-
-        # Score game name
-        name_dist = PlayerService._score_game_name(player, search_type, query_lower)
-        if name_dist is not None:
-            distances.append(name_dist)
-
-        # Score full_id composite
-        composite_id_dist = PlayerService._score_composite_id(
-            player, search_type, query_lower
-        )
-        if composite_id_dist is not None:
-            distances.append(composite_id_dist)
-
-        # Score tag_line
-        tag_dist = PlayerService._score_tag_line(
-            player, search_type, query_lower, tag_line
-        )
-        if tag_dist is not None:
-            distances.append(tag_dist)
-
-        return distances
 
     @staticmethod
     def _score_player_match(
@@ -432,21 +354,63 @@ class PlayerService:
             search_type == "full_id"
             and game_name
             and tag_line
-            and PlayerService._check_exact_match(player, game_name, tag_line)
+            and player.game_name.lower() == game_name.lower()
+            and player.tag_line.lower() == tag_line.lower()
         ):
             return 1000.0
 
-        # Levenshtein scoring for fuzzy matches
-        distances = PlayerService._calculate_levenshtein_distances(
+        distance = PlayerService._closest_field_distance(
             player, search_type, query_lower, tag_line
         )
+        # Convert to score: 1 / (1 + distance)
+        return 1.0 / (1.0 + distance) if distance is not None else 0.0
 
-        if distances:
-            min_dist = min(distances)
-            # Convert to score: 1 / (1 + distance)
-            return 1.0 / (1.0 + min_dist)
+    @staticmethod
+    def _closest_field_distance(
+        player: Player,
+        search_type: str,
+        query_lower: str,
+        tag_line: str | None,
+    ) -> int | None:
+        """Smallest edit distance over the fields this search type compares.
 
-        return 0.0
+        None when the search type compares nothing on this player. The field
+        sets are deliberately different: a tag search only ever looks at the
+        tag, and a game-name search sees the tag only inside the full Riot ID.
+
+        Split out from the caller only because the two together rank C on the
+        complexity gate; the four one-caller helpers this replaced did the
+        same work through four more frames.
+        """
+        composite = (
+            f"{player.game_name}#{player.tag_line}".lower()
+            if player.tag_line
+            else player.game_name.lower()
+        )
+        # (applies?, query, target)
+        candidates = [
+            (
+                bool(player.game_name) and search_type in ("name", "all"),
+                query_lower,
+                player.game_name.lower(),
+            ),
+            (
+                bool(player.game_name) and search_type in ("name", "full_id", "all"),
+                query_lower,
+                composite,
+            ),
+            (
+                bool(player.tag_line) and search_type in ("tag", "full_id"),
+                tag_line.lower() if tag_line else query_lower,
+                player.tag_line.lower(),
+            ),
+        ]
+        distances = [
+            levenshtein_distance(query, target)
+            for applies, query, target in candidates
+            if applies
+        ]
+        return min(distances) if distances else None
 
     def _validate_search_query(
         self, query: str, search_type: str, game_name: str | None, tag_line: str | None
