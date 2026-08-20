@@ -2,7 +2,7 @@
 
 import re
 from datetime import UTC
-from typing import Annotated
+from typing import Annotated, NoReturn
 
 import structlog
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
@@ -43,6 +43,16 @@ logger = structlog.get_logger(__name__)
 
 
 router = APIRouter(prefix="/players", tags=["players"])
+
+
+def _log_and_raise_500(
+    e: Exception, event: str, detail: str, **context: object
+) -> NoReturn:
+    """Log the unexpected error with its context and answer a client-safe 500."""
+    logger.error(event, error=str(e), exc_info=e, **context)
+    raise HTTPException(status_code=500, detail=detail) from e
+
+
 router.get_player_service = get_player_service  # type: ignore[attr-defined]
 
 # Game name and Tag line constants
@@ -126,18 +136,13 @@ async def search_player(
         return results
 
     except Exception as e:
-        # Unexpected error - log and return 500
-        logger.error(
+        _log_and_raise_500(
+            e,
             "player_search_failed",
-            error=str(e),
+            "Player search could not be completed. Please try again later.",
             query=query,
             platform=platform.value if platform else None,
-            exc_info=True,
         )
-        raise HTTPException(
-            status_code=500,
-            detail="Player search could not be completed. Please try again later.",
-        ) from e
 
 
 @router.get("/suggestions", response_model=list[PlayerResponse])
@@ -202,17 +207,12 @@ async def get_player_suggestions(
         return results
 
     except Exception as e:
-        # Unexpected error - log and return 500
-        logger.error(
+        _log_and_raise_500(
+            e,
             "player_suggestions_failed",
-            error=str(e),
+            "Player suggestions could not be loaded. Please try again later.",
             platform=platform.value if platform else None,
-            exc_info=True,
         )
-        raise HTTPException(
-            status_code=500,
-            detail="Player suggestions could not be loaded. Please try again later.",
-        ) from e
 
 
 @router.get("/context", response_model=PlayerContextResponse)
@@ -399,11 +399,12 @@ async def track_player(
             # Tracking limit reached or other validation error
             raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
-        logger.error("track_player_failed", error=str(e), puuid=puuid, exc_info=True)
-        raise HTTPException(
-            status_code=500,
-            detail="The player could not be tracked. Please try again later.",
-        ) from e
+        _log_and_raise_500(
+            e,
+            "track_player_failed",
+            "The player could not be tracked. Please try again later.",
+            puuid=puuid,
+        )
 
     # The tracking row is committed by here, so claiming the run sits outside
     # the block above on purpose. The sync only saves the viewer from waiting
@@ -454,11 +455,12 @@ async def untrack_player(
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
-        logger.error("untrack_player_failed", error=str(e), puuid=puuid, exc_info=True)
-        raise HTTPException(
-            status_code=500,
-            detail="The player could not be untracked. Please try again later.",
-        ) from e
+        _log_and_raise_500(
+            e,
+            "untrack_player_failed",
+            "The player could not be untracked. Please try again later.",
+            puuid=puuid,
+        )
 
 
 @router.get("/{puuid}/tracking-status")
@@ -484,13 +486,12 @@ async def get_tracking_status(
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
-        logger.error(
-            "get_tracking_status_failed", error=str(e), puuid=puuid, exc_info=True
+        _log_and_raise_500(
+            e,
+            "get_tracking_status_failed",
+            "The tracking status could not be loaded. Please try again later.",
+            puuid=puuid,
         )
-        raise HTTPException(
-            status_code=500,
-            detail="The tracking status could not be loaded. Please try again later.",
-        ) from e
 
 
 @router.get("/tracked/list", response_model=list[PlayerResponse])
@@ -508,11 +509,11 @@ async def get_tracked_players(
         players = await player_service.get_tracked_players(current_user.id)
         return players
     except Exception as e:
-        logger.error("get_tracked_players_failed", error=str(e), exc_info=True)
-        raise HTTPException(
-            status_code=500,
-            detail="Tracked players could not be loaded. Please try again later.",
-        ) from e
+        _log_and_raise_500(
+            e,
+            "get_tracked_players_failed",
+            "Tracked players could not be loaded. Please try again later.",
+        )
 
 
 def _handle_tracking_value_error(e: ValueError) -> None:
@@ -606,16 +607,12 @@ async def refresh_player_league(
         # it to mean "not found" (that case returns 404 explicitly above), and
         # mapping it to 404 leaked raw platform/validation errors as missing
         # players.
-        logger.error(
+        _log_and_raise_500(
+            e,
             "refresh_player_league_failed",
-            error=str(e),
+            "The player's rank could not be refreshed. Please try again later.",
             puuid=puuid,
-            exc_info=True,
         )
-        raise HTTPException(
-            status_code=500,
-            detail="The player's rank could not be refreshed. Please try again later.",
-        ) from e
 
 
 @router.get("/{puuid}/league", response_model=PlayerLeagueResponse | None)
@@ -646,14 +643,10 @@ async def get_player_current_league(
             return PlayerLeagueResponse.model_validate(league)
         return None
     except Exception as e:
-        logger.error(
+        _log_and_raise_500(
+            e,
             "get_player_league_failed",
-            error=str(e),
+            "The player's rank could not be loaded. Please try again later.",
             puuid=puuid,
             queue_type=queue_type,
-            exc_info=True,
         )
-        raise HTTPException(
-            status_code=500,
-            detail="The player's rank could not be loaded. Please try again later.",
-        ) from e
