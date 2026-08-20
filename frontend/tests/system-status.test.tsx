@@ -146,6 +146,46 @@ describe("the jobs system status", () => {
     }
   });
 
+  it("reads a future next run as upcoming, not as the recent past", () => {
+    // next_run_time has its own future-facing clock; through the past-only
+    // one, a run scheduled ten minutes out rendered "Just now". An overdue
+    // schedule (negative lead) clamps to "Just now" rather than reading as
+    // history.
+    const ahead = (minutes: number) =>
+      new Date(NOW.getTime() + minutes * 60_000).toISOString();
+
+    for (const [minutes, expected] of [
+      [10, "in 10m"],
+      [2 * 60, "in 2h"],
+      [-5, "Just now"],
+    ] as const) {
+      render(
+        <SystemStatus
+          status={status({ next_run_time: ahead(minutes), last_execution: null })}
+        />,
+      );
+
+      expect(screen.getByText(expected), `${minutes} minutes ahead`).toBeTruthy();
+      cleanup();
+    }
+  });
+
+  it("clamps a slightly-future last run to Just now rather than the future", () => {
+    // A browser clock a minute behind the DB must not read a fresh run as
+    // "in 1m" — the past clock clamps everything at or ahead of now.
+    render(
+      <SystemStatus
+        status={status({
+          last_execution: execution({
+            started_at: new Date(NOW.getTime() + 90_000).toISOString(),
+          }),
+        })}
+      />,
+    );
+
+    expect(screen.getByText("Just now")).toBeTruthy();
+  });
+
   it("says None rather than a date when nothing has ever run", () => {
     render(<SystemStatus status={status({ last_execution: null })} />);
 

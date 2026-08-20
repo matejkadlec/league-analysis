@@ -3,7 +3,7 @@
 import { JobStatusResponse } from "@/lib/core/schemas";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { formatRelativeTime } from "./job-card-format";
+import { formatNextRun, formatRelativeTime } from "./job-card-format";
 import {
   CheckCircle2,
   XCircle,
@@ -201,7 +201,7 @@ export function SystemStatus({ status }: SystemStatusProps) {
               <p className="text-sm text-muted-foreground">
                 Next scheduled run:{" "}
                 <span className="font-medium text-foreground">
-                  {formatRelativeTime(status.next_run_time)}
+                  {formatNextRun(status.next_run_time)}
                 </span>
               </p>
             </div>
