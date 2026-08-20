@@ -5,6 +5,8 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.core.schemas import PaginatedResponse
+
 from .models import ExecutionType, JobStatus, JobType
 
 
@@ -154,13 +156,7 @@ class JobControlActionResponse(BaseModel):
     is_force_stopping: bool = Field(..., description="Whether force stop was requested")
 
 
-class JobExecutionListResponse(BaseModel):
+class JobExecutionListResponse(PaginatedResponse):
     """Schema for paginated job execution list response."""
 
     executions: list[JobExecutionResponse]
-    total: int
-    page: int
-    size: int
-    pages: int
-
-    model_config = ConfigDict(from_attributes=True)
