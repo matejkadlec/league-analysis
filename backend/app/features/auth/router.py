@@ -60,6 +60,39 @@ router = APIRouter()
 logger = structlog.get_logger(__name__)
 
 
+def _issue_token_response(
+    response: Response,
+    *,
+    access_token: str,
+    refresh_token: str,
+    access_expires_at: datetime,
+    refresh_expires_at: datetime,
+) -> Token:
+    """Set the auth cookies and build the matching Token body.
+
+    Login and refresh must hand out cookies and body from the same expiry
+    instants; sharing this tail keeps the two from drifting apart.
+    """
+    now = datetime.now(UTC)
+    set_auth_cookies(
+        response,
+        access_token=access_token,
+        refresh_token=refresh_token,
+        access_expires_at=access_expires_at,
+        refresh_expires_at=refresh_expires_at,
+    )
+    return Token(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        token_type="bearer",
+        expires_in_seconds=max(0, int((access_expires_at - now).total_seconds())),
+        refresh_expires_in_seconds=max(
+            0,
+            int((refresh_expires_at - now).total_seconds()),
+        ),
+    )  # nosec B106
+
+
 @router.post("/login", response_model=Token)
 @rate_limit("5/minute")
 async def login(
@@ -164,24 +197,13 @@ async def login(
         email=user.email,
     )
 
-    now = datetime.now(UTC)
-    set_auth_cookies(
+    return _issue_token_response(
         response,
         access_token=access_token,
         refresh_token=refresh_token,
         access_expires_at=access_expires_at,
         refresh_expires_at=refresh_expires_at,
     )
-    return Token(
-        access_token=access_token,
-        refresh_token=refresh_token,
-        token_type="bearer",
-        expires_in_seconds=max(0, int((access_expires_at - now).total_seconds())),
-        refresh_expires_in_seconds=max(
-            0,
-            int((refresh_expires_at - now).total_seconds()),
-        ),
-    )  # nosec B106
 
 
 @router.post("/refresh", response_model=Token)
@@ -231,24 +253,13 @@ async def refresh_access_token(
 
     await auth_service.cleanup_expired_token_state()
 
-    now = datetime.now(UTC)
-    set_auth_cookies(
+    return _issue_token_response(
         response,
         access_token=access_token,
         refresh_token=refresh_token,
         access_expires_at=access_expires_at,
         refresh_expires_at=refresh_expires_at,
     )
-    return Token(
-        access_token=access_token,
-        refresh_token=refresh_token,
-        token_type="bearer",
-        expires_in_seconds=max(0, int((access_expires_at - now).total_seconds())),
-        refresh_expires_in_seconds=max(
-            0,
-            int((refresh_expires_at - now).total_seconds()),
-        ),
-    )  # nosec B106
 
 
 @router.post("/logout")
