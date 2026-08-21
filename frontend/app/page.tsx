@@ -15,7 +15,7 @@ export default function Home() {
                 <h1 className="text-4xl font-[family-name:var(--font-league)]">
                   League Analysis
                 </h1>
-                <div className="relative h-[3.5rem] w-[3.5rem] -m-t-2 -m-b-3">
+                <div className="relative h-[3.5rem] w-[3.5rem]">
                   <Image
                     src="/magnifier.png"
                     alt="Magnifier"
