@@ -34,7 +34,7 @@ from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from statistics import fmean
-from typing import Any, cast
+from typing import Any
 
 import structlog
 from sqlalchemy import ColumnElement, and_, func, select, update
@@ -62,7 +62,6 @@ from .schemas import (
     MatchmakingAnalysisHistoryItem,
     MatchmakingAnalysisHistoryResponse,
     MatchmakingAnalysisResponse,
-    MatchmakingAnalysisStatus,
     MatchmakingAnalysisStatusResponse,
 )
 
@@ -290,7 +289,7 @@ class MatchmakingAnalysisService:
 
         return MatchmakingAnalysisStatusResponse(
             puuid=analysis.puuid,
-            status=cast(MatchmakingAnalysisStatus, analysis.status),
+            status=analysis.status,
             progress=progress,
             total_puuids=total,
             results=results_schema,
