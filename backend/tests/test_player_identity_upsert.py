@@ -49,7 +49,7 @@ def test_a_colliding_participant_updates_instead_of_raising() -> None:
     assert "ON CONFLICT (puuid) DO UPDATE" in compiled
 
 
-def test_the_conflict_clause_never_writes_is_tracked() -> None:
+def test_the_conflict_clause_never_writes_the_tracking_flag() -> None:
     """Tracking is not this writer's to answer.
 
     The value would come from a read taken moments earlier, which is exactly
@@ -57,7 +57,7 @@ def test_the_conflict_clause_never_writes_is_tracked() -> None:
     """
     conflict_clause = _compiled(_participant()).split("ON CONFLICT")[1]
 
-    assert "is_tracked" not in conflict_clause
+    assert "is_tracked_by_anyone" not in conflict_clause
 
 
 def test_a_named_participant_overwrites_the_stored_name() -> None:

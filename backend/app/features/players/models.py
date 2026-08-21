@@ -72,7 +72,7 @@ class Player(Base):
     )
 
     # Tracking & Analysis flags
-    is_tracked: Mapped[bool] = mapped_column(
+    is_tracked_by_anyone: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,
         default=False,

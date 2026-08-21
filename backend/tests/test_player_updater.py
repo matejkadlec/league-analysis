@@ -10,6 +10,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.riot_api.client import RiotAPIClient
+from app.core.riot_api.constants import Platform
 from app.core.riot_api.errors import AuthenticationError
 from app.features.jobs.implementations import player_updater as player_updater_module
 from app.features.jobs.implementations.player_updater import PlayerUpdaterJob
@@ -135,6 +136,9 @@ async def test_new_player_uses_submitted_riot_id_when_account_omits_it(
         def where(self, *_conditions: object) -> _Statement:
             return self
 
+        def limit(self, _count: int) -> _Statement:
+            return self
+
     class _FakePlayer(SimpleNamespace):
         puuid = object()
         game_name = object()
@@ -156,6 +160,9 @@ async def test_new_player_uses_submitted_riot_id_when_account_omits_it(
         add=Mock(),
         commit=AsyncMock(),
         refresh=AsyncMock(side_effect=populate_database_timestamps),
+        execute=AsyncMock(
+            return_value=SimpleNamespace(scalar_one_or_none=lambda: None)
+        ),
     )
     service = PlayerService(cast(AsyncSession, db))
     riot_client = SimpleNamespace(
@@ -171,7 +178,8 @@ async def test_new_player_uses_submitted_riot_id_when_account_omits_it(
         riot_client=cast(RiotAPIClient, riot_client),
         game_name="Submitted Name",
         tag_line="SAFE",
-        platform="eun1",
+        platform=Platform.EUN1,
+        user_id=1,
     )
 
     created_player = db.add.call_args.args[0]

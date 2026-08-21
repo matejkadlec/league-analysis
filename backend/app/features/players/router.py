@@ -97,8 +97,8 @@ async def get_player_suggestions(
     results = await player_service.fuzzy_search_players(
         query=q,
         platform=platform,
-        limit=limit,
         user_id=current_user.id,
+        limit=limit,
     )
     if not results:
         logger.debug("No player suggestions found", query=q, platform=platform)
@@ -133,7 +133,7 @@ async def discover_player(
     request: Request,
     player_service: PlayerServiceDep,
     riot_client: Annotated[RiotAPIClient, Depends(get_riot_client)],
-    _current_user: CurrentUserDep,
+    current_user: CurrentUserDep,
     # The four Riot ID rules used to be 39 lines of imperative checks here
     # and four constants in `frontend/.../riot-id.ts`, with the OpenAPI
     # document publishing neither. Declared, they reach the document and the
@@ -164,7 +164,8 @@ async def discover_player(
             riot_client=riot_client,
             game_name=game_name,
             tag_line=tag_line,
-            platform=platform.value,
+            platform=platform,
+            user_id=current_user.id,
         )
         return result
     except NotFoundError as error:

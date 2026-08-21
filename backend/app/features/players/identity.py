@@ -44,9 +44,9 @@ def upsert_player_statement(
     escalates -- so one primary-key collision on one participant failed the
     entire job run, skipping every remaining tracked player.
 
-    `is_tracked` is deliberately absent from the conflict clause: the stored
-    value wins, because writing back a value read moments earlier is how a
-    concurrent track or untrack gets lost.
+    `is_tracked_by_anyone` is deliberately absent from the conflict clause:
+    the stored value wins, because writing back a value read moments earlier is
+    how a concurrent track or untrack gets lost.
     """
     values: dict[str, Any] = {
         "puuid": participant.puuid,
@@ -59,7 +59,7 @@ def upsert_player_statement(
         "platform": normalize_platform(platform_id),
         "profile_icon_id": first_present(participant.profile_icon, default=29),
         "summoner_level": first_present(participant.summoner_level, default=0),
-        "is_tracked": False,
+        "is_tracked_by_anyone": False,
     }
     supplied = {
         "game_name": bool(participant.game_name),
