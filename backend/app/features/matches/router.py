@@ -109,8 +109,9 @@ async def get_player_stats(
 async def get_player_champion_stats(
     puuid: str,
     match_service: MatchServiceDep,
-    queue: Annotated[
-        int | None, Query(description="Queue ID filter (e.g., 420 for ranked solo/duo)")
+    queues: Annotated[
+        str | None,
+        Query(max_length=200, description="Comma-separated queue ID filters"),
     ] = None,
 ) -> ChampionStatsResponse:
     """
@@ -119,7 +120,7 @@ async def get_player_champion_stats(
     """
     return await match_service.get_player_champion_stats(
         puuid=puuid,
-        queue=queue,
+        queue_ids=parse_match_queue_ids(queues),
     )
 
 
@@ -127,8 +128,9 @@ async def get_player_champion_stats(
 async def get_player_lane_stats(
     puuid: str,
     match_service: MatchServiceDep,
-    queue: Annotated[
-        int | None, Query(description="Queue ID filter (e.g., 420 for ranked solo/duo)")
+    queues: Annotated[
+        str | None,
+        Query(max_length=200, description="Comma-separated queue ID filters"),
     ] = None,
 ) -> LaneStatsResponse:
     """
@@ -137,5 +139,5 @@ async def get_player_lane_stats(
     """
     return await match_service.get_player_lane_stats(
         puuid=puuid,
-        queue=queue,
+        queue_ids=parse_match_queue_ids(queues),
     )

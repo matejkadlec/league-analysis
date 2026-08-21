@@ -54,7 +54,7 @@ async def test_champion_stats_returns_every_champion_with_stable_ties() -> None:
     session = _Session(participants)
     service = MatchService(session)  # type: ignore[arg-type]
 
-    response = await service.get_player_champion_stats("test-puuid", queue=None)
+    response = await service.get_player_champion_stats("test-puuid", queue_ids=None)
 
     # The double answers every query with the same rows, so only the statement
     # itself can say whether the twenty-row cap came back. It did once, and

@@ -4,7 +4,7 @@ from collections.abc import Callable, Sequence
 from typing import Any
 
 import structlog
-from sqlalchemy import ColumnElement, desc, exists, func, or_, select
+from sqlalchemy import ColumnElement, Select, desc, exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.riot_api.client import RiotAPIClient
@@ -48,6 +48,23 @@ from .schemas import (
 )
 
 logger = structlog.get_logger(__name__)
+
+
+def restrict_participants_to_queues(
+    query: Select[tuple[MatchParticipant]],
+    queue_ids: Sequence[int] | None,
+) -> Select[tuple[MatchParticipant]]:
+    """Filter a participant query by queue, joining the match row only if asked.
+
+    The champion and lane aggregates read participants, so the queue lives one
+    join away. Without a filter the join is pure cost, which is why this is a
+    wrapper rather than a condition in `build_match_history_conditions`.
+    """
+    if not queue_ids:
+        return query
+    return query.join(Match, MatchParticipant.match_id == Match.match_id).where(
+        Match.queue_id.in_(queue_ids)
+    )
 
 
 def build_match_history_conditions(
@@ -380,24 +397,23 @@ class MatchService:
     async def get_player_champion_stats(
         self,
         puuid: str,
-        queue: int | None = None,
+        queue_ids: Sequence[int] | None = None,
     ) -> ChampionStatsResponse:
         """
         Get player statistics grouped by champion.
 
         Args:
             puuid: Player PUUID
-            queue: Filter by queue ID (e.g., 420 for ranked solo/duo)
+            queue_ids: Restrict to this queue union (e.g., 420 for ranked solo)
 
         Returns:
             ChampionStatsResponse with every qualifying champion statistic
         """
         try:
-            query = select(MatchParticipant).where(MatchParticipant.puuid == puuid)
-            if queue is not None:
-                query = query.join(
-                    Match, MatchParticipant.match_id == Match.match_id
-                ).where(Match.queue_id == queue)
+            query = restrict_participants_to_queues(
+                select(MatchParticipant).where(MatchParticipant.puuid == puuid),
+                queue_ids,
+            )
 
             result = await self.db.execute(query)
             participants = result.scalars().all()
@@ -423,29 +439,28 @@ class MatchService:
     async def get_player_lane_stats(
         self,
         puuid: str,
-        queue: int | None = None,
+        queue_ids: Sequence[int] | None = None,
     ) -> LaneStatsResponse:
         """
         Get player statistics grouped by lane/position.
 
         Args:
             puuid: Player PUUID
-            queue: Filter by queue ID (e.g., 420 for ranked solo/duo)
+            queue_ids: Restrict to this queue union (e.g., 420 for ranked solo)
 
         Returns:
             LaneStatsResponse with per-lane statistics
         """
         try:
-            query = select(MatchParticipant).where(
-                MatchParticipant.puuid == puuid,
-                MatchParticipant.team_position.isnot(None),
-                MatchParticipant.team_position != "",
-                MatchParticipant.team_position != "UNKNOWN",
+            query = restrict_participants_to_queues(
+                select(MatchParticipant).where(
+                    MatchParticipant.puuid == puuid,
+                    MatchParticipant.team_position.isnot(None),
+                    MatchParticipant.team_position != "",
+                    MatchParticipant.team_position != "UNKNOWN",
+                ),
+                queue_ids,
             )
-            if queue is not None:
-                query = query.join(
-                    Match, MatchParticipant.match_id == Match.match_id
-                ).where(Match.queue_id == queue)
 
             result = await self.db.execute(query)
             participants = result.scalars().all()

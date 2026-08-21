@@ -75,13 +75,6 @@ class RunesData(BaseModel):
     primary_style: int | None = Field(default=None, description="Primary rune style ID")
     sub_style: int | None = Field(default=None, description="Sub rune style ID")
     keystone: int | None = Field(default=None, description="Keystone rune ID")
-    primary_perks: list[int] | None = Field(
-        default=None, description="Primary perk IDs"
-    )
-    sub_perks: list[int] | None = Field(default=None, description="Sub perk IDs")
-    stat_perks: dict[str, int] | None = Field(
-        default=None, description="Stat perk values"
-    )
 
     model_config = ConfigDict(from_attributes=True)
 
