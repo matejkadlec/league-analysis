@@ -49,10 +49,11 @@ distinct rather than duplicated.
   wants the owner's say-so; the statement is
   `DELETE FROM core.matches WHERE match_id = 'EUN1_3990695865';`
 
-- 2026-08-21 frontend/lib/core/schemas.ts: `npm run deadcode` cannot see an
-  unused export in this file. `tests/api-contract-alignment.test.ts` needs the
-  whole module namespace to pair schemas by name, and knip counts a namespace
-  import as a use of every export. Found by hand:
+- 2026-08-21 frontend/lib/core/schemas/: `npm run deadcode` cannot see an
+  unused export in these modules. `tests/api-contract-alignment.test.ts` needs
+  the whole module namespace to pair schemas by name, and knip counts a
+  namespace import as a use of every export -- and the `export *` barrel
+  forwards that blindness to all nine modules behind it. Found by hand:
   `JoinUsContactRequestSchema` and `UserCookieConsentUpdateSchema` had no call
   site at all while knip reported zero unused exports. Both are used now, but
   the blind spot stands and covers the largest export list in the repo. A
