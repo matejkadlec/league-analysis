@@ -5,6 +5,7 @@ from typing import override
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.db_session import rollback_quietly
 from app.core.riot_api.client import RiotAPIClient
 from app.core.riot_api.errors import RateLimitError
 from app.features.jobs.base import BaseJob, JobStopSignal
@@ -60,7 +61,7 @@ class PlayerUpdaterJob(BaseJob):
                         message="Rate limit reached while updating players",
                     ) from error
                 except RiotWriterMaintenanceActiveError as error:
-                    await db.rollback()
+                    await rollback_quietly(db)
                     raise JobStopSignal(reason="riot_maintenance") from error
                 except Exception as e:
                     if await self.handle_player_error(

@@ -4,6 +4,7 @@ from typing import override
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.db_session import rollback_quietly
 from app.core.riot_api.client import RiotAPIClient
 from app.core.riot_api.constants import (
     PRODUCT_SUPPORTED_QUEUE_IDS,
@@ -100,7 +101,7 @@ class MatchFetcherJob(BaseJob):
                     message="Rate limit reached while fetching matches",
                 ) from error
             except RiotWriterMaintenanceActiveError as error:
-                await db.rollback()
+                await rollback_quietly(db)
                 raise JobStopSignal(reason="riot_maintenance") from error
             except Exception as error:
                 if await self._handle_player_processing_error(db, puuid, error):

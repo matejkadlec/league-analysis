@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from .config import get_global_settings
+from .db_session import rollback_quietly
 
 logger = structlog.get_logger(__name__)
 
@@ -48,7 +49,7 @@ class DatabaseManager:
             try:
                 yield session
             except Exception as error:
-                await session.rollback()
+                await rollback_quietly(session)
                 # FastAPI throws route HTTPExceptions into yield-dependencies,
                 # so ordinary 4xx responses unwind through here; they are
                 # already recorded by the request completion event and must

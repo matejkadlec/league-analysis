@@ -17,6 +17,7 @@ from sqlalchemy import ColumnElement, and_, func, select, update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.db_session import rollback_quietly
 from app.core.riot_api.constants import RANKED_SOLO_QUEUE_ID
 from app.core.runs import active_run_filter, commit_new_run, guarded_run_update
 from app.features.matches.models import Match
@@ -440,7 +441,7 @@ class SmurfBoostDetectionService:
                 error_code=error.code,
                 error_type=type(error).__name__,
             )
-            await self.db.rollback()
+            await rollback_quietly(self.db)
             await self._fail(puuid, created_at, error.code, error.client_message)
         except Exception as error:
             logger.error(
@@ -451,7 +452,7 @@ class SmurfBoostDetectionService:
             )
             # The failure may have come from the session itself, which cannot
             # accept the terminal write until the broken transaction is gone.
-            await self.db.rollback()
+            await rollback_quietly(self.db)
             await self._fail(
                 puuid,
                 created_at,

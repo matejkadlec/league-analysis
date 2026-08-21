@@ -17,6 +17,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import ColumnElement
 
+from .db_session import rollback_quietly
+
 
 def active_run_filter(
     model: type[Any],
@@ -45,7 +47,7 @@ async def commit_new_run(db: AsyncSession, run: Any) -> IntegrityError | None:
     try:
         await db.commit()
     except IntegrityError as error:
-        await db.rollback()
+        await rollback_quietly(db)
         return error
     return None
 

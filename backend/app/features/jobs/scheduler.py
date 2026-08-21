@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_global_settings
 from app.core.database import db_manager
+from app.core.db_session import rollback_quietly
 
 from .base import BaseJob
 from .intervals import JobIntervalError, resolve_interval_seconds
@@ -236,7 +237,7 @@ async def _cancel_orphaned_player_syncs(db: AsyncSession) -> None:
             error=str(error),
             error_type=type(error).__name__,
         )
-        await db.rollback()
+        await rollback_quietly(db)
         raise
 
     cancelled = result.rowcount or 0  # type: ignore[union-attr]
@@ -301,7 +302,7 @@ async def _mark_stale_jobs_as_failed(db: AsyncSession) -> None:
             error=str(e),
             error_type=type(e).__name__,
         )
-        await db.rollback()
+        await rollback_quietly(db)
 
 
 def _build_scheduler(settings: Settings) -> SchedulerLike:

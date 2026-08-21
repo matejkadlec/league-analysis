@@ -678,7 +678,7 @@ class MatchmakingAnalysisService:
             select(MatchmakingAnalysis.status).where(_one_run_where(puuid, created_at))
         )
         if completion_status.scalar_one_or_none() != "completed":
-            await self.db.rollback()
+            await rollback_quietly(self.db)
             logger.info("Analysis completion ignored after terminal state")
             return
 

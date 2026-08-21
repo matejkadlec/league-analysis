@@ -19,6 +19,7 @@ from app.core.database import db_manager
 # Imported at runtime, not under TYPE_CHECKING: these names appear in
 # annotations, and anything that evaluates them (inspect.signature,
 # get_type_hints) would raise NameError under PEP 649 lazy annotations.
+from app.core.db_session import rollback_quietly
 from app.core.riot_api.client import APICallRecord, RiotAPIClient
 from app.core.riot_api.errors import AuthenticationError
 from app.core.riot_api.scoped_client import (
@@ -377,7 +378,7 @@ class BaseJob(ABC):
                 error=str(e),
                 error_type=type(e).__name__,
             )
-            await db.rollback()
+            await rollback_quietly(db)
             raise
 
     async def log_completion(
@@ -692,7 +693,7 @@ class BaseJob(ABC):
             execution_id=self.job_execution_id,
         )
         try:
-            await db.rollback()
+            await rollback_quietly(db)
             await db.execute(
                 update(JobExecution)
                 .where(JobExecution.id == self.job_execution_id)
@@ -775,7 +776,7 @@ class BaseJob(ABC):
                 on_success()
             return True
         except Exception as e:
-            await db.rollback()
+            await rollback_quietly(db)
             logger.error(
                 "job_commit_failed",
                 operation=operation,
@@ -968,7 +969,7 @@ class BaseJob(ABC):
         logger.error(message, puuid=puuid, error_type=type(error).__name__)
 
         if is_database_job_error(error):
-            await db.rollback()
+            await rollback_quietly(db)
             raise error
 
         # An API-key error recorded by an inner handler arrives here again as
@@ -987,7 +988,7 @@ class BaseJob(ABC):
             logger.error("API key error detected, stopping job execution")
             return True
 
-        await db.rollback()
+        await rollback_quietly(db)
         return False
 
     def has_errors(self) -> bool:
@@ -1073,7 +1074,7 @@ class BaseJob(ABC):
 
         # Retry once after rollback
         try:
-            await db.rollback()
+            await rollback_quietly(db)
             await db.execute(stmt)
             if await self.safe_commit(db, "job completion retry"):
                 logger.info(
@@ -1111,7 +1112,7 @@ class BaseJob(ABC):
             exc_info=error,
         )
         try:
-            await db.rollback()
+            await rollback_quietly(db)
         except Exception as rollback_error:
             logger.error(
                 "Failed to rollback after log_completion error",
