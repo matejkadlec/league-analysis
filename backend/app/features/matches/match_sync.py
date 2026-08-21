@@ -24,12 +24,31 @@ logger = structlog.get_logger(__name__)
 OnFailure = Callable[[str, Exception, dict[str, Any]], None] | None
 OnMatchStored = Callable[[int, str], None] | None
 
-CURRENT_GAME_VERSION_PREFIX = "16."
+# The oldest release still synced. Deliberately not shared with
+# `timeline._uses_historical_atakhan_contract`, which happens to test the same
+# number today: that one records a permanent fact about when Riot changed the
+# objective set, while this one is a policy that moves when support does.
+OLDEST_SYNCED_GAME_MAJOR = 16
 
 
 def is_current_game_version(game_version: str) -> bool:
-    """Whether a Riot match belongs to the supported current release year."""
-    return game_version.startswith(CURRENT_GAME_VERSION_PREFIX)
+    """Whether a Riot match belongs to a release still worth syncing.
+
+    A `>=` on the major, not a prefix match. The prefix form answered False for
+    every future season, and the caller reads False as "the rest of this queue
+    is older, stop paging" -- so the first Riot major bump would have stopped
+    match ingestion for every player and every queue while the job still
+    reported SUCCESS with zero records.
+
+    A version this cannot parse counts as current, because refusing to sync is
+    the expensive mistake here and the caller's other branch simply stores one
+    match it might not have needed.
+    """
+    try:
+        return int(game_version.split(".", 1)[0]) >= OLDEST_SYNCED_GAME_MAJOR
+    except AttributeError, TypeError, ValueError:
+        logger.debug("match_sync_version_parse_failed", game_version=game_version)
+        return True
 
 
 class ReprocessMatch(Protocol):

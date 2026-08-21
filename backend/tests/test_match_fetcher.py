@@ -112,7 +112,17 @@ async def test_ranked_queue_reports_each_stored_match_for_lp_observation() -> No
 
 @pytest.mark.parametrize(
     ("game_version", "expected_stored"),
-    [("16.15.1", 1), ("15.24.1", 0)],
+    [
+        ("16.15.1", 1),
+        ("15.24.1", 0),
+        # A future Riot major must keep syncing. The queue-done bool means
+        # "everything below this is older", so answering False for 17.x stops
+        # ingestion for every player and every queue on the day Riot ships it.
+        ("17.1.1", 1),
+        ("100.1.1", 1),
+        # Unparseable is current: storing one extra match beats stopping.
+        ("preseason", 1),
+    ],
 )
 async def test_queue_sync_accepts_current_release_and_stops_at_historical_match(
     game_version: str,
