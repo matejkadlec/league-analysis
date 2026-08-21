@@ -14,7 +14,7 @@ from sqlalchemy import Update, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from structlog import contextvars as structlog_contextvars
 
-from app.core import db_manager
+from app.core.database import db_manager
 
 # Imported at runtime, not under TYPE_CHECKING: these names appear in
 # annotations, and anything that evaluates them (inspect.signature,

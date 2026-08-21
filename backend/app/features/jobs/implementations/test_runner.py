@@ -12,7 +12,6 @@ from typing import override
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import TEST_PUUID
 from app.core.riot_api.client import RiotAPIClient
 from app.core.riot_api.constants import Platform, Region, get_region_by_platform
 from app.features.jobs.base import BaseJob
@@ -21,6 +20,11 @@ from app.features.jobs.models import ExecutionType
 from app.features.players.service import PlayerService
 
 logger = structlog.get_logger(__name__)
+
+# Fallback PUUID used by test job runs when no tracked players exist
+TEST_PUUID = (
+    "PNm-92VrUvdu-cj0KFhqs0_8dNV2g9DsQ2pObEKsJZum-3uISPmVr2xn2eI1ztzq10TJb9M-ZpdbdQ"
+)
 
 # Test loop constants
 _MAX_ITERATIONS = 60  # 1 hour (60 x 1-minute intervals)

@@ -7,8 +7,8 @@ import structlog
 from fastapi import Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from . import get_db
-from .riot_api import RiotAPIClient
+from .database import get_db
+from .riot_api.client import RiotAPIClient
 from .riot_api.constants import Platform, Region
 from .riot_api.credential_health import create_tracked_riot_api_client
 

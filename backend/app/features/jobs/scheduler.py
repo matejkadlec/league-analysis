@@ -15,8 +15,8 @@ from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core import db_manager, get_global_settings
-from app.core.config import Settings
+from app.core.config import Settings, get_global_settings
+from app.core.database import db_manager
 
 from .base import BaseJob
 from .intervals import JobIntervalError, resolve_interval_seconds
