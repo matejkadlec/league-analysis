@@ -28,12 +28,26 @@ def runtime_control_key(job_config_id: int, *, test_run: bool = False) -> int:
     return -job_config_id if test_run else job_config_id
 
 
-def register_runtime_control(
+def claim_runtime_control(
     job_config_id: int,
     task: asyncio.Task[None] | None,
-) -> None:
-    """Register runtime control object for a running job."""
+) -> bool:
+    """Take the key for a run, or report that another run already holds it.
+
+    Check and set with no `await` between them, so a single event loop makes
+    this the mutual exclusion the callers assumed they had. Registering
+    unconditionally after an awaited check let two runs of one configuration
+    both start: the second overwrote the first's control, so stop requests
+    reached only one of them and the first to finish unregistered the other's
+    key -- after which the next run declared the live execution orphaned.
+
+    Returns:
+        bool: True when the key was free and is now held by this run.
+    """
+    if job_config_id in _runtime_controls:
+        return False
     _runtime_controls[job_config_id] = RuntimeJobControl(task=task)
+    return True
 
 
 def unregister_runtime_control(job_config_id: int) -> None:

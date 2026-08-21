@@ -1,5 +1,6 @@
 """Background-job configuration and error-boundary tests."""
 
+import asyncio
 from collections.abc import AsyncGenerator, Callable, Mapping
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
@@ -85,9 +86,9 @@ async def test_test_run_pause_and_resume_flip_the_runs_own_flag(
     from app.features.jobs import router as jobs_router
 
     monkeypatch.setattr(control_module, "_runtime_controls", {})
-    control_module.register_runtime_control(-7, None)
+    control_module.claim_runtime_control(-7, None)
     control_module.set_runtime_job_paused(-7, not paused)
-    control_module.register_runtime_control(7, None)
+    control_module.claim_runtime_control(7, None)
 
     job_model = SimpleNamespace(id=7, name="Match Fetcher")
     job_service = _job_service_double(job_model)
@@ -138,9 +139,9 @@ async def test_stopping_one_run_leaves_the_other_runs_pause_alone(
     from app.features.jobs import router as jobs_router
 
     monkeypatch.setattr(control_module, "_runtime_controls", {})
-    control_module.register_runtime_control(7, None)
+    control_module.claim_runtime_control(7, None)
     control_module.set_runtime_job_paused(7, True)
-    control_module.register_runtime_control(-7, None)
+    control_module.claim_runtime_control(-7, None)
     control_module.set_runtime_job_paused(-7, True)
 
     job_model = SimpleNamespace(id=7, name="Match Fetcher")
@@ -501,7 +502,7 @@ class _MaintenanceBlockedJob(BaseJob):
 async def test_base_job_cancels_a_maintained_regular_writer_before_execute() -> None:
     """The persisted guard is checked after configuration refresh and before writes."""
     job = _MaintenanceBlockedJob()
-    job.is_already_running = AsyncMock(return_value=False)
+    job.fail_orphaned_execution = AsyncMock()
     job.log_completion = AsyncMock()
     job.check_control_state = AsyncMock()
 
@@ -536,6 +537,68 @@ async def test_base_job_cancels_a_maintained_regular_writer_before_execute() -> 
     assert completion_call.kwargs["status"] == JobStatus.CANCELLED
 
 
+class _SlowStartJob(BaseJob):
+    """A job whose start-up bookkeeping awaits, as the real one does."""
+
+    def __init__(self) -> None:
+        super().__init__(job_config_id=4242)
+        self.executed = False
+
+    @override
+    async def execute(self, db: AsyncSession) -> None:
+        self.executed = True
+
+    @override
+    async def fail_orphaned_execution(self, db: AsyncSession) -> None:
+        await asyncio.sleep(0)
+
+    @override
+    async def log_start(self, db: AsyncSession) -> None:
+        await asyncio.sleep(0)
+        self.job_execution = _job_execution_double(id=13)
+
+
+async def test_two_runs_of_one_configuration_cannot_both_start(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The runtime key is claimed before the first await, so only one run wins.
+
+    Two background player syncs for different PUUIDs both drive the Match
+    Fetcher, and they share a configuration id. While the registry was written
+    to after the start-up queries, both passed the check, both wrote match rows
+    concurrently, and the first to finish released the other's key.
+    """
+    from app.features.jobs import control as control_module
+
+    monkeypatch.setattr(control_module, "_runtime_controls", {})
+
+    @asynccontextmanager
+    async def fake_session() -> AsyncGenerator[AsyncSession]:
+        yield cast(AsyncSession, object())
+
+    jobs = [_SlowStartJob(), _SlowStartJob()]
+    for job in jobs:
+        job.log_completion = AsyncMock()
+        job.check_control_state = AsyncMock()
+        job._db_session = fake_session
+
+        async def fake_refresh(db: AsyncSession, job: _SlowStartJob = job) -> None:
+            job.job_config = _job_configuration_double(
+                name="match fetcher",
+                job_type=JobType.MATCH_FETCHER,
+                config_json={},
+            )
+
+        job._refresh_config = fake_refresh
+
+    await asyncio.gather(*(job.run() for job in jobs))
+
+    assert [job.executed for job in jobs].count(True) == 1
+    assert [job.skipped_as_already_running for job in jobs].count(True) == 1
+    # The winner released the key on its way out; the loser never held it.
+    assert control_module._runtime_controls == {}
+
+
 async def _run_job_with_recorded_error(
     job: BaseJob,
     error: Exception,
@@ -543,7 +606,7 @@ async def _run_job_with_recorded_error(
     is_api_key_error: bool,
 ) -> Mapping[str, object]:
     """Run a regular writer through BaseJob's real completion decision."""
-    job.is_already_running = AsyncMock(return_value=False)
+    job.fail_orphaned_execution = AsyncMock()
     job.log_completion = AsyncMock()
     job.check_control_state = AsyncMock()
 
