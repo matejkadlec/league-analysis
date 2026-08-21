@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { unwrap, validatedGet, validatedPost } from "@/lib/core/api";
@@ -117,69 +117,67 @@ export function usePlayerSyncRun(
     },
   });
 
+  // An effect event, not the effect body: everything below reads
+  // `activeSyncQuery`, `onCompleted`, `queryClient` and `toast`, none of which
+  // are stable, so as a dependency list they re-ran this effect on every
+  // render and only the Set below stopped it acting twice.
+  const finishRun = useEffectEvent(async (syncRun: PlayerSyncRun) => {
+    if (syncRun.status !== "completed") {
+      const rateLimited = syncRun.status === "rate_limited";
+      toast[rateLimited ? "warning" : "error"]("Player update did not finish", {
+        description: rateLimited
+          ? "Riot temporarily limited requests. Please try the update again later."
+          : "Please try the update again later.",
+      });
+      await activeSyncQuery.refetch();
+      return;
+    }
+
+    // Scoped to this player. Prefix matches without the PUUID would
+    // invalidate every cached player, so switching to someone else
+    // afterwards would refetch their data too.
+    const exactPlayerQuery = (query: { queryKey: readonly unknown[] }) =>
+      query.queryKey.includes(puuid);
+    try {
+      await queryClient.invalidateQueries({
+        predicate: exactPlayerQuery,
+        refetchType: "none",
+      });
+      await onCompleted?.();
+      await queryClient.refetchQueries(
+        { predicate: exactPlayerQuery, type: "active" },
+        { throwOnError: true },
+      );
+      toast.success("Update finished", {
+        description: "All cards were successfully updated.",
+      });
+    } catch {
+      toast.error("Player data could not refresh", {
+        description: "Please try again before relying on the card data.",
+      });
+    }
+    await activeSyncQuery.refetch();
+  });
+
+  const syncRun = exactSyncQuery.data;
   useEffect(() => {
-    const syncRun = exactSyncQuery.data;
     if (
       !syncRun ||
       syncRun.status === "pending" ||
       syncRun.status === "running" ||
-      // The run keeps returning its terminal status until polling stops, so
-      // without this the effect re-enters and refetches on every render.
+      // The completion body refetches this very query. Structural sharing
+      // usually hands back the identical object, so the effect does not
+      // re-enter -- but that holds only while `PlayerSyncRunSchema` stays a
+      // flat object of strings and numbers. One field that moves after
+      // terminal status turns this into a toast-and-refetch loop, and this
+      // Set is what makes that impossible rather than merely unlikely.
       handledTerminalSyncIds.current.has(syncRun.id)
     ) {
       return;
     }
     handledTerminalSyncIds.current.add(syncRun.id);
-
-    const finish = async () => {
-      if (syncRun.status !== "completed") {
-        const rateLimited = syncRun.status === "rate_limited";
-        toast[rateLimited ? "warning" : "error"](
-          "Player update did not finish",
-          {
-            description: rateLimited
-              ? "Riot temporarily limited requests. Please try the update again later."
-              : "Please try the update again later.",
-          },
-        );
-        await activeSyncQuery.refetch();
-        return;
-      }
-
-      // Scoped to this player. Prefix matches without the PUUID would
-      // invalidate every cached player, so switching to someone else
-      // afterwards would refetch their data too.
-      const exactPlayerQuery = (query: { queryKey: readonly unknown[] }) =>
-        query.queryKey.includes(puuid);
-      try {
-        await queryClient.invalidateQueries({
-          predicate: exactPlayerQuery,
-          refetchType: "none",
-        });
-        await onCompleted?.();
-        await queryClient.refetchQueries(
-          { predicate: exactPlayerQuery, type: "active" },
-          { throwOnError: true },
-        );
-        toast.success("Update finished", {
-          description: "All cards were successfully updated.",
-        });
-      } catch {
-        toast.error("Player data could not refresh", {
-          description: "Please try again before relying on the card data.",
-        });
-      }
-      await activeSyncQuery.refetch();
-    };
-    void finish();
-  }, [
-    activeSyncQuery,
-    exactSyncQuery.data,
-    onCompleted,
-    puuid,
-    queryClient,
-    toast,
-  ]);
+    void finishRun(syncRun);
+  }, [syncRun]);
 
   const syncStatus: PlayerSyncRun["status"] | undefined =
     exactSyncQuery.data?.status ?? activeSyncQuery.data?.status;
