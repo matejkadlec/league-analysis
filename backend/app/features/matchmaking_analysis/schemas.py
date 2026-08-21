@@ -56,7 +56,10 @@ class MatchmakingAnalysisResponse(BaseModel):
     status: MatchmakingAnalysisStatus
     error_code: str | None = None
     error_message: str | None = None
-    puuid_progress: dict[str, bool] | None = None
+    # Excluded from the wire: the two computed fields below are all any
+    # client has ever read, and the per-PUUID map is the only thing that made
+    # the status response a second schema.
+    puuid_progress: dict[str, bool] | None = Field(default=None, exclude=True)
     requests_saved: int = 0
     rate_limit_reset_at: datetime | None = None
 
@@ -75,25 +78,6 @@ class MatchmakingAnalysisResponse(BaseModel):
         if not self.puuid_progress:
             return 0
         return len(self.puuid_progress)
-
-
-class MatchmakingAnalysisStatusResponse(BaseModel):
-    """Quick status check response."""
-
-    model_config = ConfigDict(from_attributes=True)
-
-    puuid: str
-    status: MatchmakingAnalysisStatus
-    progress: int
-    total_puuids: int
-    results: MatchmakingAnalysisResults | None = None
-    created_at: datetime
-    started_at: datetime | None = None
-    completed_at: datetime | None = None
-    error_code: str | None = None
-    error_message: str | None = None
-    requests_saved: int = 0
-    rate_limit_reset_at: datetime | None = None
 
 
 class MatchmakingAnalysisHistoryItem(BaseModel):

@@ -11,8 +11,6 @@ import {
   MatchmakingAnalysisHistoryResponseSchema,
   MatchmakingAnalysisResponse,
   MatchmakingAnalysisResponseSchema,
-  MatchmakingAnalysisStatusResponse,
-  MatchmakingAnalysisStatusResponseSchema,
 } from "@/lib/core/schemas";
 
 const AnalysisActionResponseSchema = z.object({
@@ -35,9 +33,9 @@ export async function startMatchmakingAnalysis(
 export async function getMatchmakingAnalysisStatus(
   puuid: string,
   createdAt: string,
-): Promise<ApiResponse<MatchmakingAnalysisStatusResponse>> {
+): Promise<ApiResponse<MatchmakingAnalysisResponse>> {
   return validatedGet(
-    MatchmakingAnalysisStatusResponseSchema,
+    MatchmakingAnalysisResponseSchema,
     `/matchmaking-analysis/player/${puuid}/status`,
     { created_at: createdAt },
   );

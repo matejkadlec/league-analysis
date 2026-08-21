@@ -65,7 +65,6 @@ function analysis(
       : null,
     error_code: null,
     error_message: null,
-    puuid_progress: {},
     requests_saved: 0,
     rate_limit_reset_at: null,
     ...overrides,

@@ -42,6 +42,28 @@ def test_an_unstarted_analysis_reports_zero_of_zero() -> None:
     assert dumped["total_puuids"] == 0
 
 
+def test_the_map_nothing_reads_stays_off_the_wire() -> None:
+    # `puuid_progress` is the field that used to make `/status` a second,
+    # near-identical response schema. It still feeds the two computed fields;
+    # it just no longer ships.
+    dumped = response(puuid_progress={"a": True}).model_dump()
+
+    assert "puuid_progress" not in dumped
+    assert dumped["progress"] == 1
+
+
+def test_a_completed_run_missing_a_winrate_is_rejected_not_zero_filled() -> None:
+    # `/status` used to build its own results object and only for a completed
+    # row; it validates every row through the response now, so a blob written
+    # before the three keys were required fails loudly instead of rendering as
+    # a 0% winrate the response's own `ge=0.0, le=1.0` bound cannot reject.
+    with pytest.raises(ValidationError):
+        response(
+            status="completed",
+            results={"team_avg_winrate": 0.5, "matches_analyzed": 10},
+        )
+
+
 def test_gap_is_positive_when_the_players_team_was_favoured() -> None:
     # The history card prints |gap| and encodes the *sign* as colour alone, so
     # this subtraction order is the only thing saying which side was stronger.

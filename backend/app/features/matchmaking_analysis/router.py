@@ -13,7 +13,6 @@ from .schemas import (
     MatchmakingAnalysisHistoryResponse,
     MatchmakingAnalysisRequest,
     MatchmakingAnalysisResponse,
-    MatchmakingAnalysisStatusResponse,
 )
 
 router = APIRouter(
@@ -76,7 +75,7 @@ async def get_latest_completed_analysis(
     return result
 
 
-@router.get("/player/{puuid}/status", response_model=MatchmakingAnalysisStatusResponse)
+@router.get("/player/{puuid}/status", response_model=MatchmakingAnalysisResponse)
 async def get_analysis_status_by_puuid(
     puuid: str,
     created_at: datetime,

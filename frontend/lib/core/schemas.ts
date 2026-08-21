@@ -491,22 +491,6 @@ export const MatchmakingAnalysisStatusSchema = z.enum([
   "cancelled",
 ]);
 
-/** Fields every matchmaking run carries, whatever its lifecycle state. */
-const MatchmakingAnalysisRunFields = {
-  puuid: z.string(),
-  status: MatchmakingAnalysisStatusSchema,
-  progress: z.number().int(),
-  total_puuids: z.number().int(),
-  results: MatchmakingAnalysisResultsSchema.nullable().optional(),
-  created_at: z.string(),
-  started_at: z.string().nullable().optional(),
-  completed_at: z.string().nullable().optional(),
-  error_code: z.string().nullable().optional(),
-  error_message: z.string().nullable().optional(),
-  requests_saved: z.number().int().default(0),
-  rate_limit_reset_at: z.string().nullable().optional(),
-};
-
 /**
  * Splits a parsed run into `completed` — the only variant that owns `results`
  * — and everything else, which has no `results` property at all. Reading
@@ -575,20 +559,30 @@ function splitRunOnLifecycle<
   return split as RunLifecycleSplit<TWire, TResults>;
 }
 
+/**
+ * One schema for every matchmaking run the API returns.
+ *
+ * `/status` used to have its own, differing only by `puuid_progress` -- a
+ * per-PUUID map nothing reads, declared here as
+ * `z.union([z.boolean(), z.string()])` against a `dict[str, bool]` column that
+ * cannot hold a string. The server excludes the field now, so the two schemas
+ * became the same expression.
+ */
 export const MatchmakingAnalysisResponseSchema = z
   .object({
-    ...MatchmakingAnalysisRunFields,
-    puuid_progress: z
-      .record(z.string(), z.union([z.boolean(), z.string()]))
-      .nullable()
-      .optional(),
+    puuid: z.string(),
+    status: MatchmakingAnalysisStatusSchema,
+    progress: z.number().int(),
+    total_puuids: z.number().int(),
+    results: MatchmakingAnalysisResultsSchema.nullable().optional(),
+    created_at: z.string(),
+    started_at: z.string().nullable().optional(),
+    completed_at: z.string().nullable().optional(),
+    error_code: z.string().nullable().optional(),
+    error_message: z.string().nullable().optional(),
+    requests_saved: z.number().int().default(0),
+    rate_limit_reset_at: z.string().nullable().optional(),
   })
-  .transform((run) =>
-    splitRunOnLifecycle<typeof run, MatchmakingAnalysisResults>(run),
-  );
-
-export const MatchmakingAnalysisStatusResponseSchema = z
-  .object(MatchmakingAnalysisRunFields)
   .transform((run) =>
     splitRunOnLifecycle<typeof run, MatchmakingAnalysisResults>(run),
   );
@@ -612,9 +606,6 @@ export type MatchmakingAnalysisStatus = z.infer<
 >;
 export type MatchmakingAnalysisResponse = z.infer<
   typeof MatchmakingAnalysisResponseSchema
->;
-export type MatchmakingAnalysisStatusResponse = z.infer<
-  typeof MatchmakingAnalysisStatusResponseSchema
 >;
 export type MatchmakingAnalysisHistoryItem = z.infer<
   typeof MatchmakingAnalysisHistoryItemSchema
