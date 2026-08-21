@@ -15,7 +15,7 @@ from fastapi import HTTPException
 from app.features.jobs.base import BaseJob
 from app.features.jobs.models import JobType
 from app.features.jobs.router import _create_job_instance, _create_test_job_instance
-from app.features.jobs.scheduler import _get_job_registry
+from app.features.jobs.scheduler import job_registry
 from app.features.jobs.schemas import JobConfigurationResponse
 
 
@@ -33,13 +33,13 @@ def _job_row(job_type: JobType) -> JobConfigurationResponse:
 
 
 def test_every_job_type_has_a_registered_implementation() -> None:
-    registry = _get_job_registry()
+    registry = job_registry()
 
     assert set(registry) == set(JobType)
 
 
 def test_every_registered_implementation_is_a_base_job_subclass() -> None:
-    for job_type, implementation in _get_job_registry().items():
+    for job_type, implementation in job_registry().items():
         assert issubclass(implementation, BaseJob), job_type
 
 
@@ -51,13 +51,13 @@ def test_the_router_can_construct_every_job_type(
     factory: Callable[[JobConfigurationResponse], BaseJob],
     job_type: JobType,
 ) -> None:
-    """The router keeps its own per-type maps, separate from the registry.
+    """Both router factories can build every declared type.
 
-    A type registered with the scheduler but missing from these maps schedules
-    fine and then answers the request to run it with a 501, so the scheduler
-    registry check above cannot stand in for this one. Calling the factories
-    rather than reading their literals keeps the test honest: the maps are
-    function locals, and the 501 is the real observable failure.
+    The run factory reads `job_registry`, so the check above covers which types
+    it knows; this one still proves the class it hands back can be constructed
+    from a saved configuration. The test-runner map is a separate literal --
+    different classes -- and a type missing from it schedules fine and then
+    answers the request to run it with a 501.
     """
     try:
         instance = factory(_job_row(job_type))
