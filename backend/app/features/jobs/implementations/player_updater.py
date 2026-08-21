@@ -37,14 +37,20 @@ class PlayerUpdaterJob(BaseJob):
         player_service = PlayerService(db)
 
         async with self.job_riot_client(db) as riot_client:
-            tracked_players = await self._load_tracked_players(db)
+            tracked_puuids = await self._load_tracked_puuids(db)
             logger.info(
-                "Starting player updater job", tracked_count=len(tracked_players)
+                "Starting player updater job", tracked_count=len(tracked_puuids)
             )
 
-            for player in tracked_players:
+            for puuid in tracked_puuids:
                 await self.check_control_state(db)
                 try:
+                    # Re-read per iteration: a recoverable error rolls the
+                    # session back, which expires every row it holds.
+                    player = await db.get(Player, puuid)
+                    if player is None:
+                        logger.warning("Tracked player is gone", puuid=puuid)
+                        continue
                     await self._update_player_profile(
                         db, player, player_service, riot_client
                     )
@@ -62,7 +68,7 @@ class PlayerUpdaterJob(BaseJob):
                         e,
                         message="Error updating player profile",
                         operation="player profile update",
-                        puuid=player.puuid,
+                        puuid=puuid,
                     ):
                         break
 

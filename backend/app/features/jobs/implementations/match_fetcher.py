@@ -42,13 +42,11 @@ class MatchFetcherJob(BaseJob):
         match_service = MatchService(db)
 
         async with self.job_riot_client(db) as riot_client:
-            tracked_players = await self._load_tracked_players(db)
-            logger.info(
-                "Starting match fetcher job", tracked_count=len(tracked_players)
-            )
+            tracked_puuids = await self._load_tracked_puuids(db)
+            logger.info("Starting match fetcher job", tracked_count=len(tracked_puuids))
             await self._process_tracked_players(
                 db,
-                tracked_players,
+                tracked_puuids,
                 player_service,
                 match_service,
                 riot_client,
@@ -57,7 +55,7 @@ class MatchFetcherJob(BaseJob):
     async def _handle_player_processing_error(
         self,
         db: AsyncSession,
-        player: Player,
+        puuid: str,
         error: Exception,
     ) -> bool:
         """Record a recoverable player error. Return True to stop the job."""
@@ -66,21 +64,27 @@ class MatchFetcherJob(BaseJob):
             error,
             message="Error processing player",
             operation="player synchronization",
-            puuid=player.puuid,
+            puuid=puuid,
         )
 
     async def _process_tracked_players(
         self,
         db: AsyncSession,
-        tracked_players: list[Player],
+        tracked_puuids: list[str],
         player_service: PlayerService,
         match_service: MatchService,
         riot_client: RiotAPIClient,
     ) -> None:
         """Process each tracked player, converting stop conditions to signals."""
-        for player in tracked_players:
+        for puuid in tracked_puuids:
             await self.check_control_state(db)
             try:
+                # Re-read per iteration: `_handle_player_processing_error`
+                # rolls the session back, which expires every row it holds.
+                player = await db.get(Player, puuid)
+                if player is None:
+                    logger.warning("Tracked player is gone", puuid=puuid)
+                    continue
                 await self._process_player(
                     db,
                     player,
@@ -99,7 +103,7 @@ class MatchFetcherJob(BaseJob):
                 await db.rollback()
                 raise JobStopSignal(reason="riot_maintenance") from error
             except Exception as error:
-                if await self._handle_player_processing_error(db, player, error):
+                if await self._handle_player_processing_error(db, puuid, error):
                     break
 
     async def _process_player(

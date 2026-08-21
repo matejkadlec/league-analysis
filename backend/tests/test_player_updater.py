@@ -19,6 +19,11 @@ from app.features.players.models import Player
 from app.features.players.service import PlayerService
 
 
+def _load_row(_model: object, puuid: str) -> Player:
+    """Stand in for `AsyncSession.get`, which the loops now call per player."""
+    return _player(puuid)
+
+
 def _player(puuid: str) -> Player:
     """One unattached row, which is what `_load_tracked_players` returns."""
     return Player(
@@ -48,8 +53,12 @@ class _FakeRiotClient:
 async def test_player_updater_continues_after_a_recoverable_player_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    players = [_player("sanitized-one"), _player("sanitized-two")]
-    db = SimpleNamespace(commit=AsyncMock(), rollback=AsyncMock())
+    players = {p.puuid: p for p in (_player("sanitized-one"), _player("sanitized-two"))}
+    db = SimpleNamespace(
+        get=AsyncMock(side_effect=_load_row),
+        commit=AsyncMock(),
+        rollback=AsyncMock(),
+    )
     player_service = SimpleNamespace(
         update_player_profile=AsyncMock(
             side_effect=[RuntimeError("temporary player failure"), False]
@@ -72,12 +81,12 @@ async def test_player_updater_continues_after_a_recoverable_player_error(
 
     job = PlayerUpdaterJob(job_config_id=7)
     job.check_control_state = AsyncMock()
-    # Player resolution lives on BaseJob._load_tracked_players now; this test
+    # Player resolution lives on BaseJob._load_tracked_puuids now; this test
     # is about surviving a recoverable per-player error, not about resolution.
     monkeypatch.setattr(
         PlayerUpdaterJob,
-        "_load_tracked_players",
-        AsyncMock(return_value=players),
+        "_load_tracked_puuids",
+        AsyncMock(return_value=list(players)),
     )
 
     await job.execute(cast(AsyncSession, db))
@@ -199,12 +208,19 @@ async def test_player_updater_stops_the_whole_run_on_an_api_key_error(
     another rejected call proving it. Nothing covered this branch, so the job
     could have been made to carry on and the suite would have stayed green.
     """
-    players = [
-        _player("sanitized-one"),
-        _player("sanitized-two"),
-        _player("sanitized-three"),
-    ]
-    db = SimpleNamespace(commit=AsyncMock(), rollback=AsyncMock())
+    players = {
+        p.puuid: p
+        for p in (
+            _player("sanitized-one"),
+            _player("sanitized-two"),
+            _player("sanitized-three"),
+        )
+    }
+    db = SimpleNamespace(
+        get=AsyncMock(side_effect=_load_row),
+        commit=AsyncMock(),
+        rollback=AsyncMock(),
+    )
     player_service = SimpleNamespace(
         update_player_profile=AsyncMock(side_effect=AuthenticationError("rejected")),
     )
@@ -220,8 +236,8 @@ async def test_player_updater_stops_the_whole_run_on_an_api_key_error(
     monkeypatch.setattr(player_updater_module, "PlayerService", build_player_service)
     monkeypatch.setattr(
         PlayerUpdaterJob,
-        "_load_tracked_players",
-        AsyncMock(return_value=players),
+        "_load_tracked_puuids",
+        AsyncMock(return_value=list(players)),
     )
 
     job = PlayerUpdaterJob(job_config_id=7)
@@ -243,8 +259,12 @@ async def test_player_updater_reraises_a_database_error_instead_of_recording_it(
     that is already unusable, turning one failure into a whole failed run
     reported as a list of unrelated ones.
     """
-    players = [_player("sanitized-one")]
-    db = SimpleNamespace(commit=AsyncMock(), rollback=AsyncMock())
+    players = {"sanitized-one": _player("sanitized-one")}
+    db = SimpleNamespace(
+        get=AsyncMock(side_effect=_load_row),
+        commit=AsyncMock(),
+        rollback=AsyncMock(),
+    )
     player_service = SimpleNamespace(
         update_player_profile=AsyncMock(side_effect=SQLAlchemyError("session is gone")),
     )
@@ -260,8 +280,8 @@ async def test_player_updater_reraises_a_database_error_instead_of_recording_it(
     monkeypatch.setattr(player_updater_module, "PlayerService", build_player_service)
     monkeypatch.setattr(
         PlayerUpdaterJob,
-        "_load_tracked_players",
-        AsyncMock(return_value=players),
+        "_load_tracked_puuids",
+        AsyncMock(return_value=list(players)),
     )
 
     job = PlayerUpdaterJob(job_config_id=7)

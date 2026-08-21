@@ -929,19 +929,29 @@ class BaseJob(ABC):
             finally:
                 self._store_api_calls(client.get_api_calls())
 
-    async def _load_tracked_players(self, db: AsyncSession) -> list[Player]:
+    async def _load_tracked_puuids(self, db: AsyncSession) -> list[str]:
         """Load the global allowlist or the explicit target_puuids set.
 
         Both writers resolve their player list through this; a job that
         ignores target_puuids simply never calls it.
+
+        Identifiers, not rows: `handle_player_error` rolls back to keep a
+        recoverable failure from poisoning the session, and a rollback expires
+        every instance the session holds -- `expire_on_commit=False` governs
+        commit only. The next attribute read on a row loaded before the
+        rollback would then be a lazy refresh outside the async greenlet, so
+        one skippable player error would kill the whole run with a
+        `MissingGreenlet`. A string cannot expire; each loop re-reads its row
+        through `db.get`, which refreshes through awaited IO.
         """
         from app.features.players.service import PlayerService
 
         if self.target_puuids is None:
-            return await PlayerService(db).get_globally_tracked_players()
+            players = await PlayerService(db).get_globally_tracked_players()
+            return [player.puuid for player in players]
 
         result = await db.execute(
-            select(Player).where(Player.puuid.in_(self.target_puuids))
+            select(Player.puuid).where(Player.puuid.in_(self.target_puuids))
         )
         tracked_players = list(result.scalars().all())
         self.add_log_entry("target_puuids", sorted(self.target_puuids))

@@ -247,7 +247,7 @@ async def test_match_fetcher_execute_propagates_rate_limit_to_base_job(
             side_effect=RateLimitError("limited", status_code=429, retry_after=7)
         )
     )
-    player = SimpleNamespace(puuid="test-puuid", game_name="Test")
+    player = _player("test-puuid")
 
     monkeypatch.setattr(
         MatchFetcherJob,
@@ -269,16 +269,17 @@ async def test_match_fetcher_execute_propagates_rate_limit_to_base_job(
         JobConfiguration, SimpleNamespace(config_json={"enabled_queue_ids": []})
     )
     job.check_control_state = AsyncMock()
-    # Player resolution lives on BaseJob._load_tracked_players now; this test
+    # Player resolution lives on BaseJob._load_tracked_puuids now; this test
     # is about rate-limit propagation, not about resolution.
     monkeypatch.setattr(
         MatchFetcherJob,
-        "_load_tracked_players",
-        AsyncMock(return_value=[player]),
+        "_load_tracked_puuids",
+        AsyncMock(return_value=[player.puuid]),
     )
+    db = SimpleNamespace(get=AsyncMock(return_value=player))
 
     with pytest.raises(RateLimitSignal):
-        await job.execute(cast(AsyncSession, object()))
+        await job.execute(cast(AsyncSession, db))
 
 
 async def test_match_fetcher_processes_the_player_league_refresh_path() -> None:
@@ -417,7 +418,7 @@ async def test_player_error_handler_asks_the_loop_to_stop_on_an_api_key_error() 
     db = SimpleNamespace(rollback=AsyncMock())
 
     should_stop = await job._handle_player_processing_error(
-        cast(AsyncSession, db), _player(), AuthenticationError("rejected")
+        cast(AsyncSession, db), "sanitized-puuid", AuthenticationError("rejected")
     )
 
     assert should_stop is True
@@ -431,7 +432,7 @@ async def test_player_error_handler_continues_after_a_recoverable_error() -> Non
     db = SimpleNamespace(rollback=AsyncMock())
 
     should_stop = await job._handle_player_processing_error(
-        cast(AsyncSession, db), _player(), RuntimeError("one bad player")
+        cast(AsyncSession, db), "sanitized-puuid", RuntimeError("one bad player")
     )
 
     assert should_stop is False
@@ -447,7 +448,9 @@ async def test_player_error_handler_reraises_a_database_error_without_recording(
 
     with pytest.raises(SQLAlchemyError):
         await job._handle_player_processing_error(
-            cast(AsyncSession, db), _player(), SQLAlchemyError("session is gone")
+            cast(AsyncSession, db),
+            "sanitized-puuid",
+            SQLAlchemyError("session is gone"),
         )
 
     assert job.execution_log.get("errors", []) == []
@@ -470,7 +473,7 @@ async def test_a_second_api_key_error_is_not_recorded_twice() -> None:
     )
 
     should_stop = await job._handle_player_processing_error(
-        cast(AsyncSession, db), _player(), AuthenticationError("rejected")
+        cast(AsyncSession, db), "sanitized-puuid", AuthenticationError("rejected")
     )
 
     assert should_stop is True
