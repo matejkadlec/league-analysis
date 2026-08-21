@@ -41,9 +41,8 @@ ENV NODE_ENV=production \
 RUN groupadd --system --gid 10001 league-analysis \
     && useradd --system --uid 10001 --gid league-analysis \
       --home-dir /app --shell /usr/sbin/nologin league-analysis \
-    && rm -rf /usr/local/lib/node_modules/npm /opt/yarn-v* \
-    && rm -f /usr/local/bin/npm /usr/local/bin/npx \
-      /usr/local/bin/yarn /usr/local/bin/yarnpkg
+    && rm -rf /usr/local/lib/node_modules/npm \
+    && rm -f /usr/local/bin/npm /usr/local/bin/npx
 
 WORKDIR /app
 COPY --from=builder --chown=league-analysis:league-analysis /app/public ./public
