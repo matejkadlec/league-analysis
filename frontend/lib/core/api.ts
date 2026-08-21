@@ -197,10 +197,23 @@ async function validatedRequest<T>(
   }
 }
 
+/**
+ * What can go in a query string.
+ *
+ * This was `Record<string, unknown>`, which let an object or an array through
+ * to axios' serialiser. It matters more here than on a request body: a body
+ * field the endpoint does not declare is a 422, but a *query* name it does not
+ * declare is silently dropped and the parameter's default is used instead, so
+ * the call succeeds and answers the wrong question.
+ * `tests/api-contract-alignment.test.ts` checks the names against the
+ * document; this bounds the values.
+ */
+type QueryParams = Record<string, string | number | boolean | undefined>;
+
 export function validatedGet<T>(
   schema: z.ZodType<T>,
   url: string,
-  params?: Record<string, unknown>,
+  params?: QueryParams,
 ): Promise<ApiResponse<T>> {
   return validatedRequest(schema, url, () => api.get(url, { params }));
 }
@@ -209,7 +222,7 @@ export function validatedPost<T>(
   schema: z.ZodType<T>,
   url: string,
   data?: unknown,
-  params?: Record<string, unknown>,
+  params?: QueryParams,
 ): Promise<ApiResponse<T>> {
   return validatedRequest(schema, url, () => api.post(url, data, { params }));
 }
@@ -225,7 +238,7 @@ export function validatedPut<T>(
 export function validatedDelete<T>(
   schema: z.ZodType<T>,
   url: string,
-  params?: Record<string, unknown>,
+  params?: QueryParams,
 ): Promise<ApiResponse<T>> {
   return validatedRequest(schema, url, () => api.delete(url, { params }));
 }

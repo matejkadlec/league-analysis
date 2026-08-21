@@ -54,9 +54,6 @@ def build_match_history_conditions(
     puuid: str,
     queue_ids: Sequence[int] | None = None,
     search: str | None = None,
-    start_time: int | None = None,
-    end_time: int | None = None,
-    exclude_aram: bool = False,
 ) -> list[ColumnElement[bool]]:
     """Build shared filters so search and queue unions precede pagination."""
     match_table = Match.__table__
@@ -72,12 +69,6 @@ def build_match_history_conditions(
 
     if queue_ids:
         conditions.append(match_table.c.queue_id.in_(queue_ids))
-    if exclude_aram:
-        conditions.append(match_table.c.queue_id != 450)
-    if start_time is not None:
-        conditions.append(match_table.c.game_start_timestamp >= start_time)
-    if end_time is not None:
-        conditions.append(match_table.c.game_start_timestamp <= end_time)
 
     normalized_search = search.strip() if search else ""
     if normalized_search:
@@ -127,9 +118,6 @@ class MatchService:
         start: int = 0,
         count: int = 20,
         queue_ids: Sequence[int] | None = None,
-        start_time: int | None = None,
-        end_time: int | None = None,
-        exclude_aram: bool = False,
     ) -> MatchListResponse:
         """
         Get match history for a player from database only.
@@ -141,9 +129,6 @@ class MatchService:
             puuid: Player PUUID
             start: Start index for pagination
             count: Number of matches to return
-            start_time: Start timestamp
-            end_time: End timestamp
-            exclude_aram: Whether to exclude queue 450 (ARAM)
 
         Returns:
             MatchListResponse with matches from database
@@ -154,9 +139,6 @@ class MatchService:
                 start=start,
                 count=count,
                 queue_ids=queue_ids,
-                start_time=start_time,
-                end_time=end_time,
-                exclude_aram=exclude_aram,
             )
 
             match_responses = [
@@ -196,7 +178,6 @@ class MatchService:
         count: int = 20,
         queue_ids: Sequence[int] | None = None,
         search: str | None = None,
-        exclude_aram: bool = False,
     ) -> MatchListWithPlayerDataResponse:
         """
         Get match history for a player with participant data.
@@ -208,7 +189,6 @@ class MatchService:
             puuid: Player PUUID
             start: Start index for pagination
             count: Number of matches to return
-            exclude_aram: Whether to exclude queue 450 (ARAM)
 
         Returns:
             MatchListWithPlayerDataResponse with detailed match data
@@ -220,7 +200,6 @@ class MatchService:
                 count=count,
                 queue_ids=queue_ids,
                 search=search,
-                exclude_aram=exclude_aram,
             )
 
             if not db_matches:
@@ -335,7 +314,6 @@ class MatchService:
         puuid: str,
         queue_ids: Sequence[int] | None = None,
         limit: int | None = None,
-        exclude_aram: bool = False,
     ) -> MatchStatsResponse:
         """
         Calculate player statistics from recent matches.
@@ -343,7 +321,6 @@ class MatchService:
         Args:
             puuid: Player PUUID
             limit: Number of matches to analyze. If None, analyze all matches.
-            exclude_aram: Whether to exclude queue 450 (ARAM)
 
         Returns:
             MatchStatsResponse with player statistics
@@ -356,7 +333,6 @@ class MatchService:
                 puuid,
                 count=fetch_limit,
                 queue_ids=queue_ids,
-                exclude_aram=exclude_aram,
             )
 
             if not matches.matches:
@@ -494,9 +470,6 @@ class MatchService:
         count: int,
         queue_ids: Sequence[int] | None = None,
         search: str | None = None,
-        start_time: int | None = None,
-        end_time: int | None = None,
-        exclude_aram: bool = False,
     ) -> tuple[list[Match], int, int]:
         """Return one page of matches with its total and analyzed total.
 
@@ -508,9 +481,6 @@ class MatchService:
             puuid=puuid,
             queue_ids=queue_ids,
             search=search,
-            start_time=start_time,
-            end_time=end_time,
-            exclude_aram=exclude_aram,
         )
 
         page = await self.db.execute(

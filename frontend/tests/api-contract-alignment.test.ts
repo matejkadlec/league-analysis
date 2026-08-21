@@ -157,6 +157,77 @@ function calledApiPaths(): Map<string, string[]> {
   return calls;
 }
 
+/**
+ * The helpers whose next argument is a query-parameter object, by HTTP method.
+ *
+ * `validatedPost` takes one too, in fourth position after the body; no call
+ * site uses it, so it is not read here.
+ */
+const QUERY_HELPERS = new Map([
+  ["validatedGet", "get"],
+  ["validatedDelete", "delete"],
+  ["api.get", "get"],
+  ["api.delete", "delete"],
+]);
+
+/** The object literal that follows a path argument, or null if there is none. */
+function paramsObjectAfter(source: string): string | null {
+  const separator = /^\s*,\s*/.exec(source);
+  if (!separator) return null;
+  const rest = source.slice(separator[0].length);
+  if (!rest.startsWith("{")) return null;
+  let depth = 0;
+  for (let i = 0; i < rest.length; i += 1) {
+    if (rest[i] === "{") depth += 1;
+    else if (rest[i] === "}") {
+      depth -= 1;
+      if (depth === 0) return rest.slice(0, i + 1);
+    }
+  }
+  return null;
+}
+
+/**
+ * The query names a call site sends, keyed by `method path`.
+ *
+ * Both spellings count: the object literal, and any `?name=` written into the
+ * path itself. Keys of a nested object are not parameters, so one level of
+ * nesting is stripped before the names are read.
+ */
+function calledQueryParams(): Map<string, { names: Set<string>; file: string }> {
+  const calls = new Map<string, { names: Set<string>; file: string }>();
+  for (const file of allSourceFiles()) {
+    const source = readFileSync(file, "utf8");
+    for (const match of source.matchAll(CALL_SITE)) {
+      const method = QUERY_HELPERS.get(match[1] ?? "");
+      if (!method) continue;
+      const from = match.index + match[0].length;
+      const window = source.slice(from, from + 900);
+      const literal = ANY_LITERAL.exec(window);
+      if (!literal) continue;
+      const raw = literal[1] ?? literal[2] ?? literal[3] ?? "";
+      const apiPath = apiPathFrom(match[1] ?? "", raw);
+      if (apiPath === null) continue;
+
+      const names = new Set(
+        [...apiPath.matchAll(/[?&]([a-zA-Z_]\w*)=/g)].map((m) => m[1] as string),
+      );
+      const body = paramsObjectAfter(window.slice(literal.index + literal[0].length));
+      if (body) {
+        const top = body.slice(1, -1).replace(/\{[^{}]*\}/g, "");
+        for (const re of [/(?:^|,)\s*(?:\.\.\.)?([a-zA-Z_]\w*)\s*(?=[,:}]|$)/g, /(?:^|[{,])\s*([a-zA-Z_]\w*)\s*:/g]) {
+          for (const m of top.matchAll(re)) names.add(m[1] as string);
+        }
+      }
+      const key = `${method} ${normalizeCallPath(apiPath)}`;
+      if (!calls.has(key)) {
+        calls.set(key, { names, file: relative(process.cwd(), file) });
+      }
+    }
+  }
+  return calls;
+}
+
 const openApiPath = process.env.OPENAPI_JSON;
 
 describe("zod against the OpenAPI contract", () => {
@@ -206,6 +277,64 @@ describe("zod against the OpenAPI contract", () => {
    * real click, and lowering the bound on the backend is the same 422 from the
    * other side. Both sides are hand-maintained lists of numbers.
    */
+  /**
+   * Query parameters, in both directions.
+   *
+   * The failure this catches is quieter than a wrong request body. FastAPI
+   * rejects a body field it does not declare with a 422, but a *query* name it
+   * does not declare is dropped and the parameter's default used instead -- so
+   * a renamed `queues` or a mistyped `active_only` returns 200 and answers a
+   * different question. A required one that is missing is the loud 422.
+   */
+  it("names only query parameters the API declares", () => {
+    const declared = new Map<
+      string,
+      { names: Set<string>; required: Set<string> }
+    >();
+    for (const [path, operations] of Object.entries(document.paths)) {
+      for (const [method, op] of Object.entries(
+        operations as Record<string, unknown>,
+      )) {
+        if (typeof op !== "object" || op === null) continue;
+        const parameters =
+          (op as { parameters?: { name: string; in: string; required?: boolean }[] })
+            .parameters ?? [];
+        const query = parameters.filter((p) => p.in === "query");
+        const key = `${method} ${path.slice(API_PREFIX.length).replace(/\{[^}]*\}/g, "{}")}`;
+        declared.set(key, {
+          names: new Set(query.map((p) => p.name)),
+          required: new Set(
+            query.filter((p) => p.required).map((p) => p.name),
+          ),
+        });
+      }
+    }
+
+    const called = calledQueryParams();
+    // Signal first: an extractor that stopped resolving call sites would pass
+    // by having nothing to compare.
+    expect(called.size).toBeGreaterThanOrEqual(25);
+
+    const problems: string[] = [];
+    for (const [key, { names, file }] of called) {
+      const spec = declared.get(key);
+      // An unserved path is the path rule's finding, not this one's.
+      if (!spec) continue;
+      for (const name of names) {
+        if (!spec.names.has(name)) {
+          problems.push(`${key} sends \`${name}\`, which it does not accept (${file})`);
+        }
+      }
+      for (const name of spec.required) {
+        if (!names.has(name)) {
+          problems.push(`${key} omits required \`${name}\` (${file})`);
+        }
+      }
+    }
+
+    expect(problems).toEqual([]);
+  });
+
   it("offers only page sizes the match endpoint accepts", () => {
     const detailed = document.paths[
       `${API_PREFIX}/matches/player/{puuid}/detailed`
