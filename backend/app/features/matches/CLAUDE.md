@@ -10,7 +10,7 @@ Two declared interfaces; nothing else is public.
   `lane`, `match_lp` (LP observations, `RANKED_SOLO_QUEUE_ID`), and
   `match_persistence.upsert_match` — which does NOT check the Riot writer
   maintenance interlock itself; every caller rechecks it before each write
-  (`MatchService.store_match_from_dto` is the pattern to copy).
+  (`MatchService._reprocess_match` is the pattern to copy).
   Readers of participants follow the
   DB-first rules in [`docs/matchmaking-analysis.md`](../../../../docs/matchmaking-analysis.md)
   (`queue_id` and `fully_analyzed` filtering).

@@ -12,7 +12,6 @@ from app.core.riot_api.constants import (
     PRODUCT_SUPPORTED_QUEUE_IDS,
     Region,
     get_region_by_platform,
-    normalize_platform,
 )
 from app.core.riot_api.errors import (
     AuthenticationError,
@@ -20,20 +19,12 @@ from app.core.riot_api.errors import (
     RateLimitError,
 )
 from app.core.riot_api.models import MatchDTO, MatchTimelineDTO
-from app.features.players.models import Player
 
 from .match_history import (
     build_match_responses,
     load_match_player_data_context,
 )
-from .match_persistence import (
-    add_participants_from_dto,
-    build_match_record,
-    extract_store_participant_identity,
-    match_dto_id,
-    match_end_flags,
-    upsert_match,
-)
+from .match_persistence import upsert_match
 from .match_stats import (
     accumulate_champion_stats,
     accumulate_lane_stats,
@@ -53,7 +44,6 @@ from .schemas import (
     MatchResponse,
     MatchStatsResponse,
 )
-from .timeline import replace_match_timeline_rows
 
 logger = structlog.get_logger(__name__)
 
@@ -587,113 +577,9 @@ class MatchService:
         total, total_analyzed = totals.one()
         return list(page.scalars().all()), total, total_analyzed
 
-    async def _ensure_players_exist(
-        self,
-        participants: list[dict[str, Any]],
-        platform_id: str,
-    ) -> None:
-        """Ensure all participant players exist in database, creating if needed."""
-        # Bulk check for existing players
-        participants_by_puuid = {p["puuid"]: p for p in participants}
-        participant_puuids = set(participants_by_puuid)
-        existing_players_result = await self.db.execute(
-            select(Player.puuid).where(Player.puuid.in_(participant_puuids))
-        )
-        existing_puuids = {row[0] for row in existing_players_result.all()}
-
-        # Bulk create missing players
-        missing_puuids = participant_puuids - existing_puuids
-        if not missing_puuids:
-            return
-
-        new_players: list[Player] = []
-        for puuid in missing_puuids:
-            info = participants_by_puuid[puuid]
-            new_players.append(
-                Player(
-                    puuid=puuid,
-                    game_name=info["game_name"],
-                    tag_line=info["tag_line"],
-                    summoner_level=info["summoner_level"],
-                    profile_icon_id=info["profile_icon_id"],
-                    platform=normalize_platform(platform_id),
-                    is_tracked=False,
-                )
-            )
-
-        self.db.add_all(new_players)
-        logger.debug("Created minimal player records", count=len(new_players))
-
     # ============================================
     # Helper Methods for Jobs
     # ============================================
-
-    async def store_match_from_dto(
-        self,
-        match_dto: MatchDTO,
-        default_platform: str = "EUN1",
-        timeline_payload: MatchTimelineDTO | None = None,
-    ) -> Match:
-        """Store match and participants from Riot API DTO.
-
-        This method handles:
-        - Creating Match record
-        - Creating MatchParticipant records
-        - Ensuring all participant players exist in database
-
-        Args:
-            match_dto: Match DTO from Riot API
-            default_platform: Default platform if not in DTO
-            timeline_payload: Optional timeline payload from /timeline endpoint
-
-        Returns:
-            Stored Match object
-
-        Raises:
-            Exception: If storage fails
-
-        Note:
-            Caller must commit the transaction.
-        """
-        try:
-            await _ensure_riot_writer_maintenance_is_inactive(self.db)
-            platform_id = match_dto.info.platform or default_platform
-            participants_info = [
-                extract_store_participant_identity(participant)
-                for participant in match_dto.info.participants
-            ]
-            await self._ensure_players_exist(participants_info, platform_id)
-            early_surrender, surrender = match_end_flags(match_dto.info.participants)
-            match = build_match_record(
-                match_dto,
-                platform_id,
-                early_surrender,
-                surrender,
-            )
-            self.db.add(match)
-            add_participants_from_dto(self.db, match_dto)
-            timeline_rows = await replace_match_timeline_rows(
-                self.db,
-                match_dto,
-                timeline_payload,
-            )
-
-            logger.debug(
-                "Stored match from DTO",
-                match_id=match_dto.metadata.match_id,
-                participant_count=len(match_dto.info.participants),
-                timeline_rows=timeline_rows,
-            )
-
-            return match
-
-        except Exception as e:
-            logger.error(
-                "Failed to store match from DTO",
-                match_id=match_dto_id(match_dto),
-                error=str(e),
-            )
-            raise
 
     async def _reprocess_match(
         self,
