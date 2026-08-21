@@ -61,7 +61,7 @@ class JobStopSignal(Exception):
 class StoredAPICall(TypedDict):
     """One endpoint's grouped calls, as the jobs UI reads them back out of JSONB.
 
-    `frontend/lib/core/schemas.ts:JobExecutionApiCallSchema` is the other half
+    `frontend/lib/core/schemas/jobs.ts:JobExecutionApiCallSchema` is the other half
     of this shape; keep the two in step. The four optional keys are the split
     below: a single call keeps its whole params dict, a group keeps only the
     key that varied and its first and last value.
