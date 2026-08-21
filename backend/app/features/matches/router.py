@@ -36,25 +36,20 @@ def _parse_match_queue_union(queues: str) -> tuple[int, ...]:
     return queue_ids
 
 
-def parse_match_queue_ids(
-    queue: int | None, queues: str | None
-) -> tuple[int, ...] | None:
-    """Parse the legacy scalar or comma-separated queue union, never both."""
-    if queue is not None and queues is not None:
-        raise HTTPException(
-            status_code=422,
-            detail="Use either queue or queues, not both.",
-        )
-    if queues is not None:
-        return _parse_match_queue_union(queues)
-    return (queue,) if queue is not None else None
+def parse_match_queue_ids(queues: str | None) -> tuple[int, ...] | None:
+    """Answer the union filter, or None when the caller named no queues.
+
+    Kept separate from the validation above rather than folded into it: one
+    function carries four decision points plus the null check and xenon ranks
+    it C, over the B this repo holds itself to.
+    """
+    return _parse_match_queue_union(queues) if queues is not None else None
 
 
 @router.get("/player/{puuid}/detailed")
 async def get_player_matches_detailed(
     puuid: str,
     match_service: MatchServiceDep,
-    queue: Annotated[int | None, Query(description="Queue ID filter")] = None,
     queues: Annotated[
         str | None,
         Query(max_length=200, description="Comma-separated queue ID filters"),
@@ -63,9 +58,6 @@ async def get_player_matches_detailed(
         str | None,
         Query(max_length=64, description="Champion or participant Riot ID search"),
     ] = None,
-    exclude_aram: Annotated[
-        bool, Query(description="Exclude queue 450 (ARAM)")
-    ] = False,
     start: Annotated[int, Query(ge=0, description="Start index")] = 0,
     count: Annotated[
         int, Query(ge=1, le=1000, description="Number of matches to return")
@@ -75,14 +67,13 @@ async def get_player_matches_detailed(
     Get detailed match history for a player including champion data,
     lane opponent, and LP changes.
     """
-    queue_ids = parse_match_queue_ids(queue, queues)
+    queue_ids = parse_match_queue_ids(queues)
     return await match_service.get_player_matches_with_data(
         puuid=puuid,
         start=start,
         count=count,
         queue_ids=queue_ids,
         search=search.strip() or None if search is not None else None,
-        exclude_aram=exclude_aram,
     )
 
 
@@ -90,14 +81,10 @@ async def get_player_matches_detailed(
 async def get_player_stats(
     puuid: str,
     match_service: MatchServiceDep,
-    queue: Annotated[int | None, Query(description="Queue ID filter")] = None,
     queues: Annotated[
         str | None,
         Query(max_length=200, description="Comma-separated queue ID filters"),
     ] = None,
-    exclude_aram: Annotated[
-        bool, Query(description="Exclude queue 450 (ARAM)")
-    ] = False,
     limit: Annotated[
         int | None,
         Query(
@@ -110,12 +97,11 @@ async def get_player_stats(
     Get aggregated statistics for a player from recent matches.
     If limit is not provided, all matches in the database will be analyzed.
     """
-    queue_ids = parse_match_queue_ids(queue, queues)
+    queue_ids = parse_match_queue_ids(queues)
     return await match_service.get_player_stats(
         puuid=puuid,
         queue_ids=queue_ids,
         limit=limit,
-        exclude_aram=exclude_aram,
     )
 
 

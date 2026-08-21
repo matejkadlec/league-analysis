@@ -62,9 +62,15 @@ export function playerStatsQueryOptions(puuid: string, limit?: number) {
         await validatedGet(
           MatchStatsResponseSchema,
           `/matches/player/${puuid}/stats`,
-          limit === undefined
-            ? { queue: RANKED_SOLO_QUEUE_ID }
-            : { queue: RANKED_SOLO_QUEUE_ID, limit },
+          {
+            // `queues`, not the scalar `queue` this endpoint used to accept as
+            // well. A single-member union is the same filter -- the parser
+            // answers `(420,)` either way -- and a name the endpoint does not
+            // declare is dropped rather than refused, which would have made
+            // this card quietly average every queue.
+            queues: String(RANKED_SOLO_QUEUE_ID),
+            ...(limit !== undefined && { limit }),
+          },
         ),
       ),
     retry: false,

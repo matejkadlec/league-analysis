@@ -18,23 +18,15 @@ from app.features.matches.service import (
 )
 
 
-def test_queue_parser_supports_one_stable_union_and_legacy_scalar() -> None:
-    assert parse_match_queue_ids(None, "420, 440,420") == (420, 440)
-    assert parse_match_queue_ids(450, None) == (450,)
-    assert parse_match_queue_ids(None, None) is None
+def test_queue_parser_supports_one_stable_union() -> None:
+    assert parse_match_queue_ids("420, 440,420") == (420, 440)
+    assert parse_match_queue_ids(None) is None
 
 
 @pytest.mark.parametrize("queues", ["", "420,", "ARAM", "0", "-1"])
 def test_queue_parser_rejects_invalid_unions(queues: str) -> None:
     with pytest.raises(HTTPException) as error:
-        parse_match_queue_ids(None, queues)
-
-    assert error.value.status_code == 422
-
-
-def test_queue_parser_rejects_ambiguous_scalar_and_union() -> None:
-    with pytest.raises(HTTPException) as error:
-        parse_match_queue_ids(420, "440")
+        parse_match_queue_ids(queues)
 
     assert error.value.status_code == 422
 
@@ -91,5 +83,4 @@ async def test_empty_page_retains_filtered_total_for_client_clamping() -> None:
         count=25,
         queue_ids=(420, 440),
         search="Ahri",
-        exclude_aram=False,
     )
