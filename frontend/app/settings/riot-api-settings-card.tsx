@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { z } from "zod";
 import {
   unwrapOr404,
   apiErrorMessage,
@@ -12,7 +11,11 @@ import {
   validatedPost,
   validatedPut,
 } from "@/lib/core/api";
-import { SettingSchema, SettingTestResponseSchema } from "@/lib/core/schemas";
+import {
+  APIKeyStatusSchema,
+  SettingSchema,
+  SettingTestResponseSchema,
+} from "@/lib/core/schemas";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,19 +25,6 @@ import { formatDateTime } from "@/lib/core/format";
 import { useToast } from "@/lib/core/hooks";
 import { notifyRiotCredentialHealthUpdated } from "@/lib/core/riot-credential-health-events";
 import { Check, FlaskConical, Loader2, Save, ShieldCheck, X } from "lucide-react";
-
-const APIKeyStatusSchema = z.object({
-  credential_status: z.enum(["missing", "unknown", "valid", "invalid"]),
-  evidence: z.enum([
-    "missing",
-    "configured",
-    "settings_validation",
-    "provider_success",
-    "credential_rejected",
-  ]),
-  observed_at: z.string(),
-  health_revision: z.number(),
-});
 
 export function RiotApiSettingsCard() {
   const toast = useToast();

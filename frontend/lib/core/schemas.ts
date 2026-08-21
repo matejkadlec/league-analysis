@@ -33,7 +33,7 @@ export const PlayerContextSchema = z.object({
 export type PlayerContext = z.infer<typeof PlayerContextSchema>;
 
 export const PlayerSyncRunSchema = z.object({
-  id: z.coerce.number().int(),
+  id: z.number().int(),
   puuid: z.string(),
   status: z.enum([
     "pending",
@@ -43,8 +43,8 @@ export const PlayerSyncRunSchema = z.object({
     "cancelled",
     "rate_limited",
   ]),
-  match_execution_id: z.coerce.number().int().nullable().optional(),
-  profile_execution_id: z.coerce.number().int().nullable().optional(),
+  match_execution_id: z.number().int().nullable().optional(),
+  profile_execution_id: z.number().int().nullable().optional(),
   error_code: z.string().nullable().optional(),
   error_message: z.string().nullable().optional(),
   created_at: z.string(),
@@ -757,3 +757,37 @@ export type SmurfBoostConfidenceBand = z.infer<
   typeof SmurfBoostConfidenceBandSchema
 >;
 export type SmurfBoostStatus = z.infer<typeof SmurfBoostStatusSchema>;
+
+// Riot credential health, as the header banner and the settings card each
+// read it. Both used to declare their own copy next to the component, which
+// put them outside `tests/api-contract-alignment.test.ts` -- the only check
+// that compares a zod shape to what FastAPI actually serialises. Both copies
+// said `z.number()` for a `health_revision` the API declares as an integer.
+const credentialStatus = z.enum(["missing", "unknown", "valid", "invalid"]);
+
+export const ServiceStatusSchema = z.object({
+  is_under_maintenance: z.boolean(),
+  reason: z.enum(["ok", "api_key_missing", "api_key_invalid"]),
+  credential_status: credentialStatus,
+  health_revision: z.number().int(),
+  observed_at: z.string(),
+  has_recent_recovery: z.boolean(),
+  recovery_notice_key: z.string().nullable(),
+});
+
+export type ServiceStatus = z.infer<typeof ServiceStatusSchema>;
+
+export const APIKeyStatusSchema = z.object({
+  credential_status: credentialStatus,
+  evidence: z.enum([
+    "missing",
+    "configured",
+    "settings_validation",
+    "provider_success",
+    "credential_rejected",
+  ]),
+  observed_at: z.string(),
+  health_revision: z.number().int(),
+});
+
+export type APIKeyStatus = z.infer<typeof APIKeyStatusSchema>;
