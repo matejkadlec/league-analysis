@@ -2,7 +2,11 @@
 
 import { Badge } from "@/components/ui/badge";
 
-import { detailedLogKey, formatJobTimestamp } from "./job-execution-format";
+import {
+  STANDARD_LOG_FIELDS,
+  detailedLogKey,
+  formatJobTimestamp,
+} from "./job-execution-format";
 
 interface JobExecutionLogsProps {
   logs: Array<Record<string, unknown>>;
@@ -21,9 +25,8 @@ export function JobExecutionLogs({ logs }: JobExecutionLogsProps) {
             const logLevel =
               typeof log.level === "string" ? log.level.toUpperCase() : "INFO";
 
-            const standardFields = new Set(["level", "timestamp", "event"]);
             const extraFields = Object.entries(log).filter(
-              ([key]) => !standardFields.has(key),
+              ([key]) => !STANDARD_LOG_FIELDS.has(key),
             );
 
             return (

@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert } from "@/components/ui/alert";
+import { formatDateTime } from "@/lib/core/format";
 import { useToast } from "@/lib/core/hooks";
 import { notifyRiotCredentialHealthUpdated } from "@/lib/core/riot-credential-health-events";
 import { Check, FlaskConical, Loader2, Save, ShieldCheck, X } from "lucide-react";
@@ -190,9 +191,7 @@ export function RiotApiSettingsCard() {
               </div>
               <p className="text-xs text-muted-foreground">
                 Last updated:{" "}
-                {new Date(setting.updated_at).toLocaleString("en-GB", {
-                  timeZone: "UTC",
-                })}
+                {formatDateTime(setting.updated_at, { seconds: true })}
               </p>
             </div>
           )}

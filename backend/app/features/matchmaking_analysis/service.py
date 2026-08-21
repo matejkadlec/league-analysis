@@ -33,6 +33,7 @@ import asyncio
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from statistics import fmean
 from typing import Any, cast
 
 import structlog
@@ -616,15 +617,15 @@ class MatchmakingAnalysisService:
         result: dict[str, list[float]],
     ) -> None:
         if result["team"]:
-            team_avgs.append(sum(result["team"]) / len(result["team"]))
+            team_avgs.append(fmean(result["team"]))
         if result["enemy"]:
-            enemy_avgs.append(sum(result["enemy"]) / len(result["enemy"]))
+            enemy_avgs.append(fmean(result["enemy"]))
 
     def _build_completion_results(
         self, team_avgs: list[float], enemy_avgs: list[float]
     ) -> MatchmakingAnalysisResultsJSON:
-        team_avg = sum(team_avgs) / len(team_avgs) if team_avgs else 0.0
-        enemy_avg = sum(enemy_avgs) / len(enemy_avgs) if enemy_avgs else 0.0
+        team_avg = fmean(team_avgs) if team_avgs else 0.0
+        enemy_avg = fmean(enemy_avgs) if enemy_avgs else 0.0
 
         expected_other_players = self.MATCHES_TO_ANALYZE * 9
         expected_players = expected_other_players + 1

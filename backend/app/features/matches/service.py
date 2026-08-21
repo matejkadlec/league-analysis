@@ -443,7 +443,7 @@ class MatchService:
             )
 
             total_matches = len(matches.matches)
-            avg_kda = self._calculate_kda(total_kills, total_deaths, total_assists)
+            avg_kda = calculate_kda(total_kills, total_deaths, total_assists)
 
             # total_matches is guaranteed > 0 (checked for empty matches above)
             return MatchStatsResponse(
@@ -628,10 +628,6 @@ class MatchService:
 
         self.db.add_all(new_players)
         logger.debug("Created minimal player records", count=len(new_players))
-
-    def _calculate_kda(self, kills: int, deaths: int, assists: int) -> float:
-        """Calculate KDA ratio."""
-        return calculate_kda(kills, deaths, assists)
 
     # ============================================
     # Helper Methods for Jobs

@@ -203,13 +203,11 @@ export function fieldError(
 export function numericSettings(
   settings: Record<string, unknown>,
 ): Record<string, number> {
-  const numeric: Record<string, number> = {};
-  for (const [name, value] of Object.entries(settings)) {
-    if (typeof value === "number") {
-      numeric[name] = value;
-    }
-  }
-  return numeric;
+  return Object.fromEntries(
+    Object.entries(settings).filter(
+      (entry): entry is [string, number] => typeof entry[1] === "number",
+    ),
+  );
 }
 
 /**
@@ -219,14 +217,11 @@ export function numericSettings(
 export function writableSettings(
   settings: Record<string, number>,
 ): Record<string, number> {
-  const payload: Record<string, number> = {};
-  for (const field of THRESHOLD_FIELDS) {
-    const value = settings[field.name];
-    if (value !== undefined) {
-      payload[field.name] = value;
-    }
-  }
-  return payload;
+  return Object.fromEntries(
+    THRESHOLD_FIELDS.map((field) => [field.name, settings[field.name]]).filter(
+      (entry): entry is [string, number] => entry[1] !== undefined,
+    ),
+  );
 }
 
 /**
