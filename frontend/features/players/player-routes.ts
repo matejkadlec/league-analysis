@@ -1,6 +1,6 @@
-export const PLAYER_OVERVIEW_PATH = "/player-overview";
-export const MATCH_HISTORY_PATH = "/match-history";
-export const SMURF_BOOST_DETECTION_PATH = "/smurf-boost-detection";
+const PLAYER_OVERVIEW_PATH = "/player-overview";
+const MATCH_HISTORY_PATH = "/match-history";
+const SMURF_BOOST_DETECTION_PATH = "/smurf-boost-detection";
 
 const PLAYER_CENTRIC_PATHS = new Set([
   PLAYER_OVERVIEW_PATH,

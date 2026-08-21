@@ -13,16 +13,16 @@ import { blockUpstreamRequests } from "./offline";
  * leaving one spec quietly testing a shape the server stopped returning.
  */
 
-export const NOW = "2026-08-14T10:00:00.000Z";
+const NOW = "2026-08-14T10:00:00.000Z";
 export const PUUID = "smurf-boost-player-puuid";
 
-export const player = trackedPlayer(NOW, {
+const player = trackedPlayer(NOW, {
   puuid: PUUID,
   game_name: "Comparison",
   tag_line: "ONE",
 });
 
-export const CONSERVATIVE = {
+const CONSERVATIVE = {
   recentWindowSize: 20,
   baselineWindowSize: 60,
   a1StepChangeThreshold: 1.2,
@@ -40,7 +40,7 @@ export const CONSERVATIVE = {
   b4DropThreshold: 0.2,
 };
 
-export const SENSITIVE = {
+const SENSITIVE = {
   ...CONSERVATIVE,
   recentWindowSize: 15,
   baselineWindowSize: 30,
@@ -49,7 +49,7 @@ export const SENSITIVE = {
   a3MinimumNovelGames: 5,
 };
 
-export function signal(
+function signal(
   id: string,
   family: string,
   overrides: Record<string, unknown> = {},
@@ -72,7 +72,7 @@ export function signal(
   };
 }
 
-export function cardPreferences(
+function cardPreferences(
   settings: Record<string, number>,
   isDefault: boolean,
 ) {
@@ -98,7 +98,7 @@ export function cardPreferences(
   ];
 }
 
-export function analysis(overrides: Record<string, unknown> = {}) {
+function analysis(overrides: Record<string, unknown> = {}) {
   return {
     puuid: PUUID,
     created_at: NOW,

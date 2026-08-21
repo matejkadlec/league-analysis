@@ -243,13 +243,13 @@ export function writableSettings(
 export const MINIMUM_BASELINE_GAMES = 15;
 
 /** Preset names as shown to a reader, rather than as stored identifiers. */
-export const PRESET_LABELS: Record<string, string> = {
+const PRESET_LABELS: Record<string, string> = {
   conservative: "Conservative",
   balanced: "Balanced",
   sensitive: "Sensitive",
 };
 
-export const PRESET_DESCRIPTIONS: Record<string, string> = {
+const PRESET_DESCRIPTIONS: Record<string, string> = {
   conservative:
     "The shipped default. The hardest to trigger, and the least likely to call ordinary improvement unusual.",
   balanced: "A middle setting: a shorter baseline and lower thresholds.",

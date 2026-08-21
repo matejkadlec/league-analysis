@@ -61,7 +61,7 @@ export type AnalysisUiAction =
       totalPlayers: number;
     };
 
-export function parseIsoTimestamp(value: string | null | undefined): number | null {
+function parseIsoTimestamp(value: string | null | undefined): number | null {
   if (!value) {
     return null;
   }
@@ -123,7 +123,7 @@ export function isActiveAnalysisStatus(
   );
 }
 
-export function createInitialProjection(
+function createInitialProjection(
   createdAt: string | null,
   progress: number,
   timestamp = Date.now(),

@@ -8,10 +8,10 @@ import { extname, join } from "node:path";
  * it forbids in order to search for it, so scanning itself would report the
  * check as a violation.
  */
-export const SOURCE_DIRECTORIES = ["app", "components", "features", "lib"];
+const SOURCE_DIRECTORIES = ["app", "components", "features", "lib"];
 
 /** Every `.ts`/`.tsx` file under `directory`, recursively. */
-export function sourceFiles(directory: string): string[] {
+function sourceFiles(directory: string): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     const path = join(directory, entry.name);
     if (entry.isDirectory()) {
