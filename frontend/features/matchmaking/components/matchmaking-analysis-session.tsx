@@ -51,14 +51,6 @@ export function MatchmakingAnalysisSession({
   );
   const [nowTimestamp, setNowTimestamp] = useState(() => Date.now());
 
-  useEffect(() => {
-    const intervalId = setInterval(() => {
-      setNowTimestamp(Date.now());
-    }, 1000);
-
-    return () => clearInterval(intervalId);
-  }, []);
-
   const watchingCreatedAt = resolveWatchingCreatedAt(state, latestAnalysis);
   const { toast, queryClient, startMutation, cancelMutation } =
     useMatchmakingAnalysisMutations(puuid, watchingCreatedAt, dispatch);
@@ -148,6 +140,22 @@ export function MatchmakingAnalysisSession({
     Boolean(state.analysisFailure),
     !state.sawInProgress || state.lastBackendProgress < 10,
   );
+  // Only the running projection reads this clock. With empty deps it ticked
+  // for the life of the page, re-rendering the whole session card once a
+  // second behind a completed result nobody is watching change.
+  const isProjecting = displayPhase === "running" || displayPhase === "starting";
+
+  useEffect(() => {
+    if (!isProjecting) {
+      return;
+    }
+    const intervalId = setInterval(() => {
+      setNowTimestamp(Date.now());
+    }, 1000);
+
+    return () => clearInterval(intervalId);
+  }, [isProjecting]);
+
   const animProgress = resolveDisplayedAnimProgress(
     displayPhase,
     state.animProgress,
