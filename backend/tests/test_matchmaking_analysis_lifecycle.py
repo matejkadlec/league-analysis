@@ -84,7 +84,7 @@ async def test_repeated_start_attaches_to_the_existing_active_run(
     guard = AsyncMock()
     monkeypatch.setattr(
         analysis_service_module,
-        "_ensure_riot_writer_maintenance_is_inactive",
+        "ensure_riot_writer_maintenance_is_inactive",
         guard,
     )
     existing = _analysis("in_progress")
@@ -174,7 +174,7 @@ async def test_rate_limit_wait_is_persisted_as_an_active_state(
     guard = AsyncMock()
     monkeypatch.setattr(
         analysis_service_module,
-        "_ensure_riot_writer_maintenance_is_inactive",
+        "ensure_riot_writer_maintenance_is_inactive",
         guard,
     )
     reset_result = SimpleNamespace(scalar_one_or_none=lambda: None)
@@ -206,7 +206,7 @@ async def test_analysis_failure_keeps_a_safe_terminal_diagnostic(
     guard = AsyncMock()
     monkeypatch.setattr(
         analysis_service_module,
-        "_ensure_riot_writer_maintenance_is_inactive",
+        "ensure_riot_writer_maintenance_is_inactive",
         guard,
     )
     database = SimpleNamespace(execute=AsyncMock(), commit=AsyncMock())

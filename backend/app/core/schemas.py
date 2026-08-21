@@ -1,6 +1,19 @@
-"""Response shapes shared across features."""
+"""Response shapes, and the guards for payloads that arrive unvalidated."""
+
+from typing import Any, TypeIs
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field
+
+
+def is_json_object(value: object) -> TypeIs[dict[str, Any]]:
+    """Narrow a blob whose declared type is a claim rather than a guarantee.
+
+    Riot payloads off the wire and JSONB columns written by an older
+    contract both reach Python as `object`. The runtime check is
+    load-bearing at each of those boundaries, and narrowing through it is
+    what keeps the read typed afterwards.
+    """
+    return isinstance(value, dict)
 
 
 class MessageResponse(BaseModel):

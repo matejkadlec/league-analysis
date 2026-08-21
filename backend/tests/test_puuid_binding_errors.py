@@ -433,7 +433,7 @@ async def test_discovery_never_merges_a_row_sharing_the_riot_id(
     """
     monkeypatch.setattr(
         player_service_module,
-        "_ensure_riot_writer_maintenance_is_inactive",
+        "ensure_riot_writer_maintenance_is_inactive",
         AsyncMock(),
     )
     session = _NoMergeSession()

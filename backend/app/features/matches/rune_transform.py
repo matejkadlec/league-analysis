@@ -1,16 +1,8 @@
 """Shared Riot perk-payload flattening for match participant schemas."""
 
-from typing import Any, TypeIs
+from typing import Any
 
-
-def _is_json_object(value: object) -> TypeIs[dict[str, Any]]:
-    """Narrow an unvalidated Riot payload to a string-keyed object.
-
-    The perk payload arrives straight off the wire, so its declared type is a
-    claim about the format rather than a guarantee; the runtime check stays and
-    narrowing through it keeps the value typed for the callers below.
-    """
-    return isinstance(value, dict)
+from app.core.schemas import is_json_object
 
 
 def transform_runes_payload(value: object) -> object:
@@ -22,7 +14,7 @@ def transform_runes_payload(value: object) -> object:
     type is `object` and not `dict[str, Any] | None`: the declared dict was
     only ever true for the one branch that flattens.
     """
-    if not _is_json_object(value):
+    if not is_json_object(value):
         return value
     if "primary_style" in value:
         return value

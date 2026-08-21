@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable
-from typing import Any, TypedDict, TypeIs
+from typing import TypedDict
 
 import structlog
+
+from app.core.schemas import is_json_object
 
 from .participants import MatchParticipant
 from .schemas import ChampionStatsItem, LaneStatsItem
@@ -33,18 +35,9 @@ def or_zero(value: int | None) -> int:
     return value or 0
 
 
-def _is_json_object(value: object) -> TypeIs[dict[str, Any]]:
-    """Narrow an unvalidated `advanced_stats` blob to a string-keyed object.
-
-    `advanced_stats` is stored verbatim from Riot's `challenges` payload, so the
-    runtime check is load-bearing; narrowing through it keeps the read typed.
-    """
-    return isinstance(value, dict)
-
-
 def advanced_int(advanced_stats: object, key: str) -> int:
     """Safely read integer-like advanced_stats values."""
-    if not _is_json_object(advanced_stats):
+    if not is_json_object(advanced_stats):
         return 0
     raw_value = advanced_stats.get(key, 0)
     if raw_value is None:

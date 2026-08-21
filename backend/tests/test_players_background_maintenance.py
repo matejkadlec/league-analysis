@@ -192,7 +192,7 @@ async def test_player_refresh_uses_the_shared_writer_guard(
     guard = AsyncMock(side_effect=RiotWriterMaintenanceActiveError())
     monkeypatch.setattr(
         players_service_module,
-        "_ensure_riot_writer_maintenance_is_inactive",
+        "ensure_riot_writer_maintenance_is_inactive",
         guard,
     )
     player_service = PlayerService(cast(AsyncSession, SimpleNamespace()))
@@ -213,7 +213,7 @@ async def test_match_storage_rechecks_maintenance_before_each_write(
     guard = AsyncMock(side_effect=RiotWriterMaintenanceActiveError())
     monkeypatch.setattr(
         matches_service_module,
-        "_ensure_riot_writer_maintenance_is_inactive",
+        "ensure_riot_writer_maintenance_is_inactive",
         guard,
     )
     service = MatchService(cast(AsyncSession, object()))

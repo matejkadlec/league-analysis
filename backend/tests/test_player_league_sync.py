@@ -45,7 +45,7 @@ async def test_a_live_entry_is_stored_as_one_ranked_snapshot(
     )
     monkeypatch.setattr(
         player_service_module,
-        "_ensure_riot_writer_maintenance_is_inactive",
+        "ensure_riot_writer_maintenance_is_inactive",
         AsyncMock(),
     )
 
@@ -85,7 +85,7 @@ async def test_an_unchanged_entry_does_not_add_a_second_snapshot(
     )
     monkeypatch.setattr(
         player_service_module,
-        "_ensure_riot_writer_maintenance_is_inactive",
+        "ensure_riot_writer_maintenance_is_inactive",
         AsyncMock(),
     )
 

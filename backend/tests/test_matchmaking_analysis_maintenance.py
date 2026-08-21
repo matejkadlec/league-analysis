@@ -39,7 +39,7 @@ async def test_new_matchmaking_analysis_refuses_active_maintenance(
     guard = AsyncMock(side_effect=RiotWriterMaintenanceActiveError())
     monkeypatch.setattr(
         analysis_service_module,
-        "_ensure_riot_writer_maintenance_is_inactive",
+        "ensure_riot_writer_maintenance_is_inactive",
         guard,
     )
     service = MatchmakingAnalysisService(
@@ -76,7 +76,7 @@ async def test_matchmaking_fetched_match_honors_the_maintenance_interlock(
     upsert = AsyncMock()
     monkeypatch.setattr(
         analysis_service_module,
-        "_ensure_riot_writer_maintenance_is_inactive",
+        "ensure_riot_writer_maintenance_is_inactive",
         guard,
     )
     from app.features.matches import match_persistence
@@ -102,7 +102,7 @@ async def test_matchmaking_progress_writes_when_maintenance_is_inactive(
     database = SimpleNamespace(execute=AsyncMock(), commit=AsyncMock())
     monkeypatch.setattr(
         analysis_service_module,
-        "_ensure_riot_writer_maintenance_is_inactive",
+        "ensure_riot_writer_maintenance_is_inactive",
         guard,
     )
     service = MatchmakingAnalysisService(

@@ -2,7 +2,7 @@
 
 from datetime import datetime
 from enum import Enum as PyEnum
-from typing import Any, Literal, TypeGuard
+from typing import Any, Literal
 
 from pydantic import (
     BaseModel,
@@ -14,6 +14,7 @@ from pydantic import (
 )
 from pydantic.alias_generators import to_camel
 
+from app.core.schemas import is_json_object
 from app.features.matches.match_lp import RANKED_SOLO_QUEUE_ID
 
 
@@ -324,15 +325,6 @@ def _is_compatible_legacy_setting_value(field_name: str, value: object) -> bool:
     return True
 
 
-def _is_json_object(value: object) -> TypeGuard[dict[str, Any]]:
-    """Narrow a decoded JSONB column to the object shape its writers produce.
-
-    A JSONB object always decodes with string keys; its values are whatever an
-    older contract wrote, and each one is screened before it reaches a model.
-    """
-    return isinstance(value, dict)
-
-
 def validate_card_preference_update(
     card_id: CardId, settings: dict[str, Any]
 ) -> dict[str, Any]:
@@ -353,7 +345,7 @@ def normalize_stored_card_preference(
     model_type = _CARD_SETTINGS_MODELS[card_id]
     normalized = model_type().model_dump(mode="json")
     warnings: list[str] = []
-    if not _is_json_object(stored_settings):
+    if not is_json_object(stored_settings):
         return {**_CARD_FIXED_SETTINGS_V1[card_id], **normalized}, ("settings",)
 
     renames = _LEGACY_SETTING_RENAMES[card_id]

@@ -14,6 +14,7 @@ from app.core.riot_api.client import RiotAPIClient
 from app.core.riot_api.constants import Region
 from app.core.riot_api.errors import AuthenticationError, ForbiddenError, RateLimitError
 from app.core.riot_api.models import MatchDTO, MatchListDTO, MatchTimelineDTO
+from app.features.jobs.maintenance import ensure_riot_writer_maintenance_is_inactive
 
 from .models import Match
 from .participants import MatchParticipant
@@ -277,8 +278,6 @@ async def backfill_timeline_only_match(
         select(Match.game_version).where(Match.match_id == match_id)
     )
     game_version = version_result.scalar_one_or_none() or ""
-    from app.features.jobs.maintenance import ensure_riot_writer_maintenance_is_inactive
-
     await ensure_riot_writer_maintenance_is_inactive(session)
     timeline_rows = await replace_match_timeline_rows(
         session,
