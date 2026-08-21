@@ -149,9 +149,29 @@ describe("zod against the OpenAPI contract", () => {
         const zodConst = (resolve(zodJson, {}).properties as JsonSchema)[field];
         const apiConst = (resolve(apiSchemas[apiName], apiSchemas)
           .properties as JsonSchema)[field];
-        const zc = resolve(zodConst, {}).const;
-        const ac = resolve(apiConst, apiSchemas).const;
-        if (zc !== undefined && zc === ac) continue;
+        const zr = resolve(zodConst, {});
+        const ar = resolve(apiConst, apiSchemas);
+        if (zr.const !== undefined && zr.const === ar.const) continue;
+
+        // `kinds()` reduces an enum to the "string" it also declares, so
+        // membership drift used to be invisible here: a Python `Literal`
+        // gaining a member against a `z.enum` that did not compared equal.
+        // A wider zod stays legal; a narrower one is the failure.
+        //
+        // ponytail: reads the enum off the direct property node only, so a
+        // nullable enum (`anyOf: [enum, null]`), an enum inside an array, and
+        // an enum in a discriminated-union arm are all still invisible. No
+        // paired field is any of those today.
+        const zodEnum = zr.enum as unknown[] | undefined;
+        const apiEnum = ar.enum as unknown[] | undefined;
+        if (zodEnum && apiEnum) {
+          const missing = apiEnum.filter((value) => !zodEnum.includes(value));
+          if (missing.length) {
+            problems.push(
+              `${field}: API may send ${missing.join(", ")}, zod rejects`,
+            );
+          }
+        }
 
         if (core(zodKinds) !== core(apiKinds)) {
           problems.push(
