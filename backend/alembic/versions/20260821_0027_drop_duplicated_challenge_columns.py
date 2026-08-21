@@ -17,9 +17,16 @@ depends_on = None
 
 # `core.match_participants.advanced_stats` stores Riot's `challenges` object
 # verbatim. Fifteen columns were then filled by copying one key each out of
-# that same object, and nothing read any of them back -- not the API, not the
-# jobs, not the frontend, not the parked playstyle package (which reads the
-# six challenge columns that survive here).
+# that same object, and no reader wants the copy rather than the original.
+#
+# Ten of them do have a reader, and it is not one a reference search finds:
+# `playstyle_analysis/aggregates.py` resolves a tag's metric *by name* off
+# `MatchParticipant`, so `min_skillshots_hit` in `TAG_CONFIG` reaches the
+# `skillshots_hit` column through `getattr`. Dropping the column does not
+# raise there -- the average becomes 0.0 and the tag silently never fires.
+# `_CHALLENGE_KEYS` in that module now points those ten at the blob, and
+# `test_playstyle_tag_config.py` refuses a threshold key that resolves to
+# neither a column nor a blob key.
 #
 # Checked against production before dropping, over all 37,740 participant
 # rows: no row has a NULL `advanced_stats`, no stored column value disagrees
@@ -94,10 +101,13 @@ def downgrade() -> None:
     for _name, column in DROPPED_COLUMNS:
         op.add_column("match_participants", column, schema="core")
     for name, key in SOURCE_KEYS.items():
-        cast_type = (
-            "numeric" if name == "damage_taken_on_team_percentage" else "integer"
-        )
-        op.execute(
-            f"UPDATE core.match_participants "
-            f"SET {name} = COALESCE((advanced_stats ->> '{key}')::{cast_type}, 0)"
-        )
+        # Every value goes through `numeric` first, even the integer columns.
+        # Riot renders several challenges with a decimal point -- on
+        # production, 9,595 of 34,210 rows spell
+        # `maxCsAdvantageOnLaneOpponent` that way -- and `'8.0'::integer` is
+        # an error, which would abort the whole downgrade. `trunc` is what the
+        # writer's `int()` did.
+        value = f"COALESCE((advanced_stats ->> '{key}')::numeric, 0)"
+        if name != "damage_taken_on_team_percentage":
+            value = f"trunc({value})::integer"
+        op.execute(f"UPDATE core.match_participants SET {name} = {value}")

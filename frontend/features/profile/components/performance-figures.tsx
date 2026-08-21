@@ -11,9 +11,10 @@ import type { PerformanceStats } from "@/lib/core/schemas";
  *
  * `performanceStatsFields` in the zod layer spells these seven numbers once so
  * a new metric cannot land on two of the three groupings; the renderer for
- * them had landed on two of the two, character for character, down to the
- * `w-16`. The champion card and the lane card keep their own layout around
- * this and share the figures themselves.
+ * them had landed on two of the two, down to the `w-16` and the `{wins}W
+ * {losses}L`. The one difference was the KDA line: `text-sm font-medium` on
+ * the champion card, bare `text-sm` on the lane card. They agree here. The two
+ * cards keep their own layout around this and share the figures themselves.
  */
 export function PerformanceFigures({ stats }: { stats: PerformanceStats }) {
   return (

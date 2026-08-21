@@ -1,7 +1,9 @@
 """Aggregate metric calculations for playstyle tags."""
 
 from collections.abc import Callable
+from typing import Final
 
+from app.features.matches.match_stats import advanced_int
 from app.features.matches.models import Match
 from app.features.matches.participants import MatchParticipant
 from app.features.playstyle_analysis.config import TagConfig
@@ -232,25 +234,59 @@ def _average_kill_participation(
     )
 
 
+# Ten tags below read a metric that used to be a `MatchParticipant` column,
+# each one a copy of a single key from the `advanced_stats` blob stored beside
+# it. Revision `20260821_0027` dropped the copies; the blob still holds every
+# value, so the metric is read from there instead.
+#
+# This matters more than a normal rename because resolution is by name: a
+# metric with neither a column nor an entry here does not raise, it scores 0.0
+# for every player, and every threshold comparison against it quietly fails.
+# `test_playstyle_tag_config.py` refuses a threshold key that resolves to
+# neither, which is the check that was missing when the columns went.
+_CHALLENGE_KEYS: Final[dict[str, str]] = {
+    "roam_kills": "killsOnOtherLanesEarlyJungleAsLaner",
+    "enemy_jungle_monster_kills": "enemyJungleMonsterKills",
+    "turret_plates_taken": "turretPlatesTaken",
+    "ally_saves": "saveAllyFromDeath",
+    "survived_single_digit_hp_count": "survivedSingleDigitHpCount",
+    "skillshots_hit": "skillshotsHit",
+    "skillshots_dodged": "skillshotsDodged",
+    "enemy_immobilizations": "enemyChampionImmobilizations",
+    "kills_near_enemy_turret": "killsNearEnemyTurret",
+    "buffs_stolen": "buffsStolen",
+}
+
+
+def metric_is_readable(metric: str) -> bool:
+    """Return whether a threshold key names something a participant can answer."""
+    return hasattr(MatchParticipant, metric) or metric in _CHALLENGE_KEYS
+
+
+def _read_metric(participant: MatchParticipant, metric: str) -> float:
+    if hasattr(MatchParticipant, metric):
+        return getattr(participant, metric) or 0
+    return advanced_int(participant.advanced_stats, _CHALLENGE_KEYS[metric])
+
+
+def threshold_metric(config: TagConfig) -> str | None:
+    """The first `min_`/`max_` key in a tag config that names a real metric."""
+    for key in config:
+        if key.startswith(("min_", "max_")) and metric_is_readable(key[4:]):
+            return key[4:]
+    return None
+
+
 def _generic_metric_average(
     participants: list[MatchParticipant],
     config: TagConfig,
     game_count: int,
 ) -> float:
-    main_metric = None
-    for key in config:
-        if key.startswith("min_") and hasattr(MatchParticipant, key[4:]):
-            main_metric = key[4:]
-            break
-        if key.startswith("max_") and hasattr(MatchParticipant, key[4:]):
-            main_metric = key[4:]
-            break
-
-    if main_metric:
-        total_val = sum(getattr(p, main_metric) or 0 for p in participants)
-        return total_val / game_count
-
-    return 0.0
+    main_metric = threshold_metric(config)
+    if main_metric is None:
+        return 0.0
+    total_val = sum(_read_metric(p, main_metric) for p in participants)
+    return total_val / game_count
 
 
 _AGGREGATORS: list[tuple[AggregatorPredicate, Aggregator]] = [
