@@ -9,6 +9,7 @@ import { LegalNotice } from "@/components/legal-notice";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/features/auth";
 import {
+  isPlayerCentricPath,
   playerNavigationRoute,
   SidebarPlayerSwitcher,
 } from "@/features/players";
@@ -36,7 +37,14 @@ export function SidebarNav() {
   const [signingOut, setSigningOut] = useState(false);
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const urlPuuid = searchParams.get("puuid");
+  // Scoped to player-centric routes, exactly as `player-context.tsx` scopes
+  // its own read. `/matchmaking-analysis` also carries `?puuid=`, but that is
+  // a page-local analyzed player; carrying it onto these links would hand it
+  // to a route the provider *does* persist from, quietly making a local
+  // choice the account's current player.
+  const urlPuuid = isPlayerCentricPath(pathname)
+    ? searchParams.get("puuid")
+    : null;
   const { user, logout, isAuthenticated, isLoading } = useAuth();
 
   // Hide sidebar on public auth pages or when not authenticated

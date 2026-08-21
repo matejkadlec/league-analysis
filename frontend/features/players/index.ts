@@ -6,12 +6,8 @@ export {
   PlayerContextProvider,
   usePlayerContext,
 } from "./context/player-context";
-export {
-  playerQueryKey,
-  playerQueryOptions,
-  playerStatsQueryOptions,
-} from "./player-query";
+export { playerQueryOptions, playerStatsQueryOptions } from "./player-query";
 export { formatRiotId } from "./utils/riot-id";
 export { usePlayerSyncRun } from "./use-player-sync-run";
-export { playerNavigationRoute } from "./player-routes";
+export { isPlayerCentricPath, playerNavigationRoute } from "./player-routes";
 export { useAnalyzedPlayer } from "./use-analyzed-player";

@@ -171,9 +171,9 @@ run_frontend_typecheck() {
 
 run_frontend_deadcode() {
   cd "$repository_root/frontend"
-  # Files, dependencies and unlisted imports only: the exports issue type is
-  # deliberately excluded because internally-used exports and shadcn/ui
-  # primitives would drown the signal.
+  # See the `deadcode` script in frontend/package.json for the issue types --
+  # `exports` is among them, so a barrel entry whose last importer goes away
+  # fails here.
   npm run deadcode
 }
 

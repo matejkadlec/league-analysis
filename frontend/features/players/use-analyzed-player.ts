@@ -21,7 +21,6 @@ import { playerQueryKey, playerQueryOptions } from "./player-query";
  * bar. The effect cannot loop -- it returns early once the URL carries one.
  */
 export function useAnalyzedPlayer(): {
-  analyzedPuuid: string | null;
   analyzedPlayer: Player | null;
   isLoading: boolean;
   selectAnalyzedPlayer: (player: Player) => void;
@@ -62,7 +61,6 @@ export function useAnalyzedPlayer(): {
   );
 
   return {
-    analyzedPuuid,
     analyzedPlayer: analyzedPlayer ?? null,
     isLoading: isLoadingReference || isLoadingAnalyzed,
     selectAnalyzedPlayer,
