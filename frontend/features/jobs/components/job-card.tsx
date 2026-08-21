@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { validatedGet } from "@/lib/core/api";
+import { unwrap, validatedGet } from "@/lib/core/api";
 import {
   JobConfiguration,
   JobExecutionListResponseSchema,
@@ -44,24 +44,19 @@ export function JobCard({ job, onExecutionClick }: JobCardProps) {
 
   const { data: executionsResult } = useQuery({
     queryKey: ["job-executions", job.id],
-    queryFn: () =>
-      validatedGet(
-        JobExecutionListResponseSchema,
-        `/jobs/${job.id}/executions`,
-        {
-          page: 1,
-          size: 5,
-          execution_type: "REGULAR",
-        },
+    queryFn: async () =>
+      unwrap(
+        await validatedGet(
+          JobExecutionListResponseSchema,
+          `/jobs/${job.id}/executions`,
+          { page: 1, size: 5, execution_type: "REGULAR" },
+        ),
       ),
     enabled: !!job.id,
     refetchInterval: 15000,
   });
 
-  const recentExecutions = useMemo(
-    () => (executionsResult?.success ? executionsResult.data.executions : []),
-    [executionsResult],
-  );
+  const recentExecutions = executionsResult?.executions ?? [];
   const lastExecution =
     recentExecutions.length > 0 ? recentExecutions[0] : null;
 

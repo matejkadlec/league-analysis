@@ -93,29 +93,27 @@ describe("Match Fetcher job card", () => {
       });
     });
 
+    // The cache holds what `unwrap` returned, not the `ApiResponse` envelope.
     queryClient.setQueryData(["job-executions", job.id], {
-      success: true,
-      data: {
-        executions: [
-          {
-            id: 81,
-            job_config_id: job.id,
-            started_at: new Date().toISOString(),
-            completed_at: new Date().toISOString(),
-            status: "SUCCESS",
-            api_requests_made: 4,
-            records_created: 0,
-            records_updated: 2,
-            triggered_by: "user",
-            has_api_key_error: false,
-            execution_type: "REGULAR",
-          },
-        ],
-        total: 1,
-        page: 1,
-        size: 5,
-        pages: 1,
-      },
+      executions: [
+        {
+          id: 81,
+          job_config_id: job.id,
+          started_at: new Date().toISOString(),
+          completed_at: new Date().toISOString(),
+          status: "SUCCESS",
+          api_requests_made: 4,
+          records_created: 0,
+          records_updated: 2,
+          triggered_by: "user",
+          has_api_key_error: false,
+          execution_type: "REGULAR",
+        },
+      ],
+      total: 1,
+      page: 1,
+      size: 5,
+      pages: 1,
     });
 
     await waitFor(() => {
