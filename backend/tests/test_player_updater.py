@@ -18,6 +18,18 @@ from app.features.players.models import Player
 from app.features.players.service import PlayerService
 
 
+def _player(puuid: str) -> Player:
+    """One unattached row, which is what `_load_tracked_players` returns."""
+    return Player(
+        puuid=puuid,
+        game_name="Sanitized",
+        tag_line="TEST",
+        platform="eun1",
+        summoner_level=1,
+        profile_icon_id=1,
+    )
+
+
 class _FakeRiotClient:
     def __init__(self, **_kwargs: object) -> None:
         return None
@@ -35,29 +47,8 @@ class _FakeRiotClient:
 async def test_player_updater_continues_after_a_recoverable_player_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    players = [
-        SimpleNamespace(puuid="sanitized-one"),
-        SimpleNamespace(puuid="sanitized-two"),
-    ]
-    player_models = {
-        player.puuid: SimpleNamespace(
-            puuid=player.puuid,
-            game_name="Sanitized",
-            tag_line="TEST",
-            profile_icon_id=1,
-            summoner_level=1,
-        )
-        for player in players
-    }
-
-    def load_player_model(_model: object, puuid: str) -> SimpleNamespace:
-        return player_models[puuid]
-
-    db = SimpleNamespace(
-        get=AsyncMock(side_effect=load_player_model),
-        commit=AsyncMock(),
-        rollback=AsyncMock(),
-    )
+    players = [_player("sanitized-one"), _player("sanitized-two")]
+    db = SimpleNamespace(commit=AsyncMock(), rollback=AsyncMock())
     player_service = SimpleNamespace(
         update_player_profile=AsyncMock(
             side_effect=[RuntimeError("temporary player failure"), False]
@@ -201,15 +192,11 @@ async def test_player_updater_stops_the_whole_run_on_an_api_key_error(
     could have been made to carry on and the suite would have stayed green.
     """
     players = [
-        SimpleNamespace(puuid="sanitized-one"),
-        SimpleNamespace(puuid="sanitized-two"),
-        SimpleNamespace(puuid="sanitized-three"),
+        _player("sanitized-one"),
+        _player("sanitized-two"),
+        _player("sanitized-three"),
     ]
-    db = SimpleNamespace(
-        get=AsyncMock(return_value=SimpleNamespace(puuid="sanitized-one")),
-        commit=AsyncMock(),
-        rollback=AsyncMock(),
-    )
+    db = SimpleNamespace(commit=AsyncMock(), rollback=AsyncMock())
     player_service = SimpleNamespace(
         update_player_profile=AsyncMock(side_effect=AuthenticationError("rejected")),
     )
@@ -248,12 +235,8 @@ async def test_player_updater_reraises_a_database_error_instead_of_recording_it(
     that is already unusable, turning one failure into a whole failed run
     reported as a list of unrelated ones.
     """
-    players = [SimpleNamespace(puuid="sanitized-one")]
-    db = SimpleNamespace(
-        get=AsyncMock(return_value=SimpleNamespace(puuid="sanitized-one")),
-        commit=AsyncMock(),
-        rollback=AsyncMock(),
-    )
+    players = [_player("sanitized-one")]
+    db = SimpleNamespace(commit=AsyncMock(), rollback=AsyncMock())
     player_service = SimpleNamespace(
         update_player_profile=AsyncMock(side_effect=SQLAlchemyError("session is gone")),
     )

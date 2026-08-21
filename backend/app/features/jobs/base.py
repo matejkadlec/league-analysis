@@ -22,7 +22,6 @@ from app.core import db_manager
 from app.core.riot_api.client import APICallRecord, RiotAPIClient
 from app.core.riot_api.constants import Platform, Region
 from app.features.players.models import Player
-from app.features.players.schemas import PlayerResponse
 
 from .control import (
     claim_runtime_control,
@@ -930,7 +929,7 @@ class BaseJob(ABC):
             finally:
                 self._store_api_calls(client.get_api_calls())
 
-    async def _load_tracked_players(self, db: AsyncSession) -> list[PlayerResponse]:
+    async def _load_tracked_players(self, db: AsyncSession) -> list[Player]:
         """Load the global allowlist or the explicit target_puuids set.
 
         Both writers resolve their player list through this; a job that
@@ -944,9 +943,7 @@ class BaseJob(ABC):
         result = await db.execute(
             select(Player).where(Player.puuid.in_(self.target_puuids))
         )
-        tracked_players = [
-            PlayerResponse.model_validate(player) for player in result.scalars().all()
-        ]
+        tracked_players = list(result.scalars().all())
         self.add_log_entry("target_puuids", sorted(self.target_puuids))
         return tracked_players
 

@@ -705,16 +705,20 @@ class PlayerService:
         await self.db.commit()
         return await self.get_player_context(user_id)
 
-    async def get_globally_tracked_players(self) -> list[PlayerResponse]:
-        """Get all players tracked by at least one user."""
+    async def get_globally_tracked_players(self) -> list[Player]:
+        """Get all players tracked by at least one user.
+
+        Rows, not `PlayerResponse`: the only callers are the two writer jobs
+        and the job test runner, none of which has a current user, so the
+        per-user `is_tracked` field on the response had no meaning for them --
+        and both jobs then re-fetched the row they had just serialised away.
+        """
         query = (
             select(Player).where(Player.is_tracked.is_(True)).order_by(Player.game_name)
         )
 
         result = await self.db.execute(query)
-        players = result.scalars().all()
-
-        return [PlayerResponse.model_validate(player) for player in players]
+        return list(result.scalars().all())
 
     async def update_player_profile(
         self, player: Player, riot_api_client: RiotAPIClient
