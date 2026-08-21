@@ -92,8 +92,12 @@ describe("branded style contract", () => {
       code(path).includes('id="header-card"'),
     );
     // Signal first: a scan that stopped finding header cards would pass by
-    // finding nothing wrong with them.
-    expect(headerCards.length).toBeGreaterThanOrEqual(7);
+    // finding nothing wrong with them. The card is rendered once, from
+    // components/page-header.tsx; every page consumes that.
+    expect(headerCards).toContainEqual(
+      expect.stringContaining("components/page-header"),
+    );
+    expect(headerCards.length).toBeGreaterThanOrEqual(1);
 
     const offenders = headerCards
       .filter((path) => {

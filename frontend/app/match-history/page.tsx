@@ -1,6 +1,6 @@
 "use client";
 
-import { Card } from "@/components/ui/card";
+import { PageHeader } from "@/components/page-header";
 import { ProtectedRoute } from "@/features/auth";
 import { MatchHistory, MatchHistoryLoadingCard } from "@/features/matches";
 import { SelectPlayerCard, usePlayerContext } from "@/features/players";
@@ -15,13 +15,12 @@ export default function MatchHistoryPage() {
         data-testid="match-history-page"
       >
         <div className="space-y-6">
-          <Card id="header-card" className="p-6 text-white">
-            <h1 className="text-2xl font-semibold">Match History</h1>
-            <p className="mt-4 text-sm leading-relaxed">
+          <PageHeader title="Match History">
+            <p className="text-sm leading-relaxed">
               Explore player&apos;s matches, queue results, team objectives,
               builds, runes, and performance details.
             </p>
-          </Card>
+          </PageHeader>
 
           {isLoading ? (
             <MatchHistoryLoadingCard />

@@ -11,6 +11,7 @@ import {
 import { JobCard, JobExecutions, SystemStatus } from "@/features/jobs";
 import { ProtectedRoute } from "@/features/auth";
 
+import { PageHeader } from "@/components/page-header";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2, AlertCircle, Clock } from "lucide-react";
@@ -102,23 +103,23 @@ function JobsPageContent() {
   return (
     <div className="container mx-auto px-4 py-8">
       {/* Header */}
-      <Card id="header-card" className="mb-6 p-6 text-white">
-        <div className="mb-4 flex items-start justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold">Background Jobs</h1>
-            <div className="mt-2 flex items-center gap-2 text-sm text-white/70">
-              <Clock className="h-4 w-4" />
-              <RefreshCountdown
-                lastUpdate={Math.max(jobsUpdatedAt, statusUpdatedAt)}
-              />
-            </div>
+      <PageHeader
+        title="Background Jobs"
+        titleSub={
+          <div className="mt-2 flex items-center gap-2 text-sm text-white/70">
+            <Clock className="h-4 w-4" />
+            <RefreshCountdown
+              lastUpdate={Math.max(jobsUpdatedAt, statusUpdatedAt)}
+            />
           </div>
-        </div>
+        }
+        className="mb-6"
+      >
         <p className="text-sm leading-relaxed">
           Monitor and manage automated background jobs for player tracking and
           data processing
         </p>
-      </Card>
+      </PageHeader>
 
       {/* System Status Dashboard */}
       <div className="mb-6">

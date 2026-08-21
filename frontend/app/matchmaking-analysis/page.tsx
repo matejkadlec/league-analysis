@@ -15,6 +15,7 @@ import {
 } from "@/features/matchmaking";
 import { ProtectedRoute } from "@/features/auth";
 
+import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -41,15 +42,12 @@ function MatchmakingAnalysisContent() {
       {/* Header card - always shows immediately */}
       <div className="container mx-auto px-4 pt-8">
         <div className="mb-6">
-          <Card id="header-card" className="p-6 text-white">
-            <div className="mb-4 flex items-start justify-between">
-              <h1 className="text-2xl font-semibold">Matchmaking Analysis</h1>
-            </div>
+          <PageHeader title="Matchmaking Analysis">
             <p className="text-sm leading-relaxed">
               Analyze matchmaking fairness by comparing average winrates of
               teammates vs enemies in recent ranked matches.
             </p>
-          </Card>
+          </PageHeader>
         </div>
       </div>
 
