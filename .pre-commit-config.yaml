@@ -57,6 +57,16 @@ repos:
         language: pygrep
         files: '^backend/app/core/.*\.py$'
 
+      # A cross-feature import hidden inside a function body hides the feature
+      # DAG: layering becomes load-order luck, and a cycle surfaces only as an
+      # ImportError at startup. Same-feature imports are relative and pass;
+      # module-level imports start at column zero and pass. See #190.
+      - id: forbid-function-level-feature-imports
+        name: features import other features at module top level only
+        entry: '^\s+from\s+app\.features\.[a-z_]+'
+        language: pygrep
+        files: '^backend/app/features/.*\.py$'
+
       # Reviewed Alembic revisions are the schema authority. This catches the
       # committed-code half of that rule; dropping or resetting a populated
       # schema is a runtime action no hook can see.
