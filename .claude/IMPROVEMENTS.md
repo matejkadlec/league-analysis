@@ -60,3 +60,14 @@ distinct rather than duplicated.
   so it most likely arrived through a path that does not. The row is harmless
   (match history renders it as "Queue 0"), so this is a question about the
   writer, not a rendering fix.
+
+- 2026-08-21 frontend/lib/core/schemas.ts: `npm run deadcode` cannot see an
+  unused export in this file. `tests/api-contract-alignment.test.ts` needs the
+  whole module namespace to pair schemas by name, and knip counts a namespace
+  import as a use of every export. Found by hand:
+  `JoinUsContactRequestSchema` and `UserCookieConsentUpdateSchema` had no call
+  site at all while knip reported zero unused exports. Both are used now, but
+  the blind spot stands and covers the largest export list in the repo. A
+  targeted rule in the contract test -- every exported zod schema pairs to an
+  OpenAPI component -- would catch a schema that matches nothing; it would not
+  have caught these two, which paired fine and were merely uncalled.

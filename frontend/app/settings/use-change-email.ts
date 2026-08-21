@@ -6,6 +6,8 @@ import { unwrap, validatedPost } from "@/lib/core/api";
 import {
   EmailChangeCodeResponseSchema,
   UserResponseSchema,
+  type EmailChangeRequest,
+  type EmailChangeVerifyRequest,
 } from "@/lib/core/schemas";
 import { useAuth } from "@/features/auth";
 import { useToast } from "@/lib/core/hooks";
@@ -89,7 +91,7 @@ export function useChangeEmail() {
         await validatedPost(
           EmailChangeCodeResponseSchema,
           "/auth/change-email/request-code",
-          { new_email: targetEmail },
+          { new_email: targetEmail } satisfies EmailChangeRequest,
         ),
       );
     },
@@ -137,7 +139,7 @@ export function useChangeEmail() {
       return unwrap(
         await validatedPost(UserResponseSchema, "/auth/change-email/verify", {
           code,
-        }),
+        } satisfies EmailChangeVerifyRequest),
       );
     },
     onSuccess: () => {

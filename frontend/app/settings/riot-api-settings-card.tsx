@@ -11,7 +11,11 @@ import {
   validatedPost,
   validatedPut,
 } from "@/lib/core/api";
-import { SettingSchema, SettingTestResponseSchema } from "@/lib/core/schemas";
+import {
+  SettingSchema,
+  SettingTestResponseSchema,
+  type SettingUpdate,
+} from "@/lib/core/schemas";
 import {
   SERVICE_STATUS_QUERY_KEY,
   serviceStatusQueryOptions,
@@ -54,7 +58,9 @@ export function RiotApiSettingsCard() {
 
   const updateMutation = useMutation({
     mutationFn: async (value: string) =>
-      unwrap(await validatedPut(SettingSchema, "/settings/riot_api_key", { value })),
+      unwrap(await validatedPut(SettingSchema, "/settings/riot_api_key", {
+        value,
+      } satisfies SettingUpdate)),
     onSuccess: () => {
       toast.success("Riot API key updated", {
         description: "The new key is active; no server restart is required.",
@@ -85,7 +91,7 @@ export function RiotApiSettingsCard() {
         await validatedPost(
           SettingTestResponseSchema,
           "/settings/riot_api_key/test",
-          { value },
+          { value } satisfies SettingUpdate,
         ),
       ),
     onSuccess: (data) => {

@@ -3,7 +3,10 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { unwrap, validatedPost } from "@/lib/core/api";
-import { MessageResponseSchema } from "@/lib/core/schemas";
+import {
+  MessageResponseSchema,
+  type PasswordChangeRequest,
+} from "@/lib/core/schemas";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/lib/core/hooks";
@@ -107,7 +110,7 @@ export function PasswordChangeSection() {
           current_password: currentPassword,
           new_password: newPassword,
           repeat_password: repeatPassword,
-        }),
+        } satisfies PasswordChangeRequest),
       );
     },
     onSuccess: () => {

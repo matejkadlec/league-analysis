@@ -15,7 +15,10 @@ import {
 } from "@/components/ui/dialog";
 import { useAuth } from "@/features/auth";
 import { unwrap, validatedPut } from "@/lib/core/api";
-import { UserCookieConsentResponseSchema } from "@/lib/core/schemas";
+import {
+  UserCookieConsentResponseSchema,
+  type UserCookieConsentUpdate,
+} from "@/lib/core/schemas";
 import { cn } from "@/lib/core/utils";
 import {
   COOKIE_CONSENT_OPEN_PREFERENCES_EVENT,
@@ -53,7 +56,7 @@ export function CookieConsentManager() {
             consent_level: value.level,
             consent_version: value.version,
             consent_source: "banner",
-          },
+          } satisfies UserCookieConsentUpdate,
         ),
       );
       lastSyncedKeyRef.current = syncKey;

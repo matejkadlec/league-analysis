@@ -13,7 +13,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { useAuth } from "@/features/auth";
 import { unwrap, validatedGet, validatedPut } from "@/lib/core/api";
-import { PlayerContextSchema, type Player } from "@/lib/core/schemas";
+import {
+  PlayerContextSchema,
+  type CurrentPlayerUpdate,
+  type Player,
+} from "@/lib/core/schemas";
 import { playerQueryKey, playerQueryOptions } from "../player-query";
 import { isPlayerCentricPath, playerRoute } from "../player-routes";
 
@@ -71,7 +75,7 @@ export function PlayerContextProvider({
       return unwrap(
         await validatedPut(PlayerContextSchema, "/players/context/current", {
           puuid,
-        }),
+        } satisfies CurrentPlayerUpdate),
       );
     },
     onSuccess: (data) => {

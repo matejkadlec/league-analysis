@@ -9,6 +9,8 @@ import * as exportedSchemas from "@/lib/core/schemas";
 
 import { allSourceFiles } from "./source-scan-support";
 
+import { MATCH_HISTORY_PAGE_SIZES } from "../features/matches/match-history-pagination";
+
 /**
  * Every zod schema must accept everything its OpenAPI counterpart may send.
  *
@@ -197,6 +199,36 @@ describe("zod against the OpenAPI contract", () => {
     expect(unserved).toEqual([]);
   });
 
+  /**
+   * The page-size picker offers a fixed list; the endpoint bounds what it will
+   * accept. Nothing connected them, and the largest option is exactly the
+   * endpoint's ceiling -- so the next option added to the picker is a 422 on a
+   * real click, and lowering the bound on the backend is the same 422 from the
+   * other side. Both sides are hand-maintained lists of numbers.
+   */
+  it("offers only page sizes the match endpoint accepts", () => {
+    const detailed = document.paths[
+      `${API_PREFIX}/matches/player/{puuid}/detailed`
+    ] as
+      | { get?: { parameters?: { name: string; schema: JsonSchema }[] } }
+      | undefined;
+    const count = detailed?.get?.parameters?.find((p) => p.name === "count");
+    // Signal first: a renamed parameter, or one that lost its bounds, would
+    // leave nothing to compare and every page size would pass by default.
+    expect(
+      count?.schema.maximum,
+      "the detailed-matches `count` parameter has no maximum",
+    ).toBeTypeOf("number");
+
+    const minimum = Number(count?.schema.minimum ?? 1);
+    const maximum = Number(count?.schema.maximum);
+    const rejected = MATCH_HISTORY_PAGE_SIZES.filter(
+      (size) => size < minimum || size > maximum,
+    );
+
+    expect(rejected).toEqual([]);
+  });
+
   const pairs = Object.entries(exportedSchemas).flatMap(([name, value]) => {
     if (!(value instanceof z.ZodType)) return [];
     const apiName = apiCandidates(name).find((c) => c in apiSchemas);
@@ -214,6 +246,76 @@ describe("zod against the OpenAPI contract", () => {
   it("pairs enough schemas to be worth running", () => {
     expect(pairs.length).toBeGreaterThan(20);
   });
+
+  /** Every component the API accepts as a request body, by name. */
+  const requestBodyComponents = new Set(
+    Object.values(document.paths).flatMap((operations) =>
+      Object.values(operations as Record<string, unknown>).flatMap((op) => {
+        if (typeof op !== "object" || op === null) return [];
+        const content = (
+          op as { requestBody?: { content?: Record<string, JsonSchema> } }
+        ).requestBody?.content;
+        if (!content) return [];
+        return Object.values(content).flatMap((media) => {
+          const ref = (media.schema as JsonSchema | undefined)?.$ref;
+          return typeof ref === "string" ? [ref.split("/").pop() as string] : [];
+        });
+      }),
+    ),
+  );
+
+  const requestPairs = pairs.filter(([, apiName]) =>
+    requestBodyComponents.has(apiName),
+  );
+
+  it("finds the request bodies to check", () => {
+    // Signal first: these pair by name, so a renamed schema drops out of the
+    // list silently and every rule below would pass by having nothing to run.
+    // The floor is the count, not the count minus slack: slack is exactly the
+    // room a rename needs to go unnoticed, and a body legitimately added only
+    // ever raises this.
+    expect(requestPairs.length).toBeGreaterThanOrEqual(11);
+  });
+
+  /**
+   * The other direction, which only a request needs.
+   *
+   * "Accepts everything the API sends" is the right rule for a response and
+   * the wrong one for a body: there, a field zod lacks is a required field the
+   * frontend never sends, and a field zod has and the API does not is one
+   * FastAPI either ignores or rejects outright. Both are a 422 on a real
+   * click, and both used to be invisible -- `validatedPost` takes the body as
+   * `unknown`, so nothing in the type system looked at it either.
+   */
+  it.each(requestPairs.map(([name, apiName]) => [name, apiName]))(
+    "%s sends exactly what %s accepts",
+    (name) => {
+      const [, apiName, zodJson] = requestPairs.find(([n]) => n === name)!;
+      const zodFields = fieldsOf(zodJson, {});
+      const api = resolve(apiSchemas[apiName], apiSchemas);
+      const apiFields = new Set(
+        Object.keys((api.properties as JsonSchema | undefined) ?? {}),
+      );
+      const required = (api.required as string[] | undefined) ?? [];
+      // Required-ness, not presence: under `io: "input"` an `.optional()` zod
+      // field still appears in `properties`, so a field the API requires and
+      // zod marks optional would read as present and 422 on the click that
+      // omits it. Zod may require more than the API does -- sending an
+      // optional field is always legal -- so this runs one way only.
+      const zodRequired = new Set(
+        (resolve(zodJson, {}).required as string[] | undefined) ?? [],
+      );
+
+      expect(
+        required.filter((field) => !zodRequired.has(field)),
+        `${name} does not require fields ${apiName} requires`,
+      ).toEqual([]);
+      expect(
+        [...zodFields.keys()].filter((field) => !apiFields.has(field)),
+        `${name} sends fields ${apiName} does not declare`,
+      ).toEqual([]);
+    },
+  );
 
   it("names every platform the API accepts", () => {
     // Not a schema pair, and `kinds()` below could not check it if it were:
