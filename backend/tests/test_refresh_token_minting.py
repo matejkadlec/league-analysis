@@ -13,6 +13,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from sqlalchemy import Select
 
 from app.features.auth.service import AuthService
 
@@ -109,6 +110,22 @@ async def test_rotation_revokes_and_replaces_in_one_commit() -> None:
     # so the Sign Out arriving just after a refresh revokes nothing while
     # answering "Successfully logged out".
     assert record.replaced_by_token_id == added[0].token_id
+
+
+async def test_rotation_locks_the_row_it_is_about_to_revoke() -> None:
+    """Without the lock, two tabs sharing one cookie both rotate it.
+
+    The check-then-write on `revoked_at` is only a check if the row is held
+    for the duration: otherwise both readers see NULL, one token forks into
+    two live families, and reuse detection never fires.
+    """
+    service, _added, db, _record = _rotating_service()
+
+    await service.rotate_refresh_token("raw-token")
+
+    lookup = db.execute.await_args_list[0].args[0]
+    assert isinstance(lookup, Select)
+    assert lookup._for_update_arg is not None
 
 
 async def test_issuing_honours_an_explicit_lifetime() -> None:
