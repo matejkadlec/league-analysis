@@ -17,6 +17,16 @@ from pydantic import (
 
 SPECIAL_CHARACTER_PATTERN = r"[!@#$%^&*(),.?\":{}|<>\-_+=\[\]\\/;'`~]"
 
+EMAIL_CHANGE_CODE_LENGTH = 6
+"""Digits in an email-change verification code.
+
+Lives here rather than beside the generator in `service.py` because the
+request pattern below is built from it and `service.py` imports this module,
+not the other way round. Three copies of `6` used to exist -- this pattern,
+the generator's zero-padding, and the range it drew from -- and the range was
+the one that did not move with the constant.
+"""
+
 DISPLAY_NAME_MIN_LENGTH = 3
 DISPLAY_NAME_MAX_LENGTH = 128
 DISPLAY_NAME_PATTERN = r"^[\p{L}](?:[\p{L}\p{M}_ ]*[\p{L}])?$"
@@ -160,7 +170,7 @@ class EmailChangeRequest(BaseModel):
 class EmailChangeVerifyRequest(BaseModel):
     """Schema for verifying an email-change code."""
 
-    code: str = Field(..., pattern=r"^\d{6}$")
+    code: str = Field(..., pattern=rf"^\d{{{EMAIL_CHANGE_CODE_LENGTH}}}$")
 
 
 class EmailChangeCodeResponse(BaseModel):

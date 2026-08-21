@@ -33,7 +33,12 @@ from .join_us_contact_submission import JoinUsContactSubmission
 from .models import User
 from .refresh_token import RefreshToken
 from .revoked_access_token import RevokedAccessToken
-from .schemas import JoinUsSubject, TokenData, UserCreate
+from .schemas import (
+    EMAIL_CHANGE_CODE_LENGTH,
+    JoinUsSubject,
+    TokenData,
+    UserCreate,
+)
 from .subject_counts import SubjectCounts
 
 
@@ -68,7 +73,6 @@ logger = structlog.get_logger(__name__)
 # Pre-computed Argon2 hash of "dummy_password_for_timing_protection"
 DUMMY_PASSWORD_HASH = "$argon2id$v=19$m=65536,t=3,p=4$qNVaS2lNCcH4vzfG+P9fSw$VpLQUmDVmdNQm7w0VIYso0IyglZSf1VDJ7qtaRkmnNQ"
 
-EMAIL_CHANGE_CODE_LENGTH = 6
 EMAIL_CHANGE_CODE_EXPIRY_MINUTES = 10
 EMAIL_CHANGE_MAX_FAILED_ATTEMPTS = 3
 EMAIL_CHANGE_LOCK_MINUTES = 5
@@ -236,7 +240,7 @@ class AuthService:
     @staticmethod
     def _generate_email_verification_code() -> str:
         """Generate random 6-digit numeric verification code."""
-        return f"{secrets.randbelow(1_000_000):0{EMAIL_CHANGE_CODE_LENGTH}d}"
+        return f"{secrets.randbelow(10**EMAIL_CHANGE_CODE_LENGTH):0{EMAIL_CHANGE_CODE_LENGTH}d}"
 
     @staticmethod
     def _generate_token_id() -> str:
