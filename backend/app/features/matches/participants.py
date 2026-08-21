@@ -20,7 +20,7 @@ from sqlalchemy import (
     Numeric as SQLDecimal,
 )
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.models import Base
 
@@ -290,10 +290,6 @@ class MatchParticipant(Base):
             "adds new challenges."
         ),
     )
-
-    # Relationships
-    match = relationship("Match", back_populates="participants")
-    player = relationship("Player", back_populates="match_participations")
 
 
 # Create composite indexes for common queries

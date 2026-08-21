@@ -9,10 +9,6 @@ could have been rewritten without anything going red.
 from app.features.matches.match_history import build_team_compositions_and_stats
 from app.features.matches.participants import MatchParticipant
 from app.features.matches.timeline import MatchTimeline
-from app.model_registry import import_all_models
-
-# Both models carry relationships to match and player models.
-import_all_models()
 
 
 def participant(

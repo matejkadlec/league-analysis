@@ -12,7 +12,7 @@ from sqlalchemy import (
 from sqlalchemy import (
     DateTime as SQLDateTime,
 )
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
 from app.core.models import Base
@@ -111,7 +111,6 @@ class PlayerLeague(Base):
     )
 
     # Relationships
-    player = relationship("Player", back_populates="leagues")
 
     @property
     def win_rate(self) -> float:

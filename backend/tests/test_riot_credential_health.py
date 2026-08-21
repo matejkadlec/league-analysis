@@ -21,11 +21,6 @@ from app.core.riot_api.errors import RateLimitError
 from app.features.settings import service as settings_service_module
 from app.features.settings.schemas import SettingUpdate
 from app.features.settings.service import SettingsService
-from app.model_registry import import_all_models
-
-# Instantiating `RiotAPIKey` configures the ORM mappers, which cannot resolve
-# their relationships until every model module has been imported.
-import_all_models()
 
 
 def _health(

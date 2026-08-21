@@ -1,7 +1,7 @@
 """Regressions for stale-PUUID classification and job completion bookkeeping."""
 
 from datetime import UTC, datetime
-from types import ModuleType, SimpleNamespace
+from types import SimpleNamespace
 from typing import Any, NoReturn, Self, cast, override
 from unittest.mock import AsyncMock, Mock
 
@@ -25,24 +25,6 @@ from app.features.jobs.player_sync import _failure_from_job, _finish_sync
 from app.features.players import service as player_service_module
 from app.features.players.models import Player
 from app.features.players.service import PlayerService
-
-# `Player` relationships are resolved by name, so every related mapper has to be
-# imported before the real model can be instantiated.
-from app.features.auth import models as _auth_models  # isort:skip
-from app.features.matches import models as _match_models  # isort:skip
-from app.features.matchmaking_analysis import models as _mm_models  # isort:skip
-from app.features.players import leagues as _league_models  # isort:skip
-from app.features.playstyle_analysis import models as _ps_models  # isort:skip
-
-# Naming the modules keeps the imports above from looking unused to a linter
-# while preserving the reason they exist: the mappers must be registered.
-_RELATED_MAPPERS: tuple[ModuleType, ...] = (
-    _auth_models,
-    _match_models,
-    _mm_models,
-    _league_models,
-    _ps_models,
-)
 
 FRESH_PUUID = "f" * 78
 

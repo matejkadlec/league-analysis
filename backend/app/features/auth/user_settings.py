@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Final
 
 from sqlalchemy import ForeignKey, String
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.models import Base, created_at_column, updated_at_column
 
@@ -36,4 +36,3 @@ class UserSettings(Base):
     )
 
     # Relationships
-    user = relationship("User", back_populates="settings")

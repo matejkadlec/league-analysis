@@ -11,7 +11,7 @@ from sqlalchemy import (
     Enum,
     String,
 )
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
 from app.core.models import Base, updated_at_column
@@ -81,5 +81,3 @@ class UserCookieConsent(Base):
     updated_at: Mapped[datetime] = updated_at_column(
         "When this consent record was last updated"
     )
-
-    user = relationship("User", back_populates="cookie_consent")

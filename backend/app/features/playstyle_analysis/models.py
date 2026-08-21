@@ -11,7 +11,7 @@ from sqlalchemy import (
     String,
 )
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.models import Base, created_at_column, updated_at_column
 
@@ -125,4 +125,3 @@ class PlaystyleAnalysis(Base):
     updated_at: Mapped[datetime] = updated_at_column("Last update time")
 
     # Relationship to Player
-    player = relationship("Player", back_populates="playstyle_analysis")

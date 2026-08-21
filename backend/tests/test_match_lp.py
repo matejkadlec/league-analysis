@@ -28,8 +28,8 @@ BASE_TIME = datetime(2026, 8, 15, 12, tzinfo=UTC)
 # The three doubles below mirror one column group each, with the column's own
 # `Mapped[...]` type. Real ORM instances are not usable here: constructing one
 # configures every mapper in the registry, which would drag the entire model
-# universe — and its relationship targets — into a pure-arithmetic test. Each
-# factory casts once, so the seam is named in exactly one place per type.
+# universe into a pure-arithmetic test. Each factory casts once, so the seam is
+# named in exactly one place per type.
 
 
 @dataclass

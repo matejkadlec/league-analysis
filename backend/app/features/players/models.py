@@ -12,7 +12,7 @@ from sqlalchemy import (
 from sqlalchemy import (
     DateTime as SQLDateTime,
 )
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.models import Base, created_at_column, updated_at_column
 
@@ -117,21 +117,6 @@ class Player(Base):
         SQLDateTime(timezone=True),
         nullable=True,
         comment="Last complete successful Match Fetcher match check",
-    )
-
-    # Database-only relationships - used by SQLAlchemy ORM but not directly referenced in Python code
-    # These relationships enable database queries and cascade operations
-    match_participations = relationship(
-        "MatchParticipant", back_populates="player", cascade="all, delete-orphan"
-    )
-    playstyle_analysis = relationship(
-        "PlaystyleAnalysis",
-        back_populates="player",
-        cascade="all, delete-orphan",
-        uselist=False,
-    )
-    leagues = relationship(
-        "PlayerLeague", back_populates="player", cascade="all, delete-orphan"
     )
 
 

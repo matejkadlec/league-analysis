@@ -24,7 +24,6 @@ from sqlalchemy.dialects import postgresql
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.features.playstyle_analysis.models import PlaystyleAnalysis
 from app.features.settings.schemas import (
     CardId,
     CardPreferencesResetRequest,
@@ -72,11 +71,6 @@ from app.features.smurf_boost_detection.statistics import (
     sample_variance,
     wilson_lower_bound,
 )
-
-# `Player` declares a relationship to this model by name, so the ORM registry
-# has to know it before any query over that mapper can be compiled. Naming the
-# class here is what keeps that import from reading as removable.
-_RELATIONSHIP_TARGET_REGISTERED = PlaystyleAnalysis
 
 CONSERVATIVE = {key: float(value) for key, value in PRESETS["conservative"].items()}
 
