@@ -83,11 +83,7 @@ beforeEach(() => {
 
 function renderExecutions() {
   return renderWithQueryClient(
-    <JobExecutions
-      executions={pageOf(1)}
-      jobs={[]}
-      selectedExecutionId={null}
-    />,
+    <JobExecutions jobs={[]} selectedExecutionId={null} />,
   );
 }
 

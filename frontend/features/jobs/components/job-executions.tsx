@@ -4,26 +4,23 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { unwrap, validatedGet } from "@/lib/core/api";
 import {
-  JobExecutionListResponse,
   JobExecution,
   JobExecutionListResponseSchema,
   JobConfiguration,
 } from "@/lib/core/schemas";
 import { Card, CardContent } from "@/components/ui/card";
-import { FileText, Loader2 } from "lucide-react";
+import { AlertTriangle, FileText, Loader2 } from "lucide-react";
 
 import { JobExecutionDetailsDialog } from "./job-execution-details-dialog";
 import { JobExecutionsTable } from "./job-executions-table";
 
 interface JobExecutionsProps {
-  executions: JobExecutionListResponse | null;
   jobs: JobConfiguration[];
   selectedExecutionId?: number | null;
   onExecutionSelect?: (executionId: number | null) => void;
 }
 
 export function JobExecutions({
-  executions: initialExecutions,
   jobs,
   selectedExecutionId,
   onExecutionSelect,
@@ -49,7 +46,7 @@ export function JobExecutions({
   // React Query keeps the previous pages (and their pageParams) stale and
   // retries on the next tick. It throws through `unwrap` rather than a bare
   // `Error` so the toast keeps the curated message -- see `ApiRequestError`.
-  const { data, isLoading, isFetching, hasNextPage, fetchNextPage } =
+  const { data, isError, isLoading, isFetching, hasNextPage, fetchNextPage } =
     useInfiniteQuery({
       queryKey: ["job-executions-infinite"],
       queryFn: async ({ pageParam }) => {
@@ -69,26 +66,20 @@ export function JobExecutions({
         );
         return loaded < lastPage.total ? allPages.length + 1 : undefined;
       },
-      enabled: !!initialExecutions,
       refetchInterval: 15000,
       refetchOnWindowFocus: false,
       refetchOnMount: false,
       refetchOnReconnect: false,
     });
 
-  // Until the query has ever succeeded, fall back to the executions the page
-  // handed in — the poll re-runs every 15 seconds behind a table someone is
-  // reading, and a failed poll must not empty it.
+  // A failed poll must not empty a table someone is reading: the queryFn
+  // re-throws rather than returning a failure envelope, so React Query keeps
+  // the previous pages stale and this reads them.
   const allExecutions = useMemo(
-    () =>
-      data?.pages.flatMap((page) => page.executions) ??
-      initialExecutions?.executions ??
-      [],
-    [data, initialExecutions],
+    () => data?.pages.flatMap((page) => page.executions) ?? [],
+    [data],
   );
-  const totalExecutions =
-    (data?.pages.at(-1)?.total ?? initialExecutions?.total) || 0;
-  const hasMore = hasNextPage || allExecutions.length < totalExecutions;
+  const totalExecutions = data?.pages.at(-1)?.total ?? 0;
   const internalSelectedExecution = useMemo(() => {
     if (selectedExecutionId !== undefined && selectedExecutionId !== null) {
       return (
@@ -104,7 +95,7 @@ export function JobExecutions({
     const observer = new IntersectionObserver(
       (entries) => {
         const first = entries[0];
-        if (first?.isIntersecting && hasMore && !isFetching) {
+        if (first?.isIntersecting && hasNextPage && !isFetching) {
           void fetchNextPage();
         }
       },
@@ -121,7 +112,7 @@ export function JobExecutions({
         observer.unobserve(currentRef);
       }
     };
-  }, [fetchNextPage, hasMore, isFetching]);
+  }, [fetchNextPage, hasNextPage, isFetching]);
 
   const getJobName = (jobConfigId: number): string => {
     return jobNameMap.get(jobConfigId) || `Job #${jobConfigId}`;
@@ -145,6 +136,26 @@ export function JobExecutions({
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             <p className="text-sm text-muted-foreground">
               Loading executions...
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Before this arm existed, a failed first load rendered the empty state
+  // below -- a scheduler whose API was down read as a scheduler that has
+  // never run. Later failures do not reach here: React Query keeps the pages
+  // it already has, so `allExecutions` is non-empty and the table stays up.
+  if (isError && allExecutions.length === 0) {
+    return (
+      <Card>
+        <CardContent className="py-8">
+          <div className="flex flex-col items-center justify-center gap-2 text-center">
+            <AlertTriangle className="h-8 w-8 text-destructive" />
+            <p className="text-sm text-muted-foreground">
+              Execution history could not be loaded. It is retried
+              automatically.
             </p>
           </div>
         </CardContent>
@@ -183,7 +194,7 @@ export function JobExecutions({
                 <Loader2 className="h-4 w-4 animate-spin" />
                 <span className="text-sm">Loading more executions...</span>
               </div>
-            ) : hasMore ? (
+            ) : hasNextPage ? (
               <div className="text-sm text-muted-foreground">
                 Showing {allExecutions.length} of {totalExecutions} executions
               </div>

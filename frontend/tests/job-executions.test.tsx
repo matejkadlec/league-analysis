@@ -73,14 +73,25 @@ const MATCH_FETCHER: JobConfiguration = {
   updated_at: "2026-01-01T00:00:00.000Z",
 };
 
+/**
+ * The component owns its query now, so a fixture is installed on the mocked
+ * `validatedGet` rather than handed in as a prop. It used to take both -- a
+ * seed prop from the page plus its own poll -- which meant two requests for
+ * the identical first page and, when the seed failed, an infinite query that
+ * never started behind a tidy "No job executions found".
+ */
 function renderExecutions(props: {
   executions: JobExecutionListResponse | null;
   jobs?: JobConfiguration[];
   selectedExecutionId?: number | null;
 }) {
+  validatedGet.mockResolvedValue(
+    props.executions === null
+      ? { success: false, error: { kind: "server", status: 500 } }
+      : { success: true, data: props.executions },
+  );
   const tree = (selectedExecutionId: number | null) => (
     <JobExecutions
-      executions={props.executions}
       jobs={props.jobs ?? [MATCH_FETCHER]}
       selectedExecutionId={selectedExecutionId}
     />
@@ -105,21 +116,37 @@ describe("the executions table on the jobs page", () => {
 
   it("keeps the rows on screen when the 15-second poll fails", async () => {
     // This query re-runs every 15 seconds behind a table someone is reading.
-    // The refusal path falls back to the executions handed in by the page, so
-    // a single failed poll must not empty the table -- otherwise a working
-    // scheduler momentarily looks like one that has never run.
-    validatedGet.mockResolvedValue({
-      success: false,
-      error: { kind: "server", status: 500, message: "boom" },
-    });
-
+    // The queryFn re-throws rather than returning a failure envelope, so
+    // React Query keeps the pages it already has -- a single failed poll must
+    // not empty the table, or a working scheduler momentarily looks like one
+    // that has never run.
     const { queryClient } = renderExecutions({
       executions: listOf([execution({ id: 41 })]),
     });
 
-    await waitFor(() => expect(validatedGet).toHaveBeenCalled());
+    expect(await screen.findByText("Match Fetcher")).toBeTruthy();
+
+    validatedGet.mockResolvedValue({
+      success: false,
+      error: { kind: "server", status: 500, message: "boom" },
+    });
+    await queryClient.refetchQueries({ queryKey: ["job-executions-infinite"] });
 
     expect(screen.getByText("Match Fetcher")).toBeTruthy();
+    expect(screen.queryByText("No job executions found")).toBeNull();
+
+    queryClient.clear();
+  });
+
+  it("says the history could not be loaded rather than that nothing ran", async () => {
+    // The distinction the page could not make while a failed seed query left
+    // the infinite query disabled: an API that is down is not a scheduler
+    // that has never run.
+    const { queryClient } = renderExecutions({ executions: null });
+
+    expect(
+      await screen.findByText(/Execution history could not be loaded/),
+    ).toBeTruthy();
     expect(screen.queryByText("No job executions found")).toBeNull();
 
     queryClient.clear();
@@ -129,8 +156,6 @@ describe("the executions table on the jobs page", () => {
     // Executions and job configurations arrive from two different requests. A
     // job removed, renamed, or simply not in this page's list still has rows
     // here, and the fallback is what keeps the first column readable.
-    validatedGet.mockResolvedValue({ success: false, error: {} });
-
     const { queryClient } = renderExecutions({
       executions: listOf([execution({ id: 42, job_config_id: 99 })]),
       jobs: [MATCH_FETCHER],
@@ -146,8 +171,6 @@ describe("the executions table on the jobs page", () => {
     // that is not in the loaded page -- an old link, or a row past the end of
     // what has been paged in. That has to resolve to a closed dialog rather
     // than throwing on a missing row.
-    validatedGet.mockResolvedValue({ success: false, error: {} });
-
     const { queryClient } = renderExecutions({
       executions: listOf([execution({ id: 42, job_config_id: 7 })]),
       selectedExecutionId: 42,
@@ -174,8 +197,6 @@ describe("the executions table on the jobs page", () => {
     // it is the answer -- including when it resolves to nothing. Falling back
     // to the remembered row instead would leave the previous execution's
     // details on screen under a URL naming a different one.
-    validatedGet.mockResolvedValue({ success: false, error: {} });
-
     const { queryClient, setSelectedExecutionId } = renderExecutions({
       executions: listOf([execution({ id: 42, job_config_id: 7 })]),
       selectedExecutionId: null,
@@ -192,8 +213,6 @@ describe("the executions table on the jobs page", () => {
   });
 
   it("distinguishes a partly loaded list from a fully loaded one", async () => {
-    validatedGet.mockResolvedValue({ success: false, error: {} });
-
     const { queryClient } = renderExecutions({
       executions: listOf([execution({ id: 42 })], 57),
     });
@@ -213,8 +232,6 @@ describe("the executions table on the jobs page", () => {
   });
 
   it("says nothing has run rather than showing an empty table", async () => {
-    validatedGet.mockResolvedValue({ success: false, error: {} });
-
     const { queryClient } = renderExecutions({ executions: listOf([]) });
 
     expect(await screen.findByText("No job executions found")).toBeTruthy();

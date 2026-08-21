@@ -6,7 +6,6 @@ import { unwrap, validatedGet } from "@/lib/core/api";
 import {
   JobConfigurationSchema,
   JobConfiguration,
-  JobExecutionListResponseSchema,
   JobStatusResponseSchema,
 } from "@/lib/core/schemas";
 import { JobCard, JobExecutions, SystemStatus } from "@/features/jobs";
@@ -57,23 +56,6 @@ function JobsPageContent() {
     refetchInterval: REFRESH_INTERVAL,
   });
 
-  // Fetch all recent executions
-  const { data: executionsResult, isLoading: isLoadingExecutions } = useQuery({
-    queryKey: ["job-executions-all"],
-    queryFn: async () =>
-      unwrap(
-        await validatedGet(
-          JobExecutionListResponseSchema,
-          "/jobs/executions/all",
-          { page: 1, size: 20 },
-        ),
-      ),
-    // No `refetchInterval`: `JobExecutions` polls this exact URL and query
-    // string on the same 15s interval under its own infinite-query key. This
-    // one fetches once per mount, to gate that query and to seed its first
-    // paint.
-  });
-
   // Fetch system status
   const {
     data: statusResult,
@@ -104,7 +86,6 @@ function JobsPageContent() {
   }, [jobsUpdatedAt, statusUpdatedAt]);
 
   const jobs = jobsResult ?? [];
-  const executions = executionsResult ?? null;
   const status = statusResult ?? null;
 
   return (
@@ -187,20 +168,11 @@ function JobsPageContent() {
 
         {/* Recent Executions Tab */}
         <TabsContent value="executions" className="mt-6">
-          {isLoadingExecutions ? (
-            <Card className="p-8">
-              <div className="flex items-center justify-center">
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-              </div>
-            </Card>
-          ) : (
-            <JobExecutions
-              executions={executions}
-              jobs={jobs}
-              selectedExecutionId={selectedExecutionId}
-              onExecutionSelect={setSelectedExecutionId}
-            />
-          )}
+          <JobExecutions
+            jobs={jobs}
+            selectedExecutionId={selectedExecutionId}
+            onExecutionSelect={setSelectedExecutionId}
+          />
         </TabsContent>
       </Tabs>
     </div>
