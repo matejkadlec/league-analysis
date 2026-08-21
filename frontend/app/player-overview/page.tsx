@@ -63,7 +63,7 @@ function PlayerOverviewContent({ puuid }: { puuid: string }) {
           await validatedGet(
             ChampionStatsResponseSchema,
             `/matches/player/${puuid}/champion-stats`,
-            { queue: 420 },
+            { queues: "420" },
           ),
         ),
     },
@@ -75,7 +75,7 @@ function PlayerOverviewContent({ puuid }: { puuid: string }) {
         await validatedGet(
           LaneStatsResponseSchema,
           `/matches/player/${puuid}/lane-stats`,
-          { queue: 420 },
+          { queues: "420" },
         ),
       ),
   });

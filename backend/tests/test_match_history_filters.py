@@ -11,10 +11,12 @@ from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.features.matches.models import Match
+from app.features.matches.participants import MatchParticipant
 from app.features.matches.router import parse_match_queue_ids
 from app.features.matches.service import (
     MatchService,
     build_match_history_conditions,
+    restrict_participants_to_queues,
 )
 
 
@@ -54,6 +56,35 @@ def test_history_conditions_search_every_participant_before_pagination() -> None
     assert "searchable_participant.tag_line" in compiled
     assert "concat(searchable_participant.game_name, '#'," in compiled
     assert "Kai/%%Sa/_#EUW" in compiled
+
+
+def _participant_sql(queue_ids: tuple[int, ...] | None) -> str:
+    query = restrict_participants_to_queues(
+        select(MatchParticipant).where(MatchParticipant.puuid == "selected-puuid"),
+        queue_ids,
+    )
+    return str(
+        query.compile(
+            dialect=postgresql.dialect(),
+            compile_kwargs={"literal_binds": True},
+        )
+    )
+
+
+def test_champion_and_lane_aggregates_take_a_queue_union() -> None:
+    # These two endpoints took a single `queue` int while every other match
+    # query took a union; the aggregates silently answered for one queue.
+    compiled = _participant_sql((420, 440))
+
+    assert "JOIN core.matches" in compiled
+    assert "matches.queue_id IN (420, 440)" in compiled
+
+
+def test_no_queue_filter_does_not_join_the_match_row() -> None:
+    compiled = _participant_sql(None)
+
+    assert "JOIN" not in compiled
+    assert "queue_id" not in compiled
 
 
 async def test_empty_page_retains_filtered_total_for_client_clamping() -> None:
