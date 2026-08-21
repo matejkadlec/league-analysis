@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { normalizeApiError, unwrap } from "@/lib/core/api";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Search, StopCircle } from "lucide-react";
@@ -32,9 +32,15 @@ import {
   isPlatform,
 } from "@/lib/core/platform-utils";
 import type { Player } from "@/lib/core/schemas";
+import { useDebouncedValue } from "@/lib/core/use-debounced-value";
 import { cn } from "@/lib/core/utils";
 
+import { playerQueryKey } from "../player-query";
 import { formatRiotId, parseRiotId, type RiotIdParts } from "../utils/riot-id";
+
+// Long enough that a typed Riot ID is one suggestion request, short enough
+// that the list still feels attached to the keyboard.
+const PLAYER_SEARCH_DEBOUNCE_MS = 250;
 
 interface DiscoverAttempt {
   riotId: RiotIdParts;
@@ -80,20 +86,16 @@ export function PlayerSelector({
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [searchValue, setSearchValue] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [activeSuggestion, setActiveSuggestion] = useState(0);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [isSelecting, setIsSelecting] = useState(false);
   const [pendingRiotId, setPendingRiotId] = useState<RiotIdParts | null>(null);
   const [platform, setPlatform] = useState<Platform>("eun1");
 
-  useEffect(() => {
-    const timeout = window.setTimeout(
-      () => setDebouncedSearch(searchValue.trim()),
-      250,
-    );
-    return () => window.clearTimeout(timeout);
-  }, [searchValue]);
+  const debouncedSearch = useDebouncedValue(
+    searchValue.trim(),
+    PLAYER_SEARCH_DEBOUNCE_MS,
+  );
 
   const suggestionsQuery = useQuery({
     queryKey: ["player-suggestions", debouncedSearch, "all-platforms"],
@@ -117,7 +119,6 @@ export function PlayerSelector({
     try {
       await onPlayerSelected(player);
       setSearchValue("");
-      setDebouncedSearch("");
       setIsSearchFocused(false);
     } catch {
       toast({
@@ -148,7 +149,7 @@ export function PlayerSelector({
       setPendingRiotId(null);
       void queryClient.invalidateQueries({ queryKey: ["player-suggestions"] });
       void queryClient.invalidateQueries({
-        queryKey: ["player", player.puuid],
+        queryKey: playerQueryKey(player.puuid),
       });
       await choosePlayer(player);
     },

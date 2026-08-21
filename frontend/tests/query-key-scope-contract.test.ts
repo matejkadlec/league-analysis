@@ -24,6 +24,10 @@ const PLAYER_INDEPENDENT_KEYS = new Set([
   "service-status",
   "settings",
   "tracked-players",
+  // The signed-in account, not a League player: `USER_QUERY_KEY` in
+  // `settings-helpers.ts`. It was outside this contract entirely until the
+  // scan below learned to read key factories.
+  "user",
 ]);
 
 interface QueryKeyUse {
@@ -33,14 +37,29 @@ interface QueryKeyUse {
   carriesPuuid: boolean;
 }
 
-/** Every inline `queryKey: [...]` literal, with the leading namespace string. */
+/**
+ * Every key array this codebase writes, with its leading namespace string.
+ *
+ * Two spellings count: the inline `queryKey: [...]` at a call site, and the
+ * array a key factory returns. A key that moved into a factory is still a key
+ * -- reading only the inline form would let the last call site move and quietly
+ * drop the namespace from this contract's view.
+ */
+const KEY_ARRAY_PATTERNS = [
+  // [^\]] already spans newlines, so no dotall flag is needed.
+  /queryKey:\s*\[([^\]]*)\]/g,
+  /QUERY_KEY\s*=\s*\[([^\]]*)\]/g,
+  /function\s+\w*QueryKey\b[^{]*\{[^}]*?return\s*\[([^\]]*)\]/g,
+];
+
 function queryKeyUses(): QueryKeyUse[] {
   return allSourceFiles().flatMap((path) => {
     const source = readFileSync(path, "utf8");
     const uses: QueryKeyUse[] = [];
 
-    // [^\]] already spans newlines, so no dotall flag is needed.
-    for (const match of source.matchAll(/queryKey:\s*\[([^\]]*)\]/g)) {
+    for (const match of KEY_ARRAY_PATTERNS.flatMap((pattern) => [
+      ...source.matchAll(pattern),
+    ])) {
       // A comment inside the array must not be read as a key element — it
       // would let `["matches", otherId /* puuid */]` pass as scoped.
       // The single capture group always participates in a successful match.

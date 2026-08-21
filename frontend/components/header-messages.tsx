@@ -13,7 +13,10 @@ import {
   readOptionalStorage,
   writeOptionalStorage,
 } from "@/features/cookie-consent/utils/consent-storage";
-import { serviceStatusQueryOptions } from "@/lib/core/service-status-query";
+import {
+  SERVICE_STATUS_QUERY_KEY,
+  serviceStatusQueryOptions,
+} from "@/lib/core/service-status-query";
 import { cn } from "@/lib/core/utils";
 import { RIOT_CREDENTIAL_HEALTH_UPDATED_EVENT } from "@/lib/core/riot-credential-health-events";
 
@@ -136,7 +139,9 @@ export function HeaderMessages() {
 
   useEffect(() => {
     const refreshCredentialHealth = () => {
-      void queryClient.invalidateQueries({ queryKey: ["service-status"] });
+      void queryClient.invalidateQueries({
+        queryKey: SERVICE_STATUS_QUERY_KEY,
+      });
     };
     window.addEventListener(
       RIOT_CREDENTIAL_HEALTH_UPDATED_EVENT,

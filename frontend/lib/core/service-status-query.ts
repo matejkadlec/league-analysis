@@ -3,6 +3,9 @@ import { queryOptions } from "@tanstack/react-query";
 import { unwrap, validatedGet } from "@/lib/core/api";
 import { ServiceStatusSchema } from "@/lib/core/schemas";
 
+/** The cache both observers share; every write to the key spells it from here. */
+export const SERVICE_STATUS_QUERY_KEY = ["service-status"] as const;
+
 /**
  * The one credential-health read.
  *
@@ -18,7 +21,7 @@ import { ServiceStatusSchema } from "@/lib/core/schemas";
  */
 export function serviceStatusQueryOptions(options?: { enabled?: boolean }) {
   return queryOptions({
-    queryKey: ["service-status"],
+    queryKey: SERVICE_STATUS_QUERY_KEY,
     queryFn: async () =>
       unwrap(
         await validatedGet(ServiceStatusSchema, "/settings/service-status"),

@@ -9,6 +9,7 @@ import {
   MatchStatsResponseSchema,
 } from "@/lib/core/schemas";
 import { normalizeApiError, unwrap, validatedGet } from "@/lib/core/api";
+import { useDebouncedValue } from "@/lib/core/use-debounced-value";
 import { LG_BREAKPOINT_QUERY, useMediaQuery } from "@/lib/core/use-media-query";
 import { usePlayerSyncRun } from "@/features/players";
 import { getMatchHistoryErrorMessage } from "../utils/match-history-error";
@@ -59,7 +60,6 @@ export function MatchHistory({ puuid, lastUpdated }: MatchHistoryProps) {
     MatchHistoryQueueFilter[]
   >([...DEFAULT_MATCH_HISTORY_QUEUE_SELECTION]);
   const [matchSearch, setMatchSearch] = useState("");
-  const [debouncedMatchSearch, setDebouncedMatchSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState<MatchHistoryPageSize>(
     DEFAULT_MATCH_HISTORY_PAGE_SIZE,
@@ -68,14 +68,10 @@ export function MatchHistory({ puuid, lastUpdated }: MatchHistoryProps) {
   const [pageSizeOpen, setPageSizeOpen] = useState(false);
   const queueQueryParam = getMatchHistoryQueueQuery(activeQueueFilters);
   const normalizedMatchSearch = matchSearch.trim();
-
-  useEffect(() => {
-    const timeoutId = window.setTimeout(() => {
-      setDebouncedMatchSearch(normalizedMatchSearch);
-    }, MATCH_HISTORY_SEARCH_DEBOUNCE_MS);
-
-    return () => window.clearTimeout(timeoutId);
-  }, [normalizedMatchSearch]);
+  const debouncedMatchSearch = useDebouncedValue(
+    normalizedMatchSearch,
+    MATCH_HISTORY_SEARCH_DEBOUNCE_MS,
+  );
 
   /* eslint-disable react-hooks/set-state-in-effect -- Optional browser preferences initialize after hydration to preserve a stable server snapshot. */
   useEffect(() => {
