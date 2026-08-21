@@ -5,7 +5,7 @@ from __future__ import annotations
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from app.core.rate_limiter import rate_limit
+from app.core.http_rate_limit import rate_limit
 from app.features.auth.dependencies import (
     CurrentUserDep,
     get_current_active_user,

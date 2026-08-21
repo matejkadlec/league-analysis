@@ -5,7 +5,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
-from app.core.rate_limiter import rate_limit
+from app.core.http_rate_limit import rate_limit
 from app.core.schemas import MessageResponse
 from app.features.auth.dependencies import get_current_active_user
 from app.features.jobs.maintenance import RiotWriterMaintenanceActiveError

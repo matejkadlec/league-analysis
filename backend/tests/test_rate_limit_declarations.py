@@ -14,7 +14,7 @@ from __future__ import annotations
 
 # Importing the app is what registers every router, and therefore every limit.
 import app.main
-from app.core.rate_limiter import limiter
+from app.core.http_rate_limit import limiter
 
 DECLARED_LIMITS: dict[str, str] = {
     "app.features.auth.router.login": "5 per 1 minute",

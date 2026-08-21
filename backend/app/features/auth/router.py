@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Request, Response, 
 from fastapi.security import OAuth2PasswordRequestForm
 
 from app.core.http_errors import http_error
-from app.core.rate_limiter import rate_limit
+from app.core.http_rate_limit import rate_limit
 from app.core.schemas import MessageResponse
 
 from .cookies import (
