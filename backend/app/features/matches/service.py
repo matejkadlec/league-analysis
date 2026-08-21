@@ -64,17 +64,6 @@ class SyncablePlayer(Protocol):
     def platform(self) -> str: ...
 
 
-def normalize_match_queue_ids(
-    queue: int | None, queue_ids: Sequence[int] | None
-) -> tuple[int, ...] | None:
-    """Return one stable queue union while preserving the legacy scalar filter."""
-    if queue_ids is not None:
-        return tuple(dict.fromkeys(queue_ids)) or None
-    if queue is not None:
-        return (queue,)
-    return None
-
-
 def build_match_history_conditions(
     puuid: str,
     queue_ids: Sequence[int] | None = None,
@@ -163,7 +152,6 @@ class MatchService:
         puuid: str,
         start: int = 0,
         count: int = 20,
-        queue: int | None = None,
         queue_ids: Sequence[int] | None = None,
         start_time: int | None = None,
         end_time: int | None = None,
@@ -179,7 +167,6 @@ class MatchService:
             puuid: Player PUUID
             start: Start index for pagination
             count: Number of matches to return
-            queue: Filter by queue ID
             start_time: Start timestamp
             end_time: End timestamp
             exclude_aram: Whether to exclude queue 450 (ARAM)
@@ -188,13 +175,11 @@ class MatchService:
             MatchListResponse with matches from database
         """
         try:
-            effective_queue_ids = normalize_match_queue_ids(queue, queue_ids)
-
             db_matches, total_count, total_analyzed = await self._fetch_match_page(
                 puuid=puuid,
                 start=start,
                 count=count,
-                queue_ids=effective_queue_ids,
+                queue_ids=queue_ids,
                 start_time=start_time,
                 end_time=end_time,
                 exclude_aram=exclude_aram,
@@ -235,7 +220,6 @@ class MatchService:
         puuid: str,
         start: int = 0,
         count: int = 20,
-        queue: int | None = None,
         queue_ids: Sequence[int] | None = None,
         search: str | None = None,
         exclude_aram: bool = False,
@@ -250,19 +234,17 @@ class MatchService:
             puuid: Player PUUID
             start: Start index for pagination
             count: Number of matches to return
-            queue: Filter by queue ID
             exclude_aram: Whether to exclude queue 450 (ARAM)
 
         Returns:
             MatchListWithPlayerDataResponse with detailed match data
         """
         try:
-            effective_queue_ids = normalize_match_queue_ids(queue, queue_ids)
             db_matches, total_count, total_analyzed = await self._fetch_match_page(
                 puuid=puuid,
                 start=start,
                 count=count,
-                queue_ids=effective_queue_ids,
+                queue_ids=queue_ids,
                 search=search,
                 exclude_aram=exclude_aram,
             )
@@ -377,7 +359,6 @@ class MatchService:
     async def get_player_stats(
         self,
         puuid: str,
-        queue: int | None = None,
         queue_ids: Sequence[int] | None = None,
         limit: int | None = None,
         exclude_aram: bool = False,
@@ -387,7 +368,6 @@ class MatchService:
 
         Args:
             puuid: Player PUUID
-            queue: Filter by queue ID
             limit: Number of matches to analyze. If None, analyze all matches.
             exclude_aram: Whether to exclude queue 450 (ARAM)
 
@@ -401,7 +381,6 @@ class MatchService:
             matches = await self.get_player_matches(
                 puuid,
                 count=fetch_limit,
-                queue=queue,
                 queue_ids=queue_ids,
                 exclude_aram=exclude_aram,
             )

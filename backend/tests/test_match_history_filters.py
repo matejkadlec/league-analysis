@@ -15,7 +15,6 @@ from app.features.matches.router import parse_match_queue_ids
 from app.features.matches.service import (
     MatchService,
     build_match_history_conditions,
-    normalize_match_queue_ids,
 )
 
 
@@ -23,8 +22,6 @@ def test_queue_parser_supports_one_stable_union_and_legacy_scalar() -> None:
     assert parse_match_queue_ids(None, "420, 440,420") == (420, 440)
     assert parse_match_queue_ids(450, None) == (450,)
     assert parse_match_queue_ids(None, None) is None
-    assert normalize_match_queue_ids(450, None) == (450,)
-    assert normalize_match_queue_ids(450, [420, 440]) == (420, 440)
 
 
 @pytest.mark.parametrize("queues", ["", "420,", "ARAM", "0", "-1"])
@@ -78,7 +75,7 @@ async def test_empty_page_retains_filtered_total_for_client_clamping() -> None:
         puuid="selected-puuid",
         start=75,
         count=25,
-        queue_ids=[420, 440],
+        queue_ids=(420, 440),
         search="Ahri",
     )
 
