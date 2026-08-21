@@ -9,6 +9,8 @@ import * as exportedSchemas from "@/lib/core/schemas";
 
 import { allSourceFiles } from "./source-scan-support";
 
+import { MATCH_HISTORY_PAGE_SIZES } from "../features/matches/match-history-pagination";
+
 /**
  * Every zod schema must accept everything its OpenAPI counterpart may send.
  *
@@ -195,6 +197,36 @@ describe("zod against the OpenAPI contract", () => {
       .map(([path, files]) => `${path} (${files.join(", ")})`);
 
     expect(unserved).toEqual([]);
+  });
+
+  /**
+   * The page-size picker offers a fixed list; the endpoint bounds what it will
+   * accept. Nothing connected them, and the largest option is exactly the
+   * endpoint's ceiling -- so the next option added to the picker is a 422 on a
+   * real click, and lowering the bound on the backend is the same 422 from the
+   * other side. Both sides are hand-maintained lists of numbers.
+   */
+  it("offers only page sizes the match endpoint accepts", () => {
+    const detailed = document.paths[
+      `${API_PREFIX}/matches/player/{puuid}/detailed`
+    ] as
+      | { get?: { parameters?: { name: string; schema: JsonSchema }[] } }
+      | undefined;
+    const count = detailed?.get?.parameters?.find((p) => p.name === "count");
+    // Signal first: a renamed parameter, or one that lost its bounds, would
+    // leave nothing to compare and every page size would pass by default.
+    expect(
+      count?.schema.maximum,
+      "the detailed-matches `count` parameter has no maximum",
+    ).toBeTypeOf("number");
+
+    const minimum = Number(count?.schema.minimum ?? 1);
+    const maximum = Number(count?.schema.maximum);
+    const rejected = MATCH_HISTORY_PAGE_SIZES.filter(
+      (size) => size < minimum || size > maximum,
+    );
+
+    expect(rejected).toEqual([]);
   });
 
   const pairs = Object.entries(exportedSchemas).flatMap(([name, value]) => {
