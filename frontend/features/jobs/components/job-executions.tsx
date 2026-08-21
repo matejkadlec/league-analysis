@@ -33,11 +33,10 @@ export function JobExecutions({
   const PAGE_SIZE = 20;
   const loadMoreRef = useRef<HTMLDivElement>(null);
 
-  const jobNameMap = useMemo(() => {
-    const map = new Map<number, string>();
-    jobs.forEach((job) => map.set(job.id, job.name));
-    return map;
-  }, [jobs]);
+  const jobNameMap = useMemo(
+    () => new Map(jobs.map((job) => [job.id, job.name] as const)),
+    [jobs],
+  );
 
   // Fixed-size pages, not one growing request: the backend caps `size` at
   // 100, so the old growing-`size` query 422'd on the sixth load-more.

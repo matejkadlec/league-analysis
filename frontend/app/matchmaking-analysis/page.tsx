@@ -7,6 +7,7 @@ import { Scale } from "lucide-react";
 import { Player } from "@/lib/core/schemas";
 import {
   PlayerSelector,
+  formatRiotId,
   playerQueryKey,
   playerQueryOptions,
   usePlayerContext,
@@ -61,9 +62,7 @@ function MatchmakingAnalysisContent() {
   );
   const isLoadingInitialPlayer =
     isLoadingReferencePlayer || isLoadingAnalyzedPlayer;
-  const analyzedPlayerLabel = analyzedPlayer
-    ? `${analyzedPlayer.game_name}${analyzedPlayer.tag_line ? `#${analyzedPlayer.tag_line}` : ""}`
-    : "";
+  const analyzedPlayerLabel = analyzedPlayer ? formatRiotId(analyzedPlayer) : "";
 
   return (
     <>

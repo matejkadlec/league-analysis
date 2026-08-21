@@ -61,10 +61,15 @@ class CurrentPlayerUpdate(BaseModel):
 
 
 class PlayerContextResponse(BaseModel):
-    """Per-user navigation context over shared canonical player records."""
+    """Per-user navigation context over shared canonical player records.
+
+    The tracked list is deliberately not here. `GET /players/tracked/list` is
+    what the surface that renders it polls, and carrying a second copy on this
+    response meant a join per context read and per player switch that nothing
+    read.
+    """
 
     current_player: PlayerResponse | None = None
-    tracked_players: list[PlayerResponse]
 
 
 class PlayerSyncRunResponse(BaseModel):

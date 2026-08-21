@@ -37,9 +37,7 @@ def group_participants_by_match(
     """Group participant rows by match ID."""
     participants_by_match: dict[str, list[MatchParticipant]] = {}
     for participant in all_participants:
-        if participant.match_id not in participants_by_match:
-            participants_by_match[participant.match_id] = []
-        participants_by_match[participant.match_id].append(participant)
+        participants_by_match.setdefault(participant.match_id, []).append(participant)
     return participants_by_match
 
 

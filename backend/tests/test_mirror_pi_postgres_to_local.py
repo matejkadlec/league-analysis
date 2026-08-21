@@ -36,6 +36,31 @@ def mirror() -> ModuleType:
     return load_script()
 
 
+@pytest.fixture
+def local_config(mirror: ModuleType) -> object:
+    """A local target that satisfies the mirror contract."""
+    return mirror.LocalDatabaseConfig(
+        database=mirror.LOCAL_DATABASE,
+        user="admin",
+        password="opaque-test-value",
+        host="127.0.0.1",
+        port=5432,
+        environment="dev",
+    )
+
+
+@pytest.fixture
+def mirror_paths(mirror: ModuleType, tmp_path: Path) -> object:
+    """Every mirror path pointed at a throwaway directory."""
+    return mirror.MirrorPaths(
+        root=tmp_path,
+        state_directory=tmp_path,
+        state_file=tmp_path / "state",
+        lock_file=tmp_path / "lock",
+        snapshot_sql=tmp_path / "snapshot.sql",
+    )
+
+
 @pytest.mark.parametrize(
     "value",
     ["localhost", "127.0.0.1", "127.0.0.1/32", "::1", "[::1]"],
@@ -250,39 +275,19 @@ def test_failed_remote_download_removes_partial_archive(
     assert not archive.exists()
 
 
-def test_drop_database_refuses_unrelated_name(mirror: ModuleType) -> None:
-    config = mirror.LocalDatabaseConfig(
-        database=mirror.LOCAL_DATABASE,
-        user="admin",
-        password="opaque-test-value",
-        host="127.0.0.1",
-        port=5432,
-        environment="dev",
-    )
-
+def test_drop_database_refuses_unrelated_name(
+    mirror: ModuleType, local_config: object
+) -> None:
     with pytest.raises(mirror.MirrorRefusal, match="outside the mirror contract"):
-        mirror.drop_database(config, "another_project")
+        mirror.drop_database(local_config, "another_project")
 
 
 def test_matching_snapshot_skips_full_mirror(
-    mirror: ModuleType, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    mirror: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    local_config: object,
+    mirror_paths: object,
 ) -> None:
-    config = mirror.LocalDatabaseConfig(
-        database=mirror.LOCAL_DATABASE,
-        user="admin",
-        password="opaque-test-value",
-        host="127.0.0.1",
-        port=5432,
-        environment="dev",
-    )
-    paths = mirror.MirrorPaths(
-        root=tmp_path,
-        state_directory=tmp_path,
-        state_file=tmp_path / "state",
-        lock_file=tmp_path / "lock",
-        snapshot_sql=tmp_path / "snapshot.sql",
-    )
-
     def identical_snapshot(*_args: object) -> str:
         return "same"
 
@@ -295,8 +300,8 @@ def test_matching_snapshot_skips_full_mirror(
     monkeypatch.setattr(mirror, "mirror", unexpected_mirror)
 
     assert not mirror.refresh_if_changed(
-        config,
-        paths,
+        local_config,
+        mirror_paths,
         mirror.REMOTE_HOST,
         mirror.REMOTE_DATABASE,
         "20260813_0010",
@@ -304,23 +309,11 @@ def test_matching_snapshot_skips_full_mirror(
 
 
 def test_changed_snapshot_runs_full_mirror(
-    mirror: ModuleType, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    mirror: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    local_config: object,
+    mirror_paths: object,
 ) -> None:
-    config = mirror.LocalDatabaseConfig(
-        database=mirror.LOCAL_DATABASE,
-        user="admin",
-        password="opaque-test-value",
-        host="127.0.0.1",
-        port=5432,
-        environment="dev",
-    )
-    paths = mirror.MirrorPaths(
-        root=tmp_path,
-        state_directory=tmp_path,
-        state_file=tmp_path / "state",
-        lock_file=tmp_path / "lock",
-        snapshot_sql=tmp_path / "snapshot.sql",
-    )
     calls: list[tuple[object, ...]] = []
 
     def source_snapshot(*_args: object) -> str:
@@ -337,8 +330,8 @@ def test_changed_snapshot_runs_full_mirror(
     monkeypatch.setattr(mirror, "mirror", record_mirror)
 
     assert mirror.refresh_if_changed(
-        config,
-        paths,
+        local_config,
+        mirror_paths,
         mirror.REMOTE_HOST,
         mirror.REMOTE_DATABASE,
         "20260813_0010",

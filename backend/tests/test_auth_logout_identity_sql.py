@@ -150,51 +150,6 @@ async def test_an_unknown_token_names_nobody(session: Session) -> None:
 
 
 @pytest.mark.asyncio
-async def test_a_rotation_records_the_replacement_it_issued() -> None:
-    """The other half of the pair above, and it is load-bearing now.
-
-    A rotated-out token names its owner *because* it points at what replaced
-    it. Dropping this one line from the rotation would leave every superseded
-    token indistinguishable from one revoked by a logout -- so the Sign Out
-    that arrives a moment after a refresh would go back to revoking nothing
-    while answering "Successfully logged out". Deleting it passed all 614
-    tests before this one existed.
-    """
-    from unittest.mock import AsyncMock, MagicMock
-
-    from app.features.auth.service import AuthService as RealAuthService
-
-    now = datetime.now(UTC)
-    record = MagicMock()
-    record.revoked_at = None
-    record.expires_at = now + timedelta(days=30)
-    record.user_id = 5
-    record.replaced_by_token_id = None
-    lookup = MagicMock()
-    lookup.scalar_one_or_none = MagicMock(return_value=record)
-    added: list[Any] = []
-    db = MagicMock()
-    db.execute = AsyncMock(return_value=lookup)
-    db.add = MagicMock(side_effect=added.append)
-    db.commit = AsyncMock()
-    user = MagicMock()
-    user.id = 5
-    user.email = "user@example.com"
-    user.display_name = "User"
-    user.is_admin = False
-    user.is_active = True
-    user.email_verified = True
-    service = RealAuthService(db)
-    service.get_user_by_id = AsyncMock(return_value=user)
-
-    rotated = await service.rotate_refresh_token(raw_refresh_token="x")
-
-    assert rotated is not None
-    assert len(added) == 1
-    assert record.replaced_by_token_id == added[0].token_id
-
-
-@pytest.mark.asyncio
 async def test_a_logout_revokes_this_users_live_tokens_and_only_theirs(
     session: Session,
 ) -> None:

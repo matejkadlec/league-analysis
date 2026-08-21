@@ -60,11 +60,14 @@ def advanced_int(advanced_stats: object, key: str) -> int:
         return 0
 
 
-def page_window(start: int, count: int, total_count: int) -> tuple[int, int]:
-    """Convert start/count pagination into page and page-count."""
-    if count > 0:
-        return start // count, (total_count + count - 1) // count
-    return 0, 0
+def page_of(start: int, count: int) -> int:
+    """The zero-based page a start/count window lands on.
+
+    The page count that used to come back with it is a `computed_field` on
+    `PaginatedResponse` now. The `count > 0` guard stays here rather than at
+    each call site: this is arithmetic on a caller-supplied page size.
+    """
+    return start // count if count > 0 else 0
 
 
 def _accumulate_group_stats(

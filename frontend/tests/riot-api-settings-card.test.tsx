@@ -10,6 +10,8 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { formatDateTime } from "@/lib/core/format";
+
 const { validatedGet, validatedPut, validatedPost, toast } = vi.hoisted(() => ({
   validatedGet: vi.fn(),
   validatedPut: vi.fn(),
@@ -115,6 +117,21 @@ describe("the card that swaps the Riot API key", () => {
 
   afterEach(() => {
     cleanup();
+  });
+
+  it("stamps the stored key in the viewer's clock, not UTC", async () => {
+    // This surface used to render its own `toLocaleString("en-GB", { timeZone:
+    // "UTC" })`, so an operator comparing "last updated" against a job run --
+    // every other timestamp in the app being local -- read two different
+    // clocks. `formatDateTime` is that one clock; the assertion is here
+    // because nothing else stops a fifth copy reappearing.
+    const queryClient = renderCard();
+
+    await screen.findByText(
+      `Last updated: ${formatDateTime(DB_SETTING.updated_at, { seconds: true })}`,
+    );
+
+    queryClient.clear();
   });
 
   it("refuses to save a key that is not shaped like a Riot key", async () => {

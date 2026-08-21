@@ -35,44 +35,32 @@ interface SmurfBoostResultCardProps {
 }
 
 /**
- * Colour carries the same four steps as the band vocabulary. It never encodes
- * a number, because the specification forbids showing a per-family score, and
- * it never carries the reading alone — the band word is always present.
+ * One colour ladder, read two ways. The band word takes the text colour and
+ * the family's own card takes the same step as a left edge, so two readings
+ * stay tellable apart at a glance while scrolling.
+ *
+ * Colour never encodes a number -- the specification forbids showing a
+ * per-family score -- and never carries the reading alone; the band word is
+ * always present beside it.
  */
-function bandColor(band: SmurfBoostFamily["band"]): string {
-  switch (band) {
-    case "strong_indicators":
-      return "text-rose-500";
-    case "notable_indicators":
-      return "text-amber-500";
-    case "weak_indicators":
-      return "text-yellow-500";
-    case "no_unusual_pattern":
-      return "text-emerald-500";
-    default:
-      return "text-muted-foreground";
-  }
-}
+const BAND_STYLES: Record<
+  SmurfBoostFamily["band"],
+  { text: string; accent: string }
+> = {
+  strong_indicators: { text: "text-rose-500", accent: "border-l-rose-500" },
+  notable_indicators: { text: "text-amber-500", accent: "border-l-amber-500" },
+  weak_indicators: { text: "text-yellow-500", accent: "border-l-yellow-500" },
+  no_unusual_pattern: {
+    text: "text-emerald-500",
+    accent: "border-l-emerald-500",
+  },
+  not_enough_data: {
+    text: "text-muted-foreground",
+    accent: "border-l-muted-foreground",
+  },
+};
 
-/**
- * The same four steps as a left edge on the family's own card, so the two
- * readings stay tellable apart at a glance while scrolling. It repeats the band
- * word's colour and never carries the reading alone.
- */
-function bandAccent(band: SmurfBoostFamily["band"]): string {
-  switch (band) {
-    case "strong_indicators":
-      return "border-l-rose-500";
-    case "notable_indicators":
-      return "border-l-amber-500";
-    case "weak_indicators":
-      return "border-l-yellow-500";
-    case "no_unusual_pattern":
-      return "border-l-emerald-500";
-    default:
-      return "border-l-muted-foreground";
-  }
-}
+const UNREADABLE_BAND_STYLE = BAND_STYLES.not_enough_data;
 
 function formatValue(value: number | null | undefined): string {
   return value === null || value === undefined ? "—" : value.toFixed(2);
@@ -296,13 +284,16 @@ function FamilySection({
   shortfall: string;
 }) {
   const insufficient = family.band === "not_enough_data";
+  // `noUncheckedIndexedAccess` is on, so the fallback is what the types need,
+  // not a second policy.
+  const bandStyle = BAND_STYLES[family.band] ?? UNREADABLE_BAND_STYLE;
 
   return (
     // Each family is read on its own and never combined, so each gets its own
     // card. The tint separates it from the run card holding it, which shares
     // the same `bg-card`.
     <Card
-      className={`border-l-4 bg-muted/20 shadow-none ${bandAccent(family.band)}`}
+      className={`border-l-4 bg-muted/20 shadow-none ${bandStyle.accent}`}
     >
       <CardHeader className="pb-3">
         {/* The band is the reading. Beside the title there is room for it on
@@ -315,7 +306,7 @@ function FamilySection({
           <span className="sm:text-right">
             <span
               data-testid={`smurf-boost-band-${family.family}`}
-              className={`block text-lg font-bold ${bandColor(family.band)}`}
+              className={`block text-lg font-bold ${bandStyle.text}`}
             >
               {BAND_LABELS[family.band]}
             </span>

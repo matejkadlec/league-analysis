@@ -36,24 +36,3 @@ export function PlayerCardSkeleton() {
     </Card>
   );
 }
-
-export function MatchHistorySkeleton() {
-  return (
-    <Card>
-      <CardHeader>
-        <Skeleton className="h-6 w-48" />
-      </CardHeader>
-      <CardContent className="space-y-3">
-        {[...Array(5)].map((_, i) => (
-          <div key={i} className="flex items-center space-x-4">
-            <Skeleton className="h-12 w-12 rounded-md" />
-            <div className="flex-1 space-y-2">
-              <Skeleton className="h-4 w-full" />
-              <Skeleton className="h-4 w-3/4" />
-            </div>
-          </div>
-        ))}
-      </CardContent>
-    </Card>
-  );
-}

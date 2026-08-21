@@ -47,19 +47,25 @@ export function formatApiCallParamLabel(paramKey?: string | null): string {
   return `${spacedKey.charAt(0).toUpperCase()}${spacedKey.slice(1)}s`;
 }
 
+// Deliberately not shared with the identical-looking set in
+// `job-execution-logs.tsx`. That one hides fields the row already renders in
+// its header; this one skips fields the key below already emits positionally.
+// They agree today for different reasons, and one shared set means hiding a
+// noisy field from the display would also drop it from the key -- two rows
+// differing only in that field would collide and the second would never
+// render.
+const KEYED_POSITIONALLY = new Set(["level", "timestamp", "event"]);
+
 export function detailedLogKey(log: Record<string, unknown>): string {
   const level = typeof log.level === "string" ? log.level : "INFO";
   const timestamp = String(log.timestamp ?? "");
   const event = String(log.event ?? "");
-  const extras: string[] = [];
-  for (const [key, value] of Object.entries(log)) {
-    if (key === "level" || key === "timestamp" || key === "event") {
-      continue;
-    }
-    extras.push(
-      `${key}:${typeof value === "object" ? JSON.stringify(value) : String(value)}`,
-    );
-  }
-  const extrasJoined = extras.join("|");
+  const extrasJoined = Object.entries(log)
+    .filter(([key]) => !KEYED_POSITIONALLY.has(key))
+    .map(
+      ([key, value]) =>
+        `${key}:${typeof value === "object" ? JSON.stringify(value) : String(value)}`,
+    )
+    .join("|");
   return `${timestamp}|${level}|${event}|${extrasJoined}`;
 }

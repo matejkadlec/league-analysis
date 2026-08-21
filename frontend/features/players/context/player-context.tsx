@@ -21,7 +21,6 @@ const PLAYER_CONTEXT_QUERY_KEY = ["player-context"] as const;
 
 interface PlayerContextValue {
   currentPlayer: Player | null;
-  trackedPlayers: Player[];
   isLoading: boolean;
   selectPlayer: (player: Player) => Promise<void>;
 }
@@ -133,7 +132,6 @@ export function PlayerContextProvider({
         urlPuuid !== null
           ? (urlPlayerQuery.data ?? null)
           : (contextQuery.data?.current_player ?? null),
-      trackedPlayers: contextQuery.data?.tracked_players ?? [],
       // No `!!urlPuuid &&` guard: React Query v5 derives isLoading as
       // isPending && isFetching, so the disabled query already reports false.
       isLoading:

@@ -85,7 +85,7 @@ function backendBounds(): Map<string, { min: number; max: number; integer: boole
     "utf8",
   );
   const block =
-    /class SmurfBoostDetectionMutableSettingsWriteV1\(_CardSettingsWriteBase\):([\s\S]*?)\n    @field_validator/.exec(
+    /class SmurfBoostDetectionMutableSettingsWriteV1\(_CardSettingsWriteBase\):([\s\S]*?)\n    @model_validator/.exec(
       source,
     );
   expect(block).not.toBeNull();
@@ -95,8 +95,13 @@ function backendBounds(): Map<string, { min: number; max: number; integer: boole
   // recomputing camelCase here — this compares the two contracts instead of
   // comparing the frontend against its own guess at the rename. `\s*` spans
   // newlines because `ruff format` wraps the longer declarations.
+  //
+  // `strict=True` is required, not optional: it is what makes the write
+  // contract reject `"20"` and `true` for these fields, and dropping it
+  // should fail here rather than pass quietly. A zero-size result means the
+  // declarations changed shape, not that a bound moved.
   const line =
-    /^ {4}\w+: (int|float) = Field\(\s*alias="(\w+)",\s*default=[\d.]+,\s*ge=([\d.]+),\s*le=([\d.]+),?\s*\)/gm;
+    /^ {4}\w+: (int|float) = Field\(\s*strict=True,\s*alias="(\w+)",\s*default=[\d.]+,\s*ge=([\d.]+),\s*le=([\d.]+),?\s*\)/gm;
   for (const match of (block?.[1] ?? "").matchAll(line)) {
     bounds.set(match[2] ?? "", {
       min: Number(match[3]),

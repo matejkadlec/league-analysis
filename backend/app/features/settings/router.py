@@ -86,19 +86,10 @@ async def update_riot_api_key(
     require updating the process environment and restarting the backend.
     """
     try:
-        # Check if setting exists, create if not
-        existing = await settings_service.get_setting("riot_api_key")
-
-        if not existing:
-            # Create the setting for the first time
-            logger.info("creating_riot_api_key_setting")
-            setting = await settings_service.create_or_update_setting(
-                key="riot_api_key",
-                value=update.value,
-            )
-        else:
-            # Update existing setting
-            setting = await settings_service.update_setting("riot_api_key", update)
+        # No first-store branch: `update_setting` creates the key row when the
+        # value has never been seen, so the extra SELECT decided nothing and
+        # both arms called the same method.
+        setting = await settings_service.update_setting("riot_api_key", update)
 
         logger.info(
             "riot_api_key_updated",

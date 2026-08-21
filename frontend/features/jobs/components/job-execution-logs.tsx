@@ -4,6 +4,12 @@ import { Badge } from "@/components/ui/badge";
 
 import { detailedLogKey, formatJobTimestamp } from "./job-execution-format";
 
+// The row renders these three in its own header, so listing them again as
+// extras would print each twice. Hoisted out of the map: it was rebuilt per
+// log line. Not the same policy as the set in `job-execution-format.ts` --
+// see the comment there.
+const HEADER_FIELDS = new Set(["level", "timestamp", "event"]);
+
 interface JobExecutionLogsProps {
   logs: Array<Record<string, unknown>>;
 }
@@ -21,9 +27,8 @@ export function JobExecutionLogs({ logs }: JobExecutionLogsProps) {
             const logLevel =
               typeof log.level === "string" ? log.level.toUpperCase() : "INFO";
 
-            const standardFields = new Set(["level", "timestamp", "event"]);
             const extraFields = Object.entries(log).filter(
-              ([key]) => !standardFields.has(key),
+              ([key]) => !HEADER_FIELDS.has(key),
             );
 
             return (

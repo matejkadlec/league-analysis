@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { validatedGet } from "@/lib/core/api";
+import { unwrap, validatedGet } from "@/lib/core/api";
 import {
   JobConfigurationSchema,
   JobConfiguration,
@@ -48,26 +48,30 @@ function JobsPageContent() {
     dataUpdatedAt: jobsUpdatedAt,
   } = useQuery({
     queryKey: ["jobs"],
-    queryFn: () =>
-      validatedGet(z.array(JobConfigurationSchema), "/jobs/", {
-        active_only: false,
-      }),
+    queryFn: async () =>
+      unwrap(
+        await validatedGet(z.array(JobConfigurationSchema), "/jobs/", {
+          active_only: false,
+        }),
+      ),
     refetchInterval: REFRESH_INTERVAL,
   });
 
   // Fetch all recent executions
-  const {
-    data: executionsResult,
-    isLoading: isLoadingExecutions,
-    dataUpdatedAt: executionsUpdatedAt,
-  } = useQuery({
+  const { data: executionsResult, isLoading: isLoadingExecutions } = useQuery({
     queryKey: ["job-executions-all"],
-    queryFn: () =>
-      validatedGet(JobExecutionListResponseSchema, "/jobs/executions/all", {
-        page: 1,
-        size: 20,
-      }),
-    refetchInterval: REFRESH_INTERVAL,
+    queryFn: async () =>
+      unwrap(
+        await validatedGet(
+          JobExecutionListResponseSchema,
+          "/jobs/executions/all",
+          { page: 1, size: 20 },
+        ),
+      ),
+    // No `refetchInterval`: `JobExecutions` polls this exact URL and query
+    // string on the same 15s interval under its own infinite-query key. This
+    // one fetches once per mount, to gate that query and to seed its first
+    // paint.
   });
 
   // Fetch system status
@@ -77,18 +81,14 @@ function JobsPageContent() {
     dataUpdatedAt: statusUpdatedAt,
   } = useQuery({
     queryKey: ["job-status"],
-    queryFn: () =>
-      validatedGet(JobStatusResponseSchema, "/jobs/status/overview"),
+    queryFn: async () =>
+      unwrap(await validatedGet(JobStatusResponseSchema, "/jobs/status/overview")),
     refetchInterval: REFRESH_INTERVAL,
   });
 
   // Countdown timer for next refresh
   useEffect(() => {
-    const lastUpdate = Math.max(
-      jobsUpdatedAt,
-      executionsUpdatedAt,
-      statusUpdatedAt,
-    );
+    const lastUpdate = Math.max(jobsUpdatedAt, statusUpdatedAt);
     if (lastUpdate === 0) return;
 
     const interval = setInterval(() => {
@@ -101,11 +101,11 @@ function JobsPageContent() {
     }, 100);
 
     return () => clearInterval(interval);
-  }, [jobsUpdatedAt, executionsUpdatedAt, statusUpdatedAt]);
+  }, [jobsUpdatedAt, statusUpdatedAt]);
 
-  const jobs = jobsResult?.success ? jobsResult.data : [];
-  const executions = executionsResult?.success ? executionsResult.data : null;
-  const status = statusResult?.success ? statusResult.data : null;
+  const jobs = jobsResult ?? [];
+  const executions = executionsResult ?? null;
+  const status = statusResult ?? null;
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -157,7 +157,7 @@ function JobsPageContent() {
                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
               </div>
             </Card>
-          ) : jobsError || !jobsResult?.success ? (
+          ) : jobsError ? (
             <Card className="p-8">
               <div className="flex flex-col items-center justify-center gap-2">
                 <AlertCircle className="h-8 w-8 text-destructive" />

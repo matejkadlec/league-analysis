@@ -203,13 +203,11 @@ export function fieldError(
 export function numericSettings(
   settings: Record<string, unknown>,
 ): Record<string, number> {
-  const numeric: Record<string, number> = {};
-  for (const [name, value] of Object.entries(settings)) {
-    if (typeof value === "number") {
-      numeric[name] = value;
-    }
-  }
-  return numeric;
+  return Object.fromEntries(
+    Object.entries(settings).filter(
+      (entry): entry is [string, number] => typeof entry[1] === "number",
+    ),
+  );
 }
 
 /**
@@ -219,6 +217,11 @@ export function numericSettings(
 export function writableSettings(
   settings: Record<string, number>,
 ): Record<string, number> {
+  // A loop, not `THRESHOLD_FIELDS.map(...)` into `Object.fromEntries`: that
+  // map infers `(string | number | undefined)[][]`, losing the tuple, so the
+  // narrowing predicate it then needs is an assertion the compiler cannot
+  // check. Widen the value type and this body fails to compile; that one does
+  // not, and posts a string typed as a number.
   const payload: Record<string, number> = {};
   for (const field of THRESHOLD_FIELDS) {
     const value = settings[field.name];

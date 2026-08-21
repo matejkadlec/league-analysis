@@ -24,7 +24,6 @@ export type Player = z.infer<typeof PlayerSchema>;
 
 export const PlayerContextSchema = z.object({
   current_player: PlayerSchema.nullable(),
-  tracked_players: z.array(PlayerSchema),
 });
 
 export type PlayerContext = z.infer<typeof PlayerContextSchema>;

@@ -830,55 +830,52 @@ def test_the_detection_card_is_in_the_approved_catalog() -> None:
     assert CardId.SMURF_BOOST_DETECTION.value == "profile.smurf-boost-detection"
 
 
+#: Every threshold the detection card accepts, spelled the one way the write
+#: contract allows. Tests that care about a single threshold override it here
+#: rather than restating the other fourteen.
+_VALID_DETECTION_PAYLOAD: dict[str, Any] = {
+    "recentWindowSize": 20,
+    "baselineWindowSize": 60,
+    "a1StepChangeThreshold": 1.2,
+    "a2WinRateSurgeThreshold": 0.2,
+    "a3NovelChampionThreshold": 1.2,
+    "a3MinimumNovelGames": 8,
+    "a4SummonerLevelGate": 45,
+    "a4PerformanceThreshold": 1.2,
+    "b1WinRateDeltaThreshold": 0.3,
+    "b1CompositeFlatCeiling": 0.05,
+    "b2ConsistencyShiftThreshold": 1.15,
+    "b3BimodalityThreshold": 0.65,
+    "b3TailFraction": 0.3,
+    "b4HighRateFloor": 0.62,
+    "b4DropThreshold": 0.2,
+}
+
+
 def test_detection_settings_accept_only_canonical_camel_case_names() -> None:
     """The write contract stays strict for the new card too."""
-    payload: dict[str, Any] = {
-        "recentWindowSize": 20,
-        "baselineWindowSize": 60,
-        "a1StepChangeThreshold": 1.2,
-        "a2WinRateSurgeThreshold": 0.2,
-        "a3NovelChampionThreshold": 1.2,
-        "a3MinimumNovelGames": 8,
-        "a4SummonerLevelGate": 45,
-        "a4PerformanceThreshold": 1.2,
-        "b1WinRateDeltaThreshold": 0.3,
-        "b1CompositeFlatCeiling": 0.05,
-        "b2ConsistencyShiftThreshold": 1.15,
-        "b3BimodalityThreshold": 0.65,
-        "b3TailFraction": 0.3,
-        "b4HighRateFloor": 0.62,
-        "b4DropThreshold": 0.2,
-    }
-    stored = validate_card_preference_update(CardId.SMURF_BOOST_DETECTION, payload)
+    stored = validate_card_preference_update(
+        CardId.SMURF_BOOST_DETECTION, _VALID_DETECTION_PAYLOAD
+    )
     assert stored["recent_window_size"] == 20
 
     with pytest.raises(ValueError):
         validate_card_preference_update(
-            CardId.SMURF_BOOST_DETECTION, {**payload, "recent_window_size": 20}
+            CardId.SMURF_BOOST_DETECTION,
+            {**_VALID_DETECTION_PAYLOAD, "recent_window_size": 20},
         )
 
 
 def test_detection_settings_reject_an_unsatisfiable_novel_gate() -> None:
     """Cross-field validation stops a permanently unavailable signal."""
-    payload: dict[str, Any] = {
+    # Asking for 15 novel champions inside a 10-game window can never be met.
+    unsatisfiable = {
+        **_VALID_DETECTION_PAYLOAD,
         "recentWindowSize": 10,
-        "baselineWindowSize": 60,
-        "a1StepChangeThreshold": 1.2,
-        "a2WinRateSurgeThreshold": 0.2,
-        "a3NovelChampionThreshold": 1.2,
         "a3MinimumNovelGames": 15,
-        "a4SummonerLevelGate": 45,
-        "a4PerformanceThreshold": 1.2,
-        "b1WinRateDeltaThreshold": 0.3,
-        "b1CompositeFlatCeiling": 0.05,
-        "b2ConsistencyShiftThreshold": 1.15,
-        "b3BimodalityThreshold": 0.65,
-        "b3TailFraction": 0.3,
-        "b4HighRateFloor": 0.62,
-        "b4DropThreshold": 0.2,
     }
     with pytest.raises(ValueError):
-        validate_card_preference_update(CardId.SMURF_BOOST_DETECTION, payload)
+        validate_card_preference_update(CardId.SMURF_BOOST_DETECTION, unsatisfiable)
 
 
 def test_global_reset_must_enumerate_the_extended_catalog() -> None:

@@ -6,6 +6,7 @@ import { z } from "zod";
 import {
   unwrapOr404,
   apiErrorMessage,
+  normalizeApiError,
   unwrap,
   validatedGet,
   validatedPost,
@@ -17,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert } from "@/components/ui/alert";
+import { formatDateTime } from "@/lib/core/format";
 import { useToast } from "@/lib/core/hooks";
 import { notifyRiotCredentialHealthUpdated } from "@/lib/core/riot-credential-health-events";
 import { Check, FlaskConical, Loader2, Save, ShieldCheck, X } from "lucide-react";
@@ -67,77 +69,66 @@ export function RiotApiSettingsCard() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: (value: string) =>
-      validatedPut(SettingSchema, "/settings/riot_api_key", { value }),
-    onSuccess: (result) => {
-      if (result.success) {
-        toast.success("Riot API key updated", {
-          description: "The new key is active; no server restart is required.",
-        });
-        void queryClient.invalidateQueries({
-          queryKey: ["settings", "riot_api_key"],
-        });
-        notifyRiotCredentialHealthUpdated();
-        void queryClient.invalidateQueries({
-          queryKey: ["apiKeyStatus"],
-        });
-        void queryClient.invalidateQueries({
-          queryKey: ["service-status"],
-        });
-        setApiKey("");
-        setTestResult(null);
-      } else {
-        toast.error("Riot API key was not updated", {
-          description: apiErrorMessage(
-            result.error,
-            "The key could not be saved. Please try again later.",
-          ),
-        });
-      }
+    mutationFn: async (value: string) =>
+      unwrap(await validatedPut(SettingSchema, "/settings/riot_api_key", { value })),
+    onSuccess: () => {
+      toast.success("Riot API key updated", {
+        description: "The new key is active; no server restart is required.",
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["settings", "riot_api_key"],
+      });
+      notifyRiotCredentialHealthUpdated();
+      void queryClient.invalidateQueries({
+        queryKey: ["apiKeyStatus"],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["service-status"],
+      });
+      setApiKey("");
+      setTestResult(null);
     },
-    onError: () => {
+    onError: (error) => {
       toast.error("Riot API key was not updated", {
-        description: "The key could not be saved. Please try again later.",
+        description: apiErrorMessage(
+          normalizeApiError(error),
+          "The key could not be saved. Please try again later.",
+        ),
       });
     },
   });
 
   const testMutation = useMutation({
-    mutationFn: (value: string) =>
-      validatedPost(SettingTestResponseSchema, "/settings/riot_api_key/test", {
-        value,
-      }),
-    onSuccess: (result) => {
-      if (result.success) {
-        setTestResult({
-          success: result.data.success,
-          message: result.data.message,
+    mutationFn: async (value: string) =>
+      unwrap(
+        await validatedPost(
+          SettingTestResponseSchema,
+          "/settings/riot_api_key/test",
+          { value },
+        ),
+      ),
+    onSuccess: (data) => {
+      setTestResult({ success: data.success, message: data.message });
+      if (data.status === "valid") {
+        toast.success("Riot API key is valid", {
+          description: "Riot accepted the key.",
         });
-        if (result.data.status === "valid") {
-          toast.success("Riot API key is valid", {
-            description: "Riot accepted the key.",
-          });
-        } else if (result.data.status === "unavailable") {
-          toast.warning("Riot API key could not be verified", {
-            description: "Riot could not be reached. Try again later.",
-          });
-        } else {
-          toast.error("Riot API key is invalid", {
-            description: "Check the key and try again.",
-          });
-        }
+      } else if (data.status === "unavailable") {
+        toast.warning("Riot API key could not be verified", {
+          description: "Riot could not be reached. Try again later.",
+        });
       } else {
-        toast.error("Riot API key could not be tested", {
-          description: apiErrorMessage(
-            result.error,
-            "The key could not be tested. Please try again later.",
-          ),
+        toast.error("Riot API key is invalid", {
+          description: "Check the key and try again.",
         });
       }
     },
-    onError: () => {
+    onError: (error) => {
       toast.error("Riot API key could not be tested", {
-        description: "The key could not be tested. Please try again later.",
+        description: apiErrorMessage(
+          normalizeApiError(error),
+          "The key could not be tested. Please try again later.",
+        ),
       });
     },
   });
@@ -190,9 +181,7 @@ export function RiotApiSettingsCard() {
               </div>
               <p className="text-xs text-muted-foreground">
                 Last updated:{" "}
-                {new Date(setting.updated_at).toLocaleString("en-GB", {
-                  timeZone: "UTC",
-                })}
+                {formatDateTime(setting.updated_at, { seconds: true })}
               </p>
             </div>
           )}

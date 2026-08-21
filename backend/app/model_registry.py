@@ -43,6 +43,9 @@ def import_all_models() -> None:
         user_settings,
         user_tracked_player,
     )
+    from app.features.auth import (  # noqa: F401
+        models as auth_models,
+    )
     from app.features.jobs import models as job_models  # noqa: F401
     from app.features.matches import (  # noqa: F401
         models as match_models,

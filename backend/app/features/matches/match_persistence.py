@@ -102,15 +102,6 @@ def add_participants_from_dto(session: AsyncSession, match_dto: MatchDTO) -> Non
         session.add(participant_model)
 
 
-def resolve_reprocess_player_fields(
-    participant: ParticipantDTO,
-    existing_player: Player | None,
-    platform_id: str,
-) -> dict[str, Any]:
-    """Preserve known identity fields when a Riot participant payload is incomplete."""
-    return resolve_player_display_fields(participant, existing_player, platform_id)
-
-
 async def merge_reprocess_player(
     session: AsyncSession,
     participant: ParticipantDTO,
@@ -121,7 +112,7 @@ async def merge_reprocess_player(
         select(Player).where(Player.puuid == participant.puuid)
     )
     existing_player = existing_player_result.scalar_one_or_none()
-    fields = resolve_reprocess_player_fields(participant, existing_player, platform_id)
+    fields = resolve_player_display_fields(participant, existing_player, platform_id)
     await session.merge(
         Player(
             puuid=participant.puuid,

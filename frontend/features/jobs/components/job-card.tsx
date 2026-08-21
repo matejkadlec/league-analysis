@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { validatedGet } from "@/lib/core/api";
+import { unwrap, validatedGet } from "@/lib/core/api";
 import {
   JobConfiguration,
   JobExecutionListResponseSchema,
@@ -29,7 +29,6 @@ import { JobCardTestDialog } from "./job-card-test-dialog";
 import {
   formatLastRun,
   formatScheduleInterval,
-  getJobDescription,
 } from "./job-card-format";
 import { formatDuration } from "./job-execution-format";
 import { useJobCardControls } from "./use-job-card-controls";
@@ -44,24 +43,19 @@ export function JobCard({ job, onExecutionClick }: JobCardProps) {
 
   const { data: executionsResult } = useQuery({
     queryKey: ["job-executions", job.id],
-    queryFn: () =>
-      validatedGet(
-        JobExecutionListResponseSchema,
-        `/jobs/${job.id}/executions`,
-        {
-          page: 1,
-          size: 5,
-          execution_type: "REGULAR",
-        },
+    queryFn: async () =>
+      unwrap(
+        await validatedGet(
+          JobExecutionListResponseSchema,
+          `/jobs/${job.id}/executions`,
+          { page: 1, size: 5, execution_type: "REGULAR" },
+        ),
       ),
     enabled: !!job.id,
     refetchInterval: 15000,
   });
 
-  const recentExecutions = useMemo(
-    () => (executionsResult?.success ? executionsResult.data.executions : []),
-    [executionsResult],
-  );
+  const recentExecutions = executionsResult?.executions ?? [];
   const lastExecution =
     recentExecutions.length > 0 ? recentExecutions[0] : null;
 
@@ -96,7 +90,7 @@ export function JobCard({ job, onExecutionClick }: JobCardProps) {
               </Badge>
             </div>
             <div className="text-sm font-normal text-muted-foreground">
-              {job.description || getJobDescription(job.job_type)}
+              {job.description}
             </div>
           </div>
           <div className="flex items-center gap-1.5">

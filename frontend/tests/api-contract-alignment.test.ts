@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import { PLATFORM_DISPLAY_NAMES } from "@/lib/core/platform-utils";
 import * as exportedSchemas from "@/lib/core/schemas";
 
 /**
@@ -114,6 +115,19 @@ describe("zod against the OpenAPI contract", () => {
 
   it("pairs enough schemas to be worth running", () => {
     expect(pairs.length).toBeGreaterThan(20);
+  });
+
+  it("names every platform the API accepts", () => {
+    // Not a schema pair: `Platform` reaches the client as a query-parameter
+    // enum, and the frontend's copy of it is a display-name table rather than
+    // a zod schema. A platform added on the backend and missing here does not
+    // fail anywhere at runtime -- `getPlatformDisplayName` falls through to
+    // `platform.toUpperCase()`, so the picker would simply never offer it.
+    const platform = apiSchemas.Platform as { enum?: string[] } | undefined;
+    expect(platform?.enum, "OpenAPI has no Platform enum").toBeTruthy();
+    expect(new Set(Object.keys(PLATFORM_DISPLAY_NAMES))).toEqual(
+      new Set(platform?.enum),
+    );
   });
 
   it.each(pairs.map(([name, apiName]) => [name, apiName]))(
