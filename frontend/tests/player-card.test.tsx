@@ -208,7 +208,7 @@ describe("what the card says about the player", () => {
       String(url).endsWith("/stats"),
     );
     expect(statsCall?.[1]).toBe("/matches/player/p-1/stats");
-    expect(statsCall?.[2]).toEqual({ queue: 420 });
+    expect(statsCall?.[2]).toEqual({ queues: "420" });
   });
 });
 

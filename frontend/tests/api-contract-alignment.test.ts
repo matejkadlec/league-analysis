@@ -187,15 +187,34 @@ function paramsObjectAfter(source: string): string | null {
   return null;
 }
 
+interface QueryCall {
+  key: string;
+  names: Set<string>;
+  file: string;
+  /** False when a params argument is present but is not a bare object. */
+  resolved: boolean;
+}
+
+/** Whether a real argument follows the path, ignoring a trailing comma. */
+function hasFurtherArgument(after: string): boolean {
+  const next = /^\s*,\s*([\s\S])/.exec(after);
+  return next !== null && next[1] !== ")";
+}
+
 /**
- * The query names a call site sends, keyed by `method path`.
+ * The query names every call site sends.
+ *
+ * One entry per call site, not per endpoint. Keying by endpoint and keeping
+ * the first hit is how a real regression got through: two call sites ask
+ * `/matches/player/{}/stats`, they sent different names, and the one the walk
+ * reached second was discarded unread.
  *
  * Both spellings count: the object literal, and any `?name=` written into the
  * path itself. Keys of a nested object are not parameters, so one level of
  * nesting is stripped before the names are read.
  */
-function calledQueryParams(): Map<string, { names: Set<string>; file: string }> {
-  const calls = new Map<string, { names: Set<string>; file: string }>();
+function calledQueryParams(): QueryCall[] {
+  const calls: QueryCall[] = [];
   for (const file of allSourceFiles()) {
     const source = readFileSync(file, "utf8");
     for (const match of source.matchAll(CALL_SITE)) {
@@ -212,17 +231,31 @@ function calledQueryParams(): Map<string, { names: Set<string>; file: string }> 
       const names = new Set(
         [...apiPath.matchAll(/[?&]([a-zA-Z_]\w*)=/g)].map((m) => m[1] as string),
       );
-      const body = paramsObjectAfter(window.slice(literal.index + literal[0].length));
+      const after = window.slice(literal.index + literal[0].length);
+      const body = paramsObjectAfter(after);
       if (body) {
-        const top = body.slice(1, -1).replace(/\{[^{}]*\}/g, "");
+        // Comments first. A `//` line inside the object leaves the first key
+        // with no `{` or `,` in front of it, so neither pattern below matches
+        // and the site reports no names -- green, and checking nothing.
+        const top = body
+          .slice(1, -1)
+          .replace(/\/\*[\s\S]*?\*\//g, "")
+          .replace(/\/\/[^\n]*/g, "")
+          .replace(/\{[^{}]*\}/g, "");
         for (const re of [/(?:^|,)\s*(?:\.\.\.)?([a-zA-Z_]\w*)\s*(?=[,:}]|$)/g, /(?:^|[{,])\s*([a-zA-Z_]\w*)\s*:/g]) {
           for (const m of top.matchAll(re)) names.add(m[1] as string);
         }
       }
-      const key = `${method} ${normalizeCallPath(apiPath)}`;
-      if (!calls.has(key)) {
-        calls.set(key, { names, file: relative(process.cwd(), file) });
-      }
+      calls.push({
+        key: `${method} ${normalizeCallPath(apiPath)}`,
+        names,
+        file: `${relative(process.cwd(), file)}`,
+        // A params argument this cannot read is not the same as no params.
+        // The site that broke passed a ternary of two object literals and was
+        // recorded as sending nothing, which is the shape that passes.
+        // A trailing comma before `)` is not an argument.
+        resolved: body !== null || !hasFurtherArgument(after),
+      });
     }
   }
   return calls;
@@ -313,13 +346,20 @@ describe("zod against the OpenAPI contract", () => {
     const called = calledQueryParams();
     // Signal first: an extractor that stopped resolving call sites would pass
     // by having nothing to compare.
-    expect(called.size).toBeGreaterThanOrEqual(25);
+    expect(called.length).toBeGreaterThanOrEqual(28);
 
     const problems: string[] = [];
-    for (const [key, { names, file }] of called) {
+    for (const { key, names, file, resolved } of called) {
       const spec = declared.get(key);
       // An unserved path is the path rule's finding, not this one's.
       if (!spec) continue;
+      if (!resolved) {
+        problems.push(
+          `${key} passes params this cannot read, so its names go unchecked -- ` +
+            `write a plain object literal (${file})`,
+        );
+        continue;
+      }
       for (const name of names) {
         if (!spec.names.has(name)) {
           problems.push(`${key} sends \`${name}\`, which it does not accept (${file})`);

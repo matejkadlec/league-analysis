@@ -139,8 +139,8 @@ describe("the recent performance card", () => {
 
     await waitFor(() => expect(validatedGet).toHaveBeenCalledTimes(2));
     const params = validatedGet.mock.calls.map((call) => call[2]);
-    expect(params).toContainEqual({ queue: 420, limit: 10 });
-    expect(params).toContainEqual({ queue: 420 });
+    expect(params).toContainEqual({ queues: "420", limit: 10 });
+    expect(params).toContainEqual({ queues: "420" });
 
     queryClient.clear();
   });
