@@ -90,27 +90,48 @@ def test_lane_falls_back_to_individual_position() -> None:
 
 
 def test_challenge_stats_are_read_under_riots_own_names() -> None:
-    # The challenges dict is raw camelCase Riot vocabulary and two of the
-    # renames are non-obvious: roam_kills reads
-    # killsOnOtherLanesEarlyJungleAsLaner and ally_saves reads
-    # saveAllyFromDeath. A typo in any key is silent — .get(wrong, 0) writes a
-    # zero into every row forever, which is exactly the class of bug the
-    # lopsided prod data has hidden before.
+    # The challenges dict is raw camelCase Riot vocabulary, and a typo in any
+    # key is silent -- .get(wrong, 0) writes a zero into every row forever,
+    # which is exactly the class of bug the lopsided prod data has hidden
+    # before. Only the six columns something still reads are copied out; the
+    # rest of the object stays in `advanced_stats`, where the blob is the
+    # single copy.
     payload = participant(
         challenges={
-            "killsOnOtherLanesEarlyJungleAsLaner": 3,
-            "saveAllyFromDeath": 2,
+            "soloKills": 3,
             "goldPerMinute": 401.5,
+            "visionScorePerMinute": 1.25,
+            "killParticipation": 0.62,
+            "teamDamagePercentage": 0.31,
+            "epicMonsterSteals": 2,
         }
     )
     data = MatchDTOTransformer.extract_participant_data(payload)
-    assert data["roam_kills"] == 3
-    assert data["ally_saves"] == 2
+    assert data["solo_kills"] == 3
     assert data["gold_per_minute"] == 401.5
+    assert data["vision_score_per_minute"] == 1.25
+    assert data["kill_participation"] == 0.62
+    assert data["team_damage_percentage"] == 0.31
+    assert data["epic_monster_steals"] == 2
 
     # And a payload with no challenges block defaults to zeros, not KeyError.
     bare = MatchDTOTransformer.extract_participant_data(participant())
     assert bare["solo_kills"] == 0
+
+
+def test_the_challenges_blob_is_stored_whole() -> None:
+    """The columns above are a projection; the object itself is the record.
+
+    Fifteen more columns used to copy one key each out of this blob and were
+    read by nothing, so revision 0027 dropped them. That is only safe while
+    the blob is still stored verbatim.
+    """
+    challenges = {"skillshotsHit": 41, "buffsStolen": 1, "soloKills": 3}
+    data = MatchDTOTransformer.extract_participant_data(
+        participant(challenges=challenges)
+    )
+
+    assert data["advanced_stats"] == challenges
 
 
 def test_missing_vision_score_becomes_zero_not_null() -> None:
