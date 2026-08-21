@@ -53,7 +53,6 @@ def test_database_pool_pre_pings_before_reusing_connections(
     }
 
 
-@pytest.mark.asyncio
 async def test_readiness_requires_a_database_round_trip(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -72,7 +71,6 @@ async def test_readiness_requires_a_database_round_trip(
     assert result == {"status": "ready", "database": "ready"}
 
 
-@pytest.mark.asyncio
 async def test_readiness_fails_closed_without_leaking_database_errors(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

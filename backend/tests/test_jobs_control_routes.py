@@ -80,7 +80,6 @@ ROUTES: dict[str, ControlRoute] = {
 
 
 @pytest.mark.parametrize("route", ROUTES.values(), ids=list(ROUTES))
-@pytest.mark.asyncio
 async def test_successful_action_is_returned_unchanged(route: ControlRoute) -> None:
     state = _state(success=True, message="paused")
 
@@ -88,7 +87,6 @@ async def test_successful_action_is_returned_unchanged(route: ControlRoute) -> N
 
 
 @pytest.mark.parametrize("route", ROUTES.values(), ids=list(ROUTES))
-@pytest.mark.asyncio
 async def test_missing_job_configuration_is_404(route: ControlRoute) -> None:
     with pytest.raises(HTTPException) as caught:
         await route(_service(None))
@@ -97,7 +95,6 @@ async def test_missing_job_configuration_is_404(route: ControlRoute) -> None:
 
 
 @pytest.mark.parametrize("route", ROUTES.values(), ids=list(ROUTES))
-@pytest.mark.asyncio
 async def test_refusal_is_409_carrying_the_service_message(
     route: ControlRoute,
 ) -> None:
@@ -110,7 +107,6 @@ async def test_refusal_is_409_carrying_the_service_message(
 
 
 @pytest.mark.parametrize("route", ROUTES.values(), ids=list(ROUTES))
-@pytest.mark.asyncio
 async def test_an_unexpected_failure_is_not_relabelled(route: ControlRoute) -> None:
     """The route neither swallows the failure nor turns it into a 404 or 409.
 
@@ -123,7 +119,6 @@ async def test_an_unexpected_failure_is_not_relabelled(route: ControlRoute) -> N
         await route(_service(RuntimeError("connection reset")))
 
 
-@pytest.mark.asyncio
 async def test_stop_passes_its_force_flag_through() -> None:
     """`force` is the only argument that separates stop from the other two."""
     service = _ServiceDouble(_state(success=True))
@@ -135,7 +130,6 @@ async def test_stop_passes_its_force_flag_through() -> None:
     ]
 
 
-@pytest.mark.asyncio
 async def test_pause_and_resume_differ_only_by_the_paused_flag() -> None:
     paused = _ServiceDouble(_state(success=True))
     resumed = _ServiceDouble(_state(success=True))

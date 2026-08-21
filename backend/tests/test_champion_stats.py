@@ -2,8 +2,6 @@
 
 from types import SimpleNamespace
 
-import pytest
-
 from app.features.matches.service import MatchService
 
 
@@ -42,7 +40,6 @@ def _participant(
     ]
 
 
-@pytest.mark.asyncio
 async def test_champion_stats_returns_every_champion_with_stable_ties() -> None:
     """Local pagination can reach aggregates beyond the former twenty-row limit."""
     participants = [

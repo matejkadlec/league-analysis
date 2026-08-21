@@ -213,14 +213,12 @@ class TeamStats(BaseModel):
 class TeamStatsComposition(BaseModel):
     """Schema for both team statistics."""
 
-    blue_team: TeamStats = Field(
-        default_factory=lambda: TeamStats.model_validate({}),
-        description="Blue team stats",
-    )
-    red_team: TeamStats = Field(
-        default_factory=lambda: TeamStats.model_validate({}),
-        description="Red team stats",
-    )
+    # Required, not defaulted: `match_history.py` is the only construction
+    # site and it passes both. The `default_factory` was an empty-dict round
+    # trip that has never fired, and it made the response schema claim a shape
+    # no response has.
+    blue_team: TeamStats = Field(description="Blue team stats")
+    red_team: TeamStats = Field(description="Red team stats")
 
     model_config = ConfigDict(from_attributes=True)
 

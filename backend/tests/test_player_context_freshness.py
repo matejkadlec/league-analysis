@@ -16,7 +16,6 @@ from app.features.jobs.player_sync import (
 from app.features.players.service import PlayerService
 
 
-@pytest.mark.asyncio
 async def test_current_player_update_is_scoped_to_one_application_user() -> None:
     settings = SimpleNamespace(current_player_puuid=None)
     execute = AsyncMock()
@@ -67,7 +66,6 @@ def test_all_platform_search_omits_platform_filter() -> None:
     assert "lower(core.players.platform)" in str(one_platform.whereclause)
 
 
-@pytest.mark.asyncio
 async def test_concurrent_explicit_updates_attach_to_the_active_puuid_run() -> None:
     active = SimpleNamespace(id=11, puuid="player-puuid", status="running")
     add = Mock()

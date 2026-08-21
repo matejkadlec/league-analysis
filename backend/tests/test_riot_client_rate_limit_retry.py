@@ -19,7 +19,6 @@ from app.core.riot_api.errors import RateLimitError
 MATCH_URL = "https://europe.api.riotgames.com/lol/match/v5/matches/EUN1_1"
 
 
-@pytest.mark.asyncio
 async def test_429_waits_the_header_says_and_then_succeeds(
     riot_client_answering: RiotClientFactory, recorded_sleeps: list[float]
 ) -> None:
@@ -34,7 +33,6 @@ async def test_429_waits_the_header_says_and_then_succeeds(
     assert recorded_sleeps == [3, 3]
 
 
-@pytest.mark.asyncio
 async def test_429_exhaustion_raises_with_the_header_evidence(
     riot_client_answering: RiotClientFactory, recorded_sleeps: list[float]
 ) -> None:
@@ -50,7 +48,6 @@ async def test_429_exhaustion_raises_with_the_header_evidence(
     assert error.value.retry_after == 3
 
 
-@pytest.mark.asyncio
 async def test_unretried_request_sends_exactly_once(
     riot_client_answering: RiotClientFactory, recorded_sleeps: list[float]
 ) -> None:

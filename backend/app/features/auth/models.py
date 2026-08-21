@@ -59,7 +59,8 @@ class User(Base):
         Boolean,
         nullable=False,
         default=True,
-        index=True,
+        # No `index=True`: `idx_users_is_active_is_admin` below leads with this
+        # column, which serves any predicate a single-column index would.
         comment="Whether the account is active (not disabled)",
     )
 

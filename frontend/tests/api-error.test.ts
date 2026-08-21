@@ -115,6 +115,22 @@ describe("API error presentation", () => {
     expect(playerTrackingFailureKind(normalized)).toBe("api-key");
   });
 
+  it("survives the array `detail` FastAPI returns for a 422", () => {
+    // The only response body where `detail` is neither a string nor the
+    // structured object: a list of per-field validation errors. Nothing
+    // covered it, so a stricter `detail` reader could have thrown out of
+    // `normalizeApiError` -- the one function every failure path calls.
+    expect(
+      normalizeApiError(
+        axiosError(422, {
+          detail: [
+            { loc: ["body", "x"], msg: "field required", type: "missing" },
+          ],
+        }),
+      ),
+    ).toMatchObject({ kind: "validation" });
+  });
+
   it("classifies authentication, authorization, not-found and conflict paths", () => {
     expect(normalizeApiError(axiosError(401, {})).kind).toBe("authentication");
     expect(normalizeApiError(axiosError(403, {})).kind).toBe("authorization");

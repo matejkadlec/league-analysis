@@ -51,7 +51,6 @@ def _unused_database() -> object:
     return object()
 
 
-@pytest.mark.asyncio
 async def test_failure_state_persist_failure_is_logged(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -92,7 +91,6 @@ async def _dying_worker() -> None:
         raise ValueError("worker broke during cancel") from None
 
 
-@pytest.mark.asyncio
 async def test_cancel_await_failure_is_logged() -> None:
     """A worker that dies while being cancelled stays suppressed but visible."""
     created_at = datetime.now(UTC)
@@ -129,7 +127,6 @@ async def test_cancel_await_failure_is_logged() -> None:
         await asyncio.gather(worker, return_exceptions=True)
 
 
-@pytest.mark.asyncio
 async def test_normal_cancel_await_stays_silent() -> None:
     """Awaiting a cleanly cancelled worker must not log a warning."""
     created_at = datetime.now(UTC)

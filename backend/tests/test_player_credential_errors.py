@@ -43,7 +43,6 @@ def _unwrapped[**P, R](endpoint: Callable[P, R]) -> Callable[P, R]:
     return cast(Callable[P, R], inspect.unwrap(endpoint))
 
 
-@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "credential_error",
     [
@@ -77,7 +76,6 @@ async def test_credential_rejection_maps_to_structured_detail(
     assert "403" not in detail["message"]
 
 
-@pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("riot_error", "expected_status", "expected_detail"),
     [

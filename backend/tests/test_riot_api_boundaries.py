@@ -114,7 +114,6 @@ def _client_with_bodies(bodies: list[bytes]) -> tuple[RiotAPIClient, list[bytes]
     return client, served
 
 
-@pytest.mark.asyncio
 async def test_null_body_is_retried_then_raises(
     recorded_sleeps: list[float],
 ) -> None:
@@ -155,7 +154,6 @@ def test_product_supported_queue_catalog_is_explicit_and_complete() -> None:
     assert 999999 not in PRODUCT_SUPPORTED_QUEUE_IDS
 
 
-@pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("fixture_name", "expected_ids"),
     [
@@ -178,7 +176,6 @@ async def test_by_puuid_league_contract_preserves_optional_league_id(
     assert all(entry.queue_type and entry.tier for entry in entries)
 
 
-@pytest.mark.asyncio
 async def test_by_puuid_league_contract_keeps_rank_fields_required() -> None:
     client = RiotAPIClient(api_key="RGAPI-test-only")
     client._make_request = AsyncMock(return_value=LEAGUE_FIXTURES["malformed"])
@@ -211,7 +208,6 @@ def test_platform_mapping_and_endpoint_parameters_fail_closed() -> None:
     assert "startTime=0" in url
 
 
-@pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("kwargs", "message"),
     [

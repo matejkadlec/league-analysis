@@ -86,7 +86,6 @@ def _store(
     session.commit()
 
 
-@pytest.mark.asyncio
 async def test_a_live_token_names_its_owner(session: Session) -> None:
     service = _service(session)
     _store(session, service, "live", token_id="t1")
@@ -94,7 +93,6 @@ async def test_a_live_token_names_its_owner(session: Session) -> None:
     assert await service.resolve_user_id_for_refresh_token("live") == 9
 
 
-@pytest.mark.asyncio
 async def test_an_expired_but_unrevoked_token_still_names_its_owner(
     session: Session,
 ) -> None:
@@ -105,7 +103,6 @@ async def test_an_expired_but_unrevoked_token_still_names_its_owner(
     assert await service.resolve_user_id_for_refresh_token("old") == 9
 
 
-@pytest.mark.asyncio
 async def test_a_token_this_server_rotated_out_still_names_its_owner(
     session: Session,
 ) -> None:
@@ -124,7 +121,6 @@ async def test_a_token_this_server_rotated_out_still_names_its_owner(
     assert await service.resolve_user_id_for_refresh_token("rotated") == 9
 
 
-@pytest.mark.asyncio
 async def test_a_token_revoked_without_a_replacement_names_nobody(
     session: Session,
 ) -> None:
@@ -141,7 +137,6 @@ async def test_a_token_revoked_without_a_replacement_names_nobody(
     assert await service.resolve_user_id_for_refresh_token("dead") is None
 
 
-@pytest.mark.asyncio
 async def test_an_unknown_token_names_nobody(session: Session) -> None:
     service = _service(session)
     _store(session, service, "live", token_id="t1")
@@ -149,7 +144,6 @@ async def test_an_unknown_token_names_nobody(session: Session) -> None:
     assert await service.resolve_user_id_for_refresh_token("someone-elses") is None
 
 
-@pytest.mark.asyncio
 async def test_a_logout_revokes_this_users_live_tokens_and_only_theirs(
     session: Session,
 ) -> None:

@@ -43,7 +43,6 @@ def _service(user_id: int | None) -> AuthService:
     return cast(AuthService, service)
 
 
-@pytest.mark.asyncio
 async def test_logout_revokes_using_only_the_refresh_cookie() -> None:
     """The access token expires in 30 minutes; the refresh token lasts 30 days.
 
@@ -66,7 +65,6 @@ async def test_logout_revokes_using_only_the_refresh_cookie() -> None:
     assert result == {"message": "Successfully logged out"}
 
 
-@pytest.mark.asyncio
 async def test_logout_succeeds_and_clears_cookies_with_no_session_at_all() -> None:
     """Logout is idempotent: an unauthenticated call is answered, not refused.
 
@@ -105,7 +103,6 @@ async def test_logout_succeeds_and_clears_cookies_with_no_session_at_all() -> No
         assert any(header.startswith(f"{name}=") for header in cleared)
 
 
-@pytest.mark.asyncio
 async def test_logout_blacklists_the_access_token_when_one_is_present() -> None:
     service = _service(user_id=9)
 
@@ -125,7 +122,6 @@ async def test_logout_blacklists_the_access_token_when_one_is_present() -> None:
     )
 
 
-@pytest.mark.asyncio
 async def test_the_refresh_cookie_decides_who_is_logged_out() -> None:
     """A presented access token must not name anyone, not even a bystander.
 
@@ -149,7 +145,6 @@ async def test_the_refresh_cookie_decides_who_is_logged_out() -> None:
     ).revoke_all_refresh_tokens_for_user.assert_awaited_once_with(7)
 
 
-@pytest.mark.asyncio
 async def test_refresh_tokens_are_revoked_before_the_access_token() -> None:
     """Each revocation commits separately, so the order is the failure mode.
 
@@ -188,7 +183,6 @@ async def test_refresh_tokens_are_revoked_before_the_access_token() -> None:
     assert order == ["refresh", "access"]
 
 
-@pytest.mark.asyncio
 async def test_a_bearer_token_is_spent_only_on_itself() -> None:
     """An access token blacklists itself and signs nobody out everywhere.
 
@@ -229,7 +223,6 @@ class _RecordingDb:
         return result
 
 
-@pytest.mark.asyncio
 async def test_a_refresh_token_names_the_user_it_belongs_to() -> None:
     """Binds the lookup to the hash and to `user_id` specifically.
 
@@ -253,7 +246,6 @@ async def test_a_refresh_token_names_the_user_it_belongs_to() -> None:
     assert "raw-token" not in bound.values()
 
 
-@pytest.mark.asyncio
 async def test_a_revoked_refresh_token_names_nobody() -> None:
     """Otherwise a token already revoked can still revoke every other session.
 
@@ -288,7 +280,6 @@ def _live_access_token() -> str:
     )
 
 
-@pytest.mark.asyncio
 async def test_a_database_fault_during_revocation_is_not_swallowed() -> None:
     """Only the duplicate-key conflict is tolerated, not every failure.
 
@@ -311,7 +302,6 @@ async def test_a_database_fault_during_revocation_is_not_swallowed() -> None:
         await service.revoke_access_token(_live_access_token(), reason="logout")
 
 
-@pytest.mark.asyncio
 async def test_the_blacklist_row_names_the_token_it_revokes() -> None:
     """Nothing else in the suite looks at what is actually inserted.
 

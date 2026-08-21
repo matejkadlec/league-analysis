@@ -1,6 +1,6 @@
 """Service layer custom exceptions."""
 
-from typing import Any, override
+from typing import override
 
 
 class ServiceException(Exception):
@@ -11,15 +11,11 @@ class ServiceException(Exception):
         message: str,
         service: str | None = None,
         operation: str | None = None,
-        context: dict[str, Any] | None = None,
-        original_error: Exception | None = None,
     ):
         super().__init__(message)
         self.message = message
         self.service = service
         self.operation = operation
-        self.context = context or {}
-        self.original_error = original_error
 
     @override
     def __str__(self) -> str:
@@ -31,17 +27,9 @@ class ServiceException(Exception):
 class PlayerServiceError(ServiceException):
     """Exception for player operations."""
 
-    def __init__(
-        self,
-        message: str,
-        operation: str | None = None,
-        context: dict[str, Any] | None = None,
-        original_error: Exception | None = None,
-    ):
+    def __init__(self, message: str, operation: str | None = None):
         super().__init__(
             message=message,
             service="PlayerService",
             operation=operation,
-            context=context,
-            original_error=original_error,
         )

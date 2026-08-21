@@ -42,6 +42,7 @@ from .service import (
     CaptchaRequiredError,
     CaptchaVerificationError,
     EmailAlreadyRegisteredError,
+    EmailChangeEmailNotConfiguredError,
     EmailChangeLockedError,
     EmailUnchangedError,
     EmailVerificationCodeExpiredError,
@@ -503,6 +504,13 @@ async def request_email_change_code(
             "EMAIL_CHANGE_LOCKED",
             "Too many failed attempts. Try again in 5 minutes.",
             locked_until=e.locked_until.astimezone(UTC).isoformat(),
+        ) from e
+    except EmailChangeEmailNotConfiguredError as e:
+        # Before the blanket handler below, which would answer an uncoded 500.
+        raise http_error(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "EMAIL_CHANGE_EMAIL_NOT_CONFIGURED",
+            "Email delivery is not configured.",
         ) from e
     except Exception as e:
         raise HTTPException(

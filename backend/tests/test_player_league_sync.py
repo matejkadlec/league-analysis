@@ -47,7 +47,6 @@ class _LeagueSession:
         self.added.append(value)
 
 
-@pytest.mark.asyncio
 async def test_missing_league_id_is_persisted_as_null_without_losing_rank(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -83,7 +82,6 @@ async def test_missing_league_id_is_persisted_as_null_without_losing_rank(
     assert snapshot.losses == 8
 
 
-@pytest.mark.asyncio
 async def test_missing_league_id_does_not_replace_an_unchanged_snapshot(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

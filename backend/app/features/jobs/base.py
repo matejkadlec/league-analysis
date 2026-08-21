@@ -6,9 +6,10 @@ from collections import defaultdict
 from collections.abc import Callable, Mapping, MutableMapping, Sequence
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
-from typing import Any, NotRequired, TypedDict, Unpack, cast
+from typing import Any, NotRequired, TypedDict, Unpack
 
 import structlog
+from pydantic import ValidationError
 from sqlalchemy import Update, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from structlog import contextvars as structlog_contextvars
@@ -147,29 +148,19 @@ def _format_api_calls_for_storage(
 
 
 def _validation_field_locations(source_error: Exception | None) -> list[str]:
-    """Return reviewed Pydantic location paths from a diagnostic exception."""
-    validation_errors: object = getattr(source_error, "errors", None)
-    if not callable(validation_errors):
+    """Return reviewed Pydantic location paths from a diagnostic exception.
+
+    Pydantic ships `ErrorDetails` as a `py.typed` TypedDict whose `loc` is
+    `tuple[int | str, ...]`; this used to re-derive that at runtime through a
+    `getattr("errors")`, three `cast()`s and a `callable`/list/dict/tuple
+    ladder -- twenty-four lines to read a type the dependency already states.
+    """
+    if not isinstance(source_error, ValidationError):
         return []
-    try:
-        reported_errors: object = validation_errors()
-    except Exception as error:
-        logger.debug(
-            "job_validation_field_locations_failed",
-            error_type=type(error).__name__,
-        )
-        return []
-    if not isinstance(reported_errors, list):
-        return []
-    locations: list[str] = []
-    for item in cast(list[object], reported_errors):
-        if not isinstance(item, dict):
-            continue
-        location = cast(dict[object, object], item).get("loc")
-        if isinstance(location, tuple):
-            location_parts = cast(tuple[object, ...], location)
-            locations.append(".".join(str(part) for part in location_parts))
-    return locations[:5]
+    return [
+        ".".join(str(part) for part in detail["loc"])
+        for detail in source_error.errors()
+    ][:5]
 
 
 def _safe_error_context(context: dict[str, Any] | None) -> dict[str, Any]:

@@ -134,7 +134,9 @@ class MatchmakingAnalysis(Base):
                 "status IN ('pending', 'in_progress', 'waiting_rate_limit')"
             ),
         ),
-        Index("idx_matchmaking_analyses_puuid", "puuid"),
-        Index("ix_matchmaking_analyses_created_at", "created_at"),
+        # No index on `puuid` alone -- it leads the primary key -- and none
+        # on `created_at`, which the key does NOT cover: every query that
+        # orders by it also filters on `puuid` (service.py:243, 258, 309, 349),
+        # so the key serves all four.
         {"schema": "core"},
     )

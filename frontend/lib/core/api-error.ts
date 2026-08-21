@@ -42,14 +42,6 @@ export class ApiRequestError extends Error {
   }
 }
 
-export interface StructuredErrorDetail {
-  code?: string | undefined;
-  message?: string | undefined;
-  locked_until?: string | undefined;
-  attempts_remaining?: number | undefined;
-  retry_after_seconds?: number | undefined;
-}
-
 interface ExtractedResponseError {
   code?: string | undefined;
   message?: string | undefined;
@@ -60,30 +52,38 @@ const SAFE_CODE_PATTERN = /^[A-Z][A-Z0-9_]{1,63}$/;
 const TECHNICAL_MESSAGE_PATTERN =
   /(?:internal server|failed to fetch|network error|err_[a-z_]+|traceback|stack trace|sql(?:alchemy)?|postgres|axios|https?:\/\/|\/api\/|riotapierror|\bat\s+[A-Za-z_$][\w$]*\s*\(|rgapi-[A-Za-z0-9-]+)/i;
 
-function readStructuredDetail(value: unknown): StructuredErrorDetail | null {
-  if (typeof value !== "object" || value === null) {
-    return null;
-  }
+/**
+ * The structured `detail` FastAPI's `http_error` builds, read defensively.
+ *
+ * Every field was spelled out three times: once in an interface, once in a
+ * hand-written reader, and once more in `sanitizedDetails` below, which
+ * rebuilt all five to rewrite one. A sixth field added to the interface
+ * compiled while the reader silently never populated it.
+ *
+ * Per-field `.catch(undefined)` keeps the old semantics exactly -- a wrong
+ * type reads as absent rather than failing the whole detail -- and the
+ * object-level `.catch({})` covers the shape FastAPI returns for a 422, where
+ * `detail` is an array of validation errors and not an object at all.
+ */
+const StructuredErrorDetailSchema = z
+  .object({
+    code: z.string().regex(SAFE_CODE_PATTERN).optional().catch(undefined),
+    message: z.string().trim().optional().catch(undefined),
+    locked_until: z.string().optional().catch(undefined),
+    attempts_remaining: z.number().optional().catch(undefined),
+    retry_after_seconds: z.number().optional().catch(undefined),
+  })
+  .catch({});
 
-  const detail = value as Record<string, unknown>;
-  return {
-    code:
-      typeof detail.code === "string" && SAFE_CODE_PATTERN.test(detail.code)
-        ? detail.code
-        : undefined,
-    message:
-      typeof detail.message === "string" ? detail.message.trim() : undefined,
-    locked_until:
-      typeof detail.locked_until === "string" ? detail.locked_until : undefined,
-    attempts_remaining:
-      typeof detail.attempts_remaining === "number"
-        ? detail.attempts_remaining
-        : undefined,
-    retry_after_seconds:
-      typeof detail.retry_after_seconds === "number"
-        ? detail.retry_after_seconds
-        : undefined,
-  };
+export type StructuredErrorDetail = z.infer<typeof StructuredErrorDetailSchema>;
+
+function readStructuredDetail(value: unknown): StructuredErrorDetail | null {
+  // The guard is load-bearing, not vestigial: `.catch({})` would turn a plain
+  // string `detail` into a truthy `{}` and attach an empty `details`, where
+  // today it falls through to `stringDetail` below.
+  return typeof value === "object" && value !== null
+    ? StructuredErrorDetailSchema.parse(value)
+    : null;
 }
 
 function extractResponseError(data: unknown): ExtractedResponseError {
@@ -129,17 +129,14 @@ function sanitizedDetails(
     return undefined;
   }
 
-  const detail: StructuredErrorDetail = {
-    code: structuredDetail.code,
-    message: isSafeProductMessage(structuredDetail.message)
-      ? structuredDetail.message
-      : undefined,
-    locked_until: structuredDetail.locked_until,
-    attempts_remaining: structuredDetail.attempts_remaining,
-    retry_after_seconds: structuredDetail.retry_after_seconds,
+  return {
+    detail: {
+      ...structuredDetail,
+      message: isSafeProductMessage(structuredDetail.message)
+        ? structuredDetail.message
+        : undefined,
+    },
   };
-
-  return { detail };
 }
 
 function responseApiError(

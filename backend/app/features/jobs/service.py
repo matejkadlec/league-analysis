@@ -14,6 +14,7 @@ from .control import (
     runtime_control_key,
     set_runtime_job_paused,
 )
+from .intervals import resolve_interval_seconds
 from .maintenance import (
     lock_riot_writer_tables,
     preserve_riot_writer_maintenance_mode,
@@ -174,6 +175,16 @@ class JobService:
 
         for key, value in update_dict.items():
             setattr(job, key, value)
+
+        # After the merge and before the commit: config_json is merged rather
+        # than replaced, so only the resolved row can be checked. The scheduler
+        # used to be the first thing to notice, and it only logged -- leaving
+        # the DB and the running scheduler disagreeing behind a 200.
+        resolve_interval_seconds(
+            name=job.name,
+            schedule=job.schedule,
+            config_json=job.config_json,
+        )
 
         await self.db.commit()
         await self.db.refresh(job)

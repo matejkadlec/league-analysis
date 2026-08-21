@@ -1,9 +1,6 @@
 import type { MetadataRoute } from "next";
 
-const SITE_URL = (
-  process.env.NEXT_PUBLIC_SITE_URL || "https://leagueanalysis.gg"
-).replace(/\/+$/, "");
-const SHOULD_ALLOW_INDEXING = process.env.NEXT_PUBLIC_ALLOW_INDEXING === "true";
+import { SHOULD_ALLOW_INDEXING, SITE_URL } from "@/lib/core/site-url";
 
 export default function robots(): MetadataRoute.Robots {
   if (!SHOULD_ALLOW_INDEXING) {

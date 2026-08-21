@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { z } from "zod";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -15,18 +14,9 @@ import {
   writeOptionalStorage,
 } from "@/features/cookie-consent/utils/consent-storage";
 import { unwrap, validatedGet } from "@/lib/core/api";
+import { ServiceStatusSchema } from "@/lib/core/schemas";
 import { cn } from "@/lib/core/utils";
 import { RIOT_CREDENTIAL_HEALTH_UPDATED_EVENT } from "@/lib/core/riot-credential-health-events";
-
-const ServiceStatusSchema = z.object({
-  is_under_maintenance: z.boolean(),
-  reason: z.enum(["ok", "api_key_missing", "api_key_invalid"]),
-  credential_status: z.enum(["missing", "unknown", "valid", "invalid"]),
-  health_revision: z.number(),
-  observed_at: z.string(),
-  has_recent_recovery: z.boolean(),
-  recovery_notice_key: z.string().nullable(),
-});
 
 const HEADER_MESSAGES_CLOSED_KEY = "header_messages_closed:v1";
 

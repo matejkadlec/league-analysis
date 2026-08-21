@@ -61,7 +61,6 @@ def _raises(*errors: Exception) -> Any:
     return fetch
 
 
-@pytest.mark.asyncio
 async def test_a_call_that_works_is_recorded_and_returned(slept: list[float]) -> None:
     svc, _ = _service()
 
@@ -74,7 +73,6 @@ async def test_a_call_that_works_is_recorded_and_returned(slept: list[float]) ->
     assert slept == []
 
 
-@pytest.mark.asyncio
 async def test_rate_limit_waits_the_servers_own_retry_after_then_succeeds(
     slept: list[float],
 ) -> None:
@@ -91,7 +89,6 @@ async def test_rate_limit_waits_the_servers_own_retry_after_then_succeeds(
     assert svc.api_calls_made == 1
 
 
-@pytest.mark.asyncio
 async def test_a_rate_limit_without_a_retry_after_waits_two_minutes(
     slept: list[float],
 ) -> None:
@@ -106,7 +103,6 @@ async def test_a_rate_limit_without_a_retry_after_waits_two_minutes(
     assert slept == [120]
 
 
-@pytest.mark.asyncio
 async def test_an_absurd_retry_after_is_clamped(slept: list[float]) -> None:
     """Riot can ask for an hour. Waiting it would stall the whole analysis."""
     svc, _ = _service()
@@ -120,7 +116,6 @@ async def test_an_absurd_retry_after_is_clamped(slept: list[float]) -> None:
     assert slept == [MAX_RATE_LIMIT_WAIT]
 
 
-@pytest.mark.asyncio
 async def test_the_client_is_told_it_is_waiting_and_told_when_it_stops(
     slept: list[float],
 ) -> None:
@@ -140,7 +135,6 @@ async def test_the_client_is_told_it_is_waiting_and_told_when_it_stops(
     assert svc._is_waiting_for_rate_limit is False
 
 
-@pytest.mark.asyncio
 async def test_ten_rate_limits_exhaust_the_budget_and_answer_nothing(
     slept: list[float],
 ) -> None:
@@ -159,7 +153,6 @@ async def test_ten_rate_limits_exhaust_the_budget_and_answer_nothing(
     assert svc.api_calls_made == 0
 
 
-@pytest.mark.asyncio
 async def test_exhaustion_on_a_required_call_is_a_named_failure(
     slept: list[float],
 ) -> None:
@@ -175,7 +168,6 @@ async def test_exhaustion_on_a_required_call_is_a_named_failure(
     assert caught.value.code == "rate_limit_wait_exhausted"
 
 
-@pytest.mark.asyncio
 async def test_an_ordinary_riot_failure_is_not_retried(slept: list[float]) -> None:
     """Only rate limits are worth waiting out; a 404 will still be a 404."""
     svc, _ = _service()
@@ -192,7 +184,6 @@ async def test_an_ordinary_riot_failure_is_not_retried(slept: list[float]) -> No
     [AuthenticationError("bad key"), ForbiddenError("no")],
     ids=["authentication", "forbidden"],
 )
-@pytest.mark.asyncio
 async def test_a_credential_failure_always_escapes(
     error: Exception, slept: list[float]
 ) -> None:
@@ -205,7 +196,6 @@ async def test_a_credential_failure_always_escapes(
         )
 
 
-@pytest.mark.asyncio
 async def test_a_required_call_reraises_even_an_ordinary_failure(
     slept: list[float],
 ) -> None:
@@ -217,7 +207,6 @@ async def test_a_required_call_reraises_even_an_ordinary_failure(
         )
 
 
-@pytest.mark.asyncio
 async def test_exhaustion_does_not_leave_the_client_told_it_is_still_waiting(
     slept: list[float],
 ) -> None:

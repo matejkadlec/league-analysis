@@ -62,7 +62,7 @@ class PlayerLeague(Base):
     tier: Mapped[str] = mapped_column(
         String(16),
         nullable=False,
-        index=True,
+        # Led by both `idx_leagues_tier_rank` and `idx_leagues_tier_lp`.
         comment="Rank tier (e.g., GOLD, PLATINUM, DIAMOND)",
     )
 
@@ -141,6 +141,7 @@ Index("idx_leagues_tier_rank", PlayerLeague.tier, PlayerLeague.rank)
 
 Index("idx_leagues_tier_lp", PlayerLeague.tier, PlayerLeague.league_points)
 
-Index("idx_leagues_puuid_created", PlayerLeague.puuid, PlayerLeague.created_at.desc())
+# `idx_leagues_puuid_created` used to sit here: the primary key spelled again
+# with DESC, which a btree already serves by scanning backwards.
 
 Index("idx_leagues_league_id", PlayerLeague.league_id)

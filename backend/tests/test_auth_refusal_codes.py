@@ -51,7 +51,6 @@ def _service(rotated: Any) -> AuthService:
     return cast(AuthService, service)
 
 
-@pytest.mark.asyncio
 async def test_a_rejected_refresh_token_names_itself() -> None:
     with pytest.raises(HTTPException) as raised:
         await refresh_access_token(
@@ -67,7 +66,6 @@ async def test_a_rejected_refresh_token_names_itself() -> None:
     assert detail["code"] in SESSION_ENDING_CODES
 
 
-@pytest.mark.asyncio
 async def test_a_deactivated_account_names_itself_and_revokes_first() -> None:
     user = MagicMock()
     user.id = 7
@@ -92,7 +90,6 @@ async def test_a_deactivated_account_names_itself_and_revokes_first() -> None:
     ).assert_awaited_once_with(7)
 
 
-@pytest.mark.asyncio
 async def test_the_refusal_survives_the_app_as_json_the_browser_can_read() -> None:
     """The shape on the wire, after every middleware and exception handler.
 
@@ -123,7 +120,6 @@ async def test_the_refusal_survives_the_app_as_json_the_browser_can_read() -> No
     assert response.json()["detail"]["code"] == "INVALID_REFRESH_TOKEN"
 
 
-@pytest.mark.asyncio
 async def test_a_database_fault_is_not_laundered_into_a_refusal() -> None:
     """An outage must not come back as "your session is over".
 
@@ -207,7 +203,6 @@ async def test_a_database_fault_is_not_laundered_into_a_refusal() -> None:
         await service.rotate_refresh_token(raw_refresh_token="x")
 
 
-@pytest.mark.asyncio
 async def test_a_fault_reaching_the_route_is_not_answered_as_a_refusal() -> None:
     """The same laundering, one frame up, where the refusal is actually minted.
 

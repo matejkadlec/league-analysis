@@ -1,3 +1,4 @@
+import type { QueryMeta } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { toast as sonnerToast } from "sonner";
 
@@ -78,6 +79,30 @@ export function useToast() {
 }
 
 /**
+ * The complete vocabulary of a query's `meta`.
+ *
+ * A type alias, not an interface, and the distinction is the whole point:
+ * `QueryMeta` resolves to `Register["queryMeta"]` only when that type extends
+ * `Record<string, unknown>`, which an alias does by implicit index signature
+ * and an interface does not. Declare this as an interface and `QueryMeta`
+ * silently falls back to `Record<string, unknown>` -- which is what `meta`
+ * used to be, and why `meta: { silenceErrorToasts: true }` compiled, read as
+ * an unknown key, and toasted anyway.
+ */
+export type AppQueryMeta = {
+  /** Some other surface reports this failure; say which in a comment. */
+  silenceErrorToast?: true;
+  /** Name the thing that failed, instead of "Could not load this data". */
+  errorTitle?: string;
+};
+
+declare module "@tanstack/react-query" {
+  interface Register {
+    queryMeta: AppQueryMeta;
+  }
+}
+
+/**
  * Decide what a failed query should announce, or `null` to stay silent.
  *
  * Kept pure and separate from the cache handler that calls it so the silence
@@ -86,7 +111,7 @@ export function useToast() {
  */
 export function queryErrorToast(
   error: unknown,
-  meta?: Record<string, unknown>,
+  meta?: QueryMeta,
 ): ToastOptions | null {
   const apiError = normalizeApiError(error);
 
@@ -96,15 +121,12 @@ export function queryErrorToast(
     return null;
   }
 
-  if (meta?.["silenceErrorToast"] === true) {
+  if (meta?.silenceErrorToast) {
     return null;
   }
 
   return {
-    title:
-      typeof meta?.["errorTitle"] === "string"
-        ? meta["errorTitle"]
-        : "Could not load this data",
+    title: meta?.errorTitle ?? "Could not load this data",
     description: apiErrorMessage(apiError, "Please try again in a moment."),
     variant: "error",
     // One outage fails every query in flight. Keying by failure kind collapses

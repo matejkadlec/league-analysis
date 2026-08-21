@@ -932,7 +932,6 @@ def _await_args(mock: AsyncMock) -> tuple[Any, ...]:
     return mock.await_args.args
 
 
-@pytest.mark.asyncio
 async def test_a_run_over_no_history_becomes_stale_once_a_game_arrives() -> None:
     """A stored identifier of `None` must take part in the comparison."""
     service = _service(MagicMock())
@@ -942,7 +941,6 @@ async def test_a_run_over_no_history_becomes_stale_once_a_game_arrives() -> None
     assert await service._is_stale(run) is True
 
 
-@pytest.mark.asyncio
 async def test_an_unchanged_newest_game_is_not_stale() -> None:
     """The same newest identifier means nothing has been ingested since."""
     service = _service(MagicMock())
@@ -951,7 +949,6 @@ async def test_an_unchanged_newest_game_is_not_stale() -> None:
     assert await service._is_stale(_completed_run()) is False
 
 
-@pytest.mark.asyncio
 async def test_an_unfinished_run_is_never_reported_stale() -> None:
     """Staleness describes a completed answer, not a run still in flight."""
     service = _service(MagicMock())
@@ -979,7 +976,6 @@ def test_a_run_with_other_thresholds_is_not_the_same_configuration() -> None:
     )
 
 
-@pytest.mark.asyncio
 async def test_a_differently_configured_active_run_is_a_conflict() -> None:
     """A caller must never silently inherit another viewer's settings."""
     service = _service(MagicMock(execute=AsyncMock(), commit=AsyncMock()))
@@ -993,7 +989,6 @@ async def test_a_differently_configured_active_run_is_a_conflict() -> None:
     assert raised.value.code == "analysis_in_progress"
 
 
-@pytest.mark.asyncio
 async def test_an_identically_configured_active_run_is_attached_to() -> None:
     """Two viewers asking the same question share one computation."""
     active = _completed_run(status="in_progress")
@@ -1006,7 +1001,6 @@ async def test_an_identically_configured_active_run_is_attached_to() -> None:
     assert concurrent is active
 
 
-@pytest.mark.asyncio
 async def test_an_abandoned_run_is_terminalized_rather_than_blocking() -> None:
     """An interrupted request must not wedge the feature for that player."""
     execute = AsyncMock(return_value=SimpleNamespace(rowcount=1))
@@ -1021,7 +1015,6 @@ async def test_an_abandoned_run_is_terminalized_rather_than_blocking() -> None:
     assert "created_at <" in statement
 
 
-@pytest.mark.asyncio
 async def test_nothing_is_committed_when_no_run_is_abandoned() -> None:
     """The expiry sweep runs on every request, so it must stay silent."""
     commit = AsyncMock()
@@ -1036,7 +1029,6 @@ async def test_nothing_is_committed_when_no_run_is_abandoned() -> None:
     commit.assert_not_awaited()
 
 
-@pytest.mark.asyncio
 async def test_novelty_counting_excludes_the_window_by_identifier() -> None:
     """Champion history is counted past the load cap, minus the exact window.
 
@@ -1062,7 +1054,6 @@ async def test_novelty_counting_excludes_the_window_by_identifier() -> None:
     assert "LIMIT" not in compiled.upper()
 
 
-@pytest.mark.asyncio
 async def test_the_excluded_window_is_the_window_that_was_scored() -> None:
     """Novelty must exclude exactly the games the engine treats as recent."""
     eligible = _window(30)
@@ -1106,7 +1097,6 @@ def _no_rows() -> list[tuple[SimpleNamespace, SimpleNamespace]]:
     return []
 
 
-@pytest.mark.asyncio
 async def test_a_match_carrying_an_unscorable_metric_is_dropped() -> None:
     """`NaN` survives standardization and clamps to the positive bound.
 
@@ -1125,7 +1115,6 @@ async def test_a_match_carrying_an_unscorable_metric_is_dropped() -> None:
     assert loaded[0].kda == BASE_METRICS["kda"]
 
 
-@pytest.mark.asyncio
 async def test_eligibility_is_one_predicate_every_query_reuses() -> None:
     """Eligibility lives only in SQL, so only SQL can assert it.
 
@@ -1150,7 +1139,6 @@ async def test_eligibility_is_one_predicate_every_query_reuses() -> None:
     assert "'Invalid'" not in compiled
 
 
-@pytest.mark.asyncio
 async def test_the_load_cap_is_applied_in_sql() -> None:
     """A deep account must not hydrate hundreds of rows the engine discards."""
     execute = AsyncMock(return_value=SimpleNamespace(all=_no_rows))
@@ -1166,7 +1154,6 @@ async def test_the_load_cap_is_applied_in_sql() -> None:
     assert f"LIMIT {MAX_WINDOW_MATCHES}" in compiled
 
 
-@pytest.mark.asyncio
 async def test_polling_alone_terminalizes_an_abandoned_run() -> None:
     """The page offers no way to start a run while one still looks active.
 
@@ -1181,7 +1168,6 @@ async def test_polling_alone_terminalizes_an_abandoned_run() -> None:
     service._expire_abandoned.assert_awaited_once_with("p")
 
 
-@pytest.mark.asyncio
 async def test_a_race_loser_attaches_to_a_winner_that_already_finished() -> None:
     """The winner can complete before the loser looks for an active row.
 

@@ -107,7 +107,6 @@ def test_platform_enum_values_are_already_canonical() -> None:
     ]
 
 
-@pytest.mark.asyncio
 async def test_game_name_search_compares_against_canonical_casing() -> None:
     """The sibling lookup normalises identically."""
     session = _CapturingSession()

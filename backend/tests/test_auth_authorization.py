@@ -100,7 +100,6 @@ def test_password_change_requires_matching_strong_passwords() -> None:
         )
 
 
-@pytest.mark.asyncio
 async def test_inactive_user_is_forbidden() -> None:
     user = User(is_active=False, is_admin=True)
     with pytest.raises(HTTPException) as error:
@@ -109,7 +108,6 @@ async def test_inactive_user_is_forbidden() -> None:
     assert cast(dict[str, str], error.value.detail)["code"] == "ACCOUNT_INACTIVE"
 
 
-@pytest.mark.asyncio
 async def test_login_returns_a_dedicated_inactive_account_code() -> None:
     auth_service = SimpleNamespace(
         authenticate_user=AsyncMock(
@@ -137,7 +135,6 @@ async def test_login_returns_a_dedicated_inactive_account_code() -> None:
     }
 
 
-@pytest.mark.asyncio
 async def test_refresh_returns_the_same_inactive_account_code() -> None:
     user = SimpleNamespace(id=7, is_active=False)
     revoke_all_refresh_tokens_for_user = AsyncMock()
@@ -165,7 +162,6 @@ async def test_refresh_returns_the_same_inactive_account_code() -> None:
     revoke_all_refresh_tokens_for_user.assert_awaited_once_with(user.id)
 
 
-@pytest.mark.asyncio
 async def test_non_admin_user_is_forbidden_and_admin_is_allowed() -> None:
     regular_user = User(is_active=True, is_admin=False)
     with pytest.raises(HTTPException) as error:

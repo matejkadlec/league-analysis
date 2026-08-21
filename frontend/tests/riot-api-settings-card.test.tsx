@@ -150,6 +150,36 @@ describe("the card that swaps the Riot API key", () => {
     queryClient.clear();
   });
 
+  it("says so when the save request itself fails", async () => {
+    // Both mutations used to return the `ApiResponse` envelope, which
+    // `validatedPut` cannot reject -- so their `onError` arms were dead and
+    // the global `MutationCache.onError` never saw a failed key save. Nothing
+    // pinned that shape: every mock in this file resolves a success. This case
+    // is what makes putting the envelope back fail.
+    validatedPut.mockResolvedValue({
+      success: false,
+      error: {
+        kind: "unexpected",
+        code: "UNKNOWN_ERROR",
+        status: 500,
+        message: "Boom",
+      },
+    });
+    const queryClient = renderCard();
+
+    await typeKey(VALID_KEY);
+    fireEvent.click(screen.getByRole("button", { name: /Save & Apply/ }));
+
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith(
+        "Riot API key was not updated",
+        expect.anything(),
+      ),
+    );
+
+    queryClient.clear();
+  });
+
   it("will not save a key Riot has just rejected", async () => {
     // Testing is the point of the button beside it. Once a test comes back
     // failed, saving anyway would put a known-bad key live and take ingestion

@@ -19,6 +19,7 @@ from app.core import db_manager, get_global_settings
 from app.core.config import Settings
 
 from .base import BaseJob
+from .intervals import JobIntervalError, resolve_interval_seconds
 from .models import JobConfiguration, JobExecution, JobStatus, JobType
 
 logger = structlog.get_logger(__name__)
@@ -110,82 +111,13 @@ def get_scheduler() -> SchedulerLike | None:
 def _resolve_interval_seconds(job_config: JobConfiguration) -> int:
     """Determine interval seconds for a job configuration.
 
-    :param job_config: Job configuration with schedule settings.
-    :returns: Interval in seconds (minimum 1).
-    :raises ValueError: If no valid interval configuration found.
+    :raises JobIntervalError: If no valid interval configuration found.
     """
-    config = job_config.config_json or {}
-    custom_value = config.get("interval_seconds")
-
-    # Try to parse custom value from config
-    interval_from_config = _parse_interval_from_config(custom_value)
-    if interval_from_config:
-        return interval_from_config
-
-    # Try to parse from schedule string
-    schedule = (job_config.schedule or "").strip().lower()
-    interval_from_schedule = _parse_interval_from_schedule(schedule)
-    if interval_from_schedule:
-        return interval_from_schedule
-
-    # No valid configuration found - fail hard
-    raise ValueError(
-        f"No valid interval configuration found for job '{job_config.name}'. "
-        f"Either set 'interval_seconds' in config_json or provide a valid schedule string."
+    return resolve_interval_seconds(
+        name=job_config.name,
+        schedule=job_config.schedule,
+        config_json=job_config.config_json,
     )
-
-
-def _parse_interval_from_config(custom_value: object) -> int | None:
-    """Parse interval from config JSON value.
-
-    :param custom_value: Value from config_json['interval_seconds'].
-    :returns: Parsed interval in seconds, or None if invalid.
-    """
-    # Exit early if no value provided
-    if not custom_value:
-        return None
-
-    # Convert string digits to int
-    if isinstance(custom_value, str) and custom_value.isdigit():
-        custom_value = int(custom_value)
-
-    # Return if valid positive integer
-    if isinstance(custom_value, int) and custom_value > 0:
-        return custom_value
-
-    return None
-
-
-def _parse_interval_from_schedule(schedule: str) -> int | None:
-    """Parse interval from schedule string.
-
-    Supports formats:
-    - "60" - plain number
-    - "interval:60" - interval prefix
-    - "60s" - seconds suffix
-
-    :param schedule: Schedule string from job configuration.
-    :returns: Parsed interval in seconds (minimum 1), or None if invalid.
-    """
-    # Exit early if empty
-    if not schedule:
-        return None
-
-    # Try plain digit format: "60"
-    if schedule.isdigit():
-        return max(int(schedule), 1)
-
-    # Try "interval:60" format
-    if schedule.startswith("interval:"):
-        candidate = schedule.split(":", 1)[1].strip()
-        if candidate.isdigit():
-            return max(int(candidate), 1)
-
-    # Try "60s" format
-    if schedule.endswith("s") and schedule[:-1].isdigit():
-        return max(int(schedule[:-1]), 1)
-
-    return None
 
 
 class StartupRecoveryError(RuntimeError):
@@ -536,44 +468,38 @@ async def sync_job_configuration(job_config_id: int) -> None:
 
     scheduler_job_id = f"job_{job_config_id}"
 
-    try:
-        from sqlalchemy import select
+    from sqlalchemy import select
 
-        async with db_manager.get_session() as db:
-            stmt = select(JobConfiguration).where(JobConfiguration.id == job_config_id)
-            result = await db.execute(stmt)
-            job_config = result.scalar_one_or_none()
+    async with db_manager.get_session() as db:
+        stmt = select(JobConfiguration).where(JobConfiguration.id == job_config_id)
+        result = await db.execute(stmt)
+        job_config = result.scalar_one_or_none()
 
-        if job_config is None or not job_config.is_active:
-            try:
-                _scheduler.remove_job(scheduler_job_id)
-                logger.info(
-                    "Removed job from scheduler",
-                    job_id=job_config_id,
-                    reason="inactive_or_missing",
-                )
-            except JobLookupError:
-                logger.debug(
-                    "Job not present in scheduler during removal",
-                    job_id=job_config_id,
-                )
-            return
+    if job_config is None or not job_config.is_active:
+        try:
+            _scheduler.remove_job(scheduler_job_id)
+            logger.info(
+                "Removed job from scheduler",
+                job_id=job_config_id,
+                reason="inactive_or_missing",
+            )
+        except JobLookupError:
+            logger.debug(
+                "Job not present in scheduler during removal",
+                job_id=job_config_id,
+            )
+        return
 
-        registry = _get_job_registry()
-        job_class = _get_job_class(job_config.job_type, job_config, registry)
-        if not job_class:
-            return
+    registry = _get_job_registry()
+    job_class = _get_job_class(job_config.job_type, job_config, registry)
+    if not job_class:
+        return
 
-        interval_seconds = _resolve_interval_seconds(job_config)
-        _schedule_job(job_config, job_class, interval_seconds)
-
-    except Exception as e:
-        logger.error(
-            "Failed to sync job configuration with scheduler",
-            job_id=job_config_id,
-            error=str(e),
-            error_type=type(e).__name__,
-        )
+    # No blanket handler. The one caller commits the configuration first, so
+    # swallowing a fault here answered 200 for a row the scheduler had not
+    # accepted; the update route now validates the interval before it commits,
+    # which leaves only genuine scheduler faults -- worth a 500.
+    _schedule_job(job_config, job_class, _resolve_interval_seconds(job_config))
 
 
 def _overdue_reason(
@@ -736,15 +662,27 @@ async def _load_and_schedule_jobs() -> None:
 
         registry = _get_job_registry()
 
+        scheduled = 0
         for job_config in job_configs:
-            job_class = _get_job_class(job_config.job_type, job_config, registry)
-            if not job_class:
-                continue
+            # Per row, like `_collect_overdue_jobs` already does. One
+            # unresolvable configuration used to abort the loop, so every job
+            # after it went unscheduled with a single log line as the trace.
+            try:
+                job_class = _get_job_class(job_config.job_type, job_config, registry)
+                if not job_class:
+                    continue
 
-            interval_seconds = _resolve_interval_seconds(job_config)
-            _schedule_job(job_config, job_class, interval_seconds)
+                interval_seconds = _resolve_interval_seconds(job_config)
+                _schedule_job(job_config, job_class, interval_seconds)
+                scheduled += 1
+            except JobIntervalError as e:
+                logger.error(
+                    "Skipping job with an unusable interval",
+                    job_name=job_config.name,
+                    error=str(e),
+                )
 
-        logger.info("Successfully loaded and scheduled jobs", count=len(job_configs))
+        logger.info("Successfully loaded and scheduled jobs", count=scheduled)
 
     except Exception as e:
         logger.error(

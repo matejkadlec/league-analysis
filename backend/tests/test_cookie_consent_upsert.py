@@ -4,7 +4,6 @@ from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import cast
 
-import pytest
 from sqlalchemy import ClauseElement
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -38,7 +37,6 @@ class _Session:
         self.committed = True
 
 
-@pytest.mark.asyncio
 async def test_repeat_consent_upserts_instead_of_racing_the_primary_key() -> None:
     """A second consent updates the row rather than inserting a duplicate.
 
@@ -72,7 +70,6 @@ async def test_repeat_consent_upserts_instead_of_racing_the_primary_key() -> Non
     assert session.committed
 
 
-@pytest.mark.asyncio
 async def test_repeat_consent_moves_both_timestamps() -> None:
     """The conflict branch sets `updated_at` itself.
 
