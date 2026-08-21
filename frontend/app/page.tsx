@@ -27,7 +27,7 @@ export default function Home() {
               </div>
             </div>
           </div>
-          <CardContent className="px-8 pt-0 pb-4 prose prose-lg max-w-none space-y-4">
+          <CardContent className="px-8 pt-0 pb-4 max-w-none space-y-4">
             <p className="leading-relaxed">
               Welcome to League Analysis - your all in one tool for
               comprehensive analysis of League of Legends players, matches and
