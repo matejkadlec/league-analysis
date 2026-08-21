@@ -8,6 +8,7 @@ export {
   usePlayerContext,
 } from "./context/player-context";
 export { playerQueryKey, playerQueryOptions } from "./player-query";
+export { formatRiotId } from "./utils/riot-id";
 export { usePlayerSyncRun } from "./use-player-sync-run";
 export {
   MATCH_HISTORY_PATH,

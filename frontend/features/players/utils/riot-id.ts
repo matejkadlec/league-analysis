@@ -1,3 +1,5 @@
+import type { Player } from "@/lib/core/schemas";
+
 export const RIOT_ID_GAME_NAME_MAX_LENGTH = 16;
 export const RIOT_ID_TAG_LINE_MAX_LENGTH = 5;
 
@@ -7,6 +9,13 @@ const RIOT_ID_TAG_LINE_PATTERN = /^[a-zA-Z0-9]+$/;
 export interface RiotIdParts {
   gameName: string;
   tagLine: string;
+}
+
+/** The `Name#Tag` label, the inverse of `parseRiotId`. */
+export function formatRiotId(
+  player: Pick<Player, "game_name" | "tag_line">,
+): string {
+  return `${player.game_name}${player.tag_line ? `#${player.tag_line}` : ""}`;
 }
 
 export function parseRiotId(input: string): RiotIdParts {

@@ -12,16 +12,13 @@ import {
 import { PlayerSelector } from "@/features/players/components/player-selector";
 import { TrackedPlayersList } from "@/features/players/components/tracked-players-list";
 import { usePlayerContext } from "@/features/players/context/player-context";
+import { formatRiotId } from "@/features/players/utils/riot-id";
 import type { Player } from "@/lib/core/schemas";
 
 interface SidebarPlayerSwitcherProps {
   manageOpen: boolean;
   onManageOpenChange: (open: boolean) => void;
   onNavigate?: () => void;
-}
-
-function playerLabel(player: Player): string {
-  return `${player.game_name}${player.tag_line ? `#${player.tag_line}` : ""}`;
 }
 
 export function SidebarPlayerSwitcher({
@@ -65,7 +62,7 @@ export function SidebarPlayerSwitcher({
             aria-expanded={manageOpen}
           >
             <Star className="h-3.5 w-3.5 fill-current" />
-            <span className="truncate">{playerLabel(currentPlayer)}</span>
+            <span className="truncate">{formatRiotId(currentPlayer)}</span>
           </button>
         ) : (
           <p className="px-2 py-2 text-xs text-white/55">Select a player</p>

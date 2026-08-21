@@ -29,7 +29,7 @@ import { getPlatformDisplayName } from "@/lib/core/platform-utils";
 import type { Player } from "@/lib/core/schemas";
 import { cn } from "@/lib/core/utils";
 
-import { parseRiotId, type RiotIdParts } from "../utils/riot-id";
+import { formatRiotId, parseRiotId, type RiotIdParts } from "../utils/riot-id";
 
 interface DiscoverAttempt {
   riotId: RiotIdParts;
@@ -45,11 +45,10 @@ const PLATFORM_ORDER = [
   "oc1", "tr1", "ru", "ph2", "sg2", "th2", "tw2", "vn2",
 ];
 
+// Keeps its own wrapper: the platform suffix is this picker's concern, not
+// part of the Riot ID.
 function playerLabel(player: Player): string {
-  const riotId = `${player.game_name}${
-    player.tag_line ? `#${player.tag_line}` : ""
-  }`;
-  return `${riotId} (${getPlatformDisplayName(player.platform)})`;
+  return `${formatRiotId(player)} (${getPlatformDisplayName(player.platform)})`;
 }
 
 function isValidRiotId(value: string): boolean {
