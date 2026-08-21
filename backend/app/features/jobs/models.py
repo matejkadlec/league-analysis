@@ -93,7 +93,7 @@ class JobConfiguration(Base):
     schedule: Mapped[str] = mapped_column(
         String(256),
         nullable=False,
-        comment="Job schedule (cron expression or interval specification)",
+        comment="Run interval: '60', 'interval:60' or '60s'",
     )
 
     # Status and configuration

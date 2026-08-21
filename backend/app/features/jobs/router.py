@@ -21,6 +21,7 @@ from .dependencies import JobServiceDep
 from .implementations.match_fetcher import MatchFetcherJob
 from .implementations.player_updater import PlayerUpdaterJob
 from .implementations.test_runner import TestMatchFetcherJob, TestPlayerUpdaterJob
+from .intervals import JobIntervalError
 from .maintenance import RiotWriterMaintenanceConfigurationError
 from .models import ExecutionType, JobStatus, JobType
 from .schemas import (
@@ -136,6 +137,8 @@ async def update_job_configuration(
         await sync_job_configuration(job.id)
         return job
     except RiotWriterMaintenanceConfigurationError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    except JobIntervalError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
 
 

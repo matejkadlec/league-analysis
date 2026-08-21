@@ -431,6 +431,9 @@ async def test_job_configuration_update_locks_cleanup_tables_before_its_row(
         job_type=JobType.MATCH_FETCHER,
         config_json={RIOT_MAINTENANCE_MODE_KEY: True, "enabled_queue_ids": [420]},
         name="match fetcher",
+        # NOT NULL on the real column, and the update path now resolves the
+        # interval before committing, so the double needs a real one.
+        schedule="900",
         is_active=True,
         is_paused=False,
     )
