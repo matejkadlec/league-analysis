@@ -25,16 +25,19 @@ const BACKEND_ROOT = join(
   "../../backend",
 );
 
+// Where the constant lives, not where the flow lives: it moved from
+// `service.py` to `join_us.py` with the Join Us extraction, and the check
+// failed as a missing literal rather than as a mismatch. The error below is
+// the only thing that says which file to look in.
+const MINIMUM_SOURCE = "app/features/auth/join_us.py";
+
 function backendMinimumBodyLength(): number {
-  const source = readFileSync(
-    join(BACKEND_ROOT, "app/features/auth/service.py"),
-    "utf8",
-  );
+  const source = readFileSync(join(BACKEND_ROOT, MINIMUM_SOURCE), "utf8");
   const match = /^JOIN_US_MIN_BODY_LENGTH = (\d+)$/m.exec(source);
   if (!match?.[1]) {
     throw new Error(
-      "JOIN_US_MIN_BODY_LENGTH is not a module-level literal in " +
-        "auth/service.py; this check can no longer read the rule it compares",
+      `JOIN_US_MIN_BODY_LENGTH is not a module-level literal in ${MINIMUM_SOURCE}; ` +
+        "this check can no longer read the rule it compares",
     );
   }
   return Number(match[1]);
