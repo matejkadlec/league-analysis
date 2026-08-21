@@ -171,14 +171,6 @@ class SettingsService:
             updated_at=target_key.added_at,
         )
 
-    async def create_or_update_setting(
-        self,
-        key: str,
-        value: str,
-    ) -> SettingResponse:
-        """Create or update a setting."""
-        return await self.update_setting(key, SettingUpdate(value=value))
-
     def _check_api_key_format(self, api_key: str) -> SettingValidationResponse | None:
         """Check API key format. Returns error response if invalid, None if valid."""
         if not api_key or len(api_key) < 10:

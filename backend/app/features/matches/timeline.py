@@ -109,16 +109,6 @@ _MONSTER_SPECS: dict[str, tuple[str, str]] = {
     "HORDE": ("voidgrub", "team_voidgrubs_slain"),
 }
 
-_TEAM_TOTAL_COPY_FIELDS = (
-    "team_turrets_destroyed",
-    "team_inhibitors_destroyed",
-    "team_dragons_slain",
-    "team_rift_heralds_slain",
-    "team_barons_slain",
-    "team_voidgrubs_slain",
-    "team_atakhan_slain",
-)
-
 _COUNTER_COPY_FIELDS = (
     "turret_takedowns_by_lane",
     "inhibitor_takedowns_by_lane",
@@ -366,7 +356,15 @@ def _append_compact_objective_event(
 
 
 def _new_team_total_bucket() -> dict[str, Any]:
-    """Create an empty team-level objective totals bucket."""
+    """Create an empty team-level objective totals bucket.
+
+    The one place the team-total key set is written down. `_new_participant_row`
+    splats it and `_apply_team_totals_to_row` iterates it, so a new objective is
+    added here and nowhere else. It used to be spelled three times, and the
+    third copy had already drifted -- it omitted
+    `team_other_epic_monsters_slain`, which is why that one field needed its own
+    hand-written copy line.
+    """
     return {
         "team_turrets_destroyed": 0,
         "team_inhibitors_destroyed": 0,
@@ -420,14 +418,7 @@ def _new_participant_row(
         "inhibitor_takedowns_by_lane": {},
         "dragon_takedowns_by_subtype": {},
         "other_epic_monster_takedowns": {},
-        "team_turrets_destroyed": 0,
-        "team_inhibitors_destroyed": 0,
-        "team_dragons_slain": 0,
-        "team_rift_heralds_slain": 0,
-        "team_barons_slain": 0,
-        "team_voidgrubs_slain": 0,
-        "team_atakhan_slain": 0,
-        "team_other_epic_monsters_slain": {},
+        **_new_team_total_bucket(),
         "objective_events": [],
     }
 
@@ -793,11 +784,10 @@ def _apply_team_totals_to_row(
     """Copy team totals onto a participant row when the team is known."""
     if totals is None:
         return
-    for field in _TEAM_TOTAL_COPY_FIELDS:
-        row[field] = totals[field]
-    row["team_other_epic_monsters_slain"] = dict(
-        totals["team_other_epic_monsters_slain"]
-    )
+    # `dict(...)` on the mutable ones: the bucket is shared per team, so
+    # aliasing it onto each row would let a later mutation leak across rows.
+    for field, value in totals.items():
+        row[field] = value.copy() if isinstance(value, dict) else value
 
 
 def _freeze_row_counters(row: dict[str, Any]) -> None:

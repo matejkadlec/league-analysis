@@ -214,10 +214,8 @@ class MatchService:
                 MatchResponse.model_validate(match) for match in db_matches
             ]
 
-            # Calculate page-based pagination from start/count
-            page = (start // count) if count > 0 else 0
+            page, pages = page_window(start, count, total_count)
             size = count
-            pages = ((total_count + count - 1) // count) if count > 0 else 0
 
             logger.debug(
                 "Retrieved matches from database",

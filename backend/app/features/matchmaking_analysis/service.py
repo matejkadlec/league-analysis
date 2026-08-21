@@ -143,7 +143,6 @@ class MatchmakingAnalysisService:
     MATCHES_TO_ANALYZE = 10
     MATCHES_FOR_WINRATE = 10
     MIN_MATCHES_REQUIRED = 10
-    EXPECTED_PLAYERS = 100
 
     def __init__(self, db: AsyncSession, riot_client: RiotAPIClient):
         self.db = db
@@ -496,24 +495,39 @@ class MatchmakingAnalysisService:
         self._current_analysis_created_at = created_at
         self._winrate_cache = {}
 
-    async def _mark_analysis_in_progress(
-        self, puuid: str, created_at: datetime
+    async def _write_active_run(
+        self, puuid: str | None, created_at: datetime | None, **values: Any
     ) -> None:
+        """Guarded UPDATE of one active run, committed.
+
+        The maintenance check, the `_active_run_where` guard and the commit
+        were written out at four call sites; only the values ever differed.
+        Deliberately not used by `cancel_analysis`, which omits the
+        maintenance check on purpose, nor by `_finalize_completed_analysis`,
+        which reads the status back before it commits.
+        """
         await _ensure_riot_writer_maintenance_is_inactive(self.db)
         await self.db.execute(
             update(MatchmakingAnalysis)
             .where(_active_run_where(puuid, created_at))
-            .values(
-                status="in_progress",
-                started_at=func.coalesce(
-                    MatchmakingAnalysis.started_at,
-                    datetime.now(UTC),
-                ),
-                error_code=None,
-                error_message=None,
-            )
+            .values(**values)
         )
         await self.db.commit()
+
+    async def _mark_analysis_in_progress(
+        self, puuid: str, created_at: datetime
+    ) -> None:
+        await self._write_active_run(
+            puuid,
+            created_at,
+            status="in_progress",
+            started_at=func.coalesce(
+                MatchmakingAnalysis.started_at,
+                datetime.now(UTC),
+            ),
+            error_code=None,
+            error_message=None,
+        )
 
     async def _load_spine_match_ids(
         self, puuid: str, created_at: datetime
@@ -1104,22 +1118,13 @@ class MatchmakingAnalysisService:
                 reset_at, current_reset, now, force_clear
             )
 
-            await _ensure_riot_writer_maintenance_is_inactive(self.db)
-            await self.db.execute(
-                update(MatchmakingAnalysis)
-                .where(
-                    _active_run_where(
-                        self._current_analysis_puuid,
-                        self._current_analysis_created_at,
-                    )
-                )
-                .values(
-                    status=self._status_for_rate_limit(next_reset),
-                    rate_limit_reset_at=next_reset,
-                    requests_saved=self.requests_saved,
-                )
+            await self._write_active_run(
+                self._current_analysis_puuid,
+                self._current_analysis_created_at,
+                status=self._status_for_rate_limit(next_reset),
+                rate_limit_reset_at=next_reset,
+                requests_saved=self.requests_saved,
             )
-            await self.db.commit()
         except Exception as e:
             logger.warning(
                 "Failed to set rate_limit_reset_at",
@@ -1170,13 +1175,7 @@ class MatchmakingAnalysisService:
     async def _update_progress(
         self, puuid: str, created_at: datetime, progress: dict[str, bool]
     ) -> None:
-        await _ensure_riot_writer_maintenance_is_inactive(self.db)
-        await self.db.execute(
-            update(MatchmakingAnalysis)
-            .where(_active_run_where(puuid, created_at))
-            .values(puuid_progress=progress)
-        )
-        await self.db.commit()
+        await self._write_active_run(puuid, created_at, puuid_progress=progress)
 
     async def _complete_with_error(
         self,
@@ -1187,17 +1186,13 @@ class MatchmakingAnalysisService:
         error_code: str,
     ) -> None:
         logger.warning("Analysis ended without results", code=error_code)
-        await _ensure_riot_writer_maintenance_is_inactive(self.db)
-        await self.db.execute(
-            update(MatchmakingAnalysis)
-            .where(_active_run_where(puuid, created_at))
-            .values(
-                status="failed",
-                completed_at=datetime.now(UTC),
-                results=None,
-                error_code=error_code,
-                error_message=msg,
-                rate_limit_reset_at=None,
-            )
+        await self._write_active_run(
+            puuid,
+            created_at,
+            status="failed",
+            completed_at=datetime.now(UTC),
+            results=None,
+            error_code=error_code,
+            error_message=msg,
+            rate_limit_reset_at=None,
         )
-        await self.db.commit()
