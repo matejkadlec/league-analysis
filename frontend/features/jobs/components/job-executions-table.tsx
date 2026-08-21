@@ -59,7 +59,7 @@ export function JobExecutionsTable({
                 {execution.execution_type === "TEST" ? (
                   <Badge
                     variant="outline"
-                    className="bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-900/30 dark:text-blue-200 dark:border-blue-800"
+                    className="bg-blue-900/30 text-blue-200 border-blue-800"
                   >
                     Test
                   </Badge>

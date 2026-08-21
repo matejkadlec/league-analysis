@@ -4,7 +4,6 @@ import { Montserrat } from "next/font/google";
 import localFont from "next/font/local";
 import "./globals.css";
 import { Providers } from "@/components/providers";
-import { ThemeProvider } from "next-themes";
 import { SidebarNav } from "@/components/sidebar-nav";
 import { HeaderMessages } from "@/components/header-messages";
 import { CookieConsentManager } from "@/features/cookie-consent";
@@ -59,35 +58,35 @@ export default async function RootLayout({
 }>) {
   const ddragonVersion = await resolveDDragonVersion();
 
+  // `dark` is written on the element rather than chosen at runtime. There is
+  // no light design: `#content` paints the League splash unconditionally, the
+  // sidebar hardcodes `#0a1428`, and every branded class -- the gold, red and
+  // blue gradients and the submit button -- is defined only under `.dark`.
+  // With `defaultTheme="system" enableSystem` and no toggle anywhere in the
+  // UI, a viewer whose OS was set to light got white shadcn cards on that dark
+  // splash and unbranded grey buttons, and no way to correct it.
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" className="dark">
       <body
         className={`${montserrat.variable} ${leagueFont.variable} font-sans antialiased`}
       >
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="system"
-          enableSystem
-          disableTransitionOnChange
-        >
-          <Providers ddragonVersion={ddragonVersion}>
-            <HeaderMessages />
-            <div className="flex min-h-screen">
-              <Suspense fallback={null}>
-                <SidebarNav />
-              </Suspense>
-              {/* `min-w-0` because a flex item defaults to `min-width: auto`
+        <Providers ddragonVersion={ddragonVersion}>
+          <HeaderMessages />
+          <div className="flex min-h-screen">
+            <Suspense fallback={null}>
+              <SidebarNav />
+            </Suspense>
+            {/* `min-w-0` because a flex item defaults to `min-width: auto`
                   and so refuses to shrink below its content. Without it, one
                   wide child stretches the whole document sideways and every
                   `overflow-x-auto` beneath this element is inert. */}
-              <main id="content" className="min-w-0 flex-1 bg-background">
-                {children}
-              </main>
-            </div>
-            <CookieConsentManager />
-            <ToastHost />
-          </Providers>
-        </ThemeProvider>
+            <main id="content" className="min-w-0 flex-1 bg-background">
+              {children}
+            </main>
+          </div>
+          <CookieConsentManager />
+          <ToastHost />
+        </Providers>
       </body>
     </html>
   );

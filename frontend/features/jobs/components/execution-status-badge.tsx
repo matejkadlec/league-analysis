@@ -12,11 +12,11 @@ import { cn } from "@/lib/core/utils";
  */
 const STATUS_CLASSES: Partial<Record<JobStatus, string>> = {
   RATE_LIMITED:
-    "bg-yellow-100 text-yellow-800 border-yellow-300 dark:bg-yellow-900/30 dark:text-yellow-200 dark:border-yellow-800",
+    "bg-yellow-900/30 text-yellow-200 border-yellow-800",
   CANCELLED:
-    "bg-purple-100 text-primary-foreground border-purple-300 dark:bg-purple-900/30 dark:text-white dark:border-purple-800",
+    "bg-purple-900/30 text-white border-purple-800",
   PAUSED:
-    "bg-orange-100 text-white border-orange-300 dark:bg-orange-900/30 dark:text-white dark:border-orange-800",
+    "bg-orange-900/30 text-white border-orange-800",
 };
 
 function statusVariant(status: JobStatus) {

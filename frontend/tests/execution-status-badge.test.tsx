@@ -26,7 +26,7 @@ describe("the execution status badge", () => {
     status,
     hue,
   ) => {
-    expect(badgeFor(status).className).toContain(`bg-${hue}-100`);
+    expect(badgeFor(status).className).toContain(`bg-${hue}-900/30`);
   });
 
   it.each(["SUCCESS", "FAILED", "PENDING", "RUNNING"] as const)(
@@ -34,9 +34,9 @@ describe("the execution status badge", () => {
     (status) => {
       const className = badgeFor(status).className;
 
-      expect(className).not.toContain("bg-yellow-100");
-      expect(className).not.toContain("bg-purple-100");
-      expect(className).not.toContain("bg-orange-100");
+      expect(className).not.toContain("bg-yellow-900/30");
+      expect(className).not.toContain("bg-purple-900/30");
+      expect(className).not.toContain("bg-orange-900/30");
     },
   );
 

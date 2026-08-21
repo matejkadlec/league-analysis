@@ -10,8 +10,8 @@
  */
 export const GAP_FAIRNESS_THRESHOLD = 0.03;
 
-const GOOD = "text-green-600 dark:text-green-400";
-const BAD = "text-red-600 dark:text-red-400";
+const GOOD = "text-green-400";
+const BAD = "text-red-400";
 
 export interface GapVerdict {
   /** "favorable" reads from the analyzed player's side of the gap. */

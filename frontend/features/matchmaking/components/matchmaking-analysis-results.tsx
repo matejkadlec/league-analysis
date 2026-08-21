@@ -144,14 +144,14 @@ export function MatchmakingAnalysisResults({
           </p>
 
           {verdict === "favorable" && (
-            <p className="text-sm text-green-600 dark:text-green-400">
+            <p className="text-sm text-green-400">
               ✓ The analyzed player&apos;s teammates had higher average win
               rates than opponents by{" "}
               <span className="font-bold">{winrateDiffPercent}</span>
             </p>
           )}
           {verdict === "unfavorable" && (
-            <p className="text-sm text-red-600 dark:text-red-400">
+            <p className="text-sm text-red-400">
               ✗ The analyzed player&apos;s opponents had higher average win
               rates than teammates by{" "}
               <span className="font-bold">{winrateDiffPercent}</span>

@@ -103,11 +103,10 @@
     background-attachment: fixed;
   }
 
-  /* Header card background gradient */
+  /* Header card background gradient. One rule, not a light/dark pair: the
+     document forces `.dark`, so the lighter #233d72 variant that used to sit
+     here rendered for nobody. */
   #header-card {
-    background: linear-gradient(180deg, #233d72 0%, #152b56 100%) !important;
-  }
-  .dark #header-card {
     background: linear-gradient(180deg, #0f1f3a 0%, #0a1428 100%) !important;
   }
 

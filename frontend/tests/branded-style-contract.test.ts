@@ -110,6 +110,37 @@ describe("branded style contract", () => {
     expect(offenders).toEqual([]);
   });
 
+  /**
+   * The branded classes are defined under `.dark` and nowhere else, so the
+   * document has to carry that class unconditionally or they style nothing.
+   *
+   * It used to be chosen at runtime -- `defaultTheme="system" enableSystem`,
+   * with no toggle in the UI -- so a viewer whose OS was set to light got
+   * white shadcn cards on the dark League splash `#content` paints
+   * unconditionally, and grey buttons where the gold, red and blue gradients
+   * belong. Nothing failed: the classes were all still present in the
+   * stylesheet, which is all the rule above checks.
+   */
+  it("forces the theme the branded classes are written for", () => {
+    const stylesheet = readFileSync(GLOBAL_STYLESHEET, "utf8");
+    // Signal first: if a branded class ever gains an unscoped definition this
+    // coupling is no longer load-bearing, and the assertion below is checking
+    // a convention rather than a contract.
+    const darkOnly = BRANDED_CLASSES.filter(
+      (name) =>
+        stylesheet.includes(`.dark .${name}`) &&
+        !new RegExp(`^\\s*\\.${name}\\b`, "m").test(stylesheet),
+    );
+    expect(darkOnly.length).toBeGreaterThanOrEqual(3);
+
+    const layout = readFileSync("app/layout.tsx", "utf8");
+    expect(layout).toMatch(/<html[^>]*className="dark"/);
+    expect(
+      layout.includes("next-themes"),
+      "the theme is picked at runtime again, which light viewers cannot survive",
+    ).toBe(false);
+  });
+
   it("keeps the hand-rolled list free of dead entries", () => {
     const using = new Set(filesWithHandRolledGradients());
     const stale = [...HAND_ROLLED_GRADIENTS.keys()].filter(

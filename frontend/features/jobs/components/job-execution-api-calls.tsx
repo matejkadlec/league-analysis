@@ -44,7 +44,7 @@ export function JobExecutionApiCalls({
       <p className="mb-3 font-medium">API Calls</p>
       <div className="max-h-[300px] overflow-auto rounded-md border bg-background p-3">
         <div className="space-y-2 font-mono text-[11px]">
-          <div className="text-blue-600 dark:text-blue-400">
+          <div className="text-blue-400">
             [INFO] [{formatJobTimestamp(startedAt)}]: Riot API client session
             started
           </div>
@@ -61,7 +61,7 @@ export function JobExecutionApiCalls({
 
             return (
               <div key={callKey} className="space-y-1">
-                <div className="text-blue-600 dark:text-blue-400">
+                <div className="text-blue-400">
                   [INFO] [
                   {formatJobTimestamp(call.first_timestamp || startedAt)}
                   ]: Called {call.endpoint} {countText}
@@ -113,7 +113,7 @@ export function JobExecutionApiCalls({
           })}
 
           {completedAt && (
-            <div className="text-blue-600 dark:text-blue-400">
+            <div className="text-blue-400">
               [INFO] [{formatJobTimestamp(completedAt)}]: Riot API client session
               closed
             </div>
