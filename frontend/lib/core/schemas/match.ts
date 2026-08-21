@@ -86,8 +86,6 @@ export const TeamStatsCompositionSchema = z.object({
   red_team: TeamStatsSchema,
 });
 
-export type TeamStatsComposition = z.infer<typeof TeamStatsCompositionSchema>;
-
 // Team Champion Schema (for team compositions)
 export const TeamChampionSchema = z.object({
   champion_id: z.number().int(),
@@ -191,8 +189,4 @@ export type PlayerMatchParticipant = z.infer<
 >;
 export type EnemyLaneOpponent = z.infer<typeof EnemyLaneOpponentSchema>;
 export type TeamChampion = z.infer<typeof TeamChampionSchema>;
-export type TeamComposition = z.infer<typeof TeamCompositionSchema>;
 export type MatchWithPlayerData = z.infer<typeof MatchWithPlayerDataSchema>;
-export type MatchListWithPlayerDataResponse = z.infer<
-  typeof MatchListWithPlayerDataResponseSchema
->;

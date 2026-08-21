@@ -134,3 +134,50 @@ the `pitfall-check` agent.
   threshold key that resolves to neither a column nor an `advanced_stats`
   key. `tag_checks.team_attribute_share(p, match, attr)` is the same shape
   with two hard-coded call sites.
+
+- **Deleting an unread `relationship()` can reorder INSERTs and break a
+  foreign key.** *Between* mappers, only `relationship()` gives SQLAlchemy's
+  unit of work an ordering edge — a `ForeignKey` in the DDL gives it none.
+  (Within one mapper hierarchy FKs do order the tables, via
+  `Mapper._sorted_tables`; that is not the case here.) Cross-mapper actions
+  with no edge form the first topological layer and are emitted in
+  `Mapper._sort_key` order, which is the literal string
+  `"<module>.<ClassName>"`. The session is `autoflush=False`
+  (`core/database.py:42`), so everything pending goes out in one flush at
+  `commit()` and that order is the whole contract.
+
+  On 2026-08-21 commit `2356d05` deleted `MatchTimeline.match` and
+  `MatchTimeline.player` as unread — they were unread, and they were also the
+  only thing putting `core.matches` and `core.players` ahead of
+  `core.match_timelines`. Four consecutive production Match Fetcher runs died
+  on `fk_match_timelines_puuid_players` for the first match containing a
+  player row that did not already exist. Sorted by key,
+  `...matches.timeline.MatchTimeline` precedes `...players.models.Player`
+  while `...matches.models.Match` precedes both, which is why the *match* FK
+  held and the *puuid* FK did not.
+
+  The same commit also deleted `MatchParticipant.player`, and
+  `core.match_participants` carries `fk_match_participants_puuid_players` —
+  on sort key alone that one would have fired first. It did not only because
+  the surviving `Match.participants` relationship pushes
+  `SaveUpdateAll(MatchParticipant)` into a later layer. So deleting
+  `Match.participants` would put that second foreign key back in layer one.
+
+  Nothing in the gate could see any of it. Before deleting a
+  `relationship()`, check whether the flush order it implies is load-bearing;
+  where it is, an explicit `await db.flush()` states the dependency the
+  relationship used to imply. `replace_match_timeline_rows` does this, and
+  `tests/test_timeline.py::test_timeline_rows_are_staged_only_after_a_flush`
+  fails if that flush is removed or moved after the rows are staged — it
+  cannot see a deleted relationship, so this entry is the only guard for that
+  half.
+
+- **A same-length constant edit can be masked by a stale `.pyc`.** CPython
+  invalidates cached bytecode on source `(mtime, size)`. `min_length=1` →
+  `min_length=0` changes neither, and `mtime` has one-second granularity, so
+  a mutate/run/restore cycle completing inside a second reuses the mutant
+  bytecode. The failure mode is the dangerous direction: a red/green proof
+  reports **pass** for a guard that is not there. It cost two false readings
+  on 2026-08-21. When red-proving a same-length edit, `touch` the file or run
+  with `PYTHONPYCACHEPREFIX` pointed somewhere fresh, and treat an
+  unexpected pass as suspect before an unexpected failure.

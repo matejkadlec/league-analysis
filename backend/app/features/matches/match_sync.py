@@ -295,14 +295,18 @@ async def backfill_timeline_only_match(
     )
     game_version = version_result.scalar_one_or_none() or ""
     await ensure_riot_writer_maintenance_is_inactive(session)
-    timeline_rows = await replace_match_timeline_rows(
-        session,
-        build_synthetic_match_dto(match_id, participants, game_version),
-        timeline_payload,
-    )
-    if timeline_rows == 0:
-        return 0
+    timeline_rows = 0
     try:
+        # Inside the try because `replace_match_timeline_rows` flushes, so it
+        # is a second place this path can leave the session holding a failed
+        # transaction -- the exact thing the handler below exists to prevent.
+        timeline_rows = await replace_match_timeline_rows(
+            session,
+            build_synthetic_match_dto(match_id, participants, game_version),
+            timeline_payload,
+        )
+        if timeline_rows == 0:
+            return 0
         await session.commit()
     except Exception as error:
         # Without this the session is left holding a failed transaction and

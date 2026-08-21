@@ -8,7 +8,7 @@ export default function Home() {
   return (
     <ProtectedRoute>
       <div className="container mx-auto max-w-4xl px-4 py-8 space-y-6">
-        <Card id="header-card" className="py-2">
+        <Card id="header-card" className="py-2 text-white">
           <div className="flex flex-col">
             <div className="px-8 pt-4 pb-2 flex items-start justify-between">
               <div className="flex items-center gap-3">

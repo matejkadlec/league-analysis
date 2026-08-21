@@ -73,7 +73,3 @@ export const EmailChangeCodeResponseSchema = z.object({
   message: z.string(),
   expires_at: z.string(),
 });
-
-export type EmailChangeCodeResponse = z.infer<
-  typeof EmailChangeCodeResponseSchema
->;

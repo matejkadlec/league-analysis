@@ -122,6 +122,34 @@ describe("branded style contract", () => {
   });
 
   /**
+   * The header card names its own text colour.
+   *
+   * Measured in Chromium: without `text-white` the shadcn `Card`'s
+   * `text-card-foreground` wins, which `globals.css` defines as
+   * `oklch(98% 0 0)` -- `lab(97.68 ...)`, not `#ffffff`. The home page carried
+   * exactly that while the card directly beneath it, which does say
+   * `text-white`, rendered `rgb(255, 255, 255)`: two adjacent cards, two
+   * whites. It was legible only because f4d0bef forces `.dark`, so a theme
+   * toggle would have taken the colour with it.
+   */
+  it("gives every header card its own white", () => {
+    // The element, not a window around it: a slice of surrounding characters
+    // is satisfied by a `text-white` on the parent or on the heading inside,
+    // and neither colours the card. Matching the opening tag also checks every
+    // header card in a file rather than whichever one comes first.
+    const openingTag = /<[A-Za-z][^>]*\bid="header-card"[^>]*>/g;
+    const missing = allSourceFiles()
+      .filter((path) =>
+        [...code(path).matchAll(openingTag)].some(
+          ([tag]) => !/\btext-white\b/.test(tag),
+        ),
+      )
+      .map((path) => relative(process.cwd(), path));
+
+    expect(missing).toEqual([]);
+  });
+
+  /**
    * The branded classes are defined under `.dark` and nowhere else, so the
    * document has to carry that class unconditionally or they style nothing.
    *

@@ -177,12 +177,14 @@ class MatchInfoDTO(RiotDTO):
     # from the trust boundary to a NOT NULL violation at flush.
     game_end_timestamp: int = Field(...)
     game_result: str | None = Field(default=None, alias="endOfGameResult")
-    # `min_length=1` for the same reason as `platformId` below. Riot answers
-    # some match IDs with the envelope and nothing in it: production stored
-    # `EUN1_3990695865` on 2026-08-16 with an empty participant list, `queueId`
+    # `min_length=1` for the same reason as `platformId` below. Production
+    # stored `EUN1_3990695865` on 2026-08-16 with no participant rows, `queueId`
     # 0, empty `gameMode`, `gameType` and `gameVersion`, `mapId` 0 and
-    # `gameStartTimestamp` 0 -- only `gameEndTimestamp` and `platformId` came
-    # back populated. Every one of those zeros was written as fact, the row was
+    # `gameStartTimestamp` 0 -- only `gameEndTimestamp` and `platformId` held a
+    # value. `build_match_record` copies the DTO field for field and no other
+    # writer reaches those columns, so the response was empty in the same
+    # places; the response itself was never logged, so that is inference from
+    # the row. Every one of those zeros was written as fact, the row was
     # marked `fully_analyzed`, and `game_start_timestamp_source` recorded
     # `riot_game_start`, which asserts Riot said the game began at epoch 0.
     #

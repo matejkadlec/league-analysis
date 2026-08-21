@@ -720,6 +720,29 @@ async def replace_match_timeline_rows(
     match_id = match_dto.metadata.match_id
     await db.execute(delete(MatchTimeline).where(MatchTimeline.match_id == match_id))
 
+    # Write what is already pending before adding rows that point at it.
+    #
+    # These rows carry two foreign keys, to `core.matches` and `core.players`,
+    # and the session is `autoflush=False` -- so without this everything goes
+    # out in one flush at commit, in an order SQLAlchemy derives from
+    # `relationship()` alone. A `ForeignKey` in the DDL contributes nothing:
+    # actions with no relationship edge form the first layer and are emitted in
+    # `Mapper._sort_key` order, which is `"<module>.<ClassName>"`.
+    #
+    # `MatchTimeline` had `match` and `player` relationships until 2356d05
+    # deleted them as unread. They were unread, and they were also the only
+    # thing putting those two INSERTs first. Four consecutive Match Fetcher
+    # runs then died on `fk_match_timelines_puuid_players` for the first match
+    # containing a player row that did not already exist: sorted by key,
+    # `...matches.timeline.MatchTimeline` precedes `...players.models.Player`.
+    # `...matches.models.Match` sorts before both, which is the only reason the
+    # match FK held and this one did not.
+    #
+    # `merge_reprocess_player` now writes players with an immediate Core
+    # statement, so that half is no longer a bet -- but `core.matches` is still
+    # a pending merge, ordered before this by nothing but a module name.
+    await db.flush()
+
     for row in rows:
         db.add(MatchTimeline(**row))
 

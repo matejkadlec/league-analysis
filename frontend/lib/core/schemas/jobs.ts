@@ -116,14 +116,11 @@ export const JobExecutionListResponseSchema = z.object({
 });
 
 // Infer TypeScript types for Jobs
-export type JobType = z.infer<typeof JobTypeSchema>;
 export type JobStatus = z.infer<typeof JobStatusSchema>;
-export type ExecutionType = z.infer<typeof ExecutionTypeSchema>;
 export type JobConfiguration = z.infer<typeof JobConfigurationSchema>;
 export type JobExecution = z.infer<typeof JobExecutionSchema>;
 export type JobExecutionApiCall = z.infer<typeof JobExecutionApiCallSchema>;
 export type JobStatusResponse = z.infer<typeof JobStatusResponseSchema>;
-export type JobTriggerResponse = z.infer<typeof JobTriggerResponseSchema>;
 export type JobControlActionResponse = z.infer<
   typeof JobControlActionResponseSchema
 >;
