@@ -59,7 +59,11 @@ export function PlayerContextProvider({
 
   const urlPlayerQuery = useQuery({
     ...playerQueryOptions(urlPuuid),
-    enabled: isAuthenticated && !!urlPuuid,
+    // Only the auth half: the PUUID half now lives on `queryFn` as
+    // `skipToken`. Keeping this is not redundancy -- `playerQueryOptions`
+    // carries no auth gate, and a signed-out visit to
+    // `/player-overview?puuid=...` would otherwise probe the API.
+    enabled: isAuthenticated,
   });
 
   const updateCurrentMutation = useMutation({
