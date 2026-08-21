@@ -167,7 +167,7 @@ async def reconcile_admin(
                 )
 
             created = not matches
-            password_hash = AuthService.get_password_hash(password)
+            password_hash = await AuthService.get_password_hash(password)
             now = datetime.now(UTC)
             if created:
                 user = User(
@@ -222,7 +222,9 @@ async def reconcile_admin(
             or not authenticated.is_active
             or not authenticated.is_admin
             or not authenticated.email_verified
-            or not AuthService.verify_password(password, authenticated.password_hash)
+            or not await AuthService.verify_password(
+                password, authenticated.password_hash
+            )
         ):
             raise AdminReconciliationRefusal(
                 "administrator failed the normal authentication verification path"

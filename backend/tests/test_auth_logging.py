@@ -28,6 +28,7 @@ from app.features.auth.service import (
     AuthService,
     CaptchaRequiredError,
     CaptchaVerificationError,
+    pwd_context,
 )
 from route_helpers import loopback_request, undecorated
 
@@ -85,7 +86,7 @@ with warnings.catch_warnings():
     # Warming passlib's argon2 backend here keeps its deprecated
     # argon2.__version__ probe from firing inside warnings-as-error tests.
     warnings.simplefilter("ignore", DeprecationWarning)
-    _ = AuthService.verify_password("warm-up-probe", DUMMY_PASSWORD_HASH)
+    _ = pwd_context.verify("warm-up-probe", DUMMY_PASSWORD_HASH)
 
 
 async def test_unknown_email_login_failure_is_logged() -> None:
