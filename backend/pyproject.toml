@@ -170,7 +170,7 @@ ignore = [
 # on the working directory: the gate runs Ruff from backend/ and the pre-commit
 # hook from the repository root, and they disagreed on where
 # `from scripts import ...` belongs until the classification was pinned.
-known-first-party = ["app", "scripts"]
+known-first-party = ["app", "route_helpers", "scripts"]
 # `alembic` is the same problem with the opposite answer. Run from backend/,
 # Ruff sees the `alembic/` directory and calls it first-party; run from the
 # repository root it does not, and calls it third-party. `from alembic import

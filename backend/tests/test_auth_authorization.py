@@ -1,13 +1,11 @@
 """Authentication and route-authorization regression coverage."""
 
-import inspect
-from collections.abc import Callable
 from types import SimpleNamespace
 from typing import cast
 from unittest.mock import AsyncMock
 
 import pytest
-from fastapi import HTTPException, Request, Response
+from fastapi import HTTPException, Response
 from fastapi.security import OAuth2PasswordRequestForm
 
 from app.features.auth.dependencies import (
@@ -25,31 +23,7 @@ from app.features.auth.schemas import (
     validate_password_strength,
 )
 from app.features.auth.service import AuthService
-
-
-def _undecorated[**P, R](endpoint: Callable[P, R]) -> Callable[P, R]:
-    """Return the endpoint that ``rate_limit`` wrapped.
-
-    The decorator preserves the endpoint's signature for callers, but the
-    wrapper it installs wants limiter state and a fully formed ASGI request
-    that these unit tests have no reason to build. ``functools.wraps`` leaves
-    the original coroutine function on ``__wrapped__``, which no ``Callable``
-    type describes, so the unwrapping is dynamic and the signature is restated
-    here — it is the one the decorator is contracted to keep.
-    """
-    return cast(Callable[P, R], inspect.unwrap(endpoint))
-
-
-def _loopback_request() -> Request:
-    """A request carrying the loopback client and empty headers routes read."""
-    return Request(
-        {
-            "type": "http",
-            "method": "POST",
-            "headers": [],
-            "client": ("127.0.0.1", 51234),
-        }
-    )
+from route_helpers import loopback_request, undecorated
 
 
 @pytest.mark.parametrize(
@@ -121,8 +95,8 @@ async def test_login_returns_a_dedicated_inactive_account_code() -> None:
     )
 
     with pytest.raises(HTTPException) as error:
-        await _undecorated(login)(
-            request=_loopback_request(),
+        await undecorated(login)(
+            request=loopback_request(),
             response=Response(),
             form_data=form_data,
             auth_service=cast(AuthService, auth_service),
@@ -144,8 +118,8 @@ async def test_refresh_returns_the_same_inactive_account_code() -> None:
     )
 
     with pytest.raises(HTTPException) as error:
-        await _undecorated(refresh_access_token)(
-            request=_loopback_request(),
+        await undecorated(refresh_access_token)(
+            request=loopback_request(),
             response=Response(),
             refresh_request=RefreshTokenRequest(
                 refresh_token="refresh-token-value-1234"
