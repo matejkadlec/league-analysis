@@ -1,18 +1,10 @@
-import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
 import { SignInForm } from "@/features/auth";
-import {
-  AUTH_STATE_COOKIE_NAME,
-  AUTH_STATE_COOKIE_VALUE,
-} from "@/features/auth/utils/auth-state-cookie";
 
-export default async function SignInPage() {
-  const cookieStore = await cookies();
-  const authStateCookie = cookieStore.get(AUTH_STATE_COOKIE_NAME)?.value;
-
-  if (authStateCookie === AUTH_STATE_COOKIE_VALUE) {
-    redirect("/");
-  }
-
+// No auth-state cookie read here: `proxy.ts` already redirects a request
+// carrying the hint away from `/sign-in`, and this page cannot be reached
+// without passing through it. Reading `cookies()` only made the route
+// dynamic, which is why it is the one page in `app/` that rendered per
+// request to produce output that never varies.
+export default function SignInPage() {
   return <SignInForm />;
 }
