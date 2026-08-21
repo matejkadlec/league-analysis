@@ -52,3 +52,11 @@ distinct rather than duplicated.
   nothing at all" but only checks that `.<name>` appears somewhere in the
   file, which a `.dark`-only definition satisfies. Picking the light-mode
   gradients is a design call, which is why this is logged rather than fixed.
+
+- 2026-08-21 backend/app/features/matches/: production `core.matches` holds one
+  row with `queue_id = 0`, which is not in `PRODUCT_SUPPORTED_QUEUE_IDS`
+  (`420/440/480/400/450/2400`). Riot uses 0 for custom games. Worth finding
+  which writer stored it -- the queue-sync path filters on the supported list,
+  so it most likely arrived through a path that does not. The row is harmless
+  (match history renders it as "Queue 0"), so this is a question about the
+  writer, not a rendering fix.
