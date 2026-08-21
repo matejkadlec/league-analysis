@@ -92,12 +92,19 @@ describe("branded style contract", () => {
       code(path).includes('id="header-card"'),
     );
     // Signal first: a scan that stopped finding header cards would pass by
-    // finding nothing wrong with them. The card is rendered once, from
-    // components/page-header.tsx; every page consumes that.
-    expect(headerCards).toContainEqual(
-      expect.stringContaining("components/page-header"),
-    );
-    expect(headerCards.length).toBeGreaterThanOrEqual(1);
+    // finding nothing wrong with them. Every primary page now renders the
+    // card through components/page-header.tsx, but two surfaces still spell
+    // it themselves because their title is a different thing -- the home
+    // hero and the legal shell both use the League display font at their own
+    // size in a `py-2` card, which the shared header would have to grow
+    // knobs for. Pin all three, so converting one of them has to come here.
+    expect(
+      headerCards.map((path) => relative(process.cwd(), path)).sort(),
+    ).toEqual([
+      "app/page.tsx",
+      "components/legal-page-shell.tsx",
+      "components/page-header.tsx",
+    ]);
 
     const offenders = headerCards
       .filter((path) => {
