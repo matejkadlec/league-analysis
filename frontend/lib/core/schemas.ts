@@ -204,6 +204,9 @@ const performanceStatsFields = {
   avg_kda: z.number(),
 } as const;
 
+/** The figures `PerformanceFigures` renders, whichever grouping they describe. */
+export type PerformanceStats = z.infer<z.ZodObject<typeof performanceStatsFields>>;
+
 // Match Stats Response Schema
 export const MatchStatsResponseSchema = z.object({
   puuid: z.string(),
