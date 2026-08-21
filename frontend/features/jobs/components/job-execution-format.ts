@@ -47,21 +47,21 @@ export function formatApiCallParamLabel(paramKey?: string | null): string {
   return `${spacedKey.charAt(0).toUpperCase()}${spacedKey.slice(1)}s`;
 }
 
-/**
- * The fields a log row renders in its own header rather than as an extra.
- *
- * Shared with `job-execution-logs.tsx`, which lists the same extras on screen:
- * the key below is that row's React key, so a field added to one side and not
- * the other silently desynchronises the key from what is displayed.
- */
-export const STANDARD_LOG_FIELDS = new Set(["level", "timestamp", "event"]);
+// Deliberately not shared with the identical-looking set in
+// `job-execution-logs.tsx`. That one hides fields the row already renders in
+// its header; this one skips fields the key below already emits positionally.
+// They agree today for different reasons, and one shared set means hiding a
+// noisy field from the display would also drop it from the key -- two rows
+// differing only in that field would collide and the second would never
+// render.
+const KEYED_POSITIONALLY = new Set(["level", "timestamp", "event"]);
 
 export function detailedLogKey(log: Record<string, unknown>): string {
   const level = typeof log.level === "string" ? log.level : "INFO";
   const timestamp = String(log.timestamp ?? "");
   const event = String(log.event ?? "");
   const extrasJoined = Object.entries(log)
-    .filter(([key]) => !STANDARD_LOG_FIELDS.has(key))
+    .filter(([key]) => !KEYED_POSITIONALLY.has(key))
     .map(
       ([key, value]) =>
         `${key}:${typeof value === "object" ? JSON.stringify(value) : String(value)}`,
