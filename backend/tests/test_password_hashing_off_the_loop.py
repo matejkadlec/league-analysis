@@ -13,7 +13,8 @@ running while the hash ran.
 import asyncio
 import warnings
 
-from app.features.auth.service import DUMMY_PASSWORD_HASH, AuthService, pwd_context
+from app.features.auth.passwords import DUMMY_PASSWORD_HASH, pwd_context
+from app.features.auth.service import AuthService
 
 with warnings.catch_warnings():
     # Warming passlib's argon2 backend here keeps its deprecated

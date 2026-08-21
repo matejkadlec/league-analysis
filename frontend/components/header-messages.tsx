@@ -10,6 +10,7 @@ import { HEADER_MESSAGES_CLOSED_STORAGE_KEY } from "@/features/cookie-consent";
 import { COOKIE_CONSENT_UPDATED_EVENT } from "@/features/cookie-consent";
 // Not through the barrel: `tests/header-messages-credential-health.test.tsx`
 // factory-mocks `@/features/cookie-consent` down to the event name.
+// eslint-disable-next-line no-restricted-imports -- see above: the test mocks the barrel
 import {
   readOptionalStorage,
   writeOptionalStorage,

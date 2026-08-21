@@ -1,6 +1,7 @@
 """Riot API constants and enum definitions."""
 
 from enum import Enum
+from typing import Final
 
 
 class Region(str, Enum):
@@ -111,6 +112,10 @@ PRODUCT_SUPPORTED_QUEUE_TYPES: tuple[QueueType, ...] = (
 PRODUCT_SUPPORTED_QUEUE_IDS: tuple[int, ...] = tuple(
     queue.value for queue in PRODUCT_SUPPORTED_QUEUE_TYPES
 )
+
+# The one queue every stats surface reports on. Derived from the enum so the
+# Riot fact (420 = ranked solo/duo) is declared exactly once.
+RANKED_SOLO_QUEUE_ID: Final[int] = QueueType.RANKED_SOLO_5X5.value
 
 
 def normalize_platform(platform: Platform | str) -> str:

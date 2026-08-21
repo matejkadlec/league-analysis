@@ -6,7 +6,6 @@ from typing import Annotated
 import structlog
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, Response, status
 from fastapi.security import OAuth2PasswordRequestForm
-from sqlalchemy import select
 
 from app.core.http_errors import http_error
 from app.core.rate_limiter import rate_limit
@@ -21,22 +20,8 @@ from .cookies import (
     set_auth_cookies,
 )
 from .dependencies import AdminUserDep, CurrentUserDep
-from .models import User
-from .schemas import (
-    EmailChangeCodeResponse,
-    EmailChangeRequest,
-    EmailChangeVerifyRequest,
-    JoinUsContactRequest,
-    PasswordChangeRequest,
-    RefreshTokenRequest,
-    Token,
-    UserCreate,
-    UserProfileUpdate,
-    UserResponse,
-)
-from .service import (
+from .errors import (
     AccountLockedError,
-    AuthService,
     CaptchaRequiredError,
     CaptchaVerificationError,
     EmailAlreadyRegisteredError,
@@ -53,6 +38,22 @@ from .service import (
     JoinUsEmailDeliveryError,
     JoinUsEmailNotConfiguredError,
     JoinUsRateLimitExceededError,
+)
+from .models import User
+from .schemas import (
+    EmailChangeCodeResponse,
+    EmailChangeRequest,
+    EmailChangeVerifyRequest,
+    JoinUsContactRequest,
+    PasswordChangeRequest,
+    RefreshTokenRequest,
+    Token,
+    UserCreate,
+    UserProfileUpdate,
+    UserResponse,
+)
+from .service import (
+    AuthService,
     get_auth_service,
 )
 
@@ -442,8 +443,7 @@ async def list_users(
     auth_service: Annotated[AuthService, Depends(get_auth_service)],
 ) -> list[User]:
     """List all users (admin only)."""
-    result = await auth_service.db.execute(select(User))
-    return list(result.scalars().all())
+    return await auth_service.list_users()
 
 
 @router.patch("/me", response_model=UserResponse)
@@ -453,16 +453,7 @@ async def update_current_user_profile(
     auth_service: Annotated[AuthService, Depends(get_auth_service)],
 ) -> User:
     """Update current user's profile fields (display_name, etc.)."""
-    from datetime import datetime
-
-    if update.display_name is not None:
-        current_user.display_name = update.display_name
-
-    current_user.updated_at = datetime.now(UTC)
-    await auth_service.db.commit()
-    await auth_service.db.refresh(current_user)
-
-    return current_user
+    return await auth_service.update_profile(current_user, update)
 
 
 @router.post("/change-email/request-code")

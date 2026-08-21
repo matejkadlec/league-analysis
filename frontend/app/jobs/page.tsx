@@ -16,7 +16,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2, AlertCircle, Clock } from "lucide-react";
 import { z } from "zod";
 
-import { JOBS_REFRESH_INTERVAL_MS } from "@/features/jobs/refresh-interval";
+import { JOBS_REFRESH_INTERVAL_MS } from "@/features/jobs";
 
 function RefreshCountdown({ lastUpdate }: { lastUpdate: number }) {
   // Its own component, and its own second: the countdown is a pure function

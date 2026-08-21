@@ -9,10 +9,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { PlayerSelector } from "@/features/players/components/player-selector";
-import { TrackedPlayersList } from "@/features/players/components/tracked-players-list";
-import { usePlayerContext } from "@/features/players/context/player-context";
-import { formatRiotId } from "@/features/players/utils/riot-id";
+import { PlayerSelector } from "../components/player-selector";
+import { TrackedPlayersList } from "../components/tracked-players-list";
+import { usePlayerContext } from "../context/player-context";
+import { formatRiotId } from "../utils/riot-id";
 import type { Player } from "@/lib/core/schemas";
 
 interface SidebarPlayerSwitcherProps {

@@ -12,10 +12,8 @@ from typing import Any, cast
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.features.auth.service import (
-    AuthService,
-    EmailChangeEmailNotConfiguredError,
-)
+from app.features.auth.errors import EmailChangeEmailNotConfiguredError
+from app.features.auth.service import AuthService
 
 
 async def test_verification_code_is_not_sent_without_smtp() -> None:

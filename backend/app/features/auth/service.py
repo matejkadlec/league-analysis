@@ -1,17 +1,11 @@
-# passlib has no stubs; `PasswordHasher` below states the contract instead.
-# Mirrors `reportMissingTypeStubs = "none"` in pyproject.toml, which the
-# file-level `strict` pragma otherwise discards.
-# pyright: reportMissingTypeStubs=none
 """Authentication service for user management, JWT access tokens, and refresh sessions."""
 
-import asyncio
 import hashlib
 import secrets
-import smtplib
 from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
 from email.message import EmailMessage
-from typing import Annotated, NoReturn, Protocol
+from typing import Annotated, NoReturn
 from uuid import uuid4
 
 import httpx
@@ -20,7 +14,6 @@ import structlog
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jwt import ExpiredSignatureError, InvalidTokenError
-from passlib.context import CryptContext
 from sqlalchemy import delete, func, or_, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -29,8 +22,33 @@ from app.core.config import get_global_settings
 from app.core.database import get_db
 
 from .email_change_request import EmailChangeRequest
-from .join_us_contact_submission import JoinUsContactSubmission
+from .errors import (
+    AccountLockedError,
+    CaptchaRequiredError,
+    CaptchaVerificationError,
+    EmailAlreadyRegisteredError,
+    EmailChangeEmailNotConfiguredError,
+    EmailChangeLockedError,
+    EmailUnchangedError,
+    EmailVerificationCodeExpiredError,
+    EmailVerificationRequestNotFoundError,
+    InvalidCurrentPasswordError,
+    InvalidEmailVerificationCodeError,
+    JoinUsBodyTooShortError,
+    JoinUsCaptchaRequiredError,
+    JoinUsCaptchaVerificationError,
+)
+from .join_us import (
+    JOIN_US_CONTACT_RECIPIENT,
+    JOIN_US_MIN_BODY_LENGTH,
+    enforce_regular_rate_limit,
+    record_submission,
+    reserve_sequence_number,
+    send_contact_email,
+)
+from .mailer import send_smtp_message, smtp_configured
 from .models import User
+from .passwords import DUMMY_PASSWORD_HASH, hash_password, verify_password
 from .refresh_token import RefreshToken
 from .revoked_access_token import RevokedAccessToken
 from .schemas import (
@@ -38,29 +56,8 @@ from .schemas import (
     JoinUsSubject,
     TokenData,
     UserCreate,
+    UserProfileUpdate,
 )
-from .subject_counts import SubjectCounts
-
-
-class PasswordHasher(Protocol):
-    """The slice of passlib's ``CryptContext`` this module depends on.
-
-    passlib ships no type information, so every hashing call would otherwise
-    be unchecked. Stating the contract here is what makes the two wrappers
-    below verifiable.
-    """
-
-    def verify(self, secret: str, hash: str) -> bool:
-        """Check a plaintext secret against a stored hash."""
-        ...
-
-    def hash(self, secret: str) -> str:
-        """Hash a plaintext secret with the configured scheme."""
-        ...
-
-
-# Password hashing context using Argon2id
-pwd_context: PasswordHasher = CryptContext(schemes=["argon2"], deprecated="auto")
 
 # OAuth2 scheme for token authentication
 oauth2_scheme = OAuth2PasswordBearer(
@@ -70,105 +67,9 @@ oauth2_scheme = OAuth2PasswordBearer(
 
 logger = structlog.get_logger(__name__)
 
-# Pre-computed Argon2 hash of "dummy_password_for_timing_protection"
-DUMMY_PASSWORD_HASH = "$argon2id$v=19$m=65536,t=3,p=4$qNVaS2lNCcH4vzfG+P9fSw$VpLQUmDVmdNQm7w0VIYso0IyglZSf1VDJ7qtaRkmnNQ"
-
 EMAIL_CHANGE_CODE_EXPIRY_MINUTES = 10
 EMAIL_CHANGE_MAX_FAILED_ATTEMPTS = 3
 EMAIL_CHANGE_LOCK_MINUTES = 5
-JOIN_US_CONTACT_RECIPIENT = "contact@example.com"
-JOIN_US_MIN_BODY_LENGTH = 300
-JOIN_US_MAX_REGULAR_PER_HOUR = 3
-
-JOIN_US_SUBJECT_LABELS: dict[JoinUsSubject, str] = {
-    JoinUsSubject.BETA_TESTER: "Beta Tester",
-    JoinUsSubject.FULL_STACK_DEVELOPER: "Full-Stack Developer",
-    JoinUsSubject.OTHER: "Other",
-}
-
-
-class AccountLockedError(Exception):
-    """Raised when a user account is temporarily locked after failed logins."""
-
-    def __init__(self, locked_until: datetime):
-        self.locked_until = locked_until
-        super().__init__("Account is temporarily locked")
-
-
-class CaptchaRequiredError(Exception):
-    """Raised when a login attempt must provide a CAPTCHA token."""
-
-
-class CaptchaVerificationError(Exception):
-    """Raised when a CAPTCHA token is missing, invalid, or cannot be verified."""
-
-
-class EmailChangeLockedError(Exception):
-    """Raised when email-change actions are temporarily locked for a user."""
-
-    def __init__(self, locked_until: datetime):
-        self.locked_until = locked_until
-        super().__init__("Email change is temporarily locked")
-
-
-class EmailAlreadyRegisteredError(Exception):
-    """Raised when the target email is already used by another account."""
-
-
-class EmailUnchangedError(Exception):
-    """Raised when a user requests to change to the currently active email."""
-
-
-class InvalidEmailVerificationCodeError(Exception):
-    """Raised when an email verification code does not match."""
-
-    def __init__(self, attempts_remaining: int):
-        self.attempts_remaining = attempts_remaining
-        super().__init__("Verification code is incorrect")
-
-
-class EmailVerificationCodeExpiredError(Exception):
-    """Raised when the verification code is no longer valid."""
-
-
-class EmailVerificationRequestNotFoundError(Exception):
-    """Raised when there is no pending email verification request."""
-
-
-class InvalidCurrentPasswordError(Exception):
-    """Raised when the submitted current password does not match."""
-
-
-class JoinUsCaptchaRequiredError(Exception):
-    """Raised when Join Us form submission requires CAPTCHA but none is provided."""
-
-
-class JoinUsCaptchaVerificationError(Exception):
-    """Raised when Join Us CAPTCHA verification fails."""
-
-
-class JoinUsEmailNotConfiguredError(Exception):
-    """Raised when SMTP is not configured for Join Us form delivery."""
-
-
-class EmailChangeEmailNotConfiguredError(Exception):
-    """Raised when SMTP is not configured for email-change verification."""
-
-
-class JoinUsEmailDeliveryError(Exception):
-    """Raised when Join Us form email delivery fails."""
-
-
-class JoinUsBodyTooShortError(Exception):
-    """Raised when a regular Join Us submission does not meet min body length."""
-
-
-class JoinUsRateLimitExceededError(Exception):
-    """Raised when regular Join Us submissions exceed per-hour IP limit."""
-
-    def __init__(self, retry_after_seconds: int):
-        self.retry_after_seconds = retry_after_seconds
-        super().__init__("Join Us submission rate limit exceeded")
 
 
 class AuthService:
@@ -181,22 +82,13 @@ class AuthService:
 
     @staticmethod
     async def verify_password(plain_password: str, hashed_password: str) -> bool:
-        """Verify a password against its hash, off the event loop.
-
-        Argon2id is deliberately expensive -- this repo's parameters measure
-        ~42ms per call -- and the API runs one worker per container, so doing
-        it inline stalls every other request in flight for that long, the
-        dummy-hash branch of a failed login included. `send_blocking` two
-        hundred lines below already offloads for the same reason.
-        """
-        return await asyncio.to_thread(
-            pwd_context.verify, plain_password, hashed_password
-        )
+        """Verify a password against its hash, off the event loop."""
+        return await verify_password(plain_password, hashed_password)
 
     @staticmethod
     async def get_password_hash(password: str) -> str:
         """Hash a password using Argon2id, off the event loop."""
-        return await asyncio.to_thread(pwd_context.hash, password)
+        return await hash_password(password)
 
     async def get_user_by_email_case_insensitive(self, email: str) -> User | None:
         """Get a user by email address using case-insensitive comparison."""
@@ -210,6 +102,21 @@ class AuthService:
         """Get a user by ID."""
         result = await self.db.execute(select(User).where(User.id == user_id))
         return result.scalar_one_or_none()
+
+    async def list_users(self) -> list[User]:
+        """List all users."""
+        result = await self.db.execute(select(User))
+        return list(result.scalars().all())
+
+    async def update_profile(self, user: User, update: UserProfileUpdate) -> User:
+        """Apply profile field updates and persist them."""
+        if update.display_name is not None:
+            user.display_name = update.display_name
+
+        user.updated_at = datetime.now(UTC)
+        await self.db.commit()
+        await self.db.refresh(user)
+        return user
 
     async def _get_or_create_email_change_request(
         self, user_id: int
@@ -249,35 +156,7 @@ class AuthService:
 
     def _is_smtp_configured(self) -> bool:
         """Return True when SMTP delivery settings are configured."""
-        return bool(self.settings.smtp_host and self.settings.smtp_from_email)
-
-    async def _send_smtp_message(self, message: EmailMessage) -> None:
-        """Send an email message using configured SMTP transport mode."""
-        smtp_host = self.settings.smtp_host
-        smtp_port = self.settings.smtp_port
-        smtp_username = self.settings.smtp_username
-        smtp_password = self.settings.smtp_password
-        smtp_use_tls = self.settings.smtp_use_tls
-        smtp_use_ssl = self.settings.smtp_use_ssl
-
-        def send_blocking() -> None:
-            if smtp_use_ssl:
-                with smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=10) as smtp:
-                    if smtp_username:
-                        smtp.login(smtp_username, smtp_password)
-                    smtp.send_message(message)
-                return
-
-            with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as smtp:
-                if smtp_use_tls:
-                    smtp.ehlo()
-                    smtp.starttls()
-                    smtp.ehlo()
-                if smtp_username:
-                    smtp.login(smtp_username, smtp_password)
-                smtp.send_message(message)
-
-        await asyncio.to_thread(send_blocking)
+        return smtp_configured()
 
     async def _send_email_verification_code(
         self,
@@ -292,7 +171,7 @@ class AuthService:
         # committed, so an unconfigured deployment was indistinguishable from a
         # working one -- while `LOG_LEVEL=INFO` and the `local` log driver put
         # the verification code on disk.
-        if not self._is_smtp_configured():
+        if not smtp_configured():
             raise EmailChangeEmailNotConfiguredError
 
         smtp_from_email = self.settings.smtp_from_email
@@ -311,150 +190,7 @@ class AuthService:
         message["To"] = target_email
         message.set_content(body)
 
-        await self._send_smtp_message(message)
-
-    async def _get_subject_counts_for_update(self) -> SubjectCounts:
-        """Fetch singleton subject counter row with a write lock."""
-        result = await self.db.execute(
-            select(SubjectCounts).where(SubjectCounts.id == 1).with_for_update()
-        )
-        subject_counts = result.scalar_one_or_none()
-        if subject_counts is not None:
-            return subject_counts
-
-        subject_counts = SubjectCounts(
-            id=1,
-            beta_tester=0,
-            full_stack_developer=0,
-            other=0,
-        )
-        self.db.add(subject_counts)
-        await self.db.flush()
-        return subject_counts
-
-    async def _reserve_join_us_sequence_number(self, subject: JoinUsSubject) -> int:
-        """Increment and persist the per-subject sequence counter."""
-        subject_counts = await self._get_subject_counts_for_update()
-
-        if subject == JoinUsSubject.BETA_TESTER:
-            subject_counts.beta_tester += 1
-            sequence_number = subject_counts.beta_tester
-        elif subject == JoinUsSubject.FULL_STACK_DEVELOPER:
-            subject_counts.full_stack_developer += 1
-            sequence_number = subject_counts.full_stack_developer
-        else:
-            subject_counts.other += 1
-            sequence_number = subject_counts.other
-
-        await self.db.commit()
-        return sequence_number
-
-    async def _enforce_join_us_regular_rate_limit(self, remote_ip: str | None) -> None:
-        """Allow at most N regular submissions per hour for one IP."""
-        if not remote_ip:
-            return
-
-        now = datetime.now(UTC)
-        window_start = now - timedelta(hours=1)
-
-        in_window = (
-            JoinUsContactSubmission.remote_ip == remote_ip,
-            JoinUsContactSubmission.submitted_at >= window_start,
-        )
-
-        recent_count_result = await self.db.execute(
-            select(func.count(JoinUsContactSubmission.id)).where(*in_window)
-        )
-        recent_count = int(recent_count_result.scalar_one() or 0)
-        if recent_count < JOIN_US_MAX_REGULAR_PER_HOUR:
-            return
-
-        oldest_in_window_result = await self.db.execute(
-            select(JoinUsContactSubmission.submitted_at)
-            .where(*in_window)
-            .order_by(JoinUsContactSubmission.submitted_at.asc())
-            .limit(1)
-        )
-        oldest_in_window = oldest_in_window_result.scalar_one_or_none()
-
-        retry_after_seconds = 3600
-        if oldest_in_window is not None:
-            retry_at = oldest_in_window + timedelta(hours=1)
-            retry_after_seconds = max(1, int((retry_at - now).total_seconds()))
-
-        raise JoinUsRateLimitExceededError(retry_after_seconds=retry_after_seconds)
-
-    async def _record_join_us_submission(
-        self,
-        *,
-        remote_ip: str | None,
-        subject: JoinUsSubject,
-    ) -> None:
-        """Persist accepted Join Us submissions for anti-spam accounting."""
-        if not remote_ip:
-            return
-
-        self.db.add(
-            JoinUsContactSubmission(
-                remote_ip=remote_ip,
-                subject=subject.value,
-            )
-        )
-        await self.db.commit()
-
-    @staticmethod
-    def _build_join_us_email_subject(
-        subject: JoinUsSubject,
-        *,
-        sequence_number: int,
-    ) -> str:
-        """Build mailbox subject line for Join Us requests."""
-        subject_label = JOIN_US_SUBJECT_LABELS[subject]
-        return f"League Analysis {subject_label} #{sequence_number}"
-
-    async def _send_join_us_contact_email(
-        self,
-        *,
-        subject: JoinUsSubject,
-        sequence_number: int,
-        body: str,
-        remote_ip: str | None,
-    ) -> str:
-        """Deliver a Join Us email and return the final email subject line."""
-        if not self._is_smtp_configured():
-            raise JoinUsEmailNotConfiguredError
-
-        smtp_from_email = self.settings.smtp_from_email
-
-        subject_line = self._build_join_us_email_subject(
-            subject,
-            sequence_number=sequence_number,
-        )
-        subject_label = JOIN_US_SUBJECT_LABELS[subject]
-        sequence_label = f"#{sequence_number}"
-        message_body = (
-            "New Join Us submission\n\n"
-            f"Position: {subject_label}\n"
-            f"Sequence: {sequence_label}\n"
-            f"Submitted At (UTC): {datetime.now(UTC).isoformat()}\n"
-            f"Remote IP: {remote_ip or 'unknown'}\n\n"
-            "Message:\n"
-            f"{body}\n"
-        )
-
-        message = EmailMessage()
-        message["Subject"] = subject_line
-        message["From"] = smtp_from_email
-        message["To"] = JOIN_US_CONTACT_RECIPIENT
-        message.set_content(message_body)
-
-        try:
-            await self._send_smtp_message(message)
-        except (smtplib.SMTPException, OSError) as e:
-            logger.error("join_us_email_delivery_failed", error=str(e))
-            raise JoinUsEmailDeliveryError from e
-
-        return subject_line
+        await send_smtp_message(message)
 
     async def submit_join_us_contact_request(
         self,
@@ -470,7 +206,7 @@ class AuthService:
         if len(normalized_body) < JOIN_US_MIN_BODY_LENGTH:
             raise JoinUsBodyTooShortError
 
-        await self._enforce_join_us_regular_rate_limit(remote_ip)
+        await enforce_regular_rate_limit(self.db, remote_ip)
 
         if self.is_captcha_enabled():
             if not captcha_token:
@@ -482,16 +218,17 @@ class AuthService:
             if not captcha_valid:
                 raise JoinUsCaptchaVerificationError
 
-        sequence_number = await self._reserve_join_us_sequence_number(subject)
+        sequence_number = await reserve_sequence_number(self.db, subject)
 
-        subject_line = await self._send_join_us_contact_email(
+        subject_line = await send_contact_email(
             subject=subject,
             sequence_number=sequence_number,
             body=normalized_body,
             remote_ip=remote_ip,
         )
 
-        await self._record_join_us_submission(
+        await record_submission(
+            self.db,
             remote_ip=remote_ip,
             subject=subject,
         )
@@ -938,7 +675,7 @@ class AuthService:
         # Always hash password to prevent timing attacks
         # If user doesn't exist, hash against a dummy value
         if not user:
-            await self.verify_password(password, DUMMY_PASSWORD_HASH)
+            await verify_password(password, DUMMY_PASSWORD_HASH)
             logger.warning("login_failed", reason="unknown_email", email=email)
             return None
 
@@ -954,7 +691,7 @@ class AuthService:
             if not captcha_valid:
                 raise CaptchaVerificationError
 
-        if not await self.verify_password(password, user.password_hash):
+        if not await verify_password(password, user.password_hash):
             await self._record_failed_login(user)
             logger.warning(
                 "login_failed",
@@ -980,7 +717,7 @@ class AuthService:
             )
 
         # Create new user
-        hashed_password = await self.get_password_hash(user_create.password)
+        hashed_password = await hash_password(user_create.password)
         user = User(
             email=user_create.email,
             display_name=user_create.display_name,
@@ -1179,10 +916,10 @@ class AuthService:
         new_password: str,
     ) -> None:
         """Change current user's password hash."""
-        if not await self.verify_password(current_password, current_user.password_hash):
+        if not await verify_password(current_password, current_user.password_hash):
             raise InvalidCurrentPasswordError
 
-        current_user.password_hash = await self.get_password_hash(new_password)
+        current_user.password_hash = await hash_password(new_password)
         await self.db.commit()
 
         logger.info("password_changed", user_id=current_user.id)

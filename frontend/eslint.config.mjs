@@ -9,36 +9,51 @@ import nextTypeScript from "eslint-config-next/typescript";
 // the file the design treats as most dangerous into the only one allowed to
 // import the teardown helpers.
 export const sessionTeardownImports = [
-          {
-            // Trailing `*` because a specifier may carry an extension:
-            // `.../token-manager.js` matched none of these patterns and
-            // resolves to the same module.
-            group: [
-              "**/auth/utils/token-manager*",
-              "../utils/token-manager*",
-              "./utils/token-manager*",
-              "./token-manager*",
-            ],
-            allowImportNames: ["refreshAccessToken"],
-            message:
-              "Only the refresh call can tell a rejected session from an unreachable server. Ending a session from anywhere else signs people out over a redeploy, with a valid refresh cookie still in the jar.",
-          },
-          {
-            group: [
-              "**/auth/utils/auth-state-cookie*",
-              "../utils/auth-state-cookie*",
-              "./utils/auth-state-cookie*",
-              "./auth-state-cookie*",
-            ],
-            allowImportNames: [
-              "AUTH_STATE_COOKIE_NAME",
-              "AUTH_STATE_COOKIE_VALUE",
-              "hasAuthStateCookie",
-              "subscribeToAuthStateCookie",
-            ],
-            message:
-              "Reading the session hint is fine; retracting it is a teardown, and belongs to token-manager, which knows whether the server actually refused.",
-          },
+  {
+    // Trailing `*` because a specifier may carry an extension:
+    // `.../token-manager.js` matched none of these patterns and
+    // resolves to the same module.
+    group: [
+      "**/auth/utils/token-manager*",
+      "../utils/token-manager*",
+      "./utils/token-manager*",
+      "./token-manager*",
+    ],
+    allowImportNames: ["refreshAccessToken"],
+    message:
+      "Only the refresh call can tell a rejected session from an unreachable server. Ending a session from anywhere else signs people out over a redeploy, with a valid refresh cookie still in the jar.",
+  },
+  {
+    group: [
+      "**/auth/utils/auth-state-cookie*",
+      "../utils/auth-state-cookie*",
+      "./utils/auth-state-cookie*",
+      "./auth-state-cookie*",
+    ],
+    allowImportNames: [
+      "AUTH_STATE_COOKIE_NAME",
+      "AUTH_STATE_COOKIE_VALUE",
+      "hasAuthStateCookie",
+      "subscribeToAuthStateCookie",
+    ],
+    message:
+      "Reading the session hint is fine; retracting it is a teardown, and belongs to token-manager, which knows whether the server actually refused.",
+  },
+];
+
+// Feature internals sit behind each feature's public barrel. Cross-feature
+// deep imports are how untracked package cycles happen (`players` reaching
+// `matches/queue-catalog` closed a cycle nothing else could see); same-feature
+// code imports relatively, so an absolute two-segment-plus specifier is
+// always crossing a feature edge. Blocks that replace the repo-wide
+// `no-restricted-imports` rule decide deliberately whether to carry this —
+// see the five hint-reading pages and `lib/core/api.ts`.
+export const featureBarrelImports = [
+  {
+    group: ["@/features/*/*", "@/features/*/*/**"],
+    message:
+      "Import feature internals only through the feature's own barrel (@/features/<name>), or relatively from inside the same feature.",
+  },
 ];
 
 export const sessionTeardownSyntax = [
@@ -111,29 +126,29 @@ export const sessionTeardownSyntax = [
     message:
       "A dynamic import whose specifier is not a literal cannot be checked against the allowlist. Import it statically.",
   },
-{
-  // Next's own header shape, which is neither of the two above: the config's
-  // `headers()` returns `{ key: "Set-Cookie", value }` -- key `key`, so the
-  // property selector that matches a `"Set-Cookie":` key never fires. An
-  // audit retracted the hint from `next.config.ts` through exactly that, and
-  // added `Clear-Site-Data` beside it, which is a third channel and takes the
-  // HttpOnly refresh token with it.
-  selector:
-    "Property[key.name='key'][value.value=/^(set-cookie|clear-site-data)$/i]",
-  message:
-    "Writing a Set-Cookie or Clear-Site-Data header here can retract the session hint, and Clear-Site-Data takes the refresh token with it. Cookie writes belong in auth-state-cookie.ts or the backend.",
-},
-{
-  selector:
-    "CallExpression[callee.property.name=/^(set|append)$/][arguments.0.value=/^clear-site-data$/i]",
-  message:
-    "Clear-Site-Data wipes the session hint and the HttpOnly refresh cookie with it, while the token stays live server-side. Only the backend ends a session.",
-},
-{
-  selector: "Property[key.value=/^clear-site-data$/i]",
-  message:
-    "Clear-Site-Data wipes the session hint and the HttpOnly refresh cookie with it, while the token stays live server-side. Only the backend ends a session.",
-},
+  {
+    // Next's own header shape, which is neither of the two above: the config's
+    // `headers()` returns `{ key: "Set-Cookie", value }` -- key `key`, so the
+    // property selector that matches a `"Set-Cookie":` key never fires. An
+    // audit retracted the hint from `next.config.ts` through exactly that, and
+    // added `Clear-Site-Data` beside it, which is a third channel and takes the
+    // HttpOnly refresh token with it.
+    selector:
+      "Property[key.name='key'][value.value=/^(set-cookie|clear-site-data)$/i]",
+    message:
+      "Writing a Set-Cookie or Clear-Site-Data header here can retract the session hint, and Clear-Site-Data takes the refresh token with it. Cookie writes belong in auth-state-cookie.ts or the backend.",
+  },
+  {
+    selector:
+      "CallExpression[callee.property.name=/^(set|append)$/][arguments.0.value=/^clear-site-data$/i]",
+    message:
+      "Clear-Site-Data wipes the session hint and the HttpOnly refresh cookie with it, while the token stays live server-side. Only the backend ends a session.",
+  },
+  {
+    selector: "Property[key.value=/^clear-site-data$/i]",
+    message:
+      "Clear-Site-Data wipes the session hint and the HttpOnly refresh cookie with it, while the token stays live server-side. Only the backend ends a session.",
+  },
 ];
 
 const eslintConfig = [
@@ -251,10 +266,75 @@ const eslintConfig = [
           // inside `features/auth/`. `allowImportNames` rather than
           // `importNames`, because a forbidden-name list is defeated by
           // adding a differently-named export that does the same thing.
-          patterns: sessionTeardownImports,
+          patterns: [...sessionTeardownImports, ...featureBarrelImports],
         },
       ],
       "no-restricted-syntax": ["error", ...sessionTeardownSyntax],
+    },
+  },
+  // The server-side cookie store, wherever it is opened.
+  //
+  // A sweep over `getAll()` names nothing the selectors above can see, and it
+  // takes the HttpOnly refresh cookie with it, not just the hint. This was
+  // scoped to route handlers, then to `app/**`, and both were one spelling
+  // short: a Server Action is defined by a `"use server"` directive, not by a
+  // path, so it can live in `features/` or `lib/` and neither scope saw it.
+  // The five pages that read the hint are the whole exception list, and a
+  // sixth reader should be a decision rather than a default.
+  {
+    files: ["**/*.{ts,tsx,js,jsx}"],
+    ignores: [
+      "tests/**",
+      "e2e/**",
+      "app/license/page.tsx",
+      "app/sign-in/page.tsx",
+      "app/privacy-policy/page.tsx",
+      "app/cookie-policy/page.tsx",
+      "app/join-us/page.tsx",
+    ],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          // Spread here too: this block replaces the repo-wide rule for these
+          // files rather than adding to it. `eslint-config-contract.test.ts`
+          // fails if any block sets this rule without them.
+          patterns: [...sessionTeardownImports, ...featureBarrelImports],
+          paths: [
+            {
+              name: "next/headers",
+              importNames: ["cookies"],
+              message:
+                "Server code here can write cookies, and a sweep over the store retracts the session hint and the HttpOnly refresh cookie with it while the token stays live server-side. Only the backend ends a session.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  // The API client owns the one documented auth-infrastructure import
+  // (`refreshAccessToken`; see tests/api-contract-alignment.test.ts), which is
+  // a deep specifier. It keeps the teardown restrictions without the barrel
+  // ones -- a decision about one named file, not a widening.
+  {
+    files: ["lib/core/api.ts"],
+    rules: {
+      "no-restricted-imports": ["error", { patterns: sessionTeardownImports }],
+    },
+  },
+
+  // The five pages that legitimately read the hint server-side. They get the
+  // teardown allowlist back and nothing else.
+  {
+    files: [
+      "app/license/page.tsx",
+      "app/sign-in/page.tsx",
+      "app/privacy-policy/page.tsx",
+      "app/cookie-policy/page.tsx",
+      "app/join-us/page.tsx",
+    ],
+    rules: {
+      "no-restricted-imports": ["error", { patterns: sessionTeardownImports }],
     },
   },
   // The edge asks nobody anything.
@@ -353,60 +433,7 @@ const eslintConfig = [
       ],
     },
   },
-  // The server-side cookie store, wherever it is opened.
-  //
-  // A sweep over `getAll()` names nothing the selectors above can see, and it
-  // takes the HttpOnly refresh cookie with it, not just the hint. This was
-  // scoped to route handlers, then to `app/**`, and both were one spelling
-  // short: a Server Action is defined by a `"use server"` directive, not by a
-  // path, so it can live in `features/` or `lib/` and neither scope saw it.
-  // The five pages that read the hint are the whole exception list, and a
-  // sixth reader should be a decision rather than a default.
-  {
-    files: ["**/*.{ts,tsx,js,jsx}"],
-    ignores: [
-      "tests/**",
-      "e2e/**",
-      "app/license/page.tsx",
-      "app/sign-in/page.tsx",
-      "app/privacy-policy/page.tsx",
-      "app/cookie-policy/page.tsx",
-      "app/join-us/page.tsx",
-    ],
-    rules: {
-      "no-restricted-imports": [
-        "error",
-        {
-          // Spread here too: this block replaces the repo-wide rule for these
-          // files rather than adding to it. `eslint-config-contract.test.ts`
-          // fails if any block sets this rule without them.
-          patterns: sessionTeardownImports,
-          paths: [
-            {
-              name: "next/headers",
-              importNames: ["cookies"],
-              message:
-                "Server code here can write cookies, and a sweep over the store retracts the session hint and the HttpOnly refresh cookie with it while the token stays live server-side. Only the backend ends a session.",
-            },
-          ],
-        },
-      ],
-    },
-  },
-  // The five pages that legitimately read the hint server-side. They get the
-  // teardown allowlist back and nothing else.
-  {
-    files: [
-      "app/license/page.tsx",
-      "app/sign-in/page.tsx",
-      "app/privacy-policy/page.tsx",
-      "app/cookie-policy/page.tsx",
-      "app/join-us/page.tsx",
-    ],
-    rules: {
-      "no-restricted-imports": ["error", { patterns: sessionTeardownImports }],
-    },
-  },
+
   // The two files that own cookie writes: one performs the delete
   // `token-manager` asks for, the other handles an unrelated, non-credential
   // cookie. Neither decides that a session is over.
