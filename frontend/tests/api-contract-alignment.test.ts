@@ -73,6 +73,36 @@ function kinds(
   return new Set(["any"]);
 }
 
+/**
+ * The members of an enum node, following `$ref` and looking inside the
+ * `anyOf` an optional field is wrapped in, or null when the node is not one.
+ */
+function enumMembers(
+  node: unknown,
+  spec: Record<string, JsonSchema>,
+): string[] | null {
+  const schema = resolve(node, spec);
+  if (Array.isArray(schema.enum)) return schema.enum as string[];
+  const union = (schema.anyOf ?? schema.oneOf) as unknown[] | undefined;
+  if (!union) return null;
+  const branches = union
+    .map((sub) => enumMembers(sub, spec))
+    .filter((members): members is string[] => members !== null);
+  // Two enum branches in one union would make "the" member set a guess.
+  return branches.length === 1 ? (branches[0] ?? null) : null;
+}
+
+/** Field -> enum members, for the fields on both sides that are enums. */
+function enumFieldsOf(schema: unknown, spec: Record<string, JsonSchema>) {
+  const resolved = resolve(schema, spec);
+  const properties = (resolved.properties ?? {}) as Record<string, unknown>;
+  return new Map(
+    Object.entries(properties)
+      .map(([name, sub]) => [name, enumMembers(sub, spec)] as const)
+      .filter((entry): entry is [string, string[]] => entry[1] !== null),
+  );
+}
+
 function fieldsOf(schema: unknown, spec: Record<string, JsonSchema>) {
   const resolved = resolve(schema, spec);
   const properties = (resolved.properties ?? {}) as Record<string, unknown>;
@@ -592,6 +622,58 @@ describe("zod against the OpenAPI contract", () => {
       expect(problems).toEqual([]);
     },
   );
+
+  it.each(pairs.map(([name, apiName]) => [name, apiName]))(
+    "%s knows every value %s can send",
+    (name) => {
+      // `kinds()` cannot do this: it reduces both a `$ref`-to-enum and a
+      // `z.enum` to "string", so two enums agreeing on being strings is all
+      // it ever checked. A member added on the backend and missing here fails
+      // the zod parse for every response carrying it -- an error toast, not a
+      // 422, and nothing in the suite would have said so. The hand-written
+      // `Platform` check above is the case this generalises.
+      const [, apiName, zodJson] = pairs.find(([n]) => n === name)!;
+      const zodEnums = enumFieldsOf(zodJson, {});
+      const apiEnums = enumFieldsOf(apiSchemas[apiName], apiSchemas);
+      const problems: string[] = [];
+
+      for (const [field, apiValues] of apiEnums) {
+        const zodValues = zodEnums.get(field);
+        if (!zodValues) continue;
+        const missing = apiValues.filter((v) => !zodValues.includes(v));
+        const invented = zodValues.filter((v) => !apiValues.includes(v));
+        if (missing.length) {
+          problems.push(
+            `${field}: API can send ${missing.join(", ")}, zod rejects it`,
+          );
+        }
+        if (invented.length) {
+          problems.push(
+            `${field}: zod accepts ${invented.join(", ")}, API never sends it`,
+          );
+        }
+      }
+
+      expect(problems).toEqual([]);
+    },
+  );
+
+  it("compares enough enum fields to be worth trusting", () => {
+    // The check above passes by finding nothing if either extractor stops
+    // recognising an enum -- `$ref` resolution, the `anyOf` an optional field
+    // is wrapped in, or whatever `z.toJSONSchema` emits next major version.
+    // So assert on what it CHECKED, not on it having found no problems.
+    const compared = pairs.flatMap(([, apiName, zodJson]) => {
+      const zodEnums = enumFieldsOf(zodJson, {});
+      return [...enumFieldsOf(apiSchemas[apiName], apiSchemas).keys()].filter(
+        (field) => zodEnums.has(field),
+      );
+    });
+
+    // 18 today. Adding an enum should raise this; a drop means the extractor
+    // went blind, which is the failure this number exists to catch.
+    expect(compared.length).toBeGreaterThanOrEqual(18);
+  });
 });
 
 /**

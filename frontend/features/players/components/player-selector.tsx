@@ -36,7 +36,12 @@ import { useDebouncedValue } from "@/lib/core/use-debounced-value";
 import { cn } from "@/lib/core/utils";
 
 import { playerQueryKey } from "../player-query";
-import { formatRiotId, parseRiotId, type RiotIdParts } from "../utils/riot-id";
+import {
+  formatRiotId,
+  parseRiotId,
+  RIOT_ID_SEARCH_MAX_LENGTH,
+  type RiotIdParts,
+} from "../utils/riot-id";
 
 // Long enough that a typed Riot ID is one suggestion request, short enough
 // that the list still feels attached to the keyboard.
@@ -230,6 +235,7 @@ export function PlayerSelector({
       <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
       <Input
         id={id}
+        maxLength={RIOT_ID_SEARCH_MAX_LENGTH}
         value={searchValue}
         onChange={(event) => {
           setSearchValue(event.target.value);
