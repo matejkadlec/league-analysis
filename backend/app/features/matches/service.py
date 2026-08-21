@@ -588,12 +588,8 @@ class MatchService:
             riot_client: The Riot API client
             player: Player object with puuid and platform
         """
-        puuid = getattr(player, "puuid", None)
-        platform = getattr(player, "platform", None)
-
-        if not puuid or not platform:
-            logger.error("Invalid player object passed to sync_matches", player=player)
-            return 0
+        puuid = player.puuid
+        platform = player.platform
 
         region = get_region_by_platform(platform)
         queue_ids = list(self.SUPPORTED_SYNC_QUEUE_IDS)
