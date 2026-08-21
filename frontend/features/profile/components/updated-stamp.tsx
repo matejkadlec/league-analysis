@@ -13,9 +13,11 @@ import { cn } from "@/lib/core/utils";
  */
 export function UpdatedStamp({
   lastUpdated,
+  label = "Updated",
   className,
 }: {
   lastUpdated?: string | null | undefined;
+  label?: string;
   className?: string;
 }) {
   const relativeUpdatedAt = useRelativeTime(lastUpdated);
@@ -27,7 +29,9 @@ export function UpdatedStamp({
   return (
     <div className={cn("flex items-center gap-1", className)}>
       <Clock className="h-3 w-3" />
-      <span>Updated {relativeUpdatedAt}</span>
+      <span>
+        {label} {relativeUpdatedAt}
+      </span>
     </div>
   );
 }

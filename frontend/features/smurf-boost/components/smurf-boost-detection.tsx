@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertCircle, Clock, Loader2, PlayCircle, Search } from "lucide-react";
+import { AlertCircle, Loader2, PlayCircle, Search } from "lucide-react";
 import { useState } from "react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -11,8 +11,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { startSmurfBoostDetection } from "../smurf-boost-api";
 import { apiErrorMessage } from "@/lib/core/api-error";
+import { UpdatedStamp } from "@/features/profile";
 import { useToast } from "@/lib/core/hooks";
-import { useRelativeTime } from "@/lib/core/use-relative-time";
 import type { SmurfBoostAnalysisResponse } from "@/lib/core/schemas";
 
 import {
@@ -73,8 +73,6 @@ export function SmurfBoostDetection({ puuid }: SmurfBoostDetectionProps) {
   });
 
   const completedAt = latest?.completed_at ?? null;
-  const relativeCompletedAt = useRelativeTime(completedAt);
-
   const runMutation = useMutation({
     mutationFn: async (targetPuuid: string) => {
       const result = await startSmurfBoostDetection(targetPuuid);
@@ -158,12 +156,11 @@ export function SmurfBoostDetection({ puuid }: SmurfBoostDetectionProps) {
               </Badge>
             )}
           </div>
-          {completedAt && (
-            <div className="mt-2 flex items-center gap-1 text-xs text-muted-foreground">
-              <Clock className="h-3 w-3" />
-              <span>Last run {relativeCompletedAt}</span>
-            </div>
-          )}
+          <UpdatedStamp
+            lastUpdated={completedAt}
+            label="Last run"
+            className="mt-2 text-xs text-muted-foreground"
+          />
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">

@@ -6,7 +6,6 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  Clock,
   ListRestart,
   Loader2,
   RefreshCw,
@@ -24,8 +23,8 @@ import {
   type MatchHistoryPaginationItem,
   type MatchHistoryRecordRange,
 } from "../match-history-pagination";
+import { UpdatedStamp } from "@/features/profile";
 import { formatFractionAsPercent } from "@/lib/core/format";
-import { useRelativeTime } from "@/lib/core/use-relative-time";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -179,8 +178,6 @@ export function MatchHistoryHeader({
   losses,
   winRate,
 }: MatchHistoryHeaderProps) {
-  const relativeUpdatedAt = useRelativeTime(lastUpdated);
-
   return (
     <CardHeader>
       <div className="grid grid-cols-[1fr_auto] items-center gap-3 xl:grid-cols-[1fr_auto_1fr]">
@@ -281,12 +278,10 @@ export function MatchHistoryHeader({
         )}
       </div>
 
-      {lastUpdated && (
-        <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
-          <Clock className="h-3 w-3" />
-          <span>Updated {relativeUpdatedAt}</span>
-        </div>
-      )}
+      <UpdatedStamp
+        lastUpdated={lastUpdated}
+        className="text-xs text-muted-foreground mt-1"
+      />
     </CardHeader>
   );
 }
