@@ -271,7 +271,10 @@ describe("zod against the OpenAPI contract", () => {
   it("finds the request bodies to check", () => {
     // Signal first: these pair by name, so a renamed schema drops out of the
     // list silently and every rule below would pass by having nothing to run.
-    expect(requestPairs.length).toBeGreaterThanOrEqual(10);
+    // The floor is the count, not the count minus slack: slack is exactly the
+    // room a rename needs to go unnoticed, and a body legitimately added only
+    // ever raises this.
+    expect(requestPairs.length).toBeGreaterThanOrEqual(11);
   });
 
   /**
@@ -294,10 +297,18 @@ describe("zod against the OpenAPI contract", () => {
         Object.keys((api.properties as JsonSchema | undefined) ?? {}),
       );
       const required = (api.required as string[] | undefined) ?? [];
+      // Required-ness, not presence: under `io: "input"` an `.optional()` zod
+      // field still appears in `properties`, so a field the API requires and
+      // zod marks optional would read as present and 422 on the click that
+      // omits it. Zod may require more than the API does -- sending an
+      // optional field is always legal -- so this runs one way only.
+      const zodRequired = new Set(
+        (resolve(zodJson, {}).required as string[] | undefined) ?? [],
+      );
 
       expect(
-        required.filter((field) => !zodFields.has(field)),
-        `${name} omits fields ${apiName} requires`,
+        required.filter((field) => !zodRequired.has(field)),
+        `${name} does not require fields ${apiName} requires`,
       ).toEqual([]);
       expect(
         [...zodFields.keys()].filter((field) => !apiFields.has(field)),
