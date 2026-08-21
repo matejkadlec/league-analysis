@@ -53,13 +53,12 @@ def iter_error_chain(error: Exception) -> Iterator[Exception]:
         seen.add(id(current))
         yield current
 
-        original_error = getattr(current, "original_error", None)
-        if isinstance(original_error, Exception):
-            current = original_error
-        elif isinstance(current.__cause__, Exception):
-            current = current.__cause__
-        else:
-            current = None
+        # `__cause__` only: `ServiceException` used to carry a second,
+        # hand-rolled `original_error` chain that no production site ever
+        # populated -- `raise ... from` is the one the language already has.
+        current = (
+            current.__cause__ if isinstance(current.__cause__, Exception) else None
+        )
 
 
 def diagnostic_error(error: Exception) -> Exception:

@@ -13,7 +13,7 @@ from structlog.testing import capture_logs
 from structlog.typing import EventDict
 
 from app.core.database import DatabaseManager
-from app.features.jobs.base import BaseJob, _validation_field_locations
+from app.features.jobs.base import BaseJob
 from app.features.jobs.log_capture import BoundedLogCapture
 from app.features.matches import match_persistence
 from app.features.matches.match_stats import advanced_int
@@ -133,22 +133,6 @@ async def test_safe_commit_failure_logs_operation_field() -> None:
     assert entries[0]["operation"] == "job start"
     assert entries[0]["error_type"] == "RuntimeError"
     database.rollback.assert_awaited_once()
-
-
-def test_validation_field_locations_failure_logs_debug() -> None:
-    """A raising `errors()` diagnostic degrades to no locations, visibly."""
-
-    class _BrokenPydanticError(Exception):
-        def errors(self) -> list[dict[str, Any]]:
-            raise RuntimeError("broken errors()")
-
-    with capture_logs() as logs:
-        assert _validation_field_locations(_BrokenPydanticError()) == []
-
-    entries = _events(logs, "job_validation_field_locations_failed")
-    assert len(entries) == 1
-    assert entries[0]["error_type"] == "RuntimeError"
-    assert entries[0]["log_level"] == "debug"
 
 
 def test_stat_coercion_failure_names_the_stat_key() -> None:

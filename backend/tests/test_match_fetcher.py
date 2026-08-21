@@ -391,29 +391,27 @@ def test_job_diagnostics_retain_wrapped_validation_fields() -> None:
     # `model_validate` rather than the constructor because a provider payload is
     # untyped data at that boundary, and a direct call would be a static error
     # for exactly the reason the test is asserting at runtime.
-    try:
-        LeagueEntryDTO.model_validate(
-            {
-                "tier": "GOLD",
-                "rank": "II",
-                "leaguePoints": 42,
-                "wins": 12,
-                "losses": 8,
-                "veteran": False,
-                "inactive": False,
-                "freshBlood": False,
-                "hotStreak": False,
-            }
-        )
-    except PydanticValidationError as validation_error:
-        wrapped_error = ServiceException(
-            "validation failed",
-            original_error=validation_error,
-        )
-    else:  # pragma: no cover - protects the test fixture itself
-        raise AssertionError("Malformed league fixture unexpectedly validated")
+    with pytest.raises(ServiceException) as excinfo:
+        try:
+            LeagueEntryDTO.model_validate(
+                {
+                    "tier": "GOLD",
+                    "rank": "II",
+                    "leaguePoints": 42,
+                    "wins": 12,
+                    "losses": 8,
+                    "veteran": False,
+                    "inactive": False,
+                    "freshBlood": False,
+                    "hotStreak": False,
+                }
+            )
+        except PydanticValidationError as validation_error:
+            # `raise ... from` is the only wrapping production performs, now
+            # that `ServiceException`'s second chain is gone.
+            raise ServiceException("validation failed") from validation_error
 
-    job.record_error(wrapped_error, operation="player league update")
+    job.record_error(excinfo.value, operation="player league update")
 
     assert job.execution_log["errors"][0] == {
         "operation": "player league update",

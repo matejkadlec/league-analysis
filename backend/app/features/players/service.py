@@ -131,10 +131,6 @@ class PlayerService:
             message=f"No players found matching '{safe_game_name}' on {normalized_platform}. "
             f"Please check the game name and platform, or track this player first.",
             operation="get_player_by_game_name",
-            context={
-                "game_name": safe_game_name,
-                "platform": normalized_platform,
-            },
         )
 
     async def get_player_by_game_name(
@@ -203,11 +199,6 @@ class PlayerService:
                 message=f"Multiple players found matching '{safe_game_name}': {', '.join(matched_names)}. "
                 f"Please be more specific.",
                 operation="get_player_by_game_name",
-                context={
-                    "game_name": safe_game_name,
-                    "platform": normalized_platform,
-                    "matches": matched_names,
-                },
             )
 
         # No matches found
@@ -227,7 +218,6 @@ class PlayerService:
                 message=f"Player not found in database: {puuid}. "
                 f"Please track this player first.",
                 operation="get_player_by_puuid",
-                context={"puuid": puuid, "platform": platform},
             )
 
         # Count total matches for this player
