@@ -24,6 +24,7 @@ from sqlalchemy.dialects import postgresql
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.riot_api.constants import RANKED_SOLO_QUEUE_ID
 from app.features.settings.schemas import (
     CardId,
     serialize_card_preference_settings,
@@ -37,7 +38,6 @@ from app.features.smurf_boost_detection.config import (
     BAND_STRONG,
     BAND_WEAK,
     DEFAULT_PRESET,
-    ELIGIBLE_QUEUE_ID,
     MIN_MAGNITUDE,
     MINIMUM_GAME_DURATION_SECONDS,
     MODEL_VERSION,
@@ -1105,7 +1105,7 @@ async def test_eligibility_is_one_predicate_every_query_reuses() -> None:
         )
     ).replace("\n", " ")
     assert "match_participants.remake IS false" in compiled
-    assert f"matches.queue_id = {ELIGIBLE_QUEUE_ID}" in compiled
+    assert f"matches.queue_id = {RANKED_SOLO_QUEUE_ID}" in compiled
     assert f"matches.game_duration >= {MINIMUM_GAME_DURATION_SECONDS}" in compiled
     for position in RECOGNIZED_POSITIONS:
         assert f"'{position}'" in compiled

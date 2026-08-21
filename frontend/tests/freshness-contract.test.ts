@@ -15,10 +15,22 @@ import { allSourceFiles } from "./source-scan-support";
  * for player freshness, which is what it is for. Anything else must either
  * use a `*_synced_at` column or justify itself by being added here.
  */
-const NON_FRESHNESS_UPDATED_AT = new Map([
-  ["lib/core/schemas.ts", "declares the wire shape, does not display it"],
+const NON_FRESHNESS_UPDATED_AT = new Map<string, string>([
+  // The schema modules declare the wire shape; none of them display anything.
+  ...(
+    [
+      "lib/core/schemas/account.ts",
+      "lib/core/schemas/jobs.ts",
+      "lib/core/schemas/match.ts",
+      "lib/core/schemas/player.ts",
+      "lib/core/schemas/settings.ts",
+    ] as const
+  ).map(
+    (path) =>
+      [path, "declares the wire shape, does not display it"] as const,
+  ),
   [
-    "app/settings/riot-api-settings-card.tsx",
+    "features/settings/riot-api-settings-card.tsx",
     "when a setting itself was last changed",
   ],
 ]);

@@ -14,8 +14,8 @@ from pydantic import (
 )
 from pydantic.alias_generators import to_camel
 
+from app.core.riot_api.constants import RANKED_SOLO_QUEUE_ID
 from app.core.schemas import is_json_object
-from app.features.matches.match_lp import RANKED_SOLO_QUEUE_ID
 
 
 class CardId(str, PyEnum):

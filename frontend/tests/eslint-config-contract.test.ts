@@ -3,6 +3,7 @@
 import { describe, expect, it } from "vitest";
 
 import eslintConfig, {
+  featureBarrelImports,
   sessionTeardownImports,
   sessionTeardownSyntax,
 } from "../eslint.config.mjs";
@@ -78,6 +79,17 @@ const EXPECTED_EXEMPTIONS: Record<string, string[]> = {
     "features/auth/context/auth-context.tsx",
   ],
 };
+
+/** The barrel groups, spelled out here on purpose like every oracle above. */
+const EXPECTED_BARREL_GROUPS = ["@/features/*/*", "@/features/*/*/**"];
+
+/**
+ * Blocks that set `no-restricted-imports` without the barrel list, each a
+ * named decision: the edge has its own import allowlist, the API client owns
+ * one documented deep import, and the five hint-reading pages predate the
+ * rule. A sixth block appearing here is a decision that has to be argued.
+ */
+const EXPECTED_BARREL_EXEMPT_BLOCK_COUNT = 3;
 type Block = {
   files?: unknown;
   ignores?: unknown;
@@ -195,6 +207,27 @@ describe("the eslint config's shared teardown rules", () => {
         selector.toLowerCase().includes("clear-site-data"),
       ),
     ).toBe(true);
+  });
+
+  it("carries the barrel list in every general no-restricted-imports block", () => {
+    // Against literals, not against itself: the barrel groups guard feature
+    // edges, and a block that drops them reopens cross-feature cycles with
+    // lint green -- the quietest kind of hole there is.
+    expect(
+      featureBarrelImports.flatMap((pattern) => pattern.group ?? []),
+    ).toEqual(EXPECTED_BARREL_GROUPS);
+
+    const blocks = blocksSetting("no-restricted-imports");
+    const carrying = blocks.filter((block) => {
+      const [, options] = block.rules?.["no-restricted-imports"] as [
+        string,
+        { patterns?: { group?: string[] }[] },
+      ];
+      return (options.patterns ?? []).some((pattern) =>
+        (pattern.group ?? []).includes("@/features/*/*"),
+      );
+    });
+    expect(carrying.length).toBe(blocks.length - EXPECTED_BARREL_EXEMPT_BLOCK_COUNT);
   });
 
   it("lets only the owning files opt out", () => {

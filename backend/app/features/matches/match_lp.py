@@ -9,12 +9,12 @@ from datetime import UTC, datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.riot_api.constants import RANKED_SOLO_QUEUE_ID
 from app.features.players.leagues import PlayerLeague
 
 from .models import Match
 from .participants import MatchParticipant
 
-RANKED_SOLO_QUEUE_ID = 420
 LP_SOURCE_OBSERVED = "riot_league_observation"
 LP_SOURCE_REMAKE = "riot_match_remake"
 LP_SOURCE_UNAVAILABLE = "unavailable"

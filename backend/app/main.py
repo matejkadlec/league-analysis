@@ -13,7 +13,7 @@ from sqlalchemy import text
 from starlette.middleware.body_limit import RequestBodyLimitMiddleware
 from structlog import contextvars as structlog_contextvars
 
-from app.core import get_global_settings
+from app.core.config import get_global_settings
 from app.core.database import db_manager
 from app.core.http_errors import SERVICE_ERROR_DETAIL
 from app.core.rate_limiter import limiter

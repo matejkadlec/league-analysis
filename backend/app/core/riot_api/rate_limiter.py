@@ -8,9 +8,36 @@ from urllib.parse import urlsplit
 
 import structlog
 
-from .endpoints import parse_rate_limit_header
-
 logger = structlog.get_logger(__name__)
+
+
+def parse_rate_limit_header(header_value: str) -> list[dict[str, int]]:
+    """
+    Parse a rate limit or rate count header value; both share the grammar.
+
+    Example: "20:1,100:120" -> [{"requests": 20, "window": 1}, {"requests": 100, "window": 120}]
+
+    Args:
+        header_value: Rate limit or rate count header value
+
+    Returns:
+        List of rate limit dictionaries
+    """
+    if not header_value:
+        return []
+
+    limits: list[dict[str, int]] = []
+    for part in header_value.split(","):
+        try:
+            requests, window = map(int, part.strip().split(":"))
+            limits.append({"requests": requests, "window": window})
+        except ValueError, AttributeError:
+            logger.warning(
+                "Failed to parse rate limit part", part=part, header=header_value
+            )
+            continue
+
+    return limits
 
 
 @dataclass(frozen=True)

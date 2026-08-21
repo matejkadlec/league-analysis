@@ -4,8 +4,8 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { EmailCodeInputs } from "@/app/settings/email-code-inputs";
-import { emptyCodeDigits } from "@/app/settings/settings-helpers";
+import { EmailCodeInputs } from "@/features/settings/email-code-inputs";
+import { emptyCodeDigits } from "@/features/settings/settings-helpers";
 
 /**
  * The component is controlled, so the test owns the digits the way the dialog

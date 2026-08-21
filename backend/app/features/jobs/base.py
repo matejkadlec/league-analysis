@@ -14,14 +14,20 @@ from sqlalchemy import Update, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from structlog import contextvars as structlog_contextvars
 
-from app.core import db_manager
+from app.core.database import db_manager
 
 # Imported at runtime, not under TYPE_CHECKING: these names appear in
 # annotations, and anything that evaluates them (inspect.signature,
 # get_type_hints) would raise NameError under PEP 649 lazy annotations.
+from app.core.db_session import rollback_quietly
 from app.core.riot_api.client import APICallRecord, RiotAPIClient
-from app.core.riot_api.constants import Platform, Region
+from app.core.riot_api.errors import AuthenticationError
+from app.core.riot_api.scoped_client import (
+    TrackedRiotClientOptions,
+    open_tracked_riot_client,
+)
 from app.features.players.models import Player
+from app.features.players.service import PlayerService
 
 from .control import (
     claim_runtime_control,
@@ -41,18 +47,6 @@ from .maintenance import is_riot_writer_maintenance_active
 from .models import ExecutionType, JobConfiguration, JobExecution, JobStatus
 
 logger = structlog.get_logger(__name__)
-
-
-class RiotClientOptions(TypedDict, total=False):
-    """The keyword options `create_tracked_riot_api_client` accepts.
-
-    Declared here so the job helper forwards a checked set of options instead of
-    an untyped `**kwargs`, while the factory keeps owning the default values.
-    """
-
-    region: Region | None
-    platform: Platform | None
-    request_callback: Callable[[str, int], None] | None
 
 
 class JobStopSignal(Exception):
@@ -384,7 +378,7 @@ class BaseJob(ABC):
                 error=str(e),
                 error_type=type(e).__name__,
             )
-            await db.rollback()
+            await rollback_quietly(db)
             raise
 
     async def log_completion(
@@ -699,7 +693,7 @@ class BaseJob(ABC):
             execution_id=self.job_execution_id,
         )
         try:
-            await db.rollback()
+            await rollback_quietly(db)
             await db.execute(
                 update(JobExecution)
                 .where(JobExecution.id == self.job_execution_id)
@@ -782,7 +776,7 @@ class BaseJob(ABC):
                 on_success()
             return True
         except Exception as e:
-            await db.rollback()
+            await rollback_quietly(db)
             logger.error(
                 "job_commit_failed",
                 operation=operation,
@@ -890,29 +884,24 @@ class BaseJob(ABC):
     async def get_job_riot_api_client(
         self,
         db: AsyncSession,
-        **client_options: Unpack[RiotClientOptions],
+        **client_options: Unpack[TrackedRiotClientOptions],
     ) -> RiotAPIClient:
-        """Build a tracked Riot client and classify missing configuration."""
-        from app.core.riot_api.credential_health import (
-            create_tracked_riot_api_client,
-        )
-        from app.core.riot_api.errors import AuthenticationError
-
+        """Build a tracked Riot client and record missing configuration."""
         try:
-            return await create_tracked_riot_api_client(db, **client_options)
-        except ValueError as error:
+            return await open_tracked_riot_client(db, **client_options)
+        except AuthenticationError as error:
             self.record_error(
                 error,
                 operation="Riot API key lookup",
                 is_api_key_error=True,
             )
-            raise AuthenticationError("No active Riot API key configured") from error
+            raise
 
     @asynccontextmanager
     async def job_riot_client(
         self,
         db: AsyncSession,
-        **client_options: Unpack[RiotClientOptions],
+        **client_options: Unpack[TrackedRiotClientOptions],
     ):
         """A job's Riot client with its bookkeeping wired on, not remembered.
 
@@ -944,8 +933,6 @@ class BaseJob(ABC):
         `MissingGreenlet`. A string cannot expire; each loop re-reads its row
         through `db.get`, which refreshes through awaited IO.
         """
-        from app.features.players.service import PlayerService
-
         if self.target_puuids is None:
             players = await PlayerService(db).get_globally_tracked_players()
             return [player.puuid for player in players]
@@ -982,7 +969,7 @@ class BaseJob(ABC):
         logger.error(message, puuid=puuid, error_type=type(error).__name__)
 
         if is_database_job_error(error):
-            await db.rollback()
+            await rollback_quietly(db)
             raise error
 
         # An API-key error recorded by an inner handler arrives here again as
@@ -1001,7 +988,7 @@ class BaseJob(ABC):
             logger.error("API key error detected, stopping job execution")
             return True
 
-        await db.rollback()
+        await rollback_quietly(db)
         return False
 
     def has_errors(self) -> bool:
@@ -1087,7 +1074,7 @@ class BaseJob(ABC):
 
         # Retry once after rollback
         try:
-            await db.rollback()
+            await rollback_quietly(db)
             await db.execute(stmt)
             if await self.safe_commit(db, "job completion retry"):
                 logger.info(
@@ -1125,7 +1112,7 @@ class BaseJob(ABC):
             exc_info=error,
         )
         try:
-            await db.rollback()
+            await rollback_quietly(db)
         except Exception as rollback_error:
             logger.error(
                 "Failed to rollback after log_completion error",

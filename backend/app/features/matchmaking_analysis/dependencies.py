@@ -5,7 +5,7 @@ from typing import Annotated
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core import get_db
+from app.core.database import get_db
 from app.core.dependencies import get_riot_client
 from app.core.riot_api.client import RiotAPIClient
 

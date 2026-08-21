@@ -16,7 +16,11 @@ from app.core.riot_api.client import RiotAPIClient
 from app.core.riot_api.constants import Region
 from app.core.riot_api.errors import AuthenticationError, ForbiddenError, RateLimitError
 from app.core.riot_api.models import MatchDTO, MatchListDTO, MatchTimelineDTO
-from app.features.jobs.maintenance import ensure_riot_writer_maintenance_is_inactive
+from app.features.jobs.error_handling import is_database_job_error, iter_error_chain
+from app.features.jobs.maintenance import (
+    RiotWriterMaintenanceActiveError,
+    ensure_riot_writer_maintenance_is_inactive,
+)
 
 from .models import Match
 from .participants import MatchParticipant
@@ -75,9 +79,6 @@ def must_abort_writer_sync(error: Exception) -> bool:
     `fk_match_timelines_puuid_players` violation of 2026-08-21, where four
     consecutive Match Fetcher runs died on the same single match.
     """
-    from app.features.jobs.error_handling import is_database_job_error, iter_error_chain
-    from app.features.jobs.maintenance import RiotWriterMaintenanceActiveError
-
     if any(isinstance(item, IntegrityError) for item in iter_error_chain(error)):
         return False
     return is_database_job_error(error) or isinstance(

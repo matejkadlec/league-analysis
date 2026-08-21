@@ -29,7 +29,8 @@ vi.mock("@/features/auth/context/auth-context", async (importOriginal) => ({
 // page's own wiring: which tab is showing, which of the four job-list states
 // is rendered, and whether a click inside a job card reaches the other tab.
 // Each stub keeps the one prop the page is responsible for passing.
-vi.mock("@/features/jobs", () => ({
+vi.mock("@/features/jobs", async (importOriginal) => ({
+  ...(await importOriginal()),
   JobCard: ({
     job,
     onExecutionClick,

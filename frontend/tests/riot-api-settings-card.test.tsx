@@ -36,7 +36,7 @@ vi.mock("@/lib/core/hooks", async (importOriginal) => ({
   useToast: () => toast,
 }));
 
-import { RiotApiSettingsCard } from "@/app/settings/riot-api-settings-card";
+import { RiotApiSettingsCard } from "@/features/settings/riot-api-settings-card";
 import { appToast } from "@/lib/core/hooks";
 import { createProvidersQueryClient } from "@/components/providers";
 import { RIOT_CREDENTIAL_HEALTH_UPDATED_EVENT } from "@/lib/core/riot-credential-health-events";
