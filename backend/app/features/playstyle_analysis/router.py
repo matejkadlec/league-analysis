@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException
 from app.core.http_errors import log_and_raise_http
 
 from .dependencies import PlaystyleAnalysisServiceDep
+from .models import PlaystyleAnalysis
 from .schemas import (
     PlaystyleAnalysisRequest,
     PlaystyleAnalysisResponse,
@@ -19,7 +20,7 @@ router = APIRouter(prefix="/playstyle-analysis", tags=["playstyle-analysis"])
 @router.post("/analyze", response_model=PlaystyleAnalysisResponse)
 async def analyze_playstyle(
     request: PlaystyleAnalysisRequest, service: PlaystyleAnalysisServiceDep
-):
+) -> PlaystyleAnalysis:
     """
     Analyze player playstyle based on recent matches.
     Identifies playstyle tags and calculates summary statistics.
@@ -53,7 +54,7 @@ async def analyze_playstyle(
 async def get_playstyle_analysis(
     puuid: str,
     service: PlaystyleAnalysisServiceDep,
-):
+) -> PlaystyleAnalysis:
     """
     Get latest playstyle analysis for a player.
     """

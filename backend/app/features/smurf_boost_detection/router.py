@@ -36,7 +36,7 @@ router = APIRouter(
 )
 
 
-@router.get("/presets", response_model=PresetsResponse)
+@router.get("/presets")
 async def get_presets() -> PresetsResponse:
     """List the named threshold presets and the shipped default.
 
@@ -56,7 +56,7 @@ async def get_presets() -> PresetsResponse:
     )
 
 
-@router.post("/analyze", response_model=SmurfBoostAnalysisResponse)
+@router.post("/analyze")
 @rate_limit("20/minute")
 async def analyze_player(
     request: Request,
@@ -84,7 +84,7 @@ async def analyze_player(
         ) from error
 
 
-@router.get("/player/{puuid}", response_model=SmurfBoostAnalysisResponse)
+@router.get("/player/{puuid}")
 async def get_latest_analysis(
     puuid: str, service: SmurfBoostServiceDep
 ) -> SmurfBoostAnalysisResponse:

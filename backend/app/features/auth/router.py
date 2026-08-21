@@ -92,7 +92,7 @@ def _issue_token_response(
     )  # nosec B106
 
 
-@router.post("/login", response_model=Token)
+@router.post("/login")
 @rate_limit("5/minute")
 async def login(
     request: Request,
@@ -197,7 +197,7 @@ async def login(
     )
 
 
-@router.post("/refresh", response_model=Token)
+@router.post("/refresh")
 @rate_limit("20/minute")
 async def refresh_access_token(
     request: Request,
@@ -247,7 +247,7 @@ async def refresh_access_token(
     )
 
 
-@router.post("/logout", response_model=MessageResponse)
+@router.post("/logout")
 # Deliberately not rate limited. `get_remote_address` keys on
 # `request.client.host`, uvicorn runs with --no-proxy-headers, and browser
 # traffic arrives through the Next.js rewrite, so every user shares one
@@ -375,7 +375,7 @@ async def register_user(
     return await auth_service.create_user(user_create)
 
 
-@router.post("/join-us/contact", response_model=MessageResponse)
+@router.post("/join-us/contact")
 @rate_limit("5/minute")
 async def submit_join_us_contact(
     request: Request,
@@ -467,7 +467,7 @@ async def update_current_user_profile(
     return current_user
 
 
-@router.post("/change-email/request-code", response_model=EmailChangeCodeResponse)
+@router.post("/change-email/request-code")
 @rate_limit("10/minute")
 async def request_email_change_code(
     request: Request,
@@ -568,7 +568,7 @@ async def verify_email_change_code(
         ) from e
 
 
-@router.post("/change-password", response_model=MessageResponse)
+@router.post("/change-password")
 @rate_limit("10/minute")
 async def change_password(
     request: Request,

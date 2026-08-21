@@ -8,6 +8,8 @@ from app.features.auth.dependencies import (
     get_current_admin_user,
 )
 from app.features.auth.models import User
+from app.features.auth.user_cookie_consent import UserCookieConsent
+from app.features.auth.user_settings import UserSettings
 
 from .dependencies import SettingsServiceDep
 from .schemas import (
@@ -31,11 +33,11 @@ logger = structlog.get_logger(__name__)
 router = APIRouter(prefix="/settings", tags=["settings"])
 
 
-@router.get("/riot_api_key/status", response_model=APIKeyStatusResponse)
+@router.get("/riot_api_key/status")
 async def get_riot_api_key_status(
     settings_service: SettingsServiceDep,
     _current_user: User = Depends(get_current_admin_user),
-):
+) -> APIKeyStatusResponse:
     """
     Get the status of the Riot API key configuration.
     Returns whether valid key exists in DB or Env, and which one is active.
@@ -44,20 +46,20 @@ async def get_riot_api_key_status(
     return await settings_service.get_api_key_status()
 
 
-@router.get("/service-status", response_model=ServiceStatusResponse)
+@router.get("/service-status")
 async def get_service_status(
     settings_service: SettingsServiceDep,
     _current_user: User = Depends(get_current_active_user),
-):
+) -> ServiceStatusResponse:
     """Get user-facing maintenance status."""
     return await settings_service.get_service_status()
 
 
-@router.get("/riot_api_key", response_model=SettingResponse)
+@router.get("/riot_api_key")
 async def get_riot_api_key(
     settings_service: SettingsServiceDep,
     _current_user: User = Depends(get_current_admin_user),
-):
+) -> SettingResponse:
     """Get current Riot API key (value is masked for security)."""
     setting = await settings_service.get_setting("riot_api_key")
 
@@ -70,12 +72,12 @@ async def get_riot_api_key(
     return setting
 
 
-@router.put("/riot_api_key", response_model=SettingResponse)
+@router.put("/riot_api_key")
 async def update_riot_api_key(
     update: SettingUpdate,
     settings_service: SettingsServiceDep,
     _current_user: User = Depends(get_current_admin_user),
-):
+) -> SettingResponse:
     """
     Update the Riot API key.
 
@@ -104,12 +106,12 @@ async def update_riot_api_key(
         raise HTTPException(status_code=400, detail=str(e)) from e
 
 
-@router.post("/riot_api_key/test", response_model=SettingTestResponse)
+@router.post("/riot_api_key/test")
 async def test_riot_api_key(
     update: SettingUpdate,
     settings_service: SettingsServiceDep,
     _current_user: User = Depends(get_current_admin_user),
-):
+) -> SettingTestResponse:
     """
     Test a Riot API key without saving it.
 
@@ -137,7 +139,6 @@ async def test_riot_api_key(
 
 @router.get(
     "/card-preferences",
-    response_model=list[CardPreferenceResponse],
 )
 async def get_card_preferences(
     settings_service: SettingsServiceDep,
@@ -149,7 +150,6 @@ async def get_card_preferences(
 
 @router.put(
     "/card-preferences/{card_id}",
-    response_model=CardPreferenceResponse,
 )
 async def update_card_preference(
     card_id: CardId,
@@ -168,7 +168,6 @@ async def update_card_preference(
 
 @router.delete(
     "/card-preferences/{card_id}",
-    response_model=CardPreferenceResponse,
 )
 async def reset_card_preference(
     card_id: CardId,
@@ -181,7 +180,6 @@ async def reset_card_preference(
 
 @router.post(
     "/card-preferences/reset",
-    response_model=list[CardPreferenceResponse],
 )
 async def reset_all_card_preferences(
     confirmation: CardPreferencesResetRequest,
@@ -196,7 +194,7 @@ async def reset_all_card_preferences(
 async def get_user_settings(
     settings_service: SettingsServiceDep,
     current_user: User = Depends(get_current_active_user),
-):
+) -> UserSettings:
     """
     Get the current user's settings.
 
@@ -211,7 +209,7 @@ async def update_user_settings(
     update: UserSettingsUpdate,
     settings_service: SettingsServiceDep,
     current_user: User = Depends(get_current_active_user),
-):
+) -> UserSettings:
     """
     Update the current user's settings.
 
@@ -224,7 +222,7 @@ async def update_user_settings(
 async def get_user_cookie_consent(
     settings_service: SettingsServiceDep,
     current_user: User = Depends(get_current_active_user),
-):
+) -> UserCookieConsent | None:
     """Get authenticated user's latest cookie-consent selection."""
     return await settings_service.get_user_cookie_consent(current_user.id)
 
@@ -234,6 +232,6 @@ async def update_user_cookie_consent(
     update: UserCookieConsentUpdate,
     settings_service: SettingsServiceDep,
     current_user: User = Depends(get_current_active_user),
-):
+) -> UserCookieConsent:
     """Create or update authenticated user's cookie-consent selection."""
     return await settings_service.upsert_user_cookie_consent(current_user.id, update)

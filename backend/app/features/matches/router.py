@@ -48,7 +48,7 @@ def parse_match_queue_ids(
     return (queue,) if queue is not None else None
 
 
-@router.get("/player/{puuid}/detailed", response_model=MatchListWithPlayerDataResponse)
+@router.get("/player/{puuid}/detailed")
 async def get_player_matches_detailed(
     puuid: str,
     match_service: MatchServiceDep,
@@ -64,7 +64,7 @@ async def get_player_matches_detailed(
     exclude_aram: bool = Query(False, description="Exclude queue 450 (ARAM)"),
     start: int = Query(0, ge=0, description="Start index"),
     count: int = Query(20, ge=1, le=1000, description="Number of matches to return"),
-):
+) -> MatchListWithPlayerDataResponse:
     """
     Get detailed match history for a player including champion data,
     lane opponent, and LP changes.
@@ -80,7 +80,7 @@ async def get_player_matches_detailed(
     )
 
 
-@router.get("/player/{puuid}/stats", response_model=MatchStatsResponse)
+@router.get("/player/{puuid}/stats")
 async def get_player_stats(
     puuid: str,
     match_service: MatchServiceDep,
@@ -94,7 +94,7 @@ async def get_player_stats(
         ge=1,
         description="Number of matches to analyze. If not provided, uses all matches.",
     ),
-):
+) -> MatchStatsResponse:
     """
     Get aggregated statistics for a player from recent matches.
     If limit is not provided, all matches in the database will be analyzed.
@@ -108,14 +108,14 @@ async def get_player_stats(
     )
 
 
-@router.get("/player/{puuid}/champion-stats", response_model=ChampionStatsResponse)
+@router.get("/player/{puuid}/champion-stats")
 async def get_player_champion_stats(
     puuid: str,
     match_service: MatchServiceDep,
     queue: int | None = Query(
         None, description="Queue ID filter (e.g., 420 for ranked solo/duo)"
     ),
-):
+) -> ChampionStatsResponse:
     """
     Get player statistics grouped by champion.
     Returns every qualifying champion sorted by games played descending.
@@ -126,14 +126,14 @@ async def get_player_champion_stats(
     )
 
 
-@router.get("/player/{puuid}/lane-stats", response_model=LaneStatsResponse)
+@router.get("/player/{puuid}/lane-stats")
 async def get_player_lane_stats(
     puuid: str,
     match_service: MatchServiceDep,
     queue: int | None = Query(
         None, description="Queue ID filter (e.g., 420 for ranked solo/duo)"
     ),
-):
+) -> LaneStatsResponse:
     """
     Get player statistics grouped by lane/position.
     Returns lanes sorted by games played descending.

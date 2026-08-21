@@ -109,22 +109,22 @@ def _create_test_job_instance(
 # === Job Configuration Endpoints ===
 
 
-@router.get("/", response_model=list[JobConfigurationResponse])
+@router.get("/")
 async def list_job_configurations(
     job_service: JobServiceDep,
     active_only: bool = Query(False, description="Filter to active jobs only"),
-):
+) -> list[JobConfigurationResponse]:
     """List all job configurations, optionally filtered to active jobs only."""
     jobs = await job_service.list_job_configurations(active_only=active_only)
     return jobs
 
 
-@router.put("/{job_id}", response_model=JobConfigurationResponse)
+@router.put("/{job_id}")
 async def update_job_configuration(
     job_id: int,
     job_update: JobConfigurationUpdate,
     job_service: JobServiceDep,
-):
+) -> JobConfigurationResponse:
     """Update job configuration (e.g., enable/disable, change schedule)."""
     try:
         job = await job_service.update_job_configuration(job_id, job_update)
@@ -145,7 +145,7 @@ async def update_job_configuration(
 # === Job Execution Endpoints ===
 
 
-@router.get("/{job_id}/executions", response_model=JobExecutionListResponse)
+@router.get("/{job_id}/executions")
 async def get_job_executions(
     job_id: int,
     job_service: JobServiceDep,
@@ -155,7 +155,7 @@ async def get_job_executions(
     execution_type: ExecutionType | None = Query(
         None, description="Filter by execution type"
     ),
-):
+) -> JobExecutionListResponse:
     """
     Get execution history for a specific job.
 
@@ -179,7 +179,7 @@ async def get_job_executions(
     return executions
 
 
-@router.get("/executions/all", response_model=JobExecutionListResponse)
+@router.get("/executions/all")
 async def list_all_executions(
     job_service: JobServiceDep,
     page: int = Query(1, ge=1, description="Page number"),
@@ -188,7 +188,7 @@ async def list_all_executions(
     execution_type: ExecutionType | None = Query(
         None, description="Filter by execution type"
     ),
-):
+) -> JobExecutionListResponse:
     """
     Get execution history for all jobs.
 
@@ -213,12 +213,12 @@ async def list_all_executions(
 # === Job Control Endpoints ===
 
 
-@router.post("/{job_id}/trigger", response_model=JobTriggerResponse)
+@router.post("/{job_id}/trigger")
 async def trigger_job(
     job_id: int,
     background_tasks: BackgroundTasks,
     job_service: JobServiceDep,
-):
+) -> JobTriggerResponse:
     """
     Manually trigger a job execution.
 
@@ -305,34 +305,34 @@ def _require_control_state(
     return state
 
 
-@router.post("/{job_id}/pause", response_model=JobControlActionResponse)
+@router.post("/{job_id}/pause")
 async def pause_job(
     job_id: int,
     job_service: JobServiceDep,
-):
+) -> JobControlActionResponse:
     """Pause a running job execution."""
     return _require_control_state(
         await job_service.set_job_paused(job_id, paused=True), job_id
     )
 
 
-@router.post("/{job_id}/resume", response_model=JobControlActionResponse)
+@router.post("/{job_id}/resume")
 async def resume_job(
     job_id: int,
     job_service: JobServiceDep,
-):
+) -> JobControlActionResponse:
     """Resume a paused running job execution."""
     return _require_control_state(
         await job_service.set_job_paused(job_id, paused=False), job_id
     )
 
 
-@router.post("/{job_id}/stop", response_model=JobControlActionResponse)
+@router.post("/{job_id}/stop")
 async def stop_job(
     job_id: int,
     job_service: JobServiceDep,
     force: bool = Query(False, description="Force stop immediately"),
-):
+) -> JobControlActionResponse:
     """Request graceful or forced stop for a running job execution."""
     return _require_control_state(
         await job_service.request_job_stop_action(job_id, force=force), job_id
@@ -372,7 +372,7 @@ def _set_scheduled_job_suspended(job_id: int, *, suspended: bool) -> None:
         pass
 
 
-@router.post("/{job_id}/test", response_model=JobTriggerResponse)
+@router.post("/{job_id}/test")
 async def trigger_test_run(
     job_id: int,
     background_tasks: BackgroundTasks,
@@ -381,7 +381,7 @@ async def trigger_test_run(
         False,
         description="Whether to suspend regular scheduled runs during the test",
     ),
-):
+) -> JobTriggerResponse:
     """Start a test run for a job.
 
     The test run calls all Riot API endpoints the real job uses once per
@@ -452,12 +452,12 @@ async def _run_test_job_with_cleanup(
             _set_scheduled_job_suspended(job_id, suspended=False)
 
 
-@router.post("/{job_id}/test/stop", response_model=JobControlActionResponse)
+@router.post("/{job_id}/test/stop")
 async def stop_test_run(
     job_id: int,
     job_service: JobServiceDep,
     force: bool = Query(False, description="Force stop immediately"),
-):
+) -> JobControlActionResponse:
     """Stop a running test for a job."""
     state = await job_service.request_job_stop_action(
         job_id, force=force, test_run=True
@@ -480,28 +480,28 @@ async def _set_test_run_paused(
     return state
 
 
-@router.post("/{job_id}/test/pause", response_model=JobControlActionResponse)
+@router.post("/{job_id}/test/pause")
 async def pause_test_run(
     job_id: int,
     job_service: JobServiceDep,
-):
+) -> JobControlActionResponse:
     """Pause a running test execution."""
     return await _set_test_run_paused(job_id, job_service, paused=True)
 
 
-@router.post("/{job_id}/test/resume", response_model=JobControlActionResponse)
+@router.post("/{job_id}/test/resume")
 async def resume_test_run(
     job_id: int,
     job_service: JobServiceDep,
-):
+) -> JobControlActionResponse:
     """Resume a paused test execution."""
     return await _set_test_run_paused(job_id, job_service, paused=False)
 
 
-@router.get("/status/overview", response_model=JobStatusResponse)
+@router.get("/status/overview")
 async def get_job_system_status(
     job_service: JobServiceDep,
-):
+) -> JobStatusResponse:
     """
     Get overall job system status.
 
