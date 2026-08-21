@@ -176,7 +176,14 @@ class MatchInfoDTO(RiotDTO):
     game_end_timestamp: int | None = Field(default=None)
     game_result: str | None = Field(default=None, alias="endOfGameResult")
     participants: list[ParticipantDTO]
-    platform: str = Field(..., alias="platformId")
+    # `min_length=1`, so an empty `platformId` is refused here rather than
+    # standing in for a real one. `upsert_match` used to substitute "EUN1",
+    # which `normalize_platform` accepts without complaint -- a KR or NA
+    # participant first seen through that path got `platform='eun1'` written
+    # onto their player row, and every later Riot call for them was routed to
+    # the wrong region forever. A rejected match is one recoverable failure;
+    # a wrong platform is permanent and invisible.
+    platform: str = Field(..., alias="platformId", min_length=1)
 
 
 class MatchMetadataDTO(RiotDTO):

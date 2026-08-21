@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from pydantic import ValidationError
 
 from app.core.riot_api.models import (
     AccountDTO,
@@ -72,6 +73,20 @@ def test_current_account_and_summoner_contracts_allow_provider_optionality() -> 
     identity_free = AccountDTO.model_validate({"puuid": "sanitized"})
     assert identity_free.game_name is None
     assert identity_free.tag_line is None
+
+
+def test_empty_platform_id_is_rejected_not_defaulted() -> None:
+    """A match with no region is a failure, not an EUN1 match.
+
+    `upsert_match` used to fall back to "EUN1", and that value is written onto
+    every participant's player row. A KR player first seen through that path
+    was routed to the wrong regional host by every later Riot call, forever.
+    """
+    payload = _match_payload("420")
+    payload["info"]["platformId"] = ""
+
+    with pytest.raises(ValidationError):
+        MatchDTO.model_validate(payload)
 
 
 @pytest.mark.parametrize("queue_id", ["400", "420", "440", "450"])

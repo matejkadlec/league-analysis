@@ -41,7 +41,7 @@ def resolve_player_display_fields(
     platform_id: str,
 ) -> dict[str, Any]:
     """Preserve known identity fields when a Riot participant payload is incomplete."""
-    fallback_tag = platform_id.replace("1", "") if platform_id else "RIOT"
+    fallback_tag = platform_id.replace("1", "")
     return {
         "game_name": first_present(
             participant.game_name,

@@ -122,7 +122,7 @@ async def upsert_match(
     Creates skeletal Player records for FK satisfaction if missing and stores
     objective timeline aggregates when timeline payload is available.
     """
-    platform_id = match_dto.info.platform or "EUN1"
+    platform_id = match_dto.info.platform
     match_id = match_dto.metadata.match_id
 
     try:
