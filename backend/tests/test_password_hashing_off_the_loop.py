@@ -13,8 +13,12 @@ running while the hash ran.
 import asyncio
 import warnings
 
-from app.features.auth.passwords import DUMMY_PASSWORD_HASH, pwd_context
-from app.features.auth.service import AuthService
+from app.features.auth.passwords import (
+    DUMMY_PASSWORD_HASH,
+    hash_password,
+    pwd_context,
+    verify_password,
+)
 
 with warnings.catch_warnings():
     # Warming passlib's argon2 backend here keeps its deprecated
@@ -33,7 +37,7 @@ async def test_verifying_a_password_leaves_the_loop_free() -> None:
     counter = [0]
     ticker = asyncio.create_task(_count_loop_iterations(counter))
 
-    verified = await AuthService.verify_password("wrong-password", DUMMY_PASSWORD_HASH)
+    verified = await verify_password("wrong-password", DUMMY_PASSWORD_HASH)
 
     ticker.cancel()
     assert verified is False
@@ -44,7 +48,7 @@ async def test_hashing_a_password_leaves_the_loop_free() -> None:
     counter = [0]
     ticker = asyncio.create_task(_count_loop_iterations(counter))
 
-    hashed = await AuthService.get_password_hash("some-password")
+    hashed = await hash_password("some-password")
 
     ticker.cancel()
     assert hashed.startswith("$argon2id$")

@@ -42,6 +42,7 @@ if os.getenv("ENVIRONMENT", "").lower() != "test":
 from app.core.config import get_global_settings  # noqa: E402
 from app.core.database import db_manager  # noqa: E402
 from app.features.auth.models import User  # noqa: E402
+from app.features.auth.passwords import hash_password, verify_password  # noqa: E402
 from app.features.auth.schemas import DisplayName  # noqa: E402
 from app.features.auth.service import AuthService  # noqa: E402
 
@@ -164,7 +165,7 @@ async def reconcile_admin(
                 )
 
             created = not matches
-            password_hash = await AuthService.get_password_hash(password)
+            password_hash = await hash_password(password)
             now = datetime.now(UTC)
             if created:
                 user = User(
@@ -219,9 +220,7 @@ async def reconcile_admin(
             or not authenticated.is_active
             or not authenticated.is_admin
             or not authenticated.email_verified
-            or not await AuthService.verify_password(
-                password, authenticated.password_hash
-            )
+            or not await verify_password(password, authenticated.password_hash)
         ):
             raise AdminReconciliationRefusal(
                 "administrator failed the normal authentication verification path"

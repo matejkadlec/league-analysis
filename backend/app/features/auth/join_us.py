@@ -14,8 +14,6 @@ import structlog
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import get_global_settings
-
 from .errors import (
     JoinUsEmailDeliveryError,
     JoinUsEmailNotConfiguredError,
@@ -149,8 +147,6 @@ async def send_contact_email(
     if not smtp_configured():
         raise JoinUsEmailNotConfiguredError
 
-    smtp_from_email = get_global_settings().smtp_from_email
-
     subject_line = build_email_subject(subject, sequence_number=sequence_number)
     subject_label = JOIN_US_SUBJECT_LABELS[subject]
     sequence_label = f"#{sequence_number}"
@@ -166,7 +162,6 @@ async def send_contact_email(
 
     message = EmailMessage()
     message["Subject"] = subject_line
-    message["From"] = smtp_from_email
     message["To"] = JOIN_US_CONTACT_RECIPIENT
     message.set_content(message_body)
 

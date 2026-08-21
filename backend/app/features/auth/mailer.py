@@ -1,8 +1,11 @@
 """SMTP transport for the auth feature.
 
 Owns the one question both mail flows ask -- is delivery configured? -- and
-the one blocking send they must offload to a thread. Message construction
-stays with each flow; this module never reads a message's content.
+the one blocking send they must offload to a thread. The envelope sender is
+transport configuration, not message content, so it is stamped here rather
+than read from settings a second time at each call site: the guard and the
+send then answer from the same settings object, which is what the two flows
+actually depend on.
 """
 
 import asyncio
@@ -19,8 +22,9 @@ def smtp_configured() -> bool:
 
 
 async def send_smtp_message(message: EmailMessage) -> None:
-    """Send an email message using configured SMTP transport mode."""
+    """Stamp the configured sender on a message and send it, off the loop."""
     settings = get_global_settings()
+    message["From"] = settings.smtp_from_email
     smtp_host = settings.smtp_host
     smtp_port = settings.smtp_port
     smtp_username = settings.smtp_username

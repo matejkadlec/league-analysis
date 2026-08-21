@@ -80,16 +80,6 @@ class AuthService:
         self.db = db
         self.settings = get_global_settings()
 
-    @staticmethod
-    async def verify_password(plain_password: str, hashed_password: str) -> bool:
-        """Verify a password against its hash, off the event loop."""
-        return await verify_password(plain_password, hashed_password)
-
-    @staticmethod
-    async def get_password_hash(password: str) -> str:
-        """Hash a password using Argon2id, off the event loop."""
-        return await hash_password(password)
-
     async def get_user_by_email_case_insensitive(self, email: str) -> User | None:
         """Get a user by email address using case-insensitive comparison."""
         normalized_email = email.strip().lower()
@@ -154,10 +144,6 @@ class AuthService:
         """Generate a unique token identifier (jti)."""
         return str(uuid4())
 
-    def _is_smtp_configured(self) -> bool:
-        """Return True when SMTP delivery settings are configured."""
-        return smtp_configured()
-
     async def _send_email_verification_code(
         self,
         *,
@@ -165,7 +151,7 @@ class AuthService:
         code: str,
     ) -> None:
         """Send email-change verification code."""
-        # Same guard as `_send_join_us_contact_email`, and now the same answer.
+        # Same guard as `join_us.send_contact_email`, and now the same answer.
         # This used to log the code in plaintext and return as if the mail had
         # gone out: the caller then wrote `pending_email` and the hash and
         # committed, so an unconfigured deployment was indistinguishable from a
@@ -173,8 +159,6 @@ class AuthService:
         # the verification code on disk.
         if not smtp_configured():
             raise EmailChangeEmailNotConfiguredError
-
-        smtp_from_email = self.settings.smtp_from_email
 
         subject = "League Analysis - Verify Your New Email"
         body = (
@@ -186,7 +170,6 @@ class AuthService:
 
         message = EmailMessage()
         message["Subject"] = subject
-        message["From"] = smtp_from_email
         message["To"] = target_email
         message.set_content(body)
 
