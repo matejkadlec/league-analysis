@@ -4,7 +4,7 @@ from collections.abc import Callable, Sequence
 from typing import Any, Protocol
 
 import structlog
-from sqlalchemy import desc, exists, func, or_, select
+from sqlalchemy import ColumnElement, desc, exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.riot_api.client import RiotAPIClient
@@ -92,11 +92,11 @@ def build_match_history_conditions(
     start_time: int | None = None,
     end_time: int | None = None,
     exclude_aram: bool = False,
-) -> list[Any]:
+) -> list[ColumnElement[bool]]:
     """Build shared filters so search and queue unions precede pagination."""
     match_table = Match.__table__
     player_participant = MatchParticipant.__table__.alias("player_participant")
-    conditions: list[Any] = [
+    conditions: list[ColumnElement[bool]] = [
         exists(
             select(1).where(
                 player_participant.c.match_id == match_table.c.match_id,

@@ -804,7 +804,10 @@ class MatchmakingAnalysisService:
             .order_by(Match.game_start_timestamp.desc())
             .limit(self.MATCHES_FOR_WINRATE)
         )
-        db_wins = result.all()
+        # `.scalars()`, not `.all()`: SQLAlchemy types a single-column select as
+        # `Result[Tuple[bool]]`, and taking the rows threw that away into
+        # `Sequence[Any]` -- so `if w` would have accepted a row of any shape.
+        db_wins = result.scalars().all()
 
         if len(db_wins) >= self.MATCHES_FOR_WINRATE:
             return self._winrate_from_rows(db_wins)
@@ -815,11 +818,10 @@ class MatchmakingAnalysisService:
         return await self._winrate_from_match_ids(match_ids, puuid)
 
     @staticmethod
-    def _winrate_from_rows(db_wins: Sequence[Any]) -> float | None:
+    def _winrate_from_rows(db_wins: Sequence[bool]) -> float | None:
         if not db_wins:
             return None
-        win_count = sum(1 for (w,) in db_wins if w)
-        return win_count / len(db_wins)
+        return sum(db_wins) / len(db_wins)
 
     async def _winrate_from_match_ids(
         self, match_ids: list[str], puuid: str
