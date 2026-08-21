@@ -177,7 +177,21 @@ class MatchInfoDTO(RiotDTO):
     # from the trust boundary to a NOT NULL violation at flush.
     game_end_timestamp: int = Field(...)
     game_result: str | None = Field(default=None, alias="endOfGameResult")
-    participants: list[ParticipantDTO]
+    # `min_length=1` for the same reason as `platformId` below. Riot answers
+    # some match IDs with the envelope and nothing in it: production stored
+    # `EUN1_3990695865` on 2026-08-16 with an empty participant list, `queueId`
+    # 0, empty `gameMode`, `gameType` and `gameVersion`, `mapId` 0 and
+    # `gameStartTimestamp` 0 -- only `gameEndTimestamp` and `platformId` came
+    # back populated. Every one of those zeros was written as fact, the row was
+    # marked `fully_analyzed`, and `game_start_timestamp_source` recorded
+    # `riot_game_start`, which asserts Riot said the game began at epoch 0.
+    #
+    # A match with no participants cannot be rendered and cannot be filtered by
+    # queue, so it is noise that only ever has to be excluded again later. The
+    # refusal is per-match and recoverable: `process_queue_sync_match` catches
+    # it, `must_abort_writer_sync` defers to `is_database_job_error`, which does
+    # not claim a `ValidationError`, so the run logs the match and continues.
+    participants: list[ParticipantDTO] = Field(..., min_length=1)
     # `min_length=1`, so an empty `platformId` is refused here rather than
     # standing in for a real one. `upsert_match` used to substitute "EUN1",
     # which `normalize_platform` accepts without complaint -- a KR or NA

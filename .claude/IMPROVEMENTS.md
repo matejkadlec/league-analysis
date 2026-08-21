@@ -42,12 +42,21 @@ distinct rather than duplicated.
   in a browser before changing anything.
 
 - 2026-08-21 backend/app/features/matches/: production `core.matches` holds one
-  row with `queue_id = 0`, which is not in `PRODUCT_SUPPORTED_QUEUE_IDS`
-  (`420/440/480/400/450/2400`). Riot uses 0 for custom games. Worth finding
-  which writer stored it -- the queue-sync path filters on the supported list,
-  so it most likely arrived through a path that does not. The row is harmless
-  (match history renders it as "Queue 0"), so this is a question about the
-  writer, not a rendering fix.
+  row with `queue_id = 0`. **Root-caused 2026-08-21, and it is not a custom
+  game.** `EUN1_3990695865` came back from Riot as an envelope with nothing in
+  it: no participants, empty `gameMode`/`gameType`/`gameVersion`, `mapId` 0 and
+  `gameStartTimestamp` 0, with only `gameEndTimestamp` and `platformId`
+  populated. `build_match_record` copies the DTO field for field, so every zero
+  was stored as fact, the row was marked `fully_analyzed`, and
+  `game_start_timestamp_source` recorded `riot_game_start`. `MatchInfoDTO` now
+  requires `min_length=1` on `participants`, so the next one is refused at the
+  boundary and skipped per-match.
+
+  **Left to do:** the one existing row is still in production. It has no
+  participants and no timeline rows, so it renders nowhere, but it is counted
+  by anything that counts `core.matches`. Deleting it is a production write and
+  wants the owner's say-so; the statement is
+  `DELETE FROM core.matches WHERE match_id = 'EUN1_3990695865';`
 
 - 2026-08-21 frontend/lib/core/schemas.ts: `npm run deadcode` cannot see an
   unused export in this file. `tests/api-contract-alignment.test.ts` needs the

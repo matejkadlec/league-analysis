@@ -89,6 +89,32 @@ def test_empty_platform_id_is_rejected_not_defaulted() -> None:
         MatchDTO.model_validate(payload)
 
 
+def test_match_without_participants_is_rejected_not_stored() -> None:
+    """Riot answers some match IDs with the envelope and nothing in it.
+
+    Production stored `EUN1_3990695865` on 2026-08-16 from exactly this shape:
+    no participants, `queueId` 0, empty `gameMode`/`gameType`/`gameVersion`,
+    `mapId` 0 and `gameStartTimestamp` 0, with only `gameEndTimestamp` and
+    `platformId` populated. Every zero was written as fact, the row was marked
+    `fully_analyzed`, and `game_start_timestamp_source` recorded
+    `riot_game_start` -- asserting Riot said the game began at epoch 0.
+
+    A match with no participants renders nothing and filters by no queue, so
+    the only thing it can ever do is need excluding again.
+    """
+    payload = _match_payload("420")
+    payload["info"]["participants"] = []
+    payload["info"]["queueId"] = 0
+    payload["info"]["gameMode"] = ""
+    payload["info"]["gameType"] = ""
+    payload["info"]["gameVersion"] = ""
+    payload["info"]["mapId"] = 0
+    payload["info"]["gameStartTimestamp"] = 0
+
+    with pytest.raises(ValidationError):
+        MatchDTO.model_validate(payload)
+
+
 @pytest.mark.parametrize("queue_id", ["400", "420", "440", "450"])
 def test_current_match_contracts_keep_creation_and_actual_start(queue_id: str) -> None:
     match = MatchDTO.model_validate(_match_payload(queue_id))
