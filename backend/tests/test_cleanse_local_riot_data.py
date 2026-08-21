@@ -27,9 +27,6 @@ from scripts.cleanse_local_riot_data import (
     create_verified_backup,
     delete_riot_data,
     enable_riot_writer_maintenance_mode,
-    is_local_host,
-    is_loopback_address,
-    is_loopback_listener_configuration,
     lock_cleanup_tables,
     normalize_qa_accounts,
     parse_arguments,
@@ -53,32 +50,6 @@ def test_validated_database_name_rejects_unsafe_names(value: str) -> None:
     """Database targeting rejects SQL syntax and mixed-case ambiguity."""
     with pytest.raises(argparse.ArgumentTypeError):
         validated_database_name(value)
-
-
-@pytest.mark.parametrize("host", ["localhost", "127.0.0.1", "::1", "[::1]"])
-def test_is_local_host_accepts_loopback_hosts(host: str) -> None:
-    """Configured connections are limited to unambiguous loopback host names."""
-    assert is_local_host(host)
-
-
-@pytest.mark.parametrize("host", ["db.internal", "10.0.0.8", "0.0.0.0", ""])
-def test_is_local_host_rejects_non_loopback_hosts(host: str) -> None:
-    """A remote or wildcard host cannot pass the local cleanup guard."""
-    assert not is_local_host(host)
-
-
-@pytest.mark.parametrize("address", ["127.0.0.1/32", "::1/128"])
-def test_is_loopback_address_accepts_postgresql_listener_addresses(
-    address: str,
-) -> None:
-    """PostgreSQL's CIDR-formatted loopback addresses are accepted."""
-    assert is_loopback_address(address)
-
-
-@pytest.mark.parametrize("address", ["10.0.0.1/24", "0.0.0.0/0", "not-an-address"])
-def test_is_loopback_address_rejects_remote_listener_addresses(address: str) -> None:
-    """A remote database listener cannot pass the local cleanup guard."""
-    assert not is_loopback_address(address)
 
 
 def test_default_mode_is_read_only() -> None:
@@ -147,26 +118,6 @@ def test_validated_backup_path_rejects_a_symlink_into_the_repository(
 
     with pytest.raises(LocalCleanupRefusal, match="outside the repository"):
         validated_backup_path(repository_alias / "backend" / "before.dump")
-
-
-@pytest.mark.parametrize(
-    "listen_addresses", ["localhost", "127.0.0.1", "127.0.0.1, ::1"]
-)
-def test_loopback_listener_configuration_accepts_only_loopback_addresses(
-    listen_addresses: str,
-) -> None:
-    """Local PostgreSQL bind configurations retain the cleanup boundary."""
-    assert is_loopback_listener_configuration(listen_addresses)
-
-
-@pytest.mark.parametrize(
-    "listen_addresses", ["", "*", "0.0.0.0", "127.0.0.1, *", "db.internal"]
-)
-def test_loopback_listener_configuration_rejects_shared_bind_addresses(
-    listen_addresses: str,
-) -> None:
-    """Wildcard and remote PostgreSQL listeners are never a local-only target."""
-    assert not is_loopback_listener_configuration(listen_addresses)
 
 
 def test_preflight_refuses_a_wildcard_postgresql_listener_before_table_access(

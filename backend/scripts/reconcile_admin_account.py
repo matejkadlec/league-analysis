@@ -11,7 +11,6 @@ from __future__ import annotations
 import argparse
 import asyncio
 import getpass
-import ipaddress
 import os
 import sys
 from datetime import UTC, datetime
@@ -43,6 +42,10 @@ from app.core.config import get_global_settings  # noqa: E402
 from app.core.database import db_manager  # noqa: E402
 from app.features.auth.models import User  # noqa: E402
 from app.features.auth.service import AuthService  # noqa: E402
+from scripts.local_target import (  # noqa: E402
+    is_loopback_address,
+    is_loopback_listener_configuration,
+)
 
 LOCAL_DATABASE = "league_analysis_local_dev"
 
@@ -68,23 +71,6 @@ def parse_arguments(argv: list[str] | None = None) -> argparse.Namespace:
         help="Apply the idempotent reconciliation; the default is a dry run.",
     )
     return parser.parse_args(argv)
-
-
-def is_loopback_address(value: str) -> bool:
-    """Return whether one configured/observed host is loopback-only."""
-    normalized = value.strip().strip("[]").lower()
-    if normalized == "localhost":
-        return True
-    try:
-        return ipaddress.ip_interface(normalized).ip.is_loopback
-    except ValueError:
-        return False
-
-
-def is_loopback_listener_configuration(value: str) -> bool:
-    """Require every PostgreSQL listen address to be loopback-only."""
-    addresses = [item.strip().strip("'\"") for item in value.split(",") if item.strip()]
-    return bool(addresses) and all(is_loopback_address(item) for item in addresses)
 
 
 def read_password(password_stdin: bool) -> str:
