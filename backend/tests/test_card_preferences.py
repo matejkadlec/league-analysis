@@ -293,7 +293,6 @@ class _PreferencesSession:
         return _PreferencesResult(self.preferences)
 
 
-@pytest.mark.asyncio
 async def test_card_preference_read_signals_recovery_and_observes_future_version(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -340,7 +339,6 @@ async def test_card_preference_read_signals_recovery_and_observes_future_version
     )
 
 
-@pytest.mark.asyncio
 async def test_upsert_is_atomic_and_scoped_to_the_authenticated_user() -> None:
     """Concurrent writes use the composite-key upsert without a user-id input."""
     timestamp = datetime(2026, 8, 6, tzinfo=UTC)
@@ -373,7 +371,6 @@ async def test_upsert_is_atomic_and_scoped_to_the_authenticated_user() -> None:
     assert session.committed
 
 
-@pytest.mark.asyncio
 async def test_card_preference_route_uses_only_the_current_user_id() -> None:
     """A caller cannot supply a second user's identifier to the route."""
     captured: dict[str, object] = {}
@@ -400,7 +397,6 @@ async def test_card_preference_route_uses_only_the_current_user_id() -> None:
     assert captured["card_id"] is CardId.RECENT_PERFORMANCE
 
 
-@pytest.mark.asyncio
 async def test_card_reset_targets_only_the_current_v1_row() -> None:
     """Per-card reset leaves future-version records available to later servers."""
     session = _Session(None)

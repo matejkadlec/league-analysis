@@ -67,7 +67,6 @@ def test_history_conditions_search_every_participant_before_pagination() -> None
     assert "Kai/%%Sa/_#EUW" in compiled
 
 
-@pytest.mark.asyncio
 async def test_empty_page_retains_filtered_total_for_client_clamping() -> None:
     # Every query the service would make is replaced below, so the session is
     # never touched; `AsyncSession` is too large to implement for that.

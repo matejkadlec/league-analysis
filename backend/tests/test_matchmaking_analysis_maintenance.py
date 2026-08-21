@@ -32,7 +32,6 @@ def _request() -> Request:
     )
 
 
-@pytest.mark.asyncio
 async def test_new_matchmaking_analysis_refuses_active_maintenance(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -53,7 +52,6 @@ async def test_new_matchmaking_analysis_refuses_active_maintenance(
     guard.assert_awaited_once_with(service.db)
 
 
-@pytest.mark.asyncio
 async def test_matchmaking_start_returns_maintenance_status() -> None:
     """The start endpoint reports an active cleanup instead of an internal error."""
     service = MagicMock(spec=MatchmakingAnalysisService)
@@ -70,7 +68,6 @@ async def test_matchmaking_start_returns_maintenance_status() -> None:
     service.start_analysis.assert_awaited_once_with("test-puuid")
 
 
-@pytest.mark.asyncio
 async def test_matchmaking_fetched_match_honors_the_maintenance_interlock(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -97,7 +94,6 @@ async def test_matchmaking_fetched_match_honors_the_maintenance_interlock(
     upsert.assert_not_awaited()
 
 
-@pytest.mark.asyncio
 async def test_matchmaking_progress_writes_when_maintenance_is_inactive(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

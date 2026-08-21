@@ -106,7 +106,6 @@ with warnings.catch_warnings():
     _ = AuthService.verify_password("warm-up-probe", DUMMY_PASSWORD_HASH)
 
 
-@pytest.mark.asyncio
 async def test_unknown_email_login_failure_is_logged() -> None:
     service = _auth_service([None])
 
@@ -120,7 +119,6 @@ async def test_unknown_email_login_failure_is_logged() -> None:
     assert failures[0]["email"] == "ghost@example.com"
 
 
-@pytest.mark.asyncio
 async def test_invalid_password_login_failure_is_logged() -> None:
     stored_user = User(
         id=7,
@@ -146,7 +144,6 @@ async def test_invalid_password_login_failure_is_logged() -> None:
     assert failures[0]["email"] == "player@example.com"
 
 
-@pytest.mark.asyncio
 async def test_inactive_account_login_failure_is_logged() -> None:
     auth_service = SimpleNamespace(
         authenticate_user=AsyncMock(
@@ -174,7 +171,6 @@ async def test_inactive_account_login_failure_is_logged() -> None:
     assert failures[0]["user_id"] == 7
 
 
-@pytest.mark.asyncio
 async def test_locked_account_login_failure_is_logged() -> None:
     auth_service = SimpleNamespace(
         authenticate_user=AsyncMock(
@@ -202,7 +198,6 @@ async def test_locked_account_login_failure_is_logged() -> None:
     assert failures[0]["email"] == "player@example.com"
 
 
-@pytest.mark.asyncio
 async def test_captcha_required_login_failure_is_logged() -> None:
     auth_service = SimpleNamespace(
         authenticate_user=AsyncMock(side_effect=CaptchaRequiredError())
@@ -226,7 +221,6 @@ async def test_captcha_required_login_failure_is_logged() -> None:
     assert failures[0]["email"] == "player@example.com"
 
 
-@pytest.mark.asyncio
 async def test_captcha_verification_failure_is_logged() -> None:
     auth_service = SimpleNamespace(
         authenticate_user=AsyncMock(side_effect=CaptchaVerificationError())
@@ -250,7 +244,6 @@ async def test_captcha_verification_failure_is_logged() -> None:
     assert failures[0]["email"] == "player@example.com"
 
 
-@pytest.mark.asyncio
 async def test_successful_login_is_logged() -> None:
     now = datetime.now(UTC)
     auth_service = SimpleNamespace(
@@ -284,7 +277,6 @@ async def test_successful_login_is_logged() -> None:
     assert successes[0]["email"] == "player@example.com"
 
 
-@pytest.mark.asyncio
 async def test_malformed_access_token_rejection_is_logged() -> None:
     service = _auth_service([])
 
@@ -297,7 +289,6 @@ async def test_malformed_access_token_rejection_is_logged() -> None:
     assert rejections[0]["reason"] == "invalid_token"
 
 
-@pytest.mark.asyncio
 async def test_wrong_token_type_rejection_is_logged() -> None:
     service = _auth_service([])
 
@@ -310,7 +301,6 @@ async def test_wrong_token_type_rejection_is_logged() -> None:
     assert rejections[0]["reason"] == "invalid_token"
 
 
-@pytest.mark.asyncio
 async def test_expired_access_token_rejection_is_logged() -> None:
     service = _auth_service([])
 
@@ -323,7 +313,6 @@ async def test_expired_access_token_rejection_is_logged() -> None:
     assert rejections[0]["reason"] == "expired_token"
 
 
-@pytest.mark.asyncio
 async def test_revoked_access_token_rejection_is_logged() -> None:
     service = _auth_service([object()])
 
@@ -337,7 +326,6 @@ async def test_revoked_access_token_rejection_is_logged() -> None:
     assert rejections[0]["token_id"] == "token-id-1"
 
 
-@pytest.mark.asyncio
 async def test_unknown_user_access_token_rejection_is_logged() -> None:
     service = _auth_service([None, None])
 
@@ -351,7 +339,6 @@ async def test_unknown_user_access_token_rejection_is_logged() -> None:
     assert rejections[0]["user_id"] == 7
 
 
-@pytest.mark.asyncio
 async def test_inactive_user_access_denial_is_logged() -> None:
     user = User(id=7, is_active=False, is_admin=True)
 
@@ -364,7 +351,6 @@ async def test_inactive_user_access_denial_is_logged() -> None:
     assert denials[0]["user_id"] == 7
 
 
-@pytest.mark.asyncio
 async def test_admin_access_denial_is_logged() -> None:
     user = User(id=7, is_active=True, is_admin=False)
 

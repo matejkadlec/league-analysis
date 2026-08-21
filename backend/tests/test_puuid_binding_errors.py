@@ -289,7 +289,6 @@ class _FailingSession:
         self.rollbacks += 1
 
 
-@pytest.mark.asyncio
 async def test_completion_flag_requires_a_successful_write() -> None:
     """A swallowed completion-write failure must not disable the run guard."""
     job = _Job(job_config_id=1)
@@ -307,7 +306,6 @@ async def test_completion_flag_requires_a_successful_write() -> None:
     assert job.job_execution_status is None
 
 
-@pytest.mark.asyncio
 async def test_a_failed_completion_write_does_not_publish_its_status() -> None:
     """The fallback persists FAILED, so a cached CANCELLED would contradict it."""
     job = _Job(job_config_id=1)
@@ -351,7 +349,6 @@ class _RecordingSession:
         return None
 
 
-@pytest.mark.asyncio
 async def test_a_cancelled_sync_run_is_never_reopened(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -372,7 +369,6 @@ async def test_a_cancelled_sync_run_is_never_reopened(
     assert session.locked is True, "the row must be locked against a concurrent write"
 
 
-@pytest.mark.asyncio
 async def test_an_active_sync_run_still_advances(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -436,7 +432,6 @@ class _NoMergeSession:
         raise AssertionError("discovery must not detach another player row")
 
 
-@pytest.mark.asyncio
 async def test_discovery_never_merges_a_row_sharing_the_riot_id(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -520,7 +515,6 @@ def _indexed_active_statuses(model: type[Base], index_name: str) -> set[str]:
     raise AssertionError(f"{index_name} is missing")
 
 
-@pytest.mark.asyncio
 async def test_startup_cancels_orphaned_player_syncs() -> None:
     """A restart must terminalize sync runs whose in-process worker is gone.
 
@@ -551,7 +545,6 @@ async def test_startup_cancels_orphaned_player_syncs() -> None:
     assert sync["updated_at"] is not None
 
 
-@pytest.mark.asyncio
 async def test_startup_recovery_matches_the_partial_index_exactly() -> None:
     """The predicate must equal the indexed active set, not merely overlap it.
 
@@ -577,7 +570,6 @@ async def test_startup_recovery_matches_the_partial_index_exactly() -> None:
     )
 
 
-@pytest.mark.asyncio
 async def test_startup_recovery_never_touches_matchmaking_analyses() -> None:
     """Cancelling an active analysis here would discard its persisted progress.
 
@@ -595,7 +587,6 @@ async def test_startup_recovery_never_touches_matchmaking_analyses() -> None:
     assert "core.matchmaking_analyses" not in touched
 
 
-@pytest.mark.asyncio
 async def test_task_cancellation_leaves_the_analysis_resumable(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -638,7 +629,6 @@ async def test_task_cancellation_leaves_the_analysis_resumable(
     assert len(opened) == 1, "cancellation must not persist a terminal row"
 
 
-@pytest.mark.asyncio
 async def test_failed_mandatory_recovery_stops_startup(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -679,7 +669,6 @@ async def test_failed_mandatory_recovery_stops_startup(
     assert ran == ["executions"], "every step still runs before the failure is raised"
 
 
-@pytest.mark.asyncio
 async def test_a_failed_optional_recovery_does_not_stop_startup(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -706,7 +695,6 @@ async def test_a_failed_optional_recovery_does_not_stop_startup(
     await scheduler_module._run_startup_recovery()
 
 
-@pytest.mark.asyncio
 async def test_startup_recovery_failure_reaches_the_application(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -729,7 +717,6 @@ async def test_startup_recovery_failure_reaches_the_application(
     await main_module._start_scheduler_safely()
 
 
-@pytest.mark.asyncio
 async def test_each_recovery_step_gets_its_own_session(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -779,7 +766,6 @@ async def test_each_recovery_step_gets_its_own_session(
     assert sessions[0] is not sessions[1], "each step needs its own session"
 
 
-@pytest.mark.asyncio
 async def test_scheduler_startup_runs_recovery(monkeypatch: pytest.MonkeyPatch) -> None:
     """Pins the real `start_scheduler` call site, not just the helper.
 

@@ -25,7 +25,6 @@ def _events(logs: list[EventDict], event_name: str) -> list[EventDict]:
     return [entry for entry in logs if entry.get("event") == event_name]
 
 
-@pytest.mark.asyncio
 async def test_server_error_retry_decision_logs_warning(
     riot_client_answering: RiotClientFactory, recorded_sleeps: list[float]
 ) -> None:
@@ -48,7 +47,6 @@ async def test_server_error_retry_decision_logs_warning(
     assert recorded_sleeps == [1]
 
 
-@pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("status_code", "expected_error"),
     [(503, ServiceUnavailableError), (500, RiotAPIError)],
@@ -85,7 +83,6 @@ async def test_exhausted_server_error_logs_final_failure(
     assert recorded_sleeps == [1, 2, 4]
 
 
-@pytest.mark.asyncio
 async def test_network_retry_logs_one_warning_per_attempt(
     recorded_sleeps: list[float],
 ) -> None:

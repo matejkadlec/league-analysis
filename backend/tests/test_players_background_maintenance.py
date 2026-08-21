@@ -33,7 +33,6 @@ def _request() -> Request:
     )
 
 
-@pytest.mark.asyncio
 async def test_tracking_a_player_starts_one_initial_sync(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -66,7 +65,6 @@ async def test_tracking_a_player_starts_one_initial_sync(
     assert background_tasks.tasks[0].args == (11,)
 
 
-@pytest.mark.asyncio
 async def test_tracking_an_already_syncing_player_queues_no_second_task(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -93,7 +91,6 @@ async def test_tracking_an_already_syncing_player_queues_no_second_task(
     assert not background_tasks.tasks
 
 
-@pytest.mark.asyncio
 async def test_tracking_blocks_and_starts_nothing_during_maintenance(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -120,7 +117,6 @@ async def test_tracking_blocks_and_starts_nothing_during_maintenance(
     assert not background_tasks.tasks
 
 
-@pytest.mark.asyncio
 async def test_a_failed_sync_claim_still_reports_the_player_as_tracked(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -154,7 +150,6 @@ async def test_a_failed_sync_claim_still_reports_the_player_as_tracked(
     assert not background_tasks.tasks
 
 
-@pytest.mark.asyncio
 async def test_player_refresh_uses_the_shared_writer_guard(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -184,7 +179,6 @@ async def test_player_refresh_uses_the_shared_writer_guard(
     guard.assert_awaited_once()
 
 
-@pytest.mark.asyncio
 async def test_match_storage_rechecks_maintenance_before_each_write(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -106,7 +106,6 @@ def test_ordered_evidence_rejects_stale_generation_and_late_old_request() -> Non
     assert health.recovery_revision == 3
 
 
-@pytest.mark.asyncio
 async def test_only_provider_acceptance_or_rejection_changes_health() -> None:
     callback = AsyncMock()
     client = RiotAPIClient(
@@ -143,7 +142,6 @@ def test_losing_the_only_key_reports_missing_rather_than_unknown() -> None:
     assert health.evidence == RiotCredentialEvidence.MISSING.value
 
 
-@pytest.mark.asyncio
 async def test_admin_and_user_status_share_the_same_health_snapshot(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -172,7 +170,6 @@ async def test_admin_and_user_status_share_the_same_health_snapshot(
     assert user_status.reason == "api_key_invalid"
 
 
-@pytest.mark.asyncio
 async def test_candidate_validation_keeps_transient_failure_distinct(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -198,7 +195,6 @@ async def test_candidate_validation_keeps_transient_failure_distinct(
     candidate_client.close.assert_awaited_once()
 
 
-@pytest.mark.asyncio
 async def test_saving_a_key_takes_key_locks_before_the_health_lock(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

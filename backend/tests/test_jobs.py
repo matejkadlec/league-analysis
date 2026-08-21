@@ -75,7 +75,6 @@ def _job_service_double(job_model: SimpleNamespace) -> JobService:
     return service
 
 
-@pytest.mark.asyncio
 @pytest.mark.parametrize("paused", [True, False])
 async def test_test_run_pause_and_resume_flip_the_runs_own_flag(
     monkeypatch: pytest.MonkeyPatch,
@@ -107,7 +106,6 @@ async def test_test_run_pause_and_resume_flip_the_runs_own_flag(
     cast(AsyncMock, job_service.db.commit).assert_not_awaited()
 
 
-@pytest.mark.asyncio
 async def test_test_run_pause_without_an_active_run_changes_nothing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -127,7 +125,6 @@ async def test_test_run_pause_without_an_active_run_changes_nothing(
     cast(AsyncMock, job_service.db.commit).assert_not_awaited()
 
 
-@pytest.mark.asyncio
 async def test_stopping_one_run_leaves_the_other_runs_pause_alone(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -166,7 +163,6 @@ async def test_stopping_one_run_leaves_the_other_runs_pause_alone(
     cast(AsyncMock, job_service.db.commit).assert_not_awaited()
 
 
-@pytest.mark.asyncio
 async def test_status_overview_reports_the_earliest_scheduled_run(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -201,7 +197,6 @@ async def test_status_overview_reports_the_earliest_scheduled_run(
     assert response.scheduler_running is True
 
 
-@pytest.mark.asyncio
 async def test_scheduler_shutdown_does_not_drain_running_jobs(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -223,7 +218,6 @@ async def test_scheduler_shutdown_does_not_drain_running_jobs(
     assert scheduler_module.get_scheduler() is None
 
 
-@pytest.mark.asyncio
 async def test_overdue_startup_job_is_queued_without_awaiting_execution(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -428,7 +422,6 @@ def test_job_configuration_updates_preserve_an_active_maintenance_interlock() ->
         )
 
 
-@pytest.mark.asyncio
 async def test_job_configuration_update_locks_cleanup_tables_before_its_row(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -502,7 +495,6 @@ class _MaintenanceBlockedJob(BaseJob):
         self.executed = True
 
 
-@pytest.mark.asyncio
 async def test_base_job_cancels_a_maintained_regular_writer_before_execute() -> None:
     """The persisted guard is checked after configuration refresh and before writes."""
     job = _MaintenanceBlockedJob()
@@ -587,7 +579,6 @@ async def _run_job_with_recorded_error(
     return completion_call.kwargs
 
 
-@pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("job_class", "triggered_by"),
     [
@@ -612,7 +603,6 @@ async def test_regular_writers_finish_successfully_with_recoverable_warnings(
     assert job_class.recorded_errors_are_fatal is False
 
 
-@pytest.mark.asyncio
 async def test_successful_writer_keeps_warning_summary_out_of_error_message() -> None:
     job = MatchFetcherJob(7)
     kwargs = await _run_job_with_recorded_error(
@@ -630,7 +620,6 @@ async def test_successful_writer_keeps_warning_summary_out_of_error_message() ->
     )
 
 
-@pytest.mark.asyncio
 @pytest.mark.parametrize("job_class", [MatchFetcherJob, PlayerUpdaterJob])
 async def test_regular_writers_fail_when_riot_rejects_the_api_key(
     job_class: type[BaseJob],
@@ -670,7 +659,6 @@ class _WriterInterlockSession:
         return SimpleNamespace(scalars=lambda: Scalars())
 
 
-@pytest.mark.asyncio
 async def test_writer_refusal_locks_first_and_raises_on_an_active_interlock() -> None:
     # The refusal exists to stop a Riot writer while cleanup owns the data
     # tables. It only works if the lock comes *before* the read — read first
@@ -698,7 +686,6 @@ async def test_writer_refusal_locks_first_and_raises_on_an_active_interlock() ->
     assert "job_type IN" in str(cast(object, configuration_read))
 
 
-@pytest.mark.asyncio
 async def test_writer_proceeds_when_no_interlock_is_set() -> None:
     session = _WriterInterlockSession(maintenance_mode=False)
 

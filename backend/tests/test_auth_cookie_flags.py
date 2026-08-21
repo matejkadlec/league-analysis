@@ -239,7 +239,6 @@ def _active_user() -> MagicMock:
     return user
 
 
-@pytest.mark.asyncio
 async def test_a_successful_refresh_installs_the_new_cookies() -> None:
     """Rotation without the Set-Cookie is a permanent lockout, not a blip.
 
@@ -275,7 +274,6 @@ async def test_a_successful_refresh_installs_the_new_cookies() -> None:
     _assert_the_session_was_installed(response)
 
 
-@pytest.mark.asyncio
 async def test_a_successful_login_installs_the_cookies() -> None:
     """The same for the first pair: no hint, no session, however valid it is.
 

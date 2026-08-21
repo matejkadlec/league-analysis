@@ -11,8 +11,6 @@ loop waits 60 seconds between iterations, which is not something to run here.
 
 from typing import Any
 
-import pytest
-
 from app.core.riot_api.constants import Platform, Region
 from app.features.jobs.implementations.test_runner import (
     RunnerTarget,
@@ -70,7 +68,6 @@ async def run(job: _TestRunnerJob, client: RecordingClient) -> list[str]:
     return client.calls
 
 
-@pytest.mark.asyncio
 async def test_match_fetcher_covers_all_four_of_its_endpoints() -> None:
     client = RecordingClient()
 
@@ -82,7 +79,6 @@ async def test_match_fetcher_covers_all_four_of_its_endpoints() -> None:
     ]
 
 
-@pytest.mark.asyncio
 async def test_match_fetcher_skips_match_calls_when_there_is_no_match() -> None:
     # A brand-new account has no match history. The per-match calls have
     # nothing to ask about, but the two puuid-scoped calls still run -- without
@@ -95,7 +91,6 @@ async def test_match_fetcher_skips_match_calls_when_there_is_no_match() -> None:
     ]
 
 
-@pytest.mark.asyncio
 async def test_player_updater_covers_both_of_its_endpoints() -> None:
     client = RecordingClient()
 

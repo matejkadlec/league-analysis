@@ -80,7 +80,6 @@ def _session_with_fake_factory() -> tuple[DatabaseManager, _FakeSession]:
     return manager, session
 
 
-@pytest.mark.asyncio
 async def test_http_exception_rollback_logs_debug_not_warning() -> None:
     """Route HTTPExceptions unwind through get_session; they are ordinary
     4xx traffic already recorded by the completion event, not DB failures."""
@@ -97,7 +96,6 @@ async def test_http_exception_rollback_logs_debug_not_warning() -> None:
     assert entries[0]["error_type"] == "HTTPException"
 
 
-@pytest.mark.asyncio
 async def test_unexpected_rollback_still_logs_warning() -> None:
     manager, _session = _session_with_fake_factory()
 
@@ -119,7 +117,6 @@ class _ProbeJob(BaseJob):
         return None
 
 
-@pytest.mark.asyncio
 async def test_safe_commit_failure_logs_operation_field() -> None:
     """A failed commit names the operation instead of baking it into the event."""
     job = _ProbeJob(job_config_id=7)
@@ -179,7 +176,6 @@ def _fake_record(*_args: object, **_kwargs: object) -> object:
     return object()
 
 
-@pytest.mark.asyncio
 async def test_upsert_match_failure_logs_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -212,7 +208,6 @@ async def test_upsert_match_failure_logs_error(
     database.rollback.assert_awaited_once()
 
 
-@pytest.mark.asyncio
 async def test_smurf_conflict_without_concurrent_run_is_logged() -> None:
     """An IntegrityError with nothing to attach to is re-raised visibly."""
     database = MagicMock(
@@ -233,7 +228,6 @@ async def test_smurf_conflict_without_concurrent_run_is_logged() -> None:
     assert entries[0]["puuid"] == "p"
 
 
-@pytest.mark.asyncio
 async def test_smurf_detection_error_branch_logs_warning() -> None:
     """A reviewed detection failure persists `_fail` and now also logs."""
     service = SmurfBoostDetectionService(
@@ -296,7 +290,6 @@ class _ExecuteResult:
         return self._scalar
 
 
-@pytest.mark.asyncio
 async def test_playstyle_degradations_are_visible() -> None:
     """No-match-data fallbacks and a missing player row both leave a trace."""
     empty_participants = _ExecuteResult(items=[])
@@ -323,7 +316,6 @@ async def test_playstyle_degradations_are_visible() -> None:
     assert missing[0]["puuid"] == "p" * 78
 
 
-@pytest.mark.asyncio
 async def test_close_disposes_the_engine_the_scripts_shut_down() -> None:
     # `validate_migrations.py` and `reconcile_admin_account.py` both end with
     # `await db_manager.close()`; if it stops delegating to dispose, their

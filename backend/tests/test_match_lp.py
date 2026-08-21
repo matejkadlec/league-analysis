@@ -289,7 +289,6 @@ class _ObservationSession:
         return _RowsResult(self.rows)
 
 
-@pytest.mark.asyncio
 async def test_persisted_observation_is_idempotent_on_retry() -> None:
     participant = _participant(win=True)
     match = _match()

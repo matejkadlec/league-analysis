@@ -32,7 +32,6 @@ class _FakeRiotClient:
         return []
 
 
-@pytest.mark.asyncio
 async def test_player_updater_continues_after_a_recoverable_player_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -98,7 +97,6 @@ async def test_player_updater_continues_after_a_recoverable_player_error(
     db.commit.assert_awaited_once()
 
 
-@pytest.mark.asyncio
 async def test_optional_account_identity_does_not_erase_known_riot_id(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -133,7 +131,6 @@ async def test_optional_account_identity_does_not_erase_known_riot_id(
     assert player.profile_synced_at is not None
 
 
-@pytest.mark.asyncio
 async def test_new_player_uses_submitted_riot_id_when_account_omits_it(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -194,7 +191,6 @@ async def test_new_player_uses_submitted_riot_id_when_account_omits_it(
     assert created_player.profile_synced_at is not None
 
 
-@pytest.mark.asyncio
 async def test_player_updater_stops_the_whole_run_on_an_api_key_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -243,7 +239,6 @@ async def test_player_updater_stops_the_whole_run_on_an_api_key_error(
     assert job.execution_log["errors"][0]["operation"] == "player profile update"
 
 
-@pytest.mark.asyncio
 async def test_player_updater_reraises_a_database_error_instead_of_recording_it(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

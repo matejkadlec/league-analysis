@@ -74,7 +74,6 @@ class _NoopJob(BaseJob):
         return None
 
 
-@pytest.mark.asyncio
 async def test_match_sync_always_processes_the_complete_supported_queue_set() -> None:
     service = MatchService(cast(AsyncSession, _QueueSyncSession()))
     service._sync_single_queue_for_player = AsyncMock(return_value=0)
@@ -92,7 +91,6 @@ async def test_match_sync_always_processes_the_complete_supported_queue_set() ->
     ] == list(PRODUCT_SUPPORTED_QUEUE_IDS)
 
 
-@pytest.mark.asyncio
 async def test_ranked_queue_reports_each_stored_match_for_lp_observation() -> None:
     service = MatchService(cast(AsyncSession, _QueueSyncSession()))
     service._reprocess_match = AsyncMock()
@@ -112,7 +110,6 @@ async def test_ranked_queue_reports_each_stored_match_for_lp_observation() -> No
     assert stored_matches == [(420, "EUN1_123")]
 
 
-@pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("game_version", "expected_stored"),
     [("16.15.1", 1), ("15.24.1", 0)],
@@ -136,7 +133,6 @@ async def test_queue_sync_accepts_current_release_and_stops_at_historical_match(
     assert service._reprocess_match.await_count == expected_stored
 
 
-@pytest.mark.asyncio
 async def test_queue_sync_records_recoverable_match_failure_with_safe_context() -> None:
     service = MatchService(cast(AsyncSession, _QueueSyncSession()))
     service._reprocess_match = AsyncMock(side_effect=RuntimeError("raw provider body"))
@@ -157,7 +153,6 @@ async def test_queue_sync_records_recoverable_match_failure_with_safe_context() 
     assert failures[0][2] == {"queue_id": 420, "match_id": "EUN1_123"}
 
 
-@pytest.mark.asyncio
 async def test_match_sync_propagates_rate_limit_to_the_job_layer() -> None:
     service = MatchService(cast(AsyncSession, _QueueSyncSession()))
     service._sync_single_queue_for_player = AsyncMock(
@@ -173,7 +168,6 @@ async def test_match_sync_propagates_rate_limit_to_the_job_layer() -> None:
         )
 
 
-@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "fatal_error",
     [SQLAlchemyError("database unavailable"), RiotWriterMaintenanceActiveError()],
@@ -193,7 +187,6 @@ async def test_match_sync_propagates_fatal_writer_errors_to_the_job_layer(
         )
 
 
-@pytest.mark.asyncio
 async def test_match_fetcher_converts_rate_limit_to_a_non_failure_signal() -> None:
     job = MatchFetcherJob(job_config_id=7)
     match_service = SimpleNamespace(
@@ -219,7 +212,6 @@ async def test_match_fetcher_converts_rate_limit_to_a_non_failure_signal() -> No
     assert error.value.retry_after == 7
 
 
-@pytest.mark.asyncio
 async def test_match_fetcher_execute_propagates_rate_limit_to_base_job(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -275,7 +267,6 @@ async def test_match_fetcher_execute_propagates_rate_limit_to_base_job(
         await job.execute(cast(AsyncSession, object()))
 
 
-@pytest.mark.asyncio
 async def test_match_fetcher_processes_the_player_league_refresh_path() -> None:
     job = MatchFetcherJob(job_config_id=7)
     player_model = SimpleNamespace(
@@ -314,7 +305,6 @@ async def test_match_fetcher_processes_the_player_league_refresh_path() -> None:
     assert not job.has_errors()
 
 
-@pytest.mark.asyncio
 async def test_recoverable_match_failure_does_not_claim_match_freshness() -> None:
     job = MatchFetcherJob(job_config_id=7)
     player_model = SimpleNamespace(
@@ -439,7 +429,6 @@ def _player(puuid: str = "sanitized-puuid") -> PlayerResponse:
     )
 
 
-@pytest.mark.asyncio
 async def test_player_error_handler_asks_the_loop_to_stop_on_an_api_key_error() -> None:
     """The handler's boolean is the whole stop-vs-continue decision.
 
@@ -460,7 +449,6 @@ async def test_player_error_handler_asks_the_loop_to_stop_on_an_api_key_error() 
     db.rollback.assert_not_awaited()
 
 
-@pytest.mark.asyncio
 async def test_player_error_handler_continues_after_a_recoverable_error() -> None:
     job = MatchFetcherJob(job_config_id=7)
     db = SimpleNamespace(rollback=AsyncMock())
@@ -474,7 +462,6 @@ async def test_player_error_handler_continues_after_a_recoverable_error() -> Non
     db.rollback.assert_awaited_once()
 
 
-@pytest.mark.asyncio
 async def test_player_error_handler_reraises_a_database_error_without_recording() -> (
     None
 ):
@@ -490,7 +477,6 @@ async def test_player_error_handler_reraises_a_database_error_without_recording(
     db.rollback.assert_awaited_once()
 
 
-@pytest.mark.asyncio
 async def test_a_second_api_key_error_is_not_recorded_twice() -> None:
     """The inner league handler records first and re-raises into this one.
 

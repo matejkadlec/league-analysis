@@ -60,7 +60,6 @@ def _issuing_service() -> tuple[AuthService, list[Any], MagicMock]:
     return AuthService(db), added, db
 
 
-@pytest.mark.asyncio
 async def test_issued_token_truncates_a_long_user_agent() -> None:
     service, added, _ = _issuing_service()
 
@@ -69,7 +68,6 @@ async def test_issued_token_truncates_a_long_user_agent() -> None:
     assert len(added[0].user_agent) == 255
 
 
-@pytest.mark.asyncio
 async def test_rotated_token_truncates_a_long_user_agent() -> None:
     """The column is `String(255)`; an untruncated agent is a write error."""
     service, added, _, _ = _rotating_service()
@@ -82,7 +80,6 @@ async def test_rotated_token_truncates_a_long_user_agent() -> None:
 
 
 @pytest.mark.parametrize("user_agent", [None, ""])
-@pytest.mark.asyncio
 async def test_absent_user_agent_stays_null_on_both_paths(
     user_agent: str | None,
 ) -> None:
@@ -97,7 +94,6 @@ async def test_absent_user_agent_stays_null_on_both_paths(
     assert rotated[0].user_agent is None
 
 
-@pytest.mark.asyncio
 async def test_rotation_revokes_and_replaces_in_one_commit() -> None:
     """Two commits would expose a window with the old row dead and no new one."""
     service, added, db, record = _rotating_service()
@@ -115,7 +111,6 @@ async def test_rotation_revokes_and_replaces_in_one_commit() -> None:
     assert record.replaced_by_token_id == added[0].token_id
 
 
-@pytest.mark.asyncio
 async def test_issuing_honours_an_explicit_lifetime() -> None:
     service, added, _ = _issuing_service()
     before = datetime.now(UTC)
@@ -128,7 +123,6 @@ async def test_issuing_honours_an_explicit_lifetime() -> None:
     assert added[0].expires_at == expires_at
 
 
-@pytest.mark.asyncio
 async def test_rotation_uses_the_configured_lifetime() -> None:
     """Rotation takes no `expires_delta`: a rotated token restarts the clock."""
     service, added, _, _ = _rotating_service()
@@ -143,7 +137,6 @@ async def test_rotation_uses_the_configured_lifetime() -> None:
     assert timedelta(days=configured) - remaining < timedelta(minutes=1)
 
 
-@pytest.mark.asyncio
 async def test_both_paths_write_the_same_columns() -> None:
     """Whatever mints a refresh token fills the same row shape."""
     issuing, issued, _ = _issuing_service()
@@ -167,7 +160,6 @@ async def test_both_paths_write_the_same_columns() -> None:
     assert shape(issued[0]) == shape(rotated[0])
 
 
-@pytest.mark.asyncio
 async def test_the_raw_token_is_returned_only_to_the_caller() -> None:
     """What is stored is the hash; the raw secret is never on the row."""
     service, added, _ = _issuing_service()

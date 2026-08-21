@@ -61,7 +61,6 @@ def _compiled_values(statement: ClauseElement) -> list[object]:
     return list(params.values())
 
 
-@pytest.mark.asyncio
 async def test_start_route_returns_without_riot_preflight() -> None:
     """The start request never owns any long Riot work; it only enqueues."""
     expected = _analysis()
@@ -78,7 +77,6 @@ async def test_start_route_returns_without_riot_preflight() -> None:
     service.start_analysis.assert_awaited_once_with(_PUUID)
 
 
-@pytest.mark.asyncio
 async def test_repeated_start_attaches_to_the_existing_active_run(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -107,7 +105,6 @@ async def test_repeated_start_attaches_to_the_existing_active_run(
     )
 
 
-@pytest.mark.asyncio
 async def test_new_run_replaces_a_finishing_previous_task_handle() -> None:
     """A completed worker's brief cleanup window cannot strand the next run."""
     old_created_at = datetime.now(UTC) - timedelta(minutes=1)
@@ -145,7 +142,6 @@ async def test_new_run_replaces_a_finishing_previous_task_handle() -> None:
         analysis_service_module._running_analyses.pop(_PUUID, None)
 
 
-@pytest.mark.asyncio
 async def test_cancel_targets_and_retains_the_exact_active_run() -> None:
     """Cancellation records a terminal state instead of deleting progress."""
     active = _analysis("in_progress")
@@ -171,7 +167,6 @@ async def test_cancel_targets_and_retains_the_exact_active_run() -> None:
     database.commit.assert_awaited_once()
 
 
-@pytest.mark.asyncio
 async def test_rate_limit_wait_is_persisted_as_an_active_state(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -204,7 +199,6 @@ async def test_rate_limit_wait_is_persisted_as_an_active_state(
     database.commit.assert_awaited_once()
 
 
-@pytest.mark.asyncio
 async def test_analysis_failure_keeps_a_safe_terminal_diagnostic(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -254,7 +248,6 @@ def test_invalid_key_failure_keeps_the_shared_banner_signal(error: Exception) ->
     assert "provider detail" not in message
 
 
-@pytest.mark.asyncio
 async def test_optional_fetch_does_not_swallow_invalid_key_failure() -> None:
     """Any rejected Riot call terminates the run even outside the required spine."""
     riot_client = SimpleNamespace(
