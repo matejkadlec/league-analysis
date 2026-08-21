@@ -15,6 +15,7 @@ import {
   SmurfBoostPresetsResponse,
   SmurfBoostPresetsResponseSchema,
 } from "@/lib/core/schemas";
+import type { CardId } from "@/lib/core/schemas";
 
 export async function startSmurfBoostDetection(
   puuid: string,
@@ -50,11 +51,14 @@ export async function getSmurfBoostPresets(): Promise<
 export async function getCardPreferences(): Promise<
   ApiResponse<CardPreference[]>
 > {
-  return validatedGet(z.array(CardPreferenceSchema), "/settings/card-preferences");
+  return validatedGet(
+    z.array(CardPreferenceSchema),
+    "/settings/card-preferences",
+  );
 }
 
 export async function updateCardPreference(
-  cardId: string,
+  cardId: CardId,
   settings: Record<string, number>,
 ): Promise<ApiResponse<CardPreference>> {
   return validatedPut(
@@ -65,7 +69,7 @@ export async function updateCardPreference(
 }
 
 export async function resetCardPreference(
-  cardId: string,
+  cardId: CardId,
 ): Promise<ApiResponse<CardPreference>> {
   return validatedDelete(
     CardPreferenceSchema,

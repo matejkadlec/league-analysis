@@ -266,6 +266,16 @@ describe("zod against the OpenAPI contract", () => {
         // paired field is any of those today.
         const zodEnum = zr.enum as unknown[] | undefined;
         const apiEnum = ar.enum as unknown[] | undefined;
+        // A closed set on the API against an open `z.string()` here. Not a
+        // parse failure -- it is worse than that, because the value reaches
+        // React as a plain string and every consumer has to carry a branch for
+        // a member that cannot occur. `tier` was this, and `getRankColors`
+        // kept a grey fallback for it.
+        if (apiEnum && !zodEnum) {
+          problems.push(
+            `${field}: API sends one of ${apiEnum.length} enum members, zod says string`,
+          );
+        }
         if (zodEnum && apiEnum) {
           const missing = apiEnum.filter((value) => !zodEnum.includes(value));
           if (missing.length) {
