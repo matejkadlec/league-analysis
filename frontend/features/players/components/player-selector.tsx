@@ -25,7 +25,10 @@ import {
 } from "@/components/ui/select";
 import { discoverPlayer, searchPlayerSuggestions } from "../player-api";
 import { useToast } from "@/lib/core/hooks";
-import { getPlatformDisplayName } from "@/lib/core/platform-utils";
+import {
+  PLATFORM_DISPLAY_NAMES,
+  getPlatformDisplayName,
+} from "@/lib/core/platform-utils";
 import type { Player } from "@/lib/core/schemas";
 import { cn } from "@/lib/core/utils";
 
@@ -39,11 +42,6 @@ import {
   playerNotFoundMessage,
   playerTrackingFailureKind,
 } from "../utils/tracking-feedback";
-
-const PLATFORM_ORDER = [
-  "eun1", "euw1", "na1", "kr", "br1", "jp1", "la1", "la2",
-  "oc1", "tr1", "ru", "ph2", "sg2", "th2", "tw2", "vn2",
-];
 
 // Keeps its own wrapper: the platform suffix is this picker's concern, not
 // part of the Riot ID.
@@ -325,11 +323,13 @@ export function PlayerSelector({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {PLATFORM_ORDER.map((value) => (
-                  <SelectItem key={value} value={value}>
-                    {getPlatformDisplayName(value)}
-                  </SelectItem>
-                ))}
+                {Object.entries(PLATFORM_DISPLAY_NAMES).map(
+                  ([value, label]) => (
+                    <SelectItem key={value} value={value}>
+                      {label}
+                    </SelectItem>
+                  ),
+                )}
               </SelectContent>
             </Select>
           </div>

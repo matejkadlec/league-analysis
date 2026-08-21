@@ -29,7 +29,6 @@ import { JobCardTestDialog } from "./job-card-test-dialog";
 import {
   formatLastRun,
   formatScheduleInterval,
-  getJobDescription,
 } from "./job-card-format";
 import { formatDuration } from "./job-execution-format";
 import { useJobCardControls } from "./use-job-card-controls";
@@ -91,7 +90,7 @@ export function JobCard({ job, onExecutionClick }: JobCardProps) {
               </Badge>
             </div>
             <div className="text-sm font-normal text-muted-foreground">
-              {job.description || getJobDescription(job.job_type)}
+              {job.description}
             </div>
           </div>
           <div className="flex items-center gap-1.5">

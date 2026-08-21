@@ -110,16 +110,3 @@ export function formatNextRun(timestamp: string): string {
   );
   return formatMinuteLadder(upcomingMins, 1);
 }
-
-export function getJobDescription(jobType: string): string {
-  const descriptions: Record<string, string> = {
-    MATCH_FETCHER:
-      "Fetches every supported League queue and updates match history and rank progression",
-    PLAYER_UPDATER:
-      "Fetches player info and updates player name, tag, icon and level",
-  };
-  return (
-    descriptions[jobType] ||
-    `Executes ${jobType.replace(/_/g, " ").toLowerCase()} tasks`
-  );
-}

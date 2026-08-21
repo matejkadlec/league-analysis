@@ -1,9 +1,8 @@
 "use client";
 
-import { MatchHistorySkeleton } from "@/components/loading-skeleton";
 import { Card } from "@/components/ui/card";
 import { ProtectedRoute } from "@/features/auth";
-import { MatchHistory } from "@/features/matches";
+import { MatchHistory, MatchHistoryLoadingCard } from "@/features/matches";
 import { SelectPlayerCard, usePlayerContext } from "@/features/players";
 
 export default function MatchHistoryPage() {
@@ -25,7 +24,7 @@ export default function MatchHistoryPage() {
           </Card>
 
           {isLoading ? (
-            <MatchHistorySkeleton />
+            <MatchHistoryLoadingCard />
           ) : currentPlayer ? (
             <MatchHistory
               key={currentPlayer.puuid}
