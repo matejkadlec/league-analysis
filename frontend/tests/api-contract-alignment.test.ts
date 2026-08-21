@@ -237,11 +237,15 @@ function calledQueryParams(): QueryCall[] {
         // Comments first. A `//` line inside the object leaves the first key
         // with no `{` or `,` in front of it, so neither pattern below matches
         // and the site reports no names -- green, and checking nothing.
+        //
+        // Nested braces are NOT stripped. `QueryParams` admits only string,
+        // number and boolean, so an object cannot be a value here -- every
+        // brace inside the argument belongs to a conditional spread, and
+        // `...(x !== undefined && { platform: x })` names a real parameter.
         const top = body
           .slice(1, -1)
           .replace(/\/\*[\s\S]*?\*\//g, "")
-          .replace(/\/\/[^\n]*/g, "")
-          .replace(/\{[^{}]*\}/g, "");
+          .replace(/\/\/[^\n]*/g, "");
         for (const re of [/(?:^|,)\s*(?:\.\.\.)?([a-zA-Z_]\w*)\s*(?=[,:}]|$)/g, /(?:^|[{,])\s*([a-zA-Z_]\w*)\s*:/g]) {
           for (const m of top.matchAll(re)) names.add(m[1] as string);
         }
@@ -347,6 +351,11 @@ describe("zod against the OpenAPI contract", () => {
     // Signal first: an extractor that stopped resolving call sites would pass
     // by having nothing to compare.
     expect(called.length).toBeGreaterThanOrEqual(28);
+    // Sites found is the wrong number to guard on: a site whose argument the
+    // extractor cannot read is still counted, contributes no names, and
+    // compares nothing. Count the names that actually got compared.
+    const compared = called.reduce((total, call) => total + call.names.size, 0);
+    expect(compared).toBeGreaterThanOrEqual(20);
 
     const problems: string[] = [];
     for (const { key, names, file, resolved } of called) {
