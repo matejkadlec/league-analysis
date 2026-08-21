@@ -7,6 +7,7 @@ import {
 import {
   MatchmakingAnalysisHistoryResponse,
   MatchmakingAnalysisHistoryResponseSchema,
+  MatchmakingAnalysisRequest,
   MatchmakingAnalysisResponse,
   MatchmakingAnalysisResponseSchema,
   MessageResponse,
@@ -19,9 +20,7 @@ export async function startMatchmakingAnalysis(
   return validatedPost(
     MatchmakingAnalysisResponseSchema,
     "/matchmaking-analysis/start",
-    {
-      puuid,
-    },
+    { puuid } satisfies MatchmakingAnalysisRequest,
   );
 }
 

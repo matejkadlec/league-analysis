@@ -247,6 +247,65 @@ describe("zod against the OpenAPI contract", () => {
     expect(pairs.length).toBeGreaterThan(20);
   });
 
+  /** Every component the API accepts as a request body, by name. */
+  const requestBodyComponents = new Set(
+    Object.values(document.paths).flatMap((operations) =>
+      Object.values(operations as Record<string, unknown>).flatMap((op) => {
+        if (typeof op !== "object" || op === null) return [];
+        const content = (
+          op as { requestBody?: { content?: Record<string, JsonSchema> } }
+        ).requestBody?.content;
+        if (!content) return [];
+        return Object.values(content).flatMap((media) => {
+          const ref = (media.schema as JsonSchema | undefined)?.$ref;
+          return typeof ref === "string" ? [ref.split("/").pop() as string] : [];
+        });
+      }),
+    ),
+  );
+
+  const requestPairs = pairs.filter(([, apiName]) =>
+    requestBodyComponents.has(apiName),
+  );
+
+  it("finds the request bodies to check", () => {
+    // Signal first: these pair by name, so a renamed schema drops out of the
+    // list silently and every rule below would pass by having nothing to run.
+    expect(requestPairs.length).toBeGreaterThanOrEqual(10);
+  });
+
+  /**
+   * The other direction, which only a request needs.
+   *
+   * "Accepts everything the API sends" is the right rule for a response and
+   * the wrong one for a body: there, a field zod lacks is a required field the
+   * frontend never sends, and a field zod has and the API does not is one
+   * FastAPI either ignores or rejects outright. Both are a 422 on a real
+   * click, and both used to be invisible -- `validatedPost` takes the body as
+   * `unknown`, so nothing in the type system looked at it either.
+   */
+  it.each(requestPairs.map(([name, apiName]) => [name, apiName]))(
+    "%s sends exactly what %s accepts",
+    (name) => {
+      const [, apiName, zodJson] = requestPairs.find(([n]) => n === name)!;
+      const zodFields = fieldsOf(zodJson, {});
+      const api = resolve(apiSchemas[apiName], apiSchemas);
+      const apiFields = new Set(
+        Object.keys((api.properties as JsonSchema | undefined) ?? {}),
+      );
+      const required = (api.required as string[] | undefined) ?? [];
+
+      expect(
+        required.filter((field) => !zodFields.has(field)),
+        `${name} omits fields ${apiName} requires`,
+      ).toEqual([]);
+      expect(
+        [...zodFields.keys()].filter((field) => !apiFields.has(field)),
+        `${name} sends fields ${apiName} does not declare`,
+      ).toEqual([]);
+    },
+  );
+
   it("names every platform the API accepts", () => {
     // Not a schema pair, and `kinds()` below could not check it if it were:
     // it reduces both a `$ref`-to-enum and a `z.enum` to "string". This is

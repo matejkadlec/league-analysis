@@ -477,18 +477,75 @@ export const UserResponseSchema = z.object({
 
 export type UserResponse = z.infer<typeof UserResponseSchema>;
 
-export type UserProfileUpdate = {
-  display_name?: string;
-};
-
 /**
- * The two request bodies that used to be posted through the raw client.
+ * Request bodies.
  *
- * Both re-spelled a backend enum as a hand-written TS union, and neither URL
- * was visible to `test_frontend_api_paths.py`, which scans for `validated*`
- * calls only. Declaring them here puts the enums inside the OpenAPI contract
- * test and the paths inside the path test.
+ * `validatedPost` and friends take the body as `unknown`, so a field the
+ * backend renamed stayed a compile-time nothing and became a 422 at runtime.
+ * Every body the frontend sends is declared here and applied at the call site
+ * with `satisfies`, which makes an unknown or missing field a type error.
+ *
+ * These are never `.parse()`d: the server is the authority on the values and
+ * rejects a bad one regardless, so lengths and patterns are left out rather
+ * than restated. What is worth stating is the shape, and stating it here is
+ * what puts it inside `tests/api-contract-alignment.test.ts` -- the pairing
+ * there is by name over exported zod schemas, so a hand-written TS type (what
+ * `UserProfileUpdate` was) is invisible to it and drifts silently.
  */
+export const UserProfileUpdateSchema = z.object({
+  display_name: z.string().nullable().optional(),
+});
+export type UserProfileUpdate = z.infer<typeof UserProfileUpdateSchema>;
+
+export const EmailChangeRequestSchema = z.object({
+  new_email: z.email(),
+});
+export type EmailChangeRequest = z.infer<typeof EmailChangeRequestSchema>;
+
+export const EmailChangeVerifyRequestSchema = z.object({
+  code: z.string(),
+});
+export type EmailChangeVerifyRequest = z.infer<
+  typeof EmailChangeVerifyRequestSchema
+>;
+
+export const PasswordChangeRequestSchema = z.object({
+  current_password: z.string(),
+  new_password: z.string(),
+  repeat_password: z.string(),
+});
+export type PasswordChangeRequest = z.infer<typeof PasswordChangeRequestSchema>;
+
+export const CurrentPlayerUpdateSchema = z.object({
+  puuid: z.string().nullable().optional(),
+});
+export type CurrentPlayerUpdate = z.infer<typeof CurrentPlayerUpdateSchema>;
+
+export const SettingUpdateSchema = z.object({
+  value: z.string(),
+});
+export type SettingUpdate = z.infer<typeof SettingUpdateSchema>;
+
+export const CardPreferenceUpdateSchema = z.object({
+  version: z.literal(1),
+  settings: z.record(z.string(), z.unknown()),
+});
+export type CardPreferenceUpdate = z.infer<typeof CardPreferenceUpdateSchema>;
+
+export const MatchmakingAnalysisRequestSchema = z.object({
+  puuid: z.string(),
+});
+export type MatchmakingAnalysisRequest = z.infer<
+  typeof MatchmakingAnalysisRequestSchema
+>;
+
+export const SmurfBoostAnalysisRequestSchema = z.object({
+  puuid: z.string(),
+});
+export type SmurfBoostAnalysisRequest = z.infer<
+  typeof SmurfBoostAnalysisRequestSchema
+>;
+
 export const JoinUsSubjectSchema = z.enum([
   "beta_tester",
   "full_stack_developer",
@@ -498,18 +555,22 @@ export type JoinUsSubject = z.infer<typeof JoinUsSubjectSchema>;
 
 export const JoinUsContactRequestSchema = z.object({
   subject: JoinUsSubjectSchema,
-  body: z.string().min(1).max(5000),
-  captcha_token: z.string().min(1).max(4096).nullable().optional(),
+  body: z.string(),
+  captcha_token: z.string().nullable().optional(),
 });
+export type JoinUsContactRequest = z.infer<typeof JoinUsContactRequestSchema>;
 
 export const CookieConsentLevelSchema = z.enum(["necessary", "all"]);
 export type CookieConsentLevel = z.infer<typeof CookieConsentLevelSchema>;
 
 export const UserCookieConsentUpdateSchema = z.object({
   consent_level: CookieConsentLevelSchema,
-  consent_version: z.string().min(1).max(16),
-  consent_source: z.string().min(1).max(32),
+  consent_version: z.string(),
+  consent_source: z.string(),
 });
+export type UserCookieConsentUpdate = z.infer<
+  typeof UserCookieConsentUpdateSchema
+>;
 
 export const UserCookieConsentResponseSchema = z.object({
   consent_level: CookieConsentLevelSchema,

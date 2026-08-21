@@ -10,6 +10,8 @@ import {
 import {
   CardPreference,
   CardPreferenceSchema,
+  CardPreferenceUpdate,
+  SmurfBoostAnalysisRequest,
   SmurfBoostAnalysisResponse,
   SmurfBoostAnalysisResponseSchema,
   SmurfBoostPresetsResponse,
@@ -23,7 +25,7 @@ export async function startSmurfBoostDetection(
   return validatedPost(
     SmurfBoostAnalysisResponseSchema,
     "/smurf-boost-detection/analyze",
-    { puuid },
+    { puuid } satisfies SmurfBoostAnalysisRequest,
   );
 }
 
@@ -64,7 +66,7 @@ export async function updateCardPreference(
   return validatedPut(
     CardPreferenceSchema,
     `/settings/card-preferences/${cardId}`,
-    { version: 1, settings },
+    { version: 1, settings } satisfies CardPreferenceUpdate,
   );
 }
 

@@ -11,6 +11,7 @@ import {
 } from "@/lib/core/api";
 import {
   MessageResponseSchema,
+  type JoinUsContactRequest,
   type JoinUsSubject,
 } from "@/lib/core/schemas";
 import { useToast } from "@/lib/core/hooks";
@@ -97,7 +98,7 @@ export function JoinUsForm({ isAuthenticatedHint = false }: JoinUsFormProps) {
           subject: selectedSubject,
           body: trimmedBody,
           captcha_token: captcha.token,
-        }),
+        } satisfies JoinUsContactRequest),
       );
 
       toast.success("Application sent", {
