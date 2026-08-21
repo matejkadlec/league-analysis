@@ -63,6 +63,7 @@ vi.mock("@marsidev/react-turnstile", () => ({
 }));
 
 import { JoinUsForm } from "@/features/auth/components/join-us-form";
+import { JOIN_US_BODY_MAX_LENGTH } from "@/features/auth/utils/join-us-message";
 
 const LONG_ENOUGH = "a".repeat(300);
 
@@ -109,6 +110,16 @@ beforeEach(() => {
 describe("what the join-us form refuses to send", () => {
   // The endpoint is unauthenticated and sends an email, so every one of these
   // is the difference between a contact form and an open relay.
+
+  it("stops typing at the length the API accepts, rather than 422ing", () => {
+    // The counter only ever spoke about the minimum, so the 5000-character
+    // ceiling was invisible until the request came back rejected.
+    render(<JoinUsForm />);
+
+    expect(
+      (screen.getByLabelText("Body") as HTMLTextAreaElement).maxLength,
+    ).toBe(JOIN_US_BODY_MAX_LENGTH);
+  });
 
   it("will not submit without a subject", () => {
     render(<JoinUsForm />);
