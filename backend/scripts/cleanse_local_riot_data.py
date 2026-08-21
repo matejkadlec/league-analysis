@@ -22,7 +22,7 @@ from dotenv import load_dotenv
 from sqlalchemy import URL, Connection, Engine, RowMapping, create_engine, text
 
 from app.core.config import Settings, get_global_settings
-from app.features.auth.service import pwd_context
+from app.features.auth.passwords import pwd_context
 from scripts.local_target import (
     is_loopback_address,
     is_loopback_listener_configuration,

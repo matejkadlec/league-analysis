@@ -20,22 +20,8 @@ from .cookies import (
     set_auth_cookies,
 )
 from .dependencies import AdminUserDep, CurrentUserDep
-from .models import User
-from .schemas import (
-    EmailChangeCodeResponse,
-    EmailChangeRequest,
-    EmailChangeVerifyRequest,
-    JoinUsContactRequest,
-    PasswordChangeRequest,
-    RefreshTokenRequest,
-    Token,
-    UserCreate,
-    UserProfileUpdate,
-    UserResponse,
-)
-from .service import (
+from .errors import (
     AccountLockedError,
-    AuthService,
     CaptchaRequiredError,
     CaptchaVerificationError,
     EmailAlreadyRegisteredError,
@@ -52,6 +38,22 @@ from .service import (
     JoinUsEmailDeliveryError,
     JoinUsEmailNotConfiguredError,
     JoinUsRateLimitExceededError,
+)
+from .models import User
+from .schemas import (
+    EmailChangeCodeResponse,
+    EmailChangeRequest,
+    EmailChangeVerifyRequest,
+    JoinUsContactRequest,
+    PasswordChangeRequest,
+    RefreshTokenRequest,
+    Token,
+    UserCreate,
+    UserProfileUpdate,
+    UserResponse,
+)
+from .service import (
+    AuthService,
     get_auth_service,
 )
 

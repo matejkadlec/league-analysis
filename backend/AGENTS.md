@@ -64,8 +64,9 @@ re-verifies the local target and inactive writers first.
 
 `scripts/reconcile_admin_account.py` is the guarded local-only path for a
 deliberate administrator reconciliation. It accepts passwords only through a
-hidden prompt or standard input, uses `AuthService`'s normal Argon2id and
-authentication path, and refuses any database other than the exact loopback
+hidden prompt or standard input, hashes through the shared
+`app.features.auth.passwords` Argon2id helpers and authenticates through
+`AuthService`, and refuses any database other than the exact loopback
 `league_analysis_local_dev` target.
 The post-authority `scripts/mirror_pi_postgres_to_local.py` path accepts only a
 read-only Pi export, restores into a local staging database, and keeps durable
