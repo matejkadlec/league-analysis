@@ -107,6 +107,7 @@ async def upsert_match(
     """
     platform_id = match_dto.info.platform
     match_id = match_dto.metadata.match_id
+    timeline_rows = 0
 
     try:
         early_surrender, surrender = match_end_flags(match_dto.info.participants)
@@ -120,12 +121,24 @@ async def upsert_match(
             )
         )
         await merge_reprocess_participants(db, match_dto, match_id, platform_id)
-        await replace_match_timeline_rows(db, match_dto, timeline_payload)
+        timeline_rows = await replace_match_timeline_rows(
+            db, match_dto, timeline_payload
+        )
         await db.commit()
     except Exception as e:
+        # The three counts say which writer produced the failure and whether
+        # the player rows the participant and timeline foreign keys need were
+        # written for it. Production hit
+        # `fk_match_timelines_puuid_players` on four consecutive Match Fetcher
+        # runs on 2026-08-21 and the error text alone could not distinguish
+        # this path from `backfill_timeline_only_match`, by which time the
+        # container logs had rotated.
         logger.error(
             "Failed to upsert match",
             match_id=match_id,
+            writer="upsert_match",
+            participants=len(match_dto.info.participants),
+            timeline_rows=timeline_rows,
             error=str(e),
         )
         await rollback_quietly(db)

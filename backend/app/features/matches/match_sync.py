@@ -10,6 +10,7 @@ import structlog
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.db_session import rollback_quietly
 from app.core.riot_api.client import RiotAPIClient
 from app.core.riot_api.constants import Region
 from app.core.riot_api.errors import AuthenticationError, ForbiddenError, RateLimitError
@@ -284,10 +285,26 @@ async def backfill_timeline_only_match(
         build_synthetic_match_dto(match_id, participants, game_version),
         timeline_payload,
     )
-    if timeline_rows > 0:
+    if timeline_rows == 0:
+        return 0
+    try:
         await session.commit()
-        return 1
-    return 0
+    except Exception as error:
+        # Without this the session is left holding a failed transaction and
+        # every later match in the run fails on it, so the run's first error
+        # would be the only true one. `upsert_match` has always rolled back
+        # here; this path did not.
+        logger.error(
+            "Failed to store a timeline-only backfill",
+            match_id=match_id,
+            writer="backfill_timeline_only_match",
+            participants=len(participants),
+            timeline_rows=timeline_rows,
+            error=str(error),
+        )
+        await rollback_quietly(session)
+        raise
+    return 1
 
 
 async def sync_full_queue_match(
