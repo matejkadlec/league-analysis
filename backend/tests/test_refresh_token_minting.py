@@ -107,7 +107,11 @@ async def test_rotation_revokes_and_replaces_in_one_commit() -> None:
     assert db.commit.await_count == 1
     assert record.revoked_at is not None
     assert len(added) == 1
-    # The replaced-by link is written in that same commit, not a later one.
+    # The replaced-by link is written in that same commit, not a later one --
+    # and it is what lets a rotated-out token still name its owner. Without
+    # it a superseded token is indistinguishable from one a logout revoked,
+    # so the Sign Out arriving just after a refresh revokes nothing while
+    # answering "Successfully logged out".
     assert record.replaced_by_token_id == added[0].token_id
 
 
