@@ -93,35 +93,31 @@ def _enemy_lane_opponent(participant: MatchParticipant) -> EnemyLaneOpponent:
     )
 
 
-def timeline_int_or_none(timeline: MatchTimeline | None, attr: str) -> int | None:
-    if timeline is None:
-        return None
-    return getattr(timeline, attr)
-
-
-def timeline_int_or_zero(timeline: MatchTimeline | None, attr: str) -> int:
-    if timeline is None:
-        return 0
-    return getattr(timeline, attr)
-
-
 def empty_team_stats(timeline: MatchTimeline | None) -> TeamStats:
     """Seed team objective totals from timeline rows when they exist.
 
     The running totals are the response model itself rather than a dict shaped
     like it: every field below is a field of `TeamStats`, and the accumulators
     that follow mutate it in place.
+
+    The six reads used to go through `getattr(timeline, "team_...")` helpers,
+    which return `Any`: the declared `int`/`int | None` was asserted, not
+    checked, so a typo in one of the six literals or a rename in `timeline.py`
+    type-checked clean and raised `AttributeError` at request time. The None
+    branch is what those helpers did, and matches `TeamStats`'s own defaults.
     """
+    if timeline is None:
+        return TeamStats(kills=0, deaths=0, assists=0)
     return TeamStats(
         kills=0,
         deaths=0,
         assists=0,
-        turrets=timeline_int_or_none(timeline, "team_turrets_destroyed"),
-        inhibitors=timeline_int_or_none(timeline, "team_inhibitors_destroyed"),
-        dragons=timeline_int_or_none(timeline, "team_dragons_slain"),
-        barons=timeline_int_or_zero(timeline, "team_barons_slain"),
-        rift_heralds=timeline_int_or_zero(timeline, "team_rift_heralds_slain"),
-        voidgrubs=timeline_int_or_none(timeline, "team_voidgrubs_slain"),
+        turrets=timeline.team_turrets_destroyed,
+        inhibitors=timeline.team_inhibitors_destroyed,
+        dragons=timeline.team_dragons_slain,
+        barons=timeline.team_barons_slain,
+        rift_heralds=timeline.team_rift_heralds_slain,
+        voidgrubs=timeline.team_voidgrubs_slain,
     )
 
 

@@ -15,7 +15,7 @@ the same spelling the writers produce.
 
 from __future__ import annotations
 
-from types import ModuleType, SimpleNamespace
+from types import SimpleNamespace
 from typing import cast
 
 import pytest
@@ -25,24 +25,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import PlayerServiceError
 from app.core.riot_api.constants import Platform, normalize_platform
 from app.features.players.service import PlayerService
-
-# Compiling a `Player` SELECT configures the mapper, and its relationships are
-# resolved by name, so every related mapper has to be registered first.
-from app.features.auth import models as _auth_models  # isort:skip
-from app.features.matches import models as _match_models  # isort:skip
-from app.features.matchmaking_analysis import models as _mm_models  # isort:skip
-from app.features.players import leagues as _league_models  # isort:skip
-from app.features.playstyle_analysis import models as _ps_models  # isort:skip
-
-# Naming the modules keeps the imports above from looking unused to a linter
-# while preserving the reason they exist.
-_RELATED_MAPPERS: tuple[ModuleType, ...] = (
-    _auth_models,
-    _match_models,
-    _mm_models,
-    _league_models,
-    _ps_models,
-)
 
 
 def _no_players() -> list[object]:

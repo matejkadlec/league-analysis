@@ -16,6 +16,11 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.models import Base, created_at_column, updated_at_column
 
+# Imported at runtime, not under TYPE_CHECKING: the name appears in a `Mapped`
+# annotation, and SQLAlchemy resolves those by evaluating them. `participants`
+# does not import this module, so there is no cycle.
+from .participants import MatchParticipant
+
 
 class Match(Base):
     """Match model storing League of Legends match data."""
@@ -154,10 +159,15 @@ class Match(Base):
         comment="Whether this match has been processed for playstyle analysis",
     )
 
-    # Relationships
-    participants = relationship(
-        "MatchParticipant", back_populates="match", cascade="all, delete-orphan"
-    )
+    # The one relationship this application reads: `playstyle_analysis`
+    # eager-loads it with `selectinload`. `lazy="raise"` is what SQLAlchemy's
+    # asyncio docs prescribe for a codebase without `AsyncAttrs` -- a lazy load
+    # from an async context is a MissingGreenlet, and this turns it into a
+    # loud error at the access instead. One-directional: nothing ever read
+    # `MatchParticipant.match`. No cascade either: the only ORM-level delete in
+    # the app is on a table with no relationships at all, and
+    # `match_participants.match_id` already cascades in the database.
+    participants: Mapped[list[MatchParticipant]] = relationship(lazy="raise")
 
 
 # Create indexes for common queries.

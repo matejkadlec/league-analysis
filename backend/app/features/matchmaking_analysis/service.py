@@ -62,8 +62,6 @@ from .schemas import (
     MatchmakingAnalysisHistoryItem,
     MatchmakingAnalysisHistoryResponse,
     MatchmakingAnalysisResponse,
-    MatchmakingAnalysisResults,
-    MatchmakingAnalysisStatusResponse,
 )
 
 logger = structlog.get_logger(__name__)
@@ -265,7 +263,7 @@ class MatchmakingAnalysisService:
 
     async def get_analysis_status(
         self, puuid: str, created_at: datetime
-    ) -> MatchmakingAnalysisStatusResponse | None:
+    ) -> MatchmakingAnalysisResponse | None:
         """Get status of a specific analysis."""
         result = await self.db.execute(
             select(MatchmakingAnalysis).where(_one_run_where(puuid, created_at))
@@ -274,30 +272,11 @@ class MatchmakingAnalysisService:
         if not analysis:
             return None
 
-        puuid_progress = analysis.puuid_progress or {}
-        progress = sum(1 for v in puuid_progress.values() if v)
-        total = len(puuid_progress)
-
-        results_schema = None
-        if analysis.status == "completed" and analysis.results:
-            # Validates rather than fills in: a row this cannot read is a
-            # broken row, and saying so beats reporting a 0% winrate.
-            results_schema = MatchmakingAnalysisResults.model_validate(analysis.results)
-
-        return MatchmakingAnalysisStatusResponse(
-            puuid=analysis.puuid,
-            status=analysis.status,
-            progress=progress,
-            total_puuids=total,
-            results=results_schema,
-            created_at=analysis.created_at,
-            started_at=analysis.started_at,
-            completed_at=analysis.completed_at,
-            error_code=analysis.error_code,
-            error_message=analysis.error_message,
-            requests_saved=analysis.requests_saved or 0,
-            rate_limit_reset_at=analysis.rate_limit_reset_at,
-        )
+        # The same one-liner its two siblings use. What stood here restated
+        # `progress`/`total_puuids` -- both already computed fields on the
+        # response -- and re-listed all twelve fields by keyword, including a
+        # `requests_saved or 0` for a NOT NULL column.
+        return MatchmakingAnalysisResponse.model_validate(analysis)
 
     async def get_analysis_history(
         self, puuid: str, limit: int = 20
@@ -825,7 +804,10 @@ class MatchmakingAnalysisService:
             .order_by(Match.game_start_timestamp.desc())
             .limit(self.MATCHES_FOR_WINRATE)
         )
-        db_wins = result.all()
+        # `.scalars()`, not `.all()`: SQLAlchemy types a single-column select as
+        # `Result[Tuple[bool]]`, and taking the rows threw that away into
+        # `Sequence[Any]` -- so `if w` would have accepted a row of any shape.
+        db_wins = result.scalars().all()
 
         if len(db_wins) >= self.MATCHES_FOR_WINRATE:
             return self._winrate_from_rows(db_wins)
@@ -836,11 +818,10 @@ class MatchmakingAnalysisService:
         return await self._winrate_from_match_ids(match_ids, puuid)
 
     @staticmethod
-    def _winrate_from_rows(db_wins: Sequence[Any]) -> float | None:
+    def _winrate_from_rows(db_wins: Sequence[bool]) -> float | None:
         if not db_wins:
             return None
-        win_count = sum(1 for (w,) in db_wins if w)
-        return win_count / len(db_wins)
+        return sum(db_wins) / len(db_wins)
 
     async def _winrate_from_match_ids(
         self, match_ids: list[str], puuid: str

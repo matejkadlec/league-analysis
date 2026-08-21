@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from functools import cache
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal
 
 from dotenv import load_dotenv
 from pydantic import Field, ValidationInfo, field_validator
@@ -22,30 +22,24 @@ TEST_PUUID = (
 )
 
 
+# A present-but-blank variable is a missing one, not an empty value: a blank
+# POSTGRES_HOST failing at startup beats it failing as a connection error at
+# first query. `env_ignore_empty` covers `""` for the whole model -- including
+# `postgres_port`, which a hand-written validator over the four `str` fields
+# could not reach -- and `pattern` covers the whitespace-only case it does not,
+# since pydantic's `pattern` searches rather than matches in full.
+RequiredEnvStr = Annotated[str, Field(pattern=r"\S")]
+
+
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
     # Database Configuration (loaded from POSTGRES_* env vars in .env)
-    postgres_db: str
-    postgres_user: str
-    postgres_password: str
-    postgres_host: str
+    postgres_db: RequiredEnvStr
+    postgres_user: RequiredEnvStr
+    postgres_password: RequiredEnvStr
+    postgres_host: RequiredEnvStr
     postgres_port: int
-
-    @field_validator(
-        "postgres_db", "postgres_user", "postgres_password", "postgres_host"
-    )
-    @classmethod
-    def reject_blank_connection_fields(cls, v: str) -> str:
-        """A present-but-blank variable is a missing one, not an empty value.
-
-        pydantic-settings accepts "" for str fields; the old require_env helper
-        rejected it, and a blank POSTGRES_HOST failing here beats it failing as
-        a connection error at first query.
-        """
-        if v.strip() == "":
-            raise ValueError("must not be blank")
-        return v
 
     @property
     def database_url(self) -> str:
@@ -204,6 +198,7 @@ class Settings(BaseSettings):
         case_sensitive=False,
         env_prefix="",  # No prefix for environment variables
         extra="ignore",  # Ignore extra fields (like frontend env vars in shared .env)
+        env_ignore_empty=True,  # `FOO=` is unset, not the empty string
     )
 
 

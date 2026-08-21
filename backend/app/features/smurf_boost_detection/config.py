@@ -82,11 +82,14 @@ NOTABLE_EVIDENCE: Final[int] = 2
 STRONG_SCORE: Final[float] = 0.65
 STRONG_EVIDENCE: Final[int] = 3
 
-BAND_NOT_ENOUGH_DATA: Final[str] = "not_enough_data"
-BAND_NONE: Final[str] = "no_unusual_pattern"
-BAND_WEAK: Final[str] = "weak_indicators"
-BAND_NOTABLE: Final[str] = "notable_indicators"
-BAND_STRONG: Final[str] = "strong_indicators"
+# Bare `Final`, not `Final[SmurfBoostBand]`: pyright then pins each name to
+# its own literal, so a value that drifts out of the wire vocabulary is an
+# error at the `-> SmurfBoostBand` return in `engine._band_for`.
+BAND_NOT_ENOUGH_DATA: Final = "not_enough_data"
+BAND_NONE: Final = "no_unusual_pattern"
+BAND_WEAK: Final = "weak_indicators"
+BAND_NOTABLE: Final = "notable_indicators"
+BAND_STRONG: Final = "strong_indicators"
 
 # Confidence.
 PATCH_DISJOINT_FACTOR: Final[float] = 0.85

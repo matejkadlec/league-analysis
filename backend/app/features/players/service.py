@@ -2,7 +2,7 @@
 
 from collections.abc import Sequence
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, TypedDict
+from typing import TYPE_CHECKING, Final, TypedDict
 
 import structlog
 from rapidfuzz.distance.Levenshtein import distance as levenshtein_distance
@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import (
     PlayerServiceError,
 )
+from app.core.http_errors import http_error
 from app.core.riot_api.constants import (
     Platform,
     get_region_by_platform,
@@ -32,7 +33,20 @@ if TYPE_CHECKING:
 
 logger = structlog.get_logger(__name__)
 
-MAX_TRACKED_PLAYERS_PER_USER = 10
+MAX_TRACKED_PLAYERS_PER_USER: Final = 10
+
+
+class PlayerNotFoundError(ValueError):
+    """No player row matches the PUUID or Riot ID the caller named.
+
+    A `ValueError` subclass on purpose: the routers that answer 404 for every
+    failure of an operation still catch `ValueError` unconditionally and keep
+    working. Only the routes that need to tell 404 from 400 catch this.
+    """
+
+
+class TrackingLimitReachedError(ValueError):
+    """The user already tracks `MAX_TRACKED_PLAYERS_PER_USER` players."""
 
 
 class ScoredPlayer(TypedDict):
@@ -535,11 +549,11 @@ class PlayerService:
         region = get_region_by_platform(platform_enum)
         account = await riot_client.get_account_by_riot_id(game_name, tag_line, region)
         if not account:
-            raise ValueError(f"Player {game_name}#{tag_line} was not found.")
+            raise PlayerNotFoundError(f"Player {game_name}#{tag_line} was not found.")
 
         summoner = await riot_client.get_summoner_by_puuid(account.puuid, platform_enum)
         if not summoner:
-            raise ValueError("Player details were not found on this server.")
+            raise PlayerNotFoundError("Player details were not found on this server.")
 
         now = datetime.now(UTC)
         # A Riot ID whose stored row carries a different PUUID is left alone.
@@ -603,7 +617,15 @@ class PlayerService:
             select(User).where(User.id == user_id).with_for_update()
         )
         if user is None:
-            raise ValueError("Your account was not found. Please sign in again.")
+            # Not a tracking failure: the session outlived its account row, so
+            # the answer is "sign in again", not "that player does not exist".
+            # `get_current_active_user` catches this in every ordinary case;
+            # reaching here means the account was deleted mid-request.
+            raise http_error(
+                401,
+                "AUTHENTICATION_REQUIRED",
+                "Your account was not found. Please sign in again.",
+            )
 
         tracked_count = await self.db.scalar(
             select(func.count())
@@ -611,8 +633,9 @@ class PlayerService:
             .where(UserTrackedPlayer.user_id == user_id)
         )
         if (tracked_count or 0) >= MAX_TRACKED_PLAYERS_PER_USER:
-            raise ValueError(
-                "You can track up to 10 players. Manage tracked players to make room."
+            raise TrackingLimitReachedError(
+                f"You can track up to {MAX_TRACKED_PLAYERS_PER_USER} players. "
+                "Manage tracked players to make room."
             )
 
         stmt = (
@@ -679,17 +702,11 @@ class PlayerService:
         return response
 
     async def _require_player(self, puuid: str) -> Player:
-        """Fetch a player or raise the ValueError the routers translate to 404."""
+        """Fetch a player or raise the error the routers translate to 404."""
         player = await self.db.get(Player, puuid)
         if not player:
-            raise ValueError("Player not found.")
+            raise PlayerNotFoundError("Player not found.")
         return player
-
-    async def get_player_tracking_status(self, puuid: str, user_id: int) -> bool:
-        """Get user-specific tracking status for a player."""
-        await self._require_player(puuid)
-
-        return await self._is_player_tracked_by_user(puuid, user_id)
 
     async def get_tracked_players(self, user_id: int) -> list[PlayerResponse]:
         """Get all players tracked by a specific user.

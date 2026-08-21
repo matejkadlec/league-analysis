@@ -1,7 +1,7 @@
 """User model for authentication and authorization."""
 
 from datetime import datetime
-from typing import TYPE_CHECKING, Final
+from typing import Final
 
 from sqlalchemy import (
     Boolean,
@@ -12,15 +12,9 @@ from sqlalchemy import (
 from sqlalchemy import (
     DateTime as SQLDateTime,
 )
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.models import Base, created_at_column, id_column, updated_at_column
-
-if TYPE_CHECKING:
-    from .email_change_request import EmailChangeRequest
-    from .user_cookie_consent import UserCookieConsent
-    from .user_settings import UserSettings
-    from .user_tracked_player import UserTrackedPlayer
 
 
 class User(Base):
@@ -122,30 +116,6 @@ class User(Base):
         "When this user account was last updated"
     )
 
-    # Relationships
-    settings: Mapped[UserSettings | None] = relationship(
-        "UserSettings",
-        back_populates="user",
-        uselist=False,
-        cascade="all, delete-orphan",
-    )
-    cookie_consent: Mapped[UserCookieConsent | None] = relationship(
-        "UserCookieConsent",
-        back_populates="user",
-        uselist=False,
-        cascade="all, delete-orphan",
-    )
-    tracked_players: Mapped[list[UserTrackedPlayer]] = relationship(
-        "UserTrackedPlayer",
-        back_populates="user",
-        cascade="all, delete-orphan",
-    )
-    email_change_request: Mapped[EmailChangeRequest | None] = relationship(
-        "EmailChangeRequest",
-        uselist=False,
-        cascade="all, delete-orphan",
-    )
-
 
 # Create composite indexes for common queries
 Index("idx_users_is_active_is_admin", User.is_active, User.is_admin)
@@ -156,5 +126,3 @@ Index("idx_users_email_is_active", User.email, User.is_active)
 Index("idx_users_created_at", User.created_at)
 
 # Ensure consent mapper is registered even when this module is imported directly.
-
-from .user_cookie_consent import UserCookieConsent  # noqa: E402

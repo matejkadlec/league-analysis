@@ -19,7 +19,6 @@ import {
 } from "@/features/matchmaking/matchmaking-api";
 import {
   discoverPlayer,
-  getTrackingStatus,
   searchPlayerSuggestions,
   trackPlayer,
   untrackPlayer,
@@ -86,13 +85,6 @@ describe("player-api wire shapes", () => {
       ["post", "/players/p-1/track"],
       ["delete", "/players/p-1/track"],
     ]);
-  });
-
-  it("reads tracking status from the player's own status route", async () => {
-    await getTrackingStatus("p-1");
-
-    expect(request().method).toBe("get");
-    expect(request().url).toBe("/players/p-1/tracking-status");
   });
 
   it("sends only the search params the caller gave", async () => {

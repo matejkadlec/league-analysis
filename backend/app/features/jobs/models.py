@@ -20,7 +20,7 @@ from sqlalchemy import (
     text as sa_text,
 )
 from sqlalchemy.dialects.postgresql import ENUM, JSONB
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
 from app.core.models import Base, created_at_column, id_column, updated_at_column
@@ -118,14 +118,6 @@ class JobConfiguration(Base):
 
     updated_at: Mapped[datetime] = updated_at_column(
         "When this job configuration was last updated"
-    )
-
-    # Relationships
-    executions = relationship(
-        "JobExecution",
-        back_populates="job_config",
-        cascade="all, delete-orphan",
-        order_by="JobExecution.started_at.desc()",
     )
 
 
@@ -246,9 +238,6 @@ class JobExecution(Base):
         default=ExecutionType.REGULAR,
         comment="Type of execution: REGULAR (normal run) or TEST (API health-check run)",
     )
-
-    # Relationships
-    job_config = relationship("JobConfiguration", back_populates="executions")
 
 
 class PlayerSyncRun(Base):

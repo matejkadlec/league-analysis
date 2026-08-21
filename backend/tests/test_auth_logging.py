@@ -1,8 +1,6 @@
 """Security-event logging coverage for the authentication flows."""
 
-import inspect
 import warnings
-from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from typing import cast
@@ -10,7 +8,7 @@ from unittest.mock import AsyncMock
 
 import jwt
 import pytest
-from fastapi import HTTPException, Request, Response
+from fastapi import HTTPException, Response
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import ClauseElement
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -31,23 +29,7 @@ from app.features.auth.service import (
     CaptchaRequiredError,
     CaptchaVerificationError,
 )
-
-
-def _undecorated[**P, R](endpoint: Callable[P, R]) -> Callable[P, R]:
-    """Return the endpoint that ``rate_limit`` wrapped (see test_auth_authorization)."""
-    return cast(Callable[P, R], inspect.unwrap(endpoint))
-
-
-def _loopback_request() -> Request:
-    """A request carrying the loopback client and empty headers routes read."""
-    return Request(
-        {
-            "type": "http",
-            "method": "POST",
-            "headers": [],
-            "client": ("127.0.0.1", 51234),
-        }
-    )
+from route_helpers import loopback_request, undecorated
 
 
 class _Result:
@@ -157,8 +139,8 @@ async def test_inactive_account_login_failure_is_logged() -> None:
     )
 
     with capture_logs() as records, pytest.raises(HTTPException) as error:
-        await _undecorated(login)(
-            request=_loopback_request(),
+        await undecorated(login)(
+            request=loopback_request(),
             response=Response(),
             form_data=form_data,
             auth_service=cast(AuthService, auth_service),
@@ -184,8 +166,8 @@ async def test_locked_account_login_failure_is_logged() -> None:
     )
 
     with capture_logs() as records, pytest.raises(HTTPException) as error:
-        await _undecorated(login)(
-            request=_loopback_request(),
+        await undecorated(login)(
+            request=loopback_request(),
             response=Response(),
             form_data=form_data,
             auth_service=cast(AuthService, auth_service),
@@ -207,8 +189,8 @@ async def test_captcha_required_login_failure_is_logged() -> None:
     )
 
     with capture_logs() as records, pytest.raises(HTTPException) as error:
-        await _undecorated(login)(
-            request=_loopback_request(),
+        await undecorated(login)(
+            request=loopback_request(),
             response=Response(),
             form_data=form_data,
             auth_service=cast(AuthService, auth_service),
@@ -230,8 +212,8 @@ async def test_captcha_verification_failure_is_logged() -> None:
     )
 
     with capture_logs() as records, pytest.raises(HTTPException) as error:
-        await _undecorated(login)(
-            request=_loopback_request(),
+        await undecorated(login)(
+            request=loopback_request(),
             response=Response(),
             form_data=form_data,
             auth_service=cast(AuthService, auth_service),
@@ -263,8 +245,8 @@ async def test_successful_login_is_logged() -> None:
     )
 
     with capture_logs() as records:
-        token = await _undecorated(login)(
-            request=_loopback_request(),
+        token = await undecorated(login)(
+            request=loopback_request(),
             response=Response(),
             form_data=form_data,
             auth_service=cast(AuthService, auth_service),

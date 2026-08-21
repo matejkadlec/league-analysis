@@ -9,6 +9,7 @@ from sqlalchemy import select
 
 from app.core.http_errors import http_error
 from app.core.rate_limiter import rate_limit
+from app.core.schemas import MessageResponse
 
 from .cookies import (
     ACCESS_TOKEN_COOKIE_NAME,
@@ -28,7 +29,6 @@ from .schemas import (
     EmailChangeRequest,
     EmailChangeVerifyRequest,
     JoinUsContactRequest,
-    MessageResponse,
     PasswordChangeRequest,
     RefreshTokenRequest,
     Token,
@@ -247,7 +247,7 @@ async def refresh_access_token(
     )
 
 
-@router.post("/logout")
+@router.post("/logout", response_model=MessageResponse)
 # Deliberately not rate limited. `get_remote_address` keys on
 # `request.client.host`, uvicorn runs with --no-proxy-headers, and browser
 # traffic arrives through the Next.js rewrite, so every user shares one
@@ -266,7 +266,7 @@ async def logout(
     request: Request,
     response: Response,
     auth_service: AuthService = Depends(get_auth_service),
-) -> dict[str, str]:
+) -> MessageResponse:
     """Revoke whatever session the request still carries, and always succeed.
 
     This deliberately does not depend on a valid access token. It used to, and
@@ -343,7 +343,7 @@ async def logout(
     # clear, so nothing is lost by asking.
     if any((access_token, refresh_token, request.cookies.get(AUTH_STATE_COOKIE_NAME))):
         clear_auth_cookies(response)
-    return {"message": "Successfully logged out"}
+    return MessageResponse(message="Successfully logged out")
 
 
 @router.get("/me", response_model=UserResponse)

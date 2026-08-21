@@ -13,6 +13,7 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_global_settings
+from app.core.schemas import MessageResponse
 from app.features.auth.cookies import (
     ACCESS_TOKEN_COOKIE_NAME,
     AUTH_STATE_COOKIE_NAME,
@@ -62,7 +63,7 @@ async def test_logout_revokes_using_only_the_refresh_cookie() -> None:
 
     revoke = cast(AsyncMock, service).revoke_all_refresh_tokens_for_user
     revoke.assert_awaited_once_with(9)
-    assert result == {"message": "Successfully logged out"}
+    assert result == MessageResponse(message="Successfully logged out")
 
 
 async def test_logout_succeeds_and_clears_cookies_with_no_session_at_all() -> None:
@@ -88,7 +89,7 @@ async def test_logout_succeeds_and_clears_cookies_with_no_session_at_all() -> No
         auth_service=service,
     )
 
-    assert result == {"message": "Successfully logged out"}
+    assert result == MessageResponse(message="Successfully logged out")
     cast(AsyncMock, service).revoke_all_refresh_tokens_for_user.assert_not_awaited()
     cleared = response.headers.getlist("set-cookie")
     # The session hint belongs in this list too: `proxy.ts` routes on it, so a

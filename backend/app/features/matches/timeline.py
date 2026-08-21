@@ -19,7 +19,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.models import Base, created_at_column, updated_at_column
 from app.core.riot_api.models import (
@@ -243,9 +243,6 @@ class MatchTimeline(Base):
 
     created_at: Mapped[datetime] = created_at_column()
     updated_at: Mapped[datetime] = updated_at_column()
-
-    match = relationship("Match")
-    player = relationship("Player")
 
 
 Index("idx_match_timelines_puuid", MatchTimeline.puuid)

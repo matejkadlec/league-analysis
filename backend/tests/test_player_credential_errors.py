@@ -5,14 +5,11 @@ with a 401 (AuthenticationError). Both must map to the same structured
 RIOT_API_KEY_INVALID detail so the frontend can classify them.
 """
 
-import inspect
-from collections.abc import Callable
 from typing import cast
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi import HTTPException
-from starlette.requests import Request
 
 from app.core.riot_api.constants import Platform
 from app.core.riot_api.errors import (
@@ -23,24 +20,7 @@ from app.core.riot_api.errors import (
     RateLimitError,
 )
 from app.features.players.router import discover_player
-
-
-def _request() -> Request:
-    """Build the minimal request required by rate-limited route wrappers."""
-    return Request(
-        {
-            "type": "http",
-            "method": "POST",
-            "path": "/",
-            "headers": [],
-            "client": ("127.0.0.1", 12345),
-        }
-    )
-
-
-def _unwrapped[**P, R](endpoint: Callable[P, R]) -> Callable[P, R]:
-    """Reach the endpoint under slowapi's rate-limit wrapper, signature intact."""
-    return cast(Callable[P, R], inspect.unwrap(endpoint))
+from route_helpers import loopback_request, undecorated
 
 
 @pytest.mark.parametrize(
@@ -58,8 +38,8 @@ async def test_credential_rejection_maps_to_structured_detail(
     service.discover_player = AsyncMock(side_effect=credential_error)
 
     with pytest.raises(HTTPException) as error:
-        await _unwrapped(discover_player)(
-            request=_request(),
+        await undecorated(discover_player)(
+            request=loopback_request(),
             player_service=service,
             riot_client=MagicMock(),
             _current_user=MagicMock(),
@@ -104,8 +84,8 @@ async def test_riot_lookup_failures_keep_their_own_status(
     service.discover_player = AsyncMock(side_effect=riot_error)
 
     with pytest.raises(HTTPException) as error:
-        await _unwrapped(discover_player)(
-            request=_request(),
+        await undecorated(discover_player)(
+            request=loopback_request(),
             player_service=service,
             riot_client=MagicMock(),
             _current_user=MagicMock(),

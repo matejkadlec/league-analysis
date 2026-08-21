@@ -35,7 +35,11 @@ from .schemas import (
     PlayerResponse,
     PlayerSyncRunResponse,
 )
-from .service import PlayerService
+from .service import (
+    PlayerNotFoundError,
+    PlayerService,
+    TrackingLimitReachedError,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -229,8 +233,8 @@ async def discover_player(
             status_code=503,
             detail=RIOT_API_KEY_INVALID_DETAIL,
         ) from error
-    except ValueError as error:
-        _handle_tracking_value_error(error)
+    except PlayerNotFoundError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
 
 
 @router.get("/{puuid}", response_model=PlayerResponse)
@@ -337,12 +341,10 @@ async def track_player(
             status_code=503,
             detail="Riot data maintenance is in progress. Try again after it completes.",
         ) from e
-    except ValueError as e:
-        if "not found" in str(e).lower():
-            raise HTTPException(status_code=404, detail=str(e)) from e
-        else:
-            # Tracking limit reached or other validation error
-            raise HTTPException(status_code=400, detail=str(e)) from e
+    except PlayerNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except TrackingLimitReachedError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
     # The tracking row is committed by here, so claiming the run sits outside
     # the block above on purpose. The sync only saves the viewer from waiting
@@ -393,30 +395,6 @@ async def untrack_player(
         raise HTTPException(status_code=404, detail=str(e)) from e
 
 
-@router.get("/{puuid}/tracking-status")
-async def get_tracking_status(
-    puuid: str,
-    player_service: PlayerServiceDep,
-    current_user: User = Depends(get_current_active_user),
-):
-    """
-    Get the tracking status for a player.
-
-    Returns:
-        dict: {'is_tracked': bool}
-
-    Raises:
-        404: Player not found
-    """
-    try:
-        is_tracked = await player_service.get_player_tracking_status(
-            puuid, current_user.id
-        )
-        return {"is_tracked": is_tracked}
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-
-
 @router.get("/tracked/list", response_model=list[PlayerResponse])
 async def get_tracked_players(
     player_service: PlayerServiceDep,
@@ -429,15 +407,6 @@ async def get_tracked_players(
         List of tracked players with their current data
     """
     return await player_service.get_tracked_players(current_user.id)
-
-
-def _handle_tracking_value_error(e: ValueError) -> None:
-    """Handle ValueError during player tracking."""
-    error_msg = str(e)
-    if "not found" in error_msg.lower():
-        raise HTTPException(status_code=404, detail=error_msg)
-    else:
-        raise HTTPException(status_code=400, detail=error_msg)
 
 
 # === Player League Endpoints ===

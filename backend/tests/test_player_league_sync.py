@@ -1,6 +1,5 @@
 """Player league persistence regressions for current LEAGUE-V4 payloads."""
 
-import importlib
 from types import SimpleNamespace
 from typing import cast
 from unittest.mock import AsyncMock
@@ -15,12 +14,6 @@ from app.features.players.leagues import PlayerLeague
 from app.features.players.leagues_schemas import PlayerLeagueResponse
 from app.features.players.models import Player
 from app.features.players.service import PlayerService
-
-# Importing the application registers every relationship target before this
-# focused unit test instantiates a mapped Player or PlayerLeague object. The
-# module is wanted for that side effect only, so it is imported by name rather
-# than bound to an identifier nothing reads.
-importlib.import_module("app.main")
 
 
 def _league_entry(*, league_id: str | None, league_points: int = 42) -> LeagueEntryDTO:

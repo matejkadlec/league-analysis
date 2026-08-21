@@ -21,12 +21,6 @@ from app.features.matches.match_stats import (
     common_stat_fields,
 )
 from app.features.matches.participants import MatchParticipant
-from app.model_registry import import_all_models
-
-# `MatchParticipant` has a `relationship("Match")`, so instantiating one -- even
-# with no session anywhere in sight -- forces SQLAlchemy to configure every
-# mapper, and configuration fails unless the whole registry has been imported.
-import_all_models()
 
 
 def participant(

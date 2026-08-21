@@ -157,12 +157,6 @@ class PasswordChangeRequest(BaseModel):
         return self
 
 
-class MessageResponse(BaseModel):
-    """Simple message response for mutation endpoints."""
-
-    message: str
-
-
 class JoinUsSubject(str, Enum):
     """Supported Join Us contact subjects."""
 

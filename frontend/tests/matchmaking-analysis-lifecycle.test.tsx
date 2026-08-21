@@ -65,7 +65,6 @@ function analysis(
       : null,
     error_code: null,
     error_message: null,
-    puuid_progress: {},
     requests_saved: 0,
     rate_limit_reset_at: null,
     ...overrides,
@@ -219,7 +218,7 @@ describe("MatchmakingAnalysis lifecycle", () => {
     });
     cancelMatchmakingAnalysis.mockResolvedValue({
       success: true,
-      data: { success: true, message: "Analysis cancelled" },
+      data: { message: "Analysis cancelled" },
     });
     const user = userEvent.setup();
     renderComponent();

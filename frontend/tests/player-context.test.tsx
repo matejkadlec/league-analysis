@@ -313,6 +313,25 @@ describe("whether the app says it is still loading", () => {
     expect(validatedGet).not.toHaveBeenCalled();
     expect(result.current.currentPlayer).toBeNull();
   });
+
+  it("does not probe a URL PUUID while nobody is signed in either", async () => {
+    // The case above leaves `?puuid=` empty, so it passes whether or not the
+    // auth half of the URL query's `enabled` survives. This one does not: the
+    // PUUID guard moved onto `queryFn` as `skipToken`, and dropping
+    // `enabled: isAuthenticated` as newly redundant would send an
+    // unauthenticated `/players/{puuid}` on every signed-out visit to
+    // `/player-overview?puuid=...`.
+    search.current = `puuid=${FROM_URL.puuid}`;
+    useAuth.mockReturnValue({
+      user: null,
+      isAuthenticated: false,
+      isLoading: false,
+    });
+    const { result } = renderContext();
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(validatedGet).not.toHaveBeenCalled();
+  });
 });
 
 describe("choosing a player from the picker", () => {

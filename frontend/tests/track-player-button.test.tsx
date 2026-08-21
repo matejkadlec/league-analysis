@@ -6,21 +6,17 @@ import { renderWithQueryClient } from "./render-support";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { getTrackingStatus, trackPlayer, untrackPlayer, toast } = vi.hoisted(
-  () => ({
-    getTrackingStatus: vi.fn(),
-    trackPlayer: vi.fn(),
-    untrackPlayer: vi.fn(),
-    toast: vi.fn(),
-  }),
-);
+const { trackPlayer, untrackPlayer, toast } = vi.hoisted(() => ({
+  trackPlayer: vi.fn(),
+  untrackPlayer: vi.fn(),
+  toast: vi.fn(),
+}));
 
 vi.mock("@/features/auth", () => ({
   useAuth: () => ({ user: { id: 7 } }),
 }));
 
 vi.mock("@/features/players/player-api", () => ({
-  getTrackingStatus,
   trackPlayer,
   untrackPlayer,
 }));
@@ -31,15 +27,18 @@ vi.mock("@/lib/core/hooks", () => ({
 
 import { TrackPlayerButton } from "@/features/players/components/track-player-button";
 
-function renderButton() {
-  renderWithQueryClient(
-    <TrackPlayerButton puuid="player-1" playerName="Player One" />,
+function renderButton(isTracked: boolean) {
+  return renderWithQueryClient(
+    <TrackPlayerButton
+      puuid="player-1"
+      playerName="Player One"
+      isTracked={isTracked}
+    />,
   );
 }
 
 describe("TrackPlayerButton", () => {
   beforeEach(() => {
-    getTrackingStatus.mockReset();
     trackPlayer.mockReset();
     untrackPlayer.mockReset();
     toast.mockReset();
@@ -47,75 +46,62 @@ describe("TrackPlayerButton", () => {
     untrackPlayer.mockResolvedValue({ success: true, data: {} });
   });
 
+  it("presents tracked state and exposes the untrack action", async () => {
+    renderButton(true);
 
-  it("presents tracked state first and exposes the untrack action", async () => {
-    getTrackingStatus
-      .mockResolvedValueOnce({
-        success: true,
-        data: { is_tracked: true },
-      })
-      .mockResolvedValue({
-        success: true,
-        data: { is_tracked: false },
-      });
-    renderButton();
-
-    const button = await screen.findByRole("button", { name: "Untrack player" });
+    const button = screen.getByRole("button", { name: "Untrack player" });
     expect(button.getAttribute("data-tracking-state")).toBe("tracked");
 
     await userEvent.click(button);
     expect(untrackPlayer).toHaveBeenCalledWith("player-1");
-    await waitFor(() =>
-      expect(button.getAttribute("data-tracking-state")).toBe("untracked"),
-    );
   });
 
-  it("presents untracked state first and exposes the track action", async () => {
-    getTrackingStatus
-      .mockResolvedValueOnce({
-        success: true,
-        data: { is_tracked: false },
-      })
-      .mockResolvedValue({
-        success: true,
-        data: { is_tracked: true },
-      });
-    renderButton();
+  it("presents untracked state and exposes the track action", async () => {
+    renderButton(false);
 
-    const button = await screen.findByRole("button", { name: "Track player" });
+    const button = screen.getByRole("button", { name: "Track player" });
     expect(button.getAttribute("data-tracking-state")).toBe("untracked");
+    expect(screen.getByText("Untracked")).not.toBeNull();
 
     await userEvent.click(button);
     expect(trackPlayer).toHaveBeenCalledWith("player-1");
+  });
+
+  it("invalidates the player query so the card it reads its state from refetches", async () => {
+    // The button no longer owns the tracked flag: it renders what the player
+    // read handed it, so this invalidation is the whole mechanism by which the
+    // toggle changes appearance after a successful mutation.
+    const { queryClient } = renderButton(false);
+    const invalidate = vi.spyOn(queryClient, "invalidateQueries");
+
+    await userEvent.click(screen.getByRole("button", { name: "Track player" }));
+
     await waitFor(() =>
-      expect(button.getAttribute("data-tracking-state")).toBe("tracked"),
+      expect(invalidate).toHaveBeenCalledWith({
+        queryKey: ["player", "player-1"],
+      }),
     );
-    expect(screen.getByText("Tracked")).not.toBeNull();
   });
 
   it("keeps the prior state when a mutation fails", async () => {
-    getTrackingStatus.mockResolvedValue({
-      success: true,
-      data: { is_tracked: true },
-    });
     untrackPlayer.mockResolvedValue({
       success: false,
       error: { message: "Unable to untrack" },
     });
-    renderButton();
+    renderButton(true);
 
-    const button = await screen.findByRole("button", { name: "Untrack player" });
+    const button = screen.getByRole("button", { name: "Untrack player" });
     await userEvent.click(button);
 
     await waitFor(() =>
-      expect(button.getAttribute("data-tracking-state")).toBe("tracked"),
+      expect(toast).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: "Player could not be removed from tracking",
+          variant: "error",
+        }),
+      ),
     );
+    expect(button.getAttribute("data-tracking-state")).toBe("tracked");
     expect(screen.getByText("Tracked")).not.toBeNull();
-    expect(toast).toHaveBeenCalledWith(
-      expect.objectContaining({
-        title: "Player could not be removed from tracking",
-        variant: "error",
-      }),
-    );
   });
 });

@@ -36,7 +36,6 @@ from app.features.matches.schemas import (
 from app.features.matchmaking_analysis.models import MatchmakingAnalysis
 from app.features.matchmaking_analysis.schemas import (
     MatchmakingAnalysisResponse,
-    MatchmakingAnalysisStatusResponse,
 )
 from app.features.players.leagues import PlayerLeague
 from app.features.players.leagues_schemas import PlayerLeagueResponse
@@ -56,7 +55,6 @@ PAIRS: list[tuple[type[DeclarativeBase], type[BaseModel]]] = [
     (MatchParticipant, EnemyLaneOpponent),
     (MatchParticipant, PlayerMatchParticipant),
     (MatchmakingAnalysis, MatchmakingAnalysisResponse),
-    (MatchmakingAnalysis, MatchmakingAnalysisStatusResponse),
     (Player, PlayerResponse),
     (PlayerLeague, PlayerLeagueResponse),
     (PlayerSyncRun, PlayerSyncRunResponse),

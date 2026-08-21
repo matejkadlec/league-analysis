@@ -1,13 +1,10 @@
 """RequestLoggingMiddleware behavior, asserted through captured structlog events."""
 
-import warnings
-from collections.abc import Callable
-from typing import cast
+from collections.abc import AsyncIterator, Callable
 
 import httpx
 import pytest
 from fastapi import BackgroundTasks, FastAPI, HTTPException
-from starlette.exceptions import StarletteDeprecationWarning
 from starlette.types import Message, Receive, Scope, Send
 from structlog import get_logger
 from structlog.contextvars import merge_contextvars
@@ -15,12 +12,6 @@ from structlog.testing import capture_logs
 from structlog.typing import EventDict
 
 from app.core.request_logging import RequestLoggingMiddleware
-
-with warnings.catch_warnings():
-    # The suite treats warnings as errors, and starlette's TestClient still
-    # warns at import time while it runs on httpx instead of httpx2.
-    warnings.simplefilter("ignore", StarletteDeprecationWarning)
-    from starlette.testclient import TestClient
 
 route_logger = get_logger("tests.test_request_logging")
 
@@ -81,26 +72,31 @@ def _build_app() -> FastAPI:
     return app
 
 
-def _get(client: TestClient, path: str) -> httpx.Response:
-    """Issue a GET whose result is typed as the httpx response it really is.
+@pytest.fixture
+async def client() -> AsyncIterator[httpx.AsyncClient]:
+    """The middleware under a real ASGI stack, with no lifespan driven.
 
-    starlette's testclient annotates its methods against httpx2, which this
-    environment does not install, so the unresolvable stubs are ignored here
-    exactly once instead of at every call site.
+    `ASGITransport`, not starlette's TestClient: the latter is annotated
+    against httpx2, which this environment does not install, so every call
+    came back `Unknown` and had to be cast, and it warns at import time in a
+    suite that treats warnings as errors.
     """
-    response = client.get(path)  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
-    return cast(httpx.Response, response)
+    transport = httpx.ASGITransport(app=_build_app())
+    async with httpx.AsyncClient(
+        transport=transport, base_url="http://testserver"
+    ) as async_client:
+        yield async_client
 
 
 def _events(records: list[EventDict], event: str) -> list[EventDict]:
     return [record for record in records if record["event"] == event]
 
 
-def test_successful_request_logs_info_completion() -> None:
-    client = TestClient(_build_app())
-
+async def test_successful_request_logs_info_completion(
+    client: httpx.AsyncClient,
+) -> None:
     with capture_logs() as records:
-        response = _get(client, "/ok")
+        response = await client.get("/ok")
 
     assert response.status_code == 200
     completions = _events(records, "http_request_completed")
@@ -116,11 +112,11 @@ def test_successful_request_logs_info_completion() -> None:
     assert record["duration_ms"] >= 0
 
 
-def test_client_error_logs_warning_completion() -> None:
-    client = TestClient(_build_app())
-
+async def test_client_error_logs_warning_completion(
+    client: httpx.AsyncClient,
+) -> None:
     with capture_logs() as records:
-        response = _get(client, "/missing")
+        response = await client.get("/missing")
 
     assert response.status_code == 404
     completions = _events(records, "http_request_completed")
@@ -130,11 +126,11 @@ def test_client_error_logs_warning_completion() -> None:
     assert record["status_code"] == 404
 
 
-def test_server_error_response_logs_error_completion() -> None:
-    client = TestClient(_build_app())
-
+async def test_server_error_response_logs_error_completion(
+    client: httpx.AsyncClient,
+) -> None:
     with capture_logs() as records:
-        response = _get(client, "/failing")
+        response = await client.get("/failing")
 
     assert response.status_code == 500
     completions = _events(records, "http_request_completed")
@@ -145,11 +141,11 @@ def test_server_error_response_logs_error_completion() -> None:
     assert _events(records, "http_request_exception") == []
 
 
-def test_health_probe_logs_debug_completion() -> None:
-    client = TestClient(_build_app())
-
+async def test_health_probe_logs_debug_completion(
+    client: httpx.AsyncClient,
+) -> None:
     with capture_logs() as records:
-        response = _get(client, "/health/ping")
+        response = await client.get("/health/ping")
 
     assert response.status_code == 200
     completions = _events(records, "http_request_completed")
@@ -157,14 +153,14 @@ def test_health_probe_logs_debug_completion() -> None:
     assert completions[0]["log_level"] == "debug"
 
 
-def test_unhandled_exception_logs_exception_event_and_reraises() -> None:
-    client = TestClient(_build_app())
-
+async def test_unhandled_exception_logs_exception_event_and_reraises(
+    client: httpx.AsyncClient,
+) -> None:
     with (
         capture_logs() as records,
         pytest.raises(RuntimeError, match="route exploded"),
     ):
-        _get(client, "/boom")
+        await client.get("/boom")
 
     exceptions = _events(records, "http_request_exception")
     assert len(exceptions) == 1
@@ -178,11 +174,11 @@ def test_unhandled_exception_logs_exception_event_and_reraises() -> None:
     assert _events(records, "http_request_completed") == []
 
 
-def test_downstream_logs_carry_request_context() -> None:
-    client = TestClient(_build_app())
-
+async def test_downstream_logs_carry_request_context(
+    client: httpx.AsyncClient,
+) -> None:
     with capture_logs(processors=[merge_contextvars]) as records:
-        response = _get(client, "/context")
+        response = await client.get("/context")
 
     assert response.status_code == 200
     handler_events = _events(records, "route_handler_reached")
@@ -194,25 +190,31 @@ def test_downstream_logs_carry_request_context() -> None:
     assert handler_record["request_id"] == completion["request_id"]
 
 
-def test_non_http_scope_passes_through_without_request_logging() -> None:
-    client = TestClient(_build_app())
+async def test_non_http_scope_passes_through_without_request_logging() -> None:
+    """The lifespan scope must reach the app untouched and log nothing.
 
-    with capture_logs() as records, client:
-        response = _get(client, "/ok")
+    This used to be asserted by entering a TestClient, which drives a lifespan
+    scope through the middleware as a side effect of the `with`. Calling the
+    middleware directly says what is being tested; `ASGITransport` never sends
+    a non-http scope at all, so the round-trip version would have gone green
+    while covering nothing.
+    """
+    middleware = RequestLoggingMiddleware(_silent_app)
 
-    assert response.status_code == 200
-    assert len(_events(records, "http_request_completed")) == 1
-    assert _events(records, "http_request_exception") == []
+    with capture_logs() as records:
+        await middleware({"type": "lifespan"}, _no_receive, _no_send)
+
+    assert records == []
 
 
-def test_background_task_completion_is_logged_before_the_task_runs() -> None:
+async def test_background_task_completion_is_logged_before_the_task_runs(
+    client: httpx.AsyncClient,
+) -> None:
     """Starlette awaits background tasks inside the response call, so the
     completion event must fire when the response body is sent, not when the
     inner app returns — otherwise duration_ms covers the task runtime."""
-    client = TestClient(_build_app())
-
     with capture_logs(processors=[merge_contextvars]) as records:
-        response = _get(client, "/background")
+        response = await client.get("/background")
 
     assert response.status_code == 200
     completion_index = next(

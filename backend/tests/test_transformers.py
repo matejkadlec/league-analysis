@@ -49,14 +49,6 @@ def test_extracted_participant_fits_the_row_it_becomes() -> None:
     # ~75 keys and every one must name a real column — SQLAlchemy raises on
     # an unknown kwarg, so this one construction checks the entire mapping
     # without pinning a single value to its literal.
-    #
-    # Instantiating a mapped class configures every mapper, so the whole
-    # registry has to be imported first or MatchParticipant's relationships
-    # point at names that do not exist yet.
-    from app.model_registry import import_all_models
-
-    import_all_models()
-
     data = MatchDTOTransformer.extract_participant_data(participant())
     row = MatchParticipant(match_id="EUN1_1", **data)
 

@@ -10,11 +10,6 @@ import pytest
 
 from app.features.players.models import Player
 from app.features.players.service import PlayerService
-from app.model_registry import import_all_models
-
-# Player carries relationships to match and league models; constructing one
-# needs every mapper configured.
-import_all_models()
 
 
 def player(game_name: str = "Faker", tag_line: str = "KR1") -> Player:

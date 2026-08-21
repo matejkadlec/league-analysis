@@ -4,7 +4,7 @@ from datetime import datetime
 
 from sqlalchemy import DateTime as SQLDateTime
 from sqlalchemy import ForeignKey, Index, String
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
 from app.core.models import Base
@@ -45,5 +45,3 @@ class UserTrackedPlayer(Base):
         server_default=func.now(),
         comment="When this tracked player was most recently selected",
     )
-
-    user = relationship("User", back_populates="tracked_players")

@@ -1,5 +1,3 @@
-import { z } from "zod";
-
 import {
   validatedDelete,
   validatedGet,
@@ -11,14 +9,9 @@ import {
   MatchmakingAnalysisHistoryResponseSchema,
   MatchmakingAnalysisResponse,
   MatchmakingAnalysisResponseSchema,
-  MatchmakingAnalysisStatusResponse,
-  MatchmakingAnalysisStatusResponseSchema,
+  MessageResponse,
+  MessageResponseSchema,
 } from "@/lib/core/schemas";
-
-const AnalysisActionResponseSchema = z.object({
-  success: z.boolean(),
-  message: z.string(),
-});
 
 export async function startMatchmakingAnalysis(
   puuid: string,
@@ -35,9 +28,9 @@ export async function startMatchmakingAnalysis(
 export async function getMatchmakingAnalysisStatus(
   puuid: string,
   createdAt: string,
-): Promise<ApiResponse<MatchmakingAnalysisStatusResponse>> {
+): Promise<ApiResponse<MatchmakingAnalysisResponse>> {
   return validatedGet(
-    MatchmakingAnalysisStatusResponseSchema,
+    MatchmakingAnalysisResponseSchema,
     `/matchmaking-analysis/player/${puuid}/status`,
     { created_at: createdAt },
   );
@@ -75,9 +68,9 @@ export async function getMatchmakingAnalysisHistory(
 export async function cancelMatchmakingAnalysis(
   puuid: string,
   createdAt: string,
-): Promise<ApiResponse<{ success: boolean; message: string }>> {
+): Promise<ApiResponse<MessageResponse>> {
   return validatedDelete(
-    AnalysisActionResponseSchema,
+    MessageResponseSchema,
     `/matchmaking-analysis/player/${puuid}/cancel`,
     { created_at: createdAt },
   );
@@ -86,9 +79,9 @@ export async function cancelMatchmakingAnalysis(
 export async function deleteMatchmakingAnalysisRecord(
   puuid: string,
   createdAt: string,
-): Promise<ApiResponse<{ success: boolean; message: string }>> {
+): Promise<ApiResponse<MessageResponse>> {
   return validatedDelete(
-    AnalysisActionResponseSchema,
+    MessageResponseSchema,
     `/matchmaking-analysis/player/${puuid}/analysis`,
     { created_at: createdAt },
   );
