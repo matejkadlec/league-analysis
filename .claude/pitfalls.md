@@ -93,3 +93,15 @@ the `pitfall-check` agent.
   not another exception handler. The same seam means `DEBUG=true` shows
   Starlette's traceback page rather than the client-safe body -- production
   and the gate both set `DEBUG=false` explicitly, and `run.sh` clears it.
+
+- **`TypedDict.get("a_key_the_TypedDict_never_declared")` type-checks.**
+  Pyright returns `Any | None` rather than reporting the unknown key, so
+  renaming a key breaks every `.get()` reader of it without one error, and the
+  reader then behaves as though the value were simply absent. In a
+  configuration mapping that reads "criterion not set" as "criterion does not
+  apply" -- `playstyle_analysis/config.py` is the example -- the result is a
+  rule that silently never fires. Indexing (`config["key"]`) *is* checked, and
+  so is `NotRequired` access, so prefer `[...]` for required keys. When a
+  `.get()` on an optional key is the honest expression, pin the key in a test:
+  `tests/test_playstyle_tag_config.py` asserts every evaluator finds the keys
+  it reads.
