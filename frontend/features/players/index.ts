@@ -14,3 +14,4 @@ export {
 export { formatRiotId } from "./utils/riot-id";
 export { usePlayerSyncRun } from "./use-player-sync-run";
 export { playerNavigationRoute } from "./player-routes";
+export { useAnalyzedPlayer } from "./use-analyzed-player";
