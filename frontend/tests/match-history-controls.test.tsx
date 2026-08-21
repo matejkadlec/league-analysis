@@ -38,9 +38,11 @@ vi.mock("@/lib/core/use-relative-time", () => ({
 
 import { MatchHistory } from "@/features/matches/components/match-history";
 import {
+} from "@/features/matches/match-history-preferences";
+import {
   MATCH_HISTORY_PAGE_SIZE_STORAGE_KEY,
   MATCH_HISTORY_QUEUE_FILTERS_STORAGE_KEY,
-} from "@/features/matches/match-history-preferences";
+} from "@/features/cookie-consent";
 import { installMemoryLocalStorage } from "./test-browser-storage";
 
 const CONSENT_COOKIE = "league_analysis_cookie_consent";

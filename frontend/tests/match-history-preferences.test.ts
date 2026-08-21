@@ -4,14 +4,16 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { clearOptionalBrowserStorage } from "@/features/cookie-consent";
 import {
-  MATCH_HISTORY_PAGE_SIZE_STORAGE_KEY,
-  MATCH_HISTORY_QUEUE_FILTERS_STORAGE_KEY,
   parseStoredMatchHistoryPageSize,
   parseStoredMatchHistoryQueueFilters,
   persistMatchHistoryPageSize,
   persistMatchHistoryQueueFilters,
   readMatchHistoryPreferences,
 } from "@/features/matches/match-history-preferences";
+import {
+  MATCH_HISTORY_PAGE_SIZE_STORAGE_KEY,
+  MATCH_HISTORY_QUEUE_FILTERS_STORAGE_KEY,
+} from "@/features/cookie-consent";
 import { installMemoryLocalStorage } from "./test-browser-storage";
 
 const CONSENT_COOKIE = "league_analysis_cookie_consent";

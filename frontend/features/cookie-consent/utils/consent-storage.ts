@@ -7,10 +7,27 @@ export const COOKIE_CONSENT_UPDATED_EVENT =
 export const COOKIE_CONSENT_OPEN_PREFERENCES_EVENT =
   "league-analysis-cookie-consent-open-preferences";
 
+/**
+ * Every optional-storage key the app writes, owned here rather than by the
+ * features that write them.
+ *
+ * They cannot live with their writers: `match-history-preferences.ts` already
+ * imports `writeOptionalStorage` from this module, so importing the keys back
+ * would be a cycle. Owning them here is what lets `OPTIONAL_STORAGE_KEYS`
+ * below be *derived* rather than hand-listed -- and that list is what
+ * withdrawing consent erases, so a key renamed at its writer and missed here
+ * would go on being written and stop being cleared, silently.
+ */
+export const HEADER_MESSAGES_CLOSED_STORAGE_KEY = "header_messages_closed:v1";
+export const MATCH_HISTORY_PAGE_SIZE_STORAGE_KEY =
+  "league_analysis_match_history_page_size";
+export const MATCH_HISTORY_QUEUE_FILTERS_STORAGE_KEY =
+  "league_analysis_match_history_queue_filters";
+
 const OPTIONAL_STORAGE_KEYS = [
-  "header_messages_closed:v1",
-  "league_analysis_match_history_page_size",
-  "league_analysis_match_history_queue_filters",
+  HEADER_MESSAGES_CLOSED_STORAGE_KEY,
+  MATCH_HISTORY_PAGE_SIZE_STORAGE_KEY,
+  MATCH_HISTORY_QUEUE_FILTERS_STORAGE_KEY,
 ] as const;
 
 // One spelling of the backend enum, from the module the contract test reads.
