@@ -1,9 +1,10 @@
 """HttpOnly auth cookies shared by login, refresh, and logout."""
 
-import os
 from datetime import UTC, datetime
 
 from fastapi import Response
+
+from app.core.config import get_global_settings
 
 ACCESS_TOKEN_COOKIE_NAME = "league_analysis_access_token"
 REFRESH_TOKEN_COOKIE_NAME = "league_analysis_refresh_token"
@@ -12,7 +13,7 @@ AUTH_STATE_COOKIE_VALUE = "1"
 
 
 def _cookie_secure() -> bool:
-    return os.getenv("ENVIRONMENT", "").lower() == "production"
+    return get_global_settings().environment == "production"
 
 
 def max_age_seconds(expires_at: datetime) -> int:

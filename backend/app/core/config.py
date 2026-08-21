@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import os
 from functools import cache
 from pathlib import Path
+from typing import Literal
 
 from dotenv import load_dotenv
-from pydantic import Field, field_validator
+from pydantic import Field, ValidationInfo, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Load environment variables from .env file in project root
@@ -54,7 +54,9 @@ class Settings(BaseSettings):
 
     # Application Configuration
     debug: bool = Field(default=False)
-    log_level: str = Field(default="INFO")
+    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = Field(
+        default="INFO"
+    )
 
     # CORS Configuration
     cors_origins: str = Field(default="http://localhost:3000,http://127.0.0.1:3000")
@@ -66,11 +68,12 @@ class Settings(BaseSettings):
             origin.strip() for origin in self.cors_origins.split(",") if origin.strip()
         ]
 
-    @property
-    def environment(self) -> str:
-        """Get current environment from ENVIRONMENT variable."""
-        env = os.getenv("ENVIRONMENT", "").lower()
-        return env if env in ["dev", "production"] else "dev"  # Safe default
+    # Declared above `jwt_secret_key` on purpose: pydantic validates fields in
+    # declaration order, and `validate_jwt_secret` reads this one out of
+    # `info.data`. No default -- an absent ENVIRONMENT used to read as "dev",
+    # which made every `settings.environment != "dev"` guard decorative
+    # against the one case that matters, a missing configuration.
+    environment: Literal["dev", "test", "production"]
 
     # JWT Authentication Configuration
     jwt_secret_key: str = Field(
@@ -136,7 +139,7 @@ class Settings(BaseSettings):
 
     @field_validator("jwt_secret_key")
     @classmethod
-    def validate_jwt_secret(cls, v: str) -> str:
+    def validate_jwt_secret(cls, v: str, info: ValidationInfo) -> str:
         """Validate JWT secret key meets security requirements.
 
         Enforces:
@@ -147,9 +150,10 @@ class Settings(BaseSettings):
         Raises:
             ValueError: If secret is weak and environment is production
         """
-        # Check if running in production
-        env = os.getenv("ENVIRONMENT", "").lower()
-        is_production = env == "production"
+        # `.get`, not `[...]`: pydantic only publishes fields that validated,
+        # so an ENVIRONMENT of "staging" must stay its own error rather than
+        # becoming a KeyError raised from inside this validator.
+        is_production = info.data.get("environment") == "production"
 
         # Check for default/placeholder secrets
         weak_indicators = ["dev_secret", "please_change", "changeme", "secret_key"]
