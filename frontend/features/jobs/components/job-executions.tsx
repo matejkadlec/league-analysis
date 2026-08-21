@@ -12,6 +12,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { AlertTriangle, FileText, Loader2 } from "lucide-react";
 
 import { JobExecutionDetailsDialog } from "./job-execution-details-dialog";
+import { JOBS_REFRESH_INTERVAL_MS } from "../refresh-interval";
 import { JobExecutionsTable } from "./job-executions-table";
 
 interface JobExecutionsProps {
@@ -66,7 +67,7 @@ export function JobExecutions({
         );
         return loaded < lastPage.total ? allPages.length + 1 : undefined;
       },
-      refetchInterval: 15000,
+      refetchInterval: JOBS_REFRESH_INTERVAL_MS,
       refetchOnWindowFocus: false,
       refetchOnMount: false,
       refetchOnReconnect: false,

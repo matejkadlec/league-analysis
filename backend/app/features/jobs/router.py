@@ -18,8 +18,6 @@ from .control import (
     runtime_control_key,
 )
 from .dependencies import JobServiceDep
-from .implementations.match_fetcher import MatchFetcherJob
-from .implementations.player_updater import PlayerUpdaterJob
 from .implementations.test_runner import TestMatchFetcherJob, TestPlayerUpdaterJob
 from .intervals import JobIntervalError
 from .maintenance import RiotWriterMaintenanceConfigurationError
@@ -68,12 +66,9 @@ def _create_job_instance(
     Returns:
         Job instance based on job type
     """
-    job_type_mapping: dict[JobType, type[BaseJob]] = {
-        JobType.MATCH_FETCHER: MatchFetcherJob,
-        JobType.PLAYER_UPDATER: PlayerUpdaterJob,
-    }
+    from .scheduler import job_registry
 
-    job_class = job_type_mapping.get(job.job_type)
+    job_class = job_registry().get(job.job_type)
     if not job_class:
         raise HTTPException(
             status_code=501,

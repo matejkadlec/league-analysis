@@ -21,12 +21,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import {
-  formatFractionAsPercent,
-  formatKDA,
-  kdaColor,
-  winRateColors,
-} from "@/lib/core/format";
+import { PerformanceFigures } from "./performance-figures";
 import {
   ChampionPaginationState,
   getChampionPage,
@@ -154,31 +149,7 @@ export function ChampionStatsCard({
                 </p>
               </div>
 
-              {/* KDA */}
-              <div className="text-right">
-                <p className="text-sm font-medium">
-                  {champ.avg_kills.toFixed(1)} / {champ.avg_deaths.toFixed(1)} /{" "}
-                  {champ.avg_assists.toFixed(1)}
-                </p>
-                <p className="text-xs">
-                  <span className={kdaColor(champ.avg_kda)}>
-                    {formatKDA(champ.avg_kda)}
-                  </span>{" "}
-                  <span className="text-muted-foreground">KDA</span>
-                </p>
-              </div>
-
-              {/* Win rate */}
-              <div className="text-right w-16">
-                <p
-                  className={`text-sm font-bold ${winRateColors(champ.win_rate).text}`}
-                >
-                  {formatFractionAsPercent(champ.win_rate)}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {champ.wins}W {champ.losses}L
-                </p>
-              </div>
+              <PerformanceFigures stats={champ} />
             </div>
           ))}
         </div>

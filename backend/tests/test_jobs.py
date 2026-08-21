@@ -281,7 +281,7 @@ async def test_overdue_startup_job_is_queued_without_awaiting_execution(
     monkeypatch.setattr(scheduler_module.db_manager, "get_session", get_session)
     monkeypatch.setattr(
         scheduler_module,
-        "_get_job_registry",
+        "job_registry",
         lambda: {JobType.MATCH_FETCHER: JobDouble},
     )
     monkeypatch.setattr(scheduler_module, "_scheduler", SchedulerDouble())

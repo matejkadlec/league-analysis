@@ -12,6 +12,10 @@ export function playerQueryKey(puuid: string | null) {
   return ["player", puuid] as const;
 }
 
+export function trackedPlayersQueryKey(userId: number | null | undefined) {
+  return ["tracked-players", userId] as const;
+}
+
 /** Invalidate everything that reflects whether a player is tracked. Track and
  * untrack both touch the same four caches; this names that set once. */
 export function invalidateTrackingQueries(
@@ -19,7 +23,9 @@ export function invalidateTrackingQueries(
   userId: number | null | undefined,
   puuid: string,
 ): void {
-  void queryClient.invalidateQueries({ queryKey: ["tracked-players", userId] });
+  void queryClient.invalidateQueries({
+    queryKey: trackedPlayersQueryKey(userId),
+  });
   void queryClient.invalidateQueries({ queryKey: ["player-context", userId] });
   void queryClient.invalidateQueries({ queryKey: playerQueryKey(puuid) });
 }

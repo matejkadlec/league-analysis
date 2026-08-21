@@ -23,6 +23,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  invalidateMatchmakingRun,
+  matchmakingHistoryQueryKey,
+} from "../matchmaking-query";
+import { gapVerdict } from "../gap-verdict";
 
 interface MatchmakingAnalysisHistoryProps {
   puuid: string;
@@ -39,20 +44,10 @@ const HISTORY_FETCH_LIMIT = 100;
  * cannot drift from the table on which side of a gap counts as good news.
  */
 function historyFigures(item: MatchmakingAnalysisHistoryItem) {
-  const gap = item.gap * 100;
-  // Currently set to 0 so the numbers are always coloured, as it's more
-  // visually pleasing; might be changed to the 3% threshold in the future.
-  const isSignificant = Math.abs(gap) >= 0;
-  const allyColor = !isSignificant
-    ? ""
-    : gap > 0
-      ? "text-green-600 dark:text-green-400"
-      : "text-red-600 dark:text-red-400";
-  const enemyColor = !isSignificant
-    ? ""
-    : gap < 0
-      ? "text-green-600 dark:text-green-400"
-      : "text-red-600 dark:text-red-400";
+  // A zero threshold, so every gap is coloured: more visually pleasing here
+  // than the results card's three-point fairness band, which leaves a small
+  // gap grey. Both readings are deliberate; `gapVerdict` is where they differ.
+  const { ally: allyColor, enemy: enemyColor } = gapVerdict(item.gap, 0);
 
   return [
     {
@@ -147,7 +142,7 @@ export function MatchmakingAnalysisHistory({
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ["matchmaking-analysis-history", puuid],
+    queryKey: matchmakingHistoryQueryKey(puuid),
     queryFn: async () => {
       return unwrapOr404(
         await getMatchmakingAnalysisHistory(puuid, HISTORY_FETCH_LIMIT),
@@ -167,18 +162,7 @@ export function MatchmakingAnalysisHistory({
       toast.success("Matchmaking analysis removed", {
         description: "The selected history record was deleted.",
       });
-      void queryClient.invalidateQueries({
-        queryKey: ["matchmaking-analysis-history", puuid],
-      });
-      void queryClient.invalidateQueries({
-        queryKey: ["matchmaking-analysis-results", puuid],
-      });
-      // The card above reads this one. Without it, deleting the run it is
-      // showing leaves it offering "Run New Analysis" for a record that no
-      // longer exists -- every other write path in this feature lists it.
-      void queryClient.invalidateQueries({
-        queryKey: ["matchmaking-analysis", puuid],
-      });
+      void invalidateMatchmakingRun(queryClient, puuid);
     },
     onError: () => {
       toast.error("Matchmaking analysis was not removed", {

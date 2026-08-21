@@ -53,6 +53,7 @@ from app.core.riot_api.errors import (
     RiotAPIError,
 )
 from app.core.riot_api.models import MatchDTO
+from app.features.jobs.maintenance import ensure_riot_writer_maintenance_is_inactive
 from app.features.matches.match_lp import RANKED_SOLO_QUEUE_ID
 from app.features.matches.models import Match
 from app.features.matches.participants import MatchParticipant
@@ -126,13 +127,6 @@ class MatchmakingAnalysisRuntimeError(Exception):
         self.client_message = message
 
 
-async def _ensure_riot_writer_maintenance_is_inactive(session: AsyncSession) -> None:
-    """Avoid importing the jobs package until a Riot-data write runs."""
-    from app.features.jobs.maintenance import ensure_riot_writer_maintenance_is_inactive
-
-    await ensure_riot_writer_maintenance_is_inactive(session)
-
-
 class MatchmakingAnalysisService:
     """Service for analyzing matchmaking fairness."""
 
@@ -159,7 +153,7 @@ class MatchmakingAnalysisService:
 
     async def start_analysis(self, puuid: str) -> MatchmakingAnalysisResponse:
         """Create or attach to one active analysis and return immediately."""
-        await _ensure_riot_writer_maintenance_is_inactive(self.db)
+        await ensure_riot_writer_maintenance_is_inactive(self.db)
 
         running = _running_analyses.get(puuid)
         if running and running.task.done():
@@ -382,7 +376,7 @@ class MatchmakingAnalysisService:
             error_code, error_message = self._safe_failure_details(e)
             try:
                 async with db_manager.get_session() as db:
-                    await _ensure_riot_writer_maintenance_is_inactive(db)
+                    await ensure_riot_writer_maintenance_is_inactive(db)
                     await db.execute(
                         update(MatchmakingAnalysis)
                         .where(_active_run_where(puuid, created_at))
@@ -483,7 +477,7 @@ class MatchmakingAnalysisService:
         maintenance check on purpose, nor by `_finalize_completed_analysis`,
         which reads the status back before it commits.
         """
-        await _ensure_riot_writer_maintenance_is_inactive(self.db)
+        await ensure_riot_writer_maintenance_is_inactive(self.db)
         await self.db.execute(
             update(MatchmakingAnalysis)
             .where(_active_run_where(puuid, created_at))
@@ -669,7 +663,7 @@ class MatchmakingAnalysisService:
     ) -> None:
         results = self._build_completion_results(team_avgs, enemy_avgs)
         now = datetime.now(UTC)
-        await _ensure_riot_writer_maintenance_is_inactive(self.db)
+        await ensure_riot_writer_maintenance_is_inactive(self.db)
         await self.db.execute(
             update(MatchmakingAnalysis)
             .where(_active_run_where(puuid, created_at))
@@ -931,7 +925,7 @@ class MatchmakingAnalysisService:
         """Persist an API-fetched match only while cleanup is inactive."""
         from app.features.matches.match_persistence import upsert_match
 
-        await _ensure_riot_writer_maintenance_is_inactive(self.db)
+        await ensure_riot_writer_maintenance_is_inactive(self.db)
         await upsert_match(self.db, match_dto)
 
     async def _get_game_start_timestamp(self, match_id: str) -> int | None:

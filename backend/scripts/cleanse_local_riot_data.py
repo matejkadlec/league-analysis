@@ -10,7 +10,6 @@ production or shared database.
 from __future__ import annotations
 
 import argparse
-import ipaddress
 import os
 import re
 import subprocess
@@ -24,6 +23,10 @@ from sqlalchemy import URL, Connection, Engine, RowMapping, create_engine, text
 
 from app.core.config import Settings, get_global_settings
 from app.features.auth.service import pwd_context
+from scripts.local_target import (
+    is_loopback_address,
+    is_loopback_listener_configuration,
+)
 
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
 PROJECT_ROOT = BACKEND_ROOT.parent
@@ -35,8 +38,6 @@ ADMIN_PASSWORD = "LocalAdminQa123!"
 CLIENT_EMAIL = "scipiocz@gmail.com"
 CLIENT_DISPLAY_NAME = "John Doe"
 CLIENT_PASSWORD = "LocalUserQa123!"
-
-LOCAL_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
 
 # Delete dependent rows first so every removal is explicit and reviewable.
 RIOT_DATA_TABLES = (
@@ -100,34 +101,13 @@ def validated_database_name(value: str) -> str:
     return value
 
 
-def is_local_host(host: str) -> bool:
-    """Return whether the configured connection host is an unambiguous loopback."""
-    return host.strip().strip("[]").lower() in LOCAL_HOSTS
-
-
-def is_loopback_address(value: str) -> bool:
-    """Return whether PostgreSQL reported a loopback listener address."""
-    try:
-        return ipaddress.ip_interface(value).ip.is_loopback
-    except ValueError:
-        return False
-
-
-def is_loopback_listener_configuration(value: str) -> bool:
-    """Return whether every configured PostgreSQL bind address is loopback-only."""
-    addresses = [address.strip().strip("'\"") for address in value.split(",")]
-    return bool(addresses) and all(
-        address and is_local_host(address) for address in addresses
-    )
-
-
 def validate_configured_target(settings: Settings, database: str) -> None:
     """Refuse a non-local configured target before opening a database connection."""
     environment = os.environ.get("ENVIRONMENT", "").strip().lower()
     if environment != "dev" or settings.environment != "dev":
         raise LocalCleanupRefusal("ENVIRONMENT must be explicitly set to dev")
-    if not is_local_host(settings.postgres_host):
-        raise LocalCleanupRefusal("POSTGRES_HOST must be localhost, 127.0.0.1, or ::1")
+    if not is_loopback_address(settings.postgres_host):
+        raise LocalCleanupRefusal("POSTGRES_HOST must be loopback-only")
     if settings.postgres_db != database:
         raise LocalCleanupRefusal(
             "--database must exactly match the configured POSTGRES_DB"

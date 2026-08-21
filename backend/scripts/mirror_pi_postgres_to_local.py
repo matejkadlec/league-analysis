@@ -87,7 +87,13 @@ def parse_arguments(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def is_loopback_address(value: str) -> bool:
-    """Return whether a configured or observed address is loopback-only."""
+    """Return whether a configured or observed address is loopback-only.
+
+    A copy of `scripts/local_target.py` on purpose: the installer copies this
+    one file to `~/.local/share` and the timer runs it under `/usr/bin/python3`
+    with no repository on `sys.path`, so it cannot import anything from here.
+    Keep the two in step.
+    """
     normalized = value.strip().strip("[]").lower()
     if normalized == "localhost":
         return True

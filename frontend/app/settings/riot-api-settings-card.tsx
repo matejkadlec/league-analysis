@@ -12,7 +12,10 @@ import {
   validatedPut,
 } from "@/lib/core/api";
 import { SettingSchema, SettingTestResponseSchema } from "@/lib/core/schemas";
-import { serviceStatusQueryOptions } from "@/lib/core/service-status-query";
+import {
+  SERVICE_STATUS_QUERY_KEY,
+  serviceStatusQueryOptions,
+} from "@/lib/core/service-status-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -61,7 +64,7 @@ export function RiotApiSettingsCard() {
       });
       notifyRiotCredentialHealthUpdated();
       void queryClient.invalidateQueries({
-        queryKey: ["service-status"],
+        queryKey: SERVICE_STATUS_QUERY_KEY,
       });
       setApiKey("");
       setTestResult(null);

@@ -103,7 +103,7 @@ async def test_optional_account_identity_does_not_erase_known_riot_id(
 ) -> None:
     monkeypatch.setattr(
         player_service_module,
-        "_ensure_riot_writer_maintenance_is_inactive",
+        "ensure_riot_writer_maintenance_is_inactive",
         AsyncMock(),
     )
     player = SimpleNamespace(
@@ -137,7 +137,7 @@ async def test_new_player_uses_submitted_riot_id_when_account_omits_it(
 ) -> None:
     monkeypatch.setattr(
         player_service_module,
-        "_ensure_riot_writer_maintenance_is_inactive",
+        "ensure_riot_writer_maintenance_is_inactive",
         AsyncMock(),
     )
 

@@ -19,6 +19,7 @@ from app.core.riot_api.errors import (
     RateLimitError,
 )
 from app.core.riot_api.models import MatchDTO, MatchTimelineDTO
+from app.features.jobs.maintenance import ensure_riot_writer_maintenance_is_inactive
 from app.features.players.models import Player
 
 from .match_history import (
@@ -109,18 +110,6 @@ def build_match_history_conditions(
         )
 
     return conditions
-
-
-def _must_abort_writer_sync(error: Exception) -> bool:
-    """Return whether a lower-level sync error must reach the owning job."""
-    return must_abort_writer_sync(error)
-
-
-async def _ensure_riot_writer_maintenance_is_inactive(session: AsyncSession) -> None:
-    """Avoid importing the jobs package until a direct Riot-data write runs."""
-    from app.features.jobs.maintenance import ensure_riot_writer_maintenance_is_inactive
-
-    await ensure_riot_writer_maintenance_is_inactive(session)
 
 
 class MatchService:
@@ -555,7 +544,7 @@ class MatchService:
         Delegates to `upsert_match` so there is exactly one copy of the
         match-persistence sequence; this wrapper adds the cleanup interlock.
         """
-        await _ensure_riot_writer_maintenance_is_inactive(self.db)
+        await ensure_riot_writer_maintenance_is_inactive(self.db)
         await upsert_match(self.db, match_dto, timeline_payload)
 
     async def sync_matches_for_player(
@@ -601,7 +590,7 @@ class MatchService:
             except AuthenticationError, ForbiddenError, RateLimitError:
                 raise
             except Exception as e:
-                if _must_abort_writer_sync(e):
+                if must_abort_writer_sync(e):
                     raise
                 logger.warning(
                     "Queue sync failed, continuing with next queue",

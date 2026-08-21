@@ -87,19 +87,9 @@ OBJECTIVE_KINDS = {
     "atakhan",
 }
 
-_BUILDING_SPECS: dict[str, tuple[str, str, str, bool]] = {
-    "TOWER_BUILDING": (
-        "turret",
-        "team_turrets_destroyed",
-        "turret_takedowns_by_lane",
-        True,
-    ),
-    "INHIBITOR_BUILDING": (
-        "inhibitor",
-        "team_inhibitors_destroyed",
-        "inhibitor_takedowns_by_lane",
-        False,
-    ),
+_BUILDING_SPECS: dict[str, tuple[str, str, bool]] = {
+    "TOWER_BUILDING": ("turret", "team_turrets_destroyed", True),
+    "INHIBITOR_BUILDING": ("inhibitor", "team_inhibitors_destroyed", False),
 }
 
 _MONSTER_SPECS: dict[str, tuple[str, str]] = {
@@ -108,13 +98,6 @@ _MONSTER_SPECS: dict[str, tuple[str, str]] = {
     "BARON_NASHOR": ("baron", "team_barons_slain"),
     "HORDE": ("voidgrub", "team_voidgrubs_slain"),
 }
-
-_COUNTER_COPY_FIELDS = (
-    "turret_takedowns_by_lane",
-    "inhibitor_takedowns_by_lane",
-    "dragon_takedowns_by_subtype",
-    "other_epic_monster_takedowns",
-)
 
 
 class MatchTimeline(Base):
@@ -162,49 +145,6 @@ class MatchTimeline(Base):
     # Participant identity and match-level timeline shape.
     participant_id: Mapped[int] = mapped_column(Integer, nullable=False)
     team_id: Mapped[int] = mapped_column(Integer, nullable=False)
-    frame_interval_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    frame_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
-
-    # Player objective contribution (takedown = killer or assister).
-    objective_takedowns_total: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=0
-    )
-    objective_last_hits_total: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=0
-    )
-
-    turret_takedowns: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    turret_last_hits: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    inhibitor_takedowns: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    inhibitor_last_hits: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    dragon_takedowns: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    dragon_last_hits: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    rift_herald_takedowns: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=0
-    )
-    rift_herald_last_hits: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=0
-    )
-    baron_takedowns: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    baron_last_hits: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    voidgrub_takedowns: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    voidgrub_last_hits: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    atakhan_takedowns: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    atakhan_last_hits: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-
-    # Compact breakdowns for flexible analytics.
-    turret_takedowns_by_lane: Mapped[dict[str, int]] = mapped_column(
-        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
-    )
-    inhibitor_takedowns_by_lane: Mapped[dict[str, int]] = mapped_column(
-        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
-    )
-    dragon_takedowns_by_subtype: Mapped[dict[str, int]] = mapped_column(
-        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
-    )
-    other_epic_monster_takedowns: Mapped[dict[str, int]] = mapped_column(
-        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
-    )
 
     # Team totals are repeated on each participant row for fast reads.
     team_turrets_destroyed: Mapped[int] = mapped_column(
@@ -237,7 +177,10 @@ class MatchTimeline(Base):
         comment=(
             "Compact objective event log.\n"
             "Each object uses short keys: t=timestamp, o=objective, "
-            "r=role(K/A), optional l=lane, s=subtype, m=monsterType."
+            "r=role(K/A), optional l=lane, s=subtype, m=monsterType.\n"
+            "This is the per-participant record: twenty-two counter columns "
+            "used to hold sums over exactly these entries and nothing read "
+            "any of them (revision 0028)."
         ),
     )
 
@@ -384,8 +327,6 @@ def _new_participant_row(
     puuid: str,
     participant_id: int,
     team_id: int,
-    frame_interval_ms: int | None,
-    frame_count: int,
 ) -> dict[str, Any]:
     """Create an empty participant timeline aggregate row."""
     return {
@@ -393,28 +334,6 @@ def _new_participant_row(
         "puuid": puuid,
         "participant_id": participant_id,
         "team_id": team_id,
-        "frame_interval_ms": frame_interval_ms,
-        "frame_count": frame_count,
-        "objective_takedowns_total": 0,
-        "objective_last_hits_total": 0,
-        "turret_takedowns": 0,
-        "turret_last_hits": 0,
-        "inhibitor_takedowns": 0,
-        "inhibitor_last_hits": 0,
-        "dragon_takedowns": 0,
-        "dragon_last_hits": 0,
-        "rift_herald_takedowns": 0,
-        "rift_herald_last_hits": 0,
-        "baron_takedowns": 0,
-        "baron_last_hits": 0,
-        "voidgrub_takedowns": 0,
-        "voidgrub_last_hits": 0,
-        "atakhan_takedowns": 0,
-        "atakhan_last_hits": 0,
-        "turret_takedowns_by_lane": {},
-        "inhibitor_takedowns_by_lane": {},
-        "dragon_takedowns_by_subtype": {},
-        "other_epic_monster_takedowns": {},
         **_new_team_total_bucket(),
         "objective_events": [],
     }
@@ -422,8 +341,6 @@ def _new_participant_row(
 
 def _collect_participant_rows(
     match_dto: TimelineMatch,
-    frame_interval_ms: int | None,
-    frame_count: int,
 ) -> tuple[dict[int, int], dict[int, dict[str, Any]]]:
     """Index valid participants and their empty timeline rows."""
     participant_team_by_id: dict[int, int] = {}
@@ -441,8 +358,6 @@ def _collect_participant_rows(
             puuid=participant.puuid,
             participant_id=participant_id,
             team_id=team_id,
-            frame_interval_ms=frame_interval_ms,
-            frame_count=frame_count,
         )
 
     return participant_team_by_id, rows_by_participant_id
@@ -472,15 +387,13 @@ def _iter_involved_rows(
 def _resolve_building_objective(
     building_type: str | None,
     tower_type: str | None,
-) -> tuple[str | None, str | None, str | None, str | None]:
-    """Map a building kill to objective, team-total, lane, and subtype fields."""
+) -> tuple[str | None, str | None, str | None]:
+    """Map a building kill to its objective, team-total field, and subtype."""
     spec = _BUILDING_SPECS.get(building_type) if building_type is not None else None
     if spec is None:
-        return None, None, None, None
-    objective, team_field, lane_field, use_tower_subtype = spec
-    if use_tower_subtype:
-        return objective, team_field, lane_field, tower_type
-    return objective, team_field, lane_field, None
+        return None, None, None
+    objective, team_field, use_tower_subtype = spec
+    return objective, team_field, tower_type if use_tower_subtype else None
 
 
 def _resolve_monster_objective(
@@ -526,35 +439,7 @@ def _credit_team_monster(
     )
 
 
-def _credit_known_objective(
-    row: dict[str, Any],
-    objective: str,
-    role: str,
-    timestamp: int,
-    *,
-    lane: str | None = None,
-    lane_field: str | None = None,
-    subtype: str | None = None,
-) -> None:
-    """Increment known-objective takedown counters and append a compact event."""
-    row[f"{objective}_takedowns"] += 1
-    row["objective_takedowns_total"] += 1
-    if role == "K":
-        row[f"{objective}_last_hits"] += 1
-        row["objective_last_hits_total"] += 1
-    if lane and lane_field is not None:
-        _increment_counter(row[lane_field], lane)
-    _append_compact_objective_event(
-        row=row,
-        timestamp=timestamp,
-        objective=objective,
-        role=role,
-        lane=lane,
-        subtype=subtype,
-    )
-
-
-def _credit_monster_takedown(
+def _record_monster_takedown(
     row: dict[str, Any],
     objective: str | None,
     role: str,
@@ -562,26 +447,20 @@ def _credit_monster_takedown(
     monster_type: str,
     monster_subtype: str | None,
 ) -> None:
-    """Credit a participant monster takedown or retain an unknown type."""
-    if objective in OBJECTIVE_KINDS:
-        _credit_known_objective(
-            row,
-            objective,
-            role,
-            timestamp,
-            subtype=monster_subtype,
-        )
-        if objective == "dragon" and monster_subtype is not None:
-            _increment_counter(row["dragon_takedowns_by_subtype"], monster_subtype)
-        return
-    _increment_counter(row["other_epic_monster_takedowns"], monster_type)
+    """Record a monster takedown, retaining the type when it is unrecognized.
+
+    A monster this codebase does not know about is still logged, under
+    `other_epic_monster` and carrying `m` -- that is what let ATAKHAN appear in
+    current-patch matches before it was an objective here.
+    """
+    known = objective if objective in OBJECTIVE_KINDS else None
     _append_compact_objective_event(
         row=row,
         timestamp=timestamp,
-        objective="other_epic_monster",
+        objective=known or "other_epic_monster",
         role=role,
         subtype=monster_subtype,
-        monster_type=monster_type,
+        monster_type=None if known else monster_type,
     )
 
 
@@ -630,7 +509,7 @@ def _apply_building_kill(
     lane_type = _normalize_text(event.lane_type)
     tower_type = _normalize_text(event.tower_type)
     timestamp = event.timestamp
-    objective, team_total_field, lane_field, subtype = _resolve_building_objective(
+    objective, team_total_field, subtype = _resolve_building_objective(
         building_type, tower_type
     )
 
@@ -649,13 +528,12 @@ def _apply_building_kill(
 
     _increment_known_team_total(team_totals, killer_team_id, team_total_field)
     for participant_id, row in _iter_involved_rows(involved, rows_by_participant_id):
-        _credit_known_objective(
-            row,
-            objective,
-            _event_role(killer_id, participant_id),
-            timestamp,
+        _append_compact_objective_event(
+            row=row,
+            timestamp=timestamp,
+            objective=objective,
+            role=_event_role(killer_id, participant_id),
             lane=lane_type,
-            lane_field=lane_field,
             subtype=subtype,
         )
 
@@ -699,7 +577,7 @@ def _apply_elite_monster_kill(
         monster_type,
     )
     for participant_id, row in _iter_involved_rows(involved, rows_by_participant_id):
-        _credit_monster_takedown(
+        _record_monster_takedown(
             row,
             objective,
             _event_role(killer_id, participant_id),
@@ -787,12 +665,6 @@ def _apply_team_totals_to_row(
         row[field] = value.copy() if isinstance(value, dict) else value
 
 
-def _freeze_row_counters(row: dict[str, Any]) -> None:
-    """Snapshot mutable counter dicts so later mutations cannot leak."""
-    for field in _COUNTER_COPY_FIELDS:
-        row[field] = dict(row[field])
-
-
 def _finalize_timeline_rows(
     rows_by_participant_id: dict[int, dict[str, Any]],
     team_totals: dict[int, dict[str, Any]],
@@ -802,7 +674,6 @@ def _finalize_timeline_rows(
     for participant_id in sorted(rows_by_participant_id.keys()):
         row = rows_by_participant_id[participant_id]
         _apply_team_totals_to_row(row, team_totals.get(row["team_id"]))
-        _freeze_row_counters(row)
         rows.append(row)
     return rows
 
@@ -815,12 +686,9 @@ def build_match_timeline_rows(
     if timeline_payload is None:
         return []
 
-    info = timeline_payload.info
-    frames = info.frames
+    frames = timeline_payload.info.frames
     participant_team_by_id, rows_by_participant_id = _collect_participant_rows(
-        match_dto,
-        info.frame_interval,
-        len(frames),
+        match_dto
     )
     if not rows_by_participant_id:
         return []

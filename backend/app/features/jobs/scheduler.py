@@ -85,7 +85,13 @@ _scheduler: SchedulerLike | None = None
 _job_registry: dict[JobType, type[BaseJob]] | None = None
 
 
-def _get_job_registry() -> dict[JobType, type[BaseJob]]:
+def job_registry() -> dict[JobType, type[BaseJob]]:
+    """The one map from a declared job type to the class that runs it.
+
+    Built on first use so importing the scheduler does not drag in every
+    service an implementation touches. The router asks for it too, rather
+    than keeping a second copy that a new job type could be missing from.
+    """
     global _job_registry
     if _job_registry is None:
         from .implementations.match_fetcher import MatchFetcherJob
@@ -490,7 +496,7 @@ async def sync_job_configuration(job_config_id: int) -> None:
             )
         return
 
-    registry = _get_job_registry()
+    registry = job_registry()
     job_class = _get_job_class(job_config.job_type, job_config, registry)
     if not job_class:
         return
@@ -620,7 +626,7 @@ async def _check_and_run_overdue_jobs() -> None:
 
         now = datetime.now(UTC)
         overdue_jobs = await _collect_overdue_jobs(
-            list(job_configs), _get_job_registry(), now
+            list(job_configs), job_registry(), now
         )
 
         if overdue_jobs:
@@ -660,7 +666,7 @@ async def _load_and_schedule_jobs() -> None:
             logger.info("No active job configurations found")
             return
 
-        registry = _get_job_registry()
+        registry = job_registry()
 
         scheduled = 0
         for job_config in job_configs:

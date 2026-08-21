@@ -151,35 +151,8 @@ class MatchDTOTransformer:
                 "gold_per_minute": challenges.get("goldPerMinute", 0),
                 "vision_score_per_minute": challenges.get("visionScorePerMinute", 0),
                 "kill_participation": challenges.get("killParticipation", 0),
-                "max_kill_deficit": challenges.get("maxKillDeficit", 0),
                 "team_damage_percentage": challenges.get("teamDamagePercentage", 0),
-                "damage_taken_on_team_percentage": challenges.get(
-                    "damageTakenOnTeamPercentage", 0
-                ),
-                "roam_kills": challenges.get("killsOnOtherLanesEarlyJungleAsLaner", 0),
-                "enemy_jungle_monster_kills": challenges.get(
-                    "enemyJungleMonsterKills", 0
-                ),
-                "turret_plates_taken": challenges.get("turretPlatesTaken", 0),
-                "ally_saves": challenges.get("saveAllyFromDeath", 0),
-                "survived_single_digit_hp_count": challenges.get(
-                    "survivedSingleDigitHpCount", 0
-                ),
-                "skillshots_hit": challenges.get("skillshotsHit", 0),
-                "skillshots_dodged": challenges.get("skillshotsDodged", 0),
-                "enemy_immobilizations": challenges.get(
-                    "enemyChampionImmobilizations", 0
-                ),
-                "kills_near_enemy_turret": challenges.get("killsNearEnemyTurret", 0),
-                "takedowns_first_x_minutes": challenges.get(
-                    "takedownsFirstXMinutes", 0
-                ),
-                "buffs_stolen": challenges.get("buffsStolen", 0),
                 "epic_monster_steals": challenges.get("epicMonsterSteals", 0),
-                "laning_phase_gold_exp_advantage": challenges.get(
-                    "earlyLaningPhaseGoldExpAdvantage", 0
-                ),
-                "max_cs_advantage": challenges.get("maxCsAdvantageOnLaneOpponent", 0),
             }
         )
 

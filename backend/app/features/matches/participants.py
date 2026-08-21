@@ -233,39 +233,10 @@ class MatchParticipant(Base):
     kill_participation: Mapped[Decimal | None] = mapped_column(
         SQLDecimal(5, 4), default=0
     )
-    max_kill_deficit: Mapped[int | None] = mapped_column(Integer, default=0)
     team_damage_percentage: Mapped[Decimal | None] = mapped_column(
         SQLDecimal(5, 4), default=0
     )
-    damage_taken_on_team_percentage: Mapped[Decimal | None] = mapped_column(
-        SQLDecimal(5, 4), default=0
-    )
-
-    # Specific Playstyle Metrics
-    roam_kills: Mapped[int | None] = mapped_column(
-        Integer, default=0, comment="killsOnOtherLanesEarlyJungleAsLaner"
-    )
-    enemy_jungle_monster_kills: Mapped[int | None] = mapped_column(Integer, default=0)
-    turret_plates_taken: Mapped[int | None] = mapped_column(Integer, default=0)
-    ally_saves: Mapped[int | None] = mapped_column(
-        Integer, default=0, comment="saveAllyFromDeath"
-    )
-    survived_single_digit_hp_count: Mapped[int | None] = mapped_column(
-        Integer, default=0
-    )
-    skillshots_hit: Mapped[int | None] = mapped_column(Integer, default=0)
-    skillshots_dodged: Mapped[int | None] = mapped_column(Integer, default=0)
-    enemy_immobilizations: Mapped[int | None] = mapped_column(
-        Integer, default=0, comment="enemyChampionImmobilizations"
-    )
-    kills_near_enemy_turret: Mapped[int | None] = mapped_column(Integer, default=0)
-    takedowns_first_x_minutes: Mapped[int | None] = mapped_column(Integer, default=0)
-    buffs_stolen: Mapped[int | None] = mapped_column(Integer, default=0)
     epic_monster_steals: Mapped[int | None] = mapped_column(Integer, default=0)
-    laning_phase_gold_exp_advantage: Mapped[int | None] = mapped_column(
-        Integer, default=0
-    )
-    max_cs_advantage: Mapped[int | None] = mapped_column(Integer, default=0)
 
     # JSON Data
     runes: Mapped[dict[str, Any] | None] = mapped_column(

@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from typing import TypedDict
 from unittest.mock import AsyncMock, patch
+from urllib.parse import urlsplit
 
 import httpx
 import pytest
@@ -445,3 +446,44 @@ def test_riot_error_strings_carry_the_status_and_the_retry_hint() -> None:
         "Rate Limit Error 429: slow down (Retry after: 12.0s)"
     )
     assert str(RiotAPIError("no reply")) == "Riot API Error: no reply"
+
+
+class _StopBeforeRequest(Exception):
+    """Raised in place of the HTTP call once the URL has been built."""
+
+
+# Every client method records a path template for the job log and then asks
+# `endpoints` to build the URL it actually requests. Nothing but the author's
+# attention keeps the two pointing at the same Riot route, and a mismatch is
+# invisible -- the request succeeds and the log names another endpoint.
+_ROUTE_CASES: list[tuple[str, dict[str, str]]] = [
+    ("get_account_by_riot_id", {"game_name": "Sanitized", "tag_line": "TEST"}),
+    ("get_account_by_puuid", {"puuid": "sanitized-puuid"}),
+    ("get_summoner_by_puuid", {"puuid": "sanitized-puuid"}),
+    ("get_match_list_by_puuid", {"puuid": "sanitized-puuid"}),
+    ("get_match", {"match_id": "EUN1_1"}),
+    ("get_match_timeline", {"match_id": "EUN1_1"}),
+    ("get_league_entries_by_puuid", {"puuid": "sanitized-puuid"}),
+]
+
+
+@pytest.mark.parametrize(("method_name", "kwargs"), _ROUTE_CASES)
+async def test_the_logged_endpoint_is_the_route_actually_requested(
+    method_name: str, kwargs: dict[str, str]
+) -> None:
+    client = RiotAPIClient(api_key="RGAPI-test-only")
+    requested: list[str] = []
+
+    async def _capture(_self: RiotAPIClient, url: str) -> object:
+        requested.append(url)
+        raise _StopBeforeRequest
+
+    with (
+        patch.object(RiotAPIClient, "_make_request", _capture),
+        pytest.raises(_StopBeforeRequest),
+    ):
+        await getattr(client, method_name)(**kwargs)
+
+    record = client.get_api_calls()[0]
+    path = urlsplit(requested[0]).path
+    assert path == record.endpoint.format(**record.params), method_name

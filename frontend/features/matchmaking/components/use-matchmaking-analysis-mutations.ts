@@ -9,6 +9,11 @@ import {
 import { useToast } from "@/lib/core/hooks";
 
 import type { AnalysisUiAction } from "./matchmaking-analysis-state";
+import {
+  invalidateMatchmakingRun,
+  matchmakingAnalysisQueryKey,
+  matchmakingStatusQueryKey,
+} from "../matchmaking-query";
 
 export function useMatchmakingAnalysisMutations(
   puuid: string,
@@ -24,16 +29,16 @@ export function useMatchmakingAnalysisMutations(
     },
     onMutate: async () => {
       queryClient.removeQueries({
-        queryKey: ["matchmaking-analysis-status", puuid],
+        queryKey: matchmakingStatusQueryKey(puuid),
       });
-      queryClient.setQueryData(["matchmaking-analysis", puuid], null);
+      queryClient.setQueryData(matchmakingAnalysisQueryKey(puuid), null);
       dispatch({ type: "start-requested" });
     },
     onSuccess: (data) => {
       toast.info("Matchmaking analysis started", {
         description: "Progress will update here while the analysis runs.",
       });
-      queryClient.setQueryData(["matchmaking-analysis", puuid], data);
+      queryClient.setQueryData(matchmakingAnalysisQueryKey(puuid), data);
       dispatch({
         type: "start-succeeded",
         createdAt: data.created_at,
@@ -59,18 +64,10 @@ export function useMatchmakingAnalysisMutations(
     },
     onSuccess: async () => {
       queryClient.removeQueries({
-        queryKey: ["matchmaking-analysis-status", puuid],
+        queryKey: matchmakingStatusQueryKey(puuid),
       });
-      queryClient.setQueryData(["matchmaking-analysis", puuid], null);
-      await queryClient.invalidateQueries({
-        queryKey: ["matchmaking-analysis", puuid],
-      });
-      void queryClient.invalidateQueries({
-        queryKey: ["matchmaking-analysis-results", puuid],
-      });
-      void queryClient.invalidateQueries({
-        queryKey: ["matchmaking-analysis-history", puuid],
-      });
+      queryClient.setQueryData(matchmakingAnalysisQueryKey(puuid), null);
+      await invalidateMatchmakingRun(queryClient, puuid);
       dispatch({ type: "cancel-succeeded" });
       toast.success("Matchmaking analysis cancelled", {
         description: "The selected analysis run is no longer active.",

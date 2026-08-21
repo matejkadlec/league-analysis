@@ -22,6 +22,7 @@ from app.core.riot_api.models import LeagueEntryDTO
 from app.features.auth.models import User
 from app.features.auth.user_settings import ensure_user_settings
 from app.features.auth.user_tracked_player import UserTrackedPlayer
+from app.features.jobs.maintenance import ensure_riot_writer_maintenance_is_inactive
 
 from .leagues import PlayerLeague
 from .models import Player
@@ -62,13 +63,6 @@ class ScoredPlayer(TypedDict):
     player: Player
     score: float
     name: str
-
-
-async def _ensure_riot_writer_maintenance_is_inactive(session: AsyncSession) -> None:
-    """Avoid importing the jobs package until a direct Riot-data write runs."""
-    from app.features.jobs.maintenance import ensure_riot_writer_maintenance_is_inactive
-
-    await ensure_riot_writer_maintenance_is_inactive(session)
 
 
 class PlayerService:
@@ -483,7 +477,7 @@ class PlayerService:
         user_id: int,
     ) -> PlayerResponse:
         """Resolve one Riot ID into shared canonical data without tracking it."""
-        await _ensure_riot_writer_maintenance_is_inactive(self.db)
+        await ensure_riot_writer_maintenance_is_inactive(self.db)
         region = get_region_by_platform(platform)
         account = await riot_client.get_account_by_riot_id(game_name, tag_line, region)
         if not account:
@@ -544,7 +538,7 @@ class PlayerService:
         Raises:
             ValueError: If player not found.
         """
-        await _ensure_riot_writer_maintenance_is_inactive(self.db)
+        await ensure_riot_writer_maintenance_is_inactive(self.db)
         player = await self._require_player(puuid)
 
         existing = await self._is_player_tracked_by_user(puuid, user_id)
@@ -744,7 +738,7 @@ class PlayerService:
 
         from app.core.riot_api.constants import Platform, get_region_by_platform
 
-        await _ensure_riot_writer_maintenance_is_inactive(self.db)
+        await ensure_riot_writer_maintenance_is_inactive(self.db)
         logger.debug("Updating player profile", puuid=player.puuid)
 
         platform_enum = Platform(player.platform.lower())
@@ -850,7 +844,7 @@ class PlayerService:
         """
         from app.core.riot_api.constants import Platform
 
-        await _ensure_riot_writer_maintenance_is_inactive(self.db)
+        await ensure_riot_writer_maintenance_is_inactive(self.db)
         logger.debug("Updating player league", puuid=player.puuid)
 
         platform_enum = Platform(player.platform.lower())

@@ -17,7 +17,16 @@ from tenacity import (
 
 from .constants import MatchType, Platform, QueueType, Region, enum_str
 from .credential_vocabulary import RiotCredentialStatus
-from .endpoints import RiotAPIEndpoints
+from .endpoints import (
+    ACCOUNT_BY_PUUID,
+    ACCOUNT_BY_RIOT_ID,
+    LEAGUE_ENTRIES_BY_PUUID,
+    MATCH_BY_ID,
+    MATCH_LIST_BY_PUUID,
+    MATCH_TIMELINE_BY_ID,
+    SUMMONER_BY_PUUID,
+    RiotAPIEndpoints,
+)
 from .errors import (
     AuthenticationError,
     BadRequestError,
@@ -511,7 +520,7 @@ class RiotAPIClient:
         """Get account by Riot ID (gameName#tagLine)."""
         used_region = region or self.region
         self._record_api_call(
-            "/riot/account/v1/accounts/by-riot-id/{gameName}/{tagLine}",
+            ACCOUNT_BY_RIOT_ID,
             enum_str(used_region),
             {"gameName": game_name, "tagLine": tag_line},
         )
@@ -525,7 +534,7 @@ class RiotAPIClient:
         """Get account by PUUID."""
         used_region = region or self.region
         self._record_api_call(
-            "/riot/account/v1/accounts/by-puuid/{puuid}",
+            ACCOUNT_BY_PUUID,
             enum_str(used_region),
             {"puuid": puuid},
         )
@@ -541,7 +550,7 @@ class RiotAPIClient:
         """Get summoner by PUUID."""
         used_platform = platform or self.platform
         self._record_api_call(
-            "/lol/summoner/v4/summoners/by-puuid/{puuid}",
+            SUMMONER_BY_PUUID,
             enum_str(used_platform),
             {"puuid": puuid},
         )
@@ -568,7 +577,7 @@ class RiotAPIClient:
         used_region = region or self.region
 
         self._record_api_call(
-            "/lol/match/v5/matches/by-puuid/{puuid}/ids",
+            MATCH_LIST_BY_PUUID,
             enum_str(used_region),
             {"puuid": puuid},
         )
@@ -598,7 +607,7 @@ class RiotAPIClient:
         """Get match details by match ID."""
         used_region = region or self.region
         self._record_api_call(
-            "/lol/match/v5/matches/{matchId}",
+            MATCH_BY_ID,
             enum_str(used_region),
             {"matchId": match_id},
         )
@@ -612,7 +621,7 @@ class RiotAPIClient:
         """Get match timeline by match ID."""
         used_region = region or self.region
         self._record_api_call(
-            "/lol/match/v5/matches/{matchId}/timeline",
+            MATCH_TIMELINE_BY_ID,
             enum_str(used_region),
             {"matchId": match_id},
         )
@@ -633,7 +642,7 @@ class RiotAPIClient:
         """
         used_platform = platform or self.platform
         self._record_api_call(
-            "/lol/league/v4/entries/by-puuid/{puuid}",
+            LEAGUE_ENTRIES_BY_PUUID,
             enum_str(used_platform),
             {"puuid": puuid},
         )

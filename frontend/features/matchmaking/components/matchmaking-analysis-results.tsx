@@ -18,6 +18,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { matchmakingResultsQueryKey } from "../matchmaking-query";
+import { GAP_FAIRNESS_THRESHOLD, gapVerdict } from "../gap-verdict";
 
 interface MatchmakingAnalysisResultsProps {
   puuid: string;
@@ -33,7 +35,7 @@ export function MatchmakingAnalysisResults({
     isLoading,
     error,
   } = useQuery({
-    queryKey: ["matchmaking-analysis-results", puuid],
+    queryKey: matchmakingResultsQueryKey(puuid),
     queryFn: async () => {
       return unwrapOr404(
         await getLatestCompletedMatchmakingAnalysis(puuid),
@@ -76,9 +78,11 @@ export function MatchmakingAnalysisResults({
   // Calculate the difference to show if matchmaking was fair
   const winrateDiff = team_avg_winrate - enemy_avg_winrate;
   const winrateDiffPercent = formatFractionAsPercent(Math.abs(winrateDiff));
-  const isFavorable = winrateDiff >= 0.03;
-  const isUnfavorable = winrateDiff <= -0.03;
-  const isFair = !isFavorable && !isUnfavorable;
+  const {
+    verdict,
+    ally: allyColor,
+    enemy: enemyColor,
+  } = gapVerdict(winrateDiff, GAP_FAIRNESS_THRESHOLD);
 
   return (
     <Card>
@@ -113,15 +117,7 @@ export function MatchmakingAnalysisResults({
                 </div>
               </TableCell>
               <TableCell className="text-right font-mono">
-                <span
-                  className={
-                    isFavorable
-                      ? "text-green-600 dark:text-green-400"
-                      : isUnfavorable
-                        ? "text-red-600 dark:text-red-400"
-                        : ""
-                  }
-                >
+                <span className={allyColor}>
                   {formatFractionAsPercent(team_avg_winrate)}
                 </span>
               </TableCell>
@@ -134,15 +130,7 @@ export function MatchmakingAnalysisResults({
                 </div>
               </TableCell>
               <TableCell className="text-right font-mono">
-                <span
-                  className={
-                    isUnfavorable
-                      ? "text-green-600 dark:text-green-400"
-                      : isFavorable
-                        ? "text-red-600 dark:text-red-400"
-                        : ""
-                  }
-                >
+                <span className={enemyColor}>
                   {formatFractionAsPercent(enemy_avg_winrate)}
                 </span>
               </TableCell>
@@ -155,21 +143,21 @@ export function MatchmakingAnalysisResults({
             Based on {matches_analyzed} ranked matches
           </p>
 
-          {isFavorable && (
+          {verdict === "favorable" && (
             <p className="text-sm text-green-600 dark:text-green-400">
               ✓ The analyzed player&apos;s teammates had higher average win
               rates than opponents by{" "}
               <span className="font-bold">{winrateDiffPercent}</span>
             </p>
           )}
-          {isUnfavorable && (
+          {verdict === "unfavorable" && (
             <p className="text-sm text-red-600 dark:text-red-400">
               ✗ The analyzed player&apos;s opponents had higher average win
               rates than teammates by{" "}
               <span className="font-bold">{winrateDiffPercent}</span>
             </p>
           )}
-          {isFair && (
+          {verdict === "fair" && (
             <p className="text-sm text-muted-foreground">
               ≈ Matchmaking relatively fair (win rates within 3%)
             </p>

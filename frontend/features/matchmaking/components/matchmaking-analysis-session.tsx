@@ -2,7 +2,7 @@
 
 import { useEffect, useEffectEvent, useReducer, useState } from "react";
 import type { ReactNode } from "react";
-import { useQuery, type QueryObserverResult } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 
 import { unwrapOr404 } from "@/lib/core/api";
 
@@ -28,13 +28,17 @@ import {
   projectMatchmakingProgress,
 } from "./matchmaking-progress";
 import { useMatchmakingAnalysisMutations } from "./use-matchmaking-analysis-mutations";
+import {
+  invalidateMatchmakingRun,
+  matchmakingAnalysisQueryKey,
+  matchmakingStatusQueryKey,
+} from "../matchmaking-query";
 
 export interface MatchmakingAnalysisSessionProps {
   puuid: string;
   analyzedPlayerLabel: string;
   playerSelector: ReactNode;
   latestAnalysis: MatchmakingAnalysisResponse | null;
-  refetch: () => Promise<QueryObserverResult<MatchmakingAnalysisResponse | null>>;
 }
 
 export function MatchmakingAnalysisSession({
@@ -42,7 +46,6 @@ export function MatchmakingAnalysisSession({
   analyzedPlayerLabel,
   playerSelector,
   latestAnalysis,
-  refetch,
 }: MatchmakingAnalysisSessionProps) {
   const [state, dispatch] = useReducer(
     analysisUiReducer,
@@ -61,7 +64,7 @@ export function MatchmakingAnalysisSession({
   const latestForCurrent = latestMatchesCurrent ? latestAnalysis : null;
 
   const { data: statusUpdate } = useQuery({
-    queryKey: ["matchmaking-analysis-status", puuid, watchingCreatedAt],
+    queryKey: [...matchmakingStatusQueryKey(puuid), watchingCreatedAt],
     queryFn: async () => {
       if (!watchingCreatedAt) {
         return null;
@@ -170,17 +173,9 @@ export function MatchmakingAnalysisSession({
 
   const finalizeCompletion = useEffectEvent(async () => {
     queryClient.removeQueries({
-      queryKey: ["matchmaking-analysis-status", puuid],
+      queryKey: matchmakingStatusQueryKey(puuid),
     });
-    await Promise.all([
-      queryClient.invalidateQueries({
-        queryKey: ["matchmaking-analysis-results", puuid],
-      }),
-      queryClient.invalidateQueries({
-        queryKey: ["matchmaking-analysis-history", puuid],
-      }),
-    ]);
-    await refetch();
+    await invalidateMatchmakingRun(queryClient, puuid);
     dispatch({ type: "finalize-completed" });
   });
 
@@ -227,7 +222,10 @@ export function MatchmakingAnalysisSession({
       return;
     }
     const terminalUpdate = validStatusUpdate ?? latestForCurrent;
-    queryClient.setQueryData(["matchmaking-analysis", puuid], terminalUpdate);
+    queryClient.setQueryData(
+      matchmakingAnalysisQueryKey(puuid),
+      terminalUpdate,
+    );
     toast.error(analysisFailureMessage(terminalUpdate));
   }, [
     storedWatching,

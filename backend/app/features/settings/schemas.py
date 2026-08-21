@@ -2,7 +2,7 @@
 
 from datetime import datetime
 from enum import Enum as PyEnum
-from typing import Any, Literal, TypeGuard
+from typing import Annotated, Any, Literal
 
 from pydantic import (
     BaseModel,
@@ -14,6 +14,7 @@ from pydantic import (
 )
 from pydantic.alias_generators import to_camel
 
+from app.core.schemas import is_json_object
 from app.features.matches.match_lp import RANKED_SOLO_QUEUE_ID
 
 
@@ -55,31 +56,6 @@ class _CardSettingsWriteBase(BaseModel):
     )
 
 
-class TopChampionsMutableSettingsV1(_CardSettingsBase):
-    """Mutable Top Champions fields in the approved version 1 contract."""
-
-    minimum_games: int = Field(default=1, ge=1, le=999)
-    minimum_win_rate: float = Field(default=0, ge=0, le=100)
-    minimum_kda: float = Field(default=0, ge=0, le=50, multiple_of=0.1)
-    included_roles: list[CardRole] = Field(default_factory=list[CardRole])
-
-    @field_validator("included_roles")
-    @classmethod
-    def roles_must_be_unique(cls, roles: list[CardRole]) -> list[CardRole]:
-        """Reject duplicate roles instead of normalizing a malformed write."""
-        if len(roles) != len(set(roles)):
-            raise ValueError("includedRoles must contain unique canonical roles")
-        return roles
-
-
-class RecentPerformanceMutableSettingsV1(_CardSettingsBase):
-    """Mutable Recent Performance fields in the approved version 1 contract."""
-
-    recent_match_count: int = Field(default=10, ge=5, le=50)
-    win_rate_trend_delta: float = Field(default=0.05, ge=0.01, le=0.25)
-    relative_metric_trend_delta: float = Field(default=0.05, ge=0.01, le=0.25)
-
-
 def _validate_smurf_boost_cross_fields(
     minimum_novel_games: int, recent_window_size: int
 ) -> None:
@@ -93,65 +69,27 @@ def _validate_smurf_boost_cross_fields(
         raise ValueError("a3MinimumNovelGames must not exceed recentWindowSize")
 
 
-class SmurfBoostDetectionMutableSettingsV1(_CardSettingsBase):
-    """Mutable smurf and boost detection thresholds in the version 1 contract.
-
-    Defaults are the Conservative preset. Every bound sits strictly below the
-    matching signal saturation constant, so the magnitude ramp in
-    `smurf-boost/v1` can never divide by zero or by a negative number.
-    """
-
-    recent_window_size: int = Field(default=20, ge=10, le=50)
-    baseline_window_size: int = Field(default=60, ge=15, le=200)
-    a1_step_change_threshold: float = Field(default=1.20, ge=0.60, le=2.00)
-    a2_win_rate_surge_threshold: float = Field(default=0.20, ge=0.10, le=0.35)
-    a3_novel_champion_threshold: float = Field(default=1.20, ge=0.60, le=2.00)
-    a3_minimum_novel_games: int = Field(default=8, ge=5, le=15)
-    a4_summoner_level_gate: int = Field(default=45, ge=30, le=150)
-    a4_performance_threshold: float = Field(default=1.20, ge=0.60, le=2.00)
-    b1_win_rate_delta_threshold: float = Field(default=0.30, ge=0.15, le=0.45)
-    b1_composite_flat_ceiling: float = Field(default=0.05, ge=0.00, le=0.40)
-    b2_consistency_shift_threshold: float = Field(default=1.15, ge=0.60, le=1.50)
-    b3_bimodality_threshold: float = Field(default=0.65, ge=0.555, le=0.80)
-    b3_tail_fraction: float = Field(default=0.30, ge=0.15, le=0.40)
-    b4_high_rate_floor: float = Field(default=0.62, ge=0.50, le=0.80)
-    b4_drop_threshold: float = Field(default=0.20, ge=0.10, le=0.45)
-
-    @model_validator(mode="after")
-    def cross_field_rules_must_hold(self) -> SmurfBoostDetectionMutableSettingsV1:
-        """Reject a set whose signals could never be satisfiable together."""
-        _validate_smurf_boost_cross_fields(
-            self.a3_minimum_novel_games, self.recent_window_size
-        )
-        return self
-
-
-def _require_json_integer(value: object) -> int:
-    """Reject coerced values for the one field `strict=True` cannot cover.
-
-    Every other scalar on the write models says `Field(strict=True)`, which is
-    the same policy. `version` is a `Literal[1]`, and Pydantic raises
-    `RuntimeError: Unable to apply constraint 'strict' to schema of type
-    'literal'` -- and would not reject `True` there in any case.
-    """
-    if isinstance(value, bool) or not isinstance(value, int):
-        raise ValueError("must be an integer")
-    return value
-
-
+# Each card declares its fields once, on the write model, and the tolerant read
+# model below is that same model with the policy relaxed. The two used to be
+# written out separately -- same names, same defaults, same bounds, 24 fields
+# and two validators kept in step by hand -- so a bound tightened for writers
+# and forgotten for readers would have split the contract silently, and nothing
+# compared the two lists.
+#
+# `strict=True` sits on the model rather than on every field. `included_roles`
+# opts its *items* back out: strict mode wants a `CardRole` instance, and this
+# value arrives from JSON as the string `"TOP"`.
 class TopChampionsMutableSettingsWriteV1(_CardSettingsWriteBase):
-    """Strict write-only contract that leaves legacy reads tolerant."""
+    """Strict write-only contract for the approved version 1 Top Champions card."""
 
-    minimum_games: int = Field(
-        strict=True, alias="minimumGames", default=1, ge=1, le=999
-    )
-    minimum_win_rate: float = Field(
-        strict=True, alias="minimumWinRate", default=0, ge=0, le=100
-    )
+    model_config = ConfigDict(strict=True)
+
+    minimum_games: int = Field(alias="minimumGames", default=1, ge=1, le=999)
+    minimum_win_rate: float = Field(alias="minimumWinRate", default=0, ge=0, le=100)
     minimum_kda: float = Field(
-        strict=True, alias="minimumKda", default=0, ge=0, le=50, multiple_of=0.1
+        alias="minimumKda", default=0, ge=0, le=50, multiple_of=0.1
     )
-    included_roles: list[CardRole] = Field(
+    included_roles: list[Annotated[CardRole, Field(strict=False)]] = Field(
         alias="includedRoles", default_factory=list[CardRole]
     )
 
@@ -165,66 +103,71 @@ class TopChampionsMutableSettingsWriteV1(_CardSettingsWriteBase):
 
 
 class RecentPerformanceMutableSettingsWriteV1(_CardSettingsWriteBase):
-    """Strict write-only contract that leaves legacy reads tolerant."""
+    """Strict write-only contract for the Recent Performance card."""
 
-    recent_match_count: int = Field(
-        strict=True, alias="recentMatchCount", default=10, ge=5, le=50
-    )
+    model_config = ConfigDict(strict=True)
+
+    recent_match_count: int = Field(alias="recentMatchCount", default=10, ge=5, le=50)
     win_rate_trend_delta: float = Field(
-        strict=True, alias="winRateTrendDelta", default=0.05, ge=0.01, le=0.25
+        alias="winRateTrendDelta", default=0.05, ge=0.01, le=0.25
     )
     relative_metric_trend_delta: float = Field(
-        strict=True, alias="relativeMetricTrendDelta", default=0.05, ge=0.01, le=0.25
+        alias="relativeMetricTrendDelta", default=0.05, ge=0.01, le=0.25
     )
 
 
 class SmurfBoostDetectionMutableSettingsWriteV1(_CardSettingsWriteBase):
-    """Strict write-only smurf and boost detection threshold contract."""
+    """Strict write-only smurf and boost detection thresholds, version 1.
 
-    recent_window_size: int = Field(
-        strict=True, alias="recentWindowSize", default=20, ge=10, le=50
-    )
+    Defaults are the Conservative preset. Every bound sits strictly below the
+    matching signal saturation constant, so the magnitude ramp in
+    `smurf-boost/v1` can never divide by zero or by a negative number.
+    """
+
+    model_config = ConfigDict(strict=True)
+
+    recent_window_size: int = Field(alias="recentWindowSize", default=20, ge=10, le=50)
     baseline_window_size: int = Field(
-        strict=True, alias="baselineWindowSize", default=60, ge=15, le=200
+        alias="baselineWindowSize", default=60, ge=15, le=200
     )
     a1_step_change_threshold: float = Field(
-        strict=True, alias="a1StepChangeThreshold", default=1.20, ge=0.60, le=2.00
+        alias="a1StepChangeThreshold", default=1.20, ge=0.60, le=2.00
     )
     a2_win_rate_surge_threshold: float = Field(
-        strict=True, alias="a2WinRateSurgeThreshold", default=0.20, ge=0.10, le=0.35
+        alias="a2WinRateSurgeThreshold", default=0.20, ge=0.10, le=0.35
     )
     a3_novel_champion_threshold: float = Field(
-        strict=True, alias="a3NovelChampionThreshold", default=1.20, ge=0.60, le=2.00
+        alias="a3NovelChampionThreshold", default=1.20, ge=0.60, le=2.00
     )
     a3_minimum_novel_games: int = Field(
-        strict=True, alias="a3MinimumNovelGames", default=8, ge=5, le=15
+        alias="a3MinimumNovelGames", default=8, ge=5, le=15
     )
     a4_summoner_level_gate: int = Field(
-        strict=True, alias="a4SummonerLevelGate", default=45, ge=30, le=150
+        alias="a4SummonerLevelGate", default=45, ge=30, le=150
     )
     a4_performance_threshold: float = Field(
-        strict=True, alias="a4PerformanceThreshold", default=1.20, ge=0.60, le=2.00
+        alias="a4PerformanceThreshold", default=1.20, ge=0.60, le=2.00
     )
     b1_win_rate_delta_threshold: float = Field(
-        strict=True, alias="b1WinRateDeltaThreshold", default=0.30, ge=0.15, le=0.45
+        alias="b1WinRateDeltaThreshold", default=0.30, ge=0.15, le=0.45
     )
     b1_composite_flat_ceiling: float = Field(
-        strict=True, alias="b1CompositeFlatCeiling", default=0.05, ge=0.00, le=0.40
+        alias="b1CompositeFlatCeiling", default=0.05, ge=0.00, le=0.40
     )
     b2_consistency_shift_threshold: float = Field(
-        strict=True, alias="b2ConsistencyShiftThreshold", default=1.15, ge=0.60, le=1.50
+        alias="b2ConsistencyShiftThreshold", default=1.15, ge=0.60, le=1.50
     )
     b3_bimodality_threshold: float = Field(
-        strict=True, alias="b3BimodalityThreshold", default=0.65, ge=0.555, le=0.80
+        alias="b3BimodalityThreshold", default=0.65, ge=0.555, le=0.80
     )
     b3_tail_fraction: float = Field(
-        strict=True, alias="b3TailFraction", default=0.30, ge=0.15, le=0.40
+        alias="b3TailFraction", default=0.30, ge=0.15, le=0.40
     )
     b4_high_rate_floor: float = Field(
-        strict=True, alias="b4HighRateFloor", default=0.62, ge=0.50, le=0.80
+        alias="b4HighRateFloor", default=0.62, ge=0.50, le=0.80
     )
     b4_drop_threshold: float = Field(
-        strict=True, alias="b4DropThreshold", default=0.20, ge=0.10, le=0.45
+        alias="b4DropThreshold", default=0.20, ge=0.10, le=0.45
     )
 
     @model_validator(mode="after")
@@ -236,6 +179,47 @@ class SmurfBoostDetectionMutableSettingsWriteV1(_CardSettingsWriteBase):
             self.a3_minimum_novel_games, self.recent_window_size
         )
         return self
+
+
+# The read contract is the write contract with two rules dropped: a stored
+# value may be spelled with the canonical field name, and it may need coercing
+# -- both are true of rows written under an older contract. The bounds and the
+# validators are inherited, so a legacy value that no longer fits is still
+# refused. `validate_by_name` rather than `populate_by_name`: the write base
+# already resolved that setting, and Pydantic will not let a subclass reverse
+# it through the deprecated spelling.
+_READ_POLICY = ConfigDict(validate_by_name=True, validate_by_alias=True, strict=False)
+
+
+class TopChampionsMutableSettingsV1(TopChampionsMutableSettingsWriteV1):
+    """Mutable Top Champions fields as a stored row may spell them."""
+
+    model_config = _READ_POLICY
+
+
+class RecentPerformanceMutableSettingsV1(RecentPerformanceMutableSettingsWriteV1):
+    """Mutable Recent Performance fields as a stored row may spell them."""
+
+    model_config = _READ_POLICY
+
+
+class SmurfBoostDetectionMutableSettingsV1(SmurfBoostDetectionMutableSettingsWriteV1):
+    """Mutable detection thresholds as a stored row may spell them."""
+
+    model_config = _READ_POLICY
+
+
+def _require_json_integer(value: object) -> int:
+    """Reject coerced values for the one field the model's `strict` cannot cover.
+
+    The card write models say `strict=True` on the model, which is the same
+    policy. `version` is a `Literal[1]`, and Pydantic raises `RuntimeError:
+    Unable to apply constraint 'strict' to schema of type 'literal'` -- and
+    would not reject `True` there in any case.
+    """
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError("must be an integer")
+    return value
 
 
 class CardPreferenceUpdate(_CardSettingsWriteBase):
@@ -262,7 +246,7 @@ class CardPreferenceResponse(_CardSettingsBase):
     updated_at: datetime | None = None
 
 
-_CARD_SETTINGS_MODELS: dict[CardId, type[_CardSettingsBase]] = {
+_CARD_SETTINGS_MODELS: dict[CardId, type[_CardSettingsWriteBase]] = {
     CardId.TOP_CHAMPIONS: TopChampionsMutableSettingsV1,
     CardId.RECENT_PERFORMANCE: RecentPerformanceMutableSettingsV1,
     CardId.SMURF_BOOST_DETECTION: SmurfBoostDetectionMutableSettingsV1,
@@ -324,15 +308,6 @@ def _is_compatible_legacy_setting_value(field_name: str, value: object) -> bool:
     return True
 
 
-def _is_json_object(value: object) -> TypeGuard[dict[str, Any]]:
-    """Narrow a decoded JSONB column to the object shape its writers produce.
-
-    A JSONB object always decodes with string keys; its values are whatever an
-    older contract wrote, and each one is screened before it reaches a model.
-    """
-    return isinstance(value, dict)
-
-
 def validate_card_preference_update(
     card_id: CardId, settings: dict[str, Any]
 ) -> dict[str, Any]:
@@ -353,7 +328,7 @@ def normalize_stored_card_preference(
     model_type = _CARD_SETTINGS_MODELS[card_id]
     normalized = model_type().model_dump(mode="json")
     warnings: list[str] = []
-    if not _is_json_object(stored_settings):
+    if not is_json_object(stored_settings):
         return {**_CARD_FIXED_SETTINGS_V1[card_id], **normalized}, ("settings",)
 
     renames = _LEGACY_SETTING_RENAMES[card_id]

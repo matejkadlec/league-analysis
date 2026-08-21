@@ -6,7 +6,10 @@ import { Eye, EyeOff, Loader2, UserMinus, Users } from "lucide-react";
 import { unwrap, validatedGet } from "@/lib/core/api";
 
 import { untrackPlayer } from "../player-api";
-import { invalidateTrackingQueries } from "../player-query";
+import {
+  invalidateTrackingQueries,
+  trackedPlayersQueryKey,
+} from "../player-query";
 import { useToast } from "@/lib/core/hooks";
 import { PlayerSchema, type Player } from "@/lib/core/schemas";
 import { useAuth } from "@/features/auth";
@@ -136,7 +139,7 @@ export function TrackedPlayersList({
   const userId = user?.id;
 
   const { data, isLoading, isFetching, error, refetch } = useQuery({
-    queryKey: ["tracked-players", userId],
+    queryKey: trackedPlayersQueryKey(userId),
     queryFn: async () => {
       return unwrap(
         await validatedGet(TrackedPlayersSchema, "/players/tracked/list"),

@@ -7,12 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ProfileCardEmptyState } from "./profile-card-empty-state";
 import { UpdatedStamp } from "./updated-stamp";
 import { Map } from "lucide-react";
-import {
-  formatFractionAsPercent,
-  formatKDA,
-  kdaColor,
-  winRateColors,
-} from "@/lib/core/format";
+import { winRateColors } from "@/lib/core/format";
+import { PerformanceFigures } from "./performance-figures";
 
 interface RoleStatsCardProps {
   stats: LaneStatsResponse;
@@ -93,32 +89,7 @@ export function RoleStatsCard({ stats, lastUpdated }: RoleStatsCardProps) {
 
                     {/* Stats */}
                     <div className="flex items-center gap-4">
-                      {/* KDA */}
-                      <div className="text-right">
-                        <p className="text-sm">
-                          {lane.avg_kills.toFixed(1)} /{" "}
-                          {lane.avg_deaths.toFixed(1)} /{" "}
-                          {lane.avg_assists.toFixed(1)}
-                        </p>
-                        <p className="text-xs">
-                          <span className={kdaColor(lane.avg_kda)}>
-                            {formatKDA(lane.avg_kda)}
-                          </span>{" "}
-                          <span className="text-muted-foreground">KDA</span>
-                        </p>
-                      </div>
-
-                      {/* Win rate */}
-                      <div className="text-right w-16">
-                        <p
-                          className={`text-sm font-bold ${winRateColors(lane.win_rate).text}`}
-                        >
-                          {formatFractionAsPercent(lane.win_rate)}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {lane.wins}W {lane.losses}L
-                        </p>
-                      </div>
+                      <PerformanceFigures stats={lane} />
                     </div>
                   </div>
 
