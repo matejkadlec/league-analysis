@@ -18,11 +18,11 @@ from app.core.database import db_manager
 from app.core.http_errors import SERVICE_ERROR_DETAIL
 from app.core.rate_limiter import limiter
 from app.core.request_logging import RequestLoggingMiddleware
-from app.features.auth import auth_router
-from app.features.jobs import (
+from app.features.auth.router import router as auth_router
+from app.features.jobs.log_capture import job_log_capture
+from app.features.jobs.router import router as jobs_router
+from app.features.jobs.scheduler import (
     StartupRecoveryError,
-    job_log_capture,
-    jobs_router,
     shutdown_scheduler,
     start_scheduler,
 )
