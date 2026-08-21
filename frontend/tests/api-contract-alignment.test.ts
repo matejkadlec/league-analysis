@@ -1,10 +1,13 @@
 import { readFileSync } from "node:fs";
+import { relative } from "node:path";
 
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { PLATFORM_DISPLAY_NAMES } from "@/lib/core/platform-utils";
 import * as exportedSchemas from "@/lib/core/schemas";
+
+import { allSourceFiles } from "./source-scan-support";
 
 /**
  * Every zod schema must accept everything its OpenAPI counterpart may send.
@@ -80,7 +83,76 @@ function apiCandidates(zodName: string): string[] {
   const alias = ALIASES[zodName];
   if (alias) return [alias];
   const base = zodName.replace(/Schema$/, "");
-  return [base, `${base}Response`, `${base}Item`, base.replace(/Response$/, "")];
+  return [
+    base,
+    `${base}Response`,
+    `${base}Item`,
+    base.replace(/Response$/, ""),
+  ];
+}
+
+const API_PREFIX = "/api/v1";
+
+/**
+ * The calls that name a path: the validated client's helpers, the bare axios
+ * instance, and the `fetch` sites in the auth infrastructure that predate the
+ * client and are exempt from the no-raw-fetch hook.
+ */
+const CALL_SITE =
+  /(validatedGet|validatedPost|validatedPut|validatedPatch|validatedDelete|api\.(?:get|post|put|patch|delete)|fetch)\s*(?:<[^>]*>)?\s*\(/g;
+const ANY_LITERAL = /(?:`([^`]*)`|"([^"]*)"|'([^']*)')/;
+
+/**
+ * Reduce a call-site path to the shape OpenAPI writes.
+ *
+ * `${puuid}` becomes `{}`, matching a `{puuid}` parameter; an interpolation
+ * that produces a query string (`${force ? "?force=true" : ""}`) is dropped
+ * whole, because a query is not part of the path.
+ */
+function normalizeCallPath(literal: string): string {
+  return literal
+    .replace(/\$\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/g, (interpolation) =>
+      /["'`]\?/.test(interpolation) ? "" : "{}",
+    )
+    .replace(/\?.*$/, "");
+}
+
+/**
+ * The API path a call site names, or null when it names something else.
+ *
+ * The validated helpers and the axios instance take a path relative to the
+ * prefix; `fetch` takes an absolute one, sometimes behind `${API_BASE_URL}`,
+ * and is also used for page routes and static assets, which is why only a
+ * literal carrying the prefix counts as an API call there.
+ */
+function apiPathFrom(helper: string, literal: string): string | null {
+  const prefixed = literal.indexOf(API_PREFIX);
+  if (prefixed !== -1) return literal.slice(prefixed + API_PREFIX.length);
+  if (helper === "fetch") return null;
+  return literal.startsWith("/") ? literal : null;
+}
+
+/** Every API path the frontend asks for, with the files that ask for it. */
+function calledApiPaths(): Map<string, string[]> {
+  const calls = new Map<string, string[]>();
+  for (const file of allSourceFiles()) {
+    const source = readFileSync(file, "utf8");
+    for (const match of source.matchAll(CALL_SITE)) {
+      const from = match.index + match[0].length;
+      const literal = ANY_LITERAL.exec(source.slice(from, from + 400));
+      if (!literal) continue;
+      const raw = literal[1] ?? literal[2] ?? literal[3] ?? "";
+      const helper = match[1] ?? "";
+      const apiPath = apiPathFrom(helper, raw);
+      if (apiPath === null) continue;
+      const path = normalizeCallPath(apiPath);
+      calls.set(path, [
+        ...(calls.get(path) ?? []),
+        relative(process.cwd(), file),
+      ]);
+    }
+  }
+  return calls;
 }
 
 const openApiPath = process.env.OPENAPI_JSON;
@@ -93,11 +165,37 @@ describe("zod against the OpenAPI contract", () => {
     return;
   }
 
-  const apiSchemas = (
-    JSON.parse(readFileSync(openApiPath, "utf8")) as {
-      components: { schemas: Record<string, JsonSchema> };
-    }
-  ).components.schemas;
+  const document = JSON.parse(readFileSync(openApiPath, "utf8")) as {
+    components: { schemas: Record<string, JsonSchema> };
+    paths: Record<string, unknown>;
+  };
+  const apiSchemas = document.components.schemas;
+
+  /**
+   * Every path the frontend calls must be one the backend serves.
+   *
+   * Nothing else checks this: a route renamed or moved on the backend leaves
+   * every zod schema, type and test here green, and the call 404s at runtime
+   * for whoever opens the page. The paths in this repo are template literals
+   * over a helper, so they are readable statically.
+   */
+  it("asks only for paths the API serves", () => {
+    const served = new Set(
+      Object.keys(document.paths).map((path) =>
+        path.slice(API_PREFIX.length).replace(/\{[^}]*\}/g, "{}"),
+      ),
+    );
+    const called = calledApiPaths();
+    // Signal first: an extractor that stopped finding call sites would pass by
+    // having nothing to check.
+    expect(called.size).toBeGreaterThanOrEqual(40);
+
+    const unserved = [...called]
+      .filter(([path]) => !served.has(path))
+      .map(([path, files]) => `${path} (${files.join(", ")})`);
+
+    expect(unserved).toEqual([]);
+  });
 
   const pairs = Object.entries(exportedSchemas).flatMap(([name, value]) => {
     if (!(value instanceof z.ZodType)) return [];
@@ -143,12 +241,16 @@ describe("zod against the OpenAPI contract", () => {
         const zodKinds = zodFields.get(field);
         if (!zodKinds || zodKinds.has("any") || apiKinds.has("any")) continue;
         const core = (set: Set<string>) =>
-          [...set].filter((k) => k !== "null").sort().join("|");
+          [...set]
+            .filter((k) => k !== "null")
+            .sort()
+            .join("|");
         // A literal pins one value on both sides; zod serialises a numeric
         // literal as "number" where Python's Literal[1] is "integer".
         const zodConst = (resolve(zodJson, {}).properties as JsonSchema)[field];
-        const apiConst = (resolve(apiSchemas[apiName], apiSchemas)
-          .properties as JsonSchema)[field];
+        const apiConst = (
+          resolve(apiSchemas[apiName], apiSchemas).properties as JsonSchema
+        )[field];
         const zr = resolve(zodConst, {});
         const ar = resolve(apiConst, apiSchemas);
         if (zr.const !== undefined && zr.const === ar.const) continue;
@@ -181,7 +283,9 @@ describe("zod against the OpenAPI contract", () => {
         // `.optional()` accepts undefined and REJECTS null. Only `.nullable()`
         // accepts null, and Pydantic serialises an absent `X | None` as null.
         if (apiKinds.has("null") && !zodKinds.has("null")) {
-          problems.push(`${field}: API may send null, zod does not accept null`);
+          problems.push(
+            `${field}: API may send null, zod does not accept null`,
+          );
         }
         // And the mirror. A zod field that accepts a null the API cannot send
         // is a field whose absence no longer fails: five `core.matches`
