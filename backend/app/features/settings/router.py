@@ -8,7 +8,6 @@ from app.features.auth.user_cookie_consent import UserCookieConsent
 
 from .dependencies import SettingsServiceDep
 from .schemas import (
-    APIKeyStatusResponse,
     CardId,
     CardPreferenceResponse,
     CardPreferencesResetRequest,
@@ -24,19 +23,6 @@ from .schemas import (
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix="/settings", tags=["settings"])
-
-
-@router.get("/riot_api_key/status")
-async def get_riot_api_key_status(
-    settings_service: SettingsServiceDep,
-    _current_user: AdminUserDep,
-) -> APIKeyStatusResponse:
-    """
-    Get the status of the Riot API key configuration.
-    Returns whether valid key exists in DB or Env, and which one is active.
-    Used for UI header messages.
-    """
-    return await settings_service.get_api_key_status()
 
 
 @router.get("/service-status")

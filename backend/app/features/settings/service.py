@@ -20,7 +20,6 @@ from app.core.riot_api.errors import RiotAPIError
 
 from .models import UserCardPreference
 from .schemas import (
-    APIKeyStatusResponse,
     CardId,
     CardPreferenceResponse,
     CardPreferenceUpdate,
@@ -69,16 +68,6 @@ class SettingsService:
             )
 
         return None
-
-    async def get_api_key_status(self) -> APIKeyStatusResponse:
-        """Get admin detail from the shared authoritative health state."""
-        _credential, health = await synchronize_riot_credential_health(self.db)
-        return APIKeyStatusResponse(
-            credential_status=health.status.value,
-            evidence=health.evidence.value,
-            observed_at=health.evidence_at,
-            health_revision=health.revision,
-        )
 
     async def get_service_status(self) -> ServiceStatusResponse:
         """Get the same current health decision for every authenticated user."""

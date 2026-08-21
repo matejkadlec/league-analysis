@@ -767,18 +767,3 @@ export const ServiceStatusSchema = z.object({
 });
 
 export type ServiceStatus = z.infer<typeof ServiceStatusSchema>;
-
-export const APIKeyStatusSchema = z.object({
-  credential_status: credentialStatus,
-  evidence: z.enum([
-    "missing",
-    "configured",
-    "settings_validation",
-    "provider_success",
-    "credential_rejected",
-  ]),
-  observed_at: z.string(),
-  health_revision: z.number().int(),
-});
-
-export type APIKeyStatus = z.infer<typeof APIKeyStatusSchema>;

@@ -15,7 +15,6 @@ import { allSourceFiles } from "./source-scan-support";
  * update to one of them refetches all the others.
  */
 const PLAYER_INDEPENDENT_KEYS = new Set([
-  "apiKeyStatus",
   "job-executions",
   "job-executions-infinite",
   "job-status",

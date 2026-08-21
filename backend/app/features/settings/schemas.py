@@ -440,21 +440,6 @@ class SettingTestResponse(BaseModel):
     )
 
 
-class APIKeyStatusResponse(BaseModel):
-    """Admin configuration detail backed by the shared credential-health state."""
-
-    credential_status: Literal["missing", "unknown", "valid", "invalid"]
-    evidence: Literal[
-        "missing",
-        "configured",
-        "settings_validation",
-        "provider_success",
-        "credential_rejected",
-    ]
-    observed_at: datetime
-    health_revision: int = Field(..., gt=0)
-
-
 class ServiceStatusResponse(BaseModel):
     """Shared admin/non-admin view of authoritative credential health."""
 
