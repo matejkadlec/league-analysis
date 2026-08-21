@@ -10,9 +10,7 @@ from sqlalchemy import Select, and_, delete, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import (
-    PlayerServiceError,
-)
+from app.core.exceptions import ServiceException
 from app.core.http_errors import http_error
 from app.core.riot_api.constants import (
     Platform,
@@ -147,9 +145,10 @@ class PlayerService:
         player = result.scalar_one_or_none()
 
         if not player:
-            raise PlayerServiceError(
+            raise ServiceException(
                 message=f"Player not found in database: {puuid}. "
                 f"Please track this player first.",
+                service="PlayerService",
                 operation="get_player_by_puuid",
             )
 

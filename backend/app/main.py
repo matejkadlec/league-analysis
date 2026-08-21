@@ -16,7 +16,7 @@ from structlog import contextvars as structlog_contextvars
 from app.core.config import get_global_settings
 from app.core.database import db_manager
 from app.core.http_errors import SERVICE_ERROR_DETAIL
-from app.core.rate_limiter import limiter
+from app.core.http_rate_limit import limiter
 from app.core.request_logging import RequestLoggingMiddleware
 from app.features.auth.router import router as auth_router
 from app.features.jobs.log_capture import job_log_capture
