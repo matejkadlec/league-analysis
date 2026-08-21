@@ -147,6 +147,7 @@ class MatchmakingAnalysisService:
         self.riot_client = riot_client
         self.requests_saved: int = 0
         self.api_calls_made: int = 0  # Track actual API calls for savings calculation
+        self.matches_analyzed: int = 0
         self._is_waiting_for_rate_limit: bool = False
         self._current_analysis_puuid: str | None = None
         self._current_analysis_created_at: datetime | None = None
@@ -466,6 +467,7 @@ class MatchmakingAnalysisService:
     def _reset_run_state(self, puuid: str, created_at: datetime) -> None:
         self.requests_saved = 0
         self.api_calls_made = 0
+        self.matches_analyzed = 0
         self._current_analysis_puuid = puuid
         self._current_analysis_created_at = created_at
         self._winrate_cache = {}
@@ -613,17 +615,28 @@ class MatchmakingAnalysisService:
     def _build_completion_results(
         self, team_avgs: list[float], enemy_avgs: list[float]
     ) -> MatchmakingAnalysisResultsJSON:
-        team_avg = fmean(team_avgs) if team_avgs else 0.0
-        enemy_avg = fmean(enemy_avgs) if enemy_avgs else 0.0
+        """Summarise a finished run, or refuse to call an empty one finished.
+
+        Both averages used to fall back to 0.0, and the two counts were the
+        constants the run *would* have reached had everything loaded. So a run
+        that measured nothing -- every spine match failing to load returns
+        `None` from `_api_fetch_match` for any non-auth Riot error -- still
+        wrote `completed`, stamped `last_matchmaking_analysis`, and rendered
+        "0.0% vs 0.0%, based on 910 ranked matches" as a fair-matchmaking
+        verdict. `_run_analysis_task` already persists a `failed` row for a
+        raised error, which is what an unmeasured run is.
+        """
+        if not team_avgs or not enemy_avgs:
+            raise MatchmakingAnalysisRuntimeError(
+                "no_matches_analyzed",
+                "No ranked match history could be read for this lobby. "
+                "Please try again later.",
+            )
+        team_avg = fmean(team_avgs)
+        enemy_avg = fmean(enemy_avgs)
 
         expected_other_players = self.MATCHES_TO_ANALYZE * 9
-        expected_players = expected_other_players + 1
         expected_match_details_per_other = max(1, self.MATCHES_FOR_WINRATE - 1)
-        # Basis size shown in UI:
-        # 10 (current player's matches) + 90 players * 10 matches each = 910
-        expected_matches_analyzed = self.MATCHES_TO_ANALYZE + (
-            expected_other_players * self.MATCHES_FOR_WINRATE
-        )
 
         # Theoretical maximum without DB:
         #   - 1 call for current player's spine IDs
@@ -642,8 +655,9 @@ class MatchmakingAnalysisService:
         return {
             "team_avg_winrate": round(team_avg, 4),
             "enemy_avg_winrate": round(enemy_avg, 4),
-            "matches_analyzed": expected_matches_analyzed,
-            "players_analyzed": expected_players,
+            # Measured, not expected: the UI prints these as the basis of the
+            # verdict, and a shallow database reaches nothing like 910.
+            "matches_analyzed": self.matches_analyzed,
         }
 
     async def _finalize_completed_analysis(
@@ -817,10 +831,10 @@ class MatchmakingAnalysisService:
             return self._winrate_from_rows(db_wins)
         return await self._winrate_from_match_ids(match_ids, puuid)
 
-    @staticmethod
-    def _winrate_from_rows(db_wins: Sequence[bool]) -> float | None:
+    def _winrate_from_rows(self, db_wins: Sequence[bool]) -> float | None:
         if not db_wins:
             return None
+        self.matches_analyzed += len(db_wins)
         return sum(db_wins) / len(db_wins)
 
     async def _winrate_from_match_ids(
@@ -836,6 +850,7 @@ class MatchmakingAnalysisService:
                     wins += 1
         if total <= 0:
             return None
+        self.matches_analyzed += total
         return wins / total
 
     # ================================================================
