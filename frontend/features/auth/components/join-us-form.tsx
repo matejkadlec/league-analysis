@@ -31,8 +31,10 @@ import { PublicPageFooter } from "@/components/public-page-footer";
 import { useAuth } from "../context/auth-context";
 import { JoinUsRoleCards } from "./join-us-role-cards";
 import { useTurnstileCaptcha } from "./use-turnstile-captcha";
-
-const MESSAGE_MIN_LENGTH = 300;
+import {
+  JOIN_US_BODY_MAX_LENGTH,
+  JOIN_US_BODY_MIN_LENGTH,
+} from "../utils/join-us-message";
 
 const SUBJECT_OPTIONS: { value: JoinUsSubject; label: string }[] = [
   { value: "full_stack_developer", label: "Full-Stack Developer" },
@@ -67,9 +69,9 @@ export function JoinUsForm({ isAuthenticatedHint = false }: JoinUsFormProps) {
 
   const trimmedBody = body.trim();
   const bodyLength = trimmedBody.length;
-  const remainingChars = Math.max(0, MESSAGE_MIN_LENGTH - bodyLength);
+  const remainingChars = Math.max(0, JOIN_US_BODY_MIN_LENGTH - bodyLength);
   const isSubjectValid = subject !== "";
-  const isBodyValid = bodyLength >= MESSAGE_MIN_LENGTH;
+  const isBodyValid = bodyLength >= JOIN_US_BODY_MIN_LENGTH;
   const isCaptchaSatisfied =
     !captcha.isConfigured ||
     (captcha.token !== null && captcha.token.length > 0);
@@ -200,6 +202,7 @@ export function JoinUsForm({ isAuthenticatedHint = false }: JoinUsFormProps) {
                       value={body}
                       onChange={(event) => setBody(event.target.value)}
                       disabled={isSubmitting}
+                      maxLength={JOIN_US_BODY_MAX_LENGTH}
                       placeholder="Share some info about you, your relevant experience, how you approach collaboration and problem-solving, and why you want to join us."
                       className="min-h-56 w-full resize-y rounded-md border border-white/25 bg-slate-950 px-3 py-2 text-sm text-white shadow-sm outline-none placeholder:text-white/45 focus:border-amber-400 focus:ring-2 focus:ring-amber-400/30"
                     />
@@ -209,7 +212,7 @@ export function JoinUsForm({ isAuthenticatedHint = false }: JoinUsFormProps) {
                         isBodyValid ? "text-emerald-300" : "text-white/65",
                       )}
                     >
-                      {`Message must be at least ${MESSAGE_MIN_LENGTH} characters.${
+                      {`Message must be at least ${JOIN_US_BODY_MIN_LENGTH} characters.${
                         remainingChars > 0
                           ? ` ${remainingChars} more required.`
                           : " Requirement met."
