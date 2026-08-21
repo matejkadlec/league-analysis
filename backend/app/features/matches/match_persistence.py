@@ -5,14 +5,12 @@ from __future__ import annotations
 from collections.abc import Iterable
 
 import structlog
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db_session import rollback_quietly
 from app.core.riot_api.constants import normalize_platform
 from app.core.riot_api.models import MatchDTO, MatchTimelineDTO, ParticipantDTO
-from app.features.players.identity import resolve_player_display_fields
-from app.features.players.models import Player
+from app.features.players.identity import upsert_player_statement
 
 from .match_lp import initialize_participant_lp
 from .models import Match
@@ -68,22 +66,7 @@ async def merge_reprocess_player(
     platform_id: str,
 ) -> None:
     """Upsert the skeletal player row required by the match-participant FK."""
-    existing_player_result = await session.execute(
-        select(Player).where(Player.puuid == participant.puuid)
-    )
-    existing_player = existing_player_result.scalar_one_or_none()
-    fields = resolve_player_display_fields(participant, existing_player, platform_id)
-    await session.merge(
-        Player(
-            puuid=participant.puuid,
-            game_name=fields["game_name"],
-            tag_line=fields["tag_line"],
-            platform=normalize_platform(platform_id),
-            profile_icon_id=fields["profile_icon_id"],
-            summoner_level=fields["summoner_level"],
-            is_tracked=fields["is_tracked"],
-        )
-    )
+    await session.execute(upsert_player_statement(participant, platform_id))
 
 
 async def merge_reprocess_participants(
