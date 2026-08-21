@@ -1,5 +1,6 @@
-import { readFileSync } from "node:fs";
-import { relative } from "node:path";
+import { readdirSync, readFileSync } from "node:fs";
+import { dirname, join, relative } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
@@ -592,4 +593,28 @@ describe("zod against the OpenAPI contract", () => {
       expect(problems).toEqual([]);
     },
   );
+});
+
+/**
+ * `test.sh` runs the OpenAPI-backed checks as `npm test -- --run alignment`,
+ * and every one of them skips itself when `OPENAPI_JSON` is unset. A file that
+ * reads the document but is named outside that filter therefore does not fail
+ * the gate -- it passes by comparing nothing, which is what
+ * `tests/riot-id-alignment.test.ts` did from the day it was written until
+ * 2026-08-21. This holds the naming convention the gate depends on.
+ */
+describe("the gate reaches every test that reads the OpenAPI document", () => {
+  it("names every OPENAPI_JSON reader so the alignment filter selects it", () => {
+    const testsDirectory = dirname(fileURLToPath(import.meta.url));
+    const strays = readdirSync(testsDirectory)
+      .filter((entry) => entry.endsWith(".test.ts"))
+      .filter((entry) =>
+        readFileSync(join(testsDirectory, entry), "utf8").includes(
+          "OPENAPI_JSON",
+        ),
+      )
+      .filter((entry) => !entry.includes("alignment"));
+
+    expect(strays, "rename these to *-alignment.test.ts").toEqual([]);
+  });
 });

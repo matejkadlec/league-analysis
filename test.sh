@@ -198,9 +198,10 @@ run_frontend_build() {
 
 run_api_contract_alignment() {
   # The other half of backend/tests/test_model_schema_alignment.py. That one
-  # guards column -> Pydantic inside pytest; this one guards Pydantic -> zod,
-  # which needs both runtimes and so cannot live in either suite. Only runs on
-  # the full gate, because a frontend-only run has no backend venv to ask.
+  # guards column -> Pydantic inside pytest; these guard Pydantic -> zod and
+  # Pydantic -> form, which need both runtimes and so cannot live in either
+  # suite. Only runs on the full gate, because a frontend-only run has no
+  # backend venv to ask.
   local openapi_document
   openapi_document="$(mktemp)"
   # shellcheck disable=SC2064
@@ -208,7 +209,13 @@ run_api_contract_alignment() {
   (cd "$repository_root/backend" && uv run --no-sync python scripts/dump_openapi.py) \
     > "$openapi_document"
   cd "$repository_root/frontend"
-  OPENAPI_JSON="$openapi_document" npm test -- --run tests/api-contract-alignment.test.ts
+  # Every *-alignment test, not one named file: the ones that read
+  # OPENAPI_JSON skip themselves when it is unset, so a file left out of this
+  # line does not fail -- it silently stops comparing anything, which is how
+  # tests/riot-id-alignment.test.ts spent its whole life never running. The
+  # api-contract test asserts that every OPENAPI_JSON reader matches this
+  # filter, so the convention this relies on cannot rot quietly.
+  OPENAPI_JSON="$openapi_document" npm test -- --run alignment
 }
 
 run_frontend_e2e() {

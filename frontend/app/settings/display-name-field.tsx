@@ -13,6 +13,11 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/lib/core/hooks";
 import { Loader2, Save } from "lucide-react";
 import {
+  DISPLAY_NAME_MAX_LENGTH,
+  DISPLAY_NAME_MIN_LENGTH,
+  DISPLAY_NAME_PATTERN,
+} from "@/features/auth/utils/display-name";
+import {
   ACCOUNT_ACTION_BUTTON_CLASS,
   USER_QUERY_KEY,
 } from "./settings-helpers";
@@ -64,15 +69,14 @@ export function DisplayNameField() {
       return;
     }
 
-    if (trimmed.length < 3) {
+    if (trimmed.length < DISPLAY_NAME_MIN_LENGTH) {
       toast.warning("Display name too short", {
-        description: "Use at least 3 characters.",
+        description: `Use at least ${DISPLAY_NAME_MIN_LENGTH} characters.`,
       });
       return;
     }
 
-    const validPattern = /^[\p{L}](?:[\p{L}\p{M}_ ]*[\p{L}])?$/u;
-    if (!validPattern.test(trimmed)) {
+    if (!DISPLAY_NAME_PATTERN.test(trimmed)) {
       toast.warning("Check the display name", {
         description:
           "Must only contain letters, underscores, and spaces. Cannot start or end with space or underscore.",
@@ -91,7 +95,7 @@ export function DisplayNameField() {
           id="display-name"
           value={displayName}
           onChange={handleDisplayNameChange}
-          maxLength={128}
+          maxLength={DISPLAY_NAME_MAX_LENGTH}
           disabled={updateDisplayNameMutation.isPending}
           className="w-full"
         />

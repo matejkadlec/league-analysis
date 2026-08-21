@@ -3,17 +3,43 @@
 import re
 from datetime import datetime
 from enum import Enum
+from typing import Annotated
 
 from pydantic import (
     BaseModel,
     ConfigDict,
     EmailStr,
     Field,
+    StringConstraints,
     field_validator,
     model_validator,
 )
 
 SPECIAL_CHARACTER_PATTERN = r"[!@#$%^&*(),.?\":{}|<>\-_+=\[\]\\/;'`~]"
+
+DISPLAY_NAME_MIN_LENGTH = 3
+DISPLAY_NAME_MAX_LENGTH = 128
+DISPLAY_NAME_PATTERN = r"^[\p{L}](?:[\p{L}\p{M}_ ]*[\p{L}])?$"
+
+DisplayName = Annotated[
+    str,
+    StringConstraints(
+        strip_whitespace=True,
+        min_length=DISPLAY_NAME_MIN_LENGTH,
+        max_length=DISPLAY_NAME_MAX_LENGTH,
+        pattern=DISPLAY_NAME_PATTERN,
+    ),
+]
+"""Letters, marks, underscores and spaces, starting and ending on a letter.
+
+The settings form has always enforced exactly this, and the API enforced none
+of it, so `PATCH /auth/me` accepted any 1-128 character string from anything
+that was not the form. Pydantic renders all three constraints into the OpenAPI
+document, which is what `display-name-alignment.test.ts` reads back to hold the
+two copies of the rule equal. `strip_whitespace` is the one part that does not
+appear there -- it is a transform, not a constraint -- so a client that does
+not trim gets the same stored value as the form, which does.
+"""
 
 
 def validate_password_strength(value: str) -> str:
@@ -43,7 +69,7 @@ class UserBase(BaseModel):
     """Base user schema with common fields."""
 
     email: EmailStr
-    display_name: str = Field(..., min_length=1, max_length=128)
+    display_name: DisplayName
 
 
 class UserCreate(UserBase):
@@ -72,6 +98,12 @@ class UserCreate(UserBase):
 
 class UserResponse(UserBase):
     """Schema for user responses (excludes sensitive data)."""
+
+    # Deliberately looser than `UserBase`: FastAPI validates response models on
+    # the way out, so inheriting `DisplayName` would turn a row that predates
+    # the rule into a 500 on `GET /auth/me` -- the one page you would use to
+    # fix the name. The write models are where the rule belongs.
+    display_name: str
 
     id: int
     is_active: bool
@@ -114,7 +146,7 @@ class RefreshTokenRequest(BaseModel):
 class UserProfileUpdate(BaseModel):
     """Schema for updating user profile fields."""
 
-    display_name: str | None = Field(default=None, min_length=1, max_length=128)
+    display_name: DisplayName | None = Field(default=None)
 
 
 class EmailChangeRequest(BaseModel):
