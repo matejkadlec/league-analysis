@@ -10,6 +10,7 @@ import {
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ProtectedRoute } from "@/features/auth";
+import { RANKED_SOLO_QUEUE_ID } from "@/features/matches/queue-catalog";
 import {
   PlayerCard,
   SelectPlayerCard,
@@ -57,25 +58,25 @@ function PlayerOverviewContent({ puuid }: { puuid: string }) {
   } = useQuery(playerQueryOptions(puuid));
   const { data: championStats = null, isLoading: isChampionLoading } = useQuery(
     {
-      queryKey: ["champion-stats", puuid],
+      queryKey: ["champion-stats", puuid, RANKED_SOLO_QUEUE_ID],
       queryFn: async () =>
         unwrap(
           await validatedGet(
             ChampionStatsResponseSchema,
             `/matches/player/${puuid}/champion-stats`,
-            { queues: "420" },
+            { queues: String(RANKED_SOLO_QUEUE_ID) },
           ),
         ),
     },
   );
   const { data: laneStats = null, isLoading: isLaneLoading } = useQuery({
-    queryKey: ["lane-stats", puuid],
+    queryKey: ["lane-stats", puuid, RANKED_SOLO_QUEUE_ID],
     queryFn: async () =>
       unwrap(
         await validatedGet(
           LaneStatsResponseSchema,
           `/matches/player/${puuid}/lane-stats`,
-          { queues: "420" },
+          { queues: String(RANKED_SOLO_QUEUE_ID) },
         ),
       ),
   });
@@ -122,7 +123,7 @@ function PlayerOverviewContent({ puuid }: { puuid: string }) {
           <ChampionStatsCard
             stats={championStats}
             lastUpdated={player?.match_synced_at}
-            dataSourceKey={`${puuid}:queue:420`}
+            dataSourceKey={`${puuid}:queue:${RANKED_SOLO_QUEUE_ID}`}
           />
         ) : null}
 

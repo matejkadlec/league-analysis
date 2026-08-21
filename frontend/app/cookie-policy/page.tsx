@@ -4,7 +4,12 @@ import {
   AUTH_STATE_COOKIE_NAME,
   AUTH_STATE_COOKIE_VALUE,
 } from "@/features/auth/utils/auth-state-cookie";
-import { COOKIE_CONSENT_VERSION } from "@/features/cookie-consent/utils/consent-storage";
+import {
+  COOKIE_CONSENT_VERSION,
+  HEADER_MESSAGES_CLOSED_STORAGE_KEY,
+  MATCH_HISTORY_PAGE_SIZE_STORAGE_KEY,
+  MATCH_HISTORY_QUEUE_FILTERS_STORAGE_KEY,
+} from "@/features/cookie-consent/utils/consent-storage";
 
 function storageName(name: string): string {
   return name.replaceAll("_", "_\u200b");
@@ -129,7 +134,7 @@ export default async function CookiePolicyPage() {
             </tr>
             <tr className="border-t border-white/10 align-top">
               <td className="max-w-[16rem] px-3 py-2 font-mono">
-                {storageName("header_messages_closed:v1")}
+                {storageName(HEADER_MESSAGES_CLOSED_STORAGE_KEY)}
               </td>
               <td className="whitespace-nowrap px-3 py-2">Local storage</td>
               <td className="whitespace-nowrap px-3 py-2">
@@ -144,7 +149,7 @@ export default async function CookiePolicyPage() {
             </tr>
             <tr className="border-t border-white/10 align-top">
               <td className="max-w-[16rem] px-3 py-2 font-mono">
-                {storageName("league_analysis_match_history_page_size")}
+                {storageName(MATCH_HISTORY_PAGE_SIZE_STORAGE_KEY)}
               </td>
               <td className="whitespace-nowrap px-3 py-2">Local storage</td>
               <td className="whitespace-nowrap px-3 py-2">
@@ -159,7 +164,7 @@ export default async function CookiePolicyPage() {
             </tr>
             <tr className="border-t border-white/10 align-top">
               <td className="max-w-[16rem] px-3 py-2 font-mono">
-                {storageName("league_analysis_match_history_queue_filters")}
+                {storageName(MATCH_HISTORY_QUEUE_FILTERS_STORAGE_KEY)}
               </td>
               <td className="whitespace-nowrap px-3 py-2">Local storage</td>
               <td className="whitespace-nowrap px-3 py-2">

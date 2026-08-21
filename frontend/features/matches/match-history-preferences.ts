@@ -1,4 +1,6 @@
 import {
+  MATCH_HISTORY_PAGE_SIZE_STORAGE_KEY,
+  MATCH_HISTORY_QUEUE_FILTERS_STORAGE_KEY,
   readOptionalStorage,
   writeOptionalStorage,
 } from "@/features/cookie-consent";
@@ -14,11 +16,6 @@ import {
   type MatchHistoryQueueFilter,
   type MatchHistoryQueueSelection,
 } from "./queue-catalog";
-
-export const MATCH_HISTORY_PAGE_SIZE_STORAGE_KEY =
-  "league_analysis_match_history_page_size";
-export const MATCH_HISTORY_QUEUE_FILTERS_STORAGE_KEY =
-  "league_analysis_match_history_queue_filters";
 
 export interface MatchHistoryPreferences {
   pageSize: MatchHistoryPageSize;

@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { X, AlertTriangle, AlertOctagon, CircleCheck } from "lucide-react";
 import { useAuth } from "@/features/auth";
+import { HEADER_MESSAGES_CLOSED_STORAGE_KEY } from "@/features/cookie-consent";
 import { COOKIE_CONSENT_UPDATED_EVENT } from "@/features/cookie-consent";
 // Not through the barrel: `tests/header-messages-credential-health.test.tsx`
 // factory-mocks `@/features/cookie-consent` down to the event name.
@@ -20,7 +21,7 @@ import {
 import { cn } from "@/lib/core/utils";
 import { RIOT_CREDENTIAL_HEALTH_UPDATED_EVENT } from "@/lib/core/riot-credential-health-events";
 
-const HEADER_MESSAGES_CLOSED_KEY = "header_messages_closed:v1";
+
 
 // Temporarily disabled while Riot production-key review is pending.
 const SHOW_SIGNED_OUT_RECRUITMENT_BANNER = false;
@@ -88,7 +89,7 @@ function HeaderBanner({
 function readClosedMessages(): string[] {
   try {
     const parsed: unknown = JSON.parse(
-      readOptionalStorage(HEADER_MESSAGES_CLOSED_KEY) ?? "",
+      readOptionalStorage(HEADER_MESSAGES_CLOSED_STORAGE_KEY) ?? "",
     );
     return Array.isArray(parsed)
       ? parsed.filter((value): value is string => typeof value === "string")
@@ -130,7 +131,7 @@ export function HeaderMessages() {
 
     const newClosed = [...closedMessages, id];
     setClosedMessages(newClosed);
-    writeOptionalStorage(HEADER_MESSAGES_CLOSED_KEY, JSON.stringify(newClosed));
+    writeOptionalStorage(HEADER_MESSAGES_CLOSED_STORAGE_KEY, JSON.stringify(newClosed));
   };
 
   const { data: serviceStatus } = useQuery(
