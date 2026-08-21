@@ -1,10 +1,9 @@
 """Riot API HTTP client with proper rate limiting, error handling, and authentication."""
 
 import asyncio
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from enum import Enum
 from typing import Any, Protocol
 
 import httpx
@@ -16,7 +15,7 @@ from tenacity import (
     stop_after_attempt,
 )
 
-from .constants import MatchType, Platform, QueueType, Region
+from .constants import MatchType, Platform, QueueType, Region, enum_str
 from .credential_vocabulary import RiotCredentialStatus
 from .endpoints import RiotAPIEndpoints
 from .errors import (
@@ -157,8 +156,8 @@ class RiotAPIClient:
 
                     logger.info(
                         "Riot API client session started",
-                        region=self._enum_str(self.region),
-                        platform=self._enum_str(self.platform),
+                        region=enum_str(self.region),
+                        platform=enum_str(self.platform),
                         api_key_prefix="[REDACTED]" if self.api_key else "None",
                     )
 
@@ -230,12 +229,9 @@ class RiotAPIClient:
             raise NotFoundError("Resource not found", status_code=status)
 
     @staticmethod
-    def _normalize_headers(headers: dict[str, Any]) -> dict[str, str]:
-        """Normalize HTTP header keys to lowercase for case-insensitive lookups."""
-        return {str(k).lower(): str(v) for k, v in headers.items()}
-
-    @staticmethod
-    def _parse_retry_after(headers: dict[str, str], default_seconds: int = 120) -> int:
+    def _parse_retry_after(
+        headers: Mapping[str, str], default_seconds: int = 120
+    ) -> int:
         """Parse Retry-After header with a safe fallback."""
         raw_retry_after = headers.get("retry-after")
         if raw_retry_after is None:
@@ -252,7 +248,7 @@ class RiotAPIClient:
 
         return max(retry_after, 1)
 
-    def _handle_rate_limit(self, headers: dict[str, str]) -> None:
+    def _handle_rate_limit(self, headers: Mapping[str, str]) -> None:
         """Log the header evidence, then raise the 429 as a retryable error."""
         retry_after = self._parse_retry_after(headers)
 
@@ -284,7 +280,7 @@ class RiotAPIClient:
     def _handle_http_error_status(
         self,
         status: int,
-        headers: dict[str, str],
+        headers: Mapping[str, str],
         riot_message: str | None = None,
     ) -> None:
         """Raise the mapped error for a known status; return for anything else.
@@ -304,8 +300,6 @@ class RiotAPIClient:
         self,
         url: str,
         method: str,
-        params: dict[str, Any] | None,
-        data: dict[str, Any] | None,
     ) -> dict[str, Any] | list[Any]:
         """Execute a single HTTP request, raising mapped errors for bad statuses.
 
@@ -317,8 +311,7 @@ class RiotAPIClient:
             raise RiotAPIError("Session not initialized")
 
         evidence_at = datetime.now(UTC)
-        response = await self.session.request(method, url, params=params, json=data)
-        response_headers = self._normalize_headers(dict(response.headers))
+        response = await self.session.request(method, url)
 
         # Track all API requests (successful or failed) - every HTTP call counts
         if self.request_callback:
@@ -326,12 +319,12 @@ class RiotAPIClient:
 
         try:
             await self._record_credential_health(response.status_code, evidence_at)
-            self.rate_limiter.update_limits(response_headers, url, method)
+            self.rate_limiter.update_limits(response.headers, url, method)
 
             if response.status_code != 200:
                 self._handle_http_error_status(
                     response.status_code,
-                    response_headers,
+                    response.headers,
                     self._extract_riot_status_message(response),
                 )
 
@@ -413,8 +406,6 @@ class RiotAPIClient:
         self,
         url: str,
         method: str = "GET",
-        params: dict[str, Any] | None = None,
-        data: dict[str, Any] | None = None,
         retry_on_failure: bool = True,
     ) -> dict[str, Any] | list[Any]:
         """
@@ -423,8 +414,6 @@ class RiotAPIClient:
         Args:
             url: Request URL
             method: HTTP method
-            params: Query parameters
-            data: Request body data
             retry_on_failure: Retry on transient failures
 
         Returns:
@@ -455,9 +444,7 @@ class RiotAPIClient:
             reraise=True,
         )
         try:
-            return await retryer(
-                self._execute_single_request, url, method, params, data
-            )
+            return await retryer(self._execute_single_request, url, method)
         except (TimeoutError, httpx.RequestError) as error:
             logger.error(
                 "riot_api_request_failed",
@@ -517,13 +504,6 @@ class RiotAPIClient:
             )
         return response
 
-    @staticmethod
-    def _enum_str(value: Region | Platform | str) -> str:
-        """Extract string value from enum or return as-is."""
-        if isinstance(value, Enum):
-            return str(value.value)
-        return value
-
     # Account endpoints
     async def get_account_by_riot_id(
         self, game_name: str, tag_line: str, region: Region | None = None
@@ -532,7 +512,7 @@ class RiotAPIClient:
         used_region = region or self.region
         self._record_api_call(
             "/riot/account/v1/accounts/by-riot-id/{gameName}/{tagLine}",
-            self._enum_str(used_region),
+            enum_str(used_region),
             {"gameName": game_name, "tagLine": tag_line},
         )
         url = self.endpoints.account_by_riot_id(game_name, tag_line, region)
@@ -546,7 +526,7 @@ class RiotAPIClient:
         used_region = region or self.region
         self._record_api_call(
             "/riot/account/v1/accounts/by-puuid/{puuid}",
-            self._enum_str(used_region),
+            enum_str(used_region),
             {"puuid": puuid},
         )
         url = self.endpoints.account_by_puuid(puuid, region)
@@ -562,7 +542,7 @@ class RiotAPIClient:
         used_platform = platform or self.platform
         self._record_api_call(
             "/lol/summoner/v4/summoners/by-puuid/{puuid}",
-            self._enum_str(used_platform),
+            enum_str(used_platform),
             {"puuid": puuid},
         )
         url = self.endpoints.summoner_by_puuid(puuid, platform)
@@ -589,7 +569,7 @@ class RiotAPIClient:
 
         self._record_api_call(
             "/lol/match/v5/matches/by-puuid/{puuid}/ids",
-            self._enum_str(used_region),
+            enum_str(used_region),
             {"puuid": puuid},
         )
 
@@ -619,7 +599,7 @@ class RiotAPIClient:
         used_region = region or self.region
         self._record_api_call(
             "/lol/match/v5/matches/{matchId}",
-            self._enum_str(used_region),
+            enum_str(used_region),
             {"matchId": match_id},
         )
         url = self.endpoints.match_by_id(match_id, region)
@@ -633,7 +613,7 @@ class RiotAPIClient:
         used_region = region or self.region
         self._record_api_call(
             "/lol/match/v5/matches/{matchId}/timeline",
-            self._enum_str(used_region),
+            enum_str(used_region),
             {"matchId": match_id},
         )
         url = self.endpoints.match_timeline_by_id(match_id, region)
@@ -654,7 +634,7 @@ class RiotAPIClient:
         used_platform = platform or self.platform
         self._record_api_call(
             "/lol/league/v4/entries/by-puuid/{puuid}",
-            self._enum_str(used_platform),
+            enum_str(used_platform),
             {"puuid": puuid},
         )
         url = self.endpoints.league_entries_by_puuid(puuid, platform)

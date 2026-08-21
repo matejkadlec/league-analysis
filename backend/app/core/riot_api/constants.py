@@ -143,3 +143,15 @@ def get_region_by_platform(platform: Platform | str) -> Region:
     if p in ["oc1", "ph2", "sg2", "th2", "tw2", "vn2"]:
         return Region.SEA
     raise ValueError(f"Unsupported Riot platform: {platform}")
+
+
+def enum_str(value: Region | Platform | str) -> str:
+    """Extract string value from enum or return as-is.
+
+    Not `normalize_platform`: that one lowercases and strips because the
+    platform column has to match case-sensitively, and a region built through
+    it would be a different kind of value.
+    """
+    if isinstance(value, Enum):
+        return str(value.value)
+    return value

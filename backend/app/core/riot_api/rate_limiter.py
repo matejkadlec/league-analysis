@@ -2,6 +2,7 @@
 
 import asyncio
 import time
+from collections.abc import Mapping
 from dataclasses import dataclass
 from urllib.parse import urlsplit
 
@@ -247,22 +248,26 @@ class RateLimiter:
             )
 
     def update_limits(
-        self, headers: dict[str, str], endpoint: str, method: str = "GET"
+        self, headers: Mapping[str, str], endpoint: str, method: str = "GET"
     ) -> None:
-        """Update routing-scoped application and method windows from a response."""
+        """Update routing-scoped application and method windows from a response.
+
+        `httpx.Headers` is already case-insensitive and already stores the
+        lower-cased key, so nothing lowercases these on the way in. The
+        `except` below is what covers a caller that hands over something else.
+        """
         try:
-            normalized_headers = {key.lower(): value for key, value in headers.items()}
             observed_at = time.monotonic()
             self._process_rate_limit_pair(
-                normalized_headers.get("x-app-rate-limit", ""),
-                normalized_headers.get("x-app-rate-limit-count", ""),
+                headers.get("x-app-rate-limit", ""),
+                headers.get("x-app-rate-limit-count", ""),
                 self._app_windows,
                 self._get_routing_scope(endpoint),
                 observed_at,
             )
             self._process_rate_limit_pair(
-                normalized_headers.get("x-method-rate-limit", ""),
-                normalized_headers.get("x-method-rate-limit-count", ""),
+                headers.get("x-method-rate-limit", ""),
+                headers.get("x-method-rate-limit-count", ""),
                 self._method_windows,
                 self._get_endpoint_key(endpoint, method),
                 observed_at,

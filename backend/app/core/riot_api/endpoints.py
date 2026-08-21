@@ -1,11 +1,10 @@
 """Riot API endpoint definitions and routing information."""
 
-from enum import Enum
 from urllib.parse import quote, urlencode
 
 import structlog
 
-from .constants import MatchType, Platform, QueueType, Region
+from .constants import MatchType, Platform, QueueType, Region, enum_str
 
 logger = structlog.get_logger(__name__)
 
@@ -29,19 +28,12 @@ class RiotAPIEndpoints:
     def get_base_url(self, region: Region | None = None) -> str:
         """Get base URL for regional endpoints."""
         region = region or self.region
-        return f"https://{self._enum_str(region)}.api.riotgames.com"
+        return f"https://{enum_str(region)}.api.riotgames.com"
 
     def get_platform_url(self, platform: Platform | None = None) -> str:
         """Get base URL for platform endpoints."""
         platform = platform or self.platform
-        return f"https://{self._enum_str(platform)}.api.riotgames.com"
-
-    @staticmethod
-    def _enum_str(value: Region | Platform | str) -> str:
-        """Extract string value from enum or return as-is."""
-        if isinstance(value, Enum):
-            return str(value.value)
-        return value
+        return f"https://{enum_str(platform)}.api.riotgames.com"
 
     # Account endpoints (Regional)
     def account_by_riot_id(

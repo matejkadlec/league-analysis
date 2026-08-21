@@ -232,12 +232,16 @@ async def test_match_list_rejects_invalid_provider_parameters(
 
 def test_adaptive_rate_windows_keep_original_reset_and_routing_scope() -> None:
     limiter = RateLimiter()
-    headers = {
-        "X-App-Rate-Limit": "2:1,100:120",
-        "X-App-Rate-Limit-Count": "1:1,10:120",
-        "X-Method-Rate-Limit": "1:10",
-        "X-Method-Rate-Limit-Count": "1:10",
-    }
+    # `httpx.Headers`, not a plain dict: that is what the client hands the
+    # limiter, and it is what makes the header names case-insensitive here.
+    headers = httpx.Headers(
+        {
+            "X-App-Rate-Limit": "2:1,100:120",
+            "X-App-Rate-Limit-Count": "1:1,10:120",
+            "X-Method-Rate-Limit": "1:10",
+            "X-Method-Rate-Limit-Count": "1:10",
+        }
+    )
     europe = "https://europe.api.riotgames.com/lol/match/v5/matches/id"
     americas = "https://americas.api.riotgames.com/lol/match/v5/matches/id"
 
@@ -281,9 +285,9 @@ RATE_LIMITER_SLEEP = "app.core.riot_api.rate_limiter.asyncio.sleep"
 MATCH_DETAIL_ENDPOINT = "https://europe.api.riotgames.com/lol/match/v5/matches/EUN1_1"
 
 
-def _app_window_headers(limit: str, count: str) -> dict[str, str]:
+def _app_window_headers(limit: str, count: str) -> httpx.Headers:
     """Return the header pair Riot sends for one application window."""
-    return {"X-App-Rate-Limit": limit, "X-App-Rate-Limit-Count": count}
+    return httpx.Headers({"X-App-Rate-Limit": limit, "X-App-Rate-Limit-Count": count})
 
 
 async def test_saturated_window_waits_out_the_provider_interval() -> None:
