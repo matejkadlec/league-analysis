@@ -126,9 +126,20 @@ def normalize_platform(platform: Platform | str) -> str:
     used not to, and the column ended up holding both spellings while two
     lookups compared it case-sensitively — see the check constraint on
     `Player.__table_args__`.
+
+    Membership is checked here too, because this is the only place that can:
+    the column is `varchar(4)` under a lowercase check constraint, so an
+    unknown-but-lowercase id like a new Riot region stores cleanly and then
+    fails `PlayerResponse`, whose field is the enum. That is a 500 on
+    `/players/{puuid}` *and* on every tracked-player load inside the writer
+    jobs, for a row the database was happy to accept. Refusing the write
+    costs one skipped match instead.
+
+    Raises:
+        ValueError: the id is not one of Riot's platforms.
     """
     value = platform.value if isinstance(platform, Platform) else platform
-    return value.strip().lower()
+    return Platform(value.strip().lower()).value
 
 
 def get_region_by_platform(platform: Platform | str) -> Region:

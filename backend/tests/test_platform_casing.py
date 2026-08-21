@@ -71,6 +71,19 @@ def test_normalize_platform_is_canonical(raw: str | Platform, expected: str) -> 
     assert normalize_platform(raw) == expected
 
 
+@pytest.mark.parametrize("unknown", ["me1", "ME1", "EUNE", "", "not-a-platform"])
+def test_normalize_platform_refuses_an_id_riot_does_not_have(unknown: str) -> None:
+    """An unknown region is refused here or it becomes a row nobody can read.
+
+    The column is `varchar(4)` under a lowercase check constraint, so a new
+    Riot platform stores cleanly -- and then fails `PlayerResponse`, whose
+    field is the enum. That is a 500 on the player routes and on every
+    tracked-player load inside the writer jobs. One skipped match is cheaper.
+    """
+    with pytest.raises(ValueError):
+        normalize_platform(unknown)
+
+
 def test_normalize_platform_is_idempotent() -> None:
     """Normalising a stored value again must not change it."""
     for member in Platform:
