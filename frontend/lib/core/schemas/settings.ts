@@ -17,9 +17,6 @@ export const SettingTestResponseSchema = z.object({
   details: z.record(z.string(), z.unknown()).nullable().optional(),
 });
 
-export type Setting = z.infer<typeof SettingSchema>;
-export type SettingTestResponse = z.infer<typeof SettingTestResponseSchema>;
-
 export const SettingUpdateSchema = z.object({
   value: z.string(),
 });
@@ -90,5 +87,3 @@ export const ServiceStatusSchema = z.object({
   has_recent_recovery: z.boolean(),
   recovery_notice_key: z.string().nullable(),
 });
-
-export type ServiceStatus = z.infer<typeof ServiceStatusSchema>;

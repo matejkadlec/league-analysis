@@ -16,7 +16,10 @@ from app.core.riot_api.models import MatchTimelineDTO
 from app.features.matches import match_sync
 from app.features.matches.match_sync import build_synthetic_match_dto
 from app.features.matches.participants import MatchParticipant
-from app.features.matches.timeline import build_match_timeline_rows
+from app.features.matches.timeline import (
+    build_match_timeline_rows,
+    replace_match_timeline_rows,
+)
 
 
 def test_synthetic_dto_includes_stored_game_version() -> None:
@@ -149,3 +152,60 @@ def test_a_row_level_integrity_error_does_not_fail_the_whole_run() -> None:
     assert match_sync.must_abort_writer_sync(integrity) is False
     assert match_sync.must_abort_writer_sync(wrapped) is False
     assert match_sync.must_abort_writer_sync(OperationalError("select", {}, OSError()))
+
+
+async def test_timeline_rows_are_staged_only_after_a_flush() -> None:
+    """The order these rows depend on, asserted instead of inherited.
+
+    Both foreign keys on `core.match_timelines` point at rows the same
+    transaction is still holding as pending ORM objects, and the session is
+    `autoflush=False`. Across mappers SQLAlchemy orders a flush from
+    `relationship()` alone -- a `ForeignKey` in the DDL contributes no edge --
+    so when 2356d05 deleted `MatchTimeline.match` and `MatchTimeline.player` as
+    unread, the INSERT for these rows moved ahead of `core.players` and four
+    consecutive production Match Fetcher runs died on
+    `fk_match_timelines_puuid_players`.
+
+    Nothing in the gate saw it: the relationships really were unread, and the
+    ordering they bought is invisible to every type, lint and unit check. What
+    this asserts is narrower than what broke -- a recording fake sees the call
+    sequence, not the mapper graph, so it fails when the flush is removed or
+    moved after the rows are staged, and it cannot see a relationship deleted
+    somewhere else. `.claude/pitfalls.md` carries that half.
+    """
+    calls: list[str] = []
+
+    class _RecordingSession:
+        async def execute(self, *_args: object, **_kwargs: object) -> None:
+            calls.append("execute")
+
+        async def flush(self) -> None:
+            calls.append("flush")
+
+        def add(self, _instance: object) -> None:
+            calls.append("add")
+
+    participants = [
+        cast(
+            MatchParticipant,
+            SimpleNamespace(participant_id=index, team_id=100, puuid=f"p{index}"),
+        )
+        for index in range(1, 11)
+    ]
+    timeline = MatchTimelineDTO.model_validate(
+        {
+            "metadata": {"matchId": "EUN1_1", "participants": []},
+            "info": {"frames": [], "frameInterval": 60000},
+        }
+    )
+
+    written = await replace_match_timeline_rows(
+        cast(AsyncSession, _RecordingSession()),
+        build_synthetic_match_dto("EUN1_1", participants, "16.1.1"),
+        timeline,
+    )
+
+    assert written == 10
+    # Signal first: no rows staged would make any ordering claim vacuous.
+    assert calls.count("add") == 10
+    assert calls.index("flush") < calls.index("add")

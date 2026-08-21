@@ -126,4 +126,3 @@ export type SmurfBoostBand = z.infer<typeof SmurfBoostBandSchema>;
 export type SmurfBoostConfidenceBand = z.infer<
   typeof SmurfBoostConfidenceBandSchema
 >;
-export type SmurfBoostStatus = z.infer<typeof SmurfBoostStatusSchema>;
