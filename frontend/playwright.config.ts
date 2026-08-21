@@ -33,7 +33,13 @@ export default defineConfig({
       HOSTNAME: "127.0.0.1",
       PORT: "3100",
     },
-    reuseExistingServer: !process.env.CI,
+    // Never reuse. `!process.env.CI` was inert where it mattered -- the gate
+    // container has no CI variable and nothing else bound to 3100 -- while on
+    // the host path (`./test.sh -f`) it silently adopted a leftover
+    // `start:standalone` from an aborted run and graded a stale
+    // `.next/standalone`. `test.sh` always builds fresh and always wants its
+    // own server, so there is no case where reuse is the right answer.
+    reuseExistingServer: false,
     timeout: 120_000,
     url: "http://127.0.0.1:3100",
   },

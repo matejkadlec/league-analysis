@@ -218,7 +218,11 @@ run_frontend_e2e() {
   # run after the production build, because what it starts is that build:
   # `npm run start:standalone` serves .next/standalone rather than compiling
   # on demand.
-  npm run test:e2e
+  # `--` is load-bearing: without it npm swallows the flag and the gate runs
+  # unguarded. Playwright's `forbidOnly` defaults to false, and its `.only` is
+  # global to the run -- one committed `test.only` runs that test, skips the
+  # whole rest of the suite, and reports PASS.
+  npm run test:e2e -- --forbid-only
 }
 
 cd "$repository_root"
