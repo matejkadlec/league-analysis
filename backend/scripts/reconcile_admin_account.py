@@ -17,6 +17,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from dotenv import load_dotenv
+from pydantic import TypeAdapter, ValidationError
 from sqlalchemy import func, select, text
 
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
@@ -41,7 +42,10 @@ if os.getenv("ENVIRONMENT", "").lower() != "test":
 from app.core.config import get_global_settings  # noqa: E402
 from app.core.database import db_manager  # noqa: E402
 from app.features.auth.models import User  # noqa: E402
+from app.features.auth.schemas import DisplayName  # noqa: E402
 from app.features.auth.service import AuthService  # noqa: E402
+
+_DISPLAY_NAME_ADAPTER: TypeAdapter[DisplayName] = TypeAdapter(DisplayName)
 from scripts.local_target import (  # noqa: E402
     is_loopback_address,
     is_loopback_listener_configuration,
@@ -132,11 +136,18 @@ async def reconcile_admin(
 ) -> tuple[int, bool]:
     """Create or normalize one exact administrator and verify authentication."""
     normalized_email = email.strip().lower()
-    normalized_display_name = display_name.strip()
     if not normalized_email or "@" not in normalized_email:
         raise AdminReconciliationRefusal("a valid administrator email is required")
-    if not normalized_display_name:
-        raise AdminReconciliationRefusal("administrator display name is required")
+    # Through the API's own type, not a second hand-rolled rule: this writes the
+    # ORM directly, so a name that only passes here is one `PATCH /auth/me`
+    # would refuse -- an admin who cannot re-save their own profile.
+    try:
+        normalized_display_name = _DISPLAY_NAME_ADAPTER.validate_python(display_name)
+    except ValidationError as error:
+        raise AdminReconciliationRefusal(
+            "administrator display name must be 3-128 letters, marks, "
+            "underscores or spaces, starting and ending on a letter"
+        ) from error
 
     async with db_manager.get_session() as session:
         async with session.begin():

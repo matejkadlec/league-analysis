@@ -102,8 +102,10 @@ class UserResponse(UserBase):
     # Deliberately looser than `UserBase`: FastAPI validates response models on
     # the way out, so inheriting `DisplayName` would turn a row that predates
     # the rule into a 500 on `GET /auth/me` -- the one page you would use to
-    # fix the name. The write models are where the rule belongs.
-    display_name: str
+    # fix the name. The write models are where the rule belongs. `max_length`
+    # is the one constraint kept, because `String(128)` already guarantees it
+    # and dropping it would stop the document publishing the column's bound.
+    display_name: str = Field(max_length=128)
 
     id: int
     is_active: bool

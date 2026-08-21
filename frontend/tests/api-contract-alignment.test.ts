@@ -1,6 +1,5 @@
-import { readdirSync, readFileSync } from "node:fs";
-import { dirname, join, relative } from "node:path";
-import { fileURLToPath } from "node:url";
+import { readFileSync } from "node:fs";
+import { relative } from "node:path";
 
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
@@ -8,7 +7,7 @@ import { z } from "zod";
 import { PLATFORM_DISPLAY_NAMES } from "@/lib/core/platform-utils";
 import * as exportedSchemas from "@/lib/core/schemas";
 
-import { allSourceFiles } from "./source-scan-support";
+import { allSourceFiles, allTestFiles } from "./source-scan-support";
 
 import { MATCH_HISTORY_PAGE_SIZES } from "../features/matches/match-history-pagination";
 
@@ -602,18 +601,18 @@ describe("zod against the OpenAPI contract", () => {
  * the gate -- it passes by comparing nothing, which is what
  * `tests/riot-id-alignment.test.ts` did from the day it was written until
  * 2026-08-21. This holds the naming convention the gate depends on.
+ *
+ * Scope, stated rather than implied: every `*.test.ts`/`*.test.tsx` file in
+ * the project, including ones colocated beside the code they cover, that names
+ * `OPENAPI_JSON` itself. A test that reached the document only through a
+ * shared helper would carry no such literal and would not be caught -- no such
+ * helper exists, and writing one is the way to defeat this check.
  */
 describe("the gate reaches every test that reads the OpenAPI document", () => {
   it("names every OPENAPI_JSON reader so the alignment filter selects it", () => {
-    const testsDirectory = dirname(fileURLToPath(import.meta.url));
-    const strays = readdirSync(testsDirectory)
-      .filter((entry) => entry.endsWith(".test.ts"))
-      .filter((entry) =>
-        readFileSync(join(testsDirectory, entry), "utf8").includes(
-          "OPENAPI_JSON",
-        ),
-      )
-      .filter((entry) => !entry.includes("alignment"));
+    const strays = allTestFiles()
+      .filter((path) => readFileSync(path, "utf8").includes("OPENAPI_JSON"))
+      .filter((path) => !path.includes("alignment"));
 
     expect(strays, "rename these to *-alignment.test.ts").toEqual([]);
   });
