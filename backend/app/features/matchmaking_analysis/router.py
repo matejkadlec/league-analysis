@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from app.core.rate_limiter import rate_limit
 from app.features.auth.dependencies import get_current_active_user
@@ -97,9 +97,20 @@ async def get_analysis_status_by_puuid(
 async def get_analysis_history(
     puuid: str,
     service: MatchmakingServiceDep,
-    limit: int = 20,
+    limit: int = Query(
+        20,
+        ge=1,
+        le=100,
+        description="Number of completed analyses to return",
+    ),
 ):
-    """Get history of completed analyses for a player."""
+    """Get history of completed analyses for a player.
+
+    The bound is not decoration: the value reached `.limit()` unchecked, and
+    `?limit=-1` renders as `LIMIT -1`, which PostgreSQL rejects -- a 500 from
+    a query string. 100 is the ceiling because the only production caller,
+    `matchmaking-analysis-history.tsx`, asks for exactly that many.
+    """
     return await service.get_analysis_history(puuid, limit=limit)
 
 

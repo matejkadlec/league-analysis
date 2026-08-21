@@ -62,6 +62,7 @@ from .schemas import (
     MatchmakingAnalysisHistoryItem,
     MatchmakingAnalysisHistoryResponse,
     MatchmakingAnalysisResponse,
+    MatchmakingAnalysisResults,
     MatchmakingAnalysisStatusResponse,
 )
 
@@ -279,13 +280,9 @@ class MatchmakingAnalysisService:
 
         results_schema = None
         if analysis.status == "completed" and analysis.results:
-            from .schemas import MatchmakingAnalysisResults
-
-            results_schema = MatchmakingAnalysisResults(
-                team_avg_winrate=analysis.results.get("team_avg_winrate", 0),
-                enemy_avg_winrate=analysis.results.get("enemy_avg_winrate", 0),
-                matches_analyzed=analysis.results.get("matches_analyzed", 0),
-            )
+            # Validates rather than fills in: a row this cannot read is a
+            # broken row, and saying so beats reporting a 0% winrate.
+            results_schema = MatchmakingAnalysisResults.model_validate(analysis.results)
 
         return MatchmakingAnalysisStatusResponse(
             puuid=analysis.puuid,
@@ -319,8 +316,8 @@ class MatchmakingAnalysisService:
                 items.append(
                     MatchmakingAnalysisHistoryItem(
                         created_at=a.created_at,
-                        team_avg_winrate=a.results.get("team_avg_winrate", 0),
-                        enemy_avg_winrate=a.results.get("enemy_avg_winrate", 0),
+                        team_avg_winrate=a.results["team_avg_winrate"],
+                        enemy_avg_winrate=a.results["enemy_avg_winrate"],
                     )
                 )
         return MatchmakingAnalysisHistoryResponse(items=items)
