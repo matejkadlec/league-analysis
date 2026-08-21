@@ -36,6 +36,7 @@ from .config import (
     STRONG_EVIDENCE,
     STRONG_SCORE,
 )
+from .schemas import ConfidenceBand, SmurfBoostBand
 from .signals import (
     FAMILY_A_EVALUATORS,
     FAMILY_B_EVALUATORS,
@@ -59,7 +60,7 @@ class FamilyResult:
     """One family's band, score and explained signals."""
 
     family: str
-    band: str
+    band: SmurfBoostBand
     score: float
     distinct_evidence: int
     signals: tuple[SignalResult, ...]
@@ -72,7 +73,7 @@ class DetectionResult:
     model_version: str
     families: tuple[FamilyResult, ...]
     confidence: float
-    confidence_band: str
+    confidence_band: ConfidenceBand
     recent_games: int
     baseline_games: int
     eligible_games: int
@@ -151,7 +152,7 @@ def _confidence_notes(
     return factor, notes
 
 
-def _confidence_band(confidence: float) -> str:
+def _confidence_band(confidence: float) -> ConfidenceBand:
     """Map a confidence value onto its half-open band."""
     if confidence < CONFIDENCE_MEDIUM:
         return "low"
@@ -160,7 +161,7 @@ def _confidence_band(confidence: float) -> str:
     return "high"
 
 
-def _band_for(score: float, evidence: int, any_triggered: bool) -> str:
+def _band_for(score: float, evidence: int, any_triggered: bool) -> SmurfBoostBand:
     """Assign a family band from its score and distinct evidence count."""
     if not any_triggered:
         return BAND_NONE

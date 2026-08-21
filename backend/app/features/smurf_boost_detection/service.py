@@ -38,11 +38,9 @@ from .config import (
 from .engine import AnalysisRequest, DetectionResult, analyze
 from .models import SmurfBoostAnalysis
 from .schemas import (
-    ConfidenceBand,
     FamilyPayload,
     SignalPayload,
     SmurfBoostAnalysisResponse,
-    SmurfBoostBand,
     SmurfBoostResults,
 )
 
@@ -526,9 +524,7 @@ def _serialize(result: DetectionResult) -> dict[str, Any]:
         families=[
             FamilyPayload(
                 family=family.family,
-                # The engine assigns bands from the fixed vocabulary these
-                # literals enumerate, which the type system cannot see.
-                band=cast("SmurfBoostBand", family.band),
+                band=family.band,
                 distinct_evidence=family.distinct_evidence,
                 signals=[
                     SignalPayload(
@@ -546,7 +542,7 @@ def _serialize(result: DetectionResult) -> dict[str, Any]:
             for family in result.families
         ],
         confidence=result.confidence,
-        confidence_band=cast("ConfidenceBand", result.confidence_band),
+        confidence_band=result.confidence_band,
         recent_games=result.recent_games,
         baseline_games=result.baseline_games,
         eligible_games=result.eligible_games,
