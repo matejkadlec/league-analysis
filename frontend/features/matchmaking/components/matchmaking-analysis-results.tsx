@@ -18,6 +18,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  matchmakingResultsQueryKey,
+} from "../matchmaking-query";
 
 interface MatchmakingAnalysisResultsProps {
   puuid: string;
@@ -33,7 +36,7 @@ export function MatchmakingAnalysisResults({
     isLoading,
     error,
   } = useQuery({
-    queryKey: ["matchmaking-analysis-results", puuid],
+    queryKey: matchmakingResultsQueryKey(puuid),
     queryFn: async () => {
       return unwrapOr404(
         await getLatestCompletedMatchmakingAnalysis(puuid),

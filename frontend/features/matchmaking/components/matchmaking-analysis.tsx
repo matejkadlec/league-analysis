@@ -8,6 +8,9 @@ import { getLatestMatchmakingAnalysis } from "../matchmaking-api";
 
 import { MatchmakingAnalysisLoadingCard } from "./matchmaking-analysis-start-card";
 import { MatchmakingAnalysisSession } from "./matchmaking-analysis-session";
+import {
+  matchmakingAnalysisQueryKey,
+} from "../matchmaking-query";
 
 interface MatchmakingAnalysisProps {
   puuid: string;
@@ -20,12 +23,8 @@ export function MatchmakingAnalysis({
   analyzedPlayerLabel,
   playerSelector,
 }: MatchmakingAnalysisProps) {
-  const {
-    data: latestAnalysis,
-    isLoading,
-    refetch,
-  } = useQuery({
-    queryKey: ["matchmaking-analysis", puuid],
+  const { data: latestAnalysis, isLoading } = useQuery({
+    queryKey: matchmakingAnalysisQueryKey(puuid),
     queryFn: async () => {
       return unwrapOr404(await getLatestMatchmakingAnalysis(puuid), null);
     },
@@ -44,7 +43,6 @@ export function MatchmakingAnalysis({
       analyzedPlayerLabel={analyzedPlayerLabel}
       playerSelector={playerSelector}
       latestAnalysis={latestAnalysis ?? null}
-      refetch={refetch}
     />
   );
 }

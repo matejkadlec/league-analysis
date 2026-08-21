@@ -23,6 +23,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  invalidateMatchmakingRun,
+  matchmakingHistoryQueryKey,
+} from "../matchmaking-query";
 
 interface MatchmakingAnalysisHistoryProps {
   puuid: string;
@@ -147,7 +151,7 @@ export function MatchmakingAnalysisHistory({
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ["matchmaking-analysis-history", puuid],
+    queryKey: matchmakingHistoryQueryKey(puuid),
     queryFn: async () => {
       return unwrapOr404(
         await getMatchmakingAnalysisHistory(puuid, HISTORY_FETCH_LIMIT),
@@ -167,18 +171,7 @@ export function MatchmakingAnalysisHistory({
       toast.success("Matchmaking analysis removed", {
         description: "The selected history record was deleted.",
       });
-      void queryClient.invalidateQueries({
-        queryKey: ["matchmaking-analysis-history", puuid],
-      });
-      void queryClient.invalidateQueries({
-        queryKey: ["matchmaking-analysis-results", puuid],
-      });
-      // The card above reads this one. Without it, deleting the run it is
-      // showing leaves it offering "Run New Analysis" for a record that no
-      // longer exists -- every other write path in this feature lists it.
-      void queryClient.invalidateQueries({
-        queryKey: ["matchmaking-analysis", puuid],
-      });
+      void invalidateMatchmakingRun(queryClient, puuid);
     },
     onError: () => {
       toast.error("Matchmaking analysis was not removed", {
