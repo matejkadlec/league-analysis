@@ -13,6 +13,10 @@ def transform_runes_payload(value: object) -> object:
     `RunesData` instance read off the ORM. That pass-through is why the return
     type is `object` and not `dict[str, Any] | None`: the declared dict was
     only ever true for the one branch that flattens.
+
+    The stored column keeps Riot's whole perks tree, so this reads out only
+    the three values the match row renders. Widen `RunesData` and this
+    function together if a rune-page view ever needs the rest.
     """
     if not is_json_object(value):
         return value
@@ -25,49 +29,21 @@ def transform_runes_payload(value: object) -> object:
 
 def _flatten_riot_runes(payload: dict[str, Any]) -> dict[str, Any]:
     """Flatten a Riot `styles` perk payload into schema field names."""
-    styles = payload.get("styles", [])
-    stat_perks = payload.get("statPerks", {})
-
     primary_style: int | None = None
     sub_style: int | None = None
     keystone: int | None = None
-    primary_perks: list[int | None] = []
-    sub_perks: list[int | None] = []
 
-    for style in styles:
+    for style in payload.get("styles", []):
         description = style.get("description")
-        selections = style.get("selections", [])
         if description == "primaryStyle":
             primary_style = style.get("style")
-            primary_perks, keystone = _primary_style_perks(selections)
+            selections = style.get("selections", [])
+            keystone = selections[0].get("perk") if selections else None
         elif description == "subStyle":
             sub_style = style.get("style")
-            sub_perks = _perk_ids(selections)
 
     return {
         "primary_style": primary_style,
         "sub_style": sub_style,
         "keystone": keystone,
-        "primary_perks": primary_perks,
-        "sub_perks": sub_perks,
-        "stat_perks": stat_perks,
     }
-
-
-def _primary_style_perks(
-    selections: list[dict[str, Any]],
-) -> tuple[list[int | None], int | None]:
-    """Return primary perk IDs and the keystone from a primary style block."""
-    if not selections:
-        return [], None
-    return _perk_ids(selections), selections[0].get("perk")
-
-
-def _perk_ids(selections: list[dict[str, Any]]) -> list[int | None]:
-    """Collect perk IDs from Riot style selections.
-
-    `None` is reachable: a selection without a `perk` key yields one, and
-    `RunesData.primary_perks` is `list[int]`, so Pydantic rejects the payload
-    rather than storing a hole. The optional element type records that.
-    """
-    return [selection.get("perk") for selection in selections]

@@ -85,16 +85,6 @@ export const ParticipantRunesSchema = z.object({
   primary_style: z.number().int().optional().nullable(),
   sub_style: z.number().int().optional().nullable(),
   keystone: z.number().int().optional().nullable(),
-  primary_perks: z.array(z.number().int()).optional().nullable(),
-  sub_perks: z.array(z.number().int()).optional().nullable(),
-  stat_perks: z
-    .object({
-      defense: z.number().int().optional().nullable(),
-      flex: z.number().int().optional().nullable(),
-      offense: z.number().int().optional().nullable(),
-    })
-    .optional()
-    .nullable(),
 });
 
 export type ParticipantRunes = z.infer<typeof ParticipantRunesSchema>;
