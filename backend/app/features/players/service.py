@@ -21,7 +21,7 @@ from app.core.riot_api.constants import (
 )
 from app.core.riot_api.models import LeagueEntryDTO
 from app.features.auth.models import User
-from app.features.auth.user_settings import UserSettings
+from app.features.auth.user_settings import ensure_user_settings
 from app.features.auth.user_tracked_player import UserTrackedPlayer
 
 from .leagues import PlayerLeague
@@ -755,13 +755,7 @@ class PlayerService:
         """Return the authenticated user's current player."""
         from .schemas import PlayerContextResponse
 
-        settings = await self.db.scalar(
-            select(UserSettings).where(UserSettings.user_id == user_id)
-        )
-        if settings is None:
-            settings = UserSettings(user_id=user_id)
-            self.db.add(settings)
-            await self.db.flush()
+        settings = await ensure_user_settings(self.db, user_id)
 
         current_player: PlayerResponse | None = None
         if settings.current_player_puuid:
@@ -779,15 +773,7 @@ class PlayerService:
 
     async def set_current_player(self, user_id: int, puuid: str | None):
         """Persist one user's default player and update tracked recency."""
-        settings = await self.db.scalar(
-            select(UserSettings)
-            .where(UserSettings.user_id == user_id)
-            .with_for_update()
-        )
-        if settings is None:
-            settings = UserSettings(user_id=user_id)
-            self.db.add(settings)
-            await self.db.flush()
+        settings = await ensure_user_settings(self.db, user_id)
 
         if puuid is not None:
             await self._require_player(puuid)

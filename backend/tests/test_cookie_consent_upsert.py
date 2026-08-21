@@ -1,4 +1,4 @@
-"""Regression coverage for the atomic cookie-consent write."""
+"""Regression coverage for the atomic per-user-row writes in `auth`."""
 
 from datetime import UTC, datetime
 from types import SimpleNamespace
@@ -8,6 +8,7 @@ from sqlalchemy import ClauseElement
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.features.auth.user_settings import ensure_user_settings
 from app.features.settings.schemas import (
     CookieConsentLevel,
     UserCookieConsentUpdate,
@@ -95,3 +96,36 @@ async def test_repeat_consent_moves_both_timestamps() -> None:
     conflict_clause = compiled.split("ON CONFLICT")[1]
     assert "consented_at = now()" in conflict_clause
     assert "updated_at = now()" in conflict_clause
+
+
+async def test_missing_user_settings_are_inserted_on_conflict_do_nothing() -> None:
+    """Two tabs on a fresh account both load the shell and both miss the row.
+
+    `user_id` is the primary key, so select-then-`add` made the loser raise
+    IntegrityError out of a plain GET -- a 500 on the app-shell path, which
+    renders the error boundary instead of the player selector.
+    """
+
+    class _SettingsSession:
+        """Answers the first read empty, as a brand-new account does."""
+
+        def __init__(self) -> None:
+            self.statements: list[ClauseElement] = []
+            self.reads = 0
+
+        async def scalar(self, statement: ClauseElement) -> object:
+            self.statements.append(statement)
+            self.reads += 1
+            return None if self.reads == 1 else SimpleNamespace(user_id=42)
+
+        async def execute(self, statement: ClauseElement) -> None:
+            self.statements.append(statement)
+
+    session = _SettingsSession()
+
+    settings = await ensure_user_settings(cast(AsyncSession, session), 42)
+
+    assert settings is not None
+    compiled = str(session.statements[1].compile(dialect=postgresql.dialect()))
+    assert "INSERT INTO auth.user_settings" in compiled
+    assert "ON CONFLICT (user_id) DO NOTHING" in compiled
