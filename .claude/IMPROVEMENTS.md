@@ -32,15 +32,6 @@ distinct rather than duplicated.
   `ON CONFLICT DO UPDATE`, which takes the row lock, not `DO NOTHING`, which
   would let a concurrent rollback leave the FK unsatisfied.
 
-- 2026-08-21 frontend/app/page.tsx: the home page's `#header-card` is the only
-  one without `text-white` (`components/legal-page-shell.tsx:25` has the same
-  `py-2` shape and does carry it). `globals.css` paints that id with a navy
-  gradient, so the card's `prose` body may be rendering dark text on navy.
-  Forcing the dark theme did not change this either way -- the card was navy
-  in both themes before and is navy now, and `prose` sets its own body colour,
-  which may or may not win. Not verified: it needs the app running. Check it
-  in a browser before changing anything.
-
 - 2026-08-21 backend/app/features/matches/: production `core.matches` holds one
   row with `queue_id = 0`. **Root-caused 2026-08-21, and it is not a custom
   game.** `EUN1_3990695865` came back from Riot as an envelope with nothing in

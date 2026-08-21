@@ -30,7 +30,7 @@ export function LegalPageShell({
             </h1>
           </div>
         </div>
-        <CardContent className="prose prose-lg max-w-none space-y-4 px-8 pb-4 pt-0">
+        <CardContent className="max-w-none space-y-4 px-8 pb-4 pt-0">
           {children}
         </CardContent>
       </Card>

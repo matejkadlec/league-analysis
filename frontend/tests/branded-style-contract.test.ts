@@ -146,6 +146,34 @@ describe("branded style contract", () => {
     ).toBe(false);
   });
 
+  /**
+   * A class from a plugin that is not installed styles nothing.
+   *
+   * `app/page.tsx` and `components/legal-page-shell.tsx` both carried
+   * `prose prose-lg`, and `.claude/IMPROVEMENTS.md` carried an open question
+   * about whether that typography was overriding the card's text colour. It
+   * was not overriding anything: `@tailwindcss/typography` is not a
+   * dependency and no `@plugin` line registers it, so both were inert names
+   * that read as deliberate styling to everyone who saw them.
+   *
+   * Either half is fine on its own. Using the classes without the plugin is
+   * what is not.
+   */
+  it("does not use plugin classes the build cannot generate", () => {
+    const manifest = readFileSync("package.json", "utf8");
+    const stylesheet = readFileSync(GLOBAL_STYLESHEET, "utf8");
+    const installed =
+      manifest.includes('"@tailwindcss/typography"') &&
+      stylesheet.includes('@plugin "@tailwindcss/typography"');
+    if (installed) return;
+
+    const users = allSourceFiles()
+      .filter((path) => /class(Name)?="[^"]*\bprose\b/.test(code(path)))
+      .map((path) => relative(process.cwd(), path));
+
+    expect(users).toEqual([]);
+  });
+
   it("keeps the hand-rolled list free of dead entries", () => {
     const using = new Set(filesWithHandRolledGradients());
     const stale = [...HAND_ROLLED_GRADIENTS.keys()].filter(
