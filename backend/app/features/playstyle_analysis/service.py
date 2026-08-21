@@ -54,11 +54,10 @@ class TagEngine:
                 config,
             )
             if result:
-                result.setdefault("sentiment", config.get("sentiment", "neutral"))
-                result.setdefault(
-                    "display_name",
-                    config.get("display_name", tag_code.replace("_", " ").title()),
-                )
+                # Both keys are required of every tag, so the defaults these
+                # two lines used to carry could never be reached.
+                result.setdefault("sentiment", config["sentiment"])
+                result.setdefault("display_name", config["display_name"])
                 detected_tags[tag_code] = result
 
         # Remove main_champion if otp is present (otp is stricter, takes precedence)

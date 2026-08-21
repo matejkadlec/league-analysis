@@ -4,11 +4,99 @@ Configuration for playstyle analysis service.
 This module contains thresholds and parameters used to identify playstyle tags.
 """
 
-from typing import Any
+from typing import Literal, NotRequired, TypedDict
+
+
+class TagConfig(TypedDict):
+    """One tag's criteria and how the card renders it.
+
+    Every tag carries the three presentation keys; the rest select which
+    evaluator runs and what it compares against, which is why they are
+    `NotRequired`. Spelling them out is what makes a mistyped threshold in
+    `TAG_CONFIG` a type error rather than a tag that silently never fires --
+    a missing key reads as "criterion absent", so nothing else would notice.
+    """
+
+    sentiment: Literal["positive", "negative", "neutral"]
+    hover_template: str
+    display_name: str
+
+    # Evaluator selection. `type` picks a shared evaluator; a tag without one
+    # falls back to its per-code evaluator, then to the generic threshold.
+    type: NotRequired[
+        Literal[
+            "damage_type",
+            "gold_diff_check",
+            "kill_greed_check",
+            "objective_participation_check",
+            "side_preference",
+            "solo_kill_ratio_check",
+            "surrender_check",
+        ]
+    ]
+    check: NotRequired[Literal["never", "often"]]
+    check_deficit: NotRequired[bool]
+    # Two evaluators used to share one `target` key holding either a team id
+    # or a damage school, so neither consumer could be type-checked.
+    target_damage_type: NotRequired[Literal["magic", "physical"]]
+    target_team: NotRequired[Literal[100, 200]]
+
+    # Thresholds. `float` throughout: every one is compared against an
+    # average, and an `int` literal satisfies it.
+    min_first_blood_participation: NotRequired[float]
+    percentage_matches: NotRequired[float]
+    max_percentage_matches: NotRequired[float]
+    min_turret_kills: NotRequired[float]
+    min_kills: NotRequired[float]
+    min_deaths: NotRequired[float]
+    min_kda: NotRequired[float]
+    min_dead_time_ratio: NotRequired[float]
+    min_potions: NotRequired[float]
+    min_wards_placed: NotRequired[float]
+    min_largest_multi_kill: NotRequired[float]
+    min_total_self_healing: NotRequired[float]
+    min_vision_score: NotRequired[float]
+    min_total_damage_dealt_to_champions: NotRequired[float]
+    min_total_minions: NotRequired[float]
+    min_cs: NotRequired[float]
+    max_cs: NotRequired[float]
+    min_assists: NotRequired[float]
+    min_wards_killed: NotRequired[float]
+    min_objectives_stolen: NotRequired[float]
+    min_solo_kills: NotRequired[float]
+    min_gold_per_minute: NotRequired[float]
+    min_roam_kills: NotRequired[float]
+    min_enemy_jungle_monster_kills: NotRequired[float]
+    min_damage_dealt_to_objectives: NotRequired[float]
+    min_turret_plates_taken: NotRequired[float]
+    min_ally_saves: NotRequired[float]
+    min_survived_single_digit_hp_count: NotRequired[float]
+    min_skillshots_hit: NotRequired[float]
+    min_skillshots_dodged: NotRequired[float]
+    min_kill_participation: NotRequired[float]
+    min_lane_gold_lead: NotRequired[float]
+    min_team_damage_taken_pct: NotRequired[float]
+    min_enemy_immobilizations: NotRequired[float]
+    min_kills_near_enemy_turret: NotRequired[float]
+    min_buffs_stolen: NotRequired[float]
+    min_team_damage_pct: NotRequired[float]
+    min_vision_wards_bought: NotRequired[float]
+    min_epic_monster_steals: NotRequired[float]
+    min_summoner_level: NotRequired[float]
+    min_play_rate: NotRequired[float]
+    max_gold_per_minute: NotRequired[float]
+    min_lane_gold_deficit: NotRequired[float]
+    max_kill_participation: NotRequired[float]
+    min_kill_assist_ratio: NotRequired[float]
+    max_vision_score: NotRequired[float]
+    max_team_damage_taken_pct: NotRequired[float]
+    min_solo_kill_assist_ratio: NotRequired[float]
+    max_objective_damage_pct: NotRequired[float]
+
 
 # Tag Configuration
 # Each tag has specific parameters used in its formula.
-TAG_CONFIG: dict[str, dict[str, Any]] = {
+TAG_CONFIG: dict[str, TagConfig] = {
     # ----------------------------------------------------
     # Match-Based Condition Tags
     # ----------------------------------------------------
@@ -251,7 +339,7 @@ TAG_CONFIG: dict[str, dict[str, Any]] = {
     # ----------------------------------------------------
     "warrior": {
         "type": "damage_type",
-        "target": "physical",
+        "target_damage_type": "physical",
         "percentage_matches": 60,
         "sentiment": "neutral",
         "hover_template": "{value}% of all damage dealt is physical.",
@@ -259,7 +347,7 @@ TAG_CONFIG: dict[str, dict[str, Any]] = {
     },
     "wizard": {
         "type": "damage_type",
-        "target": "magic",
+        "target_damage_type": "magic",
         "percentage_matches": 60,
         "sentiment": "neutral",
         "hover_template": "{value}% of all damage dealt is magic.",
@@ -267,14 +355,14 @@ TAG_CONFIG: dict[str, dict[str, Any]] = {
     },
     "prefers_blue_side": {
         "type": "side_preference",
-        "target": 100,
+        "target_team": 100,
         "sentiment": "neutral",
         "hover_template": "Higher winrate on Blue Side ({value}%).",
         "display_name": "Prefers Blue Side",
     },
     "prefers_red_side": {
         "type": "side_preference",
-        "target": 200,
+        "target_team": 200,
         "sentiment": "neutral",
         "hover_template": "Higher winrate on Red Side ({value}%).",
         "display_name": "Prefers Red Side",

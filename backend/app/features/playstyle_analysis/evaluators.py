@@ -6,11 +6,12 @@ from typing import Any
 from app.features.matches.lane import opposing_lane_participant
 from app.features.matches.participants import MatchParticipant
 from app.features.playstyle_analysis.aggregates import calculate_aggregate_value
+from app.features.playstyle_analysis.config import TagConfig
 from app.features.playstyle_analysis.tag_checks import MatchesById, lookup_match
 
 TagResult = dict[str, Any] | None
 TagEvaluator = Callable[
-    [list[MatchParticipant], MatchesById, int, str, dict[str, Any]],
+    [list[MatchParticipant], MatchesById, int, str, TagConfig],
     TagResult,
 ]
 
@@ -34,7 +35,7 @@ def evaluate_tag(
     matches: MatchesById,
     game_count: int,
     tag_code: str,
-    config: dict[str, Any],
+    config: TagConfig,
 ) -> TagResult:
     """Evaluate a single tag configuration."""
     tag_type = config.get("type")
@@ -58,7 +59,7 @@ def evaluate_generic_threshold(
     matches: MatchesById,
     game_count: int,
     tag_code: str,
-    config: dict[str, Any],
+    config: TagConfig,
 ) -> TagResult:
     """Evaluate threshold based on actual average across ALL games."""
     if tag_code in ["aggresive_laner", "passive_laner"]:
@@ -82,7 +83,7 @@ def evaluate_occurrence_percentage(
     matches: MatchesById,
     game_count: int,
     tag_code: str,
-    config: dict[str, Any],
+    config: TagConfig,
 ) -> TagResult:
     """Evaluate tags based on occurrence percentage (for aggressive/passive laner)."""
     target_percentage = config.get("percentage_matches", 0.0)
@@ -106,7 +107,7 @@ def evaluate_occurrence_count(
     matches: MatchesById,
     game_count: int,
     tag_code: str,
-    config: dict[str, Any],
+    config: TagConfig,
 ) -> TagResult:
     """Evaluate tags based on total occurrence count (pentakills, epic steals)."""
     aggregate_value = calculate_aggregate_value(
@@ -122,7 +123,7 @@ def evaluate_gold_diff_check(
     matches: MatchesById,
     game_count: int,
     tag_code: str,
-    config: dict[str, Any],
+    config: TagConfig,
 ) -> TagResult:
     """Evaluate gold diff vs opponent (lead or deficit)."""
     check_deficit = config.get("check_deficit", False)
@@ -152,10 +153,10 @@ def evaluate_damage_type(
     matches: MatchesById,
     game_count: int,
     tag_code: str,
-    config: dict[str, Any],
+    config: TagConfig,
 ) -> TagResult:
     target_percentage = config.get("percentage_matches", 50.0)
-    target_type = config.get("target")
+    target_type = config.get("target_damage_type")
     matching_games, total_phys, total_magic, total_damage = _accumulate_damage(
         participants, target_type
     )
@@ -174,9 +175,9 @@ def evaluate_side_preference(
     matches: MatchesById,
     game_count: int,
     tag_code: str,
-    config: dict[str, Any],
+    config: TagConfig,
 ) -> TagResult:
-    target_team = config.get("target")
+    target_team = config.get("target_team")
     blue_stats, red_stats = _side_win_stats(participants)
     if blue_stats["games"] == 0 or red_stats["games"] == 0:
         return None
@@ -194,7 +195,7 @@ def evaluate_surrender(
     matches: MatchesById,
     game_count: int,
     tag_code: str,
-    config: dict[str, Any],
+    config: TagConfig,
 ) -> TagResult:
     check_type = config.get("check")
     surrender_count, total_games = _count_surrenders(participants, matches)
@@ -216,7 +217,7 @@ def evaluate_kill_greed(
     matches: MatchesById,
     game_count: int,
     tag_code: str,
-    config: dict[str, Any],
+    config: TagConfig,
 ) -> TagResult:
     """Evaluate takes_all_kills: Non-solo kills vs assists ratio (per-match)."""
     target_percentage = config.get("percentage_matches", 40.0)
@@ -236,7 +237,7 @@ def evaluate_solo_kill_ratio(
     matches: MatchesById,
     game_count: int,
     tag_code: str,
-    config: dict[str, Any],
+    config: TagConfig,
 ) -> TagResult:
     """Evaluate duelist: Solo kills vs assists ratio (per-match)."""
     target_percentage = config.get("percentage_matches", 30.0)
@@ -256,7 +257,7 @@ def evaluate_objective_participation(
     matches: MatchesById,
     game_count: int,
     tag_code: str,
-    config: dict[str, Any],
+    config: TagConfig,
 ) -> TagResult:
     """Evaluate ignores_objectives: Player's obj damage < 10% of team (per-match)."""
     target_percentage = config.get("percentage_matches", 40.0)
@@ -276,13 +277,13 @@ def evaluate_nolifer(
     matches: MatchesById,
     game_count: int,
     tag_code: str,
-    config: dict[str, Any],
+    config: TagConfig,
 ) -> TagResult:
     if not participants:
         return None
     level = participants[0].summoner_level or 0
     if level >= config.get("min_summoner_level", 500):
-        description = config.get("hover_template", "").format(value=level)
+        description = config["hover_template"].format(value=level)
         return {"threshold_met": True, "description": description, "value": level}
     return None
 
@@ -292,7 +293,7 @@ def evaluate_otp(
     matches: MatchesById,
     game_count: int,
     tag_code: str,
-    config: dict[str, Any],
+    config: TagConfig,
 ) -> TagResult:
     return _evaluate_champion_play_rate(
         participants, game_count, config, default_min_play_rate=70.0
@@ -304,7 +305,7 @@ def evaluate_main_champion(
     matches: MatchesById,
     game_count: int,
     tag_code: str,
-    config: dict[str, Any],
+    config: TagConfig,
 ) -> TagResult:
     return _evaluate_champion_play_rate(
         participants, game_count, config, default_min_play_rate=50.0
@@ -316,7 +317,7 @@ def evaluate_main_role(
     matches: MatchesById,
     game_count: int,
     tag_code: str,
-    config: dict[str, Any],
+    config: TagConfig,
 ) -> TagResult:
     roles: dict[str, int] = {}
     for p in participants:
@@ -331,10 +332,10 @@ def evaluate_main_role(
 
     if rate >= config.get("min_play_rate", 50.0):
         formatted_role = top_role.title()
-        description = config.get("hover_template", "").format(
+        description = config["hover_template"].format(
             value=format_value(rate), role=formatted_role
         )
-        display_name = config.get("display_name", "").format(role=formatted_role)
+        display_name = config["display_name"].format(role=formatted_role)
         return {
             "threshold_met": True,
             "description": description,
@@ -383,13 +384,9 @@ def generate_summary_stats(
     }
 
 
-def _met_criteria_result(
-    config: dict[str, Any], aggregate_value: float
-) -> dict[str, Any]:
+def _met_criteria_result(config: TagConfig, aggregate_value: float) -> dict[str, Any]:
     formatted_value = format_value(aggregate_value)
-    description = config.get("hover_template", "Met criteria").format(
-        value=formatted_value
-    )
+    description = config["hover_template"].format(value=formatted_value)
     return {
         "threshold_met": True,
         "description": description,
@@ -397,16 +394,21 @@ def _met_criteria_result(
     }
 
 
-def _hover_result(config: dict[str, Any], value: float) -> dict[str, Any]:
+def _hover_result(config: TagConfig, value: float) -> dict[str, Any]:
     formatted_value = format_value(value)
-    description = config.get("hover_template", "").format(value=formatted_value)
+    description = config["hover_template"].format(value=formatted_value)
     return {"threshold_met": True, "description": description, "value": value}
 
 
 def _compare_aggregate_to_thresholds(
-    config: dict[str, Any], aggregate_value: float
+    config: TagConfig, aggregate_value: float
 ) -> TagResult:
     for key, threshold in config.items():
+        # Presentation and evaluator-selection keys share the mapping with the
+        # thresholds; none of them is a `min_`/`max_` name, so skipping the
+        # non-numeric values changes nothing except that this now type-checks.
+        if not isinstance(threshold, int | float):
+            continue
         if key.startswith("min_") and key != "min_play_rate":
             if aggregate_value >= threshold:
                 return _met_criteria_result(config, aggregate_value)
@@ -617,7 +619,7 @@ def _objective_share_for_participant(
 def _evaluate_champion_play_rate(
     participants: list[MatchParticipant],
     game_count: int,
-    config: dict[str, Any],
+    config: TagConfig,
     default_min_play_rate: float,
 ) -> TagResult:
     champs: dict[str, int] = {}
@@ -630,10 +632,10 @@ def _evaluate_champion_play_rate(
     rate = (count / game_count) * 100.0
 
     if rate >= config.get("min_play_rate", default_min_play_rate):
-        description = config.get("hover_template", "").format(
+        description = config["hover_template"].format(
             value=format_value(rate), champion=top_champ
         )
-        display_name = config.get("display_name", "").format(champion=top_champ)
+        display_name = config["display_name"].format(champion=top_champ)
         return {
             "threshold_met": True,
             "description": description,
