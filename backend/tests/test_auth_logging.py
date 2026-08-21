@@ -20,16 +20,15 @@ from app.features.auth.dependencies import (
     get_current_active_user,
     get_current_admin_user,
 )
-from app.features.auth.models import User
-from app.features.auth.router import login
-from app.features.auth.service import (
-    DUMMY_PASSWORD_HASH,
+from app.features.auth.errors import (
     AccountLockedError,
-    AuthService,
     CaptchaRequiredError,
     CaptchaVerificationError,
-    pwd_context,
 )
+from app.features.auth.models import User
+from app.features.auth.passwords import DUMMY_PASSWORD_HASH, pwd_context
+from app.features.auth.router import login
+from app.features.auth.service import AuthService
 from route_helpers import loopback_request, undecorated
 
 
