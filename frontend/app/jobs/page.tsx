@@ -16,14 +16,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2, AlertCircle, Clock } from "lucide-react";
 import { z } from "zod";
 
-const REFRESH_INTERVAL = 15000; // 15 seconds
+import { JOBS_REFRESH_INTERVAL_MS } from "@/features/jobs/refresh-interval";
 
 function RefreshCountdown({ lastUpdate }: { lastUpdate: number }) {
   // Its own component, and its own second: the countdown is a pure function
   // of the wall clock read by one <span>, and ticking it in the page re-ran
   // every job card ten times a second for a number that changes once.
   const [secondsUntilRefresh, setSecondsUntilRefresh] = useState(
-    REFRESH_INTERVAL / 1000,
+    JOBS_REFRESH_INTERVAL_MS / 1000,
   );
 
   useEffect(() => {
@@ -33,7 +33,9 @@ function RefreshCountdown({ lastUpdate }: { lastUpdate: number }) {
       setSecondsUntilRefresh(
         Math.max(
           0,
-          Math.ceil((REFRESH_INTERVAL - (Date.now() - lastUpdate)) / 1000),
+          Math.ceil(
+            (JOBS_REFRESH_INTERVAL_MS - (Date.now() - lastUpdate)) / 1000,
+          ),
         ),
       );
     tick();
@@ -79,7 +81,7 @@ function JobsPageContent() {
           active_only: false,
         }),
       ),
-    refetchInterval: REFRESH_INTERVAL,
+    refetchInterval: JOBS_REFRESH_INTERVAL_MS,
   });
 
   // Fetch system status
@@ -91,7 +93,7 @@ function JobsPageContent() {
     queryKey: ["job-status"],
     queryFn: async () =>
       unwrap(await validatedGet(JobStatusResponseSchema, "/jobs/status/overview")),
-    refetchInterval: REFRESH_INTERVAL,
+    refetchInterval: JOBS_REFRESH_INTERVAL_MS,
   });
 
   const jobs = jobsResult ?? [];

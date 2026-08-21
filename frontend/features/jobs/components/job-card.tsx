@@ -31,6 +31,7 @@ import {
   formatScheduleInterval,
 } from "./job-card-format";
 import { formatDuration } from "./job-execution-format";
+import { JOBS_REFRESH_INTERVAL_MS } from "../refresh-interval";
 import { useJobCardControls } from "./use-job-card-controls";
 
 interface JobCardProps {
@@ -52,7 +53,7 @@ export function JobCard({ job, onExecutionClick }: JobCardProps) {
         ),
       ),
     enabled: !!job.id,
-    refetchInterval: 15000,
+    refetchInterval: JOBS_REFRESH_INTERVAL_MS,
   });
 
   const recentExecutions = executionsResult?.executions ?? [];

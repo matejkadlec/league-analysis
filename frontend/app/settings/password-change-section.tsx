@@ -23,14 +23,63 @@ import {
   settingsErrorDetail,
 } from "./settings-helpers";
 
+/**
+ * A password field with its own show/hide toggle.
+ *
+ * Local to this file: two uses in one component is one file's worth of
+ * abstraction. The visibility flag stays with the form because a successful
+ * change resets both fields back to hidden.
+ */
+function PasswordInput({
+  id,
+  value,
+  onChange,
+  disabled,
+  visible,
+  onVisibleChange,
+}: {
+  id: string;
+  value: string;
+  onChange: (value: string) => void;
+  disabled: boolean;
+  visible: boolean;
+  onVisibleChange: (visible: boolean) => void;
+}) {
+  return (
+    <div className="relative">
+      <Input
+        id={id}
+        type={visible ? "text" : "password"}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="w-full pr-10"
+        disabled={disabled}
+      />
+      <button
+        type="button"
+        className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-muted-foreground hover:text-foreground cursor-pointer"
+        onClick={() => onVisibleChange(!visible)}
+        disabled={disabled}
+        aria-label={visible ? "Hide password" : "Show password"}
+      >
+        {visible ? (
+          <EyeOff className="h-4 w-4" />
+        ) : (
+          <Eye className="h-4 w-4" />
+        )}
+      </button>
+    </div>
+  );
+}
+
 export function PasswordChangeSection() {
   const toast = useToast();
   const queryClient = useQueryClient();
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [repeatPassword, setRepeatPassword] = useState("");
-  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
-  const [showNewPassword, setShowNewPassword] = useState(false);
   const [currentPasswordError, setCurrentPasswordError] = useState<
     string | null
   >(null);
@@ -111,34 +160,17 @@ export function PasswordChangeSection() {
       <div className="space-y-1.5">
         <Label htmlFor="current-password">Current Password</Label>
         <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,1fr)] items-center gap-3">
-          <div className="relative">
-            <Input
-              id="current-password"
-              type={showCurrentPassword ? "text" : "password"}
-              value={currentPassword}
-              onChange={(event) => {
-                setCurrentPassword(event.target.value);
-                setCurrentPasswordError(null);
-              }}
-              className="w-full pr-10"
-              disabled={changePasswordMutation.isPending}
-            />
-            <button
-              type="button"
-              className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-muted-foreground hover:text-foreground cursor-pointer"
-              onClick={() => setShowCurrentPassword((previous) => !previous)}
-              disabled={changePasswordMutation.isPending}
-              aria-label={
-                showCurrentPassword ? "Hide password" : "Show password"
-              }
-            >
-              {showCurrentPassword ? (
-                <EyeOff className="h-4 w-4" />
-              ) : (
-                <Eye className="h-4 w-4" />
-              )}
-            </button>
-          </div>
+          <PasswordInput
+            id="current-password"
+            value={currentPassword}
+            onChange={(next) => {
+              setCurrentPassword(next);
+              setCurrentPasswordError(null);
+            }}
+            disabled={changePasswordMutation.isPending}
+            visible={showCurrentPassword}
+            onVisibleChange={setShowCurrentPassword}
+          />
           <div className="flex items-center justify-end">
             <div aria-hidden className="h-9 w-36" />
           </div>
@@ -153,29 +185,14 @@ export function PasswordChangeSection() {
           <Label htmlFor="new-password">New Password</Label>
         </div>
         <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,1fr)] items-center gap-3">
-          <div className="relative">
-            <Input
-              id="new-password"
-              type={showNewPassword ? "text" : "password"}
-              value={newPassword}
-              onChange={(event) => setNewPassword(event.target.value)}
-              className="w-full pr-10"
-              disabled={changePasswordMutation.isPending}
-            />
-            <button
-              type="button"
-              className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-muted-foreground hover:text-foreground cursor-pointer"
-              onClick={() => setShowNewPassword((previous) => !previous)}
-              disabled={changePasswordMutation.isPending}
-              aria-label={showNewPassword ? "Hide password" : "Show password"}
-            >
-              {showNewPassword ? (
-                <EyeOff className="h-4 w-4" />
-              ) : (
-                <Eye className="h-4 w-4" />
-              )}
-            </button>
-          </div>
+          <PasswordInput
+            id="new-password"
+            value={newPassword}
+            onChange={setNewPassword}
+            disabled={changePasswordMutation.isPending}
+            visible={showNewPassword}
+            onVisibleChange={setShowNewPassword}
+          />
           <div className="flex items-center justify-end">
             <div aria-hidden className="h-9 w-36" />
           </div>
