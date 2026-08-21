@@ -48,17 +48,12 @@ export const player = {
 
 const league = {
   puuid: PUUID,
-  league_id: "league-id",
   queue_type: "RANKED_SOLO_5x5",
   tier: "EMERALD",
   rank: "II",
   league_points: 74,
   wins: 70,
   losses: 56,
-  veteran: false,
-  inactive: false,
-  fresh_blood: false,
-  hot_streak: true,
   created_at: NOW,
   // A percentage, not a fraction: the backend's PlayerLeague.win_rate
   // property multiplies by 100 (leagues_schemas.py says "as a percentage").

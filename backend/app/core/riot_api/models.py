@@ -211,9 +211,6 @@ class MatchDTO(RiotDTO):
 class LeagueEntryDTO(RiotDTO):
     """Current LEAGUE-V4 by-PUUID entry."""
 
-    # The live by-PUUID response can omit leagueId even though Riot's portal
-    # still lists the field. Keep the remaining ranked fields strict.
-    league_id: str | None = Field(default=None)
     # puuid can also be omitted because the requested PUUID is already in the path
     puuid: str | None = Field(default=None, alias="puuid")
     queue_type: str = Field(...)
@@ -222,10 +219,10 @@ class LeagueEntryDTO(RiotDTO):
     league_points: int = Field(...)
     wins: int
     losses: int
-    veteran: bool = Field(..., alias="veteran")
-    inactive: bool = Field(..., alias="inactive")
-    fresh_blood: bool = Field(...)
-    hot_streak: bool = Field(...)
+    # leagueId, veteran, inactive, freshBlood and hotStreak are deliberately
+    # absent: nothing read them, and declaring them required meant a response
+    # omitting one -- which the live by-PUUID route does for leagueId -- would
+    # have failed the whole league sync. `extra="ignore"` drops them.
 
     @property
     def win_rate(self) -> float:
@@ -254,7 +251,8 @@ class LeagueEntryDTO(RiotDTO):
 # specification marks it required, because the specification is generated from
 # a reference that is documented to carry "small errors or missing DTO specs",
 # and this codebase has already been bitten by exactly that — see
-# `LeagueEntryDTO.league_id` above. A ValidationError on a field nothing reads
+# the omitted-field note on `LeagueEntryDTO` above. A ValidationError on a
+# field nothing reads
 # would be a regression against the `dict.get()` access this replaces.
 class MatchTimelinePositionDTO(RiotDTO):
     """A map coordinate."""

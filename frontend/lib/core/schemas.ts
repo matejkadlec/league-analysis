@@ -397,17 +397,12 @@ export type JobExecutionListResponse = z.infer<
 // Simplified immutable league snapshot (ordered by created_at DESC for current)
 export const PlayerLeagueSchema = z.object({
   puuid: z.string(),
-  league_id: z.string().nullable(),
   queue_type: z.string(),
   tier: z.string(),
   rank: z.string().nullable(),
   league_points: z.number().int(),
   wins: z.number().int(),
   losses: z.number().int(),
-  veteran: z.boolean(),
-  inactive: z.boolean(),
-  fresh_blood: z.boolean(),
-  hot_streak: z.boolean(),
   created_at: z.string(),
   // Computed properties from backend
   // The API serves this one win rate as a percentage (PlayerLeague.win_rate

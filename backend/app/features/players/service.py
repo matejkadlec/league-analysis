@@ -822,17 +822,12 @@ class PlayerService:
         """Build an immutable league snapshot from a live Solo/Duo entry."""
         return PlayerLeague(
             puuid=puuid,
-            league_id=solo_entry.league_id,
             queue_type=solo_entry.queue_type,
             tier=solo_entry.tier,
             rank=solo_entry.rank,
             league_points=solo_entry.league_points,
             wins=solo_entry.wins,
             losses=solo_entry.losses,
-            veteran=solo_entry.veteran,
-            inactive=solo_entry.inactive,
-            fresh_blood=solo_entry.fresh_blood,
-            hot_streak=solo_entry.hot_streak,
         )
 
     async def update_player_league(
@@ -887,8 +882,6 @@ class PlayerService:
             tier=solo_entry.tier,
             rank=solo_entry.rank,
             lp=solo_entry.league_points,
-            hot_streak=solo_entry.hot_streak,
-            fresh_blood=solo_entry.fresh_blood,
         )
         return True
 

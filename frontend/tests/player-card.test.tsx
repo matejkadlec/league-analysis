@@ -73,17 +73,12 @@ function player(overrides: Partial<Player> = {}): Player {
 
 const league = {
   puuid: "p-1",
-  league_id: "L1",
   queue_type: "RANKED_SOLO_5x5",
   tier: "GOLD",
   rank: "II",
   league_points: 42,
   wins: 60,
   losses: 40,
-  veteran: false,
-  inactive: false,
-  fresh_blood: false,
-  hot_streak: false,
   created_at: "2026-08-19T08:00:00Z",
   // Post-parse shape: the schema has already normalized the API's percent to
   // a fraction. Deliberately disagrees with the stats fixture's 0.6 so an
