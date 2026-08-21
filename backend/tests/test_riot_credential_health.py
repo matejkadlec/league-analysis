@@ -137,9 +137,15 @@ def test_losing_the_only_key_reports_missing_rather_than_unknown() -> None:
     assert health.evidence == RiotCredentialEvidence.MISSING.value
 
 
-async def test_admin_and_user_status_share_the_same_health_snapshot(
+async def test_service_status_answers_from_the_shared_health_snapshot(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """One endpoint now, so the pair can no longer disagree.
+
+    The admin card used to read its own /riot_api_key/status, backed by the
+    same synchronize call but cached separately and never refetched -- so an
+    expired key flipped the header banner and left the card stale.
+    """
     observed_at = datetime(2026, 8, 11, tzinfo=UTC)
     snapshot = SimpleNamespace(
         status=RiotCredentialStatus.INVALID,
@@ -156,13 +162,13 @@ async def test_admin_and_user_status_share_the_same_health_snapshot(
     )
     service = SettingsService(cast(AsyncSession, SimpleNamespace()))
 
-    admin_status = await service.get_api_key_status()
     user_status = await service.get_service_status()
 
-    assert admin_status.credential_status == user_status.credential_status == "invalid"
-    assert admin_status.health_revision == user_status.health_revision == 9
+    assert user_status.credential_status == "invalid"
+    assert user_status.health_revision == 9
     assert user_status.is_under_maintenance is True
     assert user_status.reason == "api_key_invalid"
+    assert user_status.observed_at == observed_at
 
 
 async def test_candidate_validation_keeps_transient_failure_distinct(

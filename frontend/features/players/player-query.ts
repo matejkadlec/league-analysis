@@ -5,7 +5,8 @@ import {
 } from "@tanstack/react-query";
 
 import { unwrap, validatedGet } from "@/lib/core/api";
-import { PlayerSchema } from "@/lib/core/schemas";
+import { MatchStatsResponseSchema, PlayerSchema } from "@/lib/core/schemas";
+import { RANKED_SOLO_QUEUE_ID } from "@/features/matches/queue-catalog";
 
 export function playerQueryKey(puuid: string | null) {
   return ["player", puuid] as const;
@@ -34,6 +35,32 @@ export function playerQueryOptions(puuid: string | null) {
     queryFn: puuid
       ? async () => unwrap(await validatedGet(PlayerSchema, `/players/${puuid}`))
       : skipToken,
+    retry: false,
+  });
+}
+
+/**
+ * Ranked Solo/Duo stats for one player, over their whole history or the last
+ * `limit` games.
+ *
+ * The player card and the recent-performance card both mount on the overview
+ * page, and their unlimited variants were two query keys issuing the byte-
+ * identical request -- so every visit to that page fetched the same
+ * aggregate twice. One key, one round trip.
+ */
+export function playerStatsQueryOptions(puuid: string, limit?: number) {
+  return queryOptions({
+    queryKey: ["player-stats", puuid, RANKED_SOLO_QUEUE_ID, limit ?? null],
+    queryFn: async () =>
+      unwrap(
+        await validatedGet(
+          MatchStatsResponseSchema,
+          `/matches/player/${puuid}/stats`,
+          limit === undefined
+            ? { queue: RANKED_SOLO_QUEUE_ID }
+            : { queue: RANKED_SOLO_QUEUE_ID, limit },
+        ),
+      ),
     retry: false,
   });
 }

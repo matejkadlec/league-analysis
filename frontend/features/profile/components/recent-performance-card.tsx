@@ -1,8 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { MatchStatsResponseSchema } from "@/lib/core/schemas";
-import { unwrap, validatedGet } from "@/lib/core/api";
+import { playerStatsQueryOptions } from "@/features/players/player-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 import { ProfileCardEmptyState } from "./profile-card-empty-state";
@@ -12,6 +11,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { TrendingUp, TrendingDown, Minus, Activity } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { formatFractionAsPercent, formatKDA } from "@/lib/core/format";
+
+/** The comparison window the card labels "Last 10 games". */
+const RECENT_GAME_COUNT = 10;
 
 interface RecentPerformanceCardProps {
   puuid: string;
@@ -126,30 +128,14 @@ export function RecentPerformanceCard({
   lastUpdated,
 }: RecentPerformanceCardProps) {
   // Fetch recent stats (last 10 games for comparison)
-  const { data: recent = null, isLoading: isRecentLoading } = useQuery({
-    queryKey: ["recent-stats", puuid, 10],
-    queryFn: async () =>
-      unwrap(
-        await validatedGet(
-          MatchStatsResponseSchema,
-          `/matches/player/${puuid}/stats`,
-          { queue: 420, limit: 10 },
-        ),
-      ),
-  });
+  const { data: recent = null, isLoading: isRecentLoading } = useQuery(
+    playerStatsQueryOptions(puuid, RECENT_GAME_COUNT),
+  );
 
   // Fetch overall stats (all games)
-  const { data: overall = null, isLoading: isOverallLoading } = useQuery({
-    queryKey: ["overall-stats", puuid],
-    queryFn: async () =>
-      unwrap(
-        await validatedGet(
-          MatchStatsResponseSchema,
-          `/matches/player/${puuid}/stats`,
-          { queue: 420 },
-        ),
-      ),
-  });
+  const { data: overall = null, isLoading: isOverallLoading } = useQuery(
+    playerStatsQueryOptions(puuid),
+  );
 
   const isLoading = isRecentLoading || isOverallLoading;
 

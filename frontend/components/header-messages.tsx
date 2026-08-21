@@ -13,8 +13,7 @@ import {
   readOptionalStorage,
   writeOptionalStorage,
 } from "@/features/cookie-consent/utils/consent-storage";
-import { unwrap, validatedGet } from "@/lib/core/api";
-import { ServiceStatusSchema } from "@/lib/core/schemas";
+import { serviceStatusQueryOptions } from "@/lib/core/service-status-query";
 import { cn } from "@/lib/core/utils";
 import { RIOT_CREDENTIAL_HEALTH_UPDATED_EVENT } from "@/lib/core/riot-credential-health-events";
 
@@ -131,22 +130,13 @@ export function HeaderMessages() {
     writeOptionalStorage(HEADER_MESSAGES_CLOSED_KEY, JSON.stringify(newClosed));
   };
 
-  const { data: serviceStatus } = useQuery({
-    queryKey: ["service-status"],
-    queryFn: async () =>
-      unwrap(
-        await validatedGet(ServiceStatusSchema, "/settings/service-status"),
-      ),
-    enabled: !!isAuthenticated,
-    staleTime: 5 * 1000,
-    refetchInterval: 15 * 1000,
-    refetchOnWindowFocus: true,
-  });
+  const { data: serviceStatus } = useQuery(
+    serviceStatusQueryOptions({ enabled: !!isAuthenticated }),
+  );
 
   useEffect(() => {
     const refreshCredentialHealth = () => {
       void queryClient.invalidateQueries({ queryKey: ["service-status"] });
-      void queryClient.invalidateQueries({ queryKey: ["apiKeyStatus"] });
     };
     window.addEventListener(
       RIOT_CREDENTIAL_HEALTH_UPDATED_EVENT,

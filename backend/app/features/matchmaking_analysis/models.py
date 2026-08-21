@@ -1,7 +1,7 @@
 """Persisted matchmaking analysis lifecycle and immutable results."""
 
 from datetime import datetime
-from typing import NotRequired, TypedDict
+from typing import TypedDict
 
 from sqlalchemy import (
     CheckConstraint,
@@ -31,14 +31,11 @@ class MatchmakingAnalysisResultsJSON(TypedDict):
     their own `0` for a missing winrate -- a value inside the response
     schema's own `ge=0.0, le=1.0` bound, so nothing could reject it and the
     UI showed "0% average teammate winrate" for a row it could not read.
-
-    `players_analyzed` stays optional: nothing reads it.
     """
 
     team_avg_winrate: float
     enemy_avg_winrate: float
     matches_analyzed: int
-    players_analyzed: NotRequired[int]
 
 
 class MatchmakingAnalysis(Base):

@@ -20,7 +20,6 @@ from app.core.riot_api.errors import RiotAPIError
 
 from .models import UserCardPreference
 from .schemas import (
-    APIKeyStatusResponse,
     CardId,
     CardPreferenceResponse,
     CardPreferenceUpdate,
@@ -30,7 +29,6 @@ from .schemas import (
     SettingUpdate,
     SettingValidationResponse,
     UserCookieConsentUpdate,
-    UserSettingsUpdate,
     normalize_stored_card_preference,
     serialize_card_preference_settings,
     validate_card_preference_update,
@@ -70,16 +68,6 @@ class SettingsService:
             )
 
         return None
-
-    async def get_api_key_status(self) -> APIKeyStatusResponse:
-        """Get admin detail from the shared authoritative health state."""
-        _credential, health = await synchronize_riot_credential_health(self.db)
-        return APIKeyStatusResponse(
-            credential_status=health.status.value,
-            evidence=health.evidence.value,
-            observed_at=health.evidence_at,
-            health_revision=health.revision,
-        )
 
     async def get_service_status(self) -> ServiceStatusResponse:
         """Get the same current health decision for every authenticated user."""
@@ -465,37 +453,6 @@ class SettingsService:
         ]
 
     # ===== USER SETTINGS METHODS =====
-
-    async def get_or_create_user_settings(self, user_id: int):
-        """Get user settings, creating default settings if they don't exist."""
-        from app.features.auth.user_settings import UserSettings
-
-        stmt = select(UserSettings).where(UserSettings.user_id == user_id)
-        result = await self.db.execute(stmt)
-        settings = result.scalar_one_or_none()
-
-        if not settings:
-            # Create default settings
-            settings = UserSettings(user_id=user_id)
-            self.db.add(settings)
-            await self.db.commit()
-            await self.db.refresh(settings)
-            logger.info("Created default user settings", user_id=user_id)
-
-        return settings
-
-    async def update_user_settings(self, user_id: int, update: UserSettingsUpdate):
-        """Accept the retired compatibility payload without persisting it."""
-        settings = await self.get_or_create_user_settings(user_id)
-        update_data = update.model_dump(exclude_unset=True)
-
-        logger.info(
-            "Ignored retired user settings compatibility update",
-            user_id=user_id,
-            ignored_fields=list(update_data.keys()),
-        )
-
-        return settings
 
     async def get_user_cookie_consent(self, user_id: int):
         """Get authenticated user's stored cookie-consent record."""

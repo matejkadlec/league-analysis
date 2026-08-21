@@ -11,11 +11,8 @@ import {
   validatedPost,
   validatedPut,
 } from "@/lib/core/api";
-import {
-  APIKeyStatusSchema,
-  SettingSchema,
-  SettingTestResponseSchema,
-} from "@/lib/core/schemas";
+import { SettingSchema, SettingTestResponseSchema } from "@/lib/core/schemas";
+import { serviceStatusQueryOptions } from "@/lib/core/service-status-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -48,15 +45,9 @@ export function RiotApiSettingsCard() {
     },
   });
 
-  const { data: keyStatus, isLoading: isApiKeyStatusLoading } = useQuery({
-    queryKey: ["apiKeyStatus"],
-    queryFn: async () =>
-      unwrap(
-        await validatedGet(APIKeyStatusSchema, "/settings/riot_api_key/status"),
-      ),
-    staleTime: 60 * 1000,
-    refetchOnWindowFocus: false,
-  });
+  const { data: keyStatus, isLoading: isApiKeyStatusLoading } = useQuery(
+    serviceStatusQueryOptions(),
+  );
 
   const updateMutation = useMutation({
     mutationFn: async (value: string) =>
@@ -69,9 +60,6 @@ export function RiotApiSettingsCard() {
         queryKey: ["settings", "riot_api_key"],
       });
       notifyRiotCredentialHealthUpdated();
-      void queryClient.invalidateQueries({
-        queryKey: ["apiKeyStatus"],
-      });
       void queryClient.invalidateQueries({
         queryKey: ["service-status"],
       });

@@ -18,6 +18,33 @@ import { z } from "zod";
 
 const REFRESH_INTERVAL = 15000; // 15 seconds
 
+function RefreshCountdown({ lastUpdate }: { lastUpdate: number }) {
+  // Its own component, and its own second: the countdown is a pure function
+  // of the wall clock read by one <span>, and ticking it in the page re-ran
+  // every job card ten times a second for a number that changes once.
+  const [secondsUntilRefresh, setSecondsUntilRefresh] = useState(
+    REFRESH_INTERVAL / 1000,
+  );
+
+  useEffect(() => {
+    if (lastUpdate === 0) return;
+
+    const tick = () =>
+      setSecondsUntilRefresh(
+        Math.max(
+          0,
+          Math.ceil((REFRESH_INTERVAL - (Date.now() - lastUpdate)) / 1000),
+        ),
+      );
+    tick();
+    const interval = setInterval(tick, 1000);
+
+    return () => clearInterval(interval);
+  }, [lastUpdate]);
+
+  return <span>Auto-refresh in {secondsUntilRefresh}s</span>;
+}
+
 export default function JobsPage() {
   return (
     <ProtectedRoute requireAdmin>
@@ -27,7 +54,6 @@ export default function JobsPage() {
 }
 
 function JobsPageContent() {
-  const [secondsUntilRefresh, setSecondsUntilRefresh] = useState(15);
   const [activeTab, setActiveTab] = useState("jobs");
   const [selectedExecutionId, setSelectedExecutionId] = useState<number | null>(
     null,
@@ -68,23 +94,6 @@ function JobsPageContent() {
     refetchInterval: REFRESH_INTERVAL,
   });
 
-  // Countdown timer for next refresh
-  useEffect(() => {
-    const lastUpdate = Math.max(jobsUpdatedAt, statusUpdatedAt);
-    if (lastUpdate === 0) return;
-
-    const interval = setInterval(() => {
-      const elapsed = Date.now() - lastUpdate;
-      const remaining = Math.max(
-        0,
-        Math.ceil((REFRESH_INTERVAL - elapsed) / 1000),
-      );
-      setSecondsUntilRefresh(remaining);
-    }, 100);
-
-    return () => clearInterval(interval);
-  }, [jobsUpdatedAt, statusUpdatedAt]);
-
   const jobs = jobsResult ?? [];
   const status = statusResult ?? null;
 
@@ -100,7 +109,9 @@ function JobsPageContent() {
             <h1 className="text-2xl font-semibold">Background Jobs</h1>
             <div className="mt-2 flex items-center gap-2 text-sm text-white/70">
               <Clock className="h-4 w-4" />
-              <span>Auto-refresh in {secondsUntilRefresh}s</span>
+              <RefreshCountdown
+                lastUpdate={Math.max(jobsUpdatedAt, statusUpdatedAt)}
+              />
             </div>
           </div>
         </div>

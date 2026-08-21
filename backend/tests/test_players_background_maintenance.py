@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 from fastapi import BackgroundTasks, HTTPException
+from sqlalchemy import Select, Update
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.requests import Request
 
@@ -31,6 +32,34 @@ def _request() -> Request:
             "client": ("127.0.0.1", 12345),
         }
     )
+
+
+async def test_the_global_tracking_recount_locks_the_row_it_rewrites() -> None:
+    """Count-then-write on one PUUID is only safe while the row is held.
+
+    Two users acting on one player interleaved there: the untrack counted
+    zero without seeing the other's uncommitted track, then wrote its stale
+    `false` last. The mapping table then said the player was tracked while
+    `core.players.is_tracked` -- the allowlist both writer jobs load -- said
+    nobody tracked them, and nothing but another track or untrack clears it.
+    """
+    statements: list[object] = []
+
+    class _Session:
+        async def execute(self, statement: object) -> SimpleNamespace:
+            statements.append(statement)
+            return SimpleNamespace(scalar=lambda: 1)
+
+    service = PlayerService(cast(AsyncSession, _Session()))
+
+    assert await service._update_global_tracking_flag("puuid-1") is True
+
+    lock = statements[0]
+    assert isinstance(lock, Select)
+    assert lock._for_update_arg is not None
+    # Ordering is the whole fix: a lock taken after the count locks nothing.
+    assert isinstance(statements[1], Select)
+    assert isinstance(statements[2], Update)
 
 
 async def test_tracking_a_player_starts_one_initial_sync(

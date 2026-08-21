@@ -262,3 +262,43 @@ async def test_optional_fetch_does_not_swallow_invalid_key_failure() -> None:
 
     with pytest.raises(ForbiddenError):
         await service._api_fetch_match_ids(_PUUID)
+
+
+def _empty_service() -> MatchmakingAnalysisService:
+    return MatchmakingAnalysisService(
+        cast(AsyncSession, SimpleNamespace()),
+        cast(RiotAPIClient, SimpleNamespace()),
+    )
+
+
+@pytest.mark.parametrize(
+    ("team_avgs", "enemy_avgs"),
+    [([], []), ([0.5], []), ([], [0.5])],
+    ids=["neither-side", "no-enemies", "no-team"],
+)
+def test_a_run_that_measured_nothing_is_not_a_completed_run(
+    team_avgs: list[float], enemy_avgs: list[float]
+) -> None:
+    """0.0% vs 0.0% used to be written as a fair-matchmaking verdict.
+
+    Every spine match failing to load returns None from the optional fetch,
+    so both averages fell back to 0.0 and the run was still stamped
+    `completed` with `last_matchmaking_analysis` set. The failure path already
+    persists a terminal diagnostic; an unmeasured run belongs on it.
+    """
+    with pytest.raises(analysis_service_module.MatchmakingAnalysisRuntimeError):
+        _empty_service()._build_completion_results(team_avgs, enemy_avgs)
+
+
+def test_the_basis_reported_to_the_viewer_is_the_one_that_was_read() -> None:
+    """ "Based on N ranked matches" was the constant 910, whatever was read.
+
+    Nearly every player in this database has fewer than ten ranked games, so
+    the number under the verdict was never the number of matches behind it.
+    """
+    service = _empty_service()
+    service.matches_analyzed = 37
+
+    results = service._build_completion_results([0.5], [0.6])
+
+    assert results["matches_analyzed"] == 37

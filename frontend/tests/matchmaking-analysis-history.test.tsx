@@ -185,7 +185,7 @@ describe("the matchmaking analysis history card", () => {
     queryClient.clear();
   });
 
-  it("reloads the results panel after a record is deleted", async () => {
+  it("reloads both sibling panels after a record is deleted", async () => {
     // The results panel beside this card is a separate query keyed on the
     // same player. Nothing else invalidates it, so without this the analysis
     // someone just deleted stays on screen as the current result, and the
@@ -195,14 +195,17 @@ describe("the matchmaking analysis history card", () => {
       data: { message: "deleted" },
     });
     const resultsQuery = vi.fn().mockResolvedValue("results");
-    function ResultsProbe() {
-      // Stands in for the sibling panel: same key, and deliberately never
+    const analysisQuery = vi.fn().mockResolvedValue("analysis");
+    function Probe({
+      queryKey,
+      queryFn,
+    }: {
+      queryKey: [string, string];
+      queryFn: () => Promise<string>;
+    }) {
+      // Stands in for a sibling panel: same key, and deliberately never
       // stale on its own, so a refetch can only come from the invalidation.
-      useQuery({
-        queryKey: ["matchmaking-analysis-results", PUUID],
-        queryFn: resultsQuery,
-        staleTime: Infinity,
-      });
+      useQuery({ queryKey, queryFn, staleTime: Infinity });
       return null;
     }
 
@@ -212,11 +215,19 @@ describe("the matchmaking analysis history card", () => {
           puuid={PUUID}
           analyzedPlayerLabel="Sett#EUN"
         />
-        <ResultsProbe />
+        <Probe
+          queryKey={["matchmaking-analysis-results", PUUID]}
+          queryFn={resultsQuery}
+        />
+        <Probe
+          queryKey={["matchmaking-analysis", PUUID]}
+          queryFn={analysisQuery}
+        />
       </>,
     );
 
     await waitFor(() => expect(resultsQuery).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(analysisQuery).toHaveBeenCalledTimes(1));
     const remove = (await table()).getAllByTitle("Delete this analysis");
     fireEvent.click(remove[0]!);
 
@@ -230,6 +241,10 @@ describe("the matchmaking analysis history card", () => {
       { timeout: 2000 },
     );
     await waitFor(() => expect(resultsQuery).toHaveBeenCalledTimes(2));
+    // The card above the table reads this key. Without it, deleting the run
+    // it is showing leaves it offering "Run New Analysis" for a record that
+    // no longer exists.
+    await waitFor(() => expect(analysisQuery).toHaveBeenCalledTimes(2));
 
     queryClient.clear();
   });

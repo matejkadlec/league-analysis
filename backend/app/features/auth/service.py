@@ -708,8 +708,21 @@ class AuthService:
         session, which is the truth, and the client keeps it.
         """
         token_hash = self._hash_refresh_token(raw_refresh_token)
+        # `FOR UPDATE`: this reads `revoked_at` and then writes it, and two
+        # requests carrying one cookie -- two tabs restored together, both
+        # 401ing on a 30-minute-old access token -- both used to read NULL and
+        # both rotate. That forks one token into two independently valid
+        # 30-day families, records only the second replacement, and skips the
+        # reuse alarm entirely; an attacker replaying a stolen cookie against
+        # a live client got a valid pair with nothing logged and nothing
+        # revoked. Serialising the pair sends the loser down the reuse branch,
+        # which revokes the family and signs the visitor out -- the outcome
+        # `resolve_user_id_for_refresh_token` already documents for a replayed
+        # token, arrived at deliberately rather than by losing a race.
         result = await self.db.execute(
-            select(RefreshToken).where(RefreshToken.token_hash == token_hash)
+            select(RefreshToken)
+            .where(RefreshToken.token_hash == token_hash)
+            .with_for_update()
         )
         token_record = result.scalar_one_or_none()
         if token_record is None:

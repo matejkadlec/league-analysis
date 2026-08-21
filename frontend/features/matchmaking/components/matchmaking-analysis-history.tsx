@@ -173,6 +173,12 @@ export function MatchmakingAnalysisHistory({
       void queryClient.invalidateQueries({
         queryKey: ["matchmaking-analysis-results", puuid],
       });
+      // The card above reads this one. Without it, deleting the run it is
+      // showing leaves it offering "Run New Analysis" for a record that no
+      // longer exists -- every other write path in this feature lists it.
+      void queryClient.invalidateQueries({
+        queryKey: ["matchmaking-analysis", puuid],
+      });
     },
     onError: () => {
       toast.error("Matchmaking analysis was not removed", {

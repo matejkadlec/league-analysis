@@ -25,9 +25,8 @@ from app.features.players.models import Player
 from app.features.players.schemas import PlayerResponse
 
 from .control import (
+    claim_runtime_control,
     get_runtime_control_snapshot,
-    is_runtime_job_running,
-    register_runtime_control,
     runtime_control_key,
     unregister_runtime_control,
 )
@@ -463,24 +462,13 @@ class BaseJob(ABC):
         except Exception as e:
             await self._handle_completion_error(db, e)
 
-    async def is_already_running(self, db: AsyncSession) -> bool:
-        """Check if this job is already running.
+    async def fail_orphaned_execution(self, db: AsyncSession) -> None:
+        """Fail a RUNNING/PAUSED row left behind by a process that died.
 
-        Uses in-memory runtime controls as the source of truth.
-        If the DB has a RUNNING record but no runtime control exists,
-        the record is orphaned and gets cleaned up automatically.
-
-        Test runs use a separate runtime key so they never conflict
-        with regular runs.
+        Only ever called once this run holds the runtime key, so any such row
+        belongs to a previous process: the registry is in-memory and does not
+        survive a restart, while the row does.
         """
-        if is_runtime_job_running(self.runtime_key):
-            logger.info(
-                "Job is already running (runtime control active), skipping execution",
-                job_config_id=self.job_config_id,
-                runtime_key=self.runtime_key,
-            )
-            return True
-
         stmt = (
             select(JobExecution)
             .where(
@@ -510,8 +498,6 @@ class BaseJob(ABC):
                 "Execution orphaned - no active runtime control found"
             )
             await self.safe_commit(db, "orphaned execution cleanup")
-
-        return False
 
     async def handle_error(self, db: AsyncSession, error: Exception) -> str:
         """Handle job execution error and return formatted error message."""
@@ -565,15 +551,21 @@ class BaseJob(ABC):
 
     async def _begin_run(self, db: AsyncSession) -> bool:
         """Start bookkeeping and register runtime control when the job may run."""
-        if await self.is_already_running(db):
+        # Claim first: everything below awaits, and a run that started its
+        # bookkeeping before taking the key could be interleaved with another
+        # run of the same configuration doing the same. Test runs claim the
+        # negated key, so they never conflict with regular runs.
+        if not claim_runtime_control(self.runtime_key, asyncio.current_task()):
             logger.info(
                 "Skipping job execution - already running",
                 job_config_id=self.job_config_id,
+                runtime_key=self.runtime_key,
             )
             self.skipped_as_already_running = True
             return False
 
         try:
+            await self.fail_orphaned_execution(db)
             await self.log_start(db)
         except Exception as error:
             logger.error(
@@ -582,12 +574,10 @@ class BaseJob(ABC):
                 error=str(error),
                 error_type=type(error).__name__,
             )
+            # `run()` returns before its `finally`, so release the key here.
+            unregister_runtime_control(self.runtime_key)
             return False
 
-        register_runtime_control(
-            self.runtime_key,
-            asyncio.current_task(),
-        )
         return True
 
     async def _execute_prepared_job(self, db: AsyncSession) -> None:

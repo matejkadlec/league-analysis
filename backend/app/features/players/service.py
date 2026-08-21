@@ -21,7 +21,7 @@ from app.core.riot_api.constants import (
 )
 from app.core.riot_api.models import LeagueEntryDTO
 from app.features.auth.models import User
-from app.features.auth.user_settings import UserSettings
+from app.features.auth.user_settings import ensure_user_settings
 from app.features.auth.user_tracked_player import UserTrackedPlayer
 
 from .leagues import PlayerLeague
@@ -103,7 +103,25 @@ class PlayerService:
         return set(result.scalars().all())
 
     async def _update_global_tracking_flag(self, puuid: str) -> bool:
-        """Update core.players.is_tracked based on all user mappings."""
+        """Update core.players.is_tracked based on all user mappings.
+
+        Locks the player row first: this counts and then writes what it
+        counted, and two users touching one PUUID at once used to interleave
+        there. A's untrack counted 0 without seeing B's uncommitted track,
+        waited on B's row lock, and then wrote its stale `false` last -- so
+        the mapping table said B tracks the player while `is_tracked` said
+        nobody did, and `get_globally_tracked_players` is the allowlist both
+        writer jobs load. B's UI reads the mapping table, so it kept showing
+        the player as tracked while its matches and rank silently stopped.
+        Nothing self-heals that; only another track or untrack clears it.
+
+        A correlated `UPDATE ... SET is_tracked = EXISTS(...)` does not fix
+        it: under READ COMMITTED the subquery's snapshot predates the lock
+        wait, so the loser rewrites the same stale value.
+        """
+        await self.db.execute(
+            select(Player.puuid).where(Player.puuid == puuid).with_for_update()
+        )
         count_stmt = (
             select(func.count())
             .select_from(UserTrackedPlayer)
@@ -737,13 +755,7 @@ class PlayerService:
         """Return the authenticated user's current player."""
         from .schemas import PlayerContextResponse
 
-        settings = await self.db.scalar(
-            select(UserSettings).where(UserSettings.user_id == user_id)
-        )
-        if settings is None:
-            settings = UserSettings(user_id=user_id)
-            self.db.add(settings)
-            await self.db.flush()
+        settings = await ensure_user_settings(self.db, user_id)
 
         current_player: PlayerResponse | None = None
         if settings.current_player_puuid:
@@ -761,15 +773,7 @@ class PlayerService:
 
     async def set_current_player(self, user_id: int, puuid: str | None):
         """Persist one user's default player and update tracked recency."""
-        settings = await self.db.scalar(
-            select(UserSettings)
-            .where(UserSettings.user_id == user_id)
-            .with_for_update()
-        )
-        if settings is None:
-            settings = UserSettings(user_id=user_id)
-            self.db.add(settings)
-            await self.db.flush()
+        settings = await ensure_user_settings(self.db, user_id)
 
         if puuid is not None:
             await self._require_player(puuid)
