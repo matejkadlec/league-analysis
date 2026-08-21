@@ -77,6 +77,39 @@ describe("branded style contract", () => {
     expect(unjustified).toEqual([]);
   });
 
+  /**
+   * `globals.css` paints `#header-card` with `background: ... !important`, in
+   * both themes. A `bg-*` utility on that element therefore renders nothing --
+   * measured in Chrome, where the utility's own `background-color` computes to
+   * `rgba(0, 0, 0, 0)` because the winning shorthand resets it. Three pages
+   * carried `bg-[#152b56] ... dark:bg-[#0a1428]`, a hand-copied pair of the
+   * hexes the stylesheet already owns, doing nothing on any of them.
+   */
+  it("leaves the header card's background to the stylesheet that owns it", () => {
+    const background =
+      /\bdark:bg-\[|\bbg-\[|\bbg-(?:navy|card|background|primary)\b/;
+    const headerCards = allSourceFiles().filter((path) =>
+      code(path).includes('id="header-card"'),
+    );
+    // Signal first: a scan that stopped finding header cards would pass by
+    // finding nothing wrong with them.
+    expect(headerCards.length).toBeGreaterThanOrEqual(7);
+
+    const offenders = headerCards
+      .filter((path) => {
+        const source = code(path);
+        const header = source.indexOf('id="header-card"');
+        const openingTag = source.slice(
+          Math.max(0, header - 400),
+          header + 400,
+        );
+        return background.test(openingTag);
+      })
+      .map((path) => relative(process.cwd(), path));
+
+    expect(offenders).toEqual([]);
+  });
+
   it("keeps the hand-rolled list free of dead entries", () => {
     const using = new Set(filesWithHandRolledGradients());
     const stale = [...HAND_ROLLED_GRADIENTS.keys()].filter(

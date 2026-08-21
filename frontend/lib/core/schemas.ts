@@ -398,10 +398,33 @@ export type JobExecutionListResponse = z.infer<
 
 // ===== PLAYER LEAGUE SCHEMA =====
 // Simplified immutable league snapshot (ordered by created_at DESC for current)
+
+/**
+ * Riot's ten rank tiers, exactly as the API's `Tier` enum spells them.
+ *
+ * This was `z.string()`, so the one enum the API is strictest about arrived
+ * here as an open string and `getRankColors` carried a grey fallback for a
+ * value that cannot occur. An eleventh tier now fails at the parse, where the
+ * app can say so, instead of rendering as unranked grey.
+ */
+export const TierSchema = z.enum([
+  "IRON",
+  "BRONZE",
+  "SILVER",
+  "GOLD",
+  "PLATINUM",
+  "EMERALD",
+  "DIAMOND",
+  "MASTER",
+  "GRANDMASTER",
+  "CHALLENGER",
+]);
+export type Tier = z.infer<typeof TierSchema>;
+
 export const PlayerLeagueSchema = z.object({
   puuid: z.string(),
   queue_type: z.string(),
-  tier: z.string(),
+  tier: TierSchema,
   rank: z.string().nullable(),
   league_points: z.number().int(),
   wins: z.number().int(),
@@ -767,8 +790,16 @@ export type SmurfBoostPresetsResponse = z.infer<
 // back only the fields the write contract accepts. Values are not all numbers
 // — Top Champions carries a role list — and this response returns every card,
 // so a numeric-only shape here would reject the whole catalog.
+/** The three analytical cards the settings API answers for, by its own ids. */
+export const CardIdSchema = z.enum([
+  "profile.top-champions",
+  "profile.recent-performance",
+  "profile.smurf-boost-detection",
+]);
+export type CardId = z.infer<typeof CardIdSchema>;
+
 export const CardPreferenceSchema = z.object({
-  cardId: z.string(),
+  cardId: CardIdSchema,
   version: z.literal(1),
   settings: z.record(z.string(), z.unknown()),
   isDefault: z.boolean(),

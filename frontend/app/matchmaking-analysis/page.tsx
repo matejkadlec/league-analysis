@@ -69,10 +69,7 @@ function MatchmakingAnalysisContent() {
       {/* Header card - always shows immediately */}
       <div className="container mx-auto px-4 pt-8">
         <div className="mb-6">
-          <Card
-            id="header-card"
-            className="bg-[#152b56] p-6 text-white dark:bg-[#0a1428]"
-          >
+          <Card id="header-card" className="p-6 text-white">
             <div className="mb-4 flex items-start justify-between">
               <h1 className="text-2xl font-semibold">Matchmaking Analysis</h1>
             </div>

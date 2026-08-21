@@ -1,3 +1,4 @@
+import type { CardId } from "@/lib/core/schemas";
 /**
  * The viewer-configurable thresholds of the smurf and boost detection card.
  *
@@ -9,7 +10,8 @@
  * fails if any bound here drifts from it.
  */
 
-export const SMURF_BOOST_CARD_ID = "profile.smurf-boost-detection";
+/** Typed against the API's own card-id enum, so a rename fails here. */
+export const SMURF_BOOST_CARD_ID: CardId = "profile.smurf-boost-detection";
 
 export interface ThresholdField {
   /** Field name in the card settings write contract. */
@@ -163,9 +165,7 @@ export const THRESHOLD_FIELDS: ThresholdField[] = [
  * say what is wrong before a request is sent. The server remains the authority
  * and rejects the write regardless.
  */
-export function crossFieldError(
-  values: Record<string, number>,
-): string | null {
+export function crossFieldError(values: Record<string, number>): string | null {
   const novel = values.a3MinimumNovelGames;
   const recent = values.recentWindowSize;
   if (

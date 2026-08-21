@@ -20,10 +20,7 @@ function SettingsPageContent() {
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="mb-6 space-y-6">
-        <Card
-          id="header-card"
-          className="bg-[#152b56] p-6 text-white dark:bg-[#0a1428]"
-        >
+        <Card id="header-card" className="p-6 text-white">
           <div className="mb-4 flex items-start justify-between">
             <h1 className="text-2xl font-semibold">Settings</h1>
           </div>

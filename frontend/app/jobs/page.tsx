@@ -102,10 +102,7 @@ function JobsPageContent() {
   return (
     <div className="container mx-auto px-4 py-8">
       {/* Header */}
-      <Card
-        id="header-card"
-        className="mb-6 bg-[#152b56] p-6 text-white dark:bg-[#0a1428]"
-      >
+      <Card id="header-card" className="mb-6 p-6 text-white">
         <div className="mb-4 flex items-start justify-between">
           <div>
             <h1 className="text-2xl font-semibold">Background Jobs</h1>
