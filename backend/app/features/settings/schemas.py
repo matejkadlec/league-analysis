@@ -134,42 +134,33 @@ class SmurfBoostDetectionMutableSettingsV1(_CardSettingsBase):
 
 
 def _require_json_integer(value: object) -> int:
-    """Reject coerced values while accepting only JSON integer settings writes."""
+    """Reject coerced values for the one field `strict=True` cannot cover.
+
+    Every other scalar on the write models says `Field(strict=True)`, which is
+    the same policy. `version` is a `Literal[1]`, and Pydantic raises
+    `RuntimeError: Unable to apply constraint 'strict' to schema of type
+    'literal'` -- and would not reject `True` there in any case.
+    """
     if isinstance(value, bool) or not isinstance(value, int):
         raise ValueError("must be an integer")
-    return value
-
-
-def _require_json_number(value: object) -> float | int:
-    """Reject boolean and string coercion for JSON numeric settings writes."""
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
-        raise ValueError("must be a number")
     return value
 
 
 class TopChampionsMutableSettingsWriteV1(_CardSettingsWriteBase):
     """Strict write-only contract that leaves legacy reads tolerant."""
 
-    minimum_games: int = Field(alias="minimumGames", default=1, ge=1, le=999)
-    minimum_win_rate: float = Field(alias="minimumWinRate", default=0, ge=0, le=100)
+    minimum_games: int = Field(
+        strict=True, alias="minimumGames", default=1, ge=1, le=999
+    )
+    minimum_win_rate: float = Field(
+        strict=True, alias="minimumWinRate", default=0, ge=0, le=100
+    )
     minimum_kda: float = Field(
-        alias="minimumKda", default=0, ge=0, le=50, multiple_of=0.1
+        strict=True, alias="minimumKda", default=0, ge=0, le=50, multiple_of=0.1
     )
     included_roles: list[CardRole] = Field(
         alias="includedRoles", default_factory=list[CardRole]
     )
-
-    @field_validator("minimum_games", mode="before")
-    @classmethod
-    def minimum_games_must_be_an_integer(cls, value: object) -> int:
-        """Reject strings, booleans, and decimal values before coercion."""
-        return _require_json_integer(value)
-
-    @field_validator("minimum_win_rate", "minimum_kda", mode="before")
-    @classmethod
-    def threshold_must_be_a_number(cls, value: object) -> float | int:
-        """Reject strings and booleans before normal numeric validation."""
-        return _require_json_number(value)
 
     @field_validator("included_roles")
     @classmethod
@@ -183,106 +174,65 @@ class TopChampionsMutableSettingsWriteV1(_CardSettingsWriteBase):
 class RecentPerformanceMutableSettingsWriteV1(_CardSettingsWriteBase):
     """Strict write-only contract that leaves legacy reads tolerant."""
 
-    recent_match_count: int = Field(alias="recentMatchCount", default=10, ge=5, le=50)
+    recent_match_count: int = Field(
+        strict=True, alias="recentMatchCount", default=10, ge=5, le=50
+    )
     win_rate_trend_delta: float = Field(
-        alias="winRateTrendDelta", default=0.05, ge=0.01, le=0.25
+        strict=True, alias="winRateTrendDelta", default=0.05, ge=0.01, le=0.25
     )
     relative_metric_trend_delta: float = Field(
-        alias="relativeMetricTrendDelta", default=0.05, ge=0.01, le=0.25
+        strict=True, alias="relativeMetricTrendDelta", default=0.05, ge=0.01, le=0.25
     )
-
-    @field_validator("recent_match_count", mode="before")
-    @classmethod
-    def match_count_must_be_an_integer(cls, value: object) -> int:
-        """Reject strings, booleans, and decimal values before coercion."""
-        return _require_json_integer(value)
-
-    @field_validator(
-        "win_rate_trend_delta", "relative_metric_trend_delta", mode="before"
-    )
-    @classmethod
-    def threshold_must_be_a_number(cls, value: object) -> float | int:
-        """Reject strings and booleans before normal numeric validation."""
-        return _require_json_number(value)
 
 
 class SmurfBoostDetectionMutableSettingsWriteV1(_CardSettingsWriteBase):
     """Strict write-only smurf and boost detection threshold contract."""
 
-    recent_window_size: int = Field(alias="recentWindowSize", default=20, ge=10, le=50)
+    recent_window_size: int = Field(
+        strict=True, alias="recentWindowSize", default=20, ge=10, le=50
+    )
     baseline_window_size: int = Field(
-        alias="baselineWindowSize", default=60, ge=15, le=200
+        strict=True, alias="baselineWindowSize", default=60, ge=15, le=200
     )
     a1_step_change_threshold: float = Field(
-        alias="a1StepChangeThreshold", default=1.20, ge=0.60, le=2.00
+        strict=True, alias="a1StepChangeThreshold", default=1.20, ge=0.60, le=2.00
     )
     a2_win_rate_surge_threshold: float = Field(
-        alias="a2WinRateSurgeThreshold", default=0.20, ge=0.10, le=0.35
+        strict=True, alias="a2WinRateSurgeThreshold", default=0.20, ge=0.10, le=0.35
     )
     a3_novel_champion_threshold: float = Field(
-        alias="a3NovelChampionThreshold", default=1.20, ge=0.60, le=2.00
+        strict=True, alias="a3NovelChampionThreshold", default=1.20, ge=0.60, le=2.00
     )
     a3_minimum_novel_games: int = Field(
-        alias="a3MinimumNovelGames", default=8, ge=5, le=15
+        strict=True, alias="a3MinimumNovelGames", default=8, ge=5, le=15
     )
     a4_summoner_level_gate: int = Field(
-        alias="a4SummonerLevelGate", default=45, ge=30, le=150
+        strict=True, alias="a4SummonerLevelGate", default=45, ge=30, le=150
     )
     a4_performance_threshold: float = Field(
-        alias="a4PerformanceThreshold", default=1.20, ge=0.60, le=2.00
+        strict=True, alias="a4PerformanceThreshold", default=1.20, ge=0.60, le=2.00
     )
     b1_win_rate_delta_threshold: float = Field(
-        alias="b1WinRateDeltaThreshold", default=0.30, ge=0.15, le=0.45
+        strict=True, alias="b1WinRateDeltaThreshold", default=0.30, ge=0.15, le=0.45
     )
     b1_composite_flat_ceiling: float = Field(
-        alias="b1CompositeFlatCeiling", default=0.05, ge=0.00, le=0.40
+        strict=True, alias="b1CompositeFlatCeiling", default=0.05, ge=0.00, le=0.40
     )
     b2_consistency_shift_threshold: float = Field(
-        alias="b2ConsistencyShiftThreshold", default=1.15, ge=0.60, le=1.50
+        strict=True, alias="b2ConsistencyShiftThreshold", default=1.15, ge=0.60, le=1.50
     )
     b3_bimodality_threshold: float = Field(
-        alias="b3BimodalityThreshold", default=0.65, ge=0.555, le=0.80
+        strict=True, alias="b3BimodalityThreshold", default=0.65, ge=0.555, le=0.80
     )
     b3_tail_fraction: float = Field(
-        alias="b3TailFraction", default=0.30, ge=0.15, le=0.40
+        strict=True, alias="b3TailFraction", default=0.30, ge=0.15, le=0.40
     )
     b4_high_rate_floor: float = Field(
-        alias="b4HighRateFloor", default=0.62, ge=0.50, le=0.80
+        strict=True, alias="b4HighRateFloor", default=0.62, ge=0.50, le=0.80
     )
     b4_drop_threshold: float = Field(
-        alias="b4DropThreshold", default=0.20, ge=0.10, le=0.45
+        strict=True, alias="b4DropThreshold", default=0.20, ge=0.10, le=0.45
     )
-
-    @field_validator(
-        "recent_window_size",
-        "baseline_window_size",
-        "a3_minimum_novel_games",
-        "a4_summoner_level_gate",
-        mode="before",
-    )
-    @classmethod
-    def window_setting_must_be_an_integer(cls, value: object) -> int:
-        """Reject strings, booleans, and decimal values before coercion."""
-        return _require_json_integer(value)
-
-    @field_validator(
-        "a1_step_change_threshold",
-        "a2_win_rate_surge_threshold",
-        "a3_novel_champion_threshold",
-        "a4_performance_threshold",
-        "b1_win_rate_delta_threshold",
-        "b1_composite_flat_ceiling",
-        "b2_consistency_shift_threshold",
-        "b3_bimodality_threshold",
-        "b3_tail_fraction",
-        "b4_high_rate_floor",
-        "b4_drop_threshold",
-        mode="before",
-    )
-    @classmethod
-    def detection_threshold_must_be_a_number(cls, value: object) -> float | int:
-        """Reject strings and booleans before normal numeric validation."""
-        return _require_json_number(value)
 
     @model_validator(mode="after")
     def cross_field_rules_must_hold(
