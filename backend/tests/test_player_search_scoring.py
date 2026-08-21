@@ -9,7 +9,7 @@ deliberately different field sets.
 import pytest
 
 from app.features.players.models import Player
-from app.features.players.service import PlayerService
+from app.features.players.service import PlayerService, SearchType
 
 
 def player(game_name: str = "Faker", tag_line: str = "KR1") -> Player:
@@ -52,16 +52,9 @@ def test_a_full_id_that_matches_exactly_outranks_every_fuzzy_hit() -> None:
     ],
 )
 def test_each_search_type_compares_its_own_fields(
-    search_type: str, query: str, expected: float
+    search_type: SearchType, query: str, expected: float
 ) -> None:
     assert (
         PlayerService._score_player_match(player(), search_type, query, None, None)
         == expected
-    )
-
-
-def test_a_search_type_that_compares_nothing_scores_zero() -> None:
-    assert (
-        PlayerService._score_player_match(player(), "unknown", "faker", None, None)
-        == 0.0
     )

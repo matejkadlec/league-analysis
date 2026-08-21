@@ -2,11 +2,11 @@
 
 from collections.abc import Sequence
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Final, TypedDict
+from typing import TYPE_CHECKING, Final, Literal, TypedDict
 
 import structlog
 from rapidfuzz.distance.Levenshtein import distance as levenshtein_distance
-from sqlalchemy import and_, delete, func, or_, select, update
+from sqlalchemy import Select, and_, delete, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,7 +17,6 @@ from app.core.http_errors import http_error
 from app.core.riot_api.constants import (
     Platform,
     get_region_by_platform,
-    normalize_platform,
 )
 from app.core.riot_api.models import LeagueEntryDTO
 from app.features.auth.models import User
@@ -34,6 +33,10 @@ if TYPE_CHECKING:
 logger = structlog.get_logger(__name__)
 
 MAX_TRACKED_PLAYERS_PER_USER: Final = 10
+
+# What `_parse_search_query` read out of the raw query string; every
+# scoring branch below switches on it.
+SearchType = Literal["full_id", "tag", "name", "all"]
 
 
 class PlayerNotFoundError(ValueError):
@@ -141,102 +144,6 @@ class PlayerService:
 
         return is_globally_tracked
 
-    def _find_exact_game_name_match(
-        self, players: Sequence[Player], safe_game_name: str
-    ) -> Player | None:
-        """Find exact game name match from list of players."""
-        for player in players:
-            if player.game_name and player.game_name.lower() == safe_game_name.lower():
-                return player
-        return None
-
-    def _handle_no_game_name_matches(
-        self, safe_game_name: str, normalized_platform: str
-    ) -> None:
-        """Raise error when no game name matches found."""
-        logger.info(
-            "No player found in database for game name",
-            game_name=safe_game_name,
-            platform=normalized_platform,
-        )
-        raise PlayerServiceError(
-            message=f"No players found matching '{safe_game_name}' on {normalized_platform}. "
-            f"Please check the game name and platform, or track this player first.",
-            operation="get_player_by_game_name",
-        )
-
-    async def get_player_by_game_name(
-        self, game_name: str, platform: str
-    ) -> PlayerResponse:
-        """
-        Get player by game name from database only.
-
-        This searches only the local database for players already being tracked.
-        To add new players from Riot API, use a separate add/import feature.
-
-        Args:
-            game_name: Game name (formerly summoner name) to search for
-            platform: Riot API platform code
-
-        Returns:
-            Player response object with player data
-
-        Raises:
-            PlayerServiceError: If player is not found
-        """
-        # Normalize inputs
-        safe_game_name = game_name.strip()
-        normalized_platform = normalize_platform(platform)
-
-        # Search database for exact match or partial match
-        result = await self.db.execute(
-            select(Player).where(
-                Player.game_name.ilike(f"%{safe_game_name}%"),
-                Player.platform == normalized_platform,
-            )
-        )
-        players = result.scalars().all()
-
-        # Try to find exact match first
-        exact_match = self._find_exact_game_name_match(players, safe_game_name)
-        if exact_match:
-            logger.info(
-                "Found exact match for game name",
-                game_name=safe_game_name,
-                platform=normalized_platform,
-                puuid=exact_match.puuid,
-            )
-            return PlayerResponse.model_validate(exact_match)
-
-        # If only one partial match, return it
-        if len(players) == 1:
-            logger.info(
-                "Found single partial match for game name",
-                game_name=safe_game_name,
-                platform=normalized_platform,
-                matched_name=players[0].game_name,
-            )
-            return PlayerResponse.model_validate(players[0])
-
-        # If multiple partial matches, return error with suggestions
-        if len(players) > 1:
-            matched_names = [p.game_name for p in players if p.game_name]
-            logger.info(
-                "Found multiple matches for game name",
-                game_name=safe_game_name,
-                platform=normalized_platform,
-                matches=matched_names,
-            )
-            raise PlayerServiceError(
-                message=f"Multiple players found matching '{safe_game_name}': {', '.join(matched_names)}. "
-                f"Please be more specific.",
-                operation="get_player_by_game_name",
-            )
-
-        # No matches found
-        self._handle_no_game_name_matches(safe_game_name, normalized_platform)
-        raise AssertionError("Unreachable after _handle_no_game_name_matches")
-
     async def get_player_by_puuid(
         self, puuid: str, platform: str = "eun1", user_id: int | None = None
     ) -> PlayerResponse:
@@ -293,13 +200,12 @@ class PlayerService:
         return response
 
     @staticmethod
-    def _parse_search_query(query: str) -> tuple[str, str | None, str | None]:
+    def _parse_search_query(query: str) -> tuple[SearchType, str | None, str | None]:
         """
         Parse search query to detect search type and extract components.
 
         Returns:
             Tuple of (search_type, game_name, tag_line)
-            search_type: "full_id", "tag", "name", or "all"
         """
         if query.startswith("#"):
             # Tag-only search: "#EUNE"
@@ -318,14 +224,18 @@ class PlayerService:
 
     @staticmethod
     def _build_player_search_query(
-        platform: str | None,
-        search_type: str,
+        platform: Platform | None,
+        search_type: SearchType,
         query_lower: str,
         game_name: str | None,
         tag_line: str | None,
-    ):
+    ) -> Select[tuple[Player]]:
         """Build SQLAlchemy query based on search type."""
-        platform_filter = [Player.platform.ilike(platform.strip())] if platform else []
+        # `platform` arrives as the enum, whose values are the one spelling the
+        # column is allowed to hold (`ck_players_platform_is_lowercase`), so
+        # this compares rather than `ilike`-ing around a casing question that
+        # the database already settled.
+        platform_filter = [Player.platform == platform.value] if platform else []
 
         if search_type == "full_id" and game_name and tag_line:
             # Search for exact or partial Full ID (GameName # TagLine)
@@ -360,7 +270,7 @@ class PlayerService:
     @staticmethod
     def _score_player_match(
         player: Player,
-        search_type: str,
+        search_type: SearchType,
         query_lower: str,
         game_name: str | None,
         tag_line: str | None,
@@ -390,7 +300,7 @@ class PlayerService:
     @staticmethod
     def _closest_field_distance(
         player: Player,
-        search_type: str,
+        search_type: SearchType,
         query_lower: str,
         tag_line: str | None,
     ) -> int | None:
@@ -435,7 +345,11 @@ class PlayerService:
         return min(distances) if distances else None
 
     def _validate_search_query(
-        self, query: str, search_type: str, game_name: str | None, tag_line: str | None
+        self,
+        query: str,
+        search_type: SearchType,
+        game_name: str | None,
+        tag_line: str | None,
     ) -> bool:
         """Validate search query and return False if invalid."""
         if len(query.strip()) < 1:
@@ -455,7 +369,7 @@ class PlayerService:
     def _score_and_sort_players(
         self,
         players: Sequence[Player],
-        search_type: str,
+        search_type: SearchType,
         query_lower: str,
         game_name: str | None,
         tag_line: str | None,
@@ -479,7 +393,7 @@ class PlayerService:
     async def fuzzy_search_players(
         self,
         query: str,
-        platform: str | None,
+        platform: Platform | None,
         limit: int = 10,
         user_id: int | None = None,
     ) -> list[PlayerResponse]:
@@ -801,17 +715,6 @@ class PlayerService:
         players = result.scalars().all()
 
         return [PlayerResponse.model_validate(player) for player in players]
-
-    async def count_tracked_players(self) -> int:
-        """Get count of currently tracked players.
-
-        Returns:
-            Number of tracked players.
-        """
-        query = select(func.count()).select_from(Player).where(Player.is_tracked)
-
-        result = await self.db.execute(query)
-        return result.scalar() or 0
 
     async def update_player_profile(
         self, player: Player, riot_api_client: RiotAPIClient

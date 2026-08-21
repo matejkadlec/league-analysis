@@ -428,30 +428,6 @@ class SettingsService:
             is_default=True,
         )
 
-    async def reset_all_card_preferences(
-        self, user_id: int
-    ) -> list[CardPreferenceResponse]:
-        """Reset the current catalog while preserving unsupported card/version rows."""
-        await self.db.execute(
-            delete(UserCardPreference).where(
-                UserCardPreference.user_id == user_id,
-                UserCardPreference.version == 1,
-                UserCardPreference.card_id.in_([card_id.value for card_id in CardId]),
-            )
-        )
-        await self.db.commit()
-        logger.info("all_card_preferences_reset", user_id=user_id, version=1)
-        return [
-            CardPreferenceResponse(
-                card_id=card_id,
-                settings=serialize_card_preference_settings(
-                    normalize_stored_card_preference(card_id, {})[0]
-                ),
-                is_default=True,
-            )
-            for card_id in CardId
-        ]
-
     # ===== USER SETTINGS METHODS =====
 
     async def get_user_cookie_consent(self, user_id: int):

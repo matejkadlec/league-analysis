@@ -262,22 +262,6 @@ class CardPreferenceResponse(_CardSettingsBase):
     updated_at: datetime | None = None
 
 
-class CardPreferencesResetRequest(_CardSettingsWriteBase):
-    """Explicit catalog confirmation required before resetting every card."""
-
-    card_ids: list[CardId] = Field(alias="cardIds", min_length=3, max_length=3)
-
-    @field_validator("card_ids")
-    @classmethod
-    def must_confirm_the_full_current_catalog(
-        cls, card_ids: list[CardId]
-    ) -> list[CardId]:
-        """Avoid an ambiguous global reset that silently omits a catalog entry."""
-        if set(card_ids) != set(CardId) or len(card_ids) != len(set(card_ids)):
-            raise ValueError("cardIds must enumerate each current card exactly once")
-        return card_ids
-
-
 _CARD_SETTINGS_MODELS: dict[CardId, type[_CardSettingsBase]] = {
     CardId.TOP_CHAMPIONS: TopChampionsMutableSettingsV1,
     CardId.RECENT_PERFORMANCE: RecentPerformanceMutableSettingsV1,

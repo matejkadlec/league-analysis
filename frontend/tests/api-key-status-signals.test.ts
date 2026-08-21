@@ -65,7 +65,7 @@ describe("Riot credential-health refresh signals", () => {
     await api.get("/matchmaking-analysis/player/test-puuid/status");
 
     await api.get("/matchmaking-analysis/player/test-puuid/latest-completed");
-    await api.get("/players/search?query=cached-player");
+    await api.get("/players/suggestions?q=cached-player");
 
     expect(notifyRiotCredentialHealthUpdated).not.toHaveBeenCalled();
   });

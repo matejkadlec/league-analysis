@@ -16,7 +16,6 @@ from app.features.settings import service as settings_service_module
 from app.features.settings.models import UserCardPreference
 from app.features.settings.schemas import (
     CardId,
-    CardPreferencesResetRequest,
     CardPreferenceUpdate,
     normalize_stored_card_preference,
     validate_card_preference_update,
@@ -113,16 +112,6 @@ def test_card_preference_validation_rejects_noncanonical_setting_names() -> None
                 "minimumKda": 2.3,
                 "includedRoles": ["TOP", "JUNGLE"],
             },
-        )
-
-    with pytest.raises(ValidationError):
-        CardPreferencesResetRequest.model_validate(
-            {
-                "card_ids": [
-                    "profile.top-champions",
-                    "profile.recent-performance",
-                ]
-            }
         )
 
 
@@ -227,29 +216,6 @@ def test_card_preference_model_declares_the_migration_index() -> None:
     assert {index.name for index in table.indexes} == {
         "ix_user_card_preferences_user_updated"
     }
-
-
-def test_global_reset_requires_explicit_catalog_enumeration() -> None:
-    """The all-card reset is a deliberate confirmation, not a broad delete."""
-    request = CardPreferencesResetRequest.model_validate(
-        {
-            "cardIds": [
-                "profile.top-champions",
-                "profile.recent-performance",
-                "profile.smurf-boost-detection",
-            ]
-        }
-    )
-    assert request.card_ids == [
-        CardId.TOP_CHAMPIONS,
-        CardId.RECENT_PERFORMANCE,
-        CardId.SMURF_BOOST_DETECTION,
-    ]
-
-    with pytest.raises(ValidationError):
-        CardPreferencesResetRequest.model_validate(
-            {"cardIds": ["profile.top-champions"]}
-        )
 
 
 class _Result:

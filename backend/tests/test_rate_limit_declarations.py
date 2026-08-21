@@ -25,11 +25,9 @@ DECLARED_LIMITS: dict[str, str] = {
     "app.features.auth.router.verify_email_change_code": "15 per 1 minute",
     "app.features.auth.router.change_password": "10 per 1 minute",
     "app.features.matchmaking_analysis.router.start_analysis": "10 per 1 minute",
-    "app.features.players.router.search_player": "100 per 1 minute",
     "app.features.players.router.discover_player": "30 per 1 minute",
     "app.features.players.router.start_player_sync": "10 per 1 minute",
     "app.features.players.router.track_player": "10 per 1 minute",
-    "app.features.players.router.refresh_player_league": "30 per 1 minute",
     "app.features.smurf_boost_detection.router.analyze_player": "20 per 1 minute",
 }
 

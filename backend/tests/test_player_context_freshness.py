@@ -46,26 +46,6 @@ async def test_current_player_update_is_scoped_to_one_application_user() -> None
     service.get_player_context.assert_awaited_once_with(7)
 
 
-def test_all_platform_search_omits_platform_filter() -> None:
-    all_platforms = PlayerService._build_player_search_query(
-        None,
-        "name",
-        "current",
-        "current",
-        None,
-    )
-    one_platform = PlayerService._build_player_search_query(
-        "eun1",
-        "name",
-        "current",
-        "current",
-        None,
-    )
-
-    assert "lower(core.players.platform)" not in str(all_platforms.whereclause)
-    assert "lower(core.players.platform)" in str(one_platform.whereclause)
-
-
 async def test_concurrent_explicit_updates_attach_to_the_active_puuid_run() -> None:
     active = SimpleNamespace(id=11, puuid="player-puuid", status="running")
     add = Mock()

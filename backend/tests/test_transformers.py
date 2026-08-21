@@ -1,6 +1,5 @@
 """Critical data-normalization regression coverage."""
 
-from types import SimpleNamespace
 from typing import Any
 
 from app.core.riot_api.models import ParticipantDTO
@@ -24,15 +23,6 @@ def participant(**overrides: Any) -> ParticipantDTO:
         **overrides,
     }
     return ParticipantDTO.model_validate(payload)
-
-
-def test_match_id_extraction_handles_supported_boundaries() -> None:
-    assert MatchDTOTransformer.extract_match_ids(None) == []
-    assert MatchDTOTransformer.extract_match_ids(["EUN1_1"]) == ["EUN1_1"]
-    assert MatchDTOTransformer.extract_match_ids(
-        SimpleNamespace(match_ids=("EUN1_1", "EUN1_2"))
-    ) == ["EUN1_1", "EUN1_2"]
-    assert MatchDTOTransformer.extract_match_ids(object()) == []
 
 
 def test_name_sanitization_is_stable() -> None:

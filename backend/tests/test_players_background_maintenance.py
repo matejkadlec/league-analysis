@@ -18,6 +18,7 @@ from app.features.matches import service as matches_service_module
 from app.features.matches.service import MatchService
 from app.features.players import router as players_router
 from app.features.players import service as players_service_module
+from app.features.players.models import Player
 from app.features.players.service import PlayerService
 
 
@@ -182,29 +183,26 @@ async def test_a_failed_sync_claim_still_reports_the_player_as_tracked(
 async def test_player_refresh_uses_the_shared_writer_guard(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Profile and league refreshes cannot repopulate cleanup-owned rows."""
+    """Profile and league refreshes cannot repopulate cleanup-owned rows.
+
+    Driven through the service rather than a route: the only route that
+    called it was `POST /{puuid}/refresh-league`, which had no client. The
+    jobs reach these two methods directly, so the guard still has to hold.
+    """
     guard = AsyncMock(side_effect=RiotWriterMaintenanceActiveError())
     monkeypatch.setattr(
         players_service_module,
         "_ensure_riot_writer_maintenance_is_inactive",
         guard,
     )
-    database = SimpleNamespace(
-        get=AsyncMock(return_value=SimpleNamespace(puuid="test-puuid", platform="eun1"))
-    )
-    player_service = PlayerService(cast(AsyncSession, database))
+    player_service = PlayerService(cast(AsyncSession, SimpleNamespace()))
+    player = cast(Player, SimpleNamespace(puuid="test-puuid", platform="eun1"))
 
-    with pytest.raises(HTTPException) as error:
-        await players_router.refresh_player_league(
-            request=_request(),
-            puuid="test-puuid",
-            player_service=player_service,
-            riot_client=cast(RiotAPIClient, object()),
-            _current_user=cast(User, SimpleNamespace(id=7)),
-            queue_type="RANKED_SOLO_5x5",
+    with pytest.raises(RiotWriterMaintenanceActiveError):
+        await player_service.update_player_profile(
+            player, cast(RiotAPIClient, object())
         )
 
-    assert error.value.status_code == 503
     guard.assert_awaited_once()
 
 
