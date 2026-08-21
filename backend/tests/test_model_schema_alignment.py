@@ -128,6 +128,45 @@ def test_no_response_field_caps_a_column_the_database_does_not_cap(
     assert offenders == []
 
 
+@pytest.mark.parametrize(("model", "schema"), PAIRS, ids=lambda p: p.__name__)
+def test_no_response_field_is_shorter_than_the_column_it_reads(
+    model: type[DeclarativeBase], schema: type[BaseModel]
+) -> None:
+    """The string half of the same rule, where the column does set a ceiling.
+
+    `max_length` is not deleted the way a numeric cap is: a `String(78)` column
+    really is bounded, and repeating the bound puts it in the OpenAPI document
+    where the frontend can read it. What it may not do is claim a *tighter*
+    bound than the column, because then a value the table accepts is one the
+    response cannot serialise -- the same 500, reached through a stored string
+    instead of a stored number.
+
+    All nineteen agree today. This exists so the next `String(64)` widened to
+    `String(128)` does not leave its response model behind.
+    """
+    columns = {column.key: column for column in sa_inspect(model).columns}
+
+    offenders: list[str] = []
+    for name, info in schema.model_fields.items():
+        column = columns.get(name)
+        # `is None`, not falsiness: a Column builds a SQL expression rather
+        # than answering a truth value, and raises if asked for one.
+        if column is None:
+            continue
+        column_length = getattr(column.type, "length", None)
+        if column_length is None:
+            continue
+        offenders += [
+            f"{schema.__name__}.{name} accepts {bound.max_length} characters, "
+            f"{model.__name__}.{name} stores {column_length}"
+            for bound in info.metadata
+            if isinstance(bound, annotated_types.MaxLen)
+            and bound.max_length < column_length
+        ]
+
+    assert offenders == []
+
+
 def test_every_orm_backed_response_schema_is_paired() -> None:
     """A new `from_attributes` schema must be paired above or named below.
 
