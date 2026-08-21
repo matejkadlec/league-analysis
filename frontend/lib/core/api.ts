@@ -6,11 +6,9 @@ import axios, {
 import { z } from "zod";
 import { ApiRequestError, normalizeApiError } from "./api-error";
 export {
-  ApiRequestError,
   apiErrorMessage,
   normalizeApiError,
   type ApiError,
-  type ApiErrorKind,
   type StructuredErrorDetail,
 } from "./api-error";
 import type { ApiError } from "./api-error";
@@ -242,5 +240,3 @@ export function validatedPatch<T>(
 
 // Feature endpoint functions live with their features (e.g.
 // features/players/player-api.ts); this module stays the generic client.
-
-export default api;

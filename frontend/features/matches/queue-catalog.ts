@@ -1,7 +1,7 @@
 /** Ranked Solo/Duo. Every stats surface in the app reports on this queue. */
 export const RANKED_SOLO_QUEUE_ID = 420;
 
-export const MATCH_QUEUE_NAMES: Readonly<Record<number, string>> = {
+const MATCH_QUEUE_NAMES: Readonly<Record<number, string>> = {
   400: "Normal Draft",
   420: "Ranked Solo/Duo",
   430: "Normal Blind",

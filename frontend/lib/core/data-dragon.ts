@@ -63,7 +63,7 @@ export function getProfileIconFallbackUrl(
  * Reverse mapping from Data Dragon format to display name.
  * Maps internal names (e.g., "MissFortune") to proper display names (e.g., "Miss Fortune").
  */
-export const CHAMPION_DISPLAY_NAME_MAP: Record<string, string> = {
+const CHAMPION_DISPLAY_NAME_MAP: Record<string, string> = {
   // Champions with apostrophes
   Kaisa: "Kai'Sa",
   Khazix: "Kha'Zix",
@@ -102,7 +102,7 @@ export function getChampionDisplayName(championName: string): string {
  * Summoner spell ID to name mapping for Data Dragon URLs.
  * These IDs come from the Riot API and need to be mapped to internal names.
  */
-export const SUMMONER_SPELL_MAP: Record<number, string> = {
+const SUMMONER_SPELL_MAP: Record<number, string> = {
   1: "SummonerBoost", // Cleanse
   3: "SummonerExhaust", // Exhaust
   4: "SummonerFlash", // Flash
@@ -174,7 +174,7 @@ export function getKeystoneIconUrlById(keystoneId: number): string | null {
   return `${DDRAGON_IMAGE_BASE_URL}/${iconPath}`;
 }
 
-export const RUNE_STYLE_MAP: Record<
+const RUNE_STYLE_MAP: Record<
   number,
   { name: string; iconPath: string }
 > = {

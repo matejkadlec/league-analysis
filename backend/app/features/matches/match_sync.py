@@ -8,8 +8,10 @@ from typing import Any, Protocol
 
 import structlog
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.db_session import rollback_quietly
 from app.core.riot_api.client import RiotAPIClient
 from app.core.riot_api.constants import Region
 from app.core.riot_api.errors import AuthenticationError, ForbiddenError, RateLimitError
@@ -61,10 +63,23 @@ class ReprocessMatch(Protocol):
 
 
 def must_abort_writer_sync(error: Exception) -> bool:
-    """Return whether a lower-level sync error must reach the owning job."""
-    from app.features.jobs.error_handling import is_database_job_error
+    """Return whether a lower-level sync error must reach the owning job.
+
+    `is_database_job_error` asks whether continuing would reuse a failed or
+    unavailable session, and for a lost connection or an aborted transaction
+    the answer is yes. An `IntegrityError` is the exception: it is about the
+    one row being written, both writers below roll the session back before
+    re-raising, and the caller already logs the match and moves to the next
+    one. Escalating it failed a whole run twice -- once on the bystander
+    player-row race that `players/identity.py` documents, and again on the
+    `fk_match_timelines_puuid_players` violation of 2026-08-21, where four
+    consecutive Match Fetcher runs died on the same single match.
+    """
+    from app.features.jobs.error_handling import is_database_job_error, iter_error_chain
     from app.features.jobs.maintenance import RiotWriterMaintenanceActiveError
 
+    if any(isinstance(item, IntegrityError) for item in iter_error_chain(error)):
+        return False
     return is_database_job_error(error) or isinstance(
         error, RiotWriterMaintenanceActiveError
     )
@@ -284,10 +299,26 @@ async def backfill_timeline_only_match(
         build_synthetic_match_dto(match_id, participants, game_version),
         timeline_payload,
     )
-    if timeline_rows > 0:
+    if timeline_rows == 0:
+        return 0
+    try:
         await session.commit()
-        return 1
-    return 0
+    except Exception as error:
+        # Without this the session is left holding a failed transaction and
+        # every later match in the run fails on it, so the run's first error
+        # would be the only true one. `upsert_match` has always rolled back
+        # here; this path did not.
+        logger.error(
+            "Failed to store a timeline-only backfill",
+            match_id=match_id,
+            writer="backfill_timeline_only_match",
+            participants=len(participants),
+            timeline_rows=timeline_rows,
+            error=str(error),
+        )
+        await rollback_quietly(session)
+        raise
+    return 1
 
 
 async def sync_full_queue_match(

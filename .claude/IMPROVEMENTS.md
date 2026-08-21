@@ -19,7 +19,15 @@ distinct rather than duplicated.
   `replace_match_timeline_rows` builds its rows from that same list, and
   `backfill_timeline_only_match` builds its DTO from stored `MatchParticipant`
   rows, which carry their own validated FK to `players` (checked on prod: zero
-  orphans). An `IntegrityError` also escalates through `must_abort_writer_sync`,
-  so one bad match kills the whole run rather than skipping the match. Next
-  step is a log line naming the writer path and the participant list, since the
-  container logs for the failing window were already rotated away.
+  orphans). The blast radius is fixed and the diagnostics are in
+  (`b0ec468`, `9a10fb3`): both writers' error lines now carry `writer`,
+  `participants` and `timeline_rows`, `backfill_timeline_only_match` rolls back
+  instead of leaving the session aborted, and `must_abort_writer_sync` no longer
+  escalates a row-level violation, so the next occurrence skips the match rather
+  than killing the run. The cause itself is still open -- reopen this when a
+  `writer=` line for `fk_match_timelines_puuid_players` reaches the logs, which
+  it could not last time because the container logs for the window had rotated.
+  Ruled out since: no code path deletes a `core.players` row, so the FK's
+  `ON DELETE CASCADE` is not the race; every player upsert is
+  `ON CONFLICT DO UPDATE`, which takes the row lock, not `DO NOTHING`, which
+  would let a concurrent rollback leave the FK unsatisfied.

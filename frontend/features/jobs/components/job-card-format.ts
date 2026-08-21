@@ -1,6 +1,6 @@
 import cronstrue from "cronstrue";
 
-export function formatCronSchedule(schedule: string): string {
+function formatCronSchedule(schedule: string): string {
   try {
     const parts = schedule.trim().split(/\s+/);
     if (parts.length >= 5 && parts.length <= 7) {

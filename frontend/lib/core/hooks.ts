@@ -89,7 +89,7 @@ export function useToast() {
  * used to be, and why `meta: { silenceErrorToasts: true }` compiled, read as
  * an unknown key, and toasted anyway.
  */
-export type AppQueryMeta = {
+type AppQueryMeta = {
   /** Some other surface reports this failure; say which in a comment. */
   silenceErrorToast?: true;
   /** Name the thing that failed, instead of "Could not load this data". */

@@ -38,10 +38,12 @@ def _compiled(participant: ParticipantDTO) -> str:
 def test_a_colliding_participant_updates_instead_of_raising() -> None:
     """A select-then-insert made one PK collision fail the whole job run.
 
-    IntegrityError is a SQLAlchemyError, and `must_abort_writer_sync`
-    escalates those past the per-match handler -- so a bystander participant
-    created by another writer meant every remaining tracked player in the pass
-    was skipped.
+    IntegrityError was a SQLAlchemyError like any other to
+    `must_abort_writer_sync`, which escalated it past the per-match handler --
+    so a bystander participant created by another writer meant every remaining
+    tracked player in the pass was skipped. That predicate no longer escalates
+    a row-level violation, but settling the collision in the conflict clause is
+    still the fix: the row gets written rather than skipped.
     """
     compiled = _compiled(_participant())
 

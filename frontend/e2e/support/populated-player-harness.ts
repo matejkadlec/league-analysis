@@ -14,8 +14,8 @@ import { blockUpstreamRequests } from "./offline";
  * fills each surface rather than merely answering each request.
  */
 
-export const NOW = "2026-08-14T10:00:00.000Z";
-export const PUUID = "populated-player-puuid";
+const NOW = "2026-08-14T10:00:00.000Z";
+const PUUID = "populated-player-puuid";
 
 // Riot's own champion keys, which is what the backend stores and what the
 // Data Dragon image URL is built from; a display spelling would 404 the icon
@@ -31,7 +31,7 @@ const CHAMPIONS = [
 
 const LANES = ["TOP", "JUNGLE", "MIDDLE", "BOTTOM", "UTILITY"] as const;
 
-export const player = {
+const player = {
   ...trackedPlayer(NOW, {
     puuid: PUUID,
     // Riot IDs run to 16 characters, and a long one is what pushes a name
@@ -241,7 +241,7 @@ const matchmakingHistory = {
 };
 
 /** Route every request the player-centric pages make to a populated fixture. */
-export async function installPopulatedPlayerMocks(page: Page): Promise<void> {
+async function installPopulatedPlayerMocks(page: Page): Promise<void> {
   await seedAuthenticatedSession(page);
   await blockUpstreamRequests(page);
   await page.addInitScript(() => {
