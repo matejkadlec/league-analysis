@@ -1,0 +1,82 @@
+import { readFileSync } from "node:fs";
+
+import { describe, expect, it } from "vitest";
+
+import {
+  RIOT_ID_GAME_NAME_MAX_LENGTH,
+  RIOT_ID_GAME_NAME_PATTERN,
+  RIOT_ID_TAG_LINE_MAX_LENGTH,
+  RIOT_ID_TAG_LINE_PATTERN,
+} from "@/features/players/utils/riot-id";
+
+/**
+ * The Riot ID rules exist on both sides, so something has to hold them equal.
+ *
+ * `parseRiotId` rejects a bad ID before the request is made and
+ * `GET /players/discover` rejects it again; the two used to be four constants
+ * and two regexes each, with the API publishing none of them. Now the route
+ * declares them as `Query(min_length=, max_length=, pattern=)`, which puts
+ * them in the OpenAPI document -- and this reads them back out.
+ *
+ * Needs `OPENAPI_JSON`, which `test.sh` produces; without it there is nothing
+ * to compare against, so the check skips rather than pretending to pass.
+ */
+const openapiPath = process.env.OPENAPI_JSON;
+const spec = openapiPath
+  ? (JSON.parse(readFileSync(openapiPath, "utf8")) as {
+      paths: Record<
+        string,
+        Record<
+          string,
+          {
+            parameters?: {
+              name: string;
+              schema: { maxLength?: number; pattern?: string };
+            }[];
+          }
+        >
+      >;
+    })
+  : null;
+
+function parameterSchema(name: string) {
+  const discover = spec?.paths["/api/v1/players/discover"];
+  const operation = discover ? Object.values(discover)[0] : undefined;
+  return operation?.parameters?.find((p) => p.name === name)?.schema;
+}
+
+describe.skipIf(!spec)("Riot ID rules against the API contract", () => {
+  it("bounds the game name to the same length the API does", () => {
+    expect(parameterSchema("game_name")?.maxLength).toBe(
+      RIOT_ID_GAME_NAME_MAX_LENGTH,
+    );
+  });
+
+  it("bounds the tag line to the same length the API does", () => {
+    expect(parameterSchema("tag_line")?.maxLength).toBe(
+      RIOT_ID_TAG_LINE_MAX_LENGTH,
+    );
+  });
+
+  it("accepts exactly the game-name characters the API accepts", () => {
+    const apiPattern = new RegExp(parameterSchema("game_name")?.pattern ?? "$^");
+    for (let code = 32; code < 127; code += 1) {
+      const character = String.fromCharCode(code);
+      expect(
+        RIOT_ID_GAME_NAME_PATTERN.test(character),
+        `game name character ${JSON.stringify(character)}`,
+      ).toBe(apiPattern.test(character));
+    }
+  });
+
+  it("accepts exactly the tag-line characters the API accepts", () => {
+    const apiPattern = new RegExp(parameterSchema("tag_line")?.pattern ?? "$^");
+    for (let code = 32; code < 127; code += 1) {
+      const character = String.fromCharCode(code);
+      expect(
+        RIOT_ID_TAG_LINE_PATTERN.test(character),
+        `tag line character ${JSON.stringify(character)}`,
+      ).toBe(apiPattern.test(character));
+    }
+  });
+});

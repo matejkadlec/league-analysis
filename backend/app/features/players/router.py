@@ -1,6 +1,5 @@
 """Player API endpoints for the Riot API application."""
 
-import re
 from datetime import UTC
 from typing import Annotated
 
@@ -42,47 +41,6 @@ logger = structlog.get_logger(__name__)
 
 
 router = APIRouter(prefix="/players", tags=["players"])
-
-
-# Game name and Tag line constants
-GAME_NAME_MAX_LENGTH = 16
-TAG_LINE_MAX_LENGTH = 5
-
-
-def _validate_game_name(game_name: str) -> None:
-    """Validate game name length and characters."""
-    if not game_name:
-        raise HTTPException(status_code=400, detail="Game name cannot be empty")
-
-    if len(game_name) > GAME_NAME_MAX_LENGTH:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Game name is too long ({GAME_NAME_MAX_LENGTH} characters max).",
-        )
-
-    if not re.match(r"^[a-zA-Z0-9\s\.\-_]+$", game_name):
-        raise HTTPException(
-            status_code=400,
-            detail="Game name contains unsupported characters. Use letters, numbers, spaces, and ._-.",
-        )
-
-
-def _validate_tag_line(tag_line: str) -> None:
-    """Validate tag line length and characters."""
-    if not tag_line:
-        raise HTTPException(status_code=400, detail="Tag line cannot be empty")
-
-    if len(tag_line) > TAG_LINE_MAX_LENGTH:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Tag line is too long ({TAG_LINE_MAX_LENGTH} characters max).",
-        )
-
-    if not re.match(r"^[a-zA-Z0-9]+$", tag_line):
-        raise HTTPException(
-            status_code=400,
-            detail="Tag line contains unsupported characters. Use only letters and numbers.",
-        )
 
 
 async def _fuzzy_search(
@@ -231,14 +189,28 @@ async def discover_player(
     player_service: PlayerServiceDep,
     riot_client: Annotated[RiotAPIClient, Depends(get_riot_client)],
     _current_user: User = Depends(get_current_active_user),
-    game_name: str = Query(..., description="Riot game name"),
-    tag_line: str = Query(..., description="Riot tag line without #"),
+    # The four Riot ID rules used to be 39 lines of imperative checks here
+    # and four constants in `frontend/.../riot-id.ts`, with the OpenAPI
+    # document publishing neither. Declared, they reach the document and the
+    # frontend can be checked against them.
+    game_name: str = Query(
+        ...,
+        min_length=1,
+        max_length=16,
+        pattern=r"^[a-zA-Z0-9\s._-]+$",
+        description="Riot game name",
+    ),
+    tag_line: str = Query(
+        ...,
+        min_length=1,
+        max_length=5,
+        pattern=r"^[a-zA-Z0-9]+$",
+        description="Riot tag line without #",
+    ),
     platform: Platform = Query(..., description="Resolved Riot platform"),
 ):
     """Resolve a one-field Riot ID after conditional platform selection."""
     try:
-        _validate_game_name(game_name)
-        _validate_tag_line(tag_line)
         result = await player_service.discover_player(
             riot_client=riot_client,
             game_name=game_name,
