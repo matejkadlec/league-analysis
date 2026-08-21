@@ -2,8 +2,7 @@
 
 import { ProtectedRoute, useAuth } from "@/features/auth";
 import { Card } from "@/components/ui/card";
-import { AccountSettingsCard } from "./account-settings-card";
-import { RiotApiSettingsCard } from "./riot-api-settings-card";
+import { AccountSettingsCard, RiotApiSettingsCard } from "@/features/settings";
 
 export default function SettingsPage() {
   return (

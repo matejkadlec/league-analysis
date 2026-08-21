@@ -27,7 +27,7 @@ const CLIENT_ONLY_CODES = new Set(["NETWORK_ERROR", "REQUEST_TIMEOUT"]);
 const BRANCHING_FILES = [
   "features/auth/utils/login-error.ts",
   "features/auth/components/sign-in-form.tsx",
-  "app/settings/use-change-email.ts",
+  "features/settings/use-change-email.ts",
 ];
 
 function backendCodes(): Set<string> {

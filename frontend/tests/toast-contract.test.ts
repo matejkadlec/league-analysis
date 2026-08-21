@@ -59,7 +59,7 @@ describe("toast source contract", () => {
   });
 
   it("uses warnings for local guidance and success for completed operations", () => {
-    const settingsDir = join(process.cwd(), "app/settings");
+    const settingsDir = join(process.cwd(), "features/settings");
     const settings = readdirSync(settingsDir)
       .filter((name) => name.endsWith(".ts") || name.endsWith(".tsx"))
       .map((name) => readFileSync(join(settingsDir, name), "utf8"))

@@ -31,7 +31,7 @@ vi.mock("@/lib/core/hooks", () => ({
 }));
 
 import type { ApiError } from "@/lib/core/api";
-import { useChangeEmail } from "@/app/settings/use-change-email";
+import { useChangeEmail } from "@/features/settings/use-change-email";
 import { renderHookWithQueryClient } from "./render-support";
 
 /** What `validatedPost` hands back when this API refuses with a code. */

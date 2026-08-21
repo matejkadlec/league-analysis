@@ -18,7 +18,7 @@ import { allSourceFiles } from "./source-scan-support";
 const NON_FRESHNESS_UPDATED_AT = new Map([
   ["lib/core/schemas.ts", "declares the wire shape, does not display it"],
   [
-    "app/settings/riot-api-settings-card.tsx",
+    "features/settings/riot-api-settings-card.tsx",
     "when a setting itself was last changed",
   ],
 ]);
