@@ -14,6 +14,23 @@ import {
 } from "@/features/auth/utils/auth-state-cookie";
 import type { AuthContextType } from "@/features/auth/types";
 
+/** A complete `UserResponse`; `UserResponseSchema` rejects anything less. */
+function userBody(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 1,
+    email: "someone@example.com",
+    display_name: "Someone",
+    is_active: true,
+    is_admin: false,
+    email_verified: true,
+    email_verified_at: null,
+    last_login: null,
+    created_at: "2026-01-01T00:00:00.000Z",
+    updated_at: "2026-01-01T00:00:00.000Z",
+    ...overrides,
+  };
+}
+
 /**
  * Signing in successfully, which nothing in this repo covered.
  *
@@ -83,7 +100,7 @@ describe("signing in", () => {
         });
       }
       return new Response(
-        JSON.stringify({ id: 1, email: "someone@example.com" }),
+        JSON.stringify(userBody({ id: 1, email: "someone@example.com" })),
         { status: 200, headers: { "content-type": "application/json" } },
       );
     });

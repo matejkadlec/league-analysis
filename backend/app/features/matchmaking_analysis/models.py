@@ -1,7 +1,7 @@
 """Persisted matchmaking analysis lifecycle and immutable results."""
 
 from datetime import datetime
-from typing import TypedDict
+from typing import NotRequired, TypedDict
 
 from sqlalchemy import (
     CheckConstraint,
@@ -21,17 +21,24 @@ from app.core.models import Base, created_at_column
 from app.features.matchmaking_analysis.schemas import MatchmakingAnalysisStatus
 
 
-class MatchmakingAnalysisResultsJSON(TypedDict, total=False):
+class MatchmakingAnalysisResultsJSON(TypedDict):
     """Shape of the ``results`` JSONB payload written on completion.
 
-    Every key is optional because rows persisted by earlier revisions predate
-    later additions, so readers must keep treating each key as possibly absent.
+    The three required keys are required because `_build_completion_results`
+    is the only writer of a non-NULL `results` and has emitted all four since
+    the initial commit; the legacy fixtures in `validate_migrations.py` carry
+    them too. They used to be optional, which meant both readers supplied
+    their own `0` for a missing winrate -- a value inside the response
+    schema's own `ge=0.0, le=1.0` bound, so nothing could reject it and the
+    UI showed "0% average teammate winrate" for a row it could not read.
+
+    `players_analyzed` stays optional: nothing reads it.
     """
 
     team_avg_winrate: float
     enemy_avg_winrate: float
     matches_analyzed: int
-    players_analyzed: int
+    players_analyzed: NotRequired[int]
 
 
 class MatchmakingAnalysis(Base):

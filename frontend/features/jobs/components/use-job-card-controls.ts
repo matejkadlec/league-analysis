@@ -53,7 +53,6 @@ export function useJobCardControls(
     void queryClient.invalidateQueries({ queryKey: ["jobs"] });
     void queryClient.invalidateQueries({ queryKey: ["job-status"] });
     void queryClient.invalidateQueries({ queryKey: ["job-executions"] });
-    void queryClient.invalidateQueries({ queryKey: ["job-executions-all"] });
     void queryClient.invalidateQueries({
       queryKey: ["job-executions-infinite"],
     });

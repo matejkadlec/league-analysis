@@ -17,6 +17,23 @@ import {
   installDrivableAbortDeadlines,
 } from "./deadline-support";
 
+/** A complete `UserResponse`; `UserResponseSchema` rejects anything less. */
+function userBody(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 1,
+    email: "someone@example.com",
+    display_name: "Someone",
+    is_active: true,
+    is_admin: false,
+    email_verified: true,
+    email_verified_at: null,
+    last_login: null,
+    created_at: "2026-01-01T00:00:00.000Z",
+    updated_at: "2026-01-01T00:00:00.000Z",
+    ...overrides,
+  };
+}
+
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
 }));
@@ -141,6 +158,28 @@ describe("request deadlines", () => {
   });
 });
 
+describe("a 200 the client cannot read", () => {
+  it("does not sign the visitor in on a body that is not a user record", async () => {
+    // `GET /auth/me` was the one response in the app that became React state
+    // without a zod parse -- `Response.json()` is `Promise<any>`, so a
+    // renamed backend field or a captive portal's HTML type-checked straight
+    // into `user`, and `user.is_admin` is what gates /jobs.
+    document.cookie = `${AUTH_STATE_COOKIE_NAME}=${AUTH_STATE_COOKIE_VALUE}; path=/`;
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ id: 1, email: "someone@example.com" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    const { getByTestId } = renderProvider();
+
+    await waitFor(() =>
+      expect(getByTestId("state").textContent).toBe("settled:false"),
+    );
+  });
+});
+
 describe("re-checking an established session", () => {
   it("never raises isLoading, which would unmount the whole app shell", async () => {
     // Four consumers render null while `isLoading` is true -- the auth gate,
@@ -154,10 +193,13 @@ describe("re-checking an established session", () => {
     // is about is only observable while the request is still outstanding.
     document.cookie = `${AUTH_STATE_COOKIE_NAME}=${AUTH_STATE_COOKIE_VALUE}; path=/`;
     const settled = () =>
-      new Response(JSON.stringify({ id: 1, email: "someone@example.com" }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
+      new Response(
+        JSON.stringify(userBody({ id: 1, email: "someone@example.com" })),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(settled());
 
     const { getByTestId } = renderProvider();
@@ -362,7 +404,7 @@ describe("a probe that fails right after a refresh the server honoured", () => {
         );
       }
       return new Response(
-        JSON.stringify({ id: 1, email: "user@example.com" }),
+        JSON.stringify(userBody({ id: 1, email: "user@example.com" })),
         { status: 200, headers: { "content-type": "application/json" } },
       );
     });
@@ -499,10 +541,13 @@ describe("signed-out session probe", () => {
   it("still verifies the session when the hint is present", async () => {
     document.cookie = `${AUTH_STATE_COOKIE_NAME}=${AUTH_STATE_COOKIE_VALUE}; path=/`;
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(JSON.stringify({ id: 1, email: "someone@example.com" }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      }),
+      new Response(
+        JSON.stringify(userBody({ id: 1, email: "someone@example.com" })),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
     );
 
     const { getByTestId } = renderProvider();
@@ -563,10 +608,13 @@ describe("data cached for one account", () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) =>
       String(input).includes("/auth/login")
         ? new Response("{}", { status: 200 })
-        : new Response(JSON.stringify({ id: 2, email: "next@example.com" }), {
-            status: 200,
-            headers: { "content-type": "application/json" },
-          }),
+        : new Response(
+            JSON.stringify(userBody({ id: 2, email: "next@example.com" })),
+            {
+              status: 200,
+              headers: { "content-type": "application/json" },
+            },
+          ),
     );
 
     const { getByTestId, queryClient } = renderProvider();

@@ -22,6 +22,8 @@ import {
   getLoginRequestError,
   LOGIN_REQUEST_TIMEOUT_MS,
 } from "../utils/login-error";
+import { UserResponseSchema } from "@/lib/core/schemas";
+
 import { hasAuthStateCookie } from "../utils/auth-state-cookie";
 import type { User, LoginRequest, AuthContextType } from "../types";
 
@@ -89,8 +91,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       if (response.ok) {
-        const userData = await response.json();
-        setUser(userData);
+        setUser(UserResponseSchema.parse(await response.json()));
       } else if (response.status === 401) {
         const refresh = await refreshAccessToken();
         if (refresh.outcome !== "refreshed") {
@@ -106,8 +107,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         response = await fetchCurrentUser();
         if (response && response.ok) {
-          const userData = await response.json();
-          setUser(userData);
+          setUser(UserResponseSchema.parse(await response.json()));
         } else {
           // Only a refusal ends the session, and only 401/403 is a refusal.
           // A null response is a network failure and a 5xx is a redeploy or a
