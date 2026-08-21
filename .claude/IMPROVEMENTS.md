@@ -59,3 +59,14 @@ distinct rather than duplicated.
   targeted rule in the contract test -- every exported zod schema pairs to an
   OpenAPI component -- would catch a schema that matches nothing; it would not
   have caught these two, which paired fine and were merely uncalled.
+
+- 2026-08-21 frontend/app/page.tsx: `#header-card` is the only branded card
+  without an explicit `text-white`. The old entry here bundled this with a
+  `prose` hypothesis, and only that half got answered: `prose` styled nothing
+  (`@tailwindcss/typography` is not installed), so it was never overriding the
+  colour, and the classes are gone. What actually colours the text is the
+  shadcn `Card`'s `text-card-foreground`, which f4d0bef made near-white by
+  forcing `.dark` -- so the card is legible today for the same reason every
+  other card is, not because it says so. The question left standing is whether
+  it should say so: an explicit `text-white` there would survive a future theme
+  toggle, and adding one is a visible change that wants a browser first.
