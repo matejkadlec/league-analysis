@@ -126,7 +126,7 @@ def test_current_mode_timeline_samples_remain_parseable(queue_id: str) -> None:
     match = MatchDTO.model_validate(_match_payload(queue_id))
     rows = build_match_timeline_rows(match, _timeline_payload(queue_id))
     assert len(rows) == 1
-    assert rows[0]["objective_takedowns_total"] == len(
+    assert len(rows[0]["objective_events"]) == len(
         FIXTURE["matches"][queue_id]["timeline"]["info"]["events"]
     )
 
@@ -168,19 +168,31 @@ def test_atakhan_is_historical_and_unknown_current_objectives_are_retained() -> 
         }
     )
     current_row = build_match_timeline_rows(current, current_timeline)[0]
-    assert current_row["atakhan_takedowns"] == 0
-    assert current_row["other_epic_monster_takedowns"] == {
-        "ATAKHAN": 1,
-        "FUTURE_MONSTER": 1,
-    }
-    assert [event["m"] for event in current_row["objective_events"][:2]] == [
+    current_events = current_row["objective_events"]
+    # Atakhan is not an objective in a current-patch match, so it is retained
+    # as an unrecognized epic monster rather than credited as one -- and the
+    # monster type survives in `m`, which is what makes the retention useful.
+    assert [event["o"] for event in current_events] == [
+        "other_epic_monster",
+        "other_epic_monster",
+        "other_building",
+    ]
+    assert [event["m"] for event in current_events[:2]] == [
         "ATAKHAN",
         "FUTURE_MONSTER",
     ]
-    assert current_row["objective_events"][2]["o"] == "other_building"
+    assert current_row["team_other_epic_monsters_slain"] == {
+        "ATAKHAN": 1,
+        "FUTURE_MONSTER": 1,
+    }
 
     historical_payload = _match_payload("420")
     historical_payload["info"]["gameVersion"] = "15.24.1.1"
     historical = MatchDTO.model_validate(historical_payload)
     historical_row = build_match_timeline_rows(historical, current_timeline)[0]
-    assert historical_row["atakhan_takedowns"] == 1
+    assert [event["o"] for event in historical_row["objective_events"]] == [
+        "atakhan",
+        "other_epic_monster",
+        "other_building",
+    ]
+    assert historical_row["team_atakhan_slain"] == 1
