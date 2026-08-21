@@ -1,6 +1,7 @@
 """Matchmaking analysis API endpoints."""
 
 from datetime import datetime
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
@@ -23,13 +24,13 @@ router = APIRouter(
 )
 
 
-@router.post("/start", response_model=MatchmakingAnalysisResponse)
+@router.post("/start")
 @rate_limit("10/minute")
 async def start_analysis(
     request: Request,
     payload: MatchmakingAnalysisRequest,
     service: MatchmakingServiceDep,
-):
+) -> MatchmakingAnalysisResponse:
     """
     Start a new matchmaking analysis for a player.
 
@@ -46,11 +47,11 @@ async def start_analysis(
         ) from error
 
 
-@router.get("/player/{puuid}", response_model=MatchmakingAnalysisResponse)
+@router.get("/player/{puuid}")
 async def get_latest_analysis(
     puuid: str,
     service: MatchmakingServiceDep,
-):
+) -> MatchmakingAnalysisResponse:
     """Get the latest analysis for a player."""
     result = await service.get_latest_analysis(puuid)
 
@@ -61,12 +62,12 @@ async def get_latest_analysis(
 
 
 @router.get(
-    "/player/{puuid}/latest-completed", response_model=MatchmakingAnalysisResponse
+    "/player/{puuid}/latest-completed",
 )
 async def get_latest_completed_analysis(
     puuid: str,
     service: MatchmakingServiceDep,
-):
+) -> MatchmakingAnalysisResponse:
     """Get the latest completed analysis for a player."""
     result = await service.get_latest_completed_analysis(puuid)
     if not result:
@@ -76,12 +77,12 @@ async def get_latest_completed_analysis(
     return result
 
 
-@router.get("/player/{puuid}/status", response_model=MatchmakingAnalysisResponse)
+@router.get("/player/{puuid}/status")
 async def get_analysis_status_by_puuid(
     puuid: str,
     created_at: datetime,
     service: MatchmakingServiceDep,
-):
+) -> MatchmakingAnalysisResponse:
     """Get authoritative status for one exact analysis run."""
     result = await service.get_analysis_status(puuid, created_at)
 
@@ -92,18 +93,15 @@ async def get_analysis_status_by_puuid(
 
 
 @router.get(
-    "/player/{puuid}/history", response_model=MatchmakingAnalysisHistoryResponse
+    "/player/{puuid}/history",
 )
 async def get_analysis_history(
     puuid: str,
     service: MatchmakingServiceDep,
-    limit: int = Query(
-        20,
-        ge=1,
-        le=100,
-        description="Number of completed analyses to return",
-    ),
-):
+    limit: Annotated[
+        int, Query(ge=1, le=100, description="Number of completed analyses to return")
+    ] = 20,
+) -> MatchmakingAnalysisHistoryResponse:
     """Get history of completed analyses for a player.
 
     The bound is not decoration: the value reached `.limit()` unchecked, and

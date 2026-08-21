@@ -11,7 +11,7 @@ import smtplib
 from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
 from email.message import EmailMessage
-from typing import NoReturn, Protocol
+from typing import Annotated, NoReturn, Protocol
 from uuid import uuid4
 
 import httpx
@@ -1209,7 +1209,10 @@ class AuthService:
             exp=exp,
         )
 
-    async def get_current_user(self, token: str = Depends(oauth2_scheme)) -> User:
+    # Not a FastAPI dependency: `dependencies.get_current_user` is, and it
+    # passes the token in. The `Depends(oauth2_scheme)` default this used to
+    # carry was never resolved by anything.
+    async def get_current_user(self, token: str) -> User:
         """Get the current authenticated user from JWT token."""
         credentials_exception = self._unauthenticated_credentials_error()
 
@@ -1256,6 +1259,6 @@ class AuthService:
         return user
 
 
-def get_auth_service(db: AsyncSession = Depends(get_db)) -> AuthService:
+def get_auth_service(db: Annotated[AsyncSession, Depends(get_db)]) -> AuthService:
     """Dependency to get auth service instance."""
     return AuthService(db)

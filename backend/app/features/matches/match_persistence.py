@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-from typing import Any
 
 import structlog
 from sqlalchemy import select
@@ -23,21 +22,6 @@ from .timeline import replace_match_timeline_rows
 logger = structlog.get_logger(__name__)
 
 
-def extract_store_participant_identity(participant: ParticipantDTO) -> dict[str, Any]:
-    """Normalize a match DTO participant into the player-row identity fields."""
-    game_name = participant.game_name or participant.summoner_name or "Unknown"
-    tag_line = participant.tag_line
-    if not tag_line and "#" in game_name:
-        game_name, tag_line = game_name.split("#", 1)
-    return {
-        "puuid": participant.puuid,
-        "game_name": game_name,
-        "tag_line": tag_line or "RIOT",
-        "summoner_level": participant.summoner_level,
-        "profile_icon_id": participant.profile_icon,
-    }
-
-
 def match_end_flags(participants: Iterable[ParticipantDTO]) -> tuple[bool, bool]:
     """Derive early-surrender and surrender flags from participant DTOs."""
     early_surrender = any(
@@ -45,12 +29,6 @@ def match_end_flags(participants: Iterable[ParticipantDTO]) -> tuple[bool, bool]
     )
     surrender = any(participant.game_ended_in_surrender for participant in participants)
     return early_surrender, surrender
-
-
-def match_dto_id(match_dto: MatchDTO) -> str:
-    if hasattr(match_dto, "metadata"):
-        return match_dto.metadata.match_id
-    return "unknown"
 
 
 def build_match_record(
@@ -82,24 +60,6 @@ def build_match_record(
     if fully_analyzed is not None:
         match.fully_analyzed = fully_analyzed
     return match
-
-
-def add_participants_from_dto(session: AsyncSession, match_dto: MatchDTO) -> None:
-    """Stage MatchParticipant rows from a Riot match DTO."""
-    from .transformers import MatchDTOTransformer
-
-    for participant in match_dto.info.participants:
-        participant_data = MatchDTOTransformer.extract_participant_data(participant)
-        participant_model = MatchParticipant(
-            match_id=match_dto.metadata.match_id,
-            **participant_data,
-        )
-        initialize_participant_lp(
-            participant_model,
-            queue_id=match_dto.info.queue_id,
-            remake=participant_data["remake"],
-        )
-        session.add(participant_model)
 
 
 async def merge_reprocess_player(

@@ -31,11 +31,16 @@ export function useJobCardControls(
   const isTestRunning =
     optimisticTestRunning !== null ? optimisticTestRunning : serverTestRunning;
 
+  // Drop the optimistic flag once the server agrees, during render: the guard
+  // is false on the immediate re-render, so it converges without a commit.
+  // `queueMicrotask` escaped React's render-phase-update tracking, so a render
+  // React discards -- StrictMode's double render, a concurrent render that
+  // loses to a higher-priority update -- still committed the reset.
   if (
     optimisticTestRunning !== null &&
     serverTestRunning === optimisticTestRunning
   ) {
-    queueMicrotask(() => setOptimisticTestRunning(null));
+    setOptimisticTestRunning(null);
   }
 
   const isAnyRunning = isRunning || isTestRunning;

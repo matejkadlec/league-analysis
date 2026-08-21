@@ -10,7 +10,7 @@ from app.core.database import get_db
 from .service import MatchService
 
 
-def get_match_service(db: AsyncSession = Depends(get_db)) -> MatchService:
+def get_match_service(db: Annotated[AsyncSession, Depends(get_db)]) -> MatchService:
     """
     Get match service instance.
 

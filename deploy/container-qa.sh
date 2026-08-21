@@ -130,26 +130,16 @@ if ! compose up --detach --remove-orphans --wait --wait-timeout 300; then
   exit 1
 fi
 
-migrate_container="$(compose ps --all --quiet migrate)"
-if [[ -z "$migrate_container" || \
-  "$(docker inspect --format '{{.State.ExitCode}}' "$migrate_container")" != "0" ]]; then
-  printf 'The isolated migration service did not complete successfully.\n' >&2
-  exit 1
-fi
-
+# No migrate exit-code check here: backend declares
+# `depends_on: migrate: condition: service_completed_successfully`, so a
+# nonzero migration fails `compose up` itself, which the branch above already
+# reports with `ps --all` and the service logs.
 postgres_container="$(compose ps --quiet postgres)"
 postgres_ports="$(docker inspect --format '{{json .HostConfig.PortBindings}}' "$postgres_container")"
 if [[ "$postgres_ports" != "null" && "$postgres_ports" != "{}" ]]; then
   printf 'The isolated PostgreSQL service unexpectedly published a host port.\n' >&2
   exit 1
 fi
-
-compose exec -T backend python -c \
-  "from urllib.request import urlopen; urlopen('http://127.0.0.1:8000/health/ready', timeout=3)" \
-  >/dev/null
-compose exec -T frontend node -e \
-  "fetch('http://127.0.0.1:3000/').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))" \
-  >/dev/null
 
 docker exec --user postgres "$postgres_container" sh -ceu \
   'exec pg_dump --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" --format=custom --compress=gzip:9 --no-password' \

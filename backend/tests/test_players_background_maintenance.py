@@ -192,6 +192,6 @@ async def test_match_storage_rechecks_maintenance_before_each_write(
     service = MatchService(cast(AsyncSession, object()))
 
     with pytest.raises(RiotWriterMaintenanceActiveError):
-        await service.store_match_from_dto(cast(MatchDTO, SimpleNamespace()))
+        await service._reprocess_match(cast(MatchDTO, SimpleNamespace()))
 
     guard.assert_awaited_once()
