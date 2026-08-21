@@ -1,10 +1,7 @@
 import type { MetadataRoute } from "next";
 
 import { LEGAL_PAGES } from "@/lib/core/legal-pages";
-
-const SITE_URL = (
-  process.env.NEXT_PUBLIC_SITE_URL || "https://leagueanalysis.gg"
-).replace(/\/+$/, "");
+import { SITE_URL } from "@/lib/core/site-url";
 
 const PUBLIC_ROUTES = ["/", ...LEGAL_PAGES.map((page) => page.href)];
 

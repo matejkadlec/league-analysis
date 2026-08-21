@@ -10,6 +10,7 @@ import { HeaderMessages } from "@/components/header-messages";
 import { CookieConsentManager } from "@/features/cookie-consent";
 import { ToastHost } from "@/components/toast-host";
 import { resolveDDragonVersion } from "@/lib/core/data-dragon-version";
+import { SHOULD_ALLOW_INDEXING, SITE_URL } from "@/lib/core/site-url";
 
 const montserrat = Montserrat({
   subsets: ["latin"],
@@ -23,11 +24,6 @@ const leagueFont = localFont({
   variable: "--font-league",
   display: "swap",
 });
-
-const SITE_URL = (
-  process.env.NEXT_PUBLIC_SITE_URL || "https://leagueanalysis.gg"
-).replace(/\/+$/, "");
-const SHOULD_ALLOW_INDEXING = process.env.NEXT_PUBLIC_ALLOW_INDEXING === "true";
 
 const robotsMetadata: Metadata["robots"] = SHOULD_ALLOW_INDEXING
   ? {
