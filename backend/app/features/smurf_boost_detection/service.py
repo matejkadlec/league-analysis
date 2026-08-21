@@ -22,6 +22,7 @@ from app.features.matches.models import Match
 from app.features.matches.participants import MatchParticipant
 from app.features.players.leagues import PlayerLeague
 from app.features.players.models import Player
+from app.features.settings.models import UserCardPreference
 from app.features.settings.schemas import CardId, normalize_stored_card_preference
 
 from .composite import EligibleMatch
@@ -88,6 +89,22 @@ class SmurfBoostDetectionService:
 
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
+
+    async def viewer_thresholds(self, user_id: int) -> dict[str, float]:
+        """Resolve the signed-in viewer's stored thresholds over the defaults.
+
+        Here rather than in the router: the route was declaring a second
+        `Depends(get_db)` beside this service purely to run this SELECT, and
+        reaching cross-feature into `settings.models` to do it.
+        """
+        result = await self.db.execute(
+            select(UserCardPreference.settings).where(
+                UserCardPreference.user_id == user_id,
+                UserCardPreference.card_id == CardId.SMURF_BOOST_DETECTION.value,
+                UserCardPreference.version == 1,
+            )
+        )
+        return resolve_thresholds(result.scalar_one_or_none())
 
     async def _load_eligible(self, puuid: str) -> list[EligibleMatch]:
         """The newest eligible ranked games for one player, newest first.

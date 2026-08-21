@@ -40,7 +40,7 @@ from .match_stats import (
     build_champion_stat_items,
     build_lane_stat_items,
     calculate_kda,
-    page_window,
+    page_of,
 )
 from .match_sync import must_abort_writer_sync, sync_single_queue_for_player
 from .models import Match
@@ -214,7 +214,7 @@ class MatchService:
                 MatchResponse.model_validate(match) for match in db_matches
             ]
 
-            page, pages = page_window(start, count, total_count)
+            page = page_of(start, count)
             size = count
 
             logger.debug(
@@ -233,7 +233,6 @@ class MatchService:
                 total_analyzed=total_analyzed,
                 page=page,
                 size=size,
-                pages=pages,
             )
         except Exception as e:
             logger.error(
@@ -279,14 +278,13 @@ class MatchService:
             )
 
             if not db_matches:
-                page, pages = page_window(start, count, total_count)
+                page = page_of(start, count)
                 return MatchListWithPlayerDataResponse(
                     matches=[],
                     total=total_count,
                     total_analyzed=total_analyzed,
                     page=page,
                     size=count,
-                    pages=pages,
                 )
             (
                 player_participants_by_match,
@@ -304,7 +302,7 @@ class MatchService:
                 timelines_by_match_team,
                 puuid,
             )
-            page, pages = page_window(start, count, total_count)
+            page = page_of(start, count)
 
             logger.debug(
                 "Retrieved matches with player data",
@@ -319,7 +317,6 @@ class MatchService:
                 total_analyzed=total_analyzed,
                 page=page,
                 size=count,
-                pages=pages,
             )
         except Exception as e:
             logger.error(

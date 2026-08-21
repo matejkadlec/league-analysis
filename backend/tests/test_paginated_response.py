@@ -16,7 +16,11 @@ from app.features.matches.schemas import (
     MatchListWithPlayerDataResponse,
 )
 
-PAGE_FIELDS = {"total", "page", "size", "pages"}
+SUPPLIED_FIELDS = {"total", "page", "size"}
+# Derived from `total` and `size`, so it is on every response without any
+# endpoint being able to supply a wrong one.
+DERIVED_FIELDS = {"pages"}
+PAGE_FIELDS = SUPPLIED_FIELDS | DERIVED_FIELDS
 
 ENVELOPES = [
     JobExecutionListResponse,
@@ -26,21 +30,39 @@ ENVELOPES = [
 
 
 def test_the_envelope_is_exactly_these_four_counters() -> None:
-    assert set(PaginatedResponse.model_fields) == PAGE_FIELDS
+    assert set(PaginatedResponse.model_fields) == SUPPLIED_FIELDS
+    assert set(PaginatedResponse.model_computed_fields) == DERIVED_FIELDS
 
 
 def test_every_counter_is_required() -> None:
-    """A missing counter must be a parse failure, not a silent zero."""
+    """A missing counter must be a parse failure, not a silent zero.
+
+    `pages` reaches this the stronger way: a computed field cannot be absent
+    from a serialized response, and cannot be given a value that disagrees
+    with `total` and `size`.
+    """
     assert all(
-        PaginatedResponse.model_fields[name].is_required() for name in PAGE_FIELDS
+        PaginatedResponse.model_fields[name].is_required() for name in SUPPLIED_FIELDS
     )
+
+
+def test_the_page_count_is_a_ceiling_not_a_floor() -> None:
+    """A partial last page still has to be counted, and an empty page size
+    must not divide by zero."""
+    assert PaginatedResponse(total=0, page=0, size=20).pages == 0
+    assert PaginatedResponse(total=1, page=0, size=20).pages == 1
+    assert PaginatedResponse(total=20, page=0, size=20).pages == 1
+    assert PaginatedResponse(total=21, page=0, size=20).pages == 2
+    assert PaginatedResponse(total=5, page=0, size=0).pages == 0
 
 
 @pytest.mark.parametrize("envelope", ENVELOPES, ids=lambda e: e.__name__)
 def test_each_list_response_carries_the_envelope(
     envelope: type[BaseModel],
 ) -> None:
-    assert set(envelope.model_fields) >= PAGE_FIELDS
+    assert set(envelope.model_fields) | set(envelope.model_computed_fields) >= (
+        PAGE_FIELDS
+    )
     assert issubclass(envelope, PaginatedResponse)
 
 

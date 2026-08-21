@@ -1,6 +1,5 @@
 """Job service for managing job configurations and executions."""
 
-import math
 from datetime import UTC, datetime
 from typing import Any
 
@@ -252,15 +251,11 @@ class JobService:
         result = await self.db.execute(query)
         executions = result.scalars().all()
 
-        # Calculate pages
-        pages = math.ceil(total / size) if size > 0 else 0
-
         return JobExecutionListResponse(
             executions=[JobExecutionResponse.model_validate(e) for e in executions],
             total=total,
             page=page,
             size=size,
-            pages=pages,
         )
 
     async def get_latest_execution(

@@ -4,15 +4,11 @@ from __future__ import annotations
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.database import get_db
 from app.core.rate_limiter import rate_limit
 from app.features.auth.dependencies import get_current_active_user
 from app.features.auth.models import User
-from app.features.settings.models import UserCardPreference
-from app.features.settings.schemas import CardId, serialize_card_preference_settings
+from app.features.settings.schemas import serialize_card_preference_settings
 
 from .config import DEFAULT_PRESET, PRESETS
 from .dependencies import SmurfBoostServiceDep
@@ -22,7 +18,7 @@ from .schemas import (
     SmurfBoostAnalysisRequest,
     SmurfBoostAnalysisResponse,
 )
-from .service import SmurfBoostDetectionError, resolve_thresholds
+from .service import SmurfBoostDetectionError
 
 # A run already in flight under different settings is a retryable conflict, not
 # a malformed request, so it must not be reported as a validation failure. A run
@@ -38,18 +34,6 @@ router = APIRouter(
     tags=["smurf-boost-detection"],
     dependencies=[Depends(get_current_active_user)],
 )
-
-
-async def _viewer_thresholds(db: AsyncSession, user_id: int) -> dict[str, float]:
-    """Resolve the signed-in viewer's stored thresholds over the defaults."""
-    result = await db.execute(
-        select(UserCardPreference.settings).where(
-            UserCardPreference.user_id == user_id,
-            UserCardPreference.card_id == CardId.SMURF_BOOST_DETECTION.value,
-            UserCardPreference.version == 1,
-        )
-    )
-    return resolve_thresholds(result.scalar_one_or_none())
 
 
 @router.get("/presets", response_model=PresetsResponse)
@@ -78,7 +62,6 @@ async def analyze_player(
     request: Request,
     payload: SmurfBoostAnalysisRequest,
     service: SmurfBoostServiceDep,
-    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ) -> SmurfBoostAnalysisResponse:
     """Run detection for one player using the viewer's thresholds.
@@ -87,7 +70,7 @@ async def analyze_player(
     and never contacts the Riot API.
     """
     try:
-        thresholds = await _viewer_thresholds(db, current_user.id)
+        thresholds = await service.viewer_thresholds(current_user.id)
         return await service.run_analysis(payload.puuid, thresholds)
     except SmurfBoostDetectionError as error:
         logger.warning(
