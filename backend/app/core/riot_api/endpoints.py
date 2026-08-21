@@ -8,6 +8,17 @@ from .constants import MatchType, Platform, QueueType, Region, enum_str
 
 logger = structlog.get_logger(__name__)
 
+# One spelling per Riot path. The builders below format these into a URL and
+# the client hands the same string to `_record_api_call`, so an endpoint that
+# moves cannot leave the job log reporting where it used to be.
+ACCOUNT_BY_RIOT_ID = "/riot/account/v1/accounts/by-riot-id/{gameName}/{tagLine}"
+ACCOUNT_BY_PUUID = "/riot/account/v1/accounts/by-puuid/{puuid}"
+SUMMONER_BY_PUUID = "/lol/summoner/v4/summoners/by-puuid/{puuid}"
+MATCH_LIST_BY_PUUID = "/lol/match/v5/matches/by-puuid/{puuid}/ids"
+MATCH_BY_ID = "/lol/match/v5/matches/{matchId}"
+MATCH_TIMELINE_BY_ID = "/lol/match/v5/matches/{matchId}/timeline"
+LEAGUE_ENTRIES_BY_PUUID = "/lol/league/v4/entries/by-puuid/{puuid}"
+
 
 class RiotAPIEndpoints:
     """Riot API endpoint definitions and routing."""
@@ -41,24 +52,20 @@ class RiotAPIEndpoints:
     ) -> str:
         """Get account by Riot ID endpoint."""
         base_url = self.get_base_url(region)
-        encoded_name = quote(game_name, safe="")
-        encoded_tag = quote(tag_line, safe="")
-        return (
-            f"{base_url}/riot/account/v1/accounts/by-riot-id/"
-            f"{encoded_name}/{encoded_tag}"
+        path = ACCOUNT_BY_RIOT_ID.format(
+            gameName=quote(game_name, safe=""), tagLine=quote(tag_line, safe="")
         )
+        return f"{base_url}{path}"
 
     def account_by_puuid(self, puuid: str, region: Region | None = None) -> str:
         """Get account by PUUID endpoint."""
         base_url = self.get_base_url(region)
-        return f"{base_url}/riot/account/v1/accounts/by-puuid/{quote(puuid, safe='')}"
+        return base_url + ACCOUNT_BY_PUUID.format(puuid=quote(puuid, safe=""))
 
     def summoner_by_puuid(self, puuid: str, platform: Platform | None = None) -> str:
         """Get summoner by PUUID endpoint."""
         platform_url = self.get_platform_url(platform)
-        return (
-            f"{platform_url}/lol/summoner/v4/summoners/by-puuid/{quote(puuid, safe='')}"
-        )
+        return platform_url + SUMMONER_BY_PUUID.format(puuid=quote(puuid, safe=""))
 
     # Match endpoints (Regional)
     def match_list_by_puuid(
@@ -74,8 +81,7 @@ class RiotAPIEndpoints:
     ) -> str:
         """Get match list by PUUID endpoint."""
         base_url = self.get_base_url(region)
-        encoded_puuid = quote(puuid, safe="")
-        url = f"{base_url}/lol/match/v5/matches/by-puuid/{encoded_puuid}/ids"
+        url = base_url + MATCH_LIST_BY_PUUID.format(puuid=quote(puuid, safe=""))
 
         params: dict[str, int | str] = {"start": start, "count": count}
 
@@ -93,12 +99,12 @@ class RiotAPIEndpoints:
     def match_by_id(self, match_id: str, region: Region | None = None) -> str:
         """Get match by ID endpoint."""
         base_url = self.get_base_url(region)
-        return f"{base_url}/lol/match/v5/matches/{quote(match_id, safe='')}"
+        return base_url + MATCH_BY_ID.format(matchId=quote(match_id, safe=""))
 
     def match_timeline_by_id(self, match_id: str, region: Region | None = None) -> str:
         """Get match timeline by ID endpoint."""
         base_url = self.get_base_url(region)
-        return f"{base_url}/lol/match/v5/matches/{quote(match_id, safe='')}/timeline"
+        return base_url + MATCH_TIMELINE_BY_ID.format(matchId=quote(match_id, safe=""))
 
     # League endpoints (Platform)
     def league_entries_by_puuid(
@@ -106,7 +112,9 @@ class RiotAPIEndpoints:
     ) -> str:
         """Get league entries by encrypted PUUID endpoint."""
         platform_url = self.get_platform_url(platform)
-        return f"{platform_url}/lol/league/v4/entries/by-puuid/{quote(puuid, safe='')}"
+        return platform_url + LEAGUE_ENTRIES_BY_PUUID.format(
+            puuid=quote(puuid, safe="")
+        )
 
 
 def parse_rate_limit_header(header_value: str) -> list[dict[str, int]]:
