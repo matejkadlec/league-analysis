@@ -107,14 +107,6 @@ function isBrowser(): boolean {
   return typeof window !== "undefined";
 }
 
-function getApiBaseUrl(): string {
-  return typeof window === "undefined"
-    ? process.env.API_INTERNAL_URL ||
-        process.env.NEXT_PUBLIC_API_URL ||
-        "http://localhost:8000"
-    : "";
-}
-
 export function removeAuthTokens(): void {
   sessionEpoch += 1;
   // Every path that gives up on a session routes through here, so this is the
@@ -136,7 +128,7 @@ export async function refreshAccessToken(): Promise<SessionRefresh> {
   const runRefresh = async (): Promise<SessionRefresh> => {
     const epoch = sessionEpoch;
     try {
-      const response = await fetch(`${getApiBaseUrl()}/api/v1/auth/refresh`, {
+      const response = await fetch("/api/v1/auth/refresh", {
         method: "POST",
         credentials: "include",
         headers: {
@@ -211,7 +203,7 @@ export async function refreshAccessToken(): Promise<SessionRefresh> {
         // credentials. Sending them back to sign in is the only sound exit.
         clearAuthStateCookie();
         try {
-          await fetch(`${getApiBaseUrl()}/api/v1/auth/logout`, {
+          await fetch("/api/v1/auth/logout", {
             method: "POST",
             credentials: "include",
             // `refreshInFlight` is only cleared in the outer `finally`, so a
