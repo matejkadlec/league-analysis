@@ -1,17 +1,16 @@
 // Authentication types
 
-export interface User {
-  id: number;
-  email: string;
-  display_name: string;
-  is_active: boolean;
-  is_admin: boolean;
-  email_verified: boolean;
-  email_verified_at: string | null;
-  last_login: string | null;
-  created_at: string;
-  updated_at: string;
-}
+import type { UserResponse } from "@/lib/core/schemas";
+
+/**
+ * The signed-in user record, as the API declares it.
+ *
+ * This used to be ten hand-written fields duplicating `UserResponseSchema`,
+ * with nothing holding the two together -- and `GET /auth/me` was the one
+ * response in the app that reached React state without a zod parse, so a
+ * renamed backend field would have landed here as garbage in silence.
+ */
+export type User = UserResponse;
 
 export interface LoginCredentials {
   email: string;
