@@ -51,7 +51,6 @@ class ParticipantDTO(RiotDTO):
     participant_id: int = Field(...)
     puuid: str
     summoner_name: str | None = Field(default=None)
-    summoner_id: str | None = Field(default=None)
     summoner_level: int = Field(default=0)
     profile_icon: int = Field(default=0)
 

@@ -62,7 +62,6 @@ class MatchDTOTransformer:
             or participant_dto.summoner_name
             or None,
             "tag_line": participant_dto.tag_line or None,
-            "summoner_id": participant_dto.summoner_id,
             "profile_icon": participant_dto.profile_icon,
             "summoner_level": participant_dto.summoner_level,
             # Team & Context
