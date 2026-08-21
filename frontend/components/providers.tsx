@@ -13,6 +13,7 @@ import { normalizeApiError } from "@/lib/core/api-error";
 import { reportApiError } from "@/lib/core/api-error-logging";
 import { DDragonVersionProvider } from "@/lib/core/data-dragon-context";
 import { appToast, queryErrorToast } from "@/lib/core/hooks";
+import { AppSkeleton } from "./app-skeleton";
 import { AuthGate } from "./auth-gate";
 
 function cacheKey(key: readonly unknown[] | undefined): string | undefined {
@@ -86,7 +87,13 @@ export function Providers({
     <DDragonVersionProvider version={ddragonVersion}>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
-          <Suspense fallback={null}>
+          {/* Not `fallback={null}`: `PlayerContextProvider` reads
+              `useSearchParams`, which bails out to client rendering during a
+              static prerender, and this boundary is what the prerender emits
+              in its place. A null fallback shipped every prerendered route
+              with an empty <body>, and pre-empted `app/loading.tsx`, which
+              sits further out and so never got the chance to render. */}
+          <Suspense fallback={<AppSkeleton />}>
             <PlayerContextProvider>
               <AuthGate>{children}</AuthGate>
             </PlayerContextProvider>
