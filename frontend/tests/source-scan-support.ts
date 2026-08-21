@@ -31,3 +31,16 @@ function sourceFiles(directory: string): string[] {
 export function allSourceFiles(): string[] {
   return SOURCE_DIRECTORIES.flatMap(sourceFiles);
 }
+
+/**
+ * Every `*.test.ts`/`*.test.tsx` file, wherever it lives.
+ *
+ * Deliberately wider than `allSourceFiles`: this one is for contracts about
+ * the test suite itself, and a test colocated beside the code it covers is
+ * exactly the file such a contract would otherwise miss.
+ */
+export function allTestFiles(): string[] {
+  return ["tests", "e2e", ...SOURCE_DIRECTORIES]
+    .flatMap(sourceFiles)
+    .filter((path) => /\.test\.tsx?$/.test(path));
+}
