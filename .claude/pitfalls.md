@@ -110,3 +110,20 @@ the `pitfall-check` agent.
   `.get()` on an optional key is the honest expression, pin the key in a test:
   `tests/test_playstyle_tag_config.py` asserts every evaluator finds the keys
   it reads.
+
+- **Grepping a column name does not prove nothing reads the column.**
+  `playstyle_analysis/aggregates.py` resolves a tag's metric with
+  `hasattr(MatchParticipant, key[4:])` / `getattr(p, metric)`, so
+  `min_skillshots_hit` in `TAG_CONFIG` reaches the `skillshots_hit` column
+  through a string that never appears next to the column name. A drop
+  migration classified by grep therefore reads as safe, and the loss is
+  silent in exactly the way above: `hasattr` is False, the aggregate is 0.0,
+  every `min_` comparison fails, and ten tags stop existing with no error and
+  a green gate (2026-08-21, caught in review of PR #176). Before dropping or
+  renaming any `MatchParticipant` / `Match` column, search for the *stem*
+  as well -- `min_<name>`, `max_<name>`, `"<name>"` as a bare string --
+  and re-run `tests/test_playstyle_tag_config.py::
+  test_every_generic_tag_names_a_metric_that_can_be_read`, which now refuses a
+  threshold key that resolves to neither a column nor an `advanced_stats`
+  key. `tag_checks.team_attribute_share(p, match, attr)` is the same shape
+  with two hard-coded call sites.
