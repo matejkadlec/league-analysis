@@ -145,11 +145,18 @@ describe("SmurfBoostSettingsCard", () => {
       const input = document.querySelector(`#smurf-boost-${field.name}`);
       expect(input, `${field.name} has no input`).toBeTruthy();
       expect(screen.getByLabelText(field.label)).toBeTruthy();
+      // Inside the loop, and read off each field's own help text: the range
+      // was asserted for recentWindowSize alone, so suppressing it on the
+      // eleven float thresholds -- whose bounds nobody could guess -- passed.
+      const help = document.querySelector(`#smurf-boost-${field.name}-help`);
+      expect(
+        help?.textContent,
+        `${field.name} does not state its allowed range`,
+      ).toContain(`Allowed: ${field.min} to ${field.max}.`);
     }
     expect(
       screen.getByText(/How many of the newest eligible games count as recent/),
     ).toBeTruthy();
-    expect(screen.getAllByText(/Allowed: 10 to 50/).length).toBe(1);
   });
 
   it("marks the preset the stored settings match", async () => {
