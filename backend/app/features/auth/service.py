@@ -147,6 +147,10 @@ class JoinUsEmailNotConfiguredError(Exception):
     """Raised when SMTP is not configured for Join Us form delivery."""
 
 
+class EmailChangeEmailNotConfiguredError(Exception):
+    """Raised when SMTP is not configured for email-change verification."""
+
+
 class JoinUsEmailDeliveryError(Exception):
     """Raised when Join Us form email delivery fails."""
 
@@ -268,18 +272,15 @@ class AuthService:
         target_email: str,
         code: str,
     ) -> None:
-        """Send email-change verification code.
-
-        Falls back to structured logs when SMTP is not configured.
-        """
+        """Send email-change verification code."""
+        # Same guard as `_send_join_us_contact_email`, and now the same answer.
+        # This used to log the code in plaintext and return as if the mail had
+        # gone out: the caller then wrote `pending_email` and the hash and
+        # committed, so an unconfigured deployment was indistinguishable from a
+        # working one -- while `LOG_LEVEL=INFO` and the `local` log driver put
+        # the verification code on disk.
         if not self._is_smtp_configured():
-            logger.warning(
-                "smtp_not_configured_email_code_logged",
-                target_email=target_email,
-                code=code,
-                note="Set SMTP_* variables in .env to send real emails",
-            )
-            return
+            raise EmailChangeEmailNotConfiguredError
 
         smtp_from_email = self.settings.smtp_from_email
 
