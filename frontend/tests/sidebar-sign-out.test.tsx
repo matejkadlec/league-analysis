@@ -41,6 +41,7 @@ const auth = vi.hoisted(() => ({
 vi.mock("@/features/auth", () => ({ useAuth: () => auth }));
 
 vi.mock("@/features/players", () => ({
+  isPlayerCentricPath: () => true,
   playerNavigationRoute: (route: string) => route,
   SidebarPlayerSwitcher: () => null,
 }));
