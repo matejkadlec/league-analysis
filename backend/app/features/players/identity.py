@@ -40,9 +40,11 @@ def upsert_player_statement(
     conflict clause rather than in Python over a prior SELECT. That SELECT was
     the race: the matchmaking worker and the Match Fetcher create the same
     bystander player rows on separate sessions, both found nothing, and the
-    loser's IntegrityError is a SQLAlchemyError, which `must_abort_writer_sync`
-    escalates -- so one primary-key collision on one participant failed the
-    entire job run, skipping every remaining tracked player.
+    loser's IntegrityError was a SQLAlchemyError like any other to
+    `must_abort_writer_sync`, so one primary-key collision on one participant
+    failed the entire job run, skipping every remaining tracked player. That
+    predicate has since stopped escalating row-level violations; this clause
+    is what keeps the row from being skipped at all.
 
     `is_tracked_by_anyone` is deliberately absent from the conflict clause:
     the stored value wins, because writing back a value read moments earlier is

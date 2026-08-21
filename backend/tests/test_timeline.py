@@ -7,7 +7,7 @@ from typing import cast
 from unittest.mock import AsyncMock
 
 import pytest
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import IntegrityError, OperationalError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.riot_api.client import RiotAPIClient
@@ -131,3 +131,21 @@ async def test_a_failed_timeline_backfill_leaves_the_session_usable(
         )
 
     assert session.rollbacks == 1
+
+
+def test_a_row_level_integrity_error_does_not_fail_the_whole_run() -> None:
+    """One bad match is skipped; a broken session still stops the run.
+
+    Both writers roll back before re-raising, so the session survives an
+    IntegrityError and the next match can be written. A lost connection or an
+    already-aborted transaction has no such guarantee and must still reach the
+    owning job.
+    """
+    integrity = IntegrityError("insert", {}, ValueError("fk violation"))
+
+    wrapped = RuntimeError("wrapped")
+    wrapped.__cause__ = integrity
+
+    assert match_sync.must_abort_writer_sync(integrity) is False
+    assert match_sync.must_abort_writer_sync(wrapped) is False
+    assert match_sync.must_abort_writer_sync(OperationalError("select", {}, OSError()))

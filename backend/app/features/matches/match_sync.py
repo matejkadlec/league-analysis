@@ -8,6 +8,7 @@ from typing import Any, Protocol
 
 import structlog
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db_session import rollback_quietly
@@ -62,10 +63,23 @@ class ReprocessMatch(Protocol):
 
 
 def must_abort_writer_sync(error: Exception) -> bool:
-    """Return whether a lower-level sync error must reach the owning job."""
-    from app.features.jobs.error_handling import is_database_job_error
+    """Return whether a lower-level sync error must reach the owning job.
+
+    `is_database_job_error` asks whether continuing would reuse a failed or
+    unavailable session, and for a lost connection or an aborted transaction
+    the answer is yes. An `IntegrityError` is the exception: it is about the
+    one row being written, both writers below roll the session back before
+    re-raising, and the caller already logs the match and moves to the next
+    one. Escalating it failed a whole run twice -- once on the bystander
+    player-row race that `players/identity.py` documents, and again on the
+    `fk_match_timelines_puuid_players` violation of 2026-08-21, where four
+    consecutive Match Fetcher runs died on the same single match.
+    """
+    from app.features.jobs.error_handling import is_database_job_error, iter_error_chain
     from app.features.jobs.maintenance import RiotWriterMaintenanceActiveError
 
+    if any(isinstance(item, IntegrityError) for item in iter_error_chain(error)):
+        return False
     return is_database_job_error(error) or isinstance(
         error, RiotWriterMaintenanceActiveError
     )
