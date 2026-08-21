@@ -25,12 +25,19 @@ the `pitfall-check` agent.
   id/status/timestamp scalars captured while the session was open. Existing
   per-function guards: `test_get_job_logs_never_touches_the_orm_instance`,
   `test_failure_from_job_never_touches_the_execution_instance`, and
-  `tests/test_job_loops_survive_a_rollback.py` for the two writer loops (it
-  expires rows with SQLAlchemy's own `instance_state`, so it fails the way
-  production does) — new code paths are not covered by any of them. The same
-  trap bit the tracked-player loops: `handle_player_error` rolls back to skip
-  one player, and a row loaded before that rollback raises on its next
-  attribute read.
+  `tests/test_job_loops_survive_a_rollback.py` for the two writer loops and
+  for a rollback that happens *inside* one iteration (it expires rows with
+  SQLAlchemy's own `instance_state`, so it fails the way production does) —
+  new code paths are not covered by any of them. The same trap bit the
+  tracked-player loops: `handle_player_error` rolls back to skip one player,
+  and a row loaded before that rollback raises on its next attribute read.
+  It bit again on 2026-08-21, one commit after `must_abort_writer_sync`
+  stopped escalating a row-level `IntegrityError`: swallowing the error made
+  the writer's own rollback land mid-iteration, where the loop still held a
+  `Player`. A callback that closed over the row rather than its id then turned
+  a skipped match back into a dead run. **Anything that begins reporting an
+  error instead of re-raising it has moved a rollback under code that did not
+  previously run after one.**
 
 - **A wide child stretches the whole page sideways.** A flex item defaults to
   `min-width: auto`, which makes every `overflow-x-auto` beneath it inert, so

@@ -120,6 +120,12 @@ class MatchFetcherJob(BaseJob):
         are handled by the separate PlayerUpdaterJob which runs less frequently (every 24h).
         """
 
+        # The identifier, not the row: this closure runs after a skipped match
+        # has rolled the session back, and a rolled-back session expires every
+        # instance it holds. Reading `player.puuid` there raises instead of
+        # reporting the match that failed.
+        puuid = player.puuid
+
         # Fetch new matches with rate limiting
         def record_match_sync_failure(
             operation: str,
@@ -129,11 +135,11 @@ class MatchFetcherJob(BaseJob):
             self.record_error(
                 error,
                 operation=operation,
-                context={"puuid": player.puuid, **context},
+                context={"puuid": puuid, **context},
             )
 
         error_count_before = len(self._errors_encountered)
-        league_before = await player_service.get_player_league(player.puuid)
+        league_before = await player_service.get_player_league(puuid)
         ranked_match_ids: set[str] = set()
 
         def record_stored_match(queue_id: int, match_id: str) -> None:
@@ -153,6 +159,13 @@ class MatchFetcherJob(BaseJob):
                 message="Rate limit reached while synchronizing matches",
             ) from error
         self.metrics["records_created"] += count
+
+        if len(self._errors_encountered) != error_count_before:
+            # Same rollback, other half of the problem: everything below reads
+            # `player` synchronously, and an expired read outside an await
+            # raises `MissingGreenlet`, which `is_database_job_error` then
+            # calls fatal. One SELECT per failing player buys the row back.
+            await db.refresh(player)
 
         if len(self._errors_encountered) == error_count_before:
             player.match_synced_at = datetime.now(UTC)

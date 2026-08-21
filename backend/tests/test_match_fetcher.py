@@ -309,7 +309,7 @@ async def test_match_fetcher_processes_the_player_league_refresh_path() -> None:
 
 async def test_recoverable_match_failure_does_not_claim_match_freshness() -> None:
     job = MatchFetcherJob(job_config_id=7)
-    db = SimpleNamespace(commit=AsyncMock(), rollback=AsyncMock())
+    db = SimpleNamespace(commit=AsyncMock(), rollback=AsyncMock(), refresh=AsyncMock())
     player = _player()
 
     async def sync_with_failure(*_args: object, **kwargs: object) -> int:
