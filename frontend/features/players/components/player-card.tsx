@@ -5,7 +5,6 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Clock, Loader2, RefreshCw } from "lucide-react";
 
-import { unwrap, validatedGet } from "@/lib/core/api";
 import { useDDragonVersion } from "@/lib/core/data-dragon-context";
 import {
   getProfileIconFallbackUrl,
@@ -13,8 +12,9 @@ import {
 } from "@/lib/core/data-dragon";
 import { getPlatformDisplayName } from "@/lib/core/platform-utils";
 import { oldestCompleteFreshness } from "@/lib/core/relative-time";
-import { MatchStatsResponseSchema, Player } from "@/lib/core/schemas";
+import { Player } from "@/lib/core/schemas";
 import { useRelativeTime } from "@/lib/core/use-relative-time";
+import { playerStatsQueryOptions } from "@/features/players/player-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -55,19 +55,7 @@ export function PlayerCard({ player, onRefreshAll }: PlayerCardProps) {
     player.puuid,
   );
 
-  const { data: stats } = useQuery({
-    queryKey: ["player-stats", player.puuid, 420],
-    queryFn: async () => {
-      return unwrap(
-        await validatedGet(
-          MatchStatsResponseSchema,
-          `/matches/player/${player.puuid}/stats`,
-          { queue: 420 },
-        ),
-      );
-    },
-    retry: false,
-  });
+  const { data: stats } = useQuery(playerStatsQueryOptions(player.puuid));
 
   const leagueColors = league ? getRankColors(league.tier) : null;
 
