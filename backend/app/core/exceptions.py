@@ -22,14 +22,3 @@ class ServiceException(Exception):
         if self.service and self.operation:
             return f"[{self.service}.{self.operation}] {self.message}"
         return self.message
-
-
-class PlayerServiceError(ServiceException):
-    """Exception for player operations."""
-
-    def __init__(self, message: str, operation: str | None = None):
-        super().__init__(
-            message=message,
-            service="PlayerService",
-            operation=operation,
-        )

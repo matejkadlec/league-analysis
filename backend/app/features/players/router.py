@@ -6,7 +6,7 @@ import structlog
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 
 from app.core.dependencies import get_riot_client
-from app.core.rate_limiter import rate_limit
+from app.core.http_rate_limit import rate_limit
 from app.core.riot_api.client import RiotAPIClient
 from app.core.riot_api.constants import Platform
 from app.core.riot_api.errors import (
