@@ -71,7 +71,7 @@ class JobConfiguration(Base):
     job_type: Mapped[JobType] = mapped_column(
         ENUM(JobType, name="job_type_enum", create_type=False, schema="jobs"),
         nullable=False,
-        index=True,
+        # Led by `idx_job_config_type_active`.
         comment="Type of job (match_fetcher, player_updater)",
     )
 
@@ -148,7 +148,8 @@ class JobExecution(Base):
         Integer,
         ForeignKey("jobs.job_configurations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
+        # Led by `idx_job_execution_config_started`, which also serves the
+        # cascade delete's lookup.
         comment="Reference to the job configuration",
     )
 
@@ -173,7 +174,7 @@ class JobExecution(Base):
         ENUM(JobStatus, name="job_status_enum", create_type=False, schema="jobs"),
         nullable=False,
         default=JobStatus.PENDING,
-        index=True,
+        # Led by `idx_job_execution_status_started`.
         comment="Current status of job execution",
     )
 

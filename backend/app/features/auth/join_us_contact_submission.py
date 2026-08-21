@@ -26,7 +26,8 @@ class JoinUsContactSubmission(Base):
     remote_ip: Mapped[str] = mapped_column(
         String(45),
         nullable=False,
-        index=True,
+        # Led by `idx_join_us_contact_submissions_ip_time`; a second index on
+        # the same column would serve nothing that one does not.
         comment="Request source IP address",
     )
     subject: Mapped[str] = mapped_column(

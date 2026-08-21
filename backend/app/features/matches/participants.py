@@ -81,7 +81,8 @@ class MatchParticipant(Base):
     team_id: Mapped[int] = mapped_column(
         Integer,
         nullable=False,
-        index=True,
+        # Led by `idx_participants_team_win`, as `champion_id` below is led by
+        # `idx_participants_champion_win`.
         comment="100 (Blue) or 200 (Red)",
     )
 
@@ -90,7 +91,7 @@ class MatchParticipant(Base):
     )
 
     # Champion
-    champion_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    champion_id: Mapped[int] = mapped_column(Integer, nullable=False)
 
     champion_name: Mapped[str] = mapped_column(String(32), nullable=False)
 
