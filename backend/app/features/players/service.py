@@ -103,7 +103,25 @@ class PlayerService:
         return set(result.scalars().all())
 
     async def _update_global_tracking_flag(self, puuid: str) -> bool:
-        """Update core.players.is_tracked based on all user mappings."""
+        """Update core.players.is_tracked based on all user mappings.
+
+        Locks the player row first: this counts and then writes what it
+        counted, and two users touching one PUUID at once used to interleave
+        there. A's untrack counted 0 without seeing B's uncommitted track,
+        waited on B's row lock, and then wrote its stale `false` last -- so
+        the mapping table said B tracks the player while `is_tracked` said
+        nobody did, and `get_globally_tracked_players` is the allowlist both
+        writer jobs load. B's UI reads the mapping table, so it kept showing
+        the player as tracked while its matches and rank silently stopped.
+        Nothing self-heals that; only another track or untrack clears it.
+
+        A correlated `UPDATE ... SET is_tracked = EXISTS(...)` does not fix
+        it: under READ COMMITTED the subquery's snapshot predates the lock
+        wait, so the loser rewrites the same stale value.
+        """
+        await self.db.execute(
+            select(Player.puuid).where(Player.puuid == puuid).with_for_update()
+        )
         count_stmt = (
             select(func.count())
             .select_from(UserTrackedPlayer)
