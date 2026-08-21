@@ -31,13 +31,6 @@ const currentPlayer = {
 vi.mock("@/features/players/context/player-context", () => ({
   usePlayerContext: () => ({
     currentPlayer,
-    trackedPlayers: [
-      currentPlayer,
-      { ...currentPlayer, puuid: "recent-1", game_name: "Recent One" },
-      { ...currentPlayer, puuid: "recent-2", game_name: "Recent Two" },
-      { ...currentPlayer, puuid: "recent-3", game_name: "Recent Three" },
-      { ...currentPlayer, puuid: "recent-4", game_name: "Hidden Four" },
-    ],
     selectPlayer,
     isLoading: false,
   }),

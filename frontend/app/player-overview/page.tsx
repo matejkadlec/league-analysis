@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 
 import { PlayerCardSkeleton } from "@/components/loading-skeleton";
 import {
@@ -13,7 +13,6 @@ import { ProtectedRoute } from "@/features/auth";
 import {
   PlayerCard,
   SelectPlayerCard,
-  playerQueryKey,
   playerQueryOptions,
   usePlayerContext,
 } from "@/features/players";
@@ -51,7 +50,6 @@ function PlayerOverviewSkeleton() {
 }
 
 function PlayerOverviewContent({ puuid }: { puuid: string }) {
-  const queryClient = useQueryClient();
   const {
     data: player,
     isLoading: isPlayerLoading,
@@ -82,16 +80,6 @@ function PlayerOverviewContent({ puuid }: { puuid: string }) {
       ),
   });
 
-  const handleRefreshAll = () => {
-    void queryClient.invalidateQueries({ queryKey: playerQueryKey(puuid) });
-    void queryClient.invalidateQueries({ queryKey: ["champion-stats", puuid] });
-    void queryClient.invalidateQueries({ queryKey: ["lane-stats", puuid] });
-    void queryClient.invalidateQueries({ queryKey: ["recent-stats", puuid] });
-    void queryClient.invalidateQueries({ queryKey: ["overall-stats", puuid] });
-    void queryClient.invalidateQueries({ queryKey: ["player-league", puuid] });
-    void queryClient.invalidateQueries({ queryKey: ["player-stats", puuid] });
-  };
-
   if (playerError) {
     return (
       <Card className="p-6">
@@ -108,7 +96,7 @@ function PlayerOverviewContent({ puuid }: { puuid: string }) {
         {isPlayerLoading ? (
           <PlayerCardSkeleton />
         ) : player ? (
-          <PlayerCard player={player} onRefreshAll={handleRefreshAll} />
+          <PlayerCard player={player} />
         ) : null}
         {player && (
           <RecentPerformanceCard

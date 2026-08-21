@@ -727,7 +727,7 @@ class PlayerService:
         return responses
 
     async def get_player_context(self, user_id: int):
-        """Return the authenticated user's current and recent tracked players."""
+        """Return the authenticated user's current player."""
         from .schemas import PlayerContextResponse
 
         settings = await self.db.scalar(
@@ -749,12 +749,8 @@ class PlayerService:
                     current_model.puuid, user_id
                 )
 
-        tracked_players = await self.get_tracked_players(user_id)
         await self.db.commit()
-        return PlayerContextResponse(
-            current_player=current_player,
-            tracked_players=tracked_players,
-        )
+        return PlayerContextResponse(current_player=current_player)
 
     async def set_current_player(self, user_id: int, puuid: str | None):
         """Persist one user's default player and update tracked recency."""

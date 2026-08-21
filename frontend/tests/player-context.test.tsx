@@ -39,6 +39,7 @@ import {
   PlayerContextProvider,
   usePlayerContext,
 } from "@/features/players/context/player-context";
+import type { PlayerContext } from "@/lib/core/schemas";
 import { renderHookWithQueryClient } from "./render-support";
 
 function player(puuid: string, name: string) {
@@ -132,13 +133,18 @@ describe("which player the app thinks you are looking at", () => {
     // fixture that lets it settle passes against reading either one.
     holdThePut();
     search.current = "puuid=url-puuid";
-    const { result } = renderContext();
+    const { result, queryClient } = renderContext();
 
     await waitFor(() =>
       expect(result.current.currentPlayer?.puuid).toBe("url-puuid"),
     );
-    // And the saved player really is still someone else at this point.
-    expect(result.current.trackedPlayers[0]?.puuid).toBe("saved-puuid");
+    // And the saved player really is still someone else at this point --
+    // read from the context query's own cache entry, because the hook
+    // deliberately exposes only the resolved current player.
+    expect(
+      queryClient.getQueryData<PlayerContext>(["player-context", 1])
+        ?.current_player?.puuid,
+    ).toBe("saved-puuid");
   });
 
   it("falls back to the saved player when the URL names nobody", async () => {
@@ -201,10 +207,14 @@ describe("which player the app thinks you are looking at", () => {
     search.current = "puuid=url-puuid";
     const { result } = renderContext();
 
-    // Wait for the context query to have *landed*, not merely to have been
+    // Wait for both queries to have *landed*, not merely to have been
     // issued: the effect cannot run before `savedPlayer` exists, so asserting
     // on the first request only proves the test was quicker than the fetch.
-    await waitFor(() => expect(result.current.trackedPlayers).toHaveLength(1));
+    // `isLoading` ORs in the context query's, so false is that proof. Not
+    // "the PUT was called" -- that fires as soon as the URL player resolves,
+    // while the context query is still undefined, which would be the race
+    // this wait exists to avoid.
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
     expect(replace).not.toHaveBeenCalled();
   });
 
@@ -303,7 +313,6 @@ describe("whether the app says it is still loading", () => {
     await waitFor(() => expect(result.current.isLoading).toBe(false));
     expect(validatedGet).not.toHaveBeenCalled();
     expect(result.current.currentPlayer).toBeNull();
-    expect(result.current.trackedPlayers).toEqual([]);
   });
 });
 
