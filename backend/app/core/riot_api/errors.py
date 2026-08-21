@@ -1,6 +1,6 @@
 """Custom error classes for Riot API client."""
 
-from typing import Any, override
+from typing import override
 
 
 class RiotAPIError(Exception):
@@ -10,10 +10,7 @@ class RiotAPIError(Exception):
         self,
         message: str,
         status_code: int | None = None,
-        response_data: dict[str, Any] | None = None,
         retry_after: float | None = None,
-        app_rate_limit: str | None = None,
-        method_rate_limit: str | None = None,
     ) -> None:
         """
         Initialize RiotAPIError.
@@ -21,17 +18,11 @@ class RiotAPIError(Exception):
         Args:
             message: Error message
             status_code: HTTP status code (400, 401, 403, 404, 429, 503, etc.)
-            response_data: Raw response data from API
             retry_after: Seconds to wait before retry (for 429 errors)
-            app_rate_limit: App-level rate limit header (for 429 errors)
-            method_rate_limit: Method-level rate limit header (for 429 errors)
         """
         super().__init__(message)
         self.status_code: int | None = status_code
-        self.response_data: dict[str, Any] = response_data or {}
         self.retry_after: float | None = retry_after
-        self.app_rate_limit: str | None = app_rate_limit
-        self.method_rate_limit: str | None = method_rate_limit
         self.message: str = message
 
     @override

@@ -350,6 +350,19 @@ class SmurfBoostDetectionService:
             return None, concurrent
         return now, None
 
+    async def _terminal(self, puuid: str, created_at: datetime, **values: Any) -> None:
+        """Write one run's terminal state, guarded so it is never revived."""
+        await self.db.execute(
+            update(SmurfBoostAnalysis)
+            .where(
+                SmurfBoostAnalysis.puuid == puuid,
+                SmurfBoostAnalysis.created_at == created_at,
+                SmurfBoostAnalysis.status.in_(ACTIVE_STATUSES),
+            )
+            .values(completed_at=datetime.now(UTC), **values)
+        )
+        await self.db.commit()
+
     async def _finalize(
         self,
         puuid: str,
@@ -357,49 +370,29 @@ class SmurfBoostDetectionService:
         result: DetectionResult,
         latest_match_id: str | None,
     ) -> None:
-        """Write the completed run, guarded so a terminal row is never revived."""
-        await self.db.execute(
-            update(SmurfBoostAnalysis)
-            .where(
-                and_(
-                    SmurfBoostAnalysis.puuid == puuid,
-                    SmurfBoostAnalysis.created_at == created_at,
-                    SmurfBoostAnalysis.status.in_(ACTIVE_STATUSES),
-                )
-            )
-            .values(
-                status="completed",
-                results=_serialize(result),
-                eligible_games=result.eligible_games,
-                latest_match_id=latest_match_id,
-                completed_at=datetime.now(UTC),
-                error_code=None,
-                error_message=None,
-            )
+        """Write the completed run."""
+        await self._terminal(
+            puuid,
+            created_at,
+            status="completed",
+            results=_serialize(result),
+            eligible_games=result.eligible_games,
+            latest_match_id=latest_match_id,
+            error_code=None,
+            error_message=None,
         )
-        await self.db.commit()
 
     async def _fail(
         self, puuid: str, created_at: datetime, code: str, message: str
     ) -> None:
         """Record a terminal failure without leaking internal detail."""
-        await self.db.execute(
-            update(SmurfBoostAnalysis)
-            .where(
-                and_(
-                    SmurfBoostAnalysis.puuid == puuid,
-                    SmurfBoostAnalysis.created_at == created_at,
-                    SmurfBoostAnalysis.status.in_(ACTIVE_STATUSES),
-                )
-            )
-            .values(
-                status="failed",
-                error_code=code,
-                error_message=message,
-                completed_at=datetime.now(UTC),
-            )
+        await self._terminal(
+            puuid,
+            created_at,
+            status="failed",
+            error_code=code,
+            error_message=message,
         )
-        await self.db.commit()
 
     async def _reload(
         self, puuid: str, created_at: datetime

@@ -362,35 +362,24 @@ _LEGACY_SETTING_RENAMES: dict[CardId, dict[str, str]] = {
     CardId.SMURF_BOOST_DETECTION: {},
 }
 
-_LEGACY_INTEGER_SETTING_FIELDS = frozenset(
-    {
-        "minimum_games",
-        "recent_match_count",
-        "recent_window_size",
-        "baseline_window_size",
-        "a3_minimum_novel_games",
-        "a4_summoner_level_gate",
-    }
-)
-_LEGACY_NUMBER_SETTING_FIELDS = frozenset(
-    {
-        "minimum_win_rate",
-        "minimum_kda",
-        "win_rate_trend_delta",
-        "relative_metric_trend_delta",
-        "a1_step_change_threshold",
-        "a2_win_rate_surge_threshold",
-        "a3_novel_champion_threshold",
-        "a4_performance_threshold",
-        "b1_win_rate_delta_threshold",
-        "b1_composite_flat_ceiling",
-        "b2_consistency_shift_threshold",
-        "b3_bimodality_threshold",
-        "b3_tail_fraction",
-        "b4_high_rate_floor",
-        "b4_drop_threshold",
-    }
-)
+
+def _write_fields_annotated(annotation: type) -> frozenset[str]:
+    """Every write-contract field declared with exactly this scalar type.
+
+    Listing these by hand meant a new threshold had to be remembered in two
+    places, and the one that gets forgotten is this one — a missed name here
+    is not a validation error, it is a legacy value that silently passes.
+    """
+    return frozenset(
+        name
+        for model in _CARD_SETTINGS_WRITE_MODELS.values()
+        for name, info in model.model_fields.items()
+        if info.annotation is annotation
+    )
+
+
+_LEGACY_INTEGER_SETTING_FIELDS = _write_fields_annotated(int)
+_LEGACY_NUMBER_SETTING_FIELDS = _write_fields_annotated(float)
 
 
 def _is_compatible_legacy_setting_value(field_name: str, value: object) -> bool:

@@ -39,7 +39,7 @@ if os.getenv("ENVIRONMENT", "").lower() != "test":
         os.environ.pop(configuration_name, None)
     load_dotenv(PROJECT_ROOT / ".env", override=False)
 
-from app.core.config import get_settings  # noqa: E402
+from app.core.config import get_global_settings  # noqa: E402
 from app.core.database import db_manager  # noqa: E402
 from app.features.auth.models import User  # noqa: E402
 from app.features.auth.service import AuthService  # noqa: E402
@@ -100,7 +100,7 @@ def read_password(password_stdin: bool) -> str:
 
 async def verify_local_target(database: str) -> None:
     """Prove this process is attached to the exact loopback development DB."""
-    settings = get_settings()
+    settings = get_global_settings()
     if settings.environment != "dev":
         raise AdminReconciliationRefusal("ENVIRONMENT must be dev")
     if settings.postgres_db != database:

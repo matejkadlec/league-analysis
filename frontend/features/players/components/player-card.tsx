@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Clock, Loader2, RefreshCw, User } from "lucide-react";
+import { Clock, Loader2, RefreshCw } from "lucide-react";
 
 import { unwrap, validatedGet } from "@/lib/core/api";
 import { useDDragonVersion } from "@/lib/core/data-dragon-context";
@@ -42,13 +42,11 @@ export function PlayerCard({ player, onRefreshAll }: PlayerCardProps) {
     player.match_synced_at,
   ]);
   const relativeFreshness = useRelativeTime(combinedFreshness);
-  const profileIconId =
-    typeof player.profile_icon_id === "number" ? player.profile_icon_id : 29;
-  const profileIconKey = `${player.puuid}:${profileIconId}`;
+  const profileIconKey = `${player.puuid}:${player.profile_icon_id}`;
   const hasFailedProfileIcon = failedProfileIconKey === profileIconKey;
   const profileIconSrc = hasFailedProfileIcon
-    ? getProfileIconFallbackUrl(profileIconId, ddragonVersion)
-    : getProfileIconUrl(profileIconId, ddragonVersion);
+    ? getProfileIconFallbackUrl(ddragonVersion)
+    : getProfileIconUrl(player.profile_icon_id, ddragonVersion);
   const { isUpdating, startSync } = usePlayerSyncRun(player.puuid, {
     onCompleted: onRefreshAll,
   });
@@ -81,23 +79,17 @@ export function PlayerCard({ player, onRefreshAll }: PlayerCardProps) {
             className="relative h-18 w-18 rounded-full overflow-hidden bg-primary/10"
             style={{ height: "72px", width: "72px" }}
           >
-            {player.profile_icon_id ? (
-              <Image
-                key={profileIconKey}
-                src={profileIconSrc}
-                alt="Profile Icon"
-                fill
-                className="object-cover"
-                sizes="72px"
-                onError={() => {
-                  setFailedProfileIconKey(profileIconKey);
-                }}
-              />
-            ) : (
-              <div className="flex h-full w-full items-center justify-center">
-                <User className="h-9 w-9 text-primary" />
-              </div>
-            )}
+            <Image
+              key={profileIconKey}
+              src={profileIconSrc}
+              alt="Profile Icon"
+              fill
+              className="object-cover"
+              sizes="72px"
+              onError={() => {
+                setFailedProfileIconKey(profileIconKey);
+              }}
+            />
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between gap-2">
@@ -152,7 +144,7 @@ export function PlayerCard({ player, onRefreshAll }: PlayerCardProps) {
               <span>•</span>
               <TrackPlayerButton
                 puuid={player.puuid}
-                playerName={player.game_name ?? undefined}
+                playerName={player.game_name}
                 variant="ghost"
                 size="sm"
               />

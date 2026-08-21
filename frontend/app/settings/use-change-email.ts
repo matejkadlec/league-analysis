@@ -40,7 +40,7 @@ export function useChangeEmail() {
     emailChangeLockedUntil.getTime() > lockCheckTimestamp;
 
   useEffect(() => {
-    if (!isEmailChangeLocked || emailChangeLockedUntil === null) {
+    if (!isEmailChangeLocked) {
       return;
     }
 
@@ -122,7 +122,7 @@ export function useChangeEmail() {
         detail?.code === "EMAIL_CHANGE_LOCKED" ||
         detail?.code === "EMAIL_CHANGE_TOO_MANY_ATTEMPTS"
       ) {
-        applyEmailLock(detail?.locked_until);
+        applyEmailLock(detail.locked_until);
         return;
       }
 
@@ -171,7 +171,7 @@ export function useChangeEmail() {
         detail?.code === "EMAIL_CHANGE_TOO_MANY_ATTEMPTS" ||
         detail?.code === "EMAIL_CHANGE_LOCKED"
       ) {
-        applyEmailLock(detail?.locked_until);
+        applyEmailLock(detail.locked_until);
         return;
       }
 

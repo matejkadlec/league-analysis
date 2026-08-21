@@ -113,7 +113,7 @@ Three choices are not obvious from the manifests:
 
 ## Local Environment
 
-The supported local setup is WSL with PostgreSQL 18.4. The repository-root
+The supported local setup is WSL with PostgreSQL 18. The repository-root
 `.env` provides database and runtime configuration and is authoritative for
 the normal `./run.sh` local launch. The launcher clears inherited backend
 configuration names first, preventing WSL values from another worktree (such
@@ -164,7 +164,7 @@ isolated disposable stack and never reads the root `.env` or native database.
 The repository owns production Dockerfiles, `compose.production.yml`, the
 locked deployment script, and the `pi5ram16` GitHub Actions workflow. The stack
 exposes the Next.js frontend on host port `8097`, FastAPI on `8098`, and keeps
-PostgreSQL 18.4 internal-only. A one-shot migration service completes before
+PostgreSQL 18 internal-only. A one-shot migration service completes before
 backend startup; backend readiness includes a database round trip, and
 frontend startup waits for that readiness.
 

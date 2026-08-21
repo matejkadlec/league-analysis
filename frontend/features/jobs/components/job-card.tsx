@@ -23,6 +23,7 @@ import {
   FlaskConical,
 } from "lucide-react";
 
+import { ExecutionStatusBadge } from "./execution-status-badge";
 import { JobCardHistory } from "./job-card-history";
 import { JobCardTestDialog } from "./job-card-test-dialog";
 import {
@@ -154,18 +155,10 @@ export function JobCard({ job, onExecutionClick }: JobCardProps) {
                 <p className="font-medium">Last Execution</p>
                 {lastExecution ? (
                   <div className="flex items-center gap-2">
-                    <Badge
-                      variant={
-                        lastExecution.status === "SUCCESS"
-                          ? "default"
-                          : lastExecution.status === "FAILED"
-                            ? "destructive"
-                            : "secondary"
-                      }
+                    <ExecutionStatusBadge
+                      status={lastExecution.status}
                       className="text-xs"
-                    >
-                      {lastExecution.status}
-                    </Badge>
+                    />
                     <span className="text-muted-foreground">
                       {formatLastRun(lastExecution.started_at)}
                     </span>

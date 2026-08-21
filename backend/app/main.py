@@ -2,10 +2,9 @@
 
 import logging
 from contextlib import asynccontextmanager
-from typing import Any
 
 import structlog
-from fastapi import FastAPI, Response, status
+from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from slowapi import _rate_limit_exceeded_handler
@@ -14,8 +13,9 @@ from sqlalchemy import text
 from starlette.middleware.body_limit import RequestBodyLimitMiddleware
 from structlog import contextvars as structlog_contextvars
 
-from app.core import get_global_settings, get_riot_api_key
+from app.core import get_global_settings
 from app.core.database import db_manager
+from app.core.http_errors import SERVICE_ERROR_DETAIL
 from app.core.rate_limiter import limiter
 from app.core.request_logging import RequestLoggingMiddleware
 from app.features.auth import auth_router
@@ -63,37 +63,6 @@ structlog.configure(
 )
 
 
-async def _validate_api_key_configuration() -> None:
-    """Validate and log Riot API key configuration status."""
-    try:
-        async with db_manager.get_session() as db:
-            api_key = await get_riot_api_key(db)
-            if not api_key or api_key == "your_riot_api_key_here":
-                logger.warning(
-                    "riot_api_key_not_configured",
-                    hint="Get your key from https://developer.riotgames.com",
-                )
-            elif api_key.startswith("RGAPI-"):
-                logger.info("riot_api_key_configured", key_type="development")
-                logger.warning(
-                    "riot_api_key_development_expiry_warning",
-                    hint="Update via web UI at /settings",
-                )
-            else:
-                logger.info("riot_api_key_configured", key_type="production")
-    except ValueError:
-        logger.warning(
-            "riot_api_key_not_configured",
-            hint="Get your key from https://developer.riotgames.com",
-        )
-    except Exception as e:
-        logger.warning(
-            "riot_api_key_validation_failed",
-            error=str(e),
-            error_type=type(e).__name__,
-        )
-
-
 async def _start_scheduler_safely() -> None:
     """Start job scheduler with error handling.
 
@@ -138,7 +107,6 @@ async def _shutdown_scheduler_safely() -> None:
 async def lifespan(app: FastAPI):
     """Application lifespan manager."""
     logger.info("Starting up League Analysis Backend")
-    await _validate_api_key_configuration()
     await _start_scheduler_safely()
     yield
     logger.info("Shutting down League Analysis Backend")
@@ -146,7 +114,7 @@ async def lifespan(app: FastAPI):
 
 
 tags_metadata = [
-    {"name": "auth", "description": "Authentication and user management."},
+    {"name": "authentication", "description": "Authentication and user management."},
     {"name": "players", "description": "Player search and management."},
     {"name": "matches", "description": "Match history and analysis."},
     {"name": "playstyle-analysis", "description": "Playstyle analysis algorithms."},
@@ -183,6 +151,17 @@ app = FastAPI(
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
 
+
+@app.exception_handler(Exception)
+async def unhandled_exception(_request: Request, _exc: Exception) -> JSONResponse:
+    """Answer one client-safe body for every error a route did not map.
+
+    Routes used to repeat this tail themselves; the exception still reaches
+    the request-logging middleware, which records it with its traceback.
+    """
+    return JSONResponse(status_code=500, content={"detail": SERVICE_ERROR_DETAIL})
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins_list,
@@ -203,30 +182,17 @@ app.add_middleware(RequestBodyLimitMiddleware, max_body_size=1024 * 1024)
 app.add_middleware(RequestLoggingMiddleware)
 
 app.include_router(auth_router, prefix="/api/v1/auth", tags=["authentication"])
-app.include_router(players_router, prefix="/api/v1", tags=["players"])
-app.include_router(matches_router, prefix="/api/v1", tags=["matches"])
-app.include_router(
-    playstyle_analysis_router, prefix="/api/v1", tags=["playstyle-analysis"]
-)
-app.include_router(jobs_router, prefix="/api/v1", tags=["jobs"])
-app.include_router(settings_router, prefix="/api/v1", tags=["settings"])
-app.include_router(matchmaking_router, prefix="/api/v1", tags=["matchmaking-analysis"])
-app.include_router(smurf_boost_router, prefix="/api/v1", tags=["smurf-boost-detection"])
-
-
-@app.get("/health", tags=["health"])
-async def health_check() -> dict[str, Any]:
-    """Health check endpoint for monitoring and load balancers."""
-    return {
-        "status": "healthy",
-        "message": "Application is running",
-        "version": "0.1.0",
-        "debug": settings.debug,
-    }
+app.include_router(players_router, prefix="/api/v1")
+app.include_router(matches_router, prefix="/api/v1")
+app.include_router(playstyle_analysis_router, prefix="/api/v1")
+app.include_router(jobs_router, prefix="/api/v1")
+app.include_router(settings_router, prefix="/api/v1")
+app.include_router(matchmaking_router, prefix="/api/v1")
+app.include_router(smurf_boost_router, prefix="/api/v1")
 
 
 @app.get("/health/ready", tags=["health"], response_model=None)
-async def readiness_check(response: Response) -> dict[str, str] | JSONResponse:
+async def readiness_check() -> dict[str, str] | JSONResponse:
     """Report readiness only after a database round trip succeeds."""
     try:
         async with db_manager.get_session() as db:
@@ -241,7 +207,6 @@ async def readiness_check(response: Response) -> dict[str, str] | JSONResponse:
             content={"status": "unavailable", "database": "unavailable"},
         )
 
-    response.status_code = status.HTTP_200_OK
     return {"status": "ready", "database": "ready"}
 
 

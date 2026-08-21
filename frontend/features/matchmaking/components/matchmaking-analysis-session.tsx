@@ -202,7 +202,7 @@ export function MatchmakingAnalysisSession({
           void finalizeCompletion();
         }, 750);
       }
-    } else if (displayPhase === "completing-slow") {
+    } else {
       toast.success("Matchmaking analysis finished", {
         description: "The latest results and history are ready.",
       });

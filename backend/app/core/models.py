@@ -45,12 +45,6 @@ type_annotation_map = {
     float: Numeric(),
     Decimal: Numeric(),
     datetime: SQLDateTime(),
-    str | None: String(),
-    int | None: Integer(),
-    bool | None: Boolean(),
-    float | None: Numeric(),
-    Decimal | None: Numeric(),
-    datetime | None: SQLDateTime(),
 }
 
 

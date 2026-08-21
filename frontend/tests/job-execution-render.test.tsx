@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import { JobExecutionApiCalls } from "@/features/jobs/components/job-execution-api-calls";
 import { JobExecutionLogs } from "@/features/jobs/components/job-execution-logs";
-import { type APICallEntry } from "@/features/jobs/components/job-execution-format";
+import type { JobExecutionApiCall } from "@/lib/core/schemas";
 
 // The two renderers behind a job execution's expanded view. The format
 // helpers they call are pinned by job-execution-format tests; what lives
@@ -15,18 +15,19 @@ import { type APICallEntry } from "@/features/jobs/components/job-execution-form
 
 const STARTED = "2026-08-19T10:00:00Z";
 
-function call(overrides: Partial<APICallEntry> = {}): APICallEntry {
+function call(overrides: Partial<JobExecutionApiCall> = {}): JobExecutionApiCall {
   return {
     endpoint: "/lol/match/v5/matches",
     region: "europe",
     count: 1,
     first_timestamp: "2026-08-19T10:00:05Z",
+    last_timestamp: "2026-08-19T10:00:05Z",
     ...overrides,
   };
 }
 
 function renderCalls(
-  calls: APICallEntry[],
+  calls: JobExecutionApiCall[],
   { completedAt = null as string | null } = {},
 ) {
   return render(

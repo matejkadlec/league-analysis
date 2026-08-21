@@ -85,12 +85,8 @@ const MATCH: MatchWithPlayerData = {
   surrender: false,
   game_result: "Win",
   fully_analyzed: true,
-  processing_error: null,
   created_at: "2026-03-04T00:00:00Z",
   updated_at: "2026-03-04T00:00:00Z",
-  game_start_datetime: null,
-  game_end_datetime: null,
-  patch_version: null,
   player_participant: PARTICIPANT,
   lane_opponent: OPPONENT,
   lp_change: 18,
@@ -278,14 +274,16 @@ describe("a match history row", () => {
     expect(screen.getByLabelText("LP change unavailable")).toBeTruthy();
   });
 
-  it("says Perfect rather than a number when the player did not die", () => {
-    // The backend sends `kda: null` for a deathless game rather than a
-    // division by zero. `kda?.toFixed(2)` on null is `undefined`, so without
-    // the `?? "Perfect"` the row renders the literal string "undefined KDA"
-    // on the best game the player has.
-    renderRow({ player_participant: { ...PARTICIPANT, kda: null } });
+  it("shows a zero KDA as 0.00, not as a perfect game", () => {
+    // `kda` is a generated column: 0 kills and 0 assists is 0.00, and 1,715
+    // production rows are exactly that. The row used to read it as falsey and
+    // print "Perfect" -- the best possible game -- on the worst ones.
+    renderRow({ player_participant: { ...PARTICIPANT, kda: 0 } });
 
-    expect(screen.getByText("Perfect")).toBeTruthy();
+    expect(
+      screen.getAllByText(/KDA$/).map((element) => element.textContent),
+    ).toContain("0.00 KDA");
+    expect(screen.queryByText("Perfect")).toBeNull();
   });
 
   // Both lineups are rendered through the same helper but from two separate

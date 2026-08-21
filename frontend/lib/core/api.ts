@@ -68,16 +68,6 @@ export function unwrapOr404<T, F>(result: ApiResponse<T>, fallback: F): T | F {
 // Standard error code returned by backend when Riot API key is invalid
 const RIOT_API_KEY_INVALID_CODE = "RIOT_API_KEY_INVALID";
 
-export type RiotApiKeySignal = "refresh" | null;
-
-export function getRiotApiKeySignal(responseData: unknown): RiotApiKeySignal {
-  const data =
-    typeof responseData === "object" && responseData !== null
-      ? (responseData as Record<string, unknown>)
-      : null;
-  return data?.error_code === RIOT_API_KEY_INVALID_CODE ? "refresh" : null;
-}
-
 function isApiKeyError(response: AxiosResponse | undefined): boolean {
   if (!response) return false;
   const detail = response.data?.detail;
@@ -91,8 +81,10 @@ function isApiKeyError(response: AxiosResponse | undefined): boolean {
 
 api.interceptors.response.use(
   (response: AxiosResponse) => {
-    const apiKeySignal = getRiotApiKeySignal(response.data);
-    if (apiKeySignal === "refresh") {
+    if (
+      (response.data as { error_code?: unknown } | null)?.error_code ===
+      RIOT_API_KEY_INVALID_CODE
+    ) {
       notifyRiotCredentialHealthUpdated();
     }
     return response;

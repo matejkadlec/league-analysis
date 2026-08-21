@@ -8,7 +8,6 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.http_errors import log_and_raise_http
 from app.core.rate_limiter import rate_limit
 from app.features.auth.dependencies import get_current_active_user
 from app.features.auth.models import User
@@ -90,8 +89,6 @@ async def analyze_player(
     try:
         thresholds = await _viewer_thresholds(db, current_user.id)
         return await service.run_analysis(payload.puuid, thresholds)
-    except HTTPException:
-        raise
     except SmurfBoostDetectionError as error:
         logger.warning(
             "smurf_boost_analysis_rejected",
@@ -102,13 +99,6 @@ async def analyze_player(
             status_code=ERROR_STATUS_CODES.get(error.code, 422),
             detail=error.client_message,
         ) from error
-    except Exception as error:
-        log_and_raise_http(
-            logger,
-            error,
-            "smurf_boost_analysis_start_failed",
-            error_type=type(error).__name__,
-        )
 
 
 @router.get("/player/{puuid}", response_model=SmurfBoostAnalysisResponse)

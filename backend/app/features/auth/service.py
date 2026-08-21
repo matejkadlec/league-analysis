@@ -22,7 +22,7 @@ from fastapi.security import OAuth2PasswordBearer
 from jwt import ExpiredSignatureError, InvalidTokenError
 from passlib.context import CryptContext
 from sqlalchemy import delete, func, or_, select
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_global_settings
@@ -555,7 +555,6 @@ class AuthService:
         now = datetime.now(UTC)
         user.failed_login_attempts += 1
         user.last_failed_login = now
-        user.updated_at = now
 
         if user.failed_login_attempts >= self.settings.auth_lockout_max_attempts:
             lock_minutes = self.settings.auth_lockout_minutes
@@ -581,7 +580,6 @@ class AuthService:
 
         user.locked_until = None
         user.failed_login_attempts = 0
-        user.updated_at = now
         await self.db.commit()
 
     def create_access_token(
@@ -871,31 +869,22 @@ class AuthService:
         if expires_at <= datetime.now(UTC):
             return
 
-        existing = await self.db.execute(
-            select(RevokedAccessToken).where(RevokedAccessToken.token_id == token_id)
-        )
-        if existing.scalar_one_or_none() is not None:
-            return
-
-        self.db.add(
-            RevokedAccessToken(
+        # Two logouts can carry the same token -- two tabs, or the context's
+        # logout racing the one token-manager sends after a rotation it could
+        # not keep. `token_id` is unique, so let the database settle it: the
+        # loser is asking for work the winner already did, and this route's
+        # whole point is that it always succeeds.
+        await self.db.execute(
+            insert(RevokedAccessToken)
+            .values(
                 user_id=user_id,
                 token_id=token_id,
                 expires_at=expires_at,
                 reason=reason,
             )
+            .on_conflict_do_nothing(index_elements=[RevokedAccessToken.token_id])
         )
-        try:
-            await self.db.commit()
-        except IntegrityError:
-            # `token_id` is unique and the check above is not atomic, so two
-            # logouts carrying the same token -- two tabs, or the context's
-            # logout racing the one token-manager sends after a rotation it
-            # could not keep -- can both reach this insert. The loser would
-            # answer 500 on a route whose whole point is that it always
-            # succeeds, and it lost only because the winner already did the
-            # work it was asking for.
-            await self.db.rollback()
+        await self.db.commit()
 
     async def is_access_token_revoked(self, token_id: str) -> bool:
         """Return True when token ID exists in blacklist."""
@@ -1022,7 +1011,6 @@ class AuthService:
         email_change_request.code_expires_at = expires_at
         email_change_request.failed_attempts = 0
         email_change_request.locked_until = None
-        email_change_request.updated_at = now
 
         await self.db.commit()
 
@@ -1074,7 +1062,6 @@ class AuthService:
         email_change_request.verification_code_hash = None
         email_change_request.code_expires_at = None
         email_change_request.failed_attempts = 0
-        email_change_request.updated_at = now
         await self.db.commit()
         raise EmailVerificationCodeExpiredError
 
@@ -1087,7 +1074,6 @@ class AuthService:
             0,
             EMAIL_CHANGE_MAX_FAILED_ATTEMPTS - email_change_request.failed_attempts,
         )
-        email_change_request.updated_at = now
 
         if email_change_request.failed_attempts >= EMAIL_CHANGE_MAX_FAILED_ATTEMPTS:
             locked_until = now + timedelta(minutes=EMAIL_CHANGE_LOCK_MINUTES)
@@ -1117,14 +1103,12 @@ class AuthService:
         current_user.email = pending_email
         current_user.email_verified = True
         current_user.email_verified_at = now
-        current_user.updated_at = now
 
         email_change_request.pending_email = None
         email_change_request.verification_code_hash = None
         email_change_request.code_expires_at = None
         email_change_request.failed_attempts = 0
         email_change_request.locked_until = None
-        email_change_request.updated_at = now
 
         await self.db.commit()
         await self.db.refresh(current_user)
@@ -1171,9 +1155,7 @@ class AuthService:
         if not self.verify_password(current_password, current_user.password_hash):
             raise InvalidCurrentPasswordError
 
-        now = datetime.now(UTC)
         current_user.password_hash = self.get_password_hash(new_password)
-        current_user.updated_at = now
         await self.db.commit()
 
         logger.info("password_changed", user_id=current_user.id)
@@ -1186,7 +1168,6 @@ class AuthService:
             user.last_login = now
             user.failed_login_attempts = 0
             user.locked_until = None
-            user.updated_at = now
             await self.db.commit()
 
     @staticmethod

@@ -6,7 +6,7 @@ from collections import defaultdict
 from collections.abc import Callable, Mapping, MutableMapping, Sequence
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
-from typing import Any, TypedDict, Unpack, cast
+from typing import Any, NotRequired, TypedDict, Unpack, cast
 
 import structlog
 from sqlalchemy import Update, select, update
@@ -65,9 +65,29 @@ class JobStopSignal(Exception):
         super().__init__(f"Job stopped: {reason}")
 
 
+class StoredAPICall(TypedDict):
+    """One endpoint's grouped calls, as the jobs UI reads them back out of JSONB.
+
+    `frontend/lib/core/schemas.ts:JobExecutionApiCallSchema` is the other half
+    of this shape; keep the two in step. The four optional keys are the split
+    below: a single call keeps its whole params dict, a group keeps only the
+    key that varied and its first and last value.
+    """
+
+    endpoint: str
+    region: str
+    count: int
+    first_timestamp: str | None
+    last_timestamp: str | None
+    params: NotRequired[dict[str, str]]
+    param_key: NotRequired[str]
+    first_param: NotRequired[str | None]
+    last_param: NotRequired[str | None]
+
+
 def _format_api_calls_for_storage(
     api_calls: list[APICallRecord],
-) -> list[dict[str, Any]]:
+) -> list[StoredAPICall]:
     """Format API call records for JSONB storage, grouping similar calls."""
     # Group calls by endpoint
     grouped: dict[str, dict[str, Any]] = defaultdict(
@@ -95,9 +115,9 @@ def _format_api_calls_for_storage(
         group["last_timestamp"] = call.timestamp
 
     # Convert to list format for storage
-    result: list[dict[str, Any]] = []
+    result: list[StoredAPICall] = []
     for endpoint, data in grouped.items():
-        entry: dict[str, Any] = {
+        entry: StoredAPICall = {
             "endpoint": endpoint,
             "region": ", ".join(data["regions"]),
             "count": data["count"],
@@ -424,25 +444,22 @@ class BaseJob(ABC):
             if not detailed_logs:
                 detailed_logs = None
 
+            final_status = (
+                status
+                if status is not None
+                else (JobStatus.SUCCESS if success else JobStatus.FAILED)
+            )
             update_stmt = self._build_completion_update_statement(
-                JobExecution,
                 completed_at,
-                success,
+                final_status,
                 error_message,
                 detailed_logs,
-                status,
             )
 
             self._completion_logged = await self._execute_completion_update(
                 db, update_stmt
             )
 
-            # Update local execution object state
-            final_status = (
-                status
-                if status is not None
-                else (JobStatus.SUCCESS if success else JobStatus.FAILED)
-            )
             # Publish the terminal status only once it is actually persisted.
             # A failed write falls through to `_fail_unfinished_execution`, and
             # a cached status from a write that never landed would contradict
@@ -472,8 +489,6 @@ class BaseJob(ABC):
                 runtime_key=self.runtime_key,
             )
             return True
-
-        from sqlalchemy import select
 
         stmt = (
             select(JobExecution)
@@ -1040,29 +1055,18 @@ class BaseJob(ABC):
 
     def _build_completion_update_statement(
         self,
-        job_execution_model: type[JobExecution],
         completed_at: datetime,
-        success: bool,
+        final_status: JobStatus,
         error_message: str | None,
         detailed_logs: dict[str, Any] | None,
-        status: JobStatus | None = None,
     ) -> Update:
         """Build SQLAlchemy update statement for job completion."""
-        from sqlalchemy import update
-
         if self.job_execution is None:
             raise RuntimeError("Job execution is missing during completion update")
 
-        # Use explicit status if provided, otherwise derive from success
-        final_status = (
-            status
-            if status is not None
-            else (JobStatus.SUCCESS if success else JobStatus.FAILED)
-        )
-
         return (
-            update(job_execution_model)
-            .where(job_execution_model.id == self.job_execution_id)
+            update(JobExecution)
+            .where(JobExecution.id == self.job_execution_id)
             .values(
                 completed_at=completed_at,
                 status=final_status,

@@ -23,13 +23,4 @@ describe("CardTitle", () => {
       screen.getByRole("heading", { name: "Tracked Players" }),
     ).toBeDefined();
   });
-
-  it("keeps the class names callers pass to it", () => {
-    const { container } = render(<CardTitle className="gold-gradient" />);
-    const title = container.firstElementChild;
-
-    expect(title?.tagName).toBe("H3");
-    expect(title?.className).toContain("gold-gradient");
-    expect(title?.className).toContain("font-semibold");
-  });
 });

@@ -105,9 +105,6 @@ class MatchDTOTransformer:
         Returns:
             Dictionary with participant data ready for database storage
         """
-        # Determine remake status (inverted logic)
-        is_remake = not getattr(participant_dto, "eligible_for_progression", True)
-
         data: dict[str, Any] = {
             # Identity
             "participant_id": participant_dto.participant_id,
@@ -117,9 +114,7 @@ class MatchDTOTransformer:
             or None,
             "tag_line": participant_dto.tag_line or None,
             "summoner_id": participant_dto.summoner_id,
-            "profile_icon": getattr(
-                participant_dto, "profile_icon", 0
-            ),  # Fallback if missing
+            "profile_icon": participant_dto.profile_icon,
             "summoner_level": participant_dto.summoner_level,
             # Team & Context
             "team_id": participant_dto.team_id,
@@ -129,48 +124,32 @@ class MatchDTOTransformer:
             "champion_id": participant_dto.champion_id,
             "champion_name": participant_dto.champion_name,
             "champion_level": participant_dto.champion_level,
-            "champion_transform": getattr(participant_dto, "champion_transform", 0),
+            "champion_transform": participant_dto.champion_transform,
             # Results
             "win": participant_dto.win,
-            "remake": is_remake,
+            "remake": participant_dto.remake,
             # KDA
             "kills": participant_dto.kills,
             "deaths": participant_dto.deaths,
             "assists": participant_dto.assists,
-            "largest_multi_kill": getattr(participant_dto, "largest_multi_kill", 0),
-            "largest_killing_spree": getattr(
-                participant_dto, "largest_killing_spree", 0
-            ),
-            "first_blood_kill": getattr(participant_dto, "first_blood_kill", False),
-            "first_tower_kill": getattr(participant_dto, "first_tower_kill", False),
+            "largest_multi_kill": participant_dto.largest_multi_kill,
+            "largest_killing_spree": participant_dto.largest_killing_spree,
+            "first_blood_kill": participant_dto.first_blood_kill,
+            "first_tower_kill": participant_dto.first_tower_kill,
             # Damage Dealt
             "total_damage_dealt": participant_dto.total_damage_dealt,
             "total_damage_dealt_to_champions": participant_dto.total_damage_dealt_to_champions,
-            "physical_damage_dealt_to_champions": getattr(
-                participant_dto, "physical_damage_dealt_to_champions", 0
-            ),
-            "magic_damage_dealt_to_champions": getattr(
-                participant_dto, "magic_damage_dealt_to_champions", 0
-            ),
-            "true_damage_dealt_to_champions": getattr(
-                participant_dto, "true_damage_dealt_to_champions", 0
-            ),
-            "damage_dealt_to_objectives": getattr(
-                participant_dto, "damage_dealt_to_objectives", 0
-            ),
-            "damage_dealt_to_turrets": getattr(
-                participant_dto, "damage_dealt_to_turrets", 0
-            ),
+            "physical_damage_dealt_to_champions": participant_dto.physical_damage_dealt_to_champions,
+            "magic_damage_dealt_to_champions": participant_dto.magic_damage_dealt_to_champions,
+            "true_damage_dealt_to_champions": participant_dto.true_damage_dealt_to_champions,
+            "damage_dealt_to_objectives": participant_dto.damage_dealt_to_objectives,
+            "damage_dealt_to_turrets": participant_dto.damage_dealt_to_turrets,
             # Damage Taken
             "total_damage_taken": participant_dto.total_damage_taken,
-            "physical_damage_taken": getattr(
-                participant_dto, "physical_damage_taken", 0
-            ),
-            "magic_damage_taken": getattr(participant_dto, "magic_damage_taken", 0),
-            "true_damage_taken": getattr(participant_dto, "true_damage_taken", 0),
-            "damage_self_mitigated": getattr(
-                participant_dto, "total_self_mitigated", 0
-            ),
+            "physical_damage_taken": participant_dto.physical_damage_taken,
+            "magic_damage_taken": participant_dto.magic_damage_taken,
+            "true_damage_taken": participant_dto.true_damage_taken,
+            "damage_self_mitigated": participant_dto.total_self_mitigated,
             # Support
             "total_self_healing": participant_dto.total_self_healing,
             "total_healing": participant_dto.total_healing,
@@ -196,26 +175,26 @@ class MatchDTOTransformer:
             "trinket": participant_dto.trinket,
             "items_purchased": participant_dto.items_purchased,
             "consumables_purchased": participant_dto.consumables_purchased,
-            "role_bound_item": getattr(participant_dto, "role_bound_item", 0),
+            "role_bound_item": participant_dto.role_bound_item,
             # Spells
-            "summoner1_id": getattr(participant_dto, "summoner1_id", None),
-            "summoner1_casts": getattr(participant_dto, "summoner1_casts", 0),
-            "summoner2_id": getattr(participant_dto, "summoner2_id", None),
-            "summoner2_casts": getattr(participant_dto, "summoner2_casts", 0),
+            "summoner1_id": participant_dto.summoner1_id,
+            "summoner1_casts": participant_dto.summoner1_casts,
+            "summoner2_id": participant_dto.summoner2_id,
+            "summoner2_casts": participant_dto.summoner2_casts,
             # Objectives
-            "turret_kills": getattr(participant_dto, "turret_kills", 0),
-            "inhibitor_kills": getattr(participant_dto, "inhibitor_kills", 0),
-            "objectives_stolen": getattr(participant_dto, "objectives_stolen", 0),
+            "turret_kills": participant_dto.turret_kills,
+            "inhibitor_kills": participant_dto.inhibitor_kills,
+            "objectives_stolen": participant_dto.objectives_stolen,
             # Time
-            "time_spent_dead": getattr(participant_dto, "time_spent_dead", 0),
-            "time_played": getattr(participant_dto, "time_played", 0),
+            "time_spent_dead": participant_dto.time_spent_dead,
+            "time_played": participant_dto.time_played,
             # JSON Data
             "runes": participant_dto.runes,
             "advanced_stats": participant_dto.advanced_stats,
         }
 
         # Advanced Stats (Challenges)
-        challenges = getattr(participant_dto, "advanced_stats", {}) or {}
+        challenges = participant_dto.advanced_stats
 
         data.update(
             {

@@ -240,9 +240,9 @@ def test_undefined_statistics_report_none_instead_of_raising() -> None:
 def test_the_two_variance_denominators_stay_apart() -> None:
     """`n` and `n - 1` are both used here, deliberately and in different places.
 
-    The module spells every estimator out because library defaults disagree on
-    exactly this, and both denominators appear within twenty lines of each
-    other. Swapping either is a small edit that changes no shape and no type:
+    The module aliases both denominators to `statistics`, one line apart, so
+    swapping which name points at which is an edit that changes no shape and
+    no type:
     the composite keeps standardizing, `hedges_g` keeps returning a float, and
     every threshold in the model quietly means something else. On eight games
     the two differ by 14 percent, which is the width of a band.

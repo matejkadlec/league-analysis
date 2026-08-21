@@ -5,13 +5,13 @@ import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.riot_api.client import RiotAPIClient
+from app.core.riot_api.constants import PRODUCT_SUPPORTED_QUEUE_IDS
 from app.core.riot_api.errors import RateLimitError
 from app.features.jobs.base import BaseJob, JobStopSignal
 from app.features.jobs.error_handling import (
     RateLimitSignal,
 )
 from app.features.jobs.maintenance import RiotWriterMaintenanceActiveError
-from app.features.jobs.queue_config import get_match_fetcher_queue_ids
 from app.features.matches.match_lp import (
     RANKED_SOLO_QUEUE_ID,
     persist_match_lp_observations,
@@ -36,7 +36,7 @@ class MatchFetcherJob(BaseJob):
         if not self.job_config:
             raise RuntimeError("Match Fetcher missing job configuration")
 
-        supported_queue_ids = get_match_fetcher_queue_ids()
+        supported_queue_ids = list(PRODUCT_SUPPORTED_QUEUE_IDS)
         self.add_log_entry("supported_queue_ids", supported_queue_ids)
 
         player_service = PlayerService(db)

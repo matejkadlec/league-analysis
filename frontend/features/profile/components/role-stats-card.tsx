@@ -32,7 +32,7 @@ function getPositionIconPath(lane: string): string {
 }
 
 export function RoleStatsCard({ stats, lastUpdated }: RoleStatsCardProps) {
-  if (!stats.lanes || stats.lanes.length === 0) {
+  if (stats.lanes.length === 0) {
     return (
       <ProfileCardEmptyState
         icon={Map}

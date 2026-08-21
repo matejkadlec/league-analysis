@@ -3,6 +3,7 @@
 import { JobStatusResponse } from "@/lib/core/schemas";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { ExecutionStatusBadge } from "./execution-status-badge";
 import { formatNextRun, formatLastRun } from "./job-card-format";
 import {
   CheckCircle2,
@@ -123,18 +124,10 @@ export function SystemStatus({ status }: SystemStatusProps) {
                   <p className="mt-1 text-sm font-semibold">
                     {formatLastRun(status.last_execution.started_at)}
                   </p>
-                  <Badge
-                    variant={
-                      status.last_execution.status === "SUCCESS"
-                        ? "default"
-                        : status.last_execution.status === "FAILED"
-                          ? "destructive"
-                          : "secondary"
-                    }
+                  <ExecutionStatusBadge
+                    status={status.last_execution.status}
                     className="mt-2"
-                  >
-                    {status.last_execution.status}
-                  </Badge>
+                  />
                 </>
               ) : (
                 <p className="mt-1 text-sm text-muted-foreground">None</p>

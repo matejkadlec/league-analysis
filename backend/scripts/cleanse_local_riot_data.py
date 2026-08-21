@@ -22,7 +22,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from sqlalchemy import URL, Connection, Engine, RowMapping, create_engine, text
 
-from app.core.config import Settings, get_settings
+from app.core.config import Settings, get_global_settings
 from app.features.auth.service import AuthService
 
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
@@ -621,7 +621,7 @@ def print_plan(
 def main(argv: list[str] | None = None) -> int:
     """Run a dry-run report or the explicit, backed-up cleanup transaction."""
     arguments = parse_arguments(argv)
-    settings = get_settings()
+    settings = get_global_settings()
     engine: Engine | None = None
     try:
         validate_configured_target(settings, arguments.database)

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Literal
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -90,8 +90,8 @@ class SmurfBoostAnalysisResponse(BaseModel):
     created_at: datetime
     status: SmurfBoostStatus
     model_version: str
-    thresholds: dict[str, Any]
-    results: dict[str, Any] | None = None
+    thresholds: dict[str, float]
+    results: SmurfBoostResults | None = None
     eligible_games: int
     latest_match_id: str | None = None
     error_code: str | None = None

@@ -36,6 +36,11 @@ const basePlayer = (now: string) => ({
   game_name: "",
   tag_line: "",
   platform: "eun1",
+  // Required since the DB, the API and zod agreed both are non-null; these are
+  // the defaults `resolve_player_display_fields` writes for a player Riot has
+  // not been asked about yet.
+  summoner_level: 0,
+  profile_icon_id: 29,
   is_tracked: true,
   analyzed_matches: 0,
   total_matches: 0,

@@ -39,6 +39,7 @@ import structlog
 from sqlalchemy import ColumnElement, and_, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from structlog import contextvars as structlog_contextvars
 
 from app.core import db_manager
 from app.core.db_session import rollback_quietly
@@ -82,6 +83,27 @@ def _active_run_where(
         MatchmakingAnalysis.puuid == puuid,
         MatchmakingAnalysis.created_at == created_at,
         MatchmakingAnalysis.status.in_(ACTIVE_ANALYSIS_STATUSES),
+    )
+
+
+def _one_run_where(puuid: str, created_at: datetime) -> ColumnElement[bool]:
+    """The WHERE clause naming one run by identity, whatever state it is in."""
+    return and_(
+        MatchmakingAnalysis.puuid == puuid,
+        MatchmakingAnalysis.created_at == created_at,
+    )
+
+
+def _completed_run_where(puuid: str) -> ColumnElement[bool]:
+    """The WHERE clause for a player's runs that finished and kept results.
+
+    "Completed" without the results check is a lie the history and latest
+    endpoints must not tell separately.
+    """
+    return and_(
+        MatchmakingAnalysis.puuid == puuid,
+        MatchmakingAnalysis.status == "completed",
+        MatchmakingAnalysis.results.isnot(None),
     )
 
 
@@ -217,20 +239,14 @@ class MatchmakingAnalysisService:
         """Get the latest completed analysis for a player (excluding errors)."""
         result = await self.db.execute(
             select(MatchmakingAnalysis)
-            .where(
-                and_(
-                    MatchmakingAnalysis.puuid == puuid,
-                    MatchmakingAnalysis.status == "completed",
-                    MatchmakingAnalysis.results.isnot(None),
-                )
-            )
+            .where(_completed_run_where(puuid))
             .order_by(MatchmakingAnalysis.created_at.desc())
-            .limit(10)
+            .limit(1)
         )
-        analyses = result.scalars().all()
-        for analysis in analyses:
-            return MatchmakingAnalysisResponse.model_validate(analysis)
-        return None
+        analysis = result.scalar_one_or_none()
+        if not analysis:
+            return None
+        return MatchmakingAnalysisResponse.model_validate(analysis)
 
     async def get_latest_analysis(
         self, puuid: str
@@ -252,12 +268,7 @@ class MatchmakingAnalysisService:
     ) -> MatchmakingAnalysisStatusResponse | None:
         """Get status of a specific analysis."""
         result = await self.db.execute(
-            select(MatchmakingAnalysis).where(
-                and_(
-                    MatchmakingAnalysis.puuid == puuid,
-                    MatchmakingAnalysis.created_at == created_at,
-                )
-            )
+            select(MatchmakingAnalysis).where(_one_run_where(puuid, created_at))
         )
         analysis = result.scalar_one_or_none()
         if not analysis:
@@ -298,13 +309,7 @@ class MatchmakingAnalysisService:
         """Get history of completed analyses for a player."""
         result = await self.db.execute(
             select(MatchmakingAnalysis)
-            .where(
-                and_(
-                    MatchmakingAnalysis.puuid == puuid,
-                    MatchmakingAnalysis.status == "completed",
-                    MatchmakingAnalysis.results.isnot(None),
-                )
-            )
+            .where(_completed_run_where(puuid))
             .order_by(MatchmakingAnalysis.created_at.desc())
             .limit(limit)
         )
@@ -325,11 +330,8 @@ class MatchmakingAnalysisService:
         """Delete a specific completed analysis record by puuid and created_at."""
         result = await self.db.execute(
             select(MatchmakingAnalysis).where(
-                and_(
-                    MatchmakingAnalysis.puuid == puuid,
-                    MatchmakingAnalysis.created_at == created_at,
-                    MatchmakingAnalysis.status == "completed",
-                )
+                _one_run_where(puuid, created_at),
+                MatchmakingAnalysis.status == "completed",
             )
         )
         analysis = result.scalar_one_or_none()
@@ -371,6 +373,9 @@ class MatchmakingAnalysisService:
 
     async def _run_analysis_background(self, puuid: str, created_at: datetime) -> None:
         """Run analysis in background with its own DB session."""
+        # Every log line below this point — the whole run, several call layers
+        # deep — carries the run's identity without being handed it.
+        structlog_contextvars.bind_contextvars(puuid=puuid, created_at=created_at)
         try:
             async with db_manager.get_session() as db:
                 try:
@@ -390,16 +395,11 @@ class MatchmakingAnalysisService:
             # writing `cancelled` here would discard that work on every deploy.
             # An explicit user cancellation is unaffected: `cancel_analysis`
             # commits the terminal row before cancelling this task.
-            logger.info(
-                "Background analysis task cancelled; persisted run left active",
-                puuid=puuid,
-                created_at=created_at,
-            )
+            logger.info("Background analysis task cancelled; persisted run left active")
             raise
         except Exception as e:
             logger.error(
                 "Background analysis failed",
-                puuid=puuid,
                 error_type=type(e).__name__,
                 exc_info=True,
             )
@@ -422,8 +422,6 @@ class MatchmakingAnalysisService:
             except Exception as persist_error:
                 logger.error(
                     "matchmaking_failure_state_persist_failed",
-                    puuid=puuid,
-                    created_at=created_at,
                     error_code=error_code,
                     error_type=type(persist_error).__name__,
                 )
@@ -431,6 +429,7 @@ class MatchmakingAnalysisService:
             running = _running_analyses.get(puuid)
             if running and running.task is asyncio.current_task():
                 _running_analyses.pop(puuid, None)
+            structlog_contextvars.clear_contextvars()
 
     @staticmethod
     def _safe_failure_details(error: Exception) -> tuple[str, str]:
@@ -466,7 +465,7 @@ class MatchmakingAnalysisService:
            - Average team vs enemy winrates
         5. Average the 10 per-match results
         """
-        logger.info("Starting matchmaking analysis", puuid=puuid, created_at=created_at)
+        logger.info("Starting matchmaking analysis")
         self._reset_run_state(puuid, created_at)
         await self._mark_analysis_in_progress(puuid, created_at)
 
@@ -486,12 +485,7 @@ class MatchmakingAnalysisService:
                 puuid, created_at, team_avgs, enemy_avgs
             )
         except Exception as e:
-            logger.error(
-                "Analysis failed",
-                puuid=puuid,
-                error_type=type(e).__name__,
-                exc_info=True,
-            )
+            logger.error("Analysis failed", error_type=type(e).__name__, exc_info=True)
             raise
 
     def _reset_run_state(self, puuid: str, created_at: datetime) -> None:
@@ -563,7 +557,6 @@ class MatchmakingAnalysisService:
 
         logger.info(
             "Spine matches ready",
-            puuid=puuid,
             count=len(spine_match_ids),
             in_db=spine_in_db_count,
         )
@@ -584,7 +577,7 @@ class MatchmakingAnalysisService:
             key: bool(existing_progress.get(key, False)) for key in all_keys
         }
         await self._update_progress(puuid, created_at, initial_progress)
-        logger.info("Progress initialized", puuid=puuid, total_keys=len(all_keys))
+        logger.info("Progress initialized", total_keys=len(all_keys))
 
     async def _collect_match_averages(
         self, puuid: str, created_at: datetime, spine_match_ids: list[str]
@@ -596,16 +589,13 @@ class MatchmakingAnalysisService:
             match_anchor = await self._get_game_start_timestamp(match_id)
             if match_anchor is None:
                 logger.warning(
-                    "matchmaking_anchor_timestamp_missing",
-                    puuid=puuid,
-                    match_id=match_id,
+                    "matchmaking_anchor_timestamp_missing", match_id=match_id
                 )
                 continue
 
             match_anchor_seconds = match_anchor // 1000 + 1
             logger.info(
                 "matchmaking_processing_match",
-                puuid=puuid,
                 match_index=idx + 1,
                 match_total=len(spine_match_ids),
                 match_id=match_id,
@@ -691,20 +681,11 @@ class MatchmakingAnalysisService:
         )
 
         completion_status = await self.db.execute(
-            select(MatchmakingAnalysis.status).where(
-                and_(
-                    MatchmakingAnalysis.puuid == puuid,
-                    MatchmakingAnalysis.created_at == created_at,
-                )
-            )
+            select(MatchmakingAnalysis.status).where(_one_run_where(puuid, created_at))
         )
         if completion_status.scalar_one_or_none() != "completed":
             await self.db.rollback()
-            logger.info(
-                "Analysis completion ignored after terminal state",
-                puuid=puuid,
-                created_at=created_at,
-            )
+            logger.info("Analysis completion ignored after terminal state")
             return
 
         from app.features.players.models import Player
@@ -718,7 +699,6 @@ class MatchmakingAnalysisService:
 
         logger.info(
             "Analysis completed",
-            puuid=puuid,
             results=results,
             requests_saved=self.requests_saved,
         )
@@ -1042,7 +1022,9 @@ class MatchmakingAnalysisService:
             ),
             required=required,
             operation="match ID fetch",
-            puuid=puuid,
+            # Not the analysis subject bound in contextvars — this is whichever
+            # participant's history is being fetched right now.
+            target_puuid=puuid,
         )
         return match_list.match_ids if match_list else []
 
@@ -1203,7 +1185,7 @@ class MatchmakingAnalysisService:
         *,
         error_code: str,
     ) -> None:
-        logger.warning("Analysis ended without results", puuid=puuid, code=error_code)
+        logger.warning("Analysis ended without results", code=error_code)
         await _ensure_riot_writer_maintenance_is_inactive(self.db)
         await self.db.execute(
             update(MatchmakingAnalysis)

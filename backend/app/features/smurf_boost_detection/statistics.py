@@ -1,42 +1,37 @@
 """Pure statistical helpers for `smurf-boost/v1`.
 
-Every estimator is spelled out rather than delegated, because library defaults
-differ on skewness, kurtosis and variance denominators and the specification
-pins exact choices.
+The specification pins exact denominators, and `statistics` pins the same ones
+by documented contract -- `pvariance` divides by n, `variance` by n - 1 -- so
+the mean and the two variances are aliases. Everything below them stays spelled
+out: skewness, kurtosis and the Wilson interval are where library defaults
+really do disagree with the specification.
 """
 
 from __future__ import annotations
 
 import math
 from collections.abc import Sequence
+from statistics import fmean as mean
+from statistics import pstdev, pvariance, variance
 
 from .config import EPSILON
 
 WILSON_Z: float = 1.96
 
-
-def mean(values: Sequence[float]) -> float:
-    """Arithmetic mean of a non-empty sequence."""
-    return sum(values) / len(values)
-
-
-def population_variance(values: Sequence[float]) -> float:
-    """Second central moment with denominator n."""
-    center = mean(values)
-    return sum((value - center) ** 2 for value in values) / len(values)
-
-
-def population_stdev(values: Sequence[float]) -> float:
-    """Population standard deviation with denominator n."""
-    return math.sqrt(population_variance(values))
+# Re-exported under the names the signals read them by. Aliased here rather
+# than imported under these names because only sibling modules consume them,
+# which ruff's F401 reads as an unused import.
+population_variance = pvariance
+population_stdev = pstdev
 
 
 def sample_variance(values: Sequence[float]) -> float:
-    """Unbiased sample variance with denominator n - 1."""
-    if len(values) < 2:
-        return 0.0
-    center = mean(values)
-    return sum((value - center) ** 2 for value in values) / (len(values) - 1)
+    """Unbiased sample variance with denominator n - 1.
+
+    A one-game window carries no dispersion, and `statistics.variance` raises
+    there rather than saying so.
+    """
+    return variance(values) if len(values) >= 2 else 0.0
 
 
 def central_moment(values: Sequence[float], order: int) -> float:

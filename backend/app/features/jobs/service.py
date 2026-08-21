@@ -2,7 +2,7 @@
 
 import math
 from datetime import UTC, datetime
-from typing import Any, TypeVar
+from typing import Any
 
 import structlog
 from sqlalchemy import Select, desc, func, select
@@ -30,11 +30,6 @@ from .schemas import (
 )
 
 logger = structlog.get_logger(__name__)
-
-# The execution filters apply to two different selects — the row query
-# (`Select[tuple[JobExecution]]`) and its count query (`Select[tuple[int]]`) —
-# so the helper has to hand the caller back the same select type it was given.
-SelectT = TypeVar("SelectT", bound=Select[Any])
 
 
 def _stop_request_message(name: str, *, force: bool, test_run: bool) -> str:
@@ -195,7 +190,10 @@ class JobService:
 
     # === Job Execution Operations ===
 
-    def _apply_execution_filters(
+    # The execution filters apply to two different selects — the row query
+    # (`Select[tuple[JobExecution]]`) and its count query (`Select[tuple[int]]`)
+    # — so the helper hands the caller back the same select type it was given.
+    def _apply_execution_filters[SelectT: Select[Any]](
         self,
         query: SelectT,
         job_config_id: int | None,

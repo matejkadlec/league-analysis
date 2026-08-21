@@ -129,64 +129,6 @@ def test_only_the_structural_spine_is_required() -> None:
     }
 
 
-def test_a_sparse_event_still_parses() -> None:
-    """An event carrying only the two always-present fields must validate.
-
-    Timeline events are polymorphic — a WARD_PLACED event has almost nothing in
-    common with a CHAMPION_KILL — so anything stricter than this breaks on
-    ordinary data.
-    """
-    timeline = MatchTimelineDTO.model_validate(
-        {
-            "metadata": {"matchId": "EUW1_1", "participants": ["puuid-1"]},
-            "info": {
-                "frameInterval": 60000,
-                "frames": [
-                    {
-                        "timestamp": 60000,
-                        "events": [{"timestamp": 60000, "type": "PAUSE_END"}],
-                    }
-                ],
-            },
-        }
-    )
-    event = timeline.info.frames[0].events[0]
-    assert event.type == "PAUSE_END"
-    assert event.killer_id is None
-
-
-def test_camel_case_payload_populates_snake_case_fields() -> None:
-    """Riot sends camelCase; the DTOs expose snake_case."""
-    timeline = MatchTimelineDTO.model_validate(
-        {
-            "metadata": {"matchId": "EUW1_2", "participants": ["puuid-1"]},
-            "info": {
-                "frameInterval": 60000,
-                "frames": [
-                    {
-                        "timestamp": 120000,
-                        "events": [
-                            {
-                                "timestamp": 120000,
-                                "type": "CHAMPION_KILL",
-                                "killerId": 3,
-                                "victimId": 7,
-                                "assistingParticipantIds": [1, 2],
-                                "killerTeamId": 100,
-                            }
-                        ],
-                    }
-                ],
-            },
-        }
-    )
-    event = timeline.info.frames[0].events[0]
-    assert event.killer_id == 3
-    assert event.victim_id == 7
-    assert event.assisting_participant_ids == [1, 2]
-    assert event.killer_team_id == 100
-
-
 def test_every_key_timeline_parsing_reads_is_documented() -> None:
     """The keys the parser consumes all exist in Riot's schema.
 

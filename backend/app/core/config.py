@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import os
+from functools import cache
 from pathlib import Path
 
 from dotenv import load_dotenv
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from sqlalchemy.ext.asyncio import AsyncSession
 
 # Load environment variables from .env file in project root
 # Get the project root (4 levels up from this file: backend/app/core/config.py -> root)
@@ -212,8 +212,9 @@ class Settings(BaseSettings):
     )
 
 
-def get_settings() -> Settings:
-    """Get application settings instance.
+@cache
+def get_global_settings() -> Settings:
+    """Get the process-wide settings instance, built on first use.
 
     The five postgres fields have no defaults, so pydantic-settings itself
     raises on any missing one — and reports all of them at once, where the
@@ -222,27 +223,3 @@ def get_settings() -> Settings:
     # The five postgres fields arrive via env/env_file; pyright only sees the
     # generated __init__ signature.
     return Settings()  # pyright: ignore[reportCallIssue]
-
-
-# Create a global settings instance lazily
-settings: Settings | None = None
-
-
-def get_global_settings() -> Settings:
-    """Get or create the global settings instance."""
-    global settings
-    if settings is None:
-        settings = get_settings()
-    return settings
-
-
-async def get_riot_api_key(db: AsyncSession) -> str:
-    """Return the database-first effective key and synchronize its health identity."""
-    from app.core.riot_api.credential_health import (
-        synchronize_riot_credential_health,
-    )
-
-    credential, _health = await synchronize_riot_credential_health(db)
-    if credential is None:
-        raise ValueError("No active Riot API key configured")
-    return credential.value

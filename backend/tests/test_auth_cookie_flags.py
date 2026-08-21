@@ -74,7 +74,7 @@ def test_the_two_lifetimes_are_measured_once_not_twice(
 ) -> None:
     """The test above only catches this about once in a hundred thousand runs.
 
-    `_max_age_seconds` truncates against the clock of the moment it is called,
+    `max_age_seconds` truncates against the clock of the moment it is called,
     so computing it separately for the refresh cookie and for the hint left
     them a second apart whenever a whole-second boundary fell between the two
     calls -- and the hint, written second, is the one that came out shorter.

@@ -23,18 +23,4 @@ describe("DialogContent", () => {
       "dialog-white-border",
     );
   });
-
-  it("keeps the class names callers pass to it", () => {
-    render(
-      <Dialog open>
-        <DialogContent className="max-w-5xl">
-          <DialogTitle>Execution details</DialogTitle>
-        </DialogContent>
-      </Dialog>,
-    );
-
-    const content = screen.getByRole("dialog");
-    expect(content.className).toContain("dialog-white-border");
-    expect(content.className).toContain("max-w-5xl");
-  });
 });

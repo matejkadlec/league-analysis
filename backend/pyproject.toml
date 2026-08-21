@@ -217,6 +217,19 @@ paths = ["app"]
 ignore_decorators = ["@router.*", "@app.*"]
 ignore_names = [
     "model_config",
+    # Vulture is whole-program: a name read anywhere counts as used everywhere.
+    # Until this batch, the single `cls.` read in app/ was
+    # `matches/service.py:is_current_game_version`; moving that to a module
+    # function made every `@field_validator` receiver in the codebase look
+    # dead at once. `cls` is a mandatory receiver name, never a dead variable.
+    "cls",
+    # `settings/router.py:reset_all_card_preferences(confirmation: ...)` is
+    # FastAPI's request-body declaration: parsing it is what runs
+    # `CardPreferencesResetRequest.must_confirm_the_full_current_catalog`, so
+    # the parameter is load-bearing precisely by existing. Nothing reads it now
+    # that the hand-rolled 500 handler that logged its length is gone -- and
+    # that length was always 3, since the validator rejects anything else.
+    "confirmation",
     # Parameters of `Protocol` method stubs. The stubs exist to give types to
     # untyped third-party libraries (passlib's hashing context, APScheduler's
     # scheduler), so their bodies are `...` and Vulture cannot see that the

@@ -9,7 +9,6 @@ const nextConfig: NextConfig = {
   experimental: {
     useTypeScriptCli: false,
   },
-  transpilePackages: ["@marsidev/react-turnstile"],
   images: {
     remotePatterns: [
       {
@@ -18,6 +17,26 @@ const nextConfig: NextConfig = {
         pathname: "/cdn/**",
       },
     ],
+  },
+  // Retired routes kept working for old links; Next passes `?puuid=` through.
+  async redirects() {
+    return [
+      {
+        source: "/my-profile",
+        destination: "/player-overview",
+        permanent: false,
+      },
+      {
+        source: "/playstyle-analysis",
+        destination: "/player-overview",
+        permanent: false,
+      },
+      {
+        source: "/tracked-players",
+        destination: "/player-overview",
+        permanent: false,
+      },
+    ];
   },
   async rewrites() {
     return [

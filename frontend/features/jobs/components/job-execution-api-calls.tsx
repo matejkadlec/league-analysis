@@ -3,8 +3,9 @@
 import { useState } from "react";
 import { ChevronUp } from "lucide-react";
 
+import type { JobExecutionApiCall } from "@/lib/core/schemas";
+
 import {
-  type APICallEntry,
   formatApiCallParamLabel,
   formatJobTimestamp,
 } from "./job-execution-format";
@@ -12,7 +13,7 @@ import {
 interface JobExecutionApiCallsProps {
   startedAt: string;
   completedAt: string | null | undefined;
-  apiCalls: APICallEntry[];
+  apiCalls: JobExecutionApiCall[];
 }
 
 export function JobExecutionApiCalls({

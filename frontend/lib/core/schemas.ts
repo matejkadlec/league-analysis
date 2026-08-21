@@ -3,12 +3,11 @@ import { z } from "zod";
 // Player Schema
 export const PlayerSchema = z.object({
   puuid: z.string(),
-  game_name: z.string().optional().nullable(),
-  tag_line: z.string().optional().nullable(),
+  game_name: z.string(),
+  tag_line: z.string(),
   platform: z.string(),
-  summoner_level: z.number().int().optional().nullable(),
-  profile_icon_id: z.number().optional().nullable(),
-  id: z.coerce.number().optional().nullable(),
+  summoner_level: z.number().int(),
+  profile_icon_id: z.number().int(),
   is_tracked: z.boolean().optional().default(false),
   analyzed_matches: z.number().int().optional().default(0),
   total_matches: z.number().int().optional().default(0),
@@ -31,7 +30,7 @@ export const PlayerContextSchema = z.object({
 export type PlayerContext = z.infer<typeof PlayerContextSchema>;
 
 export const PlayerSyncRunSchema = z.object({
-  id: z.coerce.number(),
+  id: z.coerce.number().int(),
   puuid: z.string(),
   status: z.enum([
     "pending",
@@ -41,8 +40,8 @@ export const PlayerSyncRunSchema = z.object({
     "cancelled",
     "rate_limited",
   ]),
-  match_execution_id: z.coerce.number().nullable().optional(),
-  profile_execution_id: z.coerce.number().nullable().optional(),
+  match_execution_id: z.coerce.number().int().nullable().optional(),
+  profile_execution_id: z.coerce.number().int().nullable().optional(),
   error_code: z.string().nullable().optional(),
   error_message: z.string().nullable().optional(),
   created_at: z.string(),
@@ -57,43 +56,39 @@ export type PlayerSyncRun = z.infer<typeof PlayerSyncRunSchema>;
 export const MatchSchema = z.object({
   match_id: z.string(),
   platform: z.string(),
-  game_creation_timestamp: z.number(),
-  game_start_timestamp: z.number(),
+  game_creation_timestamp: z.number().int(),
+  game_start_timestamp: z.number().int(),
   game_start_timestamp_source: z.enum([
     "riot_game_start",
     "legacy_game_creation",
   ]),
-  game_duration: z.number(),
-  queue_id: z.number(),
+  game_duration: z.number().int(),
+  queue_id: z.number().int(),
   game_version: z.string(),
-  map_id: z.number(),
+  map_id: z.number().int(),
   game_mode: z.string().optional().nullable(),
   game_type: z.string().optional().nullable(),
-  game_end_timestamp: z.number().optional().nullable(),
+  game_end_timestamp: z.number().int().optional().nullable(),
   early_surrender: z.boolean().optional().nullable(),
   surrender: z.boolean().optional().nullable(),
   game_result: z.string().optional().nullable(),
   fully_analyzed: z.boolean(),
-  processing_error: z.string().optional().nullable(),
   created_at: z.string(),
   updated_at: z.string(),
-  game_start_datetime: z.string().optional().nullable(),
-  game_end_datetime: z.string().optional().nullable(),
-  patch_version: z.string().optional().nullable(),
 });
 
 // Runes Schema for participant data
 export const ParticipantRunesSchema = z.object({
-  primary_style: z.number().optional().nullable(),
-  sub_style: z.number().optional().nullable(),
-  keystone: z.number().optional().nullable(),
-  primary_perks: z.array(z.number()).optional().nullable(),
-  sub_perks: z.array(z.number()).optional().nullable(),
+  primary_style: z.number().int().optional().nullable(),
+  sub_style: z.number().int().optional().nullable(),
+  keystone: z.number().int().optional().nullable(),
+  primary_perks: z.array(z.number().int()).optional().nullable(),
+  sub_perks: z.array(z.number().int()).optional().nullable(),
   stat_perks: z
     .object({
-      defense: z.number().optional().nullable(),
-      flex: z.number().optional().nullable(),
-      offense: z.number().optional().nullable(),
+      defense: z.number().int().optional().nullable(),
+      flex: z.number().int().optional().nullable(),
+      offense: z.number().int().optional().nullable(),
     })
     .optional()
     .nullable(),
@@ -103,53 +98,44 @@ export type ParticipantRunes = z.infer<typeof ParticipantRunesSchema>;
 
 // Player Match Participant Schema (for detailed match list)
 export const PlayerMatchParticipantSchema = z.object({
-  champion_id: z.number(),
+  champion_id: z.number().int(),
   champion_name: z.string(),
-  champion_level: z.number(),
+  champion_level: z.number().int(),
   team_position: z.string().optional().nullable(),
-  team_id: z.number(),
+  team_id: z.number().int(),
   win: z.boolean(),
   remake: z.boolean().default(false),
-  kills: z.number().default(0),
-  deaths: z.number().default(0),
-  assists: z.number().default(0),
-  kda: z.number().optional().nullable(),
-  total_cs: z.number().default(0),
-  vision_score: z.number().default(0),
-  total_damage_dealt_to_champions: z.number().default(0),
-  summoner1_id: z.number().optional().nullable(),
-  summoner2_id: z.number().optional().nullable(),
+  kills: z.number().int().default(0),
+  deaths: z.number().int().default(0),
+  assists: z.number().int().default(0),
+  kda: z.number(),
+  total_cs: z.number().int().default(0),
+  vision_score: z.number().int().default(0),
+  total_damage_dealt_to_champions: z.number().int().default(0),
+  summoner1_id: z.number().int().optional().nullable(),
+  summoner2_id: z.number().int().optional().nullable(),
   runes: ParticipantRunesSchema.optional().nullable(),
 });
 
 // Enemy Lane Opponent Schema
-export const EnemyLaneOpponentSchema = z.object({
-  champion_id: z.number(),
-  champion_name: z.string(),
-  champion_level: z.number(),
-  kills: z.number().default(0),
-  deaths: z.number().default(0),
-  assists: z.number().default(0),
-  kda: z.number().optional().nullable(),
-  total_cs: z.number().default(0),
-  vision_score: z.number().default(0),
-  total_damage_dealt_to_champions: z.number().default(0),
-  summoner1_id: z.number().optional().nullable(),
-  summoner2_id: z.number().optional().nullable(),
-  runes: ParticipantRunesSchema.optional().nullable(),
+export const EnemyLaneOpponentSchema = PlayerMatchParticipantSchema.omit({
+  team_position: true,
+  team_id: true,
+  win: true,
+  remake: true,
 });
 
 // Team Stats Schema
 export const TeamStatsSchema = z.object({
-  kills: z.number().default(0),
-  deaths: z.number().default(0),
-  assists: z.number().default(0),
-  turrets: z.number().nullable().optional(),
-  inhibitors: z.number().nullable().optional(),
-  dragons: z.number().nullable().optional(),
-  barons: z.number().default(0),
-  rift_heralds: z.number().default(0),
-  voidgrubs: z.number().nullable().optional(),
+  kills: z.number().int().default(0),
+  deaths: z.number().int().default(0),
+  assists: z.number().int().default(0),
+  turrets: z.number().int().nullable().optional(),
+  inhibitors: z.number().int().nullable().optional(),
+  dragons: z.number().int().nullable().optional(),
+  barons: z.number().int().default(0),
+  rift_heralds: z.number().int().default(0),
+  voidgrubs: z.number().int().nullable().optional(),
 });
 
 export type TeamStats = z.infer<typeof TeamStatsSchema>;
@@ -164,7 +150,7 @@ export type TeamStatsComposition = z.infer<typeof TeamStatsCompositionSchema>;
 
 // Team Champion Schema (for team compositions)
 export const TeamChampionSchema = z.object({
-  champion_id: z.number(),
+  champion_id: z.number().int(),
   champion_name: z.string(),
   team_position: z.string().optional().nullable(),
   puuid: z.string(),
@@ -180,7 +166,7 @@ export const TeamCompositionSchema = z.object({
 export const MatchWithPlayerDataSchema = MatchSchema.extend({
   player_participant: PlayerMatchParticipantSchema.optional().nullable(),
   lane_opponent: EnemyLaneOpponentSchema.optional().nullable(),
-  lp_change: z.number().optional().nullable(),
+  lp_change: z.number().int().optional().nullable(),
   team_compositions: TeamCompositionSchema.optional().nullable(),
   team_stats: TeamStatsCompositionSchema.optional().nullable(),
 });
@@ -189,16 +175,16 @@ export const MatchWithPlayerDataSchema = MatchSchema.extend({
 // backend's `PaginatedResponse`. Spelled once so a page cannot mean `size`
 // here and `page_size` there.
 const paginationFields = {
-  total: z.number(),
-  page: z.number(),
-  size: z.number(),
-  pages: z.number(),
+  total: z.number().int(),
+  page: z.number().int(),
+  size: z.number().int(),
+  pages: z.number().int(),
 };
 
 // Detailed Match List Response Schema
 export const MatchListWithPlayerDataResponseSchema = z.object({
   matches: z.array(MatchWithPlayerDataSchema),
-  total_analyzed: z.number().optional().default(0),
+  total_analyzed: z.number().int().optional().default(0),
   ...paginationFields,
 });
 
@@ -206,8 +192,8 @@ export const MatchListWithPlayerDataResponseSchema = z.object({
 // grouping -- overall, per champion, per lane. Spelled once so a new metric
 // cannot land on two of the three.
 const performanceStatsFields = {
-  wins: z.number(),
-  losses: z.number(),
+  wins: z.number().int(),
+  losses: z.number().int(),
   win_rate: z.number(),
   avg_kills: z.number(),
   avg_deaths: z.number(),
@@ -218,7 +204,7 @@ const performanceStatsFields = {
 // Match Stats Response Schema
 export const MatchStatsResponseSchema = z.object({
   puuid: z.string(),
-  total_matches: z.number(),
+  total_matches: z.number().int(),
   ...performanceStatsFields,
   avg_cs: z.number(),
   avg_vision_score: z.number(),
@@ -227,8 +213,8 @@ export const MatchStatsResponseSchema = z.object({
 // Champion Stats Item Schema
 export const ChampionStatsItemSchema = z.object({
   champion_name: z.string(),
-  champion_id: z.number(),
-  games_played: z.number(),
+  champion_id: z.number().int(),
+  games_played: z.number().int(),
   ...performanceStatsFields,
 });
 
@@ -237,7 +223,7 @@ export type ChampionStatsItem = z.infer<typeof ChampionStatsItemSchema>;
 // Champion Stats Response Schema
 export const ChampionStatsResponseSchema = z.object({
   puuid: z.string(),
-  total_champions: z.number(),
+  total_champions: z.number().int(),
   champions: z.array(ChampionStatsItemSchema),
 });
 
@@ -246,7 +232,7 @@ export type ChampionStatsResponse = z.infer<typeof ChampionStatsResponseSchema>;
 // Lane Stats Item Schema
 export const LaneStatsItemSchema = z.object({
   lane: z.string(),
-  games_played: z.number(),
+  games_played: z.number().int(),
   ...performanceStatsFields,
 });
 
@@ -255,7 +241,7 @@ export type LaneStatsItem = z.infer<typeof LaneStatsItemSchema>;
 // Lane Stats Response Schema
 export const LaneStatsResponseSchema = z.object({
   puuid: z.string(),
-  total_lanes: z.number(),
+  total_lanes: z.number().int(),
   lanes: z.array(LaneStatsItemSchema),
 });
 
@@ -296,7 +282,7 @@ export const ExecutionTypeSchema = z.enum(["REGULAR", "TEST"]);
 
 // Job Configuration Schema
 export const JobConfigurationSchema = z.object({
-  id: z.number(),
+  id: z.number().int(),
   job_type: JobTypeSchema,
   name: z.string(),
   description: z.string().nullable().optional(),
@@ -310,24 +296,48 @@ export const JobConfigurationSchema = z.object({
   is_test_paused: z.boolean().default(false),
   is_test_stopping: z.boolean().default(false),
   is_test_force_stopping: z.boolean().default(false),
-  config_json: z.record(z.string(), z.any()).nullable().optional(),
+  config_json: z.record(z.string(), z.unknown()).nullable().optional(),
   created_at: z.string(),
   updated_at: z.string(),
 });
 
 // Job Execution Schema
+// The other half of backend/app/features/jobs/base.py:StoredAPICall. A single
+// call keeps its whole params dict; a group keeps only the key that varied.
+export const JobExecutionApiCallSchema = z.object({
+  endpoint: z.string(),
+  region: z.string(),
+  count: z.number().int(),
+  first_timestamp: z.string().nullable(),
+  last_timestamp: z.string().nullable(),
+  // Null, not absent: the API declares all four `str | None`, so Pydantic
+  // serialises the variant this entry is not as `null`.
+  params: z.record(z.string(), z.string()).nullable().optional(),
+  param_key: z.string().nullable().optional(),
+  first_param: z.string().nullable().optional(),
+  last_param: z.string().nullable().optional(),
+});
+
 export const JobExecutionSchema = z.object({
-  id: z.number(),
-  job_config_id: z.number(),
+  id: z.number().int(),
+  job_config_id: z.number().int(),
   started_at: z.string(),
   completed_at: z.string().nullable().optional(),
   status: JobStatusSchema,
-  api_requests_made: z.number().default(0),
-  records_created: z.number().default(0),
-  records_updated: z.number().default(0),
+  api_requests_made: z.number().int().default(0),
+  records_created: z.number().int().default(0),
+  records_updated: z.number().int().default(0),
   error_message: z.string().nullable().optional(),
-  execution_log: z.record(z.string(), z.any()).nullable().optional(),
-  detailed_logs: z.record(z.string(), z.any()).nullable().optional(),
+  execution_log: z.record(z.string(), z.unknown()).nullable().optional(),
+  // The column is nullable -- an execution can have no detailed logs at all --
+  // but when it has them both lists are always present, empty or not.
+  detailed_logs: z
+    .object({
+      logs: z.array(z.record(z.string(), z.unknown())),
+      api_calls: z.array(JobExecutionApiCallSchema),
+    })
+    .nullable()
+    .optional(),
   triggered_by: z.string().default("system"),
   has_api_key_error: z.boolean().default(false),
   execution_type: ExecutionTypeSchema.default("REGULAR"),
@@ -336,8 +346,8 @@ export const JobExecutionSchema = z.object({
 // Job Status Response Schema
 export const JobStatusResponseSchema = z.object({
   scheduler_running: z.boolean(),
-  active_jobs: z.number(),
-  running_executions: z.number(),
+  active_jobs: z.number().int(),
+  running_executions: z.number().int(),
   last_execution: JobExecutionSchema.nullable().optional(),
   next_run_time: z.string().nullable().optional(),
 });
@@ -346,7 +356,7 @@ export const JobStatusResponseSchema = z.object({
 export const JobTriggerResponseSchema = z.object({
   success: z.boolean(),
   message: z.string(),
-  execution_id: z.number().nullable().optional(),
+  execution_id: z.number().int().nullable().optional(),
 });
 
 export const JobControlActionResponseSchema = z.object({
@@ -370,6 +380,7 @@ export type JobStatus = z.infer<typeof JobStatusSchema>;
 export type ExecutionType = z.infer<typeof ExecutionTypeSchema>;
 export type JobConfiguration = z.infer<typeof JobConfigurationSchema>;
 export type JobExecution = z.infer<typeof JobExecutionSchema>;
+export type JobExecutionApiCall = z.infer<typeof JobExecutionApiCallSchema>;
 export type JobStatusResponse = z.infer<typeof JobStatusResponseSchema>;
 export type JobTriggerResponse = z.infer<typeof JobTriggerResponseSchema>;
 export type JobControlActionResponse = z.infer<
@@ -387,9 +398,9 @@ export const PlayerLeagueSchema = z.object({
   queue_type: z.string(),
   tier: z.string(),
   rank: z.string().nullable(),
-  league_points: z.number(),
-  wins: z.number(),
-  losses: z.number(),
+  league_points: z.number().int(),
+  wins: z.number().int(),
+  losses: z.number().int(),
   veteran: z.boolean(),
   inactive: z.boolean(),
   fresh_blood: z.boolean(),
@@ -400,7 +411,7 @@ export const PlayerLeagueSchema = z.object({
   // multiplies by 100); every sibling win_rate field is a 0-1 fraction, so
   // it is normalized here, at the boundary, and the app sees one unit.
   win_rate: z.number().transform((percent) => percent / 100),
-  total_games: z.number(),
+  total_games: z.number().int(),
   display_rank: z.string(),
 });
 
@@ -428,7 +439,7 @@ export type SettingTestResponse = z.infer<typeof SettingTestResponseSchema>;
 
 // ===== USER PROFILE SCHEMAS =====
 export const UserResponseSchema = z.object({
-  id: z.number(),
+  id: z.number().int(),
   email: z.email(),
   display_name: z.string(),
   is_active: z.boolean(),
@@ -481,15 +492,15 @@ export const MatchmakingAnalysisStatusSchema = z.enum([
 const MatchmakingAnalysisRunFields = {
   puuid: z.string(),
   status: MatchmakingAnalysisStatusSchema,
-  progress: z.number(),
-  total_puuids: z.number(),
+  progress: z.number().int(),
+  total_puuids: z.number().int(),
   results: MatchmakingAnalysisResultsSchema.nullable().optional(),
   created_at: z.string(),
   started_at: z.string().nullable().optional(),
   completed_at: z.string().nullable().optional(),
   error_code: z.string().nullable().optional(),
   error_message: z.string().nullable().optional(),
-  requests_saved: z.number().default(0),
+  requests_saved: z.number().int().default(0),
   rate_limit_reset_at: z.string().nullable().optional(),
 };
 

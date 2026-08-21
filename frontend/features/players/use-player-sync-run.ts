@@ -43,7 +43,6 @@ export function usePlayerSyncRun(
     puuid: string;
     id: number;
   } | null>(null);
-  const observedSyncId = observedSync?.puuid === puuid ? observedSync.id : null;
   const handledTerminalSyncIds = useRef(new Set<number>());
 
   const activeSyncQuery = useQuery({
@@ -59,15 +58,13 @@ export function usePlayerSyncRun(
     refetchInterval: (query) => (query.state.data ? 1_000 : false),
   });
 
-  useEffect(() => {
-    const activeSyncId = activeSyncQuery.data?.id;
-    if (!activeSyncId || activeSyncId === observedSyncId) return;
-    const timeout = window.setTimeout(
-      () => setObservedSync({ puuid, id: activeSyncId }),
-      0,
-    );
-    return () => window.clearTimeout(timeout);
-  }, [activeSyncQuery.data?.id, observedSyncId, puuid]);
+  // Adopt whatever run `/sync/active` reports, during render: the guard is
+  // false on the immediate re-render, so it converges without a commit.
+  const activeSyncId = activeSyncQuery.data?.id;
+  const observedSyncId = observedSync?.puuid === puuid ? observedSync.id : null;
+  if (activeSyncId && activeSyncId !== observedSyncId) {
+    setObservedSync({ puuid, id: activeSyncId });
+  }
 
   const exactSyncQuery = useQuery({
     queryKey: ["player-sync", puuid, observedSyncId],

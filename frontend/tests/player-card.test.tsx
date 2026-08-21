@@ -254,12 +254,6 @@ describe("the profile icon", () => {
     view.rerender(<PlayerCard player={player({ profile_icon_id: 456 })} />);
     expect(profileIcon().src).toContain("/img/profileicon/456.png");
   });
-
-  it("shows a placeholder rather than a broken image when there is no icon id", () => {
-    renderCard(player({ profile_icon_id: null }));
-
-    expect(screen.queryByAltText("Profile Icon")).toBeNull();
-  });
 });
 
 describe("the update button", () => {

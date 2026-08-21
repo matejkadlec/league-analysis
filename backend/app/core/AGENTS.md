@@ -30,9 +30,10 @@ backend configuration names first, then loads the worktree file. Use
 avoids WSL variables from another worktree selecting a wrong database or
 invalid setting value.
 
-Production readiness is `/health/ready`, not the liveness-only `/health` route.
-Keep readiness secret-safe and fail it unless a real database `SELECT 1`
-succeeds; container orchestration depends on this distinction.
+`/health/ready` is the only health route, and it is a readiness probe: keep it
+secret-safe and fail it unless a real database `SELECT 1` succeeds. A
+liveness-only sibling was deleted because nothing polled it and it handed out
+the debug flag unauthenticated.
 The async SQLAlchemy engine keeps `pool_pre_ping` enabled so an atomic local
 mirror swap cannot hand a terminated pooled PostgreSQL connection to the next
 request.

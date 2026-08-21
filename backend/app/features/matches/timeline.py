@@ -262,24 +262,6 @@ Index("idx_match_timelines_puuid", MatchTimeline.puuid)
 Index("idx_match_timelines_match_team", MatchTimeline.match_id, MatchTimeline.team_id)
 
 
-def _normalize_int(value: object) -> int | None:
-    """Normalize values to int where possible.
-
-    The only remaining caller reads participant identity off `TimelineMatch`,
-    whose implementations include a synthetic DTO rebuilt from stored rows —
-    still a structural promise rather than a validated one.
-    """
-    if isinstance(value, bool):
-        return None
-    if isinstance(value, int):
-        return value
-    if isinstance(value, float):
-        return int(value)
-    if isinstance(value, str) and value.strip().isdigit():
-        return int(value.strip())
-    return None
-
-
 def _normalize_text(value: str | None) -> str | None:
     """Normalize an optional Riot text field to uppercase non-empty text.
 
@@ -461,9 +443,9 @@ def _collect_participant_rows(
     match_id = match_dto.metadata.match_id
 
     for participant in match_dto.info.participants:
-        participant_id = _normalize_int(getattr(participant, "participant_id", None))
-        team_id = _normalize_int(getattr(participant, "team_id", None))
-        if participant_id is None or team_id not in VALID_TEAM_IDS:
+        participant_id = participant.participant_id
+        team_id = participant.team_id
+        if team_id not in VALID_TEAM_IDS:
             continue
         participant_team_by_id[participant_id] = team_id
         rows_by_participant_id[participant_id] = _new_participant_row(
@@ -857,7 +839,7 @@ def build_match_timeline_rows(
         return []
 
     team_totals = _new_team_totals()
-    game_version = getattr(match_dto.info, "game_version", "") or ""
+    game_version = match_dto.info.game_version
     _process_timeline_frames(
         frames,
         match_dto.metadata.match_id,

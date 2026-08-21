@@ -48,7 +48,7 @@ export function ChampionStatsCard({
   const [paginationState, setPaginationState] =
     useState<ChampionPaginationState>({ dataSourceKey, page: 0 });
 
-  if (!stats.champions || stats.champions.length === 0) {
+  if (stats.champions.length === 0) {
     return (
       <ProfileCardEmptyState
         icon={Swords}

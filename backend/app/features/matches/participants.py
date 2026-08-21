@@ -140,13 +140,13 @@ class MatchParticipant(Base):
     assists: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     # Computed KDA column
-    kda: Mapped[Decimal | None] = mapped_column(
+    kda: Mapped[Decimal] = mapped_column(
         SQLDecimal(5, 2),
         Computed(
             "CASE WHEN deaths = 0 THEN (kills + assists) ELSE ROUND((kills + assists)::numeric / deaths, 2) END",
             persisted=True,
         ),
-        nullable=True,
+        nullable=False,
     )
 
     largest_multi_kill: Mapped[int | None] = mapped_column(Integer, default=0)

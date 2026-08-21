@@ -50,14 +50,12 @@ export function getProfileIconUrl(
 }
 
 /**
- * Get fallback URL for a summoner profile icon.
- * Uses default icon 29 when the target icon is unavailable.
+ * Get the URL every profile icon degrades to when Data Dragon has no art for
+ * the one the player actually wears.
  */
 export function getProfileIconFallbackUrl(
-  profileIconId: number,
   version: string = DDRAGON_FALLBACK_VERSION,
 ): string {
-  void profileIconId;
   return `${getVersionedBaseUrl(version)}/img/profileicon/29.png`;
 }
 

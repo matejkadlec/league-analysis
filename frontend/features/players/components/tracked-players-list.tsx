@@ -76,12 +76,8 @@ function TrackedPlayerDetails({ player }: { player: Player }) {
 
         <span>{getPlatformDisplayName(player.platform)}</span>
 
-        {typeof player.summoner_level === "number" && (
-          <>
-            <span>•</span>
-            <span>Level {player.summoner_level}</span>
-          </>
-        )}
+        <span>•</span>
+        <span>Level {player.summoner_level}</span>
       </div>
     </div>
   );

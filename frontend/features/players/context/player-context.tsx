@@ -24,7 +24,6 @@ interface PlayerContextValue {
   trackedPlayers: Player[];
   isLoading: boolean;
   selectPlayer: (player: Player) => Promise<void>;
-  refreshContext: () => Promise<void>;
 }
 
 const PlayerContext = createContext<PlayerContextValue | null>(null);
@@ -41,7 +40,13 @@ export function PlayerContextProvider({
   const queryClient = useQueryClient();
   const persistedUrlPuuidRef = useRef<string | null>(null);
   const isPlayerRoute = isPlayerCentricPath(pathname);
-  const urlPuuid = isPlayerRoute ? searchParams.get("puuid") : null;
+  // `?puuid=` with nothing after it is not a selection, it is a malformed
+  // link -- `searchParams.get` answers `""` for it, and an empty string is
+  // truthy enough to reach the URL branch below and suppress the account's
+  // saved player. Treat it as absent, as the retired `/my-profile` redirect
+  // used to before Next started forwarding the query verbatim.
+  const urlPuuid =
+    (isPlayerRoute ? searchParams.get("puuid") : null) || null;
 
   const contextQuery = useQuery({
     queryKey: [...PLAYER_CONTEXT_QUERY_KEY, user?.id],
@@ -122,12 +127,6 @@ export function PlayerContextProvider({
     [pathname, queryClient, router, searchParams, updateCurrentMutation],
   );
 
-  const refreshContext = useCallback(async () => {
-    await queryClient.invalidateQueries({
-      queryKey: [...PLAYER_CONTEXT_QUERY_KEY, user?.id],
-    });
-  }, [queryClient, user?.id]);
-
   const value = useMemo<PlayerContextValue>(
     () => ({
       currentPlayer:
@@ -140,13 +139,11 @@ export function PlayerContextProvider({
       isLoading:
         authLoading || contextQuery.isLoading || urlPlayerQuery.isLoading,
       selectPlayer,
-      refreshContext,
     }),
     [
       authLoading,
       contextQuery.data,
       contextQuery.isLoading,
-      refreshContext,
       selectPlayer,
       urlPlayerQuery.data,
       urlPlayerQuery.isLoading,

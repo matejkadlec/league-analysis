@@ -8,7 +8,8 @@ import jwt
 import pytest
 from fastapi import Request, Response
 from sqlalchemy import Select
-from sqlalchemy.exc import IntegrityError, OperationalError
+from sqlalchemy.dialects import postgresql
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_global_settings
@@ -17,7 +18,6 @@ from app.features.auth.cookies import (
     AUTH_STATE_COOKIE_NAME,
     REFRESH_TOKEN_COOKIE_NAME,
 )
-from app.features.auth.revoked_access_token import RevokedAccessToken
 from app.features.auth.router import logout
 from app.features.auth.service import AuthService
 
@@ -289,67 +289,21 @@ def _live_access_token() -> str:
 
 
 @pytest.mark.asyncio
-async def test_a_second_logout_with_the_same_token_does_not_answer_500() -> None:
-    """`token_id` is unique and the existence check is not atomic.
-
-    Two tabs logging out at once, or the auth context's logout racing the one
-    `token-manager` sends after a rotation it could not keep, both reach the
-    insert. Whichever loses the race gets an IntegrityError on a route whose
-    entire premise is that it always succeeds -- and it lost only because the
-    winner had already done exactly what it was asking for.
-    """
-
-    class _LosesTheRace:
-        """Answers "no row yet", then loses the insert to whoever won it."""
-
-        def __init__(self) -> None:
-            self.rolled_back = False
-
-        def add(self, _instance: object) -> None:
-            return None
-
-        async def execute(self, _statement: Select[Any]) -> object:
-            result = MagicMock()
-            result.scalar_one_or_none.return_value = None
-            return result
-
-        async def commit(self) -> None:
-            raise IntegrityError("insert", (), Exception("duplicate"))
-
-        async def rollback(self) -> None:
-            self.rolled_back = True
-
-    db = _LosesTheRace()
-    service = AuthService(cast("AsyncSession", db))
-
-    await service.revoke_access_token(_live_access_token(), reason="logout")
-
-    assert db.rolled_back
-
-
-@pytest.mark.asyncio
 async def test_a_database_fault_during_revocation_is_not_swallowed() -> None:
-    """Only the duplicate-insert race is tolerated, not every failure.
+    """Only the duplicate-key conflict is tolerated, not every failure.
 
-    Broadening the `except` to `Exception` passes every other test in this
-    file, because they all raise IntegrityError -- and it would turn a real DB
-    fault into a logout that reports success with the token still honoured.
+    `ON CONFLICT DO NOTHING` swallows exactly the duplicate `token_id` and
+    nothing else. Widening it -- to a bare `try`/`except Exception`, or to a
+    conflict target that matches more rows -- would turn a real DB fault into a
+    logout that reports success with the token still honoured.
     """
 
     class _Faulty:
-        def add(self, _instance: object) -> None:
-            return None
-
-        async def execute(self, _statement: Select[Any]) -> object:
-            result = MagicMock()
-            result.scalar_one_or_none.return_value = None
-            return result
+        async def execute(self, _statement: object) -> object:
+            return MagicMock()
 
         async def commit(self) -> None:
             raise OperationalError("insert", (), Exception("connection lost"))
-
-        async def rollback(self) -> None:
-            return None
 
     service = AuthService(cast("AsyncSession", _Faulty()))
 
@@ -358,64 +312,28 @@ async def test_a_database_fault_during_revocation_is_not_swallowed() -> None:
 
 
 @pytest.mark.asyncio
-async def test_a_token_already_blacklisted_is_not_inserted_twice() -> None:
-    """The pre-check is what keeps the ordinary two-tab case off that path.
-
-    Without it every repeat logout relies on the IntegrityError handler, so a
-    routine double-click becomes an exception round trip and the handler stops
-    being the rare case it is written as.
-    """
-
-    class _AlreadyHasTheRow:
-        def __init__(self) -> None:
-            self.added = 0
-            self.committed = 0
-
-        def add(self, _instance: object) -> None:
-            self.added += 1
-
-        async def execute(self, _statement: Select[Any]) -> object:
-            result = MagicMock()
-            result.scalar_one_or_none.return_value = object()
-            return result
-
-        async def commit(self) -> None:
-            self.committed += 1
-
-        async def rollback(self) -> None:
-            return None
-
-    db = _AlreadyHasTheRow()
-    service = AuthService(cast("AsyncSession", db))
-
-    await service.revoke_access_token(_live_access_token(), reason="logout")
-
-    assert db.added == 0
-    assert db.committed == 0
-
-
-@pytest.mark.asyncio
 async def test_the_blacklist_row_names_the_token_it_revokes() -> None:
     """Nothing else in the suite looks at what is actually inserted.
 
-    The fakes above all ignore the instance handed to `add()`, so swapping
+    The other fakes ignore the statement handed to `execute()`, so swapping
     `token_id=token_id` for `token_id=user_id` -- or dropping `expires_at`, or
     writing the wrong user -- leaves every test green while the blacklist stops
     matching the token it is meant to revoke. `is_access_token_revoked` then
     answers False forever and a spent token keeps working.
+
+    The same capture pins the conflict clause: without it a second logout
+    carrying the same token raises a duplicate-key IntegrityError on a route
+    whose entire premise is that it always succeeds. This fake has no
+    `rollback()` at all, so any attempt to recover from one would fail here.
     """
 
     class _CapturingDb:
         def __init__(self) -> None:
-            self.added: list[RevokedAccessToken] = []
+            self.statements: list[Any] = []
 
-        def add(self, instance: RevokedAccessToken) -> None:
-            self.added.append(instance)
-
-        async def execute(self, _statement: Select[Any]) -> object:
-            result = MagicMock()
-            result.scalar_one_or_none.return_value = None
-            return result
+        async def execute(self, statement: Any) -> object:
+            self.statements.append(statement)
+            return MagicMock()
 
         async def commit(self) -> None:
             return None
@@ -424,10 +342,12 @@ async def test_the_blacklist_row_names_the_token_it_revokes() -> None:
     service = AuthService(cast("AsyncSession", db))
 
     await service.revoke_access_token(_live_access_token(), reason="logout")
+    await service.revoke_access_token(_live_access_token(), reason="logout")
 
-    assert len(db.added) == 1
-    row = db.added[0]
-    assert row.token_id == "t"
-    assert row.user_id == 9
-    assert row.reason == "logout"
-    assert row.expires_at > datetime.now(UTC)
+    assert len(db.statements) == 2
+    compiled = db.statements[0].compile(dialect=postgresql.dialect())
+    assert compiled.params["token_id"] == "t"
+    assert compiled.params["user_id"] == 9
+    assert compiled.params["reason"] == "logout"
+    assert compiled.params["expires_at"] > datetime.now(UTC)
+    assert "ON CONFLICT (token_id) DO NOTHING" in str(compiled)

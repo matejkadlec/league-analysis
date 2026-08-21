@@ -15,7 +15,7 @@ def _cookie_secure() -> bool:
     return os.getenv("ENVIRONMENT", "").lower() == "production"
 
 
-def _max_age_seconds(expires_at: datetime) -> int:
+def max_age_seconds(expires_at: datetime) -> int:
     remaining = expires_at.astimezone(UTC) - datetime.now(UTC)
     return max(0, int(remaining.total_seconds()))
 
@@ -30,17 +30,17 @@ def set_auth_cookies(
 ) -> None:
     """Persist tokens as HttpOnly cookies so browser JS cannot read them."""
     secure = _cookie_secure()
-    # Measured once, not twice. `_max_age_seconds` truncates against the clock
+    # Measured once, not twice. `max_age_seconds` truncates against the clock
     # of the moment it is called, so the refresh cookie and the hint below
     # disagreed by a second whenever a whole-second boundary fell between the
     # two calls -- rare, but it is the hint that would be the shorter one, and
     # a hint that expires before the refresh token beside it is the stranded
     # session this whole change exists to remove.
-    refresh_max_age = _max_age_seconds(refresh_expires_at)
+    refresh_max_age = max_age_seconds(refresh_expires_at)
     response.set_cookie(
         ACCESS_TOKEN_COOKIE_NAME,
         access_token,
-        max_age=_max_age_seconds(access_expires_at),
+        max_age=max_age_seconds(access_expires_at),
         httponly=True,
         secure=secure,
         samesite="lax",

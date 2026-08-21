@@ -15,6 +15,7 @@ from .cookies import (
     AUTH_STATE_COOKIE_NAME,
     REFRESH_TOKEN_COOKIE_NAME,
     clear_auth_cookies,
+    max_age_seconds,
     set_auth_cookies,
 )
 from .dependencies import (
@@ -74,7 +75,6 @@ def _issue_token_response(
     Login and refresh must hand out cookies and body from the same expiry
     instants; sharing this tail keeps the two from drifting apart.
     """
-    now = datetime.now(UTC)
     set_auth_cookies(
         response,
         access_token=access_token,
@@ -86,11 +86,8 @@ def _issue_token_response(
         access_token=access_token,
         refresh_token=refresh_token,
         token_type="bearer",
-        expires_in_seconds=max(0, int((access_expires_at - now).total_seconds())),
-        refresh_expires_in_seconds=max(
-            0,
-            int((refresh_expires_at - now).total_seconds()),
-        ),
+        expires_in_seconds=max_age_seconds(access_expires_at),
+        refresh_expires_in_seconds=max_age_seconds(refresh_expires_at),
     )  # nosec B106
 
 

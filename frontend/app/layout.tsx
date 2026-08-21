@@ -4,7 +4,7 @@ import { Montserrat } from "next/font/google";
 import localFont from "next/font/local";
 import "./globals.css";
 import { Providers } from "@/components/providers";
-import { ThemeProvider } from "@/components/theme-provider";
+import { ThemeProvider } from "next-themes";
 import { SidebarNav } from "@/components/sidebar-nav";
 import { HeaderMessages } from "@/components/header-messages";
 import { CookieConsentManager } from "@/features/cookie-consent";

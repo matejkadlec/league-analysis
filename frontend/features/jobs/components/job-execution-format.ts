@@ -30,7 +30,7 @@ export function formatRecordsSummary(created: number, updated: number): string {
   return `${updated} records updated`;
 }
 
-export function formatApiCallParamLabel(paramKey?: string): string {
+export function formatApiCallParamLabel(paramKey?: string | null): string {
   if (!paramKey) {
     return "Parameters";
   }
@@ -45,18 +45,6 @@ export function formatApiCallParamLabel(paramKey?: string): string {
 
   const spacedKey = paramKey.replace(/([a-z])([A-Z])/g, "$1 $2");
   return `${spacedKey.charAt(0).toUpperCase()}${spacedKey.slice(1)}s`;
-}
-
-export interface APICallEntry {
-  endpoint: string;
-  region: string;
-  count: number;
-  first_timestamp?: string;
-  last_timestamp?: string;
-  params?: Record<string, string>;
-  param_key?: string;
-  first_param?: string;
-  last_param?: string;
 }
 
 export function detailedLogKey(log: Record<string, unknown>): string {

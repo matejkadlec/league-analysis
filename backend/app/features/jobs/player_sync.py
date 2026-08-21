@@ -143,7 +143,6 @@ async def _finish_sync(
             sync_run.started_at = datetime.now(UTC)
         if status not in ACTIVE_SYNC_STATUSES:
             sync_run.completed_at = datetime.now(UTC)
-        sync_run.updated_at = datetime.now(UTC)
         await db.commit()
 
 

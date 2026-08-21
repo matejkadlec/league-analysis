@@ -149,6 +149,20 @@ describe("which player the app thinks you are looking at", () => {
     );
   });
 
+  it("treats an empty `?puuid=` as no player rather than as nobody", async () => {
+    // A legacy link that carries the parameter with nothing after it. Before
+    // the retired routes became `next.config.ts` redirects, the redirect page
+    // dropped an empty value; Next forwards the query verbatim, so the empty
+    // string reached the context and read as "the URL names a player" -- the
+    // account's saved player vanished and the page asked them to pick one.
+    search.current = "puuid=";
+    const { result } = renderContext();
+
+    await waitFor(() =>
+      expect(result.current.currentPlayer?.puuid).toBe("saved-puuid"),
+    );
+  });
+
   it("does not read the saved player on a page that is not about a player", async () => {
     // `isPlayerCentricPath` is what stops `?puuid=` on, say, the settings page
     // being treated as a player selection. The URL parameter is only meaningful

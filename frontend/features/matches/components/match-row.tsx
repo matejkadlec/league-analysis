@@ -246,7 +246,7 @@ function MatchSideStats({
   visionScore,
   killParticipation,
 }: {
-  kda: number | null | undefined;
+  kda: number;
   totalCs: number;
   csPerMinute: string;
   visionScore: number;
@@ -255,7 +255,7 @@ function MatchSideStats({
   return (
     <div className="flex w-[calc(50%-0.25rem)] flex-col justify-center text-xs lg:ml-2 lg:w-25 lg:shrink-0">
       <span>
-        <span className="font-medium">{kda?.toFixed(2) ?? "Perfect"}</span> KDA
+        <span className="font-medium">{kda.toFixed(2)}</span> KDA
       </span>
       <span className="mt-0.5">
         <span className="font-medium">{totalCs}</span> CS ({csPerMinute}/min)

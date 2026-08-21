@@ -31,6 +31,8 @@ describe("how a job run is worded", () => {
 
   it.each([
     [undefined, "Parameters"],
+    // The API sends `null` for the variant an entry is not, not an absent key.
+    [null, "Parameters"],
     ["puuid", "PUUIDs"],
     ["matchId", "Match IDs"],
     ["summonerName", "Summoner Names"],

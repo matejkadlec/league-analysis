@@ -1,10 +1,10 @@
 """What the pause/resume/stop routes answer, per outcome of the service call.
 
-The three routes share one shape: ask the service, turn its answer into a
-404/409/200, and turn anything thrown into a 500. Nothing pinned that shape
-before this file, so a refactor could quietly have collapsed "this job does
-not exist" and "this job refused" into the generic server error -- which is
-the one distinction the Jobs page acts on.
+The three routes share one shape: ask the service and turn its answer into a
+404/409/200. Nothing pinned that shape before this file, so a refactor could
+quietly have collapsed "this job does not exist" and "this job refused" into
+the generic server error -- which is the one distinction the Jobs page acts
+on.
 """
 
 from collections.abc import Awaitable, Callable
@@ -13,8 +13,13 @@ from typing import cast
 import pytest
 from fastapi import HTTPException
 
-from app.core.http_errors import SERVICE_ERROR_DETAIL
-from app.features.jobs.router import pause_job, resume_job, stop_job
+from app.features.jobs import scheduler as scheduler_module
+from app.features.jobs.router import (
+    _set_scheduled_job_suspended,
+    pause_job,
+    resume_job,
+    stop_job,
+)
 from app.features.jobs.schemas import JobControlActionResponse
 from app.features.jobs.service import JobService
 
@@ -106,14 +111,16 @@ async def test_refusal_is_409_carrying_the_service_message(
 
 @pytest.mark.parametrize("route", ROUTES.values(), ids=list(ROUTES))
 @pytest.mark.asyncio
-async def test_unexpected_failure_is_a_client_safe_500(route: ControlRoute) -> None:
-    with pytest.raises(HTTPException) as caught:
-        await route(_service(RuntimeError("connection reset")))
+async def test_an_unexpected_failure_is_not_relabelled(route: ControlRoute) -> None:
+    """The route neither swallows the failure nor turns it into a 404 or 409.
 
-    assert caught.value.status_code == 500
-    assert caught.value.detail == SERVICE_ERROR_DETAIL
-    # The database's words never reach the client.
-    assert "connection reset" not in str(caught.value.detail)
+    What the client sees is the app-level handler's one client-safe body, and
+    `test_unhandled_error_response.py` pins that. What matters here is that the
+    route lets it reach the handler rather than answering for it -- a bare
+    `except Exception` would make every outage look like a refused job.
+    """
+    with pytest.raises(RuntimeError, match="connection reset"):
+        await route(_service(RuntimeError("connection reset")))
 
 
 @pytest.mark.asyncio
@@ -138,3 +145,54 @@ async def test_pause_and_resume_differ_only_by_the_paused_flag() -> None:
 
     assert paused.calls == [("set_job_paused", {"job_id": JOB_ID, "paused": True})]
     assert resumed.calls == [("set_job_paused", {"job_id": JOB_ID, "paused": False})]
+
+
+class _SchedulerDouble:
+    """Records which suspend method the helper picked, or raises JobLookupError."""
+
+    def __init__(self, *, running: bool = True, missing: bool = False) -> None:
+        self.running = running
+        self._missing = missing
+        self.calls: list[tuple[str, str]] = []
+
+    def _record(self, method: str, job_id: str) -> None:
+        from apscheduler.jobstores.base import JobLookupError
+
+        if self._missing:
+            raise JobLookupError(job_id)
+        self.calls.append((method, job_id))
+
+    def pause_job(self, job_id: str) -> None:
+        self._record("pause_job", job_id)
+
+    def resume_job(self, job_id: str) -> None:
+        self._record("resume_job", job_id)
+
+
+@pytest.mark.parametrize(
+    ("suspended", "expected"),
+    [(True, "pause_job"), (False, "resume_job")],
+)
+def test_suspending_a_scheduled_job_picks_the_matching_scheduler_call(
+    monkeypatch: pytest.MonkeyPatch, *, suspended: bool, expected: str
+) -> None:
+    double = _SchedulerDouble()
+    monkeypatch.setattr(scheduler_module, "get_scheduler", lambda: double)
+
+    _set_scheduled_job_suspended(JOB_ID, suspended=suspended)
+
+    assert double.calls == [(expected, f"job_{JOB_ID}")]
+
+
+@pytest.mark.parametrize(
+    "double",
+    [_SchedulerDouble(running=False), _SchedulerDouble(missing=True)],
+)
+def test_a_job_the_scheduler_does_not_hold_is_not_an_error(
+    monkeypatch: pytest.MonkeyPatch, double: _SchedulerDouble
+) -> None:
+    monkeypatch.setattr(scheduler_module, "get_scheduler", lambda: double)
+
+    _set_scheduled_job_suspended(JOB_ID, suspended=True)
+
+    assert double.calls == []
