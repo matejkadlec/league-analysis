@@ -83,23 +83,28 @@ class Settings(BaseSettings):
     jwt_algorithm: str = Field(default="HS256", description="JWT signing algorithm")
     jwt_access_token_expire_minutes: int = Field(
         default=30,
+        ge=1,
         description="JWT access token expiration time in minutes",
     )
     jwt_refresh_token_expire_days: int = Field(
         default=30,
+        ge=1,
         description="Refresh token expiration time in days",
     )
 
     auth_lockout_max_attempts: int = Field(
         default=5,
+        ge=1,
         description="Maximum consecutive failed login attempts before temporary lockout",
     )
     auth_lockout_minutes: int = Field(
         default=15,
+        ge=1,
         description="Duration of temporary account lockout after max failed logins",
     )
     auth_captcha_after_failures: int = Field(
         default=2,
+        ge=1,
         description="Failed-login threshold after which CAPTCHA is required",
     )
     turnstile_secret_key: str = Field(
@@ -192,20 +197,6 @@ class Settings(BaseSettings):
                 file=sys.stderr,
             )
 
-        return v
-
-    @field_validator(
-        "auth_lockout_max_attempts",
-        "auth_lockout_minutes",
-        "auth_captcha_after_failures",
-        "jwt_access_token_expire_minutes",
-        "jwt_refresh_token_expire_days",
-    )
-    @classmethod
-    def validate_auth_security_thresholds(cls, v: int) -> int:
-        """Ensure login security thresholds use sane positive values."""
-        if v < 1:
-            raise ValueError("Security threshold values must be at least 1")
         return v
 
     model_config = SettingsConfigDict(

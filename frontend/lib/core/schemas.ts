@@ -145,8 +145,8 @@ export type TeamStats = z.infer<typeof TeamStatsSchema>;
 
 // Team Stats Composition Schema
 export const TeamStatsCompositionSchema = z.object({
-  blue_team: TeamStatsSchema.optional().nullable(),
-  red_team: TeamStatsSchema.optional().nullable(),
+  blue_team: TeamStatsSchema,
+  red_team: TeamStatsSchema,
 });
 
 export type TeamStatsComposition = z.infer<typeof TeamStatsCompositionSchema>;
