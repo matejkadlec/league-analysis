@@ -395,30 +395,6 @@ async def untrack_player(
         raise HTTPException(status_code=404, detail=str(e)) from e
 
 
-@router.get("/{puuid}/tracking-status")
-async def get_tracking_status(
-    puuid: str,
-    player_service: PlayerServiceDep,
-    current_user: User = Depends(get_current_active_user),
-):
-    """
-    Get the tracking status for a player.
-
-    Returns:
-        dict: {'is_tracked': bool}
-
-    Raises:
-        404: Player not found
-    """
-    try:
-        is_tracked = await player_service.get_player_tracking_status(
-            puuid, current_user.id
-        )
-        return {"is_tracked": is_tracked}
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-
-
 @router.get("/tracked/list", response_model=list[PlayerResponse])
 async def get_tracked_players(
     player_service: PlayerServiceDep,

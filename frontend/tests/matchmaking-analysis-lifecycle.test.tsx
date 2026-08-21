@@ -218,7 +218,7 @@ describe("MatchmakingAnalysis lifecycle", () => {
     });
     cancelMatchmakingAnalysis.mockResolvedValue({
       success: true,
-      data: { success: true, message: "Analysis cancelled" },
+      data: { message: "Analysis cancelled" },
     });
     const user = userEvent.setup();
     renderComponent();

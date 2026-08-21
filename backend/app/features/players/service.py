@@ -708,12 +708,6 @@ class PlayerService:
             raise PlayerNotFoundError("Player not found.")
         return player
 
-    async def get_player_tracking_status(self, puuid: str, user_id: int) -> bool:
-        """Get user-specific tracking status for a player."""
-        await self._require_player(puuid)
-
-        return await self._is_player_tracked_by_user(puuid, user_id)
-
     async def get_tracked_players(self, user_id: int) -> list[PlayerResponse]:
         """Get all players tracked by a specific user.
 

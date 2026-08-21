@@ -18,9 +18,6 @@ export function invalidateTrackingQueries(
   userId: number | null | undefined,
   puuid: string,
 ): void {
-  void queryClient.invalidateQueries({
-    queryKey: ["tracking-status", userId, puuid],
-  });
   void queryClient.invalidateQueries({ queryKey: ["tracked-players", userId] });
   void queryClient.invalidateQueries({ queryKey: ["player-context", userId] });
   void queryClient.invalidateQueries({ queryKey: playerQueryKey(puuid) });

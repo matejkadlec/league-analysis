@@ -1,11 +1,11 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { unwrap } from "@/lib/core/api";
 import { Star, StarOff, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/lib/core/hooks";
-import { trackPlayer, untrackPlayer, getTrackingStatus } from "../player-api";
+import { trackPlayer, untrackPlayer } from "../player-api";
 import { invalidateTrackingQueries } from "../player-query";
 import { useAuth } from "@/features/auth";
 import { cn } from "@/lib/core/utils";
@@ -13,6 +13,10 @@ import { cn } from "@/lib/core/utils";
 interface TrackPlayerButtonProps {
   puuid: string;
   playerName: string;
+  /** From the `PlayerResponse` the caller already holds: the backend fills
+   * `is_tracked` per authenticated user on every player read, so asking a
+   * second endpoint for the same boolean only added a spinner. */
+  isTracked: boolean;
   variant?: "default" | "outline" | "ghost";
   size?: "default" | "sm" | "lg" | "icon";
   className?: string;
@@ -21,6 +25,7 @@ interface TrackPlayerButtonProps {
 export function TrackPlayerButton({
   puuid,
   playerName,
+  isTracked,
   variant = "outline",
   size = "default",
   className,
@@ -29,18 +34,6 @@ export function TrackPlayerButton({
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const userId = user?.id;
-
-  const { data: trackingStatus, isLoading: isLoadingStatus } = useQuery({
-    queryKey: ["tracking-status", userId, puuid],
-    queryFn: async () => {
-      return unwrap(await getTrackingStatus(puuid));
-    },
-    enabled: !!userId,
-    retry: 1,
-    staleTime: 30000,
-  });
-
-  const isTracked = trackingStatus?.is_tracked ?? false;
 
   const trackMutation = useMutation({
     mutationFn: async () => {
@@ -92,8 +85,7 @@ export function TrackPlayerButton({
     }
   };
 
-  const isLoading =
-    isLoadingStatus || trackMutation.isPending || untrackMutation.isPending;
+  const isLoading = trackMutation.isPending || untrackMutation.isPending;
 
   return (
     <Button

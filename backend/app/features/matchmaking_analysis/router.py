@@ -5,6 +5,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from app.core.rate_limiter import rate_limit
+from app.core.schemas import MessageResponse
 from app.features.auth.dependencies import get_current_active_user
 from app.features.jobs.maintenance import RiotWriterMaintenanceActiveError
 
@@ -118,7 +119,7 @@ async def cancel_analysis(
     puuid: str,
     created_at: datetime,
     service: MatchmakingServiceDep,
-):
+) -> MessageResponse:
     """Cancel a running matchmaking analysis.
 
     Cancels the exact background run and preserves its terminal state. Already-
@@ -129,7 +130,7 @@ async def cancel_analysis(
         raise HTTPException(
             status_code=404, detail="No active analysis found for this player"
         )
-    return {"success": True, "message": "Analysis cancelled"}
+    return MessageResponse(message="Analysis cancelled")
 
 
 @router.delete("/player/{puuid}/analysis")
@@ -137,9 +138,9 @@ async def delete_analysis_record(
     puuid: str,
     created_at: datetime,
     service: MatchmakingServiceDep,
-):
+) -> MessageResponse:
     """Delete a specific completed analysis record."""
     deleted = await service.delete_analysis(puuid, created_at)
     if not deleted:
         raise HTTPException(status_code=404, detail="Analysis record not found")
-    return {"success": True, "message": "Analysis record deleted"}
+    return MessageResponse(message="Analysis record deleted")

@@ -192,7 +192,7 @@ describe("the matchmaking analysis history card", () => {
     // only way back is a page reload.
     deleteMatchmakingAnalysisRecord.mockResolvedValue({
       success: true,
-      data: { success: true, message: "deleted" },
+      data: { message: "deleted" },
     });
     const resultsQuery = vi.fn().mockResolvedValue("results");
     function ResultsProbe() {

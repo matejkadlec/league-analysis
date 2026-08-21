@@ -8,7 +8,7 @@ import {
 } from "@/lib/core/api";
 import { Player, PlayerSchema } from "@/lib/core/schemas";
 
-const TrackingStatusSchema = z.object({ is_tracked: z.boolean() });
+const PlayerArraySchema = z.array(PlayerSchema);
 
 export async function trackPlayer(puuid: string): Promise<ApiResponse<Player>> {
   return validatedPost(PlayerSchema, `/players/${puuid}/track`);
@@ -20,15 +20,6 @@ export async function untrackPlayer(
   return validatedDelete(PlayerSchema, `/players/${puuid}/track`);
 }
 
-export async function getTrackingStatus(
-  puuid: string,
-): Promise<ApiResponse<{ is_tracked: boolean }>> {
-  return validatedGet(
-    TrackingStatusSchema,
-    `/players/${puuid}/tracking-status`,
-  );
-}
-
 export interface SearchSuggestionsParams {
   q: string;
   platform?: string;
@@ -38,7 +29,6 @@ export interface SearchSuggestionsParams {
 export async function searchPlayerSuggestions(
   params: SearchSuggestionsParams,
 ): Promise<ApiResponse<Player[]>> {
-  const PlayerArraySchema = z.array(PlayerSchema);
   return validatedGet(PlayerArraySchema, "/players/suggestions", {
     q: params.q,
     ...(params.platform !== undefined && { platform: params.platform }),

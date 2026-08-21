@@ -145,6 +145,7 @@ export function PlayerCard({ player, onRefreshAll }: PlayerCardProps) {
               <TrackPlayerButton
                 puuid={player.puuid}
                 playerName={player.game_name}
+                isTracked={player.is_tracked}
                 variant="ghost"
                 size="sm"
               />

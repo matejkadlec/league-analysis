@@ -22,7 +22,13 @@ const player = (
 
 const players = {
   [CURRENT_PUUID]: player(CURRENT_PUUID, "Current", "ONE"),
-  [RECENT_PUUID]: player(RECENT_PUUID, "Recent", "TWO", "euw1"),
+  // The one untracked player, which is what the toggle's "Untracked" state is
+  // asserted against below. It carries the flag itself now that the button
+  // reads `is_tracked` from the player read instead of a second endpoint.
+  [RECENT_PUUID]: {
+    ...player(RECENT_PUUID, "Recent", "TWO", "euw1"),
+    is_tracked: false,
+  },
   [THIRD_PUUID]: player(THIRD_PUUID, "Third", "THR"),
   [FOURTH_PUUID]: player(FOURTH_PUUID, "Fourth", "FOR"),
   [FIFTH_PUUID]: player(FIFTH_PUUID, "Fifth", "FIV"),
@@ -203,14 +209,6 @@ test("keeps player routes, sidebar switching, and dialog scroll lock determinist
           size: 20,
           pages: 0,
         }),
-      });
-      return;
-    }
-
-    if (path.endsWith("/tracking-status")) {
-      await route.fulfill({
-        contentType: "application/json",
-        body: JSON.stringify({ is_tracked: !path.includes(RECENT_PUUID) }),
       });
       return;
     }

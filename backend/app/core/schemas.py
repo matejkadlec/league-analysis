@@ -3,6 +3,16 @@
 from pydantic import BaseModel, ConfigDict, Field, computed_field
 
 
+class MessageResponse(BaseModel):
+    """One sentence, for a mutation whose only answer is that it worked.
+
+    The alternative every route reached for otherwise was a bare `dict`, which
+    FastAPI documents as an untyped object and no client can validate.
+    """
+
+    message: str
+
+
 class PaginatedResponse(BaseModel):
     """The page envelope every list endpoint answers with.
 
