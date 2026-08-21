@@ -17,6 +17,10 @@ from app.core.riot_api.credential_health import (
     synchronize_riot_credential_health,
 )
 from app.core.riot_api.errors import RiotAPIError
+from app.features.auth.user_cookie_consent import (
+    CookieConsentLevel,
+    UserCookieConsent,
+)
 
 from .models import UserCardPreference
 from .schemas import (
@@ -432,8 +436,6 @@ class SettingsService:
 
     async def get_user_cookie_consent(self, user_id: int):
         """Get authenticated user's stored cookie-consent record."""
-        from app.features.auth.user_cookie_consent import UserCookieConsent
-
         stmt = select(UserCookieConsent).where(UserCookieConsent.user_id == user_id)
         result = await self.db.execute(stmt)
         return result.scalar_one_or_none()
@@ -442,11 +444,6 @@ class SettingsService:
         self, user_id: int, update: UserCookieConsentUpdate
     ):
         """Create or update authenticated user's cookie-consent record."""
-        from app.features.auth.user_cookie_consent import (
-            CookieConsentLevel,
-            UserCookieConsent,
-        )
-
         consent_level = CookieConsentLevel(update.consent_level.value)
 
         # Selecting and then branching on the result raced: two concurrent PUTs

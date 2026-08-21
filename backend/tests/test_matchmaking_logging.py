@@ -12,6 +12,7 @@ from structlog import contextvars as structlog_contextvars
 from structlog.testing import capture_logs
 from structlog.typing import EventDict
 
+from app.core.riot_api import scoped_client
 from app.core.riot_api.client import RiotAPIClient
 from app.features.matchmaking_analysis import service as analysis_service_module
 from app.features.matchmaking_analysis.service import (
@@ -64,9 +65,7 @@ async def test_failure_state_persist_failure_is_logged(
     async def _no_key(_db: object) -> None:
         raise ValueError("no active Riot API key")
 
-    monkeypatch.setattr(
-        analysis_service_module, "create_tracked_riot_api_client", _no_key
-    )
+    monkeypatch.setattr(scoped_client, "create_tracked_riot_api_client", _no_key)
 
     service = analysis_service_module.MatchmakingAnalysisService(
         cast(AsyncSession, _unused_database()), cast(RiotAPIClient, SimpleNamespace())

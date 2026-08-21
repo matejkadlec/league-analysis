@@ -3,10 +3,12 @@
 import { useEffect, useReducer, useState, useSyncExternalStore } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/features/auth";
+// eslint-disable-next-line no-restricted-imports -- shell infra bound to the hint's own module; tests/auth-stranded-session.test.tsx asserts this behaviour
 import {
   hasAuthStateCookie,
   subscribeToAuthStateCookie,
 } from "@/features/auth/utils/auth-state-cookie";
+// eslint-disable-next-line no-restricted-imports -- see above
 import { isPublicRoute as pathnameIsPublic } from "@/features/auth/utils/public-routes";
 
 /**

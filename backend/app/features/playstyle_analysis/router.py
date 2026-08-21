@@ -4,6 +4,7 @@ import structlog
 from fastapi import APIRouter, HTTPException
 
 from app.core.http_errors import log_and_raise_http
+from app.features.auth.dependencies import CurrentUserDep
 
 from .dependencies import PlaystyleAnalysisServiceDep
 from .models import PlaystyleAnalysis
@@ -19,7 +20,9 @@ router = APIRouter(prefix="/playstyle-analysis", tags=["playstyle-analysis"])
 
 @router.post("/analyze", response_model=PlaystyleAnalysisResponse)
 async def analyze_playstyle(
-    request: PlaystyleAnalysisRequest, service: PlaystyleAnalysisServiceDep
+    request: PlaystyleAnalysisRequest,
+    service: PlaystyleAnalysisServiceDep,
+    current_user: CurrentUserDep,
 ) -> PlaystyleAnalysis:
     """
     Analyze player playstyle based on recent matches.
@@ -54,6 +57,7 @@ async def analyze_playstyle(
 async def get_playstyle_analysis(
     puuid: str,
     service: PlaystyleAnalysisServiceDep,
+    current_user: CurrentUserDep,
 ) -> PlaystyleAnalysis:
     """
     Get latest playstyle analysis for a player.

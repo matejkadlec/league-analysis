@@ -8,6 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import db_manager
+from app.core.db_session import rollback_quietly
 from app.features.jobs.base import BaseJob
 from app.features.jobs.implementations.match_fetcher import MatchFetcherJob
 from app.features.jobs.implementations.player_updater import PlayerUpdaterJob
@@ -42,7 +43,7 @@ async def create_or_get_player_sync(
         await db.refresh(sync_run)
         return sync_run, True
     except IntegrityError:
-        await db.rollback()
+        await rollback_quietly(db)
         concurrent = await get_active_player_sync(db, puuid)
         if concurrent is None:
             raise

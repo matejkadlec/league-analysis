@@ -38,14 +38,13 @@ from typing import Any
 
 import structlog
 from sqlalchemy import ColumnElement, and_, func, select, update
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from structlog import contextvars as structlog_contextvars
 
-from app.core import db_manager
+from app.core.database import db_manager
 from app.core.db_session import rollback_quietly
 from app.core.riot_api.client import RiotAPIClient
-from app.core.riot_api.credential_health import create_tracked_riot_api_client
+from app.core.riot_api.constants import RANKED_SOLO_QUEUE_ID
 from app.core.riot_api.errors import (
     AuthenticationError,
     ForbiddenError,
@@ -53,10 +52,17 @@ from app.core.riot_api.errors import (
     RiotAPIError,
 )
 from app.core.riot_api.models import MatchDTO
+from app.core.riot_api.scoped_client import tracked_riot_client
+from app.core.runs import (
+    active_run_filter,
+    commit_new_run,
+    guarded_run_update,
+)
 from app.features.jobs.maintenance import ensure_riot_writer_maintenance_is_inactive
-from app.features.matches.match_lp import RANKED_SOLO_QUEUE_ID
+from app.features.matches.match_persistence import upsert_match
 from app.features.matches.models import Match
 from app.features.matches.participants import MatchParticipant
+from app.features.players.models import Player
 
 from .models import MatchmakingAnalysis, MatchmakingAnalysisResultsJSON
 from .schemas import (
@@ -71,18 +77,14 @@ MAX_RATE_LIMIT_WAIT = 120
 ACTIVE_ANALYSIS_STATUSES = ("pending", "in_progress", "waiting_rate_limit")
 
 
-def _active_run_where(
-    puuid: str | None, created_at: datetime | None
-) -> ColumnElement[bool]:
+def _active_run_where(puuid: str, created_at: datetime) -> ColumnElement[bool]:
     """The WHERE clause naming one exact active run.
 
     Every cancel/progress/finalize path targets a run by this same triple;
     spelling it once keeps the paths from drifting apart.
     """
-    return and_(
-        MatchmakingAnalysis.puuid == puuid,
-        MatchmakingAnalysis.created_at == created_at,
-        MatchmakingAnalysis.status.in_(ACTIVE_ANALYSIS_STATUSES),
+    return active_run_filter(
+        MatchmakingAnalysis, ACTIVE_ANALYSIS_STATUSES, puuid, created_at
     )
 
 
@@ -172,12 +174,9 @@ class MatchmakingAnalysisService:
             status="pending",
             puuid_progress={},
         )
-        self.db.add(analysis)
-        try:
-            await self.db.commit()
+        if await commit_new_run(self.db, analysis) is None:
             await self.db.refresh(analysis)
-        except IntegrityError:
-            await self.db.rollback()
+        else:
             existing = await self._get_active_analysis(puuid)
             if not existing:
                 raise
@@ -347,17 +346,12 @@ class MatchmakingAnalysisService:
         # deep — carries the run's identity without being handed it.
         structlog_contextvars.bind_contextvars(puuid=puuid, created_at=created_at)
         try:
-            async with db_manager.get_session() as db:
-                try:
-                    riot_client = await create_tracked_riot_api_client(db)
-                except ValueError as error:
-                    raise AuthenticationError(
-                        "No active Riot API key configured"
-                    ) from error
-
-                async with riot_client:
-                    service = MatchmakingAnalysisService(db, riot_client)
-                    await service._run_analysis(puuid, created_at)
+            async with (
+                db_manager.get_session() as db,
+                tracked_riot_client(db) as riot_client,
+            ):
+                service = MatchmakingAnalysisService(db, riot_client)
+                await service._run_analysis(puuid, created_at)
         except asyncio.CancelledError:
             # Deliberately leaves the persisted row active. This also fires when
             # process shutdown cancels the task, and the documented contract is
@@ -467,7 +461,7 @@ class MatchmakingAnalysisService:
         self._winrate_cache = {}
 
     async def _write_active_run(
-        self, puuid: str | None, created_at: datetime | None, **values: Any
+        self, puuid: str, created_at: datetime, **values: Any
     ) -> None:
         """Guarded UPDATE of one active run, committed.
 
@@ -478,12 +472,14 @@ class MatchmakingAnalysisService:
         which reads the status back before it commits.
         """
         await ensure_riot_writer_maintenance_is_inactive(self.db)
-        await self.db.execute(
-            update(MatchmakingAnalysis)
-            .where(_active_run_where(puuid, created_at))
-            .values(**values)
+        await guarded_run_update(
+            self.db,
+            MatchmakingAnalysis,
+            ACTIVE_ANALYSIS_STATUSES,
+            puuid,
+            created_at,
+            **values,
         )
-        await self.db.commit()
 
     async def _mark_analysis_in_progress(
         self, puuid: str, created_at: datetime
@@ -682,11 +678,9 @@ class MatchmakingAnalysisService:
             select(MatchmakingAnalysis.status).where(_one_run_where(puuid, created_at))
         )
         if completion_status.scalar_one_or_none() != "completed":
-            await self.db.rollback()
+            await rollback_quietly(self.db)
             logger.info("Analysis completion ignored after terminal state")
             return
-
-        from app.features.players.models import Player
 
         await self.db.execute(
             update(Player)
@@ -923,8 +917,6 @@ class MatchmakingAnalysisService:
 
     async def _store_fetched_match(self, match_dto: MatchDTO) -> None:
         """Persist an API-fetched match only while cleanup is inactive."""
-        from app.features.matches.match_persistence import upsert_match
-
         await ensure_riot_writer_maintenance_is_inactive(self.db)
         await upsert_match(self.db, match_dto)
 
@@ -1092,10 +1084,7 @@ class MatchmakingAnalysisService:
         try:
             result = await self.db.execute(
                 select(MatchmakingAnalysis.rate_limit_reset_at).where(
-                    _active_run_where(
-                        self._current_analysis_puuid,
-                        self._current_analysis_created_at,
-                    )
+                    _active_run_where(*self._current_run_identity())
                 )
             )
             current_reset = result.scalar_one_or_none()
@@ -1105,8 +1094,7 @@ class MatchmakingAnalysisService:
             )
 
             await self._write_active_run(
-                self._current_analysis_puuid,
-                self._current_analysis_created_at,
+                *self._current_run_identity(),
                 status=self._status_for_rate_limit(next_reset),
                 rate_limit_reset_at=next_reset,
                 requests_saved=self.requests_saved,
@@ -1120,6 +1108,12 @@ class MatchmakingAnalysisService:
 
     def _has_current_analysis(self) -> bool:
         return bool(self._current_analysis_puuid and self._current_analysis_created_at)
+
+    def _current_run_identity(self) -> tuple[str, datetime]:
+        """The identity of the run this worker owns; guarded by `_has_current_analysis`."""
+        assert self._current_analysis_puuid is not None
+        assert self._current_analysis_created_at is not None
+        return self._current_analysis_puuid, self._current_analysis_created_at
 
     @staticmethod
     def _next_rate_limit_reset(

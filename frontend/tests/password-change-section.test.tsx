@@ -25,7 +25,7 @@ vi.mock("@/lib/core/hooks", async (importOriginal) => ({
   useToast: () => toast,
 }));
 
-import { PasswordChangeSection } from "@/app/settings/password-change-section";
+import { PasswordChangeSection } from "@/features/settings/password-change-section";
 
 const CURRENT = "Current-1";
 const STRONG = "Str0ng!Pass";

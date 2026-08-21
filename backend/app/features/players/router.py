@@ -17,6 +17,7 @@ from app.core.riot_api.errors import (
     RateLimitError,
 )
 from app.features.auth.dependencies import CurrentUserDep
+from app.features.jobs.maintenance import RiotWriterMaintenanceActiveError
 from app.features.jobs.models import PlayerSyncRun
 from app.features.jobs.player_sync import (
     create_or_get_player_sync,
@@ -278,8 +279,6 @@ async def track_player(
         404: Player not found
         400: Maximum tracked players limit reached
     """
-    from app.features.jobs.maintenance import RiotWriterMaintenanceActiveError
-
     try:
         player = await player_service.track_player(puuid, current_user.id)
     except RiotWriterMaintenanceActiveError as e:

@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
-import { EMAIL_CODE_LENGTH } from "@/app/settings/settings-helpers";
+import { EMAIL_CODE_LENGTH } from "@/features/settings/settings-helpers";
 
 /**
  * The settings page renders one input per digit of the email-change code, and

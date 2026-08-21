@@ -12,8 +12,9 @@ from typing import Final
 MODEL_VERSION: Final[str] = "smurf-boost/v1"
 
 # Eligibility. A match must be ranked solo/duo, not a remake, long enough to
-# carry performance information, and played in a recognized position.
-ELIGIBLE_QUEUE_ID: Final[int] = 420
+# carry performance information, and played in a recognized position. The
+# queue itself is the shared matches constant; only the thresholds below are
+# versioned model values.
 MINIMUM_GAME_DURATION_SECONDS: Final[int] = 300
 RECOGNIZED_POSITIONS: Final[frozenset[str]] = frozenset(
     {"TOP", "JUNGLE", "MIDDLE", "BOTTOM", "UTILITY"}

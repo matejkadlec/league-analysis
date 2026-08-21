@@ -34,7 +34,7 @@ vi.mock("@/features/auth", async (importOriginal) => ({
   }),
 }));
 
-import { DisplayNameField } from "@/app/settings/display-name-field";
+import { DisplayNameField } from "@/features/settings/display-name-field";
 
 function renderField() {
   const { queryClient } = renderWithQueryClient(

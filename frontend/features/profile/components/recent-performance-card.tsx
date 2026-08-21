@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { playerStatsQueryOptions } from "@/features/players/player-query";
+import { playerStatsQueryOptions } from "@/features/players";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 import { ProfileCardEmptyState } from "./profile-card-empty-state";

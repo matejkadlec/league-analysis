@@ -96,13 +96,11 @@ class PlaystyleAnalysisService:
         # 1. Fetch data
         stmt = (
             select(MatchParticipant)
+            .join(Match, MatchParticipant.match_id == Match.match_id)
             .where(MatchParticipant.puuid == puuid)
-            .order_by(
-                MatchParticipant.match_id.desc()
-            )  # Crude sort, ideally join Match.game_start_timestamp
+            .order_by(Match.game_start_timestamp.desc())
             .limit(100)
         )
-        # Note: Ideally join with Match to get timestamp sort, but simplified for now
         result = await self.db.execute(stmt)
         participants = list(result.scalars().all())
 

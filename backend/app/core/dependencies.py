@@ -7,10 +7,11 @@ import structlog
 from fastapi import Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from . import get_db
-from .riot_api import RiotAPIClient
+from .database import get_db
+from .riot_api.client import RiotAPIClient
 from .riot_api.constants import Platform, Region
-from .riot_api.credential_health import create_tracked_riot_api_client
+from .riot_api.errors import AuthenticationError
+from .riot_api.scoped_client import open_tracked_riot_client
 
 logger = structlog.get_logger(__name__)
 
@@ -20,12 +21,12 @@ async def get_riot_client(
 ) -> AsyncGenerator[RiotAPIClient]:
     """Get Riot API client instance."""
     try:
-        client = await create_tracked_riot_api_client(
+        client = await open_tracked_riot_client(
             db,
             region=Region("europe"),
             platform=Platform("eun1"),
         )
-    except ValueError as error:
+    except AuthenticationError as error:
         logger.warning(
             "riot_api_key_not_configured",
             hint="Get your key from https://developer.riotgames.com",

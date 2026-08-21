@@ -38,6 +38,7 @@ from .schemas import (
     JoinUsSubject,
     TokenData,
     UserCreate,
+    UserProfileUpdate,
 )
 from .subject_counts import SubjectCounts
 
@@ -210,6 +211,21 @@ class AuthService:
         """Get a user by ID."""
         result = await self.db.execute(select(User).where(User.id == user_id))
         return result.scalar_one_or_none()
+
+    async def list_users(self) -> list[User]:
+        """List all users."""
+        result = await self.db.execute(select(User))
+        return list(result.scalars().all())
+
+    async def update_profile(self, user: User, update: UserProfileUpdate) -> User:
+        """Apply profile field updates and persist them."""
+        if update.display_name is not None:
+            user.display_name = update.display_name
+
+        user.updated_at = datetime.now(UTC)
+        await self.db.commit()
+        await self.db.refresh(user)
+        return user
 
     async def _get_or_create_email_change_request(
         self, user_id: int

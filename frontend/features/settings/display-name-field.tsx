@@ -16,7 +16,7 @@ import {
   DISPLAY_NAME_MAX_LENGTH,
   DISPLAY_NAME_MIN_LENGTH,
   DISPLAY_NAME_PATTERN,
-} from "@/features/auth/utils/display-name";
+} from "@/features/auth";
 import {
   ACCOUNT_ACTION_BUTTON_CLASS,
   USER_QUERY_KEY,

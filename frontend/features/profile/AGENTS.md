@@ -19,7 +19,8 @@ browser interaction):
 - Top Champions shows exactly five champion rows per local page with a stable
   card height on a partial final page; the backend returns the complete
   ordered aggregate and the card paginates locally.
-- Win-rate color coding: green >55%, yellow 50–55%, red <50%.
+- Win-rate color coding: green ≥51%, yellow >49%, red ≤49% (see
+  `lib/core/format.ts`).
 - Cards show an updated timestamp sourced per the freshness rules in
   [`../AGENTS.md`](../AGENTS.md).
 - The LGA-23/LGA-25 configurable-card contract for these cards is
