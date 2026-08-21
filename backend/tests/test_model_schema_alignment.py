@@ -116,7 +116,6 @@ def test_every_orm_backed_response_schema_is_paired() -> None:
         "TeamStats",
         "TeamStatsComposition",
         "UserCookieConsentResponse",
-        "UserSettingsResponse",
     }
 
     found = _orm_backed_schema_names()

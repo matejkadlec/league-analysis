@@ -17,13 +17,6 @@ from pydantic.alias_generators import to_camel
 from app.features.matches.match_lp import RANKED_SOLO_QUEUE_ID
 
 
-class ThemeEnum(str, PyEnum):
-    """Theme preference enum."""
-
-    LIGHT = "LIGHT"
-    DARK = "DARK"
-
-
 class CardId(str, PyEnum):
     """Approved first-release analytical-card identifiers."""
 
@@ -482,32 +475,6 @@ class ServiceStatusResponse(BaseModel):
 
 
 # ===== USER SETTINGS SCHEMAS =====
-
-
-class UserSettingsResponse(BaseModel):
-    """Deprecated compatibility response for retired application settings."""
-
-    theme: ThemeEnum = Field(
-        default=ThemeEnum.DARK,
-        description="Deprecated fixed compatibility value; not persisted",
-    )
-    default_platform: str | None = Field(
-        default="eun1",
-        description="Deprecated fixed compatibility value; not persisted",
-    )
-    created_at: datetime
-    updated_at: datetime
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class UserSettingsUpdate(BaseModel):
-    """Deprecated compatibility input; accepted values no longer affect behavior."""
-
-    theme: ThemeEnum | None = Field(default=None, description="Theme preference")
-    default_platform: str | None = Field(
-        default=None, max_length=4, description="Default server/platform"
-    )
 
 
 class CookieConsentLevel(str, PyEnum):

@@ -5,7 +5,6 @@ from fastapi import APIRouter, HTTPException
 
 from app.features.auth.dependencies import AdminUserDep, CurrentUserDep
 from app.features.auth.user_cookie_consent import UserCookieConsent
-from app.features.auth.user_settings import UserSettings
 
 from .dependencies import SettingsServiceDep
 from .schemas import (
@@ -20,8 +19,6 @@ from .schemas import (
     SettingUpdate,
     UserCookieConsentResponse,
     UserCookieConsentUpdate,
-    UserSettingsResponse,
-    UserSettingsUpdate,
 )
 
 logger = structlog.get_logger(__name__)
@@ -184,34 +181,6 @@ async def reset_all_card_preferences(
 ) -> list[CardPreferenceResponse]:
     """Reset the complete current catalog after explicit client-side enumeration."""
     return await settings_service.reset_all_card_preferences(current_user.id)
-
-
-@router.get("/user", response_model=UserSettingsResponse)
-async def get_user_settings(
-    settings_service: SettingsServiceDep,
-    current_user: CurrentUserDep,
-) -> UserSettings:
-    """
-    Get the current user's settings.
-
-    Returns the user's remaining application preferences. Player context is
-    owned by the authenticated players API. Creates defaults if none exist.
-    """
-    return await settings_service.get_or_create_user_settings(current_user.id)
-
-
-@router.put("/user", response_model=UserSettingsResponse)
-async def update_user_settings(
-    update: UserSettingsUpdate,
-    settings_service: SettingsServiceDep,
-    current_user: CurrentUserDep,
-) -> UserSettings:
-    """
-    Update the current user's settings.
-
-    Only provided application-preference fields will be updated.
-    """
-    return await settings_service.update_user_settings(current_user.id, update)
 
 
 @router.get("/user/cookie-consent", response_model=UserCookieConsentResponse | None)
