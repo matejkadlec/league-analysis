@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   RIOT_ID_GAME_NAME_MAX_LENGTH,
+  RIOT_ID_SEARCH_MAX_LENGTH,
   RIOT_ID_GAME_NAME_PATTERN,
   RIOT_ID_TAG_LINE_MAX_LENGTH,
   RIOT_ID_TAG_LINE_PATTERN,
@@ -40,12 +41,25 @@ const spec = openapiPath
   : null;
 
 function parameterSchema(name: string) {
-  const discover = spec?.paths["/api/v1/players/discover"];
-  const operation = discover ? Object.values(discover)[0] : undefined;
+  return operationParameter("/api/v1/players/discover", name);
+}
+
+function operationParameter(path: string, name: string) {
+  const operations = spec?.paths[path];
+  const operation = operations ? Object.values(operations)[0] : undefined;
   return operation?.parameters?.find((p) => p.name === name)?.schema;
 }
 
 describe.skipIf(!spec)("Riot ID rules against the API contract", () => {
+  it("caps the search box at what the suggestions query accepts", () => {
+    // Not a Riot ID bound but the same failure: without the cap the box takes
+    // more than `q` allows, and the viewer meets a 422 error toast from the
+    // shared QueryCache rather than an empty result list.
+    expect(
+      operationParameter("/api/v1/players/suggestions", "q")?.maxLength,
+    ).toBe(RIOT_ID_SEARCH_MAX_LENGTH);
+  });
+
   it("bounds the game name to the same length the API does", () => {
     expect(parameterSchema("game_name")?.maxLength).toBe(
       RIOT_ID_GAME_NAME_MAX_LENGTH,

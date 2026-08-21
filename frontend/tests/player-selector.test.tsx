@@ -22,6 +22,7 @@ vi.mock("@/lib/core/hooks", () => ({
 }));
 
 import { PlayerSelector } from "@/features/players/components/player-selector";
+import { RIOT_ID_SEARCH_MAX_LENGTH } from "@/features/players/utils/riot-id";
 
 const player = {
   puuid: "selected-player-puuid",
@@ -50,6 +51,17 @@ describe("PlayerSelector", () => {
     toast.mockReset();
   });
 
+
+  it("stops typing at what the suggestions query accepts", () => {
+    // Past `q`'s bound the query 422s and the shared QueryCache toasts an
+    // error, which is a worse answer to a long paste than no results.
+    renderSelector();
+
+    expect(
+      (screen.getByLabelText("Choose test player") as HTMLInputElement)
+        .maxLength,
+    ).toBe(RIOT_ID_SEARCH_MAX_LENGTH);
+  });
 
   it("selects a saved suggestion through the shared non-tracking contract", async () => {
     searchPlayerSuggestions.mockResolvedValue({
