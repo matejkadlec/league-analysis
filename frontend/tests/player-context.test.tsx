@@ -39,10 +39,10 @@ import {
   PlayerContextProvider,
   usePlayerContext,
 } from "@/features/players/context/player-context";
-import type { PlayerContext } from "@/lib/core/schemas";
+import type { Player, PlayerContext } from "@/lib/core/schemas";
 import { renderHookWithQueryClient } from "./render-support";
 
-function player(puuid: string, name: string) {
+function player(puuid: string, name: string): Player {
   return {
     puuid,
     game_name: name,
@@ -50,7 +50,6 @@ function player(puuid: string, name: string) {
     platform: "eun1",
     summoner_level: 300,
     profile_icon_id: 1,
-    id: 1,
     is_tracked: true,
     analyzed_matches: 0,
     total_matches: 0,

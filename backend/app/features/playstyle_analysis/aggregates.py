@@ -1,10 +1,10 @@
 """Aggregate metric calculations for playstyle tags."""
 
 from collections.abc import Callable
-from typing import Any
 
 from app.features.matches.models import Match
 from app.features.matches.participants import MatchParticipant
+from app.features.playstyle_analysis.config import TagConfig
 from app.features.playstyle_analysis.tag_checks import (
     MatchesById,
     lookup_match,
@@ -13,17 +13,17 @@ from app.features.playstyle_analysis.tag_checks import (
 )
 
 Aggregator = Callable[
-    [list[MatchParticipant], MatchesById, dict[str, Any], int],
+    [list[MatchParticipant], MatchesById, TagConfig, int],
     float,
 ]
-AggregatorPredicate = Callable[[str, dict[str, Any]], bool]
+AggregatorPredicate = Callable[[str, TagConfig], bool]
 
 
 def calculate_aggregate_value(
     participants: list[MatchParticipant],
     matches: MatchesById,
     tag_code: str,
-    config: dict[str, Any],
+    config: TagConfig,
     game_count: int,
 ) -> float:
     """Calculate the average value (or specific metric) for the tag to display."""
@@ -34,56 +34,56 @@ def calculate_aggregate_value(
     return _generic_metric_average(participants, config, resolved_game_count)
 
 
-def _is_first_blood_rate_tag(tag_code: str, config: dict[str, Any]) -> bool:
+def _is_first_blood_rate_tag(tag_code: str, config: TagConfig) -> bool:
     return tag_code == "aggresive_laner" or tag_code == "passive_laner"
 
 
-def _has_min_dead_time_ratio(tag_code: str, config: dict[str, Any]) -> bool:
+def _has_min_dead_time_ratio(tag_code: str, config: TagConfig) -> bool:
     return "min_dead_time_ratio" in config
 
 
-def _has_cs_per_minute(tag_code: str, config: dict[str, Any]) -> bool:
+def _has_cs_per_minute(tag_code: str, config: TagConfig) -> bool:
     return "min_cs" in config or "max_cs" in config
 
 
-def _has_min_total_minions(tag_code: str, config: dict[str, Any]) -> bool:
+def _has_min_total_minions(tag_code: str, config: TagConfig) -> bool:
     return "min_total_minions" in config
 
 
-def _has_min_kda(tag_code: str, config: dict[str, Any]) -> bool:
+def _has_min_kda(tag_code: str, config: TagConfig) -> bool:
     return "min_kda" in config
 
 
-def _has_min_potions(tag_code: str, config: dict[str, Any]) -> bool:
+def _has_min_potions(tag_code: str, config: TagConfig) -> bool:
     return "min_potions" in config
 
 
-def _has_min_largest_multi_kill(tag_code: str, config: dict[str, Any]) -> bool:
+def _has_min_largest_multi_kill(tag_code: str, config: TagConfig) -> bool:
     return "min_largest_multi_kill" in config
 
 
-def _has_min_epic_monster_steals(tag_code: str, config: dict[str, Any]) -> bool:
+def _has_min_epic_monster_steals(tag_code: str, config: TagConfig) -> bool:
     return "min_epic_monster_steals" in config
 
 
-def _has_min_team_damage_pct(tag_code: str, config: dict[str, Any]) -> bool:
+def _has_min_team_damage_pct(tag_code: str, config: TagConfig) -> bool:
     return "min_team_damage_pct" in config
 
 
-def _has_team_damage_taken_pct(tag_code: str, config: dict[str, Any]) -> bool:
+def _has_team_damage_taken_pct(tag_code: str, config: TagConfig) -> bool:
     return (
         "min_team_damage_taken_pct" in config or "max_team_damage_taken_pct" in config
     )
 
 
-def _has_kill_participation(tag_code: str, config: dict[str, Any]) -> bool:
+def _has_kill_participation(tag_code: str, config: TagConfig) -> bool:
     return "min_kill_participation" in config or "max_kill_participation" in config
 
 
 def _first_blood_rate(
     participants: list[MatchParticipant],
     matches: MatchesById,
-    config: dict[str, Any],
+    config: TagConfig,
     game_count: int,
 ) -> float:
     fb_count = sum(1 for p in participants if p.first_blood_kill)
@@ -93,7 +93,7 @@ def _first_blood_rate(
 def _dead_time_ratio(
     participants: list[MatchParticipant],
     matches: MatchesById,
-    config: dict[str, Any],
+    config: TagConfig,
     game_count: int,
 ) -> float:
     total_dead = sum(p.time_spent_dead or 0 for p in participants)
@@ -106,7 +106,7 @@ def _dead_time_ratio(
 def _cs_per_minute(
     participants: list[MatchParticipant],
     matches: MatchesById,
-    config: dict[str, Any],
+    config: TagConfig,
     game_count: int,
 ) -> float:
     total_cs = 0
@@ -122,7 +122,7 @@ def _cs_per_minute(
 def _total_minions_per_game(
     participants: list[MatchParticipant],
     matches: MatchesById,
-    config: dict[str, Any],
+    config: TagConfig,
     game_count: int,
 ) -> float:
     total_cs = sum(
@@ -135,7 +135,7 @@ def _total_minions_per_game(
 def _overall_kda(
     participants: list[MatchParticipant],
     matches: MatchesById,
-    config: dict[str, Any],
+    config: TagConfig,
     game_count: int,
 ) -> float:
     t_k = sum(p.kills for p in participants)
@@ -148,7 +148,7 @@ def _overall_kda(
 def _potions_per_game(
     participants: list[MatchParticipant],
     matches: MatchesById,
-    config: dict[str, Any],
+    config: TagConfig,
     game_count: int,
 ) -> float:
     total_val = sum(
@@ -161,7 +161,7 @@ def _potions_per_game(
 def _pentakill_count(
     participants: list[MatchParticipant],
     matches: MatchesById,
-    config: dict[str, Any],
+    config: TagConfig,
     game_count: int,
 ) -> float:
     return sum(1 for p in participants if (p.largest_multi_kill or 0) >= 5)
@@ -170,7 +170,7 @@ def _pentakill_count(
 def _epic_steal_count(
     participants: list[MatchParticipant],
     matches: MatchesById,
-    config: dict[str, Any],
+    config: TagConfig,
     game_count: int,
 ) -> float:
     return sum(p.epic_monster_steals or 0 for p in participants)
@@ -198,7 +198,7 @@ def _average_or_zero(values: list[float]) -> float:
 def _average_team_damage_pct(
     participants: list[MatchParticipant],
     matches: MatchesById,
-    config: dict[str, Any],
+    config: TagConfig,
     game_count: int,
 ) -> float:
 
@@ -211,7 +211,7 @@ def _average_team_damage_pct(
 def _average_team_damage_taken_pct(
     participants: list[MatchParticipant],
     matches: MatchesById,
-    config: dict[str, Any],
+    config: TagConfig,
     game_count: int,
 ) -> float:
 
@@ -224,7 +224,7 @@ def _average_team_damage_taken_pct(
 def _average_kill_participation(
     participants: list[MatchParticipant],
     matches: MatchesById,
-    config: dict[str, Any],
+    config: TagConfig,
     game_count: int,
 ) -> float:
     return _average_or_zero(
@@ -234,7 +234,7 @@ def _average_kill_participation(
 
 def _generic_metric_average(
     participants: list[MatchParticipant],
-    config: dict[str, Any],
+    config: TagConfig,
     game_count: int,
 ) -> float:
     main_metric = None

@@ -37,7 +37,7 @@ from app.features.smurf_boost_detection.router import (
 
 settings = get_global_settings()
 logging.basicConfig(
-    level=getattr(logging, settings.log_level.upper()),
+    level=settings.log_level,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = structlog.get_logger(__name__)

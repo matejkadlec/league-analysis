@@ -1,11 +1,14 @@
 import type { ApiError } from "@/lib/core/api";
-import { getPlatformDisplayName } from "@/lib/core/platform-utils";
+import {
+  type Platform,
+  getPlatformDisplayName,
+} from "@/lib/core/platform-utils";
 
 import type { RiotIdParts } from "./riot-id";
 
 export function playerNotFoundMessage(
   riotId: RiotIdParts,
-  platform: string,
+  platform: Platform,
 ): string {
   return `Player ${riotId.gameName}#${riotId.tagLine} wasn't found on server ${getPlatformDisplayName(platform)}.`;
 }

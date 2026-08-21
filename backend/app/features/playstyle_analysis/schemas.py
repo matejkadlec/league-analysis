@@ -3,11 +3,10 @@ Pydantic schemas for playstyle analysis API.
 """
 
 from datetime import datetime
-from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from .models import AnalysisStatus
+from .models import AnalysisStatus, DetectedTag, SummaryStats
 
 
 class PlaystyleAnalysisRequest(BaseModel):
@@ -25,8 +24,12 @@ class PlaystyleAnalysisResponse(BaseModel):
     id: int
     puuid: str
     status: AnalysisStatus
-    tags: dict[str, Any] = Field(..., description="Detected playstyle tags")
-    summary_stats: dict[str, Any] = Field(..., description="Summary statistics")
+    tags: dict[str, DetectedTag] = Field(
+        ..., description="Detected playstyle tags, keyed by tag code"
+    )
+    summary_stats: SummaryStats | None = Field(
+        ..., description="Summary statistics, null when the player had no matches"
+    )
     created_at: datetime
     updated_at: datetime
 

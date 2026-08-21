@@ -1,7 +1,6 @@
 """Service for playstyle analysis."""
 
 from datetime import UTC, datetime
-from typing import Any
 
 import structlog
 from sqlalchemy import select, update
@@ -17,7 +16,12 @@ from app.features.playstyle_analysis.evaluators import (
     evaluate_tag,
     generate_summary_stats,
 )
-from app.features.playstyle_analysis.models import AnalysisStatus, PlaystyleAnalysis
+from app.features.playstyle_analysis.models import (
+    AnalysisStatus,
+    DetectedTag,
+    PlaystyleAnalysis,
+    SummaryStats,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -38,12 +42,9 @@ class TagEngine:
         self.matches = {m.match_id: m for m in matches}
         self.game_count = len(participants)
 
-    def generate_tags(self) -> dict[str, Any]:
+    def generate_tags(self) -> dict[str, DetectedTag]:
         """Generate all applicable tags based on configuration."""
-        detected_tags: dict[str, Any] = {}
-
-        if self.game_count == 0:
-            return {}
+        detected_tags: dict[str, DetectedTag] = {}
 
         for tag_code, config in TAG_CONFIG.items():
             result = evaluate_tag(
@@ -54,12 +55,16 @@ class TagEngine:
                 config,
             )
             if result:
-                result.setdefault("sentiment", config.get("sentiment", "neutral"))
-                result.setdefault(
-                    "display_name",
-                    config.get("display_name", tag_code.replace("_", " ").title()),
+                # Two evaluators name the champion or role they matched; every
+                # other tag is named by its config, and no evaluator ever set
+                # a sentiment, which is why these used to be `setdefault`.
+                detected_tags[tag_code] = DetectedTag(
+                    threshold_met=result["threshold_met"],
+                    description=result["description"],
+                    value=result["value"],
+                    sentiment=config["sentiment"],
+                    display_name=result.get("display_name", config["display_name"]),
                 )
-                detected_tags[tag_code] = result
 
         # Remove main_champion if otp is present (otp is stricter, takes precedence)
         if "otp" in detected_tags and "main_champion" in detected_tags:
@@ -67,7 +72,7 @@ class TagEngine:
 
         return detected_tags
 
-    def generate_summary_stats(self) -> dict[str, Any]:
+    def generate_summary_stats(self) -> SummaryStats:
         """Generate summary statistics for the player."""
         return generate_summary_stats(self.participants, self.game_count)
 
@@ -125,7 +130,10 @@ class PlaystyleAnalysisService:
         return await self._save_analysis(puuid, tags, stats)
 
     async def _save_analysis(
-        self, puuid: str, tags: dict[str, Any], stats: dict[str, Any]
+        self,
+        puuid: str,
+        tags: dict[str, DetectedTag],
+        stats: SummaryStats | None,
     ) -> PlaystyleAnalysis:
         """Save or update analysis record."""
         current_time = datetime.now(UTC)
@@ -189,7 +197,12 @@ class PlaystyleAnalysisService:
         return saved_analysis
 
     async def _save_empty_analysis(self, puuid: str) -> PlaystyleAnalysis:
-        return await self._save_analysis(puuid, {}, {"note": "No match data available"})
+        """No matches means no statistics -- the column says so with NULL.
+
+        It used to store `{"note": "No match data available"}`, a second shape
+        in the same column that no reader distinguished from real statistics.
+        """
+        return await self._save_analysis(puuid, {}, None)
 
     async def get_latest_analysis(self, puuid: str) -> PlaystyleAnalysis | None:
         stmt = select(PlaystyleAnalysis).where(PlaystyleAnalysis.puuid == puuid)

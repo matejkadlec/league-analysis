@@ -18,6 +18,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.models import Base, created_at_column
+from app.features.matchmaking_analysis.schemas import MatchmakingAnalysisStatus
 
 
 class MatchmakingAnalysisResultsJSON(TypedDict, total=False):
@@ -68,7 +69,7 @@ class MatchmakingAnalysis(Base):
         comment="When this analysis was completed",
     )
 
-    status: Mapped[str] = mapped_column(
+    status: Mapped[MatchmakingAnalysisStatus] = mapped_column(
         String(32),
         nullable=False,
         default="pending",

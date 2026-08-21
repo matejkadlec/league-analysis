@@ -2,7 +2,7 @@
 
 from datetime import datetime
 from enum import Enum as PyEnum
-from typing import Any, Final
+from typing import Final, Literal, NotRequired, TypedDict
 
 from sqlalchemy import (
     BigInteger,
@@ -24,6 +24,49 @@ class AnalysisStatus(str, PyEnum):
     COMPLETED = "COMPLETED"
     FAILED = "FAILED"
     CANCELLED = "CANCELLED"
+
+
+class TagResult(TypedDict):
+    """What an evaluator answers with when a tag's criteria are met."""
+
+    threshold_met: bool
+    description: str
+    value: float
+    # Set only by the two evaluators that name the champion or role they
+    # matched; every other tag takes its name from `TagConfig`.
+    display_name: NotRequired[str]
+
+
+class DetectedTag(TypedDict):
+    """A `TagResult` after the service has filled in what the config knows."""
+
+    threshold_met: bool
+    description: str
+    value: float
+    sentiment: Literal["positive", "negative", "neutral"]
+    display_name: str
+
+
+class SummaryStats(TypedDict):
+    """The player-level figures stored beside the tags.
+
+    `main_role` and `most_played_champion` are `None` when no role passed the
+    play-rate bar, rather than the string `"None"` they used to carry.
+    """
+
+    total_games: int
+    total_wins: int
+    total_losses: int
+    win_rate: float
+    recent_win_rate: float
+    avg_kills: float
+    avg_deaths: float
+    avg_assists: float
+    main_role: str | None
+    main_role_win_rate: float
+    avg_kda: float
+    most_played_champion: str | None
+    most_played_champion_win_rate: float
 
 
 class PlaystyleAnalysis(Base):
@@ -62,7 +105,7 @@ class PlaystyleAnalysis(Base):
     )
 
     # Analysis Results
-    tags: Mapped[dict[str, Any]] = mapped_column(
+    tags: Mapped[dict[str, DetectedTag]] = mapped_column(
         JSONB,
         nullable=False,
         default=dict,
@@ -70,12 +113,10 @@ class PlaystyleAnalysis(Base):
         comment="Detected playstyle tags (key=tag_code, value=details)",
     )
 
-    summary_stats: Mapped[dict[str, Any]] = mapped_column(
+    summary_stats: Mapped[SummaryStats | None] = mapped_column(
         JSONB,
-        nullable=False,
-        default=dict,
-        server_default="{}",
-        comment="Summary statistics calculated during analysis",
+        nullable=True,
+        comment="Summary statistics, NULL when the player had no matches",
     )
 
     # Timestamps

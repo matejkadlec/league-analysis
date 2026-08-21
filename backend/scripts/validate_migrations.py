@@ -346,6 +346,75 @@ def seed_riot_keys_revision_0019_must_collapse(database: str) -> None:
         engine.dispose()
 
 
+def seed_rows_revision_0022_must_empty(database: str) -> None:
+    """Seed the two stand-ins for absence that revision 0022 retires.
+
+    Both shapes were written by the service before `summary_stats` could be
+    NULL: the `note` blob for a player with no matches, and the *string*
+    `"None"` where a role or champion could not be determined. Neither is a
+    `SummaryStats`, and the API now promises that type.
+
+    Seeded at the 0003 stop beside the 0014 fixtures, under two puuids of its
+    own so revision 0014's de-duplication leaves both rows standing.
+    """
+    url = administration_url().set(database=database)
+    engine = create_engine(url)
+    try:
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "INSERT INTO core.players "
+                    "(puuid, game_name, tag_line, platform, is_tracked) VALUES "
+                    "('NO_MATCH_DATA_VALIDATION', 'Empty', 'TEST', 'EUN1', false), "
+                    "('SENTINEL_VALIDATION', 'Sentinel', 'TEST', 'EUN1', false)"
+                )
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO core.playstyle_analyses "
+                    "(puuid, status, tags, summary_stats) VALUES "
+                    "('NO_MATCH_DATA_VALIDATION', 'COMPLETED', '{}'::jsonb, "
+                    ' \'{"note": "No match data available"}\'::jsonb), '
+                    "('SENTINEL_VALIDATION', 'COMPLETED', '{}'::jsonb, "
+                    ' \'{"main_role": "None", "most_played_champion": "None"}\'::jsonb)'
+                )
+            )
+    finally:
+        engine.dispose()
+
+
+def validate_revision_0022_retired_the_absent_stand_ins(database: str) -> None:
+    """Assert 0022 emptied the `note` row and nulled both `"None"` strings."""
+    url = administration_url().set(database=database)
+    engine = create_engine(url)
+    try:
+        with engine.connect() as connection:
+            no_match_data = connection.execute(
+                text(
+                    "SELECT summary_stats FROM core.playstyle_analyses "
+                    "WHERE puuid = 'NO_MATCH_DATA_VALIDATION'"
+                )
+            ).scalar_one()
+            sentinels = connection.execute(
+                text(
+                    "SELECT summary_stats->>'main_role', "
+                    "summary_stats->>'most_played_champion' "
+                    "FROM core.playstyle_analyses WHERE puuid = 'SENTINEL_VALIDATION'"
+                )
+            ).one()
+    finally:
+        engine.dispose()
+    if no_match_data is not None:
+        raise RuntimeError(
+            "revision 0022 left the no-match-data blob in place: "
+            f"{no_match_data!r} -- the column still holds a second shape"
+        )
+    if sentinels != (None, None):
+        raise RuntimeError(
+            f'revision 0022 left a "None" string in summary_stats: {sentinels!r}'
+        )
+
+
 def validate_revision_0019_kept_one_bound_key(database: str) -> None:
     """Assert only the active key survived and health still points at it."""
     url = administration_url().set(database=database)
@@ -881,6 +950,7 @@ def main() -> int:
         seed_legacy_match(database)
         seed_legacy_matchmaking_analyses(database)
         seed_rows_revision_0014_must_repair(database)
+        seed_rows_revision_0022_must_empty(database)
         run_upgrade(database, "20260820_0018")
         seed_riot_keys_revision_0019_must_collapse(database)
         run_upgrade(database)
@@ -888,6 +958,7 @@ def main() -> int:
         validate_revision_0014_repaired_the_seeded_rows(database)
         validate_revision_0017_rewrote_the_seeded_basis(database)
         validate_revision_0019_kept_one_bound_key(database)
+        validate_revision_0022_retired_the_absent_stand_ins(database)
         asyncio.run(verify_application_database_access(database))
         asyncio.run(verify_expired_key_turns_health_missing(database))
         with tempfile.TemporaryDirectory(

@@ -1,6 +1,7 @@
 """The auth-state hint must stay readable while the tokens stay HttpOnly."""
 
 from datetime import UTC, datetime, timedelta, tzinfo
+from types import SimpleNamespace
 from typing import cast
 from unittest.mock import AsyncMock, MagicMock
 
@@ -314,7 +315,7 @@ async def test_a_successful_login_installs_the_cookies() -> None:
 
 @pytest.mark.parametrize(
     ("environment", "expect_secure"),
-    [("production", True), ("test", False), ("", False)],
+    [("production", True), ("test", False), ("dev", False)],
 )
 def test_secure_tracks_the_environment(
     monkeypatch: pytest.MonkeyPatch, environment: str, expect_secure: bool
@@ -333,8 +334,17 @@ def test_secure_tracks_the_environment(
 
     The other tests in this file read the same headers, so they need the
     environment they were written under; only this one varies it.
+
+    The settings object is `@cache`d, so `monkeypatch.setenv` would be inert
+    here -- the environment is substituted at the reader instead. There is no
+    "absent" case any more: `environment` is a required settings field, so a
+    missing ENVIRONMENT is a startup error rather than a quiet `dev`.
     """
-    monkeypatch.setenv("ENVIRONMENT", environment)
+    monkeypatch.setattr(
+        cookies_module,
+        "get_global_settings",
+        lambda: SimpleNamespace(environment=environment),
+    )
     cookies = _set_cookie_headers()
 
     for name in (

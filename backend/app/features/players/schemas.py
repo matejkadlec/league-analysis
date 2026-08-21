@@ -5,6 +5,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.core.riot_api.constants import Platform
+
 
 class PlayerBase(BaseModel):
     """Base player schema with common fields."""
@@ -12,7 +14,7 @@ class PlayerBase(BaseModel):
     puuid: str = Field(..., min_length=78, max_length=78, description="Player's PUUID")
     game_name: str = Field(..., description="Riot ID game name")
     tag_line: str = Field(..., description="Riot tag line")
-    platform: str = Field(..., description="Platform (e.g. EUN1)")
+    platform: Platform = Field(..., description="Platform the account is on")
     summoner_level: int = Field(..., description="Account/Summoner level")
     profile_icon_id: int = Field(..., description="Profile icon ID")
 

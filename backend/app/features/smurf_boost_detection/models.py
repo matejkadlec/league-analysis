@@ -20,6 +20,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.models import Base, created_at_column
+from app.features.smurf_boost_detection.schemas import SmurfBoostStatus
 
 
 class SmurfBoostAnalysis(Base):
@@ -37,7 +38,7 @@ class SmurfBoostAnalysis(Base):
         "When this analysis run was created"
     )
 
-    status: Mapped[str] = mapped_column(
+    status: Mapped[SmurfBoostStatus] = mapped_column(
         String(32),
         nullable=False,
         default="pending",
