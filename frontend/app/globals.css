@@ -40,6 +40,12 @@
 /* Dark mode color overrides */
 @layer base {
   .dark {
+    /* Native widgets -- the document scrollbar, every `overflow-auto` panel
+       and the `<select>` popup on the join-us form -- follow this and nothing
+       else. next-themes used to set it on the element (`enableColorScheme`
+       defaults on), so dropping the provider left it unset and rendered light
+       scrollbars on a #00091a page. Nothing in the gate looks at UA chrome. */
+    color-scheme: dark;
     --color-background: #00091a;
     --color-foreground: oklch(98% 0 0);
     --color-card: #0a1428;

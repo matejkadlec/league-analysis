@@ -133,6 +133,11 @@ describe("branded style contract", () => {
     );
     expect(darkOnly.length).toBeGreaterThanOrEqual(3);
 
+    // Native widgets read `color-scheme` and nothing else, and next-themes
+    // used to set it on the element for us. Nothing in the gate renders UA
+    // chrome, so a light scrollbar on a #00091a page fails no other check.
+    expect(stylesheet).toMatch(/^\s*color-scheme:\s*dark;/m);
+
     const layout = readFileSync("app/layout.tsx", "utf8");
     expect(layout).toMatch(/<html[^>]*className="dark"/);
     expect(
