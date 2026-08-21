@@ -1,5 +1,6 @@
 """Player league persistence regressions for current LEAGUE-V4 payloads."""
 
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import cast
 from unittest.mock import AsyncMock
@@ -7,10 +8,12 @@ from unittest.mock import AsyncMock
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.enums import Tier
 from app.core.riot_api.client import RiotAPIClient
 from app.core.riot_api.models import LeagueEntryDTO
 from app.features.players import service as player_service_module
 from app.features.players.leagues import PlayerLeague
+from app.features.players.leagues_schemas import PlayerLeagueResponse
 from app.features.players.models import Player
 from app.features.players.service import PlayerService
 
@@ -96,3 +99,29 @@ async def test_an_unchanged_entry_does_not_add_a_second_snapshot(
 
     assert updated is False
     assert session.added == []
+
+
+def test_a_challenger_snapshot_survives_the_response_model() -> None:
+    """Master and above have no divisions, so their LP has no ceiling.
+
+    `PlayerLeagueResponse.league_points` carried `le=100`, which holds for Iron
+    through Diamond and for nothing above them. It is a response model, so the
+    bound rejected the row on the way out: `GET /players/{puuid}/league` would
+    have answered 500 for every player above Diamond, and the writer stores
+    Riot's own value with no clamp to keep it under.
+    """
+    snapshot = PlayerLeagueResponse(
+        puuid="sanitized-puuid",
+        queue_type="RANKED_SOLO_5x5",
+        tier=Tier.CHALLENGER,
+        rank="I",
+        league_points=1247,
+        wins=300,
+        losses=200,
+        created_at=datetime(2026, 8, 21, tzinfo=UTC),
+        win_rate=60.0,
+        total_games=500,
+        display_rank="Challenger",
+    )
+
+    assert snapshot.league_points == 1247

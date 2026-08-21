@@ -16,6 +16,7 @@ from __future__ import annotations
 import types
 import typing
 
+import annotated_types
 import pytest
 from pydantic import BaseModel
 from sqlalchemy import inspect as sa_inspect
@@ -85,6 +86,83 @@ def test_no_response_field_forbids_a_null_its_column_allows(
         and column.nullable
         and not _admits_none(info.annotation)
     ]
+
+    assert offenders == []
+
+
+@pytest.mark.parametrize(("model", "schema"), PAIRS, ids=lambda p: p.__name__)
+def test_no_response_field_caps_a_column_the_database_does_not_cap(
+    model: type[DeclarativeBase], schema: type[BaseModel]
+) -> None:
+    """A ceiling on a response field can only ever reject a real row.
+
+    A response model describes what the API sends; it does not get to decide
+    what the table may hold. An upper bound the database does not enforce turns
+    a stored value into a `ResponseValidationError`, which FastAPI serves as a
+    500 -- so the field is unreadable exactly when it is most interesting.
+
+    `PlayerLeagueResponse.league_points` was `le=100`, true of Iron through
+    Diamond and false of the three tiers above them, where LP has no ceiling.
+    Nothing clamps the writer and no CHECK backs it, so tracking one Master
+    player would have 500'd `GET /players/{puuid}/league`.
+
+    Lower bounds are left alone: `ge=0` on a count or an average states
+    something arithmetic already guarantees, and it reaches the OpenAPI
+    document where the frontend can read it. Fields that are not columns are
+    left alone too -- `win_rate`'s `le=1.0` bounds a ratio whose own definition
+    guarantees it, not a value the table stores.
+
+    No exception is carved out for a column with a CHECK ceiling, because no
+    column has one. If one ever does, that is the case to teach this test.
+    """
+    columns = {column.key for column in sa_inspect(model).columns}
+
+    offenders = [
+        f"{schema.__name__}.{name} caps {model.__name__}.{name} at {bound}"
+        for name, info in schema.model_fields.items()
+        if name in columns
+        for bound in info.metadata
+        if isinstance(bound, (annotated_types.Le, annotated_types.Lt))
+    ]
+
+    assert offenders == []
+
+
+@pytest.mark.parametrize(("model", "schema"), PAIRS, ids=lambda p: p.__name__)
+def test_no_response_field_is_shorter_than_the_column_it_reads(
+    model: type[DeclarativeBase], schema: type[BaseModel]
+) -> None:
+    """The string half of the same rule, where the column does set a ceiling.
+
+    `max_length` is not deleted the way a numeric cap is: a `String(78)` column
+    really is bounded, and repeating the bound puts it in the OpenAPI document
+    where the frontend can read it. What it may not do is claim a *tighter*
+    bound than the column, because then a value the table accepts is one the
+    response cannot serialise -- the same 500, reached through a stored string
+    instead of a stored number.
+
+    All nineteen agree today. This exists so the next `String(64)` widened to
+    `String(128)` does not leave its response model behind.
+    """
+    columns = {column.key: column for column in sa_inspect(model).columns}
+
+    offenders: list[str] = []
+    for name, info in schema.model_fields.items():
+        column = columns.get(name)
+        # `is None`, not falsiness: a Column builds a SQL expression rather
+        # than answering a truth value, and raises if asked for one.
+        if column is None:
+            continue
+        column_length = getattr(column.type, "length", None)
+        if column_length is None:
+            continue
+        offenders += [
+            f"{schema.__name__}.{name} accepts {bound.max_length} characters, "
+            f"{model.__name__}.{name} stores {column_length}"
+            for bound in info.metadata
+            if isinstance(bound, annotated_types.MaxLen)
+            and bound.max_length < column_length
+        ]
 
     assert offenders == []
 
