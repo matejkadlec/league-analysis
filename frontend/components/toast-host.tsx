@@ -2,7 +2,6 @@
 
 import { useEffect } from "react";
 import { CircleCheckBig, CircleX, Info, TriangleAlert } from "lucide-react";
-import { useTheme } from "next-themes";
 import { Toaster } from "sonner";
 import { z } from "zod";
 
@@ -22,8 +21,6 @@ const ToastPreviewDetailSchema = z.object({
 });
 
 export function ToastHost() {
-  const { theme = "system" } = useTheme();
-
   useEffect(() => {
     if (process.env.NODE_ENV === "production") {
       return;
@@ -58,7 +55,7 @@ export function ToastHost() {
       closeButton
       visibleToasts={4}
       duration={TOAST_DEFAULT_DURATION_MS}
-      theme={theme as "light" | "dark" | "system"}
+      theme="dark"
       icons={{
         success: (
           <CircleCheckBig

@@ -100,7 +100,7 @@ export function MatchmakingAnalysisActiveCard({
         </p>
         <Alert>
           {showAsFinished ? (
-            <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
+            <CheckCircle className="h-4 w-4 text-green-400" />
           ) : (
             <Loader2 className="h-4 w-4 animate-spin" />
           )}

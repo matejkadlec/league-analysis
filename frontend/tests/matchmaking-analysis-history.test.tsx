@@ -163,12 +163,12 @@ describe("the matchmaking analysis history card", () => {
     const queryClient = renderHistory();
 
     const rows = await table();
-    expect(rows.getByText("52.3%").className).toContain("text-green-600");
-    expect(rows.getByText("49.1%").className).toContain("text-red-600");
+    expect(rows.getByText("52.3%").className).toContain("text-green-400");
+    expect(rows.getByText("49.1%").className).toContain("text-red-400");
 
     // The losing side of the same card, and the sign that is not printed.
-    expect(rows.getByText("47.4%").className).toContain("text-red-600");
-    expect(rows.getByText("51.2%").className).toContain("text-green-600");
+    expect(rows.getByText("47.4%").className).toContain("text-red-400");
+    expect(rows.getByText("51.2%").className).toContain("text-green-400");
     expect(rows.getByText("3.8%")).toBeTruthy();
     expect(rows.queryByText("-3.8%")).toBeNull();
 

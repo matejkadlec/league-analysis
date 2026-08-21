@@ -64,7 +64,7 @@ describe("ToastHost", () => {
         richColors: true,
         closeButton: true,
         position: "top-right",
-        theme: "system",
+        theme: "dark",
         visibleToasts: 4,
       }),
     );

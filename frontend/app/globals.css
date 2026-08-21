@@ -40,6 +40,12 @@
 /* Dark mode color overrides */
 @layer base {
   .dark {
+    /* Native widgets -- the document scrollbar, every `overflow-auto` panel
+       and the `<select>` popup on the join-us form -- follow this and nothing
+       else. next-themes used to set it on the element (`enableColorScheme`
+       defaults on), so dropping the provider left it unset and rendered light
+       scrollbars on a #00091a page. Nothing in the gate looks at UA chrome. */
+    color-scheme: dark;
     --color-background: #00091a;
     --color-foreground: oklch(98% 0 0);
     --color-card: #0a1428;
@@ -103,11 +109,10 @@
     background-attachment: fixed;
   }
 
-  /* Header card background gradient */
+  /* Header card background gradient. One rule, not a light/dark pair: the
+     document forces `.dark`, so the lighter #233d72 variant that used to sit
+     here rendered for nobody. */
   #header-card {
-    background: linear-gradient(180deg, #233d72 0%, #152b56 100%) !important;
-  }
-  .dark #header-card {
     background: linear-gradient(180deg, #0f1f3a 0%, #0a1428 100%) !important;
   }
 
