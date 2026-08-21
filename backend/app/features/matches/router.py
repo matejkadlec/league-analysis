@@ -1,5 +1,7 @@
 """Match API endpoints for the Riot API application."""
 
+from typing import Annotated
+
 from fastapi import APIRouter, HTTPException, Query
 
 from .dependencies import MatchServiceDep
@@ -52,18 +54,22 @@ def parse_match_queue_ids(
 async def get_player_matches_detailed(
     puuid: str,
     match_service: MatchServiceDep,
-    queue: int | None = Query(None, description="Queue ID filter"),
-    queues: str | None = Query(
-        None, max_length=200, description="Comma-separated queue ID filters"
-    ),
-    search: str | None = Query(
-        None,
-        max_length=64,
-        description="Champion or participant Riot ID search",
-    ),
-    exclude_aram: bool = Query(False, description="Exclude queue 450 (ARAM)"),
-    start: int = Query(0, ge=0, description="Start index"),
-    count: int = Query(20, ge=1, le=1000, description="Number of matches to return"),
+    queue: Annotated[int | None, Query(description="Queue ID filter")] = None,
+    queues: Annotated[
+        str | None,
+        Query(max_length=200, description="Comma-separated queue ID filters"),
+    ] = None,
+    search: Annotated[
+        str | None,
+        Query(max_length=64, description="Champion or participant Riot ID search"),
+    ] = None,
+    exclude_aram: Annotated[
+        bool, Query(description="Exclude queue 450 (ARAM)")
+    ] = False,
+    start: Annotated[int, Query(ge=0, description="Start index")] = 0,
+    count: Annotated[
+        int, Query(ge=1, le=1000, description="Number of matches to return")
+    ] = 20,
 ) -> MatchListWithPlayerDataResponse:
     """
     Get detailed match history for a player including champion data,
@@ -84,16 +90,21 @@ async def get_player_matches_detailed(
 async def get_player_stats(
     puuid: str,
     match_service: MatchServiceDep,
-    queue: int | None = Query(None, description="Queue ID filter"),
-    queues: str | None = Query(
-        None, max_length=200, description="Comma-separated queue ID filters"
-    ),
-    exclude_aram: bool = Query(False, description="Exclude queue 450 (ARAM)"),
-    limit: int | None = Query(
-        None,
-        ge=1,
-        description="Number of matches to analyze. If not provided, uses all matches.",
-    ),
+    queue: Annotated[int | None, Query(description="Queue ID filter")] = None,
+    queues: Annotated[
+        str | None,
+        Query(max_length=200, description="Comma-separated queue ID filters"),
+    ] = None,
+    exclude_aram: Annotated[
+        bool, Query(description="Exclude queue 450 (ARAM)")
+    ] = False,
+    limit: Annotated[
+        int | None,
+        Query(
+            ge=1,
+            description="Number of matches to analyze. If not provided, uses all matches.",
+        ),
+    ] = None,
 ) -> MatchStatsResponse:
     """
     Get aggregated statistics for a player from recent matches.
@@ -112,9 +123,9 @@ async def get_player_stats(
 async def get_player_champion_stats(
     puuid: str,
     match_service: MatchServiceDep,
-    queue: int | None = Query(
-        None, description="Queue ID filter (e.g., 420 for ranked solo/duo)"
-    ),
+    queue: Annotated[
+        int | None, Query(description="Queue ID filter (e.g., 420 for ranked solo/duo)")
+    ] = None,
 ) -> ChampionStatsResponse:
     """
     Get player statistics grouped by champion.
@@ -130,9 +141,9 @@ async def get_player_champion_stats(
 async def get_player_lane_stats(
     puuid: str,
     match_service: MatchServiceDep,
-    queue: int | None = Query(
-        None, description="Queue ID filter (e.g., 420 for ranked solo/duo)"
-    ),
+    queue: Annotated[
+        int | None, Query(description="Queue ID filter (e.g., 420 for ranked solo/duo)")
+    ] = None,
 ) -> LaneStatsResponse:
     """
     Get player statistics grouped by lane/position.

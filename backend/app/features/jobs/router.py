@@ -4,7 +4,7 @@
 # pyright: reportMissingTypeStubs=false
 """Job management API endpoints."""
 
-from typing import NoReturn
+from typing import Annotated, NoReturn
 
 import structlog
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
@@ -112,7 +112,9 @@ def _create_test_job_instance(
 @router.get("/")
 async def list_job_configurations(
     job_service: JobServiceDep,
-    active_only: bool = Query(False, description="Filter to active jobs only"),
+    active_only: Annotated[
+        bool, Query(description="Filter to active jobs only")
+    ] = False,
 ) -> list[JobConfigurationResponse]:
     """List all job configurations, optionally filtered to active jobs only."""
     jobs = await job_service.list_job_configurations(active_only=active_only)
@@ -149,12 +151,12 @@ async def update_job_configuration(
 async def get_job_executions(
     job_id: int,
     job_service: JobServiceDep,
-    page: int = Query(1, ge=1, description="Page number"),
-    size: int = Query(20, ge=1, le=100, description="Page size"),
-    status: JobStatus | None = Query(None, description="Filter by status"),
-    execution_type: ExecutionType | None = Query(
-        None, description="Filter by execution type"
-    ),
+    page: Annotated[int, Query(ge=1, description="Page number")] = 1,
+    size: Annotated[int, Query(ge=1, le=100, description="Page size")] = 20,
+    status: Annotated[JobStatus | None, Query(description="Filter by status")] = None,
+    execution_type: Annotated[
+        ExecutionType | None, Query(description="Filter by execution type")
+    ] = None,
 ) -> JobExecutionListResponse:
     """
     Get execution history for a specific job.
@@ -182,12 +184,12 @@ async def get_job_executions(
 @router.get("/executions/all")
 async def list_all_executions(
     job_service: JobServiceDep,
-    page: int = Query(1, ge=1, description="Page number"),
-    size: int = Query(20, ge=1, le=100, description="Page size"),
-    status: JobStatus | None = Query(None, description="Filter by status"),
-    execution_type: ExecutionType | None = Query(
-        None, description="Filter by execution type"
-    ),
+    page: Annotated[int, Query(ge=1, description="Page number")] = 1,
+    size: Annotated[int, Query(ge=1, le=100, description="Page size")] = 20,
+    status: Annotated[JobStatus | None, Query(description="Filter by status")] = None,
+    execution_type: Annotated[
+        ExecutionType | None, Query(description="Filter by execution type")
+    ] = None,
 ) -> JobExecutionListResponse:
     """
     Get execution history for all jobs.
@@ -331,7 +333,7 @@ async def resume_job(
 async def stop_job(
     job_id: int,
     job_service: JobServiceDep,
-    force: bool = Query(False, description="Force stop immediately"),
+    force: Annotated[bool, Query(description="Force stop immediately")] = False,
 ) -> JobControlActionResponse:
     """Request graceful or forced stop for a running job execution."""
     return _require_control_state(
@@ -377,10 +379,10 @@ async def trigger_test_run(
     job_id: int,
     background_tasks: BackgroundTasks,
     job_service: JobServiceDep,
-    suspend_regular: bool = Query(
-        False,
-        description="Whether to suspend regular scheduled runs during the test",
-    ),
+    suspend_regular: Annotated[
+        bool,
+        Query(description="Whether to suspend regular scheduled runs during the test"),
+    ] = False,
 ) -> JobTriggerResponse:
     """Start a test run for a job.
 
@@ -456,7 +458,7 @@ async def _run_test_job_with_cleanup(
 async def stop_test_run(
     job_id: int,
     job_service: JobServiceDep,
-    force: bool = Query(False, description="Force stop immediately"),
+    force: Annotated[bool, Query(description="Force stop immediately")] = False,
 ) -> JobControlActionResponse:
     """Stop a running test for a job."""
     state = await job_service.request_job_stop_action(

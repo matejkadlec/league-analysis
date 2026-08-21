@@ -6,8 +6,10 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from app.core.rate_limiter import rate_limit
-from app.features.auth.dependencies import get_current_active_user
-from app.features.auth.models import User
+from app.features.auth.dependencies import (
+    CurrentUserDep,
+    get_current_active_user,
+)
 from app.features.settings.schemas import serialize_card_preference_settings
 
 from .config import DEFAULT_PRESET, PRESETS
@@ -62,7 +64,7 @@ async def analyze_player(
     request: Request,
     payload: SmurfBoostAnalysisRequest,
     service: SmurfBoostServiceDep,
-    current_user: User = Depends(get_current_active_user),
+    current_user: CurrentUserDep,
 ) -> SmurfBoostAnalysisResponse:
     """Run detection for one player using the viewer's thresholds.
 

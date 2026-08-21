@@ -72,15 +72,18 @@ reportMissingTypeStubs = "none"
 # annotations called impossible. Revision 20260816_0014 closed that gap;
 # turning them back on reported exactly one dead guard repo-wide, not the
 # sweep the disabling comment feared.
-# Rules Pyright leaves off even in strict mode. These four are enabled because
+# Rules Pyright leaves off even in strict mode. These five are enabled because
 # they cost nothing to keep passing; the ones deliberately left off are:
-#   reportCallInDefaultInitializer (104)  fires on FastAPI's `Depends()`, the
-#     same false positive Ruff's B008 is ignored for
 #   reportUnusedCallResult (106)          flags every discarded return value
 #   reportImplicitStringConcatenation (37) style, and it fights the wrapped
 #     message strings this codebase uses throughout
 #   reportMissingSuperCall (16)           the ORM and Pydantic base classes do
 #     not want a chained __init__ in every subclass
+# On since every FastAPI parameter uses the `Annotated[T, Depends(...)]` form.
+# It was off while 88 routes spelled their dependencies as call defaults, which
+# is also why Ruff's B008 was ignored; both suppressions are gone now, so a
+# `datetime.now()` or a shared mutable default anywhere in `app/` is reported.
+reportCallInDefaultInitializer = "error"
 reportUninitializedInstanceVariable = "error"
 reportPropertyTypeMismatch = "error"
 reportUnnecessaryTypeIgnoreComment = "error"
@@ -147,10 +150,6 @@ select = [
     "UP",
 ]
 ignore = [
-    # FastAPI's whole dependency-injection contract is `Depends()` evaluated
-    # once in a parameter default. B008 exists to catch accidental shared
-    # mutable defaults; here it fires on the framework's intended usage.
-    "B008",
     # Not every exception is an error. `JobStopSignal` and `RateLimitSignal`
     # are control flow, and the `*Refusal` names in scripts/ are a deliberate
     # vocabulary for "this tool declined to act". Renaming them to `*Error`

@@ -18,8 +18,7 @@ from app.core.riot_api.errors import (
     NotFoundError,
     RateLimitError,
 )
-from app.features.auth.dependencies import get_current_active_user
-from app.features.auth.models import User
+from app.features.auth.dependencies import CurrentUserDep
 from app.features.jobs.models import PlayerSyncRun
 from app.features.jobs.player_sync import (
     create_or_get_player_sync,
@@ -80,16 +79,18 @@ async def _fuzzy_search(
 async def search_player(
     request: Request,
     player_service: PlayerServiceDep,
-    current_user: User = Depends(get_current_active_user),
-    query: str = Query(
-        ...,
-        min_length=3,
-        max_length=30,
-        description="Search query (game name, tag line or both)",
-    ),
-    platform: Platform | None = Query(
-        None, description="Optional platform filter (e.g. EUN1)"
-    ),
+    current_user: CurrentUserDep,
+    query: Annotated[
+        str,
+        Query(
+            min_length=3,
+            max_length=30,
+            description="Search query (game name, tag line or both)",
+        ),
+    ],
+    platform: Annotated[
+        Platform | None, Query(description="Optional platform filter (e.g. EUN1)")
+    ] = None,
 ) -> list[PlayerResponse]:
     """
     Fuzzy search for players by game name, tag line or both.
@@ -113,22 +114,26 @@ async def search_player(
 async def get_player_suggestions(
     request: Request,
     player_service: PlayerServiceDep,
-    current_user: User = Depends(get_current_active_user),
-    q: str = Query(
-        ...,
-        min_length=0,
-        max_length=30,
-        description="Search query (name, tag, or Name#Tag)",
-    ),
-    platform: Platform | None = Query(
-        None, description="Optional platform filter (e.g. EUN1)"
-    ),
-    limit: int = Query(
-        5,
-        ge=1,
-        le=10,
-        description="Number of suggestions to return (default: 5, max: 10)",
-    ),
+    current_user: CurrentUserDep,
+    q: Annotated[
+        str,
+        Query(
+            min_length=0,
+            max_length=30,
+            description="Search query (name, tag, or Name#Tag)",
+        ),
+    ],
+    platform: Annotated[
+        Platform | None, Query(description="Optional platform filter (e.g. EUN1)")
+    ] = None,
+    limit: Annotated[
+        int,
+        Query(
+            ge=1,
+            le=10,
+            description="Number of suggestions to return (default: 5, max: 10)",
+        ),
+    ] = 5,
 ) -> list[PlayerResponse]:
     """
     Get autocomplete suggestions for player search.
@@ -168,7 +173,7 @@ async def get_player_suggestions(
 @router.get("/context")
 async def get_player_context(
     player_service: PlayerServiceDep,
-    current_user: User = Depends(get_current_active_user),
+    current_user: CurrentUserDep,
 ) -> PlayerContextResponse:
     """Get the authenticated user's current and recent tracked players."""
     return await player_service.get_player_context(current_user.id)
@@ -178,7 +183,7 @@ async def get_player_context(
 async def update_current_player(
     update: CurrentPlayerUpdate,
     player_service: PlayerServiceDep,
-    current_user: User = Depends(get_current_active_user),
+    current_user: CurrentUserDep,
 ) -> PlayerContextResponse:
     """Set the user's default current player without tracking or syncing it."""
     try:
@@ -193,26 +198,30 @@ async def discover_player(
     request: Request,
     player_service: PlayerServiceDep,
     riot_client: Annotated[RiotAPIClient, Depends(get_riot_client)],
-    _current_user: User = Depends(get_current_active_user),
+    _current_user: CurrentUserDep,
     # The four Riot ID rules used to be 39 lines of imperative checks here
     # and four constants in `frontend/.../riot-id.ts`, with the OpenAPI
     # document publishing neither. Declared, they reach the document and the
     # frontend can be checked against them.
-    game_name: str = Query(
-        ...,
-        min_length=1,
-        max_length=16,
-        pattern=r"^[a-zA-Z0-9\s._-]+$",
-        description="Riot game name",
-    ),
-    tag_line: str = Query(
-        ...,
-        min_length=1,
-        max_length=5,
-        pattern=r"^[a-zA-Z0-9]+$",
-        description="Riot tag line without #",
-    ),
-    platform: Platform = Query(..., description="Resolved Riot platform"),
+    game_name: Annotated[
+        str,
+        Query(
+            min_length=1,
+            max_length=16,
+            pattern=r"^[a-zA-Z0-9\s._-]+$",
+            description="Riot game name",
+        ),
+    ],
+    tag_line: Annotated[
+        str,
+        Query(
+            min_length=1,
+            max_length=5,
+            pattern=r"^[a-zA-Z0-9]+$",
+            description="Riot tag line without #",
+        ),
+    ],
+    platform: Annotated[Platform, Query(description="Resolved Riot platform")],
 ) -> PlayerResponse:
     """Resolve a one-field Riot ID after conditional platform selection."""
     try:
@@ -242,7 +251,7 @@ async def discover_player(
 async def get_player_by_puuid(
     puuid: str,
     player_service: PlayerServiceDep,
-    current_user: User = Depends(get_current_active_user),
+    current_user: CurrentUserDep,
 ) -> PlayerResponse:
     """Get player information by PUUID."""
     player = await player_service.get_player_by_puuid(puuid, user_id=current_user.id)
@@ -258,7 +267,7 @@ async def start_player_sync(
     puuid: str,
     background_tasks: BackgroundTasks,
     player_service: PlayerServiceDep,
-    current_user: User = Depends(get_current_active_user),
+    current_user: CurrentUserDep,
 ) -> PlayerSyncRun:
     """Create or attach to one authoritative explicit update for this player."""
     try:
@@ -278,7 +287,7 @@ async def start_player_sync(
 async def read_active_player_sync(
     puuid: str,
     player_service: PlayerServiceDep,
-    _current_user: User = Depends(get_current_active_user),
+    _current_user: CurrentUserDep,
 ) -> PlayerSyncRun | None:
     """Rehydrate the active update for a player after navigation or reload."""
     return await get_active_player_sync(player_service.db, puuid)
@@ -289,7 +298,7 @@ async def read_player_sync(
     puuid: str,
     sync_id: int,
     player_service: PlayerServiceDep,
-    _current_user: User = Depends(get_current_active_user),
+    _current_user: CurrentUserDep,
 ) -> PlayerSyncRun:
     """Read the exact persisted update run returned by the start endpoint."""
     sync_run = await player_service.db.get(PlayerSyncRun, sync_id)
@@ -313,7 +322,7 @@ async def track_player(
     puuid: str,
     player_service: PlayerServiceDep,
     background_tasks: BackgroundTasks,
-    current_user: User = Depends(get_current_active_user),
+    current_user: CurrentUserDep,
 ) -> PlayerResponse:
     """
     Mark a player for automated tracking and monitoring.
@@ -376,7 +385,7 @@ async def track_player(
 async def untrack_player(
     puuid: str,
     player_service: PlayerServiceDep,
-    current_user: User = Depends(get_current_active_user),
+    current_user: CurrentUserDep,
 ) -> PlayerResponse:
     """
     Remove a player from automated tracking.
@@ -399,7 +408,7 @@ async def untrack_player(
 @router.get("/tracked/list")
 async def get_tracked_players(
     player_service: PlayerServiceDep,
-    current_user: User = Depends(get_current_active_user),
+    current_user: CurrentUserDep,
 ) -> list[PlayerResponse]:
     """
     Get all players currently marked for tracking.
@@ -420,10 +429,10 @@ async def refresh_player_league(
     puuid: str,
     player_service: PlayerServiceDep,
     riot_client: Annotated[RiotAPIClient, Depends(get_riot_client)],
-    _current_user: User = Depends(get_current_active_user),
-    queue_type: str = Query(
-        "RANKED_SOLO_5x5", description="Queue type to refresh league for"
-    ),
+    _current_user: CurrentUserDep,
+    queue_type: Annotated[
+        str, Query(description="Queue type to refresh league for")
+    ] = "RANKED_SOLO_5x5",
 ) -> PlayerLeague | None:
     """
     Refresh and get the current league for a player from Riot API.
@@ -486,9 +495,9 @@ async def refresh_player_league(
 async def get_player_current_league(
     puuid: str,
     player_service: PlayerServiceDep,
-    queue_type: str = Query(
-        "RANKED_SOLO_5x5", description="Queue type to fetch league for"
-    ),
+    queue_type: Annotated[
+        str, Query(description="Queue type to fetch league for")
+    ] = "RANKED_SOLO_5x5",
 ) -> PlayerLeague | None:
     """
     Get the current league for a player.

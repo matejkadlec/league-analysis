@@ -1,6 +1,7 @@
 """Matchmaking analysis API endpoints."""
 
 from datetime import datetime
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
@@ -97,12 +98,9 @@ async def get_analysis_status_by_puuid(
 async def get_analysis_history(
     puuid: str,
     service: MatchmakingServiceDep,
-    limit: int = Query(
-        20,
-        ge=1,
-        le=100,
-        description="Number of completed analyses to return",
-    ),
+    limit: Annotated[
+        int, Query(ge=1, le=100, description="Number of completed analyses to return")
+    ] = 20,
 ) -> MatchmakingAnalysisHistoryResponse:
     """Get history of completed analyses for a player.
 

@@ -1,6 +1,7 @@
 """Authentication router with login, refresh, logout, and user management endpoints."""
 
 from datetime import UTC, datetime
+from typing import Annotated
 
 import structlog
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, Response, status
@@ -19,10 +20,7 @@ from .cookies import (
     max_age_seconds,
     set_auth_cookies,
 )
-from .dependencies import (
-    get_current_active_user,
-    get_current_admin_user,
-)
+from .dependencies import AdminUserDep, CurrentUserDep
 from .models import User
 from .schemas import (
     EmailChangeCodeResponse,
@@ -97,9 +95,9 @@ def _issue_token_response(
 async def login(
     request: Request,
     response: Response,
-    form_data: OAuth2PasswordRequestForm = Depends(),
-    captcha_token: str | None = Form(default=None),
-    auth_service: AuthService = Depends(get_auth_service),
+    form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
+    auth_service: Annotated[AuthService, Depends(get_auth_service)],
+    captcha_token: Annotated[str | None, Form()] = None,
 ) -> Token:
     """Authenticate user credentials and issue an access token.
 
@@ -202,8 +200,8 @@ async def login(
 async def refresh_access_token(
     request: Request,
     response: Response,
+    auth_service: Annotated[AuthService, Depends(get_auth_service)],
     refresh_request: RefreshTokenRequest | None = None,
-    auth_service: AuthService = Depends(get_auth_service),
 ) -> Token:
     """Rotate refresh token and issue a new access token pair."""
     raw_refresh_token = (
@@ -265,7 +263,7 @@ async def refresh_access_token(
 async def logout(
     request: Request,
     response: Response,
-    auth_service: AuthService = Depends(get_auth_service),
+    auth_service: Annotated[AuthService, Depends(get_auth_service)],
 ) -> MessageResponse:
     """Revoke whatever session the request still carries, and always succeed.
 
@@ -348,7 +346,7 @@ async def logout(
 
 @router.get("/me", response_model=UserResponse)
 async def get_current_user_info(
-    current_user: User = Depends(get_current_active_user),
+    current_user: CurrentUserDep,
 ) -> User:
     """Get current authenticated user information."""
     return current_user
@@ -361,7 +359,7 @@ async def get_current_user_info(
 async def register_user(
     request: Request,
     user_create: UserCreate,
-    auth_service: AuthService = Depends(get_auth_service),
+    auth_service: Annotated[AuthService, Depends(get_auth_service)],
 ) -> User:
     """Register a new user account.
 
@@ -380,7 +378,7 @@ async def register_user(
 async def submit_join_us_contact(
     request: Request,
     payload: JoinUsContactRequest,
-    auth_service: AuthService = Depends(get_auth_service),
+    auth_service: Annotated[AuthService, Depends(get_auth_service)],
 ) -> MessageResponse:
     """Submit Join Us contact form and send a numbered recruitment email."""
     try:
@@ -440,8 +438,8 @@ async def submit_join_us_contact(
 
 @router.get("/users", response_model=list[UserResponse])
 async def list_users(
-    current_user: User = Depends(get_current_admin_user),
-    auth_service: AuthService = Depends(get_auth_service),
+    current_user: AdminUserDep,
+    auth_service: Annotated[AuthService, Depends(get_auth_service)],
 ) -> list[User]:
     """List all users (admin only)."""
     result = await auth_service.db.execute(select(User))
@@ -451,8 +449,8 @@ async def list_users(
 @router.patch("/me", response_model=UserResponse)
 async def update_current_user_profile(
     update: UserProfileUpdate,
-    current_user: User = Depends(get_current_active_user),
-    auth_service: AuthService = Depends(get_auth_service),
+    current_user: CurrentUserDep,
+    auth_service: Annotated[AuthService, Depends(get_auth_service)],
 ) -> User:
     """Update current user's profile fields (display_name, etc.)."""
     from datetime import datetime
@@ -472,8 +470,8 @@ async def update_current_user_profile(
 async def request_email_change_code(
     request: Request,
     payload: EmailChangeRequest,
-    current_user: User = Depends(get_current_active_user),
-    auth_service: AuthService = Depends(get_auth_service),
+    current_user: CurrentUserDep,
+    auth_service: Annotated[AuthService, Depends(get_auth_service)],
 ) -> EmailChangeCodeResponse:
     """Send a 6-digit verification code to a new email address."""
     _ = request
@@ -524,8 +522,8 @@ async def request_email_change_code(
 async def verify_email_change_code(
     request: Request,
     payload: EmailChangeVerifyRequest,
-    current_user: User = Depends(get_current_active_user),
-    auth_service: AuthService = Depends(get_auth_service),
+    current_user: CurrentUserDep,
+    auth_service: Annotated[AuthService, Depends(get_auth_service)],
 ) -> User:
     """Verify submitted email-change code and update current user email."""
     _ = request
@@ -573,8 +571,8 @@ async def verify_email_change_code(
 async def change_password(
     request: Request,
     payload: PasswordChangeRequest,
-    current_user: User = Depends(get_current_active_user),
-    auth_service: AuthService = Depends(get_auth_service),
+    current_user: CurrentUserDep,
+    auth_service: Annotated[AuthService, Depends(get_auth_service)],
 ) -> MessageResponse:
     """Change password for the current authenticated user."""
     _ = request

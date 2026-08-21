@@ -1,5 +1,7 @@
 """Authentication dependencies for protecting routes."""
 
+from typing import Annotated
+
 import structlog
 from fastapi import Depends, HTTPException, Request, status
 
@@ -14,7 +16,7 @@ logger = structlog.get_logger(__name__)
 
 def get_request_access_token(
     request: Request,
-    bearer_token: str | None = Depends(oauth2_scheme),
+    bearer_token: Annotated[str | None, Depends(oauth2_scheme)],
 ) -> str:
     """Prefer the Authorization header, then the HttpOnly access cookie."""
     if bearer_token:
@@ -30,15 +32,15 @@ def get_request_access_token(
 
 
 async def get_current_user(
-    token: str = Depends(get_request_access_token),
-    auth_service: AuthService = Depends(get_auth_service),
+    token: Annotated[str, Depends(get_request_access_token)],
+    auth_service: Annotated[AuthService, Depends(get_auth_service)],
 ) -> User:
     """Get the current authenticated user."""
     return await auth_service.get_current_user(token)
 
 
 async def get_current_active_user(
-    current_user: User = Depends(get_current_user),
+    current_user: Annotated[User, Depends(get_current_user)],
 ) -> User:
     """Get the current active user (not disabled)."""
     if not current_user.is_active:
@@ -55,7 +57,7 @@ async def get_current_active_user(
 
 
 async def get_current_admin_user(
-    current_user: User = Depends(get_current_active_user),
+    current_user: Annotated[User, Depends(get_current_active_user)],
 ) -> User:
     """Get the current admin user."""
     if not current_user.is_admin:
@@ -69,3 +71,19 @@ async def get_current_admin_user(
             "You need administrator access for this action.",
         )
     return current_user
+
+
+# Spelled once, matching `JobServiceDep`: 29 routes across five features asked
+# for the same two dependencies, and every one of them restated the whole
+# `Annotated[User, Depends(...)]` form.
+CurrentUserDep = Annotated[User, Depends(get_current_active_user)]
+AdminUserDep = Annotated[User, Depends(get_current_admin_user)]
+
+__all__ = [
+    "AdminUserDep",
+    "CurrentUserDep",
+    "get_current_active_user",
+    "get_current_admin_user",
+    "get_current_user",
+    "get_request_access_token",
+]
