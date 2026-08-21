@@ -183,6 +183,16 @@ describe("zod against the OpenAPI contract", () => {
         if (apiKinds.has("null") && !zodKinds.has("null")) {
           problems.push(`${field}: API may send null, zod does not accept null`);
         }
+        // And the mirror. A zod field that accepts a null the API cannot send
+        // is a field whose absence no longer fails: five `core.matches`
+        // columns were NOT NULL in the DDL, `| None` in the response model and
+        // `.optional().nullable()` here, so renaming any of them on the
+        // backend would have left every parse in this suite green.
+        if (!apiKinds.has("null") && zodKinds.has("null")) {
+          problems.push(
+            `${field}: zod accepts null, API never sends it -- drop .nullable()`,
+          );
+        }
       }
 
       expect(problems).toEqual([]);

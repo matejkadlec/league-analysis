@@ -173,7 +173,10 @@ class MatchInfoDTO(RiotDTO):
     game_version: str = Field(...)
     game_mode: str = Field(...)
     game_type: str = Field(...)
-    game_end_timestamp: int | None = Field(default=None)
+    # Required, because `core.matches.game_end_timestamp` is NOT NULL and this
+    # value is written straight into it. Optional here only moved the refusal
+    # from the trust boundary to a NOT NULL violation at flush.
+    game_end_timestamp: int = Field(...)
     game_result: str | None = Field(default=None, alias="endOfGameResult")
     participants: list[ParticipantDTO]
     # `min_length=1`, so an empty `platformId` is refused here rather than
