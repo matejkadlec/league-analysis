@@ -1,15 +1,16 @@
 import { describe, expect, it } from "vitest";
 
-import { getPlatformDisplayName } from "../lib/core/platform-utils";
+import { PLATFORMS, getPlatformDisplayName } from "../lib/core/platform-utils";
 import { getRankColors } from "../features/players/utils/rank-colors";
 
 describe("platform presentation", () => {
-  it("normalizes known platform codes case-insensitively", () => {
-    expect(getPlatformDisplayName("EUN1")).toBe("EUNE");
-  });
-
-  it("uses safe fallbacks for unknown platforms", () => {
-    expect(getPlatformDisplayName("test")).toBe("TEST");
+  it("names every platform it is given", () => {
+    // The parameter is `Platform`, so there is no unknown-code case left to
+    // test -- `PlayerSchema` rejects the payload before this is ever called.
+    for (const platform of PLATFORMS) {
+      expect(getPlatformDisplayName(platform)).toBeTruthy();
+    }
+    expect(getPlatformDisplayName("eun1")).toBe("EUNE");
   });
 });
 

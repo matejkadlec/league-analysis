@@ -27,7 +27,9 @@ import { discoverPlayer, searchPlayerSuggestions } from "../player-api";
 import { useToast } from "@/lib/core/hooks";
 import {
   PLATFORM_DISPLAY_NAMES,
+  type Platform,
   getPlatformDisplayName,
+  isPlatform,
 } from "@/lib/core/platform-utils";
 import type { Player } from "@/lib/core/schemas";
 import { cn } from "@/lib/core/utils";
@@ -36,7 +38,7 @@ import { formatRiotId, parseRiotId, type RiotIdParts } from "../utils/riot-id";
 
 interface DiscoverAttempt {
   riotId: RiotIdParts;
-  platform: string;
+  platform: Platform;
 }
 import {
   playerNotFoundMessage,
@@ -83,7 +85,7 @@ export function PlayerSelector({
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [isSelecting, setIsSelecting] = useState(false);
   const [pendingRiotId, setPendingRiotId] = useState<RiotIdParts | null>(null);
-  const [platform, setPlatform] = useState("eun1");
+  const [platform, setPlatform] = useState<Platform>("eun1");
 
   useEffect(() => {
     const timeout = window.setTimeout(
@@ -318,7 +320,14 @@ export function PlayerSelector({
           </DialogHeader>
           <div className="space-y-2">
             <Label htmlFor={`${id}-platform`}>Server</Label>
-            <Select value={platform} onValueChange={setPlatform}>
+            <Select
+              value={platform}
+              onValueChange={(value) => {
+                if (isPlatform(value)) {
+                  setPlatform(value);
+                }
+              }}
+            >
               <SelectTrigger id={`${id}-platform`}>
                 <SelectValue />
               </SelectTrigger>

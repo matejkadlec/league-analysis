@@ -118,11 +118,12 @@ describe("zod against the OpenAPI contract", () => {
   });
 
   it("names every platform the API accepts", () => {
-    // Not a schema pair: `Platform` reaches the client as a query-parameter
-    // enum, and the frontend's copy of it is a display-name table rather than
-    // a zod schema. A platform added on the backend and missing here does not
-    // fail anywhere at runtime -- `getPlatformDisplayName` falls through to
-    // `platform.toUpperCase()`, so the picker would simply never offer it.
+    // Not a schema pair, and `kinds()` below could not check it if it were:
+    // it reduces both a `$ref`-to-enum and a `z.enum` to "string". This is
+    // the only thing tying the frontend's platform vocabulary to the API's.
+    // A platform added on the backend and missing from the display-name table
+    // now fails `PlayerSchema` for every player on it, rather than merely
+    // going unoffered by the picker.
     const platform = apiSchemas.Platform as { enum?: string[] } | undefined;
     expect(platform?.enum, "OpenAPI has no Platform enum").toBeTruthy();
     expect(new Set(Object.keys(PLATFORM_DISPLAY_NAMES))).toEqual(

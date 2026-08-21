@@ -1,11 +1,15 @@
 import { z } from "zod";
 
+import { PLATFORMS } from "@/lib/core/platform-utils";
+
 // Player Schema
 export const PlayerSchema = z.object({
   puuid: z.string(),
   game_name: z.string(),
   tag_line: z.string(),
-  platform: z.string(),
+  // Derived from the display-name table rather than listed again: the two
+  // used to be sixteen codes typed twice, checked in neither direction.
+  platform: z.enum(PLATFORMS),
   summoner_level: z.number().int(),
   profile_icon_id: z.number().int(),
   is_tracked: z.boolean().optional().default(false),
