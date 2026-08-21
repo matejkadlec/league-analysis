@@ -23,6 +23,8 @@ from app.features.auth.models import User
 from app.features.auth.user_settings import ensure_user_settings
 from app.features.auth.user_tracked_player import UserTrackedPlayer
 from app.features.jobs.maintenance import ensure_riot_writer_maintenance_is_inactive
+from app.features.matches.models import Match
+from app.features.matches.participants import MatchParticipant
 
 from .leagues import PlayerLeague
 from .models import Player
@@ -152,9 +154,6 @@ class PlayerService:
             )
 
         # Count total matches for this player
-        from app.features.matches.models import Match
-        from app.features.matches.participants import MatchParticipant
-
         # Get total matches count
         count_result = await self.db.execute(
             select(func.count())

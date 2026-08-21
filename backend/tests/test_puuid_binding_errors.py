@@ -589,6 +589,7 @@ async def test_task_cancellation_leaves_the_analysis_resumable(
     """
     import asyncio
 
+    from app.core.riot_api import scoped_client
     from app.features.matchmaking_analysis import service as analysis_module
 
     opened: list[object] = []
@@ -606,7 +607,7 @@ async def test_task_cancellation_leaves_the_analysis_resumable(
     async def _cancelled(*_args: object, **_kwargs: object) -> NoReturn:
         raise asyncio.CancelledError()
 
-    monkeypatch.setattr(analysis_module, "create_tracked_riot_api_client", _cancelled)
+    monkeypatch.setattr(scoped_client, "create_tracked_riot_api_client", _cancelled)
 
     service = analysis_module.MatchmakingAnalysisService(
         cast(AsyncSession, _Session()), cast(RiotAPIClient, SimpleNamespace())

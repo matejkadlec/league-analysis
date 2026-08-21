@@ -15,9 +15,10 @@ from typing import Any, cast
 import structlog
 from sqlalchemy import ColumnElement, and_, func, select, update
 from sqlalchemy.engine import CursorResult
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.riot_api.constants import RANKED_SOLO_QUEUE_ID
+from app.core.runs import active_run_filter, commit_new_run, guarded_run_update
 from app.features.matches.models import Match
 from app.features.matches.participants import MatchParticipant
 from app.features.players.leagues import PlayerLeague
@@ -29,7 +30,6 @@ from .composite import EligibleMatch
 from .config import (
     COMPOSITE_WEIGHTS,
     DEFAULT_PRESET,
-    ELIGIBLE_QUEUE_ID,
     MINIMUM_GAME_DURATION_SECONDS,
     MODEL_VERSION,
     PRESETS,
@@ -154,7 +154,7 @@ class SmurfBoostDetectionService:
             MatchParticipant.puuid == puuid,
             MatchParticipant.remake.is_(False),
             MatchParticipant.team_position.in_(sorted(RECOGNIZED_POSITIONS)),
-            Match.queue_id == ELIGIBLE_QUEUE_ID,
+            Match.queue_id == RANKED_SOLO_QUEUE_ID,
             Match.game_duration >= MINIMUM_GAME_DURATION_SECONDS,
         ]
 
@@ -260,10 +260,7 @@ class SmurfBoostDetectionService:
         """The one active run for a player, if any."""
         result = await self.db.execute(
             select(SmurfBoostAnalysis)
-            .where(
-                SmurfBoostAnalysis.puuid == puuid,
-                SmurfBoostAnalysis.status.in_(ACTIVE_STATUSES),
-            )
+            .where(active_run_filter(SmurfBoostAnalysis, ACTIVE_STATUSES, puuid))
             .order_by(SmurfBoostAnalysis.created_at.desc())
             .limit(1)
         )
@@ -281,8 +278,7 @@ class SmurfBoostDetectionService:
             update(SmurfBoostAnalysis)
             .where(
                 and_(
-                    SmurfBoostAnalysis.puuid == puuid,
-                    SmurfBoostAnalysis.status.in_(ACTIVE_STATUSES),
+                    active_run_filter(SmurfBoostAnalysis, ACTIVE_STATUSES, puuid),
                     SmurfBoostAnalysis.created_at < cutoff,
                 )
             )
@@ -340,11 +336,8 @@ class SmurfBoostDetectionService:
             model_version=MODEL_VERSION,
             thresholds=dict(thresholds),
         )
-        self.db.add(run)
-        try:
-            await self.db.commit()
-        except IntegrityError as error:
-            await self.db.rollback()
+        conflict = await commit_new_run(self.db, run)
+        if conflict is not None:
             # The winner of the race may already have finished, in which case
             # there is no active row left to attach to and its completed result
             # is the honest answer to this identical request.
@@ -353,9 +346,9 @@ class SmurfBoostDetectionService:
                 logger.error(
                     "smurf_boost_detection_integrity_conflict",
                     puuid=puuid,
-                    error_type=type(error).__name__,
+                    error_type=type(conflict).__name__,
                 )
-                raise
+                raise conflict
             if not self._matches_configuration(concurrent, thresholds):
                 raise SmurfBoostDetectionError(
                     "analysis_in_progress",
@@ -367,16 +360,15 @@ class SmurfBoostDetectionService:
 
     async def _terminal(self, puuid: str, created_at: datetime, **values: Any) -> None:
         """Write one run's terminal state, guarded so it is never revived."""
-        await self.db.execute(
-            update(SmurfBoostAnalysis)
-            .where(
-                SmurfBoostAnalysis.puuid == puuid,
-                SmurfBoostAnalysis.created_at == created_at,
-                SmurfBoostAnalysis.status.in_(ACTIVE_STATUSES),
-            )
-            .values(completed_at=datetime.now(UTC), **values)
+        await guarded_run_update(
+            self.db,
+            SmurfBoostAnalysis,
+            ACTIVE_STATUSES,
+            puuid,
+            created_at,
+            completed_at=datetime.now(UTC),
+            **values,
         )
-        await self.db.commit()
 
     async def _finalize(
         self,
