@@ -460,6 +460,43 @@ export type UserProfileUpdate = {
   display_name?: string;
 };
 
+/**
+ * The two request bodies that used to be posted through the raw client.
+ *
+ * Both re-spelled a backend enum as a hand-written TS union, and neither URL
+ * was visible to `test_frontend_api_paths.py`, which scans for `validated*`
+ * calls only. Declaring them here puts the enums inside the OpenAPI contract
+ * test and the paths inside the path test.
+ */
+export const JoinUsSubjectSchema = z.enum([
+  "beta_tester",
+  "full_stack_developer",
+  "other",
+]);
+export type JoinUsSubject = z.infer<typeof JoinUsSubjectSchema>;
+
+export const JoinUsContactRequestSchema = z.object({
+  subject: JoinUsSubjectSchema,
+  body: z.string().min(1).max(5000),
+  captcha_token: z.string().min(1).max(4096).nullable().optional(),
+});
+
+export const CookieConsentLevelSchema = z.enum(["necessary", "all"]);
+export type CookieConsentLevel = z.infer<typeof CookieConsentLevelSchema>;
+
+export const UserCookieConsentUpdateSchema = z.object({
+  consent_level: CookieConsentLevelSchema,
+  consent_version: z.string().min(1).max(16),
+  consent_source: z.string().min(1).max(32),
+});
+
+export const UserCookieConsentResponseSchema = z.object({
+  consent_level: CookieConsentLevelSchema,
+  consent_version: z.string(),
+  consent_source: z.string(),
+  consented_at: z.string(),
+});
+
 export const MessageResponseSchema = z.object({
   message: z.string(),
 });
