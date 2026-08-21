@@ -4,8 +4,7 @@ This module provides utility classes for transforming data from Riot API DTOs
 to formats suitable for database storage, validation, and processing.
 """
 
-from collections.abc import Sequence
-from typing import Any, Protocol, cast, runtime_checkable
+from typing import Any
 
 import structlog
 
@@ -14,58 +13,8 @@ from app.core.riot_api.models import ParticipantDTO
 logger = structlog.get_logger(__name__)
 
 
-@runtime_checkable
-class _MatchIdCarrier(Protocol):
-    """The single member `extract_match_ids` reads off a match-list DTO.
-
-    `MatchListDTO` satisfies this, but the function is a shape probe that also
-    accepts `None`, a bare list, and objects carrying neither — so the DTO
-    itself cannot be the parameter type. The Protocol names the one attribute
-    the DTO branch actually needs.
-    """
-
-    @property
-    def match_ids(self) -> Sequence[str]: ...
-
-
 class MatchDTOTransformer:
     """Utility for transforming match DTOs from Riot API."""
-
-    @staticmethod
-    def extract_match_ids(match_list_dto: object) -> list[str]:
-        """Extract match IDs from match list DTO.
-
-        Handles different DTO formats from Riot API.
-
-        Args:
-            match_list_dto: Match list DTO from Riot API
-
-        Returns:
-            List of match ID strings
-
-        Example:
-            >>> dto = MatchListDTO(match_ids=['EUN1_123', 'EUN1_456'])
-            >>> MatchDTOTransformer.extract_match_ids(dto)
-            ['EUN1_123', 'EUN1_456']
-        """
-        if match_list_dto is None:
-            return []
-
-        # Handle DTO with match_ids attribute
-        if isinstance(match_list_dto, _MatchIdCarrier):
-            return list(match_list_dto.match_ids)
-
-        # Handle direct list: element types are unchecked here exactly as the
-        # declared return type already assumes.
-        if isinstance(match_list_dto, list):
-            return list(cast("list[str]", match_list_dto))
-
-        # Fallback to empty list
-        logger.warning(
-            "Unexpected match list DTO format",
-            dto_type=type(match_list_dto).__name__,
-        )
-        return []
 
     @staticmethod
     def sanitize_participant_names(participant_data: dict[str, Any]) -> dict[str, Any]:

@@ -73,7 +73,7 @@ async def test_discover_player_does_not_classify_a_bare_value_error() -> None:
             request=loopback_request(),
             player_service=service,
             riot_client=MagicMock(),
-            _current_user=MagicMock(),
+            current_user=MagicMock(),
             game_name="SomeName",
             tag_line="1234",
             platform=Platform("eun1"),

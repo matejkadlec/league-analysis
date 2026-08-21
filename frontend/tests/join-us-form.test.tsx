@@ -10,14 +10,14 @@ import {
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
-  post,
+  validatedPost,
   useAuth,
   toastSuccess,
   toastError,
   turnstileReset,
   onSuccessRef,
 } = vi.hoisted(() => ({
-  post: vi.fn(),
+  validatedPost: vi.fn(),
   useAuth: vi.fn(),
   toastSuccess: vi.fn(),
   toastError: vi.fn(),
@@ -25,9 +25,13 @@ const {
   onSuccessRef: { current: null as ((token: string) => void) | null },
 }));
 
+// `validatedPost`, not `api.post`: the helper closes over the module's own
+// axios instance, so replacing the exported `api` object leaves the real
+// request in place -- which is why the success cases here used to hang for
+// five seconds and the failure cases passed for the wrong reason.
 vi.mock("@/lib/core/api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/core/api")>();
-  return { ...actual, api: { ...actual.api, post } };
+  return { ...actual, validatedPost };
 });
 
 vi.mock("@/lib/core/hooks", async (importOriginal) => ({
@@ -92,8 +96,8 @@ function solveCaptcha() {
 
 beforeEach(() => {
   vi.stubEnv("NEXT_PUBLIC_TURNSTILE_SITE_KEY", "site-key");
-  post.mockReset();
-  post.mockResolvedValue({ data: { message: "ok" } });
+  validatedPost.mockReset();
+  validatedPost.mockResolvedValue({ success: true, data: { message: "ok" } });
   toastSuccess.mockReset();
   toastError.mockReset();
   turnstileReset.mockReset();
@@ -188,8 +192,9 @@ describe("what the join-us form refuses to send", () => {
 
     fireEvent.click(submitButton());
 
-    await waitFor(() => expect(post).toHaveBeenCalledTimes(1));
-    expect(post.mock.calls[0]?.[1]).toEqual({
+    await waitFor(() => expect(validatedPost).toHaveBeenCalledTimes(1));
+    expect(validatedPost.mock.calls[0]?.[1]).toBe("/auth/join-us/contact");
+    expect(validatedPost.mock.calls[0]?.[2]).toEqual({
       subject: "beta_tester",
       body: LONG_ENOUGH,
       captcha_token: "captcha-token",
@@ -237,7 +242,7 @@ describe("what happens after the send", () => {
   it("keeps the message the sender wrote when the send fails", async () => {
     // It is at least 300 characters and they typed it once. Clearing it on
     // failure is the difference between "try again" and "write it again".
-    post.mockRejectedValue(new Error("network"));
+    validatedPost.mockRejectedValue(new Error("network"));
     render(<JoinUsForm />);
     fillIn();
     solveCaptcha();
@@ -253,7 +258,7 @@ describe("what happens after the send", () => {
     // The token was spent on the attempt that failed. Without the reset the
     // form still holds it, the button is still enabled, and every retry is
     // rejected by the server for reusing it.
-    post.mockRejectedValue(new Error("network"));
+    validatedPost.mockRejectedValue(new Error("network"));
     render(<JoinUsForm />);
     fillIn();
     solveCaptcha();
@@ -269,7 +274,7 @@ describe("what happens after the send", () => {
   it("shows the failure on the page as well as in a toast", async () => {
     // The toast disappears. The alert is what is still there when the sender
     // looks back at the form wondering whether it went.
-    post.mockRejectedValue(new Error("network"));
+    validatedPost.mockRejectedValue(new Error("network"));
     render(<JoinUsForm />);
     fillIn();
     solveCaptcha();
@@ -287,10 +292,11 @@ describe("what happens after the send", () => {
     // A holder rather than a bare `let`: TypeScript narrows a variable only
     // assigned inside a closure to `never` at the call site below.
     const pending: { release: (() => void) | null } = { release: null };
-    post.mockImplementation(
+    validatedPost.mockImplementation(
       () =>
         new Promise((resolve) => {
-          pending.release = () => resolve({ data: {} });
+          pending.release = () =>
+            resolve({ success: true, data: { message: "ok" } });
         }),
     );
     render(<JoinUsForm />);
@@ -302,7 +308,7 @@ describe("what happens after the send", () => {
     fireEvent.submit(form);
     fireEvent.submit(form);
 
-    await waitFor(() => expect(post).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(validatedPost).toHaveBeenCalledTimes(1));
     pending.release?.();
   });
 });

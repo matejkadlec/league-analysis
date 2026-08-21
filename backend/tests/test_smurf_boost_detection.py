@@ -26,7 +26,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.features.settings.schemas import (
     CardId,
-    CardPreferencesResetRequest,
     serialize_card_preference_settings,
     validate_card_preference_update,
 )
@@ -870,26 +869,6 @@ def test_detection_settings_reject_an_unsatisfiable_novel_gate() -> None:
     }
     with pytest.raises(ValueError):
         validate_card_preference_update(CardId.SMURF_BOOST_DETECTION, unsatisfiable)
-
-
-def test_global_reset_must_enumerate_the_extended_catalog() -> None:
-    """A reset that omits the new card is ambiguous and must be rejected."""
-    # The request model accepts its camel-case aliases only, which is a
-    # validation-time contract rather than a constructor signature.
-    assert CardPreferencesResetRequest.model_validate(
-        {
-            "cardIds": [
-                "profile.top-champions",
-                "profile.recent-performance",
-                "profile.smurf-boost-detection",
-            ]
-        }
-    ).card_ids == list(CardId)
-
-    with pytest.raises(ValueError):
-        CardPreferencesResetRequest.model_validate(
-            {"cardIds": ["profile.top-champions", "profile.recent-performance"]}
-        )
 
 
 # ---------------------------------------------------------------------------

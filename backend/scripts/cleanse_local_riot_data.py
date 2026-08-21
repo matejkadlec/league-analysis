@@ -23,7 +23,7 @@ from dotenv import load_dotenv
 from sqlalchemy import URL, Connection, Engine, RowMapping, create_engine, text
 
 from app.core.config import Settings, get_global_settings
-from app.features.auth.service import AuthService
+from app.features.auth.service import pwd_context
 
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
 PROJECT_ROOT = BACKEND_ROOT.parent
@@ -451,8 +451,11 @@ def delete_riot_data(connection: Connection) -> dict[str, int]:
 
 def normalize_qa_accounts(connection: Connection, target: Preflight) -> bool:
     """Reset the retained admin and create or normalize the non-admin client."""
-    admin_hash = AuthService.get_password_hash(ADMIN_PASSWORD)
-    client_hash = AuthService.get_password_hash(CLIENT_PASSWORD)
+    # `pwd_context` rather than `AuthService`: the service's wrappers are
+    # async because the API path must not block on Argon2, and this script
+    # is synchronous throughout.
+    admin_hash = pwd_context.hash(ADMIN_PASSWORD)
+    client_hash = pwd_context.hash(CLIENT_PASSWORD)
     common_values = {
         "is_active": True,
         "email_verified": True,
@@ -578,7 +581,7 @@ def verify_after_cleanup(
         or not admin["email_verified"]
         or admin["failed_login_attempts"] != 0
         or admin["locked_until"] is not None
-        or not AuthService.verify_password(ADMIN_PASSWORD, admin["password_hash"])
+        or not pwd_context.verify(ADMIN_PASSWORD, admin["password_hash"])
     ):
         raise LocalCleanupRefusal("admin QA account validation failed")
     if (
@@ -587,7 +590,7 @@ def verify_after_cleanup(
         or not client["email_verified"]
         or client["failed_login_attempts"] != 0
         or client["locked_until"] is not None
-        or not AuthService.verify_password(CLIENT_PASSWORD, client["password_hash"])
+        or not pwd_context.verify(CLIENT_PASSWORD, client["password_hash"])
     ):
         raise LocalCleanupRefusal("client QA account validation failed")
 

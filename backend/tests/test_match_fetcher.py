@@ -21,9 +21,21 @@ from app.features.jobs.implementations import match_fetcher as match_fetcher_mod
 from app.features.jobs.implementations.match_fetcher import MatchFetcherJob
 from app.features.jobs.maintenance import RiotWriterMaintenanceActiveError
 from app.features.jobs.models import JobConfiguration
-from app.features.matches.service import MatchService, SyncablePlayer
-from app.features.players.schemas import PlayerResponse
+from app.features.matches.service import MatchService
+from app.features.players.models import Player
 from app.features.players.service import PlayerService
+
+
+def _player(puuid: str = "sanitized-puuid") -> Player:
+    """One unattached row, which is what the job layer now passes around."""
+    return Player(
+        puuid=puuid,
+        game_name="Sanitized",
+        tag_line="EUN1",
+        platform="eun1",
+        summoner_level=30,
+        profile_icon_id=29,
+    )
 
 
 class _EmptyQueryResult:
@@ -80,9 +92,7 @@ async def test_match_sync_always_processes_the_complete_supported_queue_set() ->
 
     await service.sync_matches_for_player(
         riot_client=cast(RiotAPIClient, object()),
-        player=cast(
-            SyncablePlayer, SimpleNamespace(puuid="test-puuid", platform="eun1")
-        ),
+        player=_player("test-puuid"),
     )
 
     assert [
@@ -172,9 +182,7 @@ async def test_match_sync_propagates_rate_limit_to_the_job_layer() -> None:
     with pytest.raises(RateLimitError):
         await service.sync_matches_for_player(
             riot_client=cast(RiotAPIClient, object()),
-            player=cast(
-                SyncablePlayer, SimpleNamespace(puuid="test-puuid", platform="eun1")
-            ),
+            player=_player("test-puuid"),
         )
 
 
@@ -191,9 +199,7 @@ async def test_match_sync_propagates_fatal_writer_errors_to_the_job_layer(
     with pytest.raises(type(fatal_error)):
         await service.sync_matches_for_player(
             riot_client=cast(RiotAPIClient, object()),
-            player=cast(
-                SyncablePlayer, SimpleNamespace(puuid="test-puuid", platform="eun1")
-            ),
+            player=_player("test-puuid"),
         )
 
 
@@ -208,9 +214,7 @@ async def test_match_fetcher_converts_rate_limit_to_a_non_failure_signal() -> No
     with pytest.raises(RateLimitSignal) as error:
         await job._process_player(
             db=cast(AsyncSession, object()),
-            player=cast(
-                PlayerResponse, SimpleNamespace(puuid="test-puuid", game_name="Test")
-            ),
+            player=_player("test-puuid"),
             player_service=cast(
                 PlayerService,
                 SimpleNamespace(get_player_league=AsyncMock(return_value=None)),
@@ -243,7 +247,7 @@ async def test_match_fetcher_execute_propagates_rate_limit_to_base_job(
             side_effect=RateLimitError("limited", status_code=429, retry_after=7)
         )
     )
-    player = SimpleNamespace(puuid="test-puuid", game_name="Test")
+    player = _player("test-puuid")
 
     monkeypatch.setattr(
         MatchFetcherJob,
@@ -265,44 +269,32 @@ async def test_match_fetcher_execute_propagates_rate_limit_to_base_job(
         JobConfiguration, SimpleNamespace(config_json={"enabled_queue_ids": []})
     )
     job.check_control_state = AsyncMock()
-    # Player resolution lives on BaseJob._load_tracked_players now; this test
+    # Player resolution lives on BaseJob._load_tracked_puuids now; this test
     # is about rate-limit propagation, not about resolution.
     monkeypatch.setattr(
         MatchFetcherJob,
-        "_load_tracked_players",
-        AsyncMock(return_value=[player]),
+        "_load_tracked_puuids",
+        AsyncMock(return_value=[player.puuid]),
     )
+    db = SimpleNamespace(get=AsyncMock(return_value=player))
 
     with pytest.raises(RateLimitSignal):
-        await job.execute(cast(AsyncSession, object()))
+        await job.execute(cast(AsyncSession, db))
 
 
 async def test_match_fetcher_processes_the_player_league_refresh_path() -> None:
     job = MatchFetcherJob(job_config_id=7)
-    player_model = SimpleNamespace(
-        puuid="sanitized-puuid",
-        match_synced_at=None,
-        league_synced_at=None,
-    )
-    db = SimpleNamespace(
-        get=AsyncMock(return_value=player_model),
-        commit=AsyncMock(),
-        rollback=AsyncMock(),
-    )
+    db = SimpleNamespace(commit=AsyncMock(), rollback=AsyncMock())
     player_service = SimpleNamespace(
         get_player_league=AsyncMock(return_value=None),
         update_player_league=AsyncMock(return_value=False),
     )
     match_service = SimpleNamespace(sync_matches_for_player=AsyncMock(return_value=0))
-    player = SimpleNamespace(
-        puuid="sanitized-puuid",
-        platform="eun1",
-        game_name="Sanitized",
-    )
+    player = _player()
 
     await job._process_player(
         db=cast(AsyncSession, db),
-        player=cast(PlayerResponse, player),
+        player=player,
         player_service=cast(PlayerService, player_service),
         match_service=cast(MatchService, match_service),
         riot_client=cast(RiotAPIClient, object()),
@@ -310,23 +302,15 @@ async def test_match_fetcher_processes_the_player_league_refresh_path() -> None:
 
     player_service.update_player_league.assert_awaited_once()
     assert db.commit.await_count == 2
-    assert player_model.match_synced_at is not None
-    assert player_model.league_synced_at is not None
+    assert player.match_synced_at is not None
+    assert player.league_synced_at is not None
     assert not job.has_errors()
 
 
 async def test_recoverable_match_failure_does_not_claim_match_freshness() -> None:
     job = MatchFetcherJob(job_config_id=7)
-    player_model = SimpleNamespace(
-        puuid="sanitized-puuid",
-        match_synced_at=None,
-        league_synced_at=None,
-    )
-    db = SimpleNamespace(
-        get=AsyncMock(return_value=player_model),
-        commit=AsyncMock(),
-        rollback=AsyncMock(),
-    )
+    db = SimpleNamespace(commit=AsyncMock(), rollback=AsyncMock())
+    player = _player()
 
     async def sync_with_failure(*_args: object, **kwargs: object) -> int:
         on_failure = cast(
@@ -350,21 +334,14 @@ async def test_recoverable_match_failure_does_not_claim_match_freshness() -> Non
 
     await job._process_player(
         db=cast(AsyncSession, db),
-        player=cast(
-            PlayerResponse,
-            SimpleNamespace(
-                puuid="sanitized-puuid",
-                platform="eun1",
-                game_name="Sanitized",
-            ),
-        ),
+        player=player,
         player_service=cast(PlayerService, player_service),
         match_service=cast(MatchService, match_service),
         riot_client=cast(RiotAPIClient, object()),
     )
 
-    assert player_model.match_synced_at is None
-    assert player_model.league_synced_at is not None
+    assert player.match_synced_at is None
+    assert player.league_synced_at is not None
     assert job.has_errors()
 
 
@@ -430,13 +407,6 @@ def test_job_diagnostics_retain_wrapped_validation_fields() -> None:
     }
 
 
-def _player(puuid: str = "sanitized-puuid") -> PlayerResponse:
-    return cast(
-        PlayerResponse,
-        SimpleNamespace(puuid=puuid, platform="eun1", game_name="Sanitized"),
-    )
-
-
 async def test_player_error_handler_asks_the_loop_to_stop_on_an_api_key_error() -> None:
     """The handler's boolean is the whole stop-vs-continue decision.
 
@@ -448,7 +418,7 @@ async def test_player_error_handler_asks_the_loop_to_stop_on_an_api_key_error() 
     db = SimpleNamespace(rollback=AsyncMock())
 
     should_stop = await job._handle_player_processing_error(
-        cast(AsyncSession, db), _player(), AuthenticationError("rejected")
+        cast(AsyncSession, db), "sanitized-puuid", AuthenticationError("rejected")
     )
 
     assert should_stop is True
@@ -462,7 +432,7 @@ async def test_player_error_handler_continues_after_a_recoverable_error() -> Non
     db = SimpleNamespace(rollback=AsyncMock())
 
     should_stop = await job._handle_player_processing_error(
-        cast(AsyncSession, db), _player(), RuntimeError("one bad player")
+        cast(AsyncSession, db), "sanitized-puuid", RuntimeError("one bad player")
     )
 
     assert should_stop is False
@@ -478,7 +448,9 @@ async def test_player_error_handler_reraises_a_database_error_without_recording(
 
     with pytest.raises(SQLAlchemyError):
         await job._handle_player_processing_error(
-            cast(AsyncSession, db), _player(), SQLAlchemyError("session is gone")
+            cast(AsyncSession, db),
+            "sanitized-puuid",
+            SQLAlchemyError("session is gone"),
         )
 
     assert job.execution_log.get("errors", []) == []
@@ -501,7 +473,7 @@ async def test_a_second_api_key_error_is_not_recorded_twice() -> None:
     )
 
     should_stop = await job._handle_player_processing_error(
-        cast(AsyncSession, db), _player(), AuthenticationError("rejected")
+        cast(AsyncSession, db), "sanitized-puuid", AuthenticationError("rejected")
     )
 
     assert should_stop is True

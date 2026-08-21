@@ -15,38 +15,15 @@ the same spelling the writers produce.
 
 from __future__ import annotations
 
-from types import SimpleNamespace
-from typing import cast
-
 import pytest
 from sqlalchemy import Select
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import PlayerServiceError
 from app.core.riot_api.constants import Platform, normalize_platform
+from app.features.players.models import Player
 from app.features.players.service import PlayerService
 
 
-def _no_players() -> list[object]:
-    """An empty result, typed so the fake satisfies strict mode."""
-    return []
-
-
-class _CapturingSession:
-    """Session that records the SELECTs a lookup issues."""
-
-    def __init__(self) -> None:
-        self.executed: list[Select[tuple[object]]] = []
-
-    async def execute(self, statement: Select[tuple[object]]) -> SimpleNamespace:
-        self.executed.append(statement)
-        return SimpleNamespace(
-            scalar_one_or_none=lambda: None,
-            scalars=lambda: SimpleNamespace(all=_no_players),
-        )
-
-
-def _bound_platform(statement: Select[tuple[object]]) -> str | None:
+def _bound_platform(statement: Select[tuple[Player]]) -> str | None:
     """Return the platform value a compiled lookup actually compares against."""
     for value in statement.compile().params.values():
         if isinstance(value, str) and value.lower() in {
@@ -102,13 +79,26 @@ def test_platform_enum_values_are_already_canonical() -> None:
     ]
 
 
-async def test_game_name_search_compares_against_canonical_casing() -> None:
-    """The sibling lookup normalises identically."""
-    session = _CapturingSession()
-    service = PlayerService(cast(AsyncSession, session))
+def test_the_player_lookup_compares_against_canonical_casing() -> None:
+    """The one remaining platform-filtered lookup binds the stored spelling.
 
-    with pytest.raises(PlayerServiceError):
-        await service.get_player_by_game_name("Name", "EUN1")
+    It used to `ilike` its way around the question. The column is lowercase by
+    check constraint and the parameter is the enum, so an equality comparison
+    is both correct and index-usable -- but only while the value being bound
+    is the enum's own.
+    """
+    statement = PlayerService._build_player_search_query(
+        Platform.EUN1, "name", "faker", "faker", None
+    )
 
-    assert len(session.executed) == 1
-    assert _bound_platform(session.executed[0]) == "eun1"
+    assert _bound_platform(statement) == "eun1"
+    assert "core.players.platform = " in str(statement.whereclause)
+
+
+def test_a_search_without_a_platform_filters_on_no_platform_at_all() -> None:
+    """`None` means every region, not the default one."""
+    statement = PlayerService._build_player_search_query(
+        None, "name", "faker", "faker", None
+    )
+
+    assert "core.players.platform" not in str(statement.whereclause)

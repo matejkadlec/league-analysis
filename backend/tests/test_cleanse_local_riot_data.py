@@ -460,11 +460,7 @@ def test_normalize_qa_accounts_preserves_revoked_access_tokens(
     def fake_password_hash(_password: str) -> str:
         return "test-password-hash"
 
-    monkeypatch.setattr(
-        cleanup.AuthService,
-        "get_password_hash",
-        staticmethod(fake_password_hash),
-    )
+    monkeypatch.setattr(cleanup.pwd_context, "hash", fake_password_hash)
     connection = Connection()
     target = Preflight(
         admin_id=1,

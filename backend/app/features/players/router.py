@@ -1,13 +1,11 @@
 """Player API endpoints for the Riot API application."""
 
-from datetime import UTC
 from typing import Annotated
 
 import structlog
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 
 from app.core.dependencies import get_riot_client
-from app.core.http_errors import log_and_raise_http
 from app.core.rate_limiter import rate_limit
 from app.core.riot_api.client import RiotAPIClient
 from app.core.riot_api.constants import Platform
@@ -37,7 +35,6 @@ from .schemas import (
 )
 from .service import (
     PlayerNotFoundError,
-    PlayerService,
     TrackingLimitReachedError,
 )
 
@@ -45,69 +42,6 @@ logger = structlog.get_logger(__name__)
 
 
 router = APIRouter(prefix="/players", tags=["players"])
-
-
-async def _fuzzy_search(
-    player_service: PlayerService,
-    *,
-    query: str,
-    platform: Platform | None,
-    limit: int,
-    user_id: int,
-    empty_event: str,
-) -> list[PlayerResponse]:
-    """Run one fuzzy player search and report it the same way both routes do.
-
-    `/search` and `/suggestions` differ only in their query parameter names and
-    their result limit -- the search itself and the empty-result debug line were
-    written twice.
-    """
-    platform_value = platform.value if platform else None
-    results = await player_service.fuzzy_search_players(
-        query=query,
-        platform=platform_value,
-        limit=limit,
-        user_id=user_id,
-    )
-    if not results:
-        logger.debug(empty_event, query=query, platform=platform_value)
-    return results
-
-
-@router.get("/search")
-@rate_limit("100/minute")
-async def search_player(
-    request: Request,
-    player_service: PlayerServiceDep,
-    current_user: CurrentUserDep,
-    query: Annotated[
-        str,
-        Query(
-            min_length=3,
-            max_length=30,
-            description="Search query (game name, tag line or both)",
-        ),
-    ],
-    platform: Annotated[
-        Platform | None, Query(description="Optional platform filter (e.g. EUN1)")
-    ] = None,
-) -> list[PlayerResponse]:
-    """
-    Fuzzy search for players by game name, tag line or both.
-
-    Returns array of matches (empty if none found). Search patterns:
-    - "Name#TAG" → Exact match prioritized (Game Name + Tag Line)
-    - "#TAG" → Tag only
-    - "Name" → Game name
-    """
-    return await _fuzzy_search(
-        player_service,
-        query=query,
-        platform=platform,
-        limit=10,
-        user_id=current_user.id,
-        empty_event="No player search results",
-    )
 
 
 @router.get("/suggestions")
@@ -160,14 +94,15 @@ async def get_player_suggestions(
         GET /api/v1/players/suggestions?q=John Doe#EUNE&platform=eun1&limit=3
         GET /api/v1/players/suggestions?q=#EUNE&platform=eun1&limit=10
     """
-    return await _fuzzy_search(
-        player_service,
+    results = await player_service.fuzzy_search_players(
         query=q,
         platform=platform,
-        limit=limit,
         user_id=current_user.id,
-        empty_event="No player suggestions found",
+        limit=limit,
     )
+    if not results:
+        logger.debug("No player suggestions found", query=q, platform=platform)
+    return results
 
 
 @router.get("/context")
@@ -198,7 +133,7 @@ async def discover_player(
     request: Request,
     player_service: PlayerServiceDep,
     riot_client: Annotated[RiotAPIClient, Depends(get_riot_client)],
-    _current_user: CurrentUserDep,
+    current_user: CurrentUserDep,
     # The four Riot ID rules used to be 39 lines of imperative checks here
     # and four constants in `frontend/.../riot-id.ts`, with the OpenAPI
     # document publishing neither. Declared, they reach the document and the
@@ -229,7 +164,8 @@ async def discover_player(
             riot_client=riot_client,
             game_name=game_name,
             tag_line=tag_line,
-            platform=platform.value,
+            platform=platform,
+            user_id=current_user.id,
         )
         return result
     except NotFoundError as error:
@@ -420,75 +356,6 @@ async def get_tracked_players(
 
 
 # === Player League Endpoints ===
-
-
-@router.post("/{puuid}/refresh-league", response_model=PlayerLeagueResponse | None)
-@rate_limit("30/minute")
-async def refresh_player_league(
-    request: Request,
-    puuid: str,
-    player_service: PlayerServiceDep,
-    riot_client: Annotated[RiotAPIClient, Depends(get_riot_client)],
-    _current_user: CurrentUserDep,
-    queue_type: Annotated[
-        str, Query(description="Queue type to refresh league for")
-    ] = "RANKED_SOLO_5x5",
-) -> PlayerLeague | None:
-    """
-    Refresh and get the current league for a player from Riot API.
-
-    This endpoint fetches the latest league data from Riot API and stores it.
-    Also updates player profile (game_name, tag_line, profile_icon_id, summoner_level).
-
-    Args:
-        puuid: Player's PUUID
-        queue_type: Queue type (default: RANKED_SOLO_5x5)
-
-    Returns:
-        Updated league data or None if no league data exists
-
-    Raises:
-        404: Player not found
-        500: Database or API error
-    """
-    from app.features.jobs.maintenance import RiotWriterMaintenanceActiveError
-
-    try:
-        # Get the player model (not PlayerResponse) for update_player_league
-        from .models import Player
-
-        player_model = await player_service.db.get(Player, puuid)
-        if not player_model:
-            raise HTTPException(status_code=404, detail="Player not found")
-
-        # Update player profile (game_name, tag_line, profile_icon_id, summoner_level)
-        await player_service.update_player_profile(player_model, riot_client)
-
-        # Update league from Riot API (adds record to player_service.db session)
-        await player_service.update_player_league(player_model, riot_client)
-        from datetime import datetime
-
-        player_model.league_synced_at = datetime.now(UTC)
-
-        # Commit using the same session the service used
-        await player_service.db.commit()
-
-        # Return the updated league
-        return await player_service.get_player_league(puuid, queue_type)
-    except RiotWriterMaintenanceActiveError as e:
-        raise HTTPException(
-            status_code=503,
-            detail="Riot data maintenance is in progress. Try again after it completes.",
-        ) from e
-    except (AuthenticationError, ForbiddenError) as e:
-        log_and_raise_http(
-            logger,
-            e,
-            "refresh_player_league_failed",
-            RIOT_API_KEY_INVALID_DETAIL,
-            status_code=503,
-            puuid=puuid,
-        )
 
 
 @router.get("/{puuid}/league", response_model=PlayerLeagueResponse | None)

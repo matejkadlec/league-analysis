@@ -16,8 +16,10 @@ class _Result:
 class _Session:
     def __init__(self, participants: list[SimpleNamespace]) -> None:
         self._participants = participants
+        self.statements: list[object] = []
 
-    async def execute(self, _statement: object) -> _Result:
+    async def execute(self, statement: object) -> _Result:
+        self.statements.append(statement)
         return _Result(self._participants)
 
 
@@ -49,9 +51,15 @@ async def test_champion_stats_returns_every_champion_with_stable_ties() -> None:
     for index in range(21):
         participants.extend(_participant(f"Champion{index:02d}", index + 1, games=1))
 
-    service = MatchService(_Session(participants))  # type: ignore[arg-type]
+    session = _Session(participants)
+    service = MatchService(session)  # type: ignore[arg-type]
 
     response = await service.get_player_champion_stats("test-puuid", queue=None)
+
+    # The double answers every query with the same rows, so only the statement
+    # itself can say whether the twenty-row cap came back. It did once, and
+    # every player with more than twenty champions silently lost the tail.
+    assert "LIMIT" not in str(session.statements[0])
 
     assert response.total_champions == 23
     assert len(response.champions) == 23

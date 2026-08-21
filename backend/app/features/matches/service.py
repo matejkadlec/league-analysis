@@ -1,7 +1,7 @@
 """Match service for handling match data operations."""
 
 from collections.abc import Callable, Sequence
-from typing import Any, Protocol
+from typing import Any
 
 import structlog
 from sqlalchemy import ColumnElement, desc, exists, func, or_, select
@@ -19,6 +19,7 @@ from app.core.riot_api.errors import (
     RateLimitError,
 )
 from app.core.riot_api.models import MatchDTO, MatchTimelineDTO
+from app.features.players.models import Player
 
 from .match_history import (
     build_match_responses,
@@ -46,22 +47,6 @@ from .schemas import (
 )
 
 logger = structlog.get_logger(__name__)
-
-
-class SyncablePlayer(Protocol):
-    """The identity slice of a player that queue sync actually reads.
-
-    Callers hand this method several unrelated shapes -- a `PlayerResponse`
-    schema from the job layer, a throwaway holder from the background-sync
-    route -- and only `puuid` and `platform` are ever touched, so naming the
-    two fields is more honest than either concrete type would be.
-    """
-
-    @property
-    def puuid(self) -> str: ...
-
-    @property
-    def platform(self) -> str: ...
 
 
 def build_match_history_conditions(
@@ -576,7 +561,7 @@ class MatchService:
     async def sync_matches_for_player(
         self,
         riot_client: RiotAPIClient,
-        player: SyncablePlayer,
+        player: Player,
         on_failure: Callable[[str, Exception, dict[str, Any]], None] | None = None,
         on_match_stored: Callable[[int, str], None] | None = None,
     ) -> int:

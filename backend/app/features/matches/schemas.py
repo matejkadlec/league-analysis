@@ -31,17 +31,19 @@ class MatchBase(BaseModel):
     queue_id: int = Field(..., description="Queue type ID")
     game_version: str = Field(..., max_length=32, description="Game version")
     map_id: int = Field(..., description="Map ID")
-    game_mode: str | None = Field(default=None, max_length=32, description="Game mode")
-    game_type: str | None = Field(default=None, max_length=32, description="Game type")
-    game_end_timestamp: int | None = Field(
-        default=None, description="Game end timestamp in milliseconds since epoch"
+    # These five are NOT NULL columns. Declaring them optional here published
+    # a `null` the database cannot produce, which zod then mirrored as
+    # `.optional().nullable()` -- so dropping or renaming any of them on the
+    # backend would have left every frontend parse passing.
+    game_mode: str = Field(..., max_length=32, description="Game mode")
+    game_type: str = Field(..., max_length=32, description="Game type")
+    game_end_timestamp: int = Field(
+        ..., description="Game end timestamp in milliseconds since epoch"
     )
-    early_surrender: bool | None = Field(
-        default=None, description="Whether the game ended in early surrender"
+    early_surrender: bool = Field(
+        ..., description="Whether the game ended in early surrender"
     )
-    surrender: bool | None = Field(
-        default=None, description="Whether the game ended in surrender"
-    )
+    surrender: bool = Field(..., description="Whether the game ended in surrender")
     game_result: str | None = Field(
         default=None, max_length=32, description="End of game result"
     )

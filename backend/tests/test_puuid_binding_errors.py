@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.models import Base
 from app.core.riot_api.client import JSONValue, RiotAPIClient
+from app.core.riot_api.constants import Platform
 from app.core.riot_api.errors import BadRequestError, PuuidDecryptionError
 from app.features.jobs import player_sync as player_sync_module
 from app.features.jobs.base import BaseJob
@@ -398,8 +399,14 @@ class _NoMergeSession:
         instance.created_at = datetime.now(UTC)
         instance.updated_at = datetime.now(UTC)
 
-    async def execute(self, *_args: object, **_kwargs: object) -> NoReturn:
-        raise AssertionError("discovery must not run a statement against other rows")
+    async def execute(self, statement: object, **_kwargs: object) -> SimpleNamespace:
+        # The one statement discovery may run is the per-user tracking check
+        # that fills `is_tracked`; anything touching `core.players` would be
+        # the merge this regression forbids.
+        assert "core.players" not in str(statement), (
+            "discovery must not run a statement against other player rows"
+        )
+        return SimpleNamespace(scalar_one_or_none=lambda: None)
 
     async def scalars(self, *_args: object, **_kwargs: object) -> NoReturn:
         raise AssertionError("discovery must not search for rows sharing the Riot ID")
@@ -446,7 +453,8 @@ async def test_discovery_never_merges_a_row_sharing_the_riot_id(
         riot_client=cast(RiotAPIClient, riot_client),
         game_name="Shared Name",
         tag_line="TAG",
-        platform="eun1",
+        platform=Platform.EUN1,
+        user_id=1,
     )
 
     assert response.puuid == FRESH_PUUID

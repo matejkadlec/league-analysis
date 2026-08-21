@@ -10,12 +10,30 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.riot_api.client import RiotAPIClient
+from app.core.riot_api.constants import Platform
 from app.core.riot_api.errors import AuthenticationError
 from app.features.jobs.implementations import player_updater as player_updater_module
 from app.features.jobs.implementations.player_updater import PlayerUpdaterJob
 from app.features.players import service as player_service_module
 from app.features.players.models import Player
 from app.features.players.service import PlayerService
+
+
+def _load_row(_model: object, puuid: str) -> Player:
+    """Stand in for `AsyncSession.get`, which the loops now call per player."""
+    return _player(puuid)
+
+
+def _player(puuid: str) -> Player:
+    """One unattached row, which is what `_load_tracked_players` returns."""
+    return Player(
+        puuid=puuid,
+        game_name="Sanitized",
+        tag_line="TEST",
+        platform="eun1",
+        summoner_level=1,
+        profile_icon_id=1,
+    )
 
 
 class _FakeRiotClient:
@@ -35,26 +53,9 @@ class _FakeRiotClient:
 async def test_player_updater_continues_after_a_recoverable_player_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    players = [
-        SimpleNamespace(puuid="sanitized-one"),
-        SimpleNamespace(puuid="sanitized-two"),
-    ]
-    player_models = {
-        player.puuid: SimpleNamespace(
-            puuid=player.puuid,
-            game_name="Sanitized",
-            tag_line="TEST",
-            profile_icon_id=1,
-            summoner_level=1,
-        )
-        for player in players
-    }
-
-    def load_player_model(_model: object, puuid: str) -> SimpleNamespace:
-        return player_models[puuid]
-
+    players = {p.puuid: p for p in (_player("sanitized-one"), _player("sanitized-two"))}
     db = SimpleNamespace(
-        get=AsyncMock(side_effect=load_player_model),
+        get=AsyncMock(side_effect=_load_row),
         commit=AsyncMock(),
         rollback=AsyncMock(),
     )
@@ -80,12 +81,12 @@ async def test_player_updater_continues_after_a_recoverable_player_error(
 
     job = PlayerUpdaterJob(job_config_id=7)
     job.check_control_state = AsyncMock()
-    # Player resolution lives on BaseJob._load_tracked_players now; this test
+    # Player resolution lives on BaseJob._load_tracked_puuids now; this test
     # is about surviving a recoverable per-player error, not about resolution.
     monkeypatch.setattr(
         PlayerUpdaterJob,
-        "_load_tracked_players",
-        AsyncMock(return_value=players),
+        "_load_tracked_puuids",
+        AsyncMock(return_value=list(players)),
     )
 
     await job.execute(cast(AsyncSession, db))
@@ -144,6 +145,9 @@ async def test_new_player_uses_submitted_riot_id_when_account_omits_it(
         def where(self, *_conditions: object) -> _Statement:
             return self
 
+        def limit(self, _count: int) -> _Statement:
+            return self
+
     class _FakePlayer(SimpleNamespace):
         puuid = object()
         game_name = object()
@@ -165,6 +169,9 @@ async def test_new_player_uses_submitted_riot_id_when_account_omits_it(
         add=Mock(),
         commit=AsyncMock(),
         refresh=AsyncMock(side_effect=populate_database_timestamps),
+        execute=AsyncMock(
+            return_value=SimpleNamespace(scalar_one_or_none=lambda: None)
+        ),
     )
     service = PlayerService(cast(AsyncSession, db))
     riot_client = SimpleNamespace(
@@ -180,7 +187,8 @@ async def test_new_player_uses_submitted_riot_id_when_account_omits_it(
         riot_client=cast(RiotAPIClient, riot_client),
         game_name="Submitted Name",
         tag_line="SAFE",
-        platform="eun1",
+        platform=Platform.EUN1,
+        user_id=1,
     )
 
     created_player = db.add.call_args.args[0]
@@ -200,13 +208,16 @@ async def test_player_updater_stops_the_whole_run_on_an_api_key_error(
     another rejected call proving it. Nothing covered this branch, so the job
     could have been made to carry on and the suite would have stayed green.
     """
-    players = [
-        SimpleNamespace(puuid="sanitized-one"),
-        SimpleNamespace(puuid="sanitized-two"),
-        SimpleNamespace(puuid="sanitized-three"),
-    ]
+    players = {
+        p.puuid: p
+        for p in (
+            _player("sanitized-one"),
+            _player("sanitized-two"),
+            _player("sanitized-three"),
+        )
+    }
     db = SimpleNamespace(
-        get=AsyncMock(return_value=SimpleNamespace(puuid="sanitized-one")),
+        get=AsyncMock(side_effect=_load_row),
         commit=AsyncMock(),
         rollback=AsyncMock(),
     )
@@ -225,8 +236,8 @@ async def test_player_updater_stops_the_whole_run_on_an_api_key_error(
     monkeypatch.setattr(player_updater_module, "PlayerService", build_player_service)
     monkeypatch.setattr(
         PlayerUpdaterJob,
-        "_load_tracked_players",
-        AsyncMock(return_value=players),
+        "_load_tracked_puuids",
+        AsyncMock(return_value=list(players)),
     )
 
     job = PlayerUpdaterJob(job_config_id=7)
@@ -248,9 +259,9 @@ async def test_player_updater_reraises_a_database_error_instead_of_recording_it(
     that is already unusable, turning one failure into a whole failed run
     reported as a list of unrelated ones.
     """
-    players = [SimpleNamespace(puuid="sanitized-one")]
+    players = {"sanitized-one": _player("sanitized-one")}
     db = SimpleNamespace(
-        get=AsyncMock(return_value=SimpleNamespace(puuid="sanitized-one")),
+        get=AsyncMock(side_effect=_load_row),
         commit=AsyncMock(),
         rollback=AsyncMock(),
     )
@@ -269,8 +280,8 @@ async def test_player_updater_reraises_a_database_error_instead_of_recording_it(
     monkeypatch.setattr(player_updater_module, "PlayerService", build_player_service)
     monkeypatch.setattr(
         PlayerUpdaterJob,
-        "_load_tracked_players",
-        AsyncMock(return_value=players),
+        "_load_tracked_puuids",
+        AsyncMock(return_value=list(players)),
     )
 
     job = PlayerUpdaterJob(job_config_id=7)

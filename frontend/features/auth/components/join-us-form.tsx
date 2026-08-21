@@ -3,7 +3,16 @@
 import { useState, type FormEvent } from "react";
 import { Users } from "lucide-react";
 
-import { api, apiErrorMessage, normalizeApiError } from "@/lib/core/api";
+import {
+  apiErrorMessage,
+  normalizeApiError,
+  unwrap,
+  validatedPost,
+} from "@/lib/core/api";
+import {
+  MessageResponseSchema,
+  type JoinUsSubject,
+} from "@/lib/core/schemas";
 import { useToast } from "@/lib/core/hooks";
 import { cn } from "@/lib/core/utils";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -21,8 +30,6 @@ import { PublicPageFooter } from "@/components/public-page-footer";
 import { useAuth } from "../context/auth-context";
 import { JoinUsRoleCards } from "./join-us-role-cards";
 import { useTurnstileCaptcha } from "./use-turnstile-captcha";
-
-type JoinUsSubject = "beta_tester" | "full_stack_developer" | "other";
 
 const MESSAGE_MIN_LENGTH = 300;
 
@@ -85,11 +92,13 @@ export function JoinUsForm({ isAuthenticatedHint = false }: JoinUsFormProps) {
     setIsSubmitting(true);
 
     try {
-      await api.post("/auth/join-us/contact", {
-        subject: selectedSubject,
-        body: trimmedBody,
-        captcha_token: captcha.token,
-      });
+      unwrap(
+        await validatedPost(MessageResponseSchema, "/auth/join-us/contact", {
+          subject: selectedSubject,
+          body: trimmedBody,
+          captcha_token: captcha.token,
+        }),
+      );
 
       toast.success("Application sent", {
         description: "Thank you for reaching out. We will review your message.",

@@ -69,11 +69,11 @@ export const MatchSchema = z.object({
   queue_id: z.number().int(),
   game_version: z.string(),
   map_id: z.number().int(),
-  game_mode: z.string().optional().nullable(),
-  game_type: z.string().optional().nullable(),
-  game_end_timestamp: z.number().int().optional().nullable(),
-  early_surrender: z.boolean().optional().nullable(),
-  surrender: z.boolean().optional().nullable(),
+  game_mode: z.string(),
+  game_type: z.string(),
+  game_end_timestamp: z.number().int(),
+  early_surrender: z.boolean(),
+  surrender: z.boolean(),
   game_result: z.string().optional().nullable(),
   fully_analyzed: z.boolean(),
   created_at: z.string(),
@@ -397,17 +397,12 @@ export type JobExecutionListResponse = z.infer<
 // Simplified immutable league snapshot (ordered by created_at DESC for current)
 export const PlayerLeagueSchema = z.object({
   puuid: z.string(),
-  league_id: z.string().nullable(),
   queue_type: z.string(),
   tier: z.string(),
   rank: z.string().nullable(),
   league_points: z.number().int(),
   wins: z.number().int(),
   losses: z.number().int(),
-  veteran: z.boolean(),
-  inactive: z.boolean(),
-  fresh_blood: z.boolean(),
-  hot_streak: z.boolean(),
   created_at: z.string(),
   // Computed properties from backend
   // The API serves this one win rate as a percentage (PlayerLeague.win_rate
@@ -459,6 +454,43 @@ export type UserResponse = z.infer<typeof UserResponseSchema>;
 export type UserProfileUpdate = {
   display_name?: string;
 };
+
+/**
+ * The two request bodies that used to be posted through the raw client.
+ *
+ * Both re-spelled a backend enum as a hand-written TS union, and neither URL
+ * was visible to `test_frontend_api_paths.py`, which scans for `validated*`
+ * calls only. Declaring them here puts the enums inside the OpenAPI contract
+ * test and the paths inside the path test.
+ */
+export const JoinUsSubjectSchema = z.enum([
+  "beta_tester",
+  "full_stack_developer",
+  "other",
+]);
+export type JoinUsSubject = z.infer<typeof JoinUsSubjectSchema>;
+
+export const JoinUsContactRequestSchema = z.object({
+  subject: JoinUsSubjectSchema,
+  body: z.string().min(1).max(5000),
+  captcha_token: z.string().min(1).max(4096).nullable().optional(),
+});
+
+export const CookieConsentLevelSchema = z.enum(["necessary", "all"]);
+export type CookieConsentLevel = z.infer<typeof CookieConsentLevelSchema>;
+
+export const UserCookieConsentUpdateSchema = z.object({
+  consent_level: CookieConsentLevelSchema,
+  consent_version: z.string().min(1).max(16),
+  consent_source: z.string().min(1).max(32),
+});
+
+export const UserCookieConsentResponseSchema = z.object({
+  consent_level: CookieConsentLevelSchema,
+  consent_version: z.string(),
+  consent_source: z.string(),
+  consented_at: z.string(),
+});
 
 export const MessageResponseSchema = z.object({
   message: z.string(),

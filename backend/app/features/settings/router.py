@@ -10,7 +10,6 @@ from .dependencies import SettingsServiceDep
 from .schemas import (
     CardId,
     CardPreferenceResponse,
-    CardPreferencesResetRequest,
     CardPreferenceUpdate,
     ServiceStatusResponse,
     SettingResponse,
@@ -155,18 +154,6 @@ async def reset_card_preference(
 ) -> CardPreferenceResponse:
     """Remove the viewer's v1 override for one card and return its defaults."""
     return await settings_service.reset_card_preference(current_user.id, card_id)
-
-
-@router.post(
-    "/card-preferences/reset",
-)
-async def reset_all_card_preferences(
-    confirmation: CardPreferencesResetRequest,
-    settings_service: SettingsServiceDep,
-    current_user: CurrentUserDep,
-) -> list[CardPreferenceResponse]:
-    """Reset the complete current catalog after explicit client-side enumeration."""
-    return await settings_service.reset_all_card_preferences(current_user.id)
 
 
 @router.get("/user/cookie-consent", response_model=UserCookieConsentResponse | None)

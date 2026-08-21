@@ -58,14 +58,34 @@ def test_join_us_body_is_trimmed_and_whitespace_only_is_rejected() -> None:
         JoinUsContactRequest(subject=JoinUsSubject.OTHER, body="   ")
 
 
-def test_password_change_requires_matching_strong_passwords() -> None:
-    request = PasswordChangeRequest(
-        current_password="Old-password-1!",
-        new_password="New-password-2!",
-        repeat_password="New-password-2!",
-    )
-    assert request.new_password == request.repeat_password
+@pytest.mark.parametrize(
+    "weak",
+    [
+        "missing-uppercase-1!",
+        "MISSING-LOWERCASE-1!",
+        "MissingNumber!",
+        "MissingSpecial1",
+        "Sh0rt!",
+    ],
+)
+def test_password_change_holds_the_new_password_to_the_strength_policy(
+    weak: str,
+) -> None:
+    """Registration's policy applies to a change too, and nothing said so.
 
+    Every password this file fed the model was already strong, so dropping
+    the `validate_password_strength` call from `PasswordChangeRequest` left
+    the suite green and accepted any eight characters.
+    """
+    with pytest.raises(ValueError):
+        PasswordChangeRequest(
+            current_password="Old-password-1!",
+            new_password=weak,
+            repeat_password=weak,
+        )
+
+
+def test_password_change_requires_both_copies_to_match() -> None:
     with pytest.raises(ValueError, match="Passwords do not match"):
         PasswordChangeRequest(
             current_password="Old-password-1!",

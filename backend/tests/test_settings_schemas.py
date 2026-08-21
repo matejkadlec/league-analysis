@@ -86,11 +86,11 @@ def test_strict_write_models_spell_every_alias_explicitly() -> None:
 
 def test_strict_write_models_accept_the_alias_and_reject_the_field_name() -> None:
     """Pin the runtime half of the contract the test above type-checks."""
-    assert schemas.CardPreferencesResetRequest.model_validate(
-        {"cardIds": [card.value for card in schemas.CardId]}
+    assert schemas.TopChampionsMutableSettingsWriteV1.model_validate(
+        {"minimumGames": 12, "minimumWinRate": 54.5, "minimumKda": 2.3}
     )
 
     with pytest.raises(ValidationError):
-        schemas.CardPreferencesResetRequest.model_validate(
-            {"card_ids": [card.value for card in schemas.CardId]}
+        schemas.TopChampionsMutableSettingsWriteV1.model_validate(
+            {"minimum_games": 12, "minimumWinRate": 54.5, "minimumKda": 2.3}
         )

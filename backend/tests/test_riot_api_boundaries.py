@@ -154,28 +154,6 @@ def test_product_supported_queue_catalog_is_explicit_and_complete() -> None:
     assert 999999 not in PRODUCT_SUPPORTED_QUEUE_IDS
 
 
-@pytest.mark.parametrize(
-    ("fixture_name", "expected_ids"),
-    [
-        ("present", ["sanitized-league-id"]),
-        ("missing", [None]),
-        ("mixed", ["sanitized-solo-league-id", None]),
-        ("empty", []),
-    ],
-)
-async def test_by_puuid_league_contract_preserves_optional_league_id(
-    fixture_name: str,
-    expected_ids: list[str | None],
-) -> None:
-    client = RiotAPIClient(api_key="RGAPI-test-only")
-    client._make_request = AsyncMock(return_value=LEAGUE_FIXTURES[fixture_name])
-
-    entries = await client.get_league_entries_by_puuid("sanitized-puuid")
-
-    assert [entry.league_id for entry in entries] == expected_ids
-    assert all(entry.queue_type and entry.tier for entry in entries)
-
-
 async def test_by_puuid_league_contract_keeps_rank_fields_required() -> None:
     client = RiotAPIClient(api_key="RGAPI-test-only")
     client._make_request = AsyncMock(return_value=LEAGUE_FIXTURES["malformed"])

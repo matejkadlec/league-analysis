@@ -13,7 +13,10 @@ const OPTIONAL_STORAGE_KEYS = [
   "league_analysis_match_history_queue_filters",
 ] as const;
 
-export type CookieConsentLevel = "necessary" | "all";
+// One spelling of the backend enum, from the module the contract test reads.
+import type { CookieConsentLevel } from "@/lib/core/schemas";
+
+export type { CookieConsentLevel };
 
 export interface CookieConsentState {
   level: CookieConsentLevel;

@@ -13,7 +13,6 @@ from app.features.jobs.error_handling import (
 )
 from app.features.jobs.maintenance import RiotWriterMaintenanceActiveError
 from app.features.players.models import Player
-from app.features.players.schemas import PlayerResponse
 from app.features.players.service import PlayerService
 
 logger = structlog.get_logger(__name__)
@@ -38,14 +37,20 @@ class PlayerUpdaterJob(BaseJob):
         player_service = PlayerService(db)
 
         async with self.job_riot_client(db) as riot_client:
-            tracked_players = await self._load_tracked_players(db)
+            tracked_puuids = await self._load_tracked_puuids(db)
             logger.info(
-                "Starting player updater job", tracked_count=len(tracked_players)
+                "Starting player updater job", tracked_count=len(tracked_puuids)
             )
 
-            for player in tracked_players:
+            for puuid in tracked_puuids:
                 await self.check_control_state(db)
                 try:
+                    # Re-read per iteration: a recoverable error rolls the
+                    # session back, which expires every row it holds.
+                    player = await db.get(Player, puuid)
+                    if player is None:
+                        logger.warning("Tracked player is gone", puuid=puuid)
+                        continue
                     await self._update_player_profile(
                         db, player, player_service, riot_client
                     )
@@ -63,26 +68,20 @@ class PlayerUpdaterJob(BaseJob):
                         e,
                         message="Error updating player profile",
                         operation="player profile update",
-                        puuid=player.puuid,
+                        puuid=puuid,
                     ):
                         break
 
     async def _update_player_profile(
         self,
         db: AsyncSession,
-        player: PlayerResponse,
+        player: Player,
         player_service: PlayerService,
         riot_client: RiotAPIClient,
     ) -> None:
         """Update profile for a single player (game_name, tag_line, profile_icon_id, summoner_level)."""
-        # Need to get the Player model, not PlayerResponse
-        player_model = await db.get(Player, player.puuid)
-        if not player_model:
-            logger.warning("Player model not found", puuid=player.puuid)
-            return
-
         profile_updated = await player_service.update_player_profile(
-            player_model, riot_client
+            player, riot_client
         )
 
         await db.commit()
@@ -92,14 +91,14 @@ class PlayerUpdaterJob(BaseJob):
             logger.info(
                 "Player profile updated",
                 puuid=player.puuid,
-                game_name=player_model.game_name,
-                tag_line=player_model.tag_line,
-                profile_icon_id=player_model.profile_icon_id,
-                summoner_level=player_model.summoner_level,
+                game_name=player.game_name,
+                tag_line=player.tag_line,
+                profile_icon_id=player.profile_icon_id,
+                summoner_level=player.summoner_level,
             )
         else:
             logger.debug(
                 "Player profile unchanged",
                 puuid=player.puuid,
-                game_name=player_model.game_name,
+                game_name=player.game_name,
             )

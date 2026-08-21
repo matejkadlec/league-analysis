@@ -3,14 +3,13 @@
 from datetime import datetime
 
 from sqlalchemy import (
-    Boolean,
+    DateTime as SQLDateTime,
+)
+from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
     String,
-)
-from sqlalchemy import (
-    DateTime as SQLDateTime,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
@@ -43,15 +42,6 @@ class PlayerLeague(Base):
         comment="When this league snapshot was recorded",
     )
 
-    # League information
-    league_id: Mapped[str | None] = mapped_column(
-        String(36),
-        nullable=True,
-        # Indexed by `idx_leagues_league_id` at the bottom of this module;
-        # `index=True` here would declare a second index on the same column.
-        comment="Optional Riot league ID (omitted by current by-PUUID responses)",
-    )
-
     queue_type: Mapped[str] = mapped_column(
         String(32),
         nullable=False,
@@ -80,34 +70,6 @@ class PlayerLeague(Base):
 
     losses: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, comment="Number of losses in this queue"
-    )
-
-    veteran: Mapped[bool] = mapped_column(
-        Boolean,
-        nullable=False,
-        default=False,
-        comment="Whether player is a veteran (100+ games in this queue)",
-    )
-
-    inactive: Mapped[bool] = mapped_column(
-        Boolean,
-        nullable=False,
-        default=False,
-        comment="Whether player is inactive (decay warning)",
-    )
-
-    fresh_blood: Mapped[bool] = mapped_column(
-        Boolean,
-        nullable=False,
-        default=False,
-        comment="Whether player recently joined this tier",
-    )
-
-    hot_streak: Mapped[bool] = mapped_column(
-        Boolean,
-        nullable=False,
-        default=False,
-        comment="Whether player is on a winning streak",
     )
 
     # Relationships
@@ -142,5 +104,3 @@ Index("idx_leagues_tier_lp", PlayerLeague.tier, PlayerLeague.league_points)
 
 # `idx_leagues_puuid_created` used to sit here: the primary key spelled again
 # with DESC, which a btree already serves by scanning backwards.
-
-Index("idx_leagues_league_id", PlayerLeague.league_id)

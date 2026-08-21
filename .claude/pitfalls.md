@@ -23,9 +23,14 @@ the `pitfall-check` agent.
   job's session closes, raises `MissingGreenlet`. A rollback expires the
   instance, and reloading it outside the async greenlet fails. Use the cached
   id/status/timestamp scalars captured while the session was open. Existing
-  per-function guards: `test_get_job_logs_never_touches_the_orm_instance` and
-  `test_failure_from_job_never_touches_the_execution_instance` — new code
-  paths are not covered by either.
+  per-function guards: `test_get_job_logs_never_touches_the_orm_instance`,
+  `test_failure_from_job_never_touches_the_execution_instance`, and
+  `tests/test_job_loops_survive_a_rollback.py` for the two writer loops (it
+  expires rows with SQLAlchemy's own `instance_state`, so it fails the way
+  production does) — new code paths are not covered by any of them. The same
+  trap bit the tracked-player loops: `handle_player_error` rolls back to skip
+  one player, and a row loaded before that rollback raises on its next
+  attribute read.
 
 - **A wide child stretches the whole page sideways.** A flex item defaults to
   `min-width: auto`, which makes every `overflow-x-auto` beneath it inert, so

@@ -176,14 +176,23 @@ class AuthService:
         self.settings = get_global_settings()
 
     @staticmethod
-    def verify_password(plain_password: str, hashed_password: str) -> bool:
-        """Verify a password against its hash."""
-        return pwd_context.verify(plain_password, hashed_password)
+    async def verify_password(plain_password: str, hashed_password: str) -> bool:
+        """Verify a password against its hash, off the event loop.
+
+        Argon2id is deliberately expensive -- this repo's parameters measure
+        ~42ms per call -- and the API runs one worker per container, so doing
+        it inline stalls every other request in flight for that long, the
+        dummy-hash branch of a failed login included. `send_blocking` two
+        hundred lines below already offloads for the same reason.
+        """
+        return await asyncio.to_thread(
+            pwd_context.verify, plain_password, hashed_password
+        )
 
     @staticmethod
-    def get_password_hash(password: str) -> str:
-        """Hash a password using Argon2id."""
-        return pwd_context.hash(password)
+    async def get_password_hash(password: str) -> str:
+        """Hash a password using Argon2id, off the event loop."""
+        return await asyncio.to_thread(pwd_context.hash, password)
 
     async def get_user_by_email_case_insensitive(self, email: str) -> User | None:
         """Get a user by email address using case-insensitive comparison."""
@@ -925,7 +934,7 @@ class AuthService:
         # Always hash password to prevent timing attacks
         # If user doesn't exist, hash against a dummy value
         if not user:
-            self.verify_password(password, DUMMY_PASSWORD_HASH)
+            await self.verify_password(password, DUMMY_PASSWORD_HASH)
             logger.warning("login_failed", reason="unknown_email", email=email)
             return None
 
@@ -941,7 +950,7 @@ class AuthService:
             if not captcha_valid:
                 raise CaptchaVerificationError
 
-        if not self.verify_password(password, user.password_hash):
+        if not await self.verify_password(password, user.password_hash):
             await self._record_failed_login(user)
             logger.warning(
                 "login_failed",
@@ -967,7 +976,7 @@ class AuthService:
             )
 
         # Create new user
-        hashed_password = self.get_password_hash(user_create.password)
+        hashed_password = await self.get_password_hash(user_create.password)
         user = User(
             email=user_create.email,
             display_name=user_create.display_name,
@@ -1166,10 +1175,10 @@ class AuthService:
         new_password: str,
     ) -> None:
         """Change current user's password hash."""
-        if not self.verify_password(current_password, current_user.password_hash):
+        if not await self.verify_password(current_password, current_user.password_hash):
             raise InvalidCurrentPasswordError
 
-        current_user.password_hash = self.get_password_hash(new_password)
+        current_user.password_hash = await self.get_password_hash(new_password)
         await self.db.commit()
 
         logger.info("password_changed", user_id=current_user.id)

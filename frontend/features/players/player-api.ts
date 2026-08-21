@@ -7,6 +7,7 @@ import {
   type ApiResponse,
 } from "@/lib/core/api";
 import { Player, PlayerSchema } from "@/lib/core/schemas";
+import type { Platform } from "@/lib/core/platform-utils";
 
 const PlayerArraySchema = z.array(PlayerSchema);
 
@@ -22,7 +23,11 @@ export async function untrackPlayer(
 
 export interface SearchSuggestionsParams {
   q: string;
-  platform?: string;
+  // `Platform`, not `string`: both routes validate the query parameter
+  // against the backend enum, so these two functions are the last place a
+  // "EUW" or a display name can enter the request. It compiled, shipped, and
+  // came back 422.
+  platform?: Platform;
   limit?: number;
 }
 
@@ -36,10 +41,9 @@ export async function searchPlayerSuggestions(
   });
 }
 
-export type DiscoverPlayerParams = Record<
-  "game_name" | "tag_line" | "platform",
-  string
->;
+export type DiscoverPlayerParams = Record<"game_name" | "tag_line", string> & {
+  platform: Platform;
+};
 
 export async function discoverPlayer(
   params: DiscoverPlayerParams,

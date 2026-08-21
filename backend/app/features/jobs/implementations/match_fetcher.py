@@ -19,7 +19,6 @@ from app.features.matches.match_lp import (
 from app.features.matches.service import MatchService
 from app.features.players.leagues import PlayerLeague
 from app.features.players.models import Player
-from app.features.players.schemas import PlayerResponse
 from app.features.players.service import PlayerService
 
 logger = structlog.get_logger(__name__)
@@ -43,13 +42,11 @@ class MatchFetcherJob(BaseJob):
         match_service = MatchService(db)
 
         async with self.job_riot_client(db) as riot_client:
-            tracked_players = await self._load_tracked_players(db)
-            logger.info(
-                "Starting match fetcher job", tracked_count=len(tracked_players)
-            )
+            tracked_puuids = await self._load_tracked_puuids(db)
+            logger.info("Starting match fetcher job", tracked_count=len(tracked_puuids))
             await self._process_tracked_players(
                 db,
-                tracked_players,
+                tracked_puuids,
                 player_service,
                 match_service,
                 riot_client,
@@ -58,7 +55,7 @@ class MatchFetcherJob(BaseJob):
     async def _handle_player_processing_error(
         self,
         db: AsyncSession,
-        player: PlayerResponse,
+        puuid: str,
         error: Exception,
     ) -> bool:
         """Record a recoverable player error. Return True to stop the job."""
@@ -67,21 +64,27 @@ class MatchFetcherJob(BaseJob):
             error,
             message="Error processing player",
             operation="player synchronization",
-            puuid=player.puuid,
+            puuid=puuid,
         )
 
     async def _process_tracked_players(
         self,
         db: AsyncSession,
-        tracked_players: list[PlayerResponse],
+        tracked_puuids: list[str],
         player_service: PlayerService,
         match_service: MatchService,
         riot_client: RiotAPIClient,
     ) -> None:
         """Process each tracked player, converting stop conditions to signals."""
-        for player in tracked_players:
+        for puuid in tracked_puuids:
             await self.check_control_state(db)
             try:
+                # Re-read per iteration: `_handle_player_processing_error`
+                # rolls the session back, which expires every row it holds.
+                player = await db.get(Player, puuid)
+                if player is None:
+                    logger.warning("Tracked player is gone", puuid=puuid)
+                    continue
                 await self._process_player(
                     db,
                     player,
@@ -100,13 +103,13 @@ class MatchFetcherJob(BaseJob):
                 await db.rollback()
                 raise JobStopSignal(reason="riot_maintenance") from error
             except Exception as error:
-                if await self._handle_player_processing_error(db, player, error):
+                if await self._handle_player_processing_error(db, puuid, error):
                     break
 
     async def _process_player(
         self,
         db: AsyncSession,
-        player: PlayerResponse,
+        player: Player,
         player_service: PlayerService,
         match_service: MatchService,
         riot_client: RiotAPIClient,
@@ -151,13 +154,8 @@ class MatchFetcherJob(BaseJob):
             ) from error
         self.metrics["records_created"] += count
 
-        # Need to get the Player model, not PlayerResponse
-        player_model = await db.get(Player, player.puuid)
-        if not player_model:
-            return
-
         if len(self._errors_encountered) == error_count_before:
-            player_model.match_synced_at = datetime.now(UTC)
+            player.match_synced_at = datetime.now(UTC)
             await db.commit()
 
         # Update player league (will only insert if league has changed)
@@ -165,7 +163,6 @@ class MatchFetcherJob(BaseJob):
             league_updated, lp_observations = await self._refresh_league_and_lp(
                 db,
                 player,
-                player_model,
                 player_service,
                 riot_client,
                 ranked_match_ids,
@@ -195,17 +192,14 @@ class MatchFetcherJob(BaseJob):
     async def _refresh_league_and_lp(
         self,
         db: AsyncSession,
-        player: PlayerResponse,
-        player_model: Player,
+        player: Player,
         player_service: PlayerService,
         riot_client: RiotAPIClient,
         ranked_match_ids: set[str],
         league_before: PlayerLeague | None,
     ) -> tuple[bool, int]:
         """Close one Match Fetcher observation window and commit its evidence."""
-        league_updated = await player_service.update_player_league(
-            player_model, riot_client
-        )
+        league_updated = await player_service.update_player_league(player, riot_client)
         if league_updated:
             await db.flush()
         league_after = await player_service.get_player_league(player.puuid)
@@ -216,13 +210,13 @@ class MatchFetcherJob(BaseJob):
             league_before,
             league_after,
         )
-        player_model.league_synced_at = datetime.now(UTC)
+        player.league_synced_at = datetime.now(UTC)
         await db.commit()
         return league_updated, lp_observations
 
     def _record_league_refresh_result(
         self,
-        player: PlayerResponse,
+        player: Player,
         league_updated: bool,
         lp_observations: int,
     ) -> None:

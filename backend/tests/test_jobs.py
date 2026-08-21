@@ -262,10 +262,12 @@ async def test_overdue_startup_job_is_queued_without_awaiting_execution(
         yield next(sessions)
 
     constructed: list[tuple[int, str]] = []
+    instances: list[JobDouble] = []
 
     class JobDouble:
         def __init__(self, job_config_id: int, triggered_by: str) -> None:
             constructed.append((job_config_id, triggered_by))
+            instances.append(self)
 
         async def run(self) -> None:  # pragma: no cover - must not run here
             raise AssertionError("startup awaited provider work")
@@ -284,14 +286,23 @@ async def test_overdue_startup_job_is_queued_without_awaiting_execution(
     )
     monkeypatch.setattr(scheduler_module, "_scheduler", SchedulerDouble())
 
+    before = datetime.now(UTC)
     await scheduler_module._check_and_run_overdue_jobs()
+    after = datetime.now(UTC)
 
     assert constructed == [(7, "system")]
     assert len(scheduled) == 1
+    # `func` and `run_date` used to be read out of the entry and compared to
+    # themselves, so the catch-up could have been queued a year out -- or
+    # pointed at another job -- with this test still green.
+    assert scheduled[0]["func"] == instances[0].run
+    run_date = scheduled[0]["run_date"]
+    assert isinstance(run_date, datetime)
+    assert before <= run_date <= after, "an overdue catch-up runs now, not later"
     assert scheduled[0] == {
-        "func": scheduled[0]["func"],
+        "func": instances[0].run,
         "trigger": "date",
-        "run_date": scheduled[0]["run_date"],
+        "run_date": run_date,
         "id": "startup_overdue_job_7",
         "name": "Match Fetcher startup catch-up",
         "replace_existing": True,
