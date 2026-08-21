@@ -7,10 +7,20 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.core.enums import Tier
 
 
-class PlayerLeagueBase(BaseModel):
-    """Base PlayerLeague schema with common attributes.
+class PlayerLeagueResponse(BaseModel):
+    """One immutable league snapshot, as the API returns it.
 
-    Simplified schema - table is now immutable, each row is a snapshot.
+    There is no separate base: this was a `PlayerLeagueBase` with exactly one
+    subclass and no other user, so the two said the same thing twice.
+
+    `league_points` carried `le=100`, which is true of Iron through Diamond and
+    false of the three tiers above them -- Master, Grandmaster and Challenger
+    have no divisions and accumulate LP without a ceiling. Nothing writes a
+    clamp (`service.py` stores Riot's own value) and no CHECK constraint backs
+    it, so the bound could only ever turn a real row into a
+    `ResponseValidationError` -- a 500 on `GET /players/{puuid}/league` for
+    every player above Diamond. Production has never hit it because the
+    tracked set tops out at Diamond 49 LP.
     """
 
     puuid: str = Field(
@@ -19,14 +29,9 @@ class PlayerLeagueBase(BaseModel):
     queue_type: str = Field(..., max_length=32, description="Queue type")
     tier: Tier = Field(..., description="Rank tier")
     rank: str | None = Field(default=None, max_length=4, description="Rank division")
-    league_points: int = Field(default=0, ge=0, le=100, description="League points")
-    wins: int = Field(default=0, ge=0, description="Number of wins")
-    losses: int = Field(default=0, ge=0, description="Number of losses")
-
-
-class PlayerLeagueResponse(PlayerLeagueBase):
-    """Schema for PlayerLeague response."""
-
+    league_points: int = Field(..., ge=0, description="League points")
+    wins: int = Field(..., ge=0, description="Number of wins")
+    losses: int = Field(..., ge=0, description="Number of losses")
     created_at: datetime = Field(
         ..., description="When this league snapshot was recorded"
     )

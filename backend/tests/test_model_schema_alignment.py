@@ -16,6 +16,7 @@ from __future__ import annotations
 import types
 import typing
 
+import annotated_types
 import pytest
 from pydantic import BaseModel
 from sqlalchemy import inspect as sa_inspect
@@ -84,6 +85,44 @@ def test_no_response_field_forbids_a_null_its_column_allows(
         if (column := columns.get(name)) is not None
         and column.nullable
         and not _admits_none(info.annotation)
+    ]
+
+    assert offenders == []
+
+
+@pytest.mark.parametrize(("model", "schema"), PAIRS, ids=lambda p: p.__name__)
+def test_no_response_field_caps_a_column_the_database_does_not_cap(
+    model: type[DeclarativeBase], schema: type[BaseModel]
+) -> None:
+    """A ceiling on a response field can only ever reject a real row.
+
+    A response model describes what the API sends; it does not get to decide
+    what the table may hold. An upper bound the database does not enforce turns
+    a stored value into a `ResponseValidationError`, which FastAPI serves as a
+    500 -- so the field is unreadable exactly when it is most interesting.
+
+    `PlayerLeagueResponse.league_points` was `le=100`, true of Iron through
+    Diamond and false of the three tiers above them, where LP has no ceiling.
+    Nothing clamps the writer and no CHECK backs it, so tracking one Master
+    player would have 500'd `GET /players/{puuid}/league`.
+
+    Lower bounds are left alone: `ge=0` on a count or an average states
+    something arithmetic already guarantees, and it reaches the OpenAPI
+    document where the frontend can read it. Fields that are not columns are
+    left alone too -- `win_rate`'s `le=1.0` bounds a ratio whose own definition
+    guarantees it, not a value the table stores.
+
+    No exception is carved out for a column with a CHECK ceiling, because no
+    column has one. If one ever does, that is the case to teach this test.
+    """
+    columns = {column.key for column in sa_inspect(model).columns}
+
+    offenders = [
+        f"{schema.__name__}.{name} caps {model.__name__}.{name} at {bound}"
+        for name, info in schema.model_fields.items()
+        if name in columns
+        for bound in info.metadata
+        if isinstance(bound, (annotated_types.Le, annotated_types.Lt))
     ]
 
     assert offenders == []
