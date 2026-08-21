@@ -2,6 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 
+import { PageHeader } from "@/components/page-header";
 import { PlayerCardSkeleton } from "@/components/loading-skeleton";
 import {
   SectionQuickNavigation,
@@ -159,13 +160,12 @@ export default function PlayerOverviewPage() {
       )}
       <div className="container mx-auto px-4 py-8">
         <div className="space-y-6">
-          <Card id="header-card" className="p-6 text-white">
-            <h1 className="text-2xl font-semibold">Player Overview</h1>
-            <p className="mt-4 text-sm leading-relaxed">
+          <PageHeader title="Player Overview">
+            <p className="text-sm leading-relaxed">
               Review player&apos;s rank, recent performance, champion statistics,
               and role performance in one dashboard.
             </p>
-          </Card>
+          </PageHeader>
 
           {isLoading ? (
             <PlayerOverviewSkeleton />

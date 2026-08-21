@@ -54,6 +54,7 @@ GATE_HOOKS = (
     "forbid-credential-filenames",
     "forbid-non-kebab-frontend-filenames",
     "forbid-core-importing-features",
+    "forbid-function-level-feature-imports",
     "forbid-metadata-create-all",
     "forbid-positional-field-default",
     "forbid-direct-axios",

@@ -1,11 +1,11 @@
 "use client";
 
 import { ProtectedRoute } from "@/features/auth";
+import { PageHeader } from "@/components/page-header";
 import {
   SectionQuickNavigation,
   type SectionQuickNavigationItem,
 } from "@/components/section-quick-navigation";
-import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SelectPlayerCard, usePlayerContext } from "@/features/players";
 import {
@@ -40,13 +40,12 @@ export default function SmurfBoostDetectionPage() {
       )}
       <div className="container mx-auto px-4 py-8">
         <div className="space-y-6">
-          <Card id="header-card" className="p-6 text-white">
-            <h1 className="text-2xl font-semibold">Smurf &amp; Boost Detection</h1>
-            <p className="mt-4 text-sm leading-relaxed">
+          <PageHeader title="Smurf &amp; Boost Detection">
+            <p className="text-sm leading-relaxed">
               Compare a player&apos;s recent ranked games against their own
               earlier games, and see exactly which areas moved and by how much.
             </p>
-          </Card>
+          </PageHeader>
 
           <SmurfBoostExplanationCard />
 
