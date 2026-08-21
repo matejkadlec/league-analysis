@@ -4,6 +4,7 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from json import loads
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
 from starlette import status
@@ -56,9 +57,17 @@ def test_database_pool_pre_pings_before_reusing_connections(
 async def test_readiness_requires_a_database_round_trip(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """The probe must run, not merely be reachable.
+
+    The assertion used to live inside the double's `execute`, which never
+    runs if the endpoint stops calling it -- so a readiness check that only
+    opened a session and reported "ready" passed this test.
+    """
+    execute = AsyncMock()
+
     class Session:
         async def execute(self, statement: object) -> None:
-            assert str(statement) == "SELECT 1"
+            await execute(statement)
 
     @asynccontextmanager
     async def get_session() -> AsyncGenerator[Session]:
@@ -69,6 +78,10 @@ async def test_readiness_requires_a_database_round_trip(
     result = await app_main.readiness_check()
 
     assert result == {"status": "ready", "database": "ready"}
+    execute.assert_awaited_once()
+    probe = execute.await_args
+    assert probe is not None
+    assert str(probe.args[0]) == "SELECT 1"
 
 
 async def test_readiness_fails_closed_without_leaking_database_errors(
