@@ -67,6 +67,20 @@ function formatValue(value: number | null | undefined): string {
 }
 
 /**
+ * The version half of a `module/version` model identifier.
+ *
+ * The backend stores the module name alongside the version, and that module
+ * is still called `smurf-boost` because renaming it would move the API
+ * contract for nothing. Only the version tells a reader which formulas
+ * produced the numbers beside it, so the module name is dropped rather than
+ * shown. A value carrying no slash is passed through unchanged.
+ */
+function modelVersionLabel(modelVersion: string): string {
+  const separator = modelVersion.lastIndexOf("/");
+  return separator === -1 ? modelVersion : modelVersion.slice(separator + 1);
+}
+
+/**
  * The recent window is taken first, so the earlier games the comparison needs
  * sit behind a full recent window. Reporting only the two sample floors would
  * understate the requirement whenever the recent window is the larger of them.
@@ -195,7 +209,7 @@ function SignalBlock({ signal }: { signal: SmurfBoostSignal }) {
       <dl className="mt-3 grid grid-cols-3 gap-2 border-t border-border/40 pt-2">
         {figures.map((figure) => (
           <div key={figure.label}>
-            <dt className="text-[0.6875rem] uppercase tracking-wide text-muted-foreground">
+            <dt className="text-sm uppercase tracking-wide text-muted-foreground">
               {figure.label}
             </dt>
             <dd className="font-mono text-sm">{figure.value}</dd>
@@ -298,9 +312,9 @@ function FamilySection({
             the right, but once the row wraps on a phone `justify-between`
             leaves it stranded mid-line, so below `sm` the two simply stack. */}
         <div className="flex flex-col gap-1 sm:flex-row sm:flex-wrap sm:items-baseline sm:justify-between sm:gap-2">
-          <h2 className="text-base font-semibold">
+          <h4 className="text-base font-semibold">
             {familyTitle(family.family)}
-          </h2>
+          </h4>
           <span className="sm:text-right">
             <span
               data-testid={`smurf-boost-band-${family.family}`}
@@ -378,8 +392,12 @@ export function SmurfBoostResultCard({
             How much this comparison can be relied on, separate from what it
             found.
           </span>
+          {/* The stored value is a namespaced slug (`smurf-boost/v1`) naming
+              the detection module, which is the one place the retired product
+              name still reached a reader. Only the version identifies what
+              produced this reading, so only the version is shown. */}
           <span className="ml-auto font-mono text-sm text-muted-foreground">
-            {results.model_version}
+            Model {modelVersionLabel(results.model_version)}
           </span>
         </div>
       </CardHeader>
@@ -401,10 +419,10 @@ export function SmurfBoostResultCard({
 
         {results.notes.length > 0 && (
           <div className="space-y-2">
-            <h3 className="flex items-center gap-2 text-sm font-medium">
+            <h4 className="flex items-center gap-2 text-sm font-medium">
               <CircleAlert className="h-4 w-4 text-muted-foreground" />
               Limits of This Data
-            </h3>
+            </h4>
             <ul className="space-y-1">
               {results.notes.map((note) => (
                 <li key={note} className="text-sm text-muted-foreground">

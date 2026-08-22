@@ -30,7 +30,7 @@ export function SmurfBoostSettingsPresets({
 
   return (
     <div className="space-y-3">
-      <h3 className="text-base font-semibold">Presets</h3>
+      <h4 className="text-base font-semibold">Presets</h4>
       {isError ? (
         <p className="text-sm text-muted-foreground">
           The presets could not be loaded. You can still edit each threshold
