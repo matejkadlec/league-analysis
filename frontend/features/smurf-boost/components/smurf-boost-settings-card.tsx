@@ -152,7 +152,7 @@ export function SmurfBoostSettingsCard() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <SlidersHorizontal className="h-5 w-5 text-primary" />
-            Detection settings
+            Detection Settings
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -207,7 +207,7 @@ export function SmurfBoostSettingsCard() {
         <div className="flex flex-wrap items-center gap-2">
           <CardTitle className="flex items-center gap-2">
             <SlidersHorizontal className="h-5 w-5 text-primary" />
-            Detection settings
+            Detection Settings
           </CardTitle>
           <Badge variant="outline" className="ml-auto">
             {preference.isDefault ? "Shipped defaults" : "Your settings"}

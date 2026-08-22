@@ -1,11 +1,14 @@
 const PLAYER_OVERVIEW_PATH = "/player-overview";
 const MATCH_HISTORY_PATH = "/match-history";
-const SMURF_BOOST_DETECTION_PATH = "/smurf-boost-detection";
 
+// The routes whose `?puuid=` *is* the account's current player, so following a
+// link between them carries the selection along. `/rank-manipulation` and
+// `/matchmaking-analysis` are deliberately absent: their `?puuid=` names a
+// page-local analysis target, and handing it to a route the player provider
+// persists from would quietly promote a local choice to the account's player.
 const PLAYER_CENTRIC_PATHS = new Set([
   PLAYER_OVERVIEW_PATH,
   MATCH_HISTORY_PATH,
-  SMURF_BOOST_DETECTION_PATH,
 ]);
 
 export function isPlayerCentricPath(pathname: string): boolean {

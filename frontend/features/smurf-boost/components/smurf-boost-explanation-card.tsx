@@ -16,14 +16,14 @@ export function SmurfBoostExplanationCard() {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <CircleHelp className="h-5 w-5 text-primary" />
-          What this page does
+          What This Page Does
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <p className="text-sm leading-relaxed">
           This page compares a player&apos;s most recent ranked solo/duo games
-          against that same player&apos;s earlier ranked solo/duo games. It never
-          compares one player against another.
+          against that same player&apos;s earlier ranked solo/duo games. It
+          never compares one player against another.
         </p>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -31,7 +31,7 @@ export function SmurfBoostExplanationCard() {
             <h3 className="text-sm font-semibold">
               {FAMILY_TITLES.rapid_improvement}
             </h3>
-            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+            <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
               Whether the recent games look stronger than the earlier ones, in
               performance, win rate, results on rarely played champions, and
               strong play on a very new account.
@@ -41,7 +41,7 @@ export function SmurfBoostExplanationCard() {
             <h3 className="text-sm font-semibold">
               {FAMILY_TITLES.playing_pattern_change}
             </h3>
-            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+            <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
               Whether the recent games look different in shape: wins and losses
               that no longer track performance, a change in consistency, strong
               and weak games sitting side by side, or a sustained drop after a

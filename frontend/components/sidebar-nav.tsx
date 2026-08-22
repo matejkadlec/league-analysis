@@ -23,7 +23,7 @@ const navItems: NavItem[] = [
   { name: "Home", path: "/" },
   { name: "Player Overview", path: "/player-overview" },
   { name: "Match History", path: "/match-history" },
-  { name: "Smurf & Boost Detection", path: "/smurf-boost-detection" },
+  { name: "Rank Manipulation", path: "/rank-manipulation" },
   { name: "Matchmaking Analysis", path: "/matchmaking-analysis" },
 ];
 

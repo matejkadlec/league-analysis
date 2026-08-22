@@ -81,4 +81,44 @@ describe("SectionQuickNavigation", () => {
       block: "start",
     });
   });
+
+  it("offers only the sections that are on the page", async () => {
+    const user = userEvent.setup();
+    function Page({ withResult }: { withResult: boolean }) {
+      return (
+        <>
+          <SectionQuickNavigation
+            items={[
+              { label: "Games Comparison", anchor: "#smurf-boost-run" },
+              { label: "Result", anchor: "#smurf-boost-result" },
+            ]}
+          />
+          <section id="smurf-boost-run">Run</section>
+          {withResult && <section id="smurf-boost-result">Result</section>}
+        </>
+      );
+    }
+
+    const { rerender } = render(<Page withResult={false} />);
+    await user.hover(screen.getByTestId("section-quick-navigation"));
+
+    // Rank Manipulation listed `Result` before any comparison had produced
+    // one, and clicking it did nothing at all. The list is the page's rendered
+    // sections, so a page cannot advertise a section it has not rendered.
+    expect(
+      screen.getByRole("button", { name: "Games Comparison" }),
+    ).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Result" })).toBeNull();
+
+    // Still hovered: a result that arrives while the panel is open appears
+    // without needing it closed and reopened first.
+    rerender(<Page withResult />);
+    await screen.findByRole("button", { name: "Result" });
+
+    await user.click(screen.getByRole("button", { name: "Result" }));
+    expect(scrollIntoView).toHaveBeenCalledWith({
+      behavior: "smooth",
+      block: "start",
+    });
+  });
 });

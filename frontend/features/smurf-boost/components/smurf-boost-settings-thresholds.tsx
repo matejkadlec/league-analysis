@@ -24,8 +24,11 @@ export function SmurfBoostSettingsThresholds({
 }: SmurfBoostSettingsThresholdsProps) {
   return (
     <div className="space-y-3">
-      <h3 className="text-sm font-medium">Thresholds</h3>
-      <div className="grid gap-4 md:grid-cols-2">
+      <h3 className="text-base font-semibold">Thresholds</h3>
+      <div
+        id="smurf-boost-thresholds-grid"
+        className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
+      >
         {THRESHOLD_FIELDS.map((field) => (
           <div key={field.name} className="space-y-1">
             <Label htmlFor={`smurf-boost-${field.name}`}>{field.label}</Label>
@@ -39,7 +42,7 @@ export function SmurfBoostSettingsThresholds({
               disabled={busy}
               aria-invalid={Boolean(
                 errors[field.name] ??
-                  (crossError && CROSS_FIELD_NAMES.includes(field.name)),
+                (crossError && CROSS_FIELD_NAMES.includes(field.name)),
               )}
               aria-describedby={[
                 `smurf-boost-${field.name}-help`,
@@ -55,7 +58,7 @@ export function SmurfBoostSettingsThresholds({
             />
             <p
               id={`smurf-boost-${field.name}-help`}
-              className="text-xs text-muted-foreground"
+              className="text-sm text-muted-foreground"
             >
               {field.explanation} Allowed: {field.min} to {field.max}.
             </p>
@@ -63,7 +66,7 @@ export function SmurfBoostSettingsThresholds({
               <p
                 id={`smurf-boost-${field.name}-error`}
                 role="alert"
-                className="text-xs text-destructive"
+                className="text-sm text-destructive"
               >
                 {errors[field.name]}
               </p>
@@ -75,7 +78,7 @@ export function SmurfBoostSettingsThresholds({
         <p
           id="smurf-boost-cross-error"
           role="alert"
-          className="text-xs text-destructive"
+          className="text-sm text-destructive"
         >
           {crossError}
         </p>

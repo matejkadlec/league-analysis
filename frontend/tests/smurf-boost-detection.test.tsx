@@ -163,7 +163,10 @@ function shortHistory() {
 
 function renderCard(puuid = "test-puuid") {
   const { queryClient } = renderWithQueryClient(
-    <SmurfBoostDetection puuid={puuid} />,
+    <SmurfBoostDetection
+      puuid={puuid}
+      playerSelector={<input aria-label="Choose player for comparison" />}
+    />,
   );
   return queryClient;
 }

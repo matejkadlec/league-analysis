@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState, type FocusEvent } from "react";
+import { useEffect, useId, useState, type FocusEvent } from "react";
 import { ChevronLeft } from "lucide-react";
 
 import { cn } from "@/lib/core/utils";
@@ -14,6 +14,12 @@ interface SectionQuickNavigationProps {
   items: SectionQuickNavigationItem[];
 }
 
+function renderedAnchorsOf(items: SectionQuickNavigationItem[]): string[] {
+  return items
+    .filter((item) => document.querySelector(item.anchor) !== null)
+    .map((item) => item.anchor);
+}
+
 function scrollToAnchor(anchor: string) {
   const element = document.querySelector(anchor);
   if (!element) {
@@ -23,13 +29,32 @@ function scrollToAnchor(anchor: string) {
   element.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
-export function SectionQuickNavigation({
-  items,
-}: SectionQuickNavigationProps) {
+export function SectionQuickNavigation({ items }: SectionQuickNavigationProps) {
   const [isHovered, setIsHovered] = useState(false);
   const [isPinned, setIsPinned] = useState(false);
+  const [renderedAnchors, setRenderedAnchors] = useState<string[]>([]);
   const navigationId = useId();
   const isExpanded = isHovered || isPinned;
+
+  // An item whose section is not on the page is a dead link, and a page cannot
+  // be trusted to keep a hard-coded list in step with what it conditionally
+  // renders -- Rank Manipulation offered `Result` before any comparison had
+  // produced one. The DOM is the registry instead. Measuring only while the
+  // panel is open is enough, because that is the only state in which an item
+  // can be read or clicked, and it keeps the observer off the page the rest of
+  // the time; a section that arrives while the panel is open still appears.
+  useEffect(() => {
+    if (!isExpanded) return;
+    const measure = () => setRenderedAnchors(renderedAnchorsOf(items));
+    measure();
+    const observer = new MutationObserver(measure);
+    observer.observe(document.body, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, [isExpanded, items]);
+
+  const visibleItems = items.filter((item) =>
+    renderedAnchors.includes(item.anchor),
+  );
 
   const handleBlur = (event: FocusEvent<HTMLDivElement>) => {
     if (!event.currentTarget.contains(event.relatedTarget)) {
@@ -81,7 +106,7 @@ export function SectionQuickNavigation({
         >
           <nav aria-label="Page sections" className="h-auto w-[180px] py-2">
             <ul className="flex h-full flex-col justify-center">
-              {items.map((item) => (
+              {visibleItems.map((item) => (
                 <li key={item.anchor}>
                   <button
                     type="button"

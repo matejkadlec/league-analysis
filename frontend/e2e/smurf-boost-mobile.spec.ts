@@ -26,7 +26,7 @@ test.describe("smurf and boost detection on a phone", () => {
     test.setTimeout(60_000);
     await installSmurfBoostMocks(page);
 
-    await page.goto(`/smurf-boost-detection?puuid=${PUUID}`);
+    await page.goto(`/rank-manipulation?puuid=${PUUID}`);
     await acceptCookieBanner(page);
 
     const documentWidth = () =>
@@ -55,7 +55,7 @@ test.describe("smurf and boost detection on a phone", () => {
     test.setTimeout(60_000);
     await installSmurfBoostMocks(page);
 
-    await page.goto(`/smurf-boost-detection?puuid=${PUUID}`);
+    await page.goto(`/rank-manipulation?puuid=${PUUID}`);
     await acceptCookieBanner(page);
     await page.getByRole("button", { name: "Run the comparison" }).click();
 
@@ -103,7 +103,7 @@ test.describe("smurf and boost detection on a phone", () => {
     test.setTimeout(60_000);
     await installSmurfBoostMocks(page);
 
-    await page.goto(`/smurf-boost-detection?puuid=${PUUID}`);
+    await page.goto(`/rank-manipulation?puuid=${PUUID}`);
     await acceptCookieBanner(page);
 
     const field = page.getByLabel("Recent games compared");
