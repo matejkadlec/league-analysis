@@ -112,9 +112,9 @@ test("runs a comparison and reports both families without accusing anyone", asyn
   ).toBeVisible();
 
   // Each family carries its own band, and neither is summarised as a number.
-  await expect(result.getByText("Rapid improvement pattern")).toBeVisible();
+  await expect(result.getByText("Rapid Improvement Pattern")).toBeVisible();
   await expect(result.getByText("Notable indicators")).toBeVisible();
-  await expect(result.getByText("Playing pattern change")).toBeVisible();
+  await expect(result.getByText("Playing Pattern Change")).toBeVisible();
   await expect(result.getByText("No unusual pattern")).toBeVisible();
   await expect(result.getByText("High confidence")).toBeVisible();
 

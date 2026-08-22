@@ -215,9 +215,9 @@ describe("SmurfBoostDetection", () => {
     renderCard();
 
     await waitFor(() =>
-      expect(screen.getByText("Rapid improvement pattern")).toBeTruthy(),
+      expect(screen.getByText("Rapid Improvement Pattern")).toBeTruthy(),
     );
-    expect(screen.getByText("Playing pattern change")).toBeTruthy();
+    expect(screen.getByText("Playing Pattern Change")).toBeTruthy();
 
     // A family reading is one of the five fixed words and nothing else. A digit
     // here would mean the internal weighted sum had reached the screen. A raw
@@ -330,8 +330,8 @@ describe("SmurfBoostDetection", () => {
     await waitFor(() =>
       expect(screen.getAllByText("Not enough data").length).toBe(2),
     );
-    expect(screen.getByText("Rapid improvement pattern")).toBeTruthy();
-    expect(screen.getByText("Playing pattern change")).toBeTruthy();
+    expect(screen.getByText("Rapid Improvement Pattern")).toBeTruthy();
+    expect(screen.getByText("Playing Pattern Change")).toBeTruthy();
     expect(screen.getByText("Low confidence")).toBeTruthy();
     expect(screen.getByText(DISCLAIMER)).toBeTruthy();
     // 20 recent plus a 15-game baseline floor is 35, not the 25 the two
