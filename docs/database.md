@@ -108,10 +108,20 @@ because these values drive staleness decisions.
   provider evidence is accepted only for the current random `generation` and
   in timestamp order, making key replacement race-safe against concurrent
   request completion.
-- One-active-row-per-PUUID partial unique indexes guard
-  `jobs.player_sync_runs`, `core.matchmaking_analyses`, and
-  `core.smurf_boost_analyses`; the first two lifecycle contracts are in
-  [`jobs.md`](jobs.md).
+- Partial unique indexes cap the active rows on `jobs.player_sync_runs`,
+  `core.matchmaking_analyses`, and `core.smurf_boost_analyses`; the first two
+  lifecycle contracts are in [`jobs.md`](jobs.md). The player sync run is one
+  per PUUID because an update is a fact about the player. Both analysis tables
+  are one per `(user_id, puuid)` since revision `20260822_0030`: a stored run
+  belongs to the account that asked for it, and puuid-wide indexes let either
+  account lock the other out of the feature.
+- `core.smurf_boost_analyses` and `core.matchmaking_analyses` carry a NOT NULL
+  `user_id` referencing `auth.users` with `ON DELETE CASCADE`. Nullable would
+  let an unowned row back in the first time a writer forgot, and an unowned row
+  is precisely what made one account's results, cancels and deletes reachable
+  by every other account. Revision `20260822_0030` deletes the pre-ownership
+  rows rather than attributing them: nothing in either table records who ran
+  them, and a re-run costs a button press.
 - `core.smurf_boost_analyses` (revision `20260814_0010`) stores one explained
   detection run per `(puuid, created_at)`. It records the `model_version` and
   the exact `thresholds` the run used, so a stored result is never reinterpreted

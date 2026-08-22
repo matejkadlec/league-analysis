@@ -19,6 +19,10 @@ from app.features.matchmaking_analysis.models import MatchmakingAnalysis
 from app.features.matchmaking_analysis.schemas import MatchmakingAnalysisRequest
 from app.features.matchmaking_analysis.service import MatchmakingAnalysisService
 
+# The account these tests act as. Every stored run belongs to one, so a service
+# cannot be built without saying which.
+_USER_ID = 7
+
 _PUUID = "test-puuid"
 
 
@@ -90,7 +94,7 @@ async def test_repeated_start_attaches_to_the_existing_active_run(
     existing = _analysis("in_progress")
     database = SimpleNamespace(add=MagicMock())
     service = MatchmakingAnalysisService(
-        cast(AsyncSession, database), cast(RiotAPIClient, object())
+        cast(AsyncSession, database), cast(RiotAPIClient, object()), _USER_ID
     )
     service._get_active_analysis = AsyncMock(return_value=existing)
     service._ensure_background_task = MagicMock()
@@ -113,7 +117,7 @@ async def test_new_run_replaces_a_finishing_previous_task_handle() -> None:
     new_started = asyncio.Event()
     database = SimpleNamespace()
     service = MatchmakingAnalysisService(
-        cast(AsyncSession, database), cast(RiotAPIClient, object())
+        cast(AsyncSession, database), cast(RiotAPIClient, object()), _USER_ID
     )
 
     async def run_new_analysis(puuid: str, created_at: datetime) -> None:
@@ -122,7 +126,7 @@ async def test_new_run_replaces_a_finishing_previous_task_handle() -> None:
         new_started.set()
 
     service._run_analysis_background = run_new_analysis
-    analysis_service_module._running_analyses[_PUUID] = (
+    analysis_service_module._running_analyses[(_USER_ID, _PUUID)] = (
         analysis_service_module.RunningAnalysis(
             created_at=old_created_at,
             task=old_task,
@@ -132,14 +136,14 @@ async def test_new_run_replaces_a_finishing_previous_task_handle() -> None:
     try:
         service._ensure_background_task(_PUUID, new_created_at)
         await asyncio.wait_for(new_started.wait(), timeout=1)
-        replacement = analysis_service_module._running_analyses[_PUUID]
+        replacement = analysis_service_module._running_analyses[(_USER_ID, _PUUID)]
         assert replacement.created_at == new_created_at
         assert replacement.task is not old_task
         await replacement.task
     finally:
         old_task.cancel()
         await asyncio.gather(old_task, return_exceptions=True)
-        analysis_service_module._running_analyses.pop(_PUUID, None)
+        analysis_service_module._running_analyses.pop((_USER_ID, _PUUID), None)
 
 
 async def test_cancel_targets_and_retains_the_exact_active_run() -> None:
@@ -152,7 +156,7 @@ async def test_cancel_targets_and_retains_the_exact_active_run() -> None:
         delete=AsyncMock(),
     )
     service = MatchmakingAnalysisService(
-        cast(AsyncSession, database), cast(RiotAPIClient, object())
+        cast(AsyncSession, database), cast(RiotAPIClient, object()), _USER_ID
     )
 
     cancelled = await service.cancel_analysis(active.puuid, active.created_at)
@@ -184,7 +188,7 @@ async def test_rate_limit_wait_is_persisted_as_an_active_state(
         rollback=AsyncMock(),
     )
     service = MatchmakingAnalysisService(
-        cast(AsyncSession, database), cast(RiotAPIClient, object())
+        cast(AsyncSession, database), cast(RiotAPIClient, object()), _USER_ID
     )
     service._current_analysis_puuid = _PUUID
     service._current_analysis_created_at = datetime.now(UTC)
@@ -211,7 +215,7 @@ async def test_analysis_failure_keeps_a_safe_terminal_diagnostic(
     )
     database = SimpleNamespace(execute=AsyncMock(), commit=AsyncMock())
     service = MatchmakingAnalysisService(
-        cast(AsyncSession, database), cast(RiotAPIClient, object())
+        cast(AsyncSession, database), cast(RiotAPIClient, object()), _USER_ID
     )
     created_at = datetime.now(UTC)
 
@@ -258,6 +262,7 @@ async def test_optional_fetch_does_not_swallow_invalid_key_failure() -> None:
     service = MatchmakingAnalysisService(
         cast(AsyncSession, SimpleNamespace()),
         cast(RiotAPIClient, riot_client),
+        _USER_ID,
     )
 
     with pytest.raises(ForbiddenError):
@@ -268,6 +273,7 @@ def _empty_service() -> MatchmakingAnalysisService:
     return MatchmakingAnalysisService(
         cast(AsyncSession, SimpleNamespace()),
         cast(RiotAPIClient, SimpleNamespace()),
+        _USER_ID,
     )
 
 

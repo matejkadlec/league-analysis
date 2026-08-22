@@ -568,6 +568,71 @@ def validate_revision_0017_rewrote_the_seeded_basis(database: str) -> None:
         )
 
 
+def validate_revision_0030_owns_every_analysis(database: str) -> None:
+    """Assert both analysis tables can no longer hold an unowned run.
+
+    This is the half of LGA-102 that pytest structurally cannot reach: the
+    suite has no database, so a NOT NULL, a foreign key and a partial unique
+    index are all invisible to it. The check that matters is the last one --
+    the active-run indexes led with `puuid` alone, which let either account
+    lock the other out of a player, and rekeying them is easy to get wrong in
+    a way nothing else notices until two accounts collide in production.
+    """
+    url = administration_url().set(database=database)
+    engine = create_engine(url)
+    try:
+        with engine.connect() as connection:
+            for table in ("smurf_boost_analyses", "matchmaking_analyses"):
+                left = connection.execute(
+                    text(f"SELECT count(*) FROM core.{table}")
+                ).scalar_one()
+                if left:
+                    raise RuntimeError(
+                        f"revision 0030 left {left} unowned row(s) in {table}"
+                    )
+
+                nullable = connection.execute(
+                    text(
+                        "SELECT is_nullable FROM information_schema.columns "
+                        "WHERE table_schema = 'core' AND table_name = :table "
+                        "AND column_name = 'user_id'"
+                    ),
+                    {"table": table},
+                ).scalar_one_or_none()
+                if nullable != "NO":
+                    raise RuntimeError(
+                        f"core.{table}.user_id is {nullable or 'absent'}, "
+                        "not a required owner"
+                    )
+
+                # `ondelete=CASCADE` is what `user_id_column` exists to say
+                # once. Without it, deleting an account fails on this table.
+                cascade = connection.execute(
+                    text("SELECT confdeltype FROM pg_constraint WHERE conname = :name"),
+                    {"name": f"fk_{table}_user_id_users"},
+                ).scalar_one_or_none()
+                if cascade != "c":
+                    raise RuntimeError(
+                        f"fk_{table}_user_id_users does not cascade "
+                        f"(confdeltype {cascade!r})"
+                    )
+
+                definition = connection.execute(
+                    text(
+                        "SELECT indexdef FROM pg_indexes "
+                        "WHERE schemaname = 'core' AND indexname = :name"
+                    ),
+                    {"name": f"uq_{table}_active_puuid"},
+                ).scalar_one_or_none()
+                if definition is None or "(user_id, puuid)" not in definition:
+                    raise RuntimeError(
+                        f"uq_{table}_active_puuid is not keyed by account "
+                        f"and player ({definition!r})"
+                    )
+    finally:
+        engine.dispose()
+
+
 def _python_default_literal(column: object) -> object | None:
     """Render a column's Python-side default, or None when it has none."""
     default = getattr(column, "default", None)
@@ -952,13 +1017,18 @@ def main() -> int:
         seed_rows_revision_0014_must_repair(database)
         seed_rows_revision_0022_must_empty(database)
         run_upgrade(database, "20260820_0018")
+        # Before head on purpose: revision 0030 gives the analysis tables an
+        # owning account, and rows seeded here have none to give, so it empties
+        # them. Left after head this check would read zero rows -- and the
+        # assertion it makes would then be about nothing at all.
+        validate_revision_0017_rewrote_the_seeded_basis(database)
         seed_riot_keys_revision_0019_must_collapse(database)
         run_upgrade(database)
         validate_revision(database)
         validate_revision_0014_repaired_the_seeded_rows(database)
-        validate_revision_0017_rewrote_the_seeded_basis(database)
         validate_revision_0019_kept_one_bound_key(database)
         validate_revision_0022_retired_the_absent_stand_ins(database)
+        validate_revision_0030_owns_every_analysis(database)
         asyncio.run(verify_application_database_access(database))
         asyncio.run(verify_expired_key_turns_health_missing(database))
         with tempfile.TemporaryDirectory(

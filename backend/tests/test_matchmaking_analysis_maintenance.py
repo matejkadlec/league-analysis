@@ -18,6 +18,10 @@ from app.features.matchmaking_analysis import service as analysis_service_module
 from app.features.matchmaking_analysis.schemas import MatchmakingAnalysisRequest
 from app.features.matchmaking_analysis.service import MatchmakingAnalysisService
 
+# The account these tests act as. Every stored run belongs to one, so a service
+# cannot be built without saying which.
+_USER_ID = 7
+
 
 def _request() -> Request:
     """Build the minimal request required by rate-limited route wrappers."""
@@ -43,7 +47,7 @@ async def test_new_matchmaking_analysis_refuses_active_maintenance(
         guard,
     )
     service = MatchmakingAnalysisService(
-        cast(AsyncSession, object()), cast(RiotAPIClient, object())
+        cast(AsyncSession, object()), cast(RiotAPIClient, object()), _USER_ID
     )
 
     with pytest.raises(RiotWriterMaintenanceActiveError):
@@ -84,7 +88,7 @@ async def test_matchmaking_fetched_match_honors_the_maintenance_interlock(
     monkeypatch.setattr(match_persistence, "upsert_match", upsert)
     database = object()
     service = MatchmakingAnalysisService(
-        cast(AsyncSession, database), cast(RiotAPIClient, object())
+        cast(AsyncSession, database), cast(RiotAPIClient, object()), _USER_ID
     )
 
     with pytest.raises(RiotWriterMaintenanceActiveError):
@@ -106,7 +110,7 @@ async def test_matchmaking_progress_writes_when_maintenance_is_inactive(
         guard,
     )
     service = MatchmakingAnalysisService(
-        cast(AsyncSession, database), cast(RiotAPIClient, object())
+        cast(AsyncSession, database), cast(RiotAPIClient, object()), _USER_ID
     )
     created_at = datetime.now(UTC)
 

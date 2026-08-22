@@ -71,6 +71,10 @@ from app.features.smurf_boost_detection.statistics import (
     wilson_lower_bound,
 )
 
+# The account these tests act as. Every stored run belongs to one, so a service
+# cannot be built without saying which.
+_USER_ID = 7
+
 CONSERVATIVE = {key: float(value) for key, value in PRESETS["conservative"].items()}
 
 BASE_METRICS: dict[str, float] = {
@@ -896,7 +900,7 @@ def _completed_run(**overrides: Any) -> SmurfBoostAnalysis:
 
 
 def _service(db: MagicMock) -> SmurfBoostDetectionService:
-    return SmurfBoostDetectionService(cast(AsyncSession, db))
+    return SmurfBoostDetectionService(cast(AsyncSession, db), _USER_ID)
 
 
 def _await_args(mock: AsyncMock) -> tuple[Any, ...]:

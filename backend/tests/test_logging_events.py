@@ -26,6 +26,10 @@ from app.features.smurf_boost_detection.service import (
     SmurfBoostDetectionService,
 )
 
+# The account these tests act as. Every stored run belongs to one, so a service
+# cannot be built without saying which.
+_USER_ID = 7
+
 CONSERVATIVE = {key: float(value) for key, value in PRESETS["conservative"].items()}
 
 
@@ -198,7 +202,7 @@ async def test_smurf_conflict_without_concurrent_run_is_logged() -> None:
         commit=AsyncMock(side_effect=IntegrityError("stmt", {}, ValueError("race"))),
         rollback=AsyncMock(),
     )
-    service = SmurfBoostDetectionService(cast(AsyncSession, database))
+    service = SmurfBoostDetectionService(cast(AsyncSession, database), _USER_ID)
     service._expire_abandoned = AsyncMock()
     service._active_run = AsyncMock(return_value=None)
     service._newest_run = AsyncMock(return_value=None)
@@ -215,7 +219,7 @@ async def test_smurf_conflict_without_concurrent_run_is_logged() -> None:
 async def test_smurf_detection_error_branch_logs_warning() -> None:
     """A reviewed detection failure persists `_fail` and now also logs."""
     service = SmurfBoostDetectionService(
-        cast(AsyncSession, MagicMock(rollback=AsyncMock()))
+        cast(AsyncSession, MagicMock(rollback=AsyncMock())), _USER_ID
     )
     created_at = datetime.now(UTC)
     service._claim_run = AsyncMock(return_value=(created_at, None))

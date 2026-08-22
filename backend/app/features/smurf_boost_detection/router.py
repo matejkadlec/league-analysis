@@ -6,10 +6,7 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from app.core.http_rate_limit import rate_limit
-from app.features.auth.dependencies import (
-    CurrentUserDep,
-    get_current_active_user,
-)
+from app.features.auth.dependencies import get_current_active_user
 from app.features.settings.schemas import serialize_card_preference_settings
 
 from .config import DEFAULT_PRESET, PRESETS
@@ -64,7 +61,6 @@ async def analyze_player(
     request: Request,
     payload: SmurfBoostAnalysisRequest,
     service: SmurfBoostServiceDep,
-    current_user: CurrentUserDep,
 ) -> SmurfBoostAnalysisResponse:
     """Run detection for one player using the viewer's thresholds.
 
@@ -72,7 +68,7 @@ async def analyze_player(
     and never contacts the Riot API.
     """
     try:
-        thresholds = await service.viewer_thresholds(current_user.id)
+        thresholds = await service.viewer_thresholds()
         return await service.run_analysis(payload.puuid, thresholds)
     except SmurfBoostDetectionError as error:
         logger.warning(
@@ -90,7 +86,12 @@ async def analyze_player(
 async def get_latest_analysis(
     puuid: str, service: SmurfBoostServiceDep
 ) -> SmurfBoostAnalysisResponse:
-    """Read the newest stored detection run for one player."""
+    """Read the caller's newest stored detection run for one player.
+
+    Scoped to the caller by the service, not by this signature: a run is
+    scored against the viewer's own thresholds, so another account's run is
+    not a weaker answer here -- it is the wrong one.
+    """
     result = await service.get_latest(puuid)
     if not result:
         raise HTTPException(status_code=404, detail="No analysis found for this player")

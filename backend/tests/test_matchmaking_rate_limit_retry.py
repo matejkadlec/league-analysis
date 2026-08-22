@@ -24,6 +24,10 @@ from app.features.matchmaking_analysis.service import (
     MatchmakingAnalysisService,
 )
 
+# The account these tests act as. Every stored run belongs to one, so a service
+# cannot be built without saying which.
+_USER_ID = 7
+
 
 @pytest.fixture
 def slept(monkeypatch: pytest.MonkeyPatch) -> list[float]:
@@ -43,7 +47,7 @@ def _service() -> tuple[MatchmakingAnalysisService, AsyncMock]:
     The row that write touches is covered elsewhere; what matters here is when
     a reset time is published and when it is cleared.
     """
-    svc = MatchmakingAnalysisService(MagicMock(), MagicMock())
+    svc = MatchmakingAnalysisService(MagicMock(), MagicMock(), _USER_ID)
     reset = AsyncMock()
     svc._set_rate_limit_reset = reset
     return svc, reset

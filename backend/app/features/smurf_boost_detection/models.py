@@ -20,6 +20,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.models import Base, created_at_column
+from app.features.auth.user_reference import user_id_column
 from app.features.smurf_boost_detection.schemas import SmurfBoostStatus
 
 
@@ -27,6 +28,11 @@ class SmurfBoostAnalysis(Base):
     """Persisted lifecycle and explained result for one detection run."""
 
     __tablename__ = "smurf_boost_analyses"
+
+    user_id: Mapped[int] = user_id_column(
+        "Account that ran this analysis and is the only one shown it",
+        index=True,
+    )
 
     puuid: Mapped[str] = mapped_column(
         String(78),
@@ -102,8 +108,13 @@ class SmurfBoostAnalysis(Base):
             "status IN ('pending', 'in_progress', 'completed', 'failed')",
             name="status_valid",
         ),
+        # Per account, not per player: the interlock exists so one viewer
+        # cannot start a second run over their own, and a puuid-wide version
+        # let either account block the other out of a page they share nothing
+        # on.
         Index(
             "uq_smurf_boost_analyses_active_puuid",
+            "user_id",
             "puuid",
             unique=True,
             postgresql_where=text("status IN ('pending', 'in_progress')"),

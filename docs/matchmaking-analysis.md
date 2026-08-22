@@ -103,14 +103,32 @@ saving up to 910 of the theoretical 911.
 
 ## Lifecycle Invariants
 
+### Run ownership
+
+Every run belongs to the account that started it (`user_id`, NOT NULL, revision
+`20260822_0030`), and every query -- read, attach, cancel, delete -- is scoped
+to it. Before that, a run was identified by `(puuid, created_at)` alone, and
+`created_at` is returned by the status and history endpoints: reflecting one
+field back was enough for any signed-in account to cancel another's running
+analysis or permanently delete their completed record.
+
+The scope is not applied per endpoint. `MatchmakingAnalysisService` takes the
+owner in its constructor, resolved once in `dependencies.py` from
+`CurrentUserDep`, so an endpoint cannot be written that forgets it. The
+background worker constructs its own service with the same owner rather than
+inheriting an ambient one.
+
 ### DB-first start
 
 `POST /matchmaking-analysis/start` returns the **persisted active run before
 any Riot preflight**. `start_analysis` attaches to an existing active row when
 one exists; otherwise it inserts a `pending` row and relies on the partial
 unique index `uq_matchmaking_analyses_active_puuid` (at most one `pending`,
-`in_progress`, or `waiting_rate_limit` row per PUUID) to resolve concurrent
-starts — the loser of the race attaches to the winner's row. The start
+`in_progress`, or `waiting_rate_limit` row per `(user_id, puuid)`) to resolve
+concurrent starts — the loser of the race attaches to the winner's row. Both
+the attach and the index are scoped to the calling account, so the race being
+resolved is between one account's own concurrent starts; another account
+analyzing the same player gets its own run. The start
 response carries the exact run identity `(puuid, created_at)`; the frontend
 seeds its state from it and polls that exact identity.
 
@@ -144,9 +162,12 @@ authoritative. Progress counts shown to the client are
 
 ### Cancellation
 
-Cancellation targets the exact `(puuid, created_at)` run, persists a terminal
-`cancelled` record (retained for diagnostics), then stops that worker. Matches
-fetched so far stay persisted; a new start remains retryable.
+Cancellation targets the exact `(puuid, created_at)` run **belonging to the
+calling account**, persists a terminal `cancelled` record (retained for
+diagnostics), then stops that worker. A run the caller does not own is not
+found rather than refused, so the response says nothing about whether somebody
+else is analyzing that player. Matches fetched so far stay persisted; a new
+start remains retryable.
 
 ---
 
