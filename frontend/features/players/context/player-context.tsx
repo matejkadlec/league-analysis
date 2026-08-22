@@ -46,8 +46,7 @@ export function PlayerContextProvider({
   // `?puuid=` with nothing after it is not a selection, it is a malformed
   // link -- `searchParams.get` answers `""` for it, and an empty string is
   // truthy enough to reach the URL branch below and suppress the account's
-  // saved player. Treat it as absent, as the retired `/my-profile` redirect
-  // used to before Next started forwarding the query verbatim.
+  // saved player. Treat it as absent.
   const urlPuuid = (isPlayerRoute ? searchParams.get("puuid") : null) || null;
 
   const contextQuery = useQuery({

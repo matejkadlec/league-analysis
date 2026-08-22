@@ -394,9 +394,7 @@ test("keeps player routes, sidebar switching, and dialog scroll lock determinist
   await expect(
     page.getByRole("button", { name: "Ranked Solo/Duo" }),
   ).toHaveAttribute("aria-pressed", "true");
-  await expect(
-    page.getByLabel("Match history page size"),
-  ).toContainText("25");
+  await expect(page.getByLabel("Match history page size")).toContainText("25");
 
   const activePlayerFromMatchHistory = page.getByTestId(
     "current-player-button",
@@ -448,9 +446,7 @@ test("keeps player routes, sidebar switching, and dialog scroll lock determinist
     page.getByRole("button", { name: "ARAM", exact: true }),
   ).toHaveAttribute("aria-pressed", "true");
 
-  const matchSearch = page.getByPlaceholder(
-    "Search for champion or player",
-  );
+  const matchSearch = page.getByPlaceholder("Search for champion or player");
   await expect(matchSearch).toBeVisible();
   await expect
     .poll(() =>
@@ -502,9 +498,7 @@ test("keeps player routes, sidebar switching, and dialog scroll lock determinist
   await expect(
     page.getByRole("button", { name: "Previous page" }),
   ).toBeDisabled();
-  await expect(
-    page.getByRole("button", { name: "Next page" }),
-  ).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Next page" })).toBeDisabled();
 
   const matchCardAfterFilter = await page
     .locator("#match-history")
@@ -534,9 +528,7 @@ test("keeps player routes, sidebar switching, and dialog scroll lock determinist
   await expect(
     page.getByRole("button", { name: "ARAM: Mayhem" }),
   ).toHaveAttribute("aria-pressed", "true");
-  await expect(
-    page.getByLabel("Match history page size"),
-  ).toContainText("100");
+  await expect(page.getByLabel("Match history page size")).toContainText("100");
 
   const playerOverviewLink = page.getByRole("link", {
     name: "Player Overview",
@@ -696,13 +688,4 @@ test("keeps player routes, sidebar switching, and dialog scroll lock determinist
   await expect(
     page.getByText("Connected Riot Account", { exact: true }),
   ).toHaveCount(0);
-
-  await page.goto(`/my-profile?puuid=${CURRENT_PUUID}`);
-  await expect(page).toHaveURL(
-    new RegExp(`/player-overview\\?puuid=${CURRENT_PUUID}`),
-  );
-  await page.goto(`/playstyle-analysis?puuid=${RECENT_PUUID}`);
-  await expect(page).toHaveURL(
-    new RegExp(`/player-overview\\?puuid=${RECENT_PUUID}`),
-  );
 });

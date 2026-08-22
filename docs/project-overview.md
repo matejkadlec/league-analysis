@@ -60,9 +60,11 @@ navigation. Player Overview owns aggregate/statistical cards; Match History is
 a separate top-level detailed workflow. The sidebar is the canonical search
 and current-player surface. Clicking the current-player row opens the Tracked
 Players dialog without changing the active route; that dialog owns the complete
-tracked-list switch/management flow. `/my-profile`, `/playstyle-analysis`, and
-`/tracked-players` are PUUID-preserving compatibility redirects to Player
-Overview.
+tracked-list switch/management flow. The `/my-profile`,
+`/playstyle-analysis` and `/tracked-players` pages were consolidated into
+Player Overview and their paths are simply gone -- see
+[`../frontend/app/AGENTS.md`](../frontend/app/AGENTS.md) for why nothing
+redirects.
 
 Matchmaking Analysis and Rank Manipulation are the deliberate exceptions: the
 global current player is shown as their reference/default, while each page owns

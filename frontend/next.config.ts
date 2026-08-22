@@ -17,31 +17,6 @@ const nextConfig: NextConfig = {
       },
     ],
   },
-  // Retired routes kept working for old links; Next passes `?puuid=` through.
-  async redirects() {
-    return [
-      {
-        source: "/my-profile",
-        destination: "/player-overview",
-        permanent: false,
-      },
-      {
-        source: "/playstyle-analysis",
-        destination: "/player-overview",
-        permanent: false,
-      },
-      {
-        source: "/tracked-players",
-        destination: "/player-overview",
-        permanent: false,
-      },
-      {
-        source: "/smurf-boost-detection",
-        destination: "/rank-manipulation",
-        permanent: false,
-      },
-    ];
-  },
   async rewrites() {
     return [
       {

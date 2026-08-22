@@ -16,9 +16,7 @@ const SIDEBAR_SOURCES = [
   .map((file) => readFileSync(join(process.cwd(), file), "utf8"))
   .join("\n");
 
-// The root route is the shell itself rather than a navigation target. The
-// retired compatibility routes are `redirects()` entries in next.config.ts, so
-// they have no page.tsx and cannot appear here at all.
+// The root route is the shell itself rather than a navigation target.
 const NOT_NAVIGATION_TARGETS = new Set(["/"]);
 
 // Routes a signed-out visitor is meant to reach. Everything else in app/ that
