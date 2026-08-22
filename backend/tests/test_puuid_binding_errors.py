@@ -27,6 +27,10 @@ from app.features.players import service as player_service_module
 from app.features.players.models import Player
 from app.features.players.service import PlayerService
 
+# The account these tests act as. Every stored run belongs to one, so a service
+# cannot be built without saying which.
+_USER_ID = 7
+
 FRESH_PUUID = "f" * 78
 
 
@@ -610,7 +614,7 @@ async def test_task_cancellation_leaves_the_analysis_resumable(
     monkeypatch.setattr(scoped_client, "create_tracked_riot_api_client", _cancelled)
 
     service = analysis_module.MatchmakingAnalysisService(
-        cast(AsyncSession, _Session()), cast(RiotAPIClient, SimpleNamespace())
+        cast(AsyncSession, _Session()), cast(RiotAPIClient, SimpleNamespace()), _USER_ID
     )
 
     with pytest.raises(asyncio.CancelledError):

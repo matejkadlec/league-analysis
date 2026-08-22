@@ -23,14 +23,14 @@ import { MINIMUM_BASELINE_GAMES } from "../smurf-boost-settings";
 import { SmurfBoostResultCard } from "./smurf-boost-result-card";
 
 // The two statuses the backend uses for a run that has not reached a terminal
-// state. A request that arrives while another viewer's identical run is still
-// computing is answered with that run, so a start can legitimately return one
-// of these instead of a result.
+// state. A run is owned by the account that asked for it, so a start returns
+// one of these only when this same account already has one in flight -- a
+// second tab, or a double submit -- and attaches to it instead of racing.
 const ACTIVE_STATUSES = ["pending", "in_progress"];
 
 // How often an active run is re-read. The computation finishes inside its own
-// request, so an active row seen here belongs to another viewer's request and
-// resolves within seconds.
+// request, so an active row seen here belongs to this account's other in-flight
+// request and resolves within seconds.
 const ACTIVE_POLL_MS = 3000;
 
 function isActive(analysis: SmurfBoostAnalysisResponse | null): boolean {

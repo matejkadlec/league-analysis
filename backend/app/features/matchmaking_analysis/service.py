@@ -77,38 +77,6 @@ MAX_RATE_LIMIT_WAIT = 120
 ACTIVE_ANALYSIS_STATUSES = ("pending", "in_progress", "waiting_rate_limit")
 
 
-def _active_run_where(puuid: str, created_at: datetime) -> ColumnElement[bool]:
-    """The WHERE clause naming one exact active run.
-
-    Every cancel/progress/finalize path targets a run by this same triple;
-    spelling it once keeps the paths from drifting apart.
-    """
-    return active_run_filter(
-        MatchmakingAnalysis, ACTIVE_ANALYSIS_STATUSES, puuid, created_at
-    )
-
-
-def _one_run_where(puuid: str, created_at: datetime) -> ColumnElement[bool]:
-    """The WHERE clause naming one run by identity, whatever state it is in."""
-    return and_(
-        MatchmakingAnalysis.puuid == puuid,
-        MatchmakingAnalysis.created_at == created_at,
-    )
-
-
-def _completed_run_where(puuid: str) -> ColumnElement[bool]:
-    """The WHERE clause for a player's runs that finished and kept results.
-
-    "Completed" without the results check is a lie the history and latest
-    endpoints must not tell separately.
-    """
-    return and_(
-        MatchmakingAnalysis.puuid == puuid,
-        MatchmakingAnalysis.status == "completed",
-        MatchmakingAnalysis.results.isnot(None),
-    )
-
-
 @dataclass(frozen=True)
 class RunningAnalysis:
     """Process-local handle for one persisted analysis run."""
@@ -117,7 +85,10 @@ class RunningAnalysis:
     task: asyncio.Task[None]
 
 
-_running_analyses: dict[str, RunningAnalysis] = {}
+# Keyed by account and player together. Keyed by player alone, one account's
+# worker was the only worker that could exist for a lobby, so a second account
+# asking was silently handed the first one's run.
+_running_analyses: dict[tuple[int, str], RunningAnalysis] = {}
 
 
 class MatchmakingAnalysisRuntimeError(Exception):
@@ -132,15 +103,61 @@ class MatchmakingAnalysisRuntimeError(Exception):
 class MatchmakingAnalysisService:
     """Service for analyzing matchmaking fairness."""
 
+    def _active_run_where(
+        self, puuid: str, created_at: datetime
+    ) -> ColumnElement[bool]:
+        """The WHERE clause naming one exact active run of this account's.
+
+        Every cancel/progress/finalize path targets a run by this same triple;
+        spelling it once keeps the paths from drifting apart.
+        """
+        return active_run_filter(
+            MatchmakingAnalysis,
+            ACTIVE_ANALYSIS_STATUSES,
+            self.user_id,
+            puuid,
+            created_at,
+        )
+
+    def _one_run_where(self, puuid: str, created_at: datetime) -> ColumnElement[bool]:
+        """The WHERE clause naming one of this account's runs by identity.
+
+        `created_at` is handed out by the status and history endpoints, so it
+        identifies a run but proves nothing about who may act on it.
+        """
+        return and_(
+            MatchmakingAnalysis.user_id == self.user_id,
+            MatchmakingAnalysis.puuid == puuid,
+            MatchmakingAnalysis.created_at == created_at,
+        )
+
+    def _completed_run_where(self, puuid: str) -> ColumnElement[bool]:
+        """This account's runs for a player that finished and kept results.
+
+        "Completed" without the results check is a lie the history and latest
+        endpoints must not tell separately.
+        """
+        return and_(
+            MatchmakingAnalysis.user_id == self.user_id,
+            MatchmakingAnalysis.puuid == puuid,
+            MatchmakingAnalysis.status == "completed",
+            MatchmakingAnalysis.results.isnot(None),
+        )
+
     MAX_RATE_LIMIT_ATTEMPTS = 10
 
     MATCHES_TO_ANALYZE = 10
     MATCHES_FOR_WINRATE = 10
     MIN_MATCHES_REQUIRED = 10
 
-    def __init__(self, db: AsyncSession, riot_client: RiotAPIClient):
+    def __init__(self, db: AsyncSession, riot_client: RiotAPIClient, user_id: int):
         self.db = db
         self.riot_client = riot_client
+        # The account this service answers for. See the identical note on
+        # `SmurfBoostDetectionService`: these were module-level WHERE helpers
+        # keyed on the player alone, which is how cancel and delete came to
+        # reach across accounts.
+        self.user_id = user_id
         self.requests_saved: int = 0
         self.api_calls_made: int = 0  # Track actual API calls for savings calculation
         self.matches_analyzed: int = 0
@@ -157,9 +174,9 @@ class MatchmakingAnalysisService:
         """Create or attach to one active analysis and return immediately."""
         await ensure_riot_writer_maintenance_is_inactive(self.db)
 
-        running = _running_analyses.get(puuid)
+        running = _running_analyses.get((self.user_id, puuid))
         if running and running.task.done():
-            _running_analyses.pop(puuid, None)
+            _running_analyses.pop((self.user_id, puuid), None)
 
         existing = await self._get_active_analysis(puuid)
         if existing:
@@ -169,17 +186,24 @@ class MatchmakingAnalysisService:
 
         now = datetime.now(UTC)
         analysis = MatchmakingAnalysis(
+            user_id=self.user_id,
             puuid=puuid,
             created_at=now,
             status="pending",
             puuid_progress={},
         )
-        if await commit_new_run(self.db, analysis) is None:
+        conflict = await commit_new_run(self.db, analysis)
+        if conflict is None:
             await self.db.refresh(analysis)
         else:
             existing = await self._get_active_analysis(puuid)
             if not existing:
-                raise
+                # `commit_new_run` returns the IntegrityError rather than
+                # raising it, so there is no exception in flight here: a bare
+                # `raise` reached this line as `RuntimeError: No active
+                # exception to reraise`, hiding the constraint that actually
+                # failed.
+                raise conflict
             logger.info("Attached after concurrent start", puuid=puuid)
             self._ensure_background_task(puuid, existing.created_at)
             return MatchmakingAnalysisResponse.model_validate(existing)
@@ -191,14 +215,14 @@ class MatchmakingAnalysisService:
     async def cancel_analysis(self, puuid: str, created_at: datetime) -> bool:
         """Cancel the exact active run while retaining its terminal record."""
         result = await self.db.execute(
-            select(MatchmakingAnalysis).where(_active_run_where(puuid, created_at))
+            select(MatchmakingAnalysis).where(self._active_run_where(puuid, created_at))
         )
         if result.scalar_one_or_none() is None:
             return False
 
         await self.db.execute(
             update(MatchmakingAnalysis)
-            .where(_active_run_where(puuid, created_at))
+            .where(self._active_run_where(puuid, created_at))
             .values(
                 status="cancelled",
                 completed_at=datetime.now(UTC),
@@ -209,7 +233,7 @@ class MatchmakingAnalysisService:
         )
         await self.db.commit()
 
-        running = _running_analyses.get(puuid)
+        running = _running_analyses.get((self.user_id, puuid))
         if running and running.created_at == created_at and not running.task.done():
             running.task.cancel()
             try:
@@ -231,7 +255,7 @@ class MatchmakingAnalysisService:
         """Get the latest completed analysis for a player (excluding errors)."""
         result = await self.db.execute(
             select(MatchmakingAnalysis)
-            .where(_completed_run_where(puuid))
+            .where(self._completed_run_where(puuid))
             .order_by(MatchmakingAnalysis.created_at.desc())
             .limit(1)
         )
@@ -246,7 +270,10 @@ class MatchmakingAnalysisService:
         """Get the latest analysis for a player."""
         result = await self.db.execute(
             select(MatchmakingAnalysis)
-            .where(MatchmakingAnalysis.puuid == puuid)
+            .where(
+                MatchmakingAnalysis.user_id == self.user_id,
+                MatchmakingAnalysis.puuid == puuid,
+            )
             .order_by(MatchmakingAnalysis.created_at.desc())
             .limit(1)
         )
@@ -260,7 +287,7 @@ class MatchmakingAnalysisService:
     ) -> MatchmakingAnalysisResponse | None:
         """Get status of a specific analysis."""
         result = await self.db.execute(
-            select(MatchmakingAnalysis).where(_one_run_where(puuid, created_at))
+            select(MatchmakingAnalysis).where(self._one_run_where(puuid, created_at))
         )
         analysis = result.scalar_one_or_none()
         if not analysis:
@@ -278,7 +305,7 @@ class MatchmakingAnalysisService:
         """Get history of completed analyses for a player."""
         result = await self.db.execute(
             select(MatchmakingAnalysis)
-            .where(_completed_run_where(puuid))
+            .where(self._completed_run_where(puuid))
             .order_by(MatchmakingAnalysis.created_at.desc())
             .limit(limit)
         )
@@ -299,7 +326,7 @@ class MatchmakingAnalysisService:
         """Delete a specific completed analysis record by puuid and created_at."""
         result = await self.db.execute(
             select(MatchmakingAnalysis).where(
-                _one_run_where(puuid, created_at),
+                self._one_run_where(puuid, created_at),
                 MatchmakingAnalysis.status == "completed",
             )
         )
@@ -316,6 +343,7 @@ class MatchmakingAnalysisService:
         result = await self.db.execute(
             select(MatchmakingAnalysis)
             .where(
+                MatchmakingAnalysis.user_id == self.user_id,
                 MatchmakingAnalysis.puuid == puuid,
                 MatchmakingAnalysis.status.in_(ACTIVE_ANALYSIS_STATUSES),
             )
@@ -326,12 +354,12 @@ class MatchmakingAnalysisService:
 
     def _ensure_background_task(self, puuid: str, created_at: datetime) -> None:
         """Start the process-local worker once for the persisted active run."""
-        running = _running_analyses.get(puuid)
+        running = _running_analyses.get((self.user_id, puuid))
         if running and running.created_at == created_at and not running.task.done():
             return
 
         task = asyncio.create_task(self._run_analysis_background(puuid, created_at))
-        _running_analyses[puuid] = RunningAnalysis(
+        _running_analyses[(self.user_id, puuid)] = RunningAnalysis(
             created_at=created_at,
             task=task,
         )
@@ -350,7 +378,7 @@ class MatchmakingAnalysisService:
                 db_manager.get_session() as db,
                 tracked_riot_client(db) as riot_client,
             ):
-                service = MatchmakingAnalysisService(db, riot_client)
+                service = MatchmakingAnalysisService(db, riot_client, self.user_id)
                 await service._run_analysis(puuid, created_at)
         except asyncio.CancelledError:
             # Deliberately leaves the persisted row active. This also fires when
@@ -373,7 +401,7 @@ class MatchmakingAnalysisService:
                     await ensure_riot_writer_maintenance_is_inactive(db)
                     await db.execute(
                         update(MatchmakingAnalysis)
-                        .where(_active_run_where(puuid, created_at))
+                        .where(self._active_run_where(puuid, created_at))
                         .values(
                             status="failed",
                             rate_limit_reset_at=None,
@@ -390,9 +418,9 @@ class MatchmakingAnalysisService:
                     error_type=type(persist_error).__name__,
                 )
         finally:
-            running = _running_analyses.get(puuid)
+            running = _running_analyses.get((self.user_id, puuid))
             if running and running.task is asyncio.current_task():
-                _running_analyses.pop(puuid, None)
+                _running_analyses.pop((self.user_id, puuid), None)
             structlog_contextvars.clear_contextvars()
 
     @staticmethod
@@ -476,6 +504,7 @@ class MatchmakingAnalysisService:
             self.db,
             MatchmakingAnalysis,
             ACTIVE_ANALYSIS_STATUSES,
+            self.user_id,
             puuid,
             created_at,
             **values,
@@ -662,7 +691,7 @@ class MatchmakingAnalysisService:
         await ensure_riot_writer_maintenance_is_inactive(self.db)
         await self.db.execute(
             update(MatchmakingAnalysis)
-            .where(_active_run_where(puuid, created_at))
+            .where(self._active_run_where(puuid, created_at))
             .values(
                 status="completed",
                 results=results,
@@ -675,7 +704,9 @@ class MatchmakingAnalysisService:
         )
 
         completion_status = await self.db.execute(
-            select(MatchmakingAnalysis.status).where(_one_run_where(puuid, created_at))
+            select(MatchmakingAnalysis.status).where(
+                self._one_run_where(puuid, created_at)
+            )
         )
         if completion_status.scalar_one_or_none() != "completed":
             await rollback_quietly(self.db)
@@ -1084,7 +1115,7 @@ class MatchmakingAnalysisService:
         try:
             result = await self.db.execute(
                 select(MatchmakingAnalysis.rate_limit_reset_at).where(
-                    _active_run_where(*self._current_run_identity())
+                    self._active_run_where(*self._current_run_identity())
                 )
             )
             current_reset = result.scalar_one_or_none()
@@ -1148,7 +1179,7 @@ class MatchmakingAnalysisService:
         self, puuid: str, created_at: datetime
     ) -> MatchmakingAnalysis:
         result = await self.db.execute(
-            select(MatchmakingAnalysis).where(_active_run_where(puuid, created_at))
+            select(MatchmakingAnalysis).where(self._active_run_where(puuid, created_at))
         )
         return result.scalar_one()
 

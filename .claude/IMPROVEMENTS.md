@@ -47,3 +47,14 @@ animated element.
   half the panel is empty. Sizing to content and keeping the fixed height only
   as a `max-h` would fix it; check the rail's hover geometry first, since the
   collapse trigger sits on the same box.
+
+- 2026-08-22 frontend/features/cookie-consent/components/cookie-consent-manager.tsx:
+  the consent cookie is jar-wide, so a second account signing in on the same
+  browser inherits the first account's choice without ever seeing the banner —
+  and the effect at line 102 then PUTs that inherited choice to
+  `/settings/user/cookie-consent` as `consent_source: "banner"`, stamping one
+  person's decision into another's audit trail. Left out of LGA-102 on purpose:
+  that ticket scopes cached *data*, while this is a decision about whether
+  consent belongs to the browser or the account, and getting it wrong the cheap
+  way re-prompts every sign-in. Whichever way it goes,
+  `docs/cookie-consent-compliance.md` records the answer.

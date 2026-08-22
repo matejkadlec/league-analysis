@@ -18,6 +18,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.models import Base, created_at_column
+from app.features.auth.user_reference import user_id_column
 from app.features.matchmaking_analysis.schemas import MatchmakingAnalysisStatus
 
 
@@ -42,6 +43,11 @@ class MatchmakingAnalysis(Base):
     """Persisted lifecycle and results for one matchmaking analysis run."""
 
     __tablename__ = "matchmaking_analyses"
+
+    user_id: Mapped[int] = user_id_column(
+        "Account that started this analysis and is the only one it answers to",
+        index=True,
+    )
 
     # Composite primary key
     puuid: Mapped[str] = mapped_column(
@@ -123,8 +129,13 @@ class MatchmakingAnalysis(Base):
             "'completed', 'failed', 'cancelled')",
             name="status_valid",
         ),
+        # Per account, not per player -- see the matching index on
+        # `smurf_boost_analyses`. Ownership itself is enforced by the WHERE
+        # clauses in the service; this only stops the two accounts from
+        # contending for one active row.
         Index(
             "uq_matchmaking_analyses_active_puuid",
+            "user_id",
             "puuid",
             unique=True,
             postgresql_where=text(

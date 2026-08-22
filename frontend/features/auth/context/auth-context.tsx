@@ -4,6 +4,7 @@ import {
   createContext,
   useContext,
   useState,
+  useRef,
   useEffect,
   useCallback,
   useMemo,
@@ -39,6 +40,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const queryClient = useQueryClient();
   const router = useRouter();
+  // The account the cache below currently holds data for. A ref rather than
+  // reading `user`: `checkAuth` would otherwise have to depend on it, and it
+  // is re-created on every identity change as it is.
+  const cachedAccountRef = useRef<number | null>(null);
+
+  // Adopt whoever the server says is signed in, dropping the previous
+  // account's cached data first.
+  //
+  // Clearing used to be attached to the transitions this context performs --
+  // login, logout, a refused refresh -- and never to the identity actually
+  // returned. Cookies are jar-wide, so signing in as somebody else in a second
+  // tab changes who this tab is without any of those transitions running here:
+  // the next `checkAuth`, from a settings save or the auth gate's retry,
+  // adopted the new account while every query key that carries no account
+  // dimension -- `["card-preferences"]`, `["user"]`, `["player", puuid]` and
+  // both analysis features -- still held the previous one's answers.
+  const adoptUser = useCallback(
+    (next: User) => {
+      if (
+        cachedAccountRef.current !== null &&
+        cachedAccountRef.current !== next.id
+      ) {
+        queryClient.clear();
+      }
+      cachedAccountRef.current = next.id;
+      setUser(next);
+    },
+    [queryClient],
+  );
 
   // Check authentication status on mount and after login
   const checkAuth = useCallback(async () => {
@@ -91,7 +121,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       if (response.ok) {
-        setUser(UserResponseSchema.parse(await response.json()));
+        adoptUser(UserResponseSchema.parse(await response.json()));
       } else if (response.status === 401) {
         const refresh = await refreshAccessToken();
         if (refresh.outcome !== "refreshed") {
@@ -107,7 +137,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         response = await fetchCurrentUser();
         if (response && response.ok) {
-          setUser(UserResponseSchema.parse(await response.json()));
+          adoptUser(UserResponseSchema.parse(await response.json()));
         } else {
           // Only a refusal ends the session, and only 401/403 is a refusal.
           // A null response is a network failure and a 5xx is a redeploy or a
@@ -164,7 +194,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoading(false);
     }
-  }, [queryClient]);
+  }, [queryClient, adoptUser]);
 
   // Initialize auth state on mount
   useEffect(() => {

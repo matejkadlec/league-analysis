@@ -86,10 +86,16 @@ class SmurfBoostDetectionError(Exception):
 class SmurfBoostDetectionService:
     """Loads stored history, runs the model, and persists explained results."""
 
-    def __init__(self, db: AsyncSession) -> None:
+    def __init__(self, db: AsyncSession, user_id: int) -> None:
         self.db = db
+        # The account every query in this service is answering for. Held on the
+        # instance rather than threaded through a dozen private signatures: the
+        # service is constructed per request from the authenticated caller, so
+        # there is exactly one right value for its whole lifetime, and a
+        # parameter is a thing a future method can forget to accept.
+        self.user_id = user_id
 
-    async def viewer_thresholds(self, user_id: int) -> dict[str, float]:
+    async def viewer_thresholds(self) -> dict[str, float]:
         """Resolve the signed-in viewer's stored thresholds over the defaults.
 
         Here rather than in the router: the route was declaring a second
@@ -98,7 +104,7 @@ class SmurfBoostDetectionService:
         """
         result = await self.db.execute(
             select(UserCardPreference.settings).where(
-                UserCardPreference.user_id == user_id,
+                UserCardPreference.user_id == self.user_id,
                 UserCardPreference.card_id == CardId.SMURF_BOOST_DETECTION.value,
                 UserCardPreference.version == 1,
             )
@@ -251,7 +257,10 @@ class SmurfBoostDetectionService:
         """The most recently created run for a player, whatever its status."""
         result = await self.db.execute(
             select(SmurfBoostAnalysis)
-            .where(SmurfBoostAnalysis.puuid == puuid)
+            .where(
+                SmurfBoostAnalysis.user_id == self.user_id,
+                SmurfBoostAnalysis.puuid == puuid,
+            )
             .order_by(SmurfBoostAnalysis.created_at.desc())
             .limit(1)
         )
@@ -261,7 +270,11 @@ class SmurfBoostDetectionService:
         """The one active run for a player, if any."""
         result = await self.db.execute(
             select(SmurfBoostAnalysis)
-            .where(active_run_filter(SmurfBoostAnalysis, ACTIVE_STATUSES, puuid))
+            .where(
+                active_run_filter(
+                    SmurfBoostAnalysis, ACTIVE_STATUSES, self.user_id, puuid
+                )
+            )
             .order_by(SmurfBoostAnalysis.created_at.desc())
             .limit(1)
         )
@@ -279,7 +292,9 @@ class SmurfBoostDetectionService:
             update(SmurfBoostAnalysis)
             .where(
                 and_(
-                    active_run_filter(SmurfBoostAnalysis, ACTIVE_STATUSES, puuid),
+                    active_run_filter(
+                        SmurfBoostAnalysis, ACTIVE_STATUSES, self.user_id, puuid
+                    ),
                     SmurfBoostAnalysis.created_at < cutoff,
                 )
             )
@@ -303,9 +318,11 @@ class SmurfBoostDetectionService:
     ) -> bool:
         """True when an existing run was computed the way this caller asked for.
 
-        Attaching to a run configured differently would hand the caller another
-        viewer's thresholds, so the comparison is exact on both the model
-        version and every threshold value.
+        Runs are per account, but this account's thresholds can still change
+        between two in-flight requests, and attaching to a run configured
+        differently would answer with settings the caller did not ask for. So
+        the comparison is exact on both the model version and every threshold
+        value.
         """
         if run.model_version != MODEL_VERSION:
             return False
@@ -331,6 +348,7 @@ class SmurfBoostDetectionService:
 
         now = datetime.now(UTC)
         run = SmurfBoostAnalysis(
+            user_id=self.user_id,
             puuid=puuid,
             created_at=now,
             status="in_progress",
@@ -365,6 +383,7 @@ class SmurfBoostDetectionService:
             self.db,
             SmurfBoostAnalysis,
             ACTIVE_STATUSES,
+            self.user_id,
             puuid,
             created_at,
             completed_at=datetime.now(UTC),
@@ -409,6 +428,7 @@ class SmurfBoostDetectionService:
         result = await self.db.execute(
             select(SmurfBoostAnalysis).where(
                 and_(
+                    SmurfBoostAnalysis.user_id == self.user_id,
                     SmurfBoostAnalysis.puuid == puuid,
                     SmurfBoostAnalysis.created_at == created_at,
                 )

@@ -19,6 +19,10 @@ from app.features.matchmaking_analysis.service import (
     RunningAnalysis,
 )
 
+# The account these tests act as. Every stored run belongs to one, so a service
+# cannot be built without saying which.
+_USER_ID = 7
+
 _PUUID = "p" * 78
 
 
@@ -68,7 +72,9 @@ async def test_failure_state_persist_failure_is_logged(
     monkeypatch.setattr(scoped_client, "create_tracked_riot_api_client", _no_key)
 
     service = analysis_service_module.MatchmakingAnalysisService(
-        cast(AsyncSession, _unused_database()), cast(RiotAPIClient, SimpleNamespace())
+        cast(AsyncSession, _unused_database()),
+        cast(RiotAPIClient, SimpleNamespace()),
+        _USER_ID,
     )
 
     # `capture_logs` swaps out the whole configured chain, so the run's bound
@@ -94,7 +100,7 @@ async def test_cancel_await_failure_is_logged() -> None:
     """A worker that dies while being cancelled stays suppressed but visible."""
     created_at = datetime.now(UTC)
     worker = asyncio.create_task(_dying_worker())
-    analysis_service_module._running_analyses[_PUUID] = RunningAnalysis(
+    analysis_service_module._running_analyses[(_USER_ID, _PUUID)] = RunningAnalysis(
         created_at=created_at,
         task=worker,
     )
@@ -111,7 +117,7 @@ async def test_cancel_await_failure_is_logged() -> None:
             commit=AsyncMock(),
         )
         service = analysis_service_module.MatchmakingAnalysisService(
-            cast(AsyncSession, database), cast(RiotAPIClient, object())
+            cast(AsyncSession, database), cast(RiotAPIClient, object()), _USER_ID
         )
 
         with capture_logs() as logs:
@@ -122,7 +128,7 @@ async def test_cancel_await_failure_is_logged() -> None:
         assert entries[0]["error_type"] == "ValueError"
         assert entries[0]["puuid"] == _PUUID
     finally:
-        analysis_service_module._running_analyses.pop(_PUUID, None)
+        analysis_service_module._running_analyses.pop((_USER_ID, _PUUID), None)
         await asyncio.gather(worker, return_exceptions=True)
 
 
@@ -130,7 +136,7 @@ async def test_normal_cancel_await_stays_silent() -> None:
     """Awaiting a cleanly cancelled worker must not log a warning."""
     created_at = datetime.now(UTC)
     worker = asyncio.create_task(asyncio.sleep(30))
-    analysis_service_module._running_analyses[_PUUID] = RunningAnalysis(
+    analysis_service_module._running_analyses[(_USER_ID, _PUUID)] = RunningAnalysis(
         created_at=created_at,
         task=worker,
     )
@@ -145,7 +151,7 @@ async def test_normal_cancel_await_stays_silent() -> None:
             commit=AsyncMock(),
         )
         service = analysis_service_module.MatchmakingAnalysisService(
-            cast(AsyncSession, database), cast(RiotAPIClient, object())
+            cast(AsyncSession, database), cast(RiotAPIClient, object()), _USER_ID
         )
 
         with capture_logs() as logs:
@@ -153,5 +159,5 @@ async def test_normal_cancel_await_stays_silent() -> None:
 
         assert _events(logs, "matchmaking_analysis_cancel_await_failed") == []
     finally:
-        analysis_service_module._running_analyses.pop(_PUUID, None)
+        analysis_service_module._running_analyses.pop((_USER_ID, _PUUID), None)
         await asyncio.gather(worker, return_exceptions=True)
