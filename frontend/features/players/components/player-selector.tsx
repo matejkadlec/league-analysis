@@ -288,7 +288,7 @@ export function PlayerSelector({
               onMouseEnter={() => setActiveSuggestion(index)}
               onClick={() => void choosePlayer(player)}
               className={cn(
-                "w-full rounded px-2 py-2 text-left text-xs transition-colors",
+                "w-full rounded px-2 py-2 text-left text-sm transition-colors",
                 index === activeSuggestion
                   ? "bg-accent text-accent-foreground"
                   : "hover:bg-accent hover:text-accent-foreground",
@@ -301,7 +301,7 @@ export function PlayerSelector({
             (suggestions.length === 0 || isValidRiotId(searchValue)) && (
               <button
                 type="button"
-                className="w-full rounded px-2 py-2 text-left text-xs text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                className="w-full rounded px-2 py-2 text-left text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground"
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={submitUnknownPlayer}
               >

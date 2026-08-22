@@ -4,16 +4,37 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { SectionQuickNavigation } from "@/components/section-quick-navigation";
+import {
+  SectionQuickNavigation,
+  type SectionQuickNavigationItem,
+} from "@/components/section-quick-navigation";
 
 const scrollIntoView = vi.fn();
+
+// Module level, exactly as `app/rank-manipulation/page.tsx` and
+// `app/player-overview/page.tsx` declare theirs: an array literal rebuilt on
+// each render is a new dependency every time, which re-runs the effect and
+// hides whether the observer does anything.
+const ITEMS: SectionQuickNavigationItem[] = [
+  { label: "Games Comparison", anchor: "#smurf-boost-run" },
+  { label: "Result", anchor: "#smurf-boost-result" },
+];
+
+function Page({ withResult }: { withResult: boolean }) {
+  return (
+    <>
+      <SectionQuickNavigation items={ITEMS} />
+      <section id="smurf-boost-run">Run</section>
+      {withResult && <section id="smurf-boost-result">Result</section>}
+    </>
+  );
+}
 
 describe("SectionQuickNavigation", () => {
   beforeEach(() => {
     scrollIntoView.mockReset();
     Element.prototype.scrollIntoView = scrollIntoView;
   });
-
 
   it("stays off viewports too narrow to spare its fixed 40px", () => {
     render(
@@ -84,20 +105,6 @@ describe("SectionQuickNavigation", () => {
 
   it("offers only the sections that are on the page", async () => {
     const user = userEvent.setup();
-    function Page({ withResult }: { withResult: boolean }) {
-      return (
-        <>
-          <SectionQuickNavigation
-            items={[
-              { label: "Games Comparison", anchor: "#smurf-boost-run" },
-              { label: "Result", anchor: "#smurf-boost-result" },
-            ]}
-          />
-          <section id="smurf-boost-run">Run</section>
-          {withResult && <section id="smurf-boost-result">Result</section>}
-        </>
-      );
-    }
 
     const { rerender } = render(<Page withResult={false} />);
     await user.hover(screen.getByTestId("section-quick-navigation"));
@@ -120,5 +127,46 @@ describe("SectionQuickNavigation", () => {
       behavior: "smooth",
       block: "start",
     });
+  });
+
+  it("notices a section that arrives from outside React", async () => {
+    // The test above re-renders, and a re-render re-runs the effect on its
+    // own -- which is why it passed with the observer deleted. Production
+    // passes a module-level `items`, so its identity never churns and the
+    // observer is the only thing that can deliver a late section. This adds
+    // the node without React's help so nothing else can explain the update.
+    const user = userEvent.setup();
+    render(<Page withResult={false} />);
+    await user.hover(screen.getByTestId("section-quick-navigation"));
+    expect(screen.queryByRole("button", { name: "Result" })).toBeNull();
+
+    const late = document.createElement("section");
+    late.id = "smurf-boost-result";
+    document.body.append(late);
+
+    await screen.findByRole("button", { name: "Result" });
+  });
+
+  it("does no watching while the panel is shut", async () => {
+    // The observer is on `document.body` with `subtree: true`, so it sees
+    // every DOM change anywhere on the page -- on a surface that polls, that
+    // is a callback several times a minute for a list nobody can read while
+    // it is collapsed.
+    const user = userEvent.setup();
+    const observe = vi.spyOn(MutationObserver.prototype, "observe");
+    const disconnect = vi.spyOn(MutationObserver.prototype, "disconnect");
+
+    render(<Page withResult />);
+    expect(observe).not.toHaveBeenCalled();
+
+    const quickNavigation = screen.getByTestId("section-quick-navigation");
+    await user.hover(quickNavigation);
+    expect(observe).toHaveBeenCalledTimes(1);
+
+    await user.unhover(quickNavigation);
+    expect(disconnect).toHaveBeenCalledTimes(1);
+
+    observe.mockRestore();
+    disconnect.mockRestore();
   });
 });

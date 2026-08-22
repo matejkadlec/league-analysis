@@ -22,6 +22,22 @@ const player = trackedPlayer(NOW, {
   tag_line: "ONE",
 });
 
+/**
+ * A second player, never tracked and never the account's current one.
+ *
+ * The whole point of the page's local search is that it can analyse somebody
+ * the sidebar has never heard of, so the fixture has to be somebody the
+ * sidebar has never heard of: `/players/context` returns only `player`.
+ */
+export const OTHER_PUUID = "rank-manipulation-other-puuid";
+
+const otherPlayer = trackedPlayer(NOW, {
+  puuid: OTHER_PUUID,
+  game_name: "Stranger",
+  tag_line: "TWO",
+  is_tracked: false,
+});
+
 const CONSERVATIVE = {
   recentWindowSize: 20,
   baselineWindowSize: 60,
@@ -72,10 +88,7 @@ function signal(
   };
 }
 
-function cardPreferences(
-  settings: Record<string, number>,
-  isDefault: boolean,
-) {
+function cardPreferences(settings: Record<string, number>, isDefault: boolean) {
   return [
     // Top Champions carries a role list, so the shared settings shape is not
     // numeric-only. Getting that wrong rejects the whole catalog.
@@ -98,9 +111,12 @@ function cardPreferences(
   ];
 }
 
-function analysis(overrides: Record<string, unknown> = {}) {
+function analysis(
+  puuid: string = PUUID,
+  overrides: Record<string, unknown> = {},
+) {
   return {
-    puuid: PUUID,
+    puuid,
     created_at: NOW,
     status: "completed",
     model_version: "smurf-boost/v1",
@@ -167,6 +183,9 @@ function analysis(overrides: Record<string, unknown> = {}) {
 
 export interface HarnessState {
   analyzeCalls: number;
+  /** Every PUUID an analyze request asked about, in order. */
+  analyzed: string[];
+  currentPlayer: typeof player;
   thresholds: Record<string, number>;
   isDefaultSettings: boolean;
   written: Record<string, unknown> | null;
@@ -178,9 +197,13 @@ export interface HarnessState {
  * asserts on, because a route handler runs in the driver and cannot hand a
  * value back through the page.
  */
-export async function installSmurfBoostMocks(page: Page): Promise<HarnessState> {
+export async function installSmurfBoostMocks(
+  page: Page,
+): Promise<HarnessState> {
   const state: HarnessState = {
     analyzeCalls: 0,
+    analyzed: [],
+    currentPlayer: player,
     thresholds: CONSERVATIVE,
     isDefaultSettings: true,
     written: null,
@@ -209,10 +232,17 @@ export async function installSmurfBoostMocks(page: Page): Promise<HarnessState> 
       path.endsWith("/players/context") ||
       path.endsWith("/players/context/current")
     ) {
+      // A write really moves the account's player, so a spec asserting that
+      // something left it alone is asserting against a mock that could have
+      // shown otherwise.
+      if (request.method() === "PUT") {
+        const { puuid } = request.postDataJSON() as { puuid: string };
+        state.currentPlayer = puuid === OTHER_PUUID ? otherPlayer : player;
+      }
       await route.fulfill({
         contentType: "application/json",
         body: JSON.stringify({
-          current_player: player,
+          current_player: state.currentPlayer,
           tracked_players: [player],
         }),
       });
@@ -223,6 +253,30 @@ export async function installSmurfBoostMocks(page: Page): Promise<HarnessState> 
       await route.fulfill({
         contentType: "application/json",
         body: JSON.stringify(player),
+      });
+      return;
+    }
+
+    if (path.endsWith(`/players/${OTHER_PUUID}`)) {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify(otherPlayer),
+      });
+      return;
+    }
+
+    // The suggestion list behind the shared player search. It answers for the
+    // stranger only, so a spec that finds them here has proved the search --
+    // not the tracked list -- put them on screen.
+    if (path.endsWith("/players/suggestions")) {
+      const query = new URL(request.url()).searchParams.get("q") ?? "";
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify(
+          "Stranger".toLowerCase().startsWith(query.toLowerCase())
+            ? [otherPlayer]
+            : [],
+        ),
       });
       return;
     }
@@ -277,11 +331,26 @@ export async function installSmurfBoostMocks(page: Page): Promise<HarnessState> 
     }
 
     if (path.endsWith("/smurf-boost-detection/analyze")) {
+      // Answers about the player the request named. A handler that always
+      // said `PUUID` would make a run aimed at anybody else look like it
+      // worked while the page silently discarded a mismatched result.
+      const target = (request.postDataJSON() as { puuid: string }).puuid;
       state.analyzeCalls += 1;
-      state.stored = analysis();
+      state.analyzed.push(target);
+      const result = analysis(target);
+      if (target === PUUID) state.stored = result;
       await route.fulfill({
         contentType: "application/json",
-        body: JSON.stringify(state.stored),
+        body: JSON.stringify(result),
+      });
+      return;
+    }
+
+    if (path.endsWith(`/smurf-boost-detection/player/${OTHER_PUUID}`)) {
+      await route.fulfill({
+        status: 404,
+        contentType: "application/json",
+        body: JSON.stringify({ detail: "No analysis found for this player" }),
       });
       return;
     }

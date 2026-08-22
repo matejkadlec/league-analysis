@@ -54,9 +54,9 @@ TanStack Query owns server-data fetching and cache state. Zod validates API
 payloads at the frontend boundary.
 
 The authenticated player provider owns the normal current-player context.
-Player Overview, Match History and Smurf & Boost Detection use an explicit
-`?puuid=` as the tab-local authority and the account's saved current PUUID only
-as the default for new navigation. Player Overview owns aggregate/statistical cards; Match History is
+Player Overview and Match History use an explicit `?puuid=` as the tab-local
+authority and the account's saved current PUUID only as the default for new
+navigation. Player Overview owns aggregate/statistical cards; Match History is
 a separate top-level detailed workflow. The sidebar is the canonical search
 and current-player surface. Clicking the current-player row opens the Tracked
 Players dialog without changing the active route; that dialog owns the complete
@@ -64,10 +64,14 @@ tracked-list switch/management flow. `/my-profile`, `/playstyle-analysis`, and
 `/tracked-players` are PUUID-preserving compatibility redirects to Player
 Overview.
 
-Matchmaking Analysis is the deliberate exception: the global current player is
-shown as its reference/default, while the page owns a separate analyzed-player
-PUUID. Its compact selector uses the shared suggestion/discovery contract and
-never tracks the analyzed player or changes the global context. Settings exposes
+Matchmaking Analysis and Rank Manipulation are the deliberate exceptions: the
+global current player is shown as their reference/default, while each page owns
+a separate analyzed-player PUUID. Their compact selectors use the shared
+suggestion/discovery contract and never track the analyzed player or change the
+global context. Because those routes are not player-centric, the sidebar search
+navigates away from them, so each has to carry a selector of its own -- Rank
+Manipulation keeps its comparison card on screen with no player rather than
+swapping in an empty state that would point back at the sidebar. Settings exposes
 working account/security controls and, for administrators, Riot API
 configuration; obsolete theme/default-server controls and the unapproved Riot
 account-link affordance are not product settings.

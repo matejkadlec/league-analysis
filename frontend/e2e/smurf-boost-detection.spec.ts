@@ -2,7 +2,11 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
 import { acceptCookieBanner } from "./support/auth";
-import { installSmurfBoostMocks, PUUID } from "./support/smurf-boost-harness";
+import {
+  installSmurfBoostMocks,
+  OTHER_PUUID,
+  PUUID,
+} from "./support/smurf-boost-harness";
 
 /** Words the model's result wording forbids in the rendered page. */
 const FORBIDDEN = [
@@ -241,6 +245,65 @@ test("renders the page at the sizes the layout was specified in", async ({
 });
 
 /**
+ * The reason the page has a search of its own: analysing somebody who is not
+ * the account's player, without becoming that player.
+ *
+ * Nothing else covers it. The other spec asserts the control is on screen and
+ * stops there, which passed just as well when choosing a player meant leaving
+ * for Player Overview.
+ */
+test("compares a player the account has never tracked, and stays itself", async ({
+  page,
+}) => {
+  test.setTimeout(60_000);
+  await page.setViewportSize({ width: 1440, height: 1000 });
+
+  const api = await installSmurfBoostMocks(page);
+
+  await page.goto("/rank-manipulation");
+  await acceptCookieBanner(page);
+  await expect(page.locator("#smurf-boost-run")).toBeVisible();
+
+  const currentPlayer = page.getByTestId("current-player-button");
+  await expect(currentPlayer).toHaveText("Comparison#ONE");
+
+  // The stranger is reachable only through the suggestion endpoint: the
+  // tracked list this account has holds one player, and it is not them.
+  const search = page
+    .locator("#smurf-boost-run")
+    .getByLabel("Choose player for comparison");
+  await search.fill("Stranger");
+  await page.getByRole("option", { name: /Stranger#TWO/ }).click();
+
+  await expect(page).toHaveURL(
+    new RegExp(`/rank-manipulation\\?puuid=${OTHER_PUUID}`),
+  );
+
+  await page.getByRole("button", { name: "Run the comparison" }).click();
+  await expect(page.locator("#smurf-boost-result")).toBeVisible();
+  // Aimed at the stranger, not at whoever the sidebar holds.
+  expect(api.analyzed).toEqual([OTHER_PUUID]);
+
+  // And the account is untouched. Picking in the sidebar would have written
+  // this player in as the current one; picking in the card must not.
+  await expect(currentPlayer).toHaveText("Comparison#ONE");
+
+  // The same control also lives in the 240px sidebar, where the readability
+  // pass raised its suggestions from 12px. Two lines is the ceiling there --
+  // a third would push the list past the fold on the shortest laptop.
+  const sidebarSearch = page.getByLabel("Search for player");
+  await sidebarSearch.fill("Stranger");
+  const suggestion = page.getByRole("option", { name: /Stranger#TWO/ });
+  const box = await suggestion.boundingBox();
+  const lineHeight = await suggestion.evaluate(
+    (element) => Number.parseFloat(getComputedStyle(element).lineHeight) || 20,
+  );
+  expect(box).not.toBeNull();
+  // 16px is the button's own vertical padding (py-2).
+  expect(box!.height).toBeLessThanOrEqual(lineHeight * 2 + 16 + 1);
+});
+
+/**
  * `accessibility.spec.ts` scans the three routes the populated-player harness
  * serves; Rank Manipulation runs on its own fixtures, so its scan lives here.
  * The result card is included on purpose -- it is the widest, densest markup
@@ -259,13 +322,6 @@ test("has no WCAG A/AA violations, before or after a comparison", async ({
 
   const scan = async (stage: string) => {
     const results = await new AxeBuilder({ page })
-      // The toast host is excluded, not passed: sonner's `richColors` success
-      // description fails contrast in every variant on every page that raises
-      // one, which is a shared-component defect rather than anything this page
-      // renders. It is recorded in `.claude/IMPROVEMENTS.md`; scanning it here
-      // would only ever report the same finding from whichever page toasts
-      // first.
-      .exclude("[data-sonner-toaster]")
       .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
       .analyze();
     const readable = results.violations.flatMap((violation) =>
@@ -280,6 +336,13 @@ test("has no WCAG A/AA violations, before or after a comparison", async ({
 
   await page.getByRole("button", { name: "Run the comparison" }).click();
   await expect(page.locator("#smurf-boost-result")).toBeVisible();
+
+  // The success toast is scanned rather than excluded, but only once it has
+  // finished fading in. Axe measures whatever opacity it finds, and the
+  // exclusion this replaces was hiding a `color-contrast` failure recorded at
+  // opacity 0.03 mid-animation -- the settled colours are near-black on a
+  // pale tint.
+  await expect(page.locator("[data-sonner-toast]")).toHaveCSS("opacity", "1");
 
   await scan("with a result on screen");
 });

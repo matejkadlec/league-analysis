@@ -158,6 +158,7 @@ export function RecentPerformanceCard({
   if (!recent || !overall || overall.total_matches === 0) {
     return (
       <ProfileCardEmptyState
+        id="recent-performance"
         icon={Activity}
         title="Recent Performance"
         message="Not enough match data to analyze performance trends."
