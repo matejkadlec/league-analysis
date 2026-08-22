@@ -362,7 +362,7 @@ export function SmurfBoostResultCard({
         <div className="flex flex-wrap items-center gap-2">
           <CardTitle className="flex items-center gap-2">
             <ShieldQuestion className="h-5 w-5 text-primary" />
-            Comparison result
+            Comparison Result
           </CardTitle>
           <Badge variant="secondary" className="ml-auto">
             Recent {results.recent_games} games against the previous{" "}
@@ -403,7 +403,7 @@ export function SmurfBoostResultCard({
           <div className="space-y-2">
             <h3 className="flex items-center gap-2 text-sm font-medium">
               <CircleAlert className="h-4 w-4 text-muted-foreground" />
-              Limits of this data
+              Limits of This Data
             </h3>
             <ul className="space-y-1">
               {results.notes.map((note) => (

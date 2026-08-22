@@ -10,20 +10,17 @@ import { renderWithQueryClient } from "./render-support";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const {
-  getLatestSmurfBoostDetection,
-  startSmurfBoostDetection,
-  toast,
-} = vi.hoisted(() => ({
-  getLatestSmurfBoostDetection: vi.fn(),
-  startSmurfBoostDetection: vi.fn(),
-  toast: {
-    error: vi.fn(),
-    info: vi.fn(),
-    success: vi.fn(),
-    warning: vi.fn(),
-  },
-}));
+const { getLatestSmurfBoostDetection, startSmurfBoostDetection, toast } =
+  vi.hoisted(() => ({
+    getLatestSmurfBoostDetection: vi.fn(),
+    startSmurfBoostDetection: vi.fn(),
+    toast: {
+      error: vi.fn(),
+      info: vi.fn(),
+      success: vi.fn(),
+      warning: vi.fn(),
+    },
+  }));
 
 vi.mock("@/features/smurf-boost/smurf-boost-api", () => ({
   getLatestSmurfBoostDetection,
@@ -161,7 +158,7 @@ function shortHistory() {
   });
 }
 
-function renderCard(puuid = "test-puuid") {
+function renderCard(puuid: string | null = "test-puuid") {
   const { queryClient } = renderWithQueryClient(
     <SmurfBoostDetection
       puuid={puuid}
@@ -169,6 +166,16 @@ function renderCard(puuid = "test-puuid") {
     />,
   );
   return queryClient;
+}
+
+function renderCardWithUnmount(puuid = "test-puuid") {
+  const { queryClient, unmount } = renderWithQueryClient(
+    <SmurfBoostDetection
+      puuid={puuid}
+      playerSelector={<input aria-label="Choose player for comparison" />}
+    />,
+  );
+  return { queryClient, unmount };
 }
 
 /**
@@ -205,7 +212,6 @@ describe("SmurfBoostDetection", () => {
     startSmurfBoostDetection.mockReset();
     Object.values(toast).forEach((mock) => mock.mockReset());
   });
-
 
   it("shows both families with their own band and never a number", async () => {
     getLatestSmurfBoostDetection.mockResolvedValue({
@@ -257,7 +263,9 @@ describe("SmurfBoostDetection", () => {
     });
     renderCard();
 
-    await waitFor(() => expect(tableMeasurements().getByText("A3")).toBeTruthy());
+    await waitFor(() =>
+      expect(tableMeasurements().getByText("A3")).toBeTruthy(),
+    );
 
     for (const layout of [tableMeasurements(), mobileMeasurements()]) {
       expect(layout.getAllByText("Not available").length).toBe(1);
@@ -438,7 +446,7 @@ describe("SmurfBoostDetection", () => {
     renderCard();
 
     await waitFor(() => expect(runButton()).toBeTruthy());
-    expect(screen.queryByText("Comparison result")).toBeNull();
+    expect(screen.queryByText("Comparison Result")).toBeNull();
   });
 
   it("renders the result returned by a run", async () => {
@@ -492,7 +500,7 @@ describe("SmurfBoostDetection", () => {
     );
     expect(toast.success).not.toHaveBeenCalled();
     expect(toast.error).toHaveBeenCalled();
-    expect(screen.queryByText("Comparison result")).toBeNull();
+    expect(screen.queryByText("Comparison Result")).toBeNull();
   });
 
   it("shows a stored failed run instead of an empty page", async () => {
@@ -544,7 +552,7 @@ describe("SmurfBoostDetection", () => {
     );
     expect(toast.success).not.toHaveBeenCalled();
     expect(toast.info).toHaveBeenCalled();
-    expect(screen.queryByText("Comparison result")).toBeNull();
+    expect(screen.queryByText("Comparison Result")).toBeNull();
   });
 
   it("reports a conflicting run without exposing transport detail", async () => {
@@ -595,9 +603,64 @@ describe("SmurfBoostDetection", () => {
         queryClient.getQueryData(["smurf-boost-detection", "other-puuid"]),
       ).toBeTruthy(),
     );
-    expect(queryClient.getQueryData(["smurf-boost-detection", "test-puuid"])).toBeFalsy();
-    expect(screen.queryByText("Comparison result")).toBeNull();
+    expect(
+      queryClient.getQueryData(["smurf-boost-detection", "test-puuid"]),
+    ).toBeFalsy();
+    expect(screen.queryByText("Comparison Result")).toBeNull();
     expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  it("says nothing about a run whose card is already gone", async () => {
+    // The card is remounted per player and its own search switches players,
+    // so a run can outlive the card that started it. A mutation's
+    // options-level callbacks keep running after unmount, and the guard that
+    // used to sit there compared against the unmounted closure's player --
+    // matching, and announcing "Comparison complete" over whoever the page
+    // was showing by then.
+    getLatestSmurfBoostDetection.mockResolvedValue({
+      success: false,
+      error: { message: "Not found", kind: "not-found", status: 404 },
+    });
+    // A box rather than a plain `let`: TypeScript narrows a variable assigned
+    // only inside a callback to `never`, and then refuses to call it.
+    const settle: { resolve: (() => void) | null } = { resolve: null };
+    startSmurfBoostDetection.mockImplementation(async () => {
+      await new Promise<void>((resolve) => {
+        settle.resolve = resolve;
+      });
+      return { success: true, data: analysis({ puuid: "test-puuid" }) };
+    });
+
+    const user = userEvent.setup();
+    const { queryClient, unmount } = renderCardWithUnmount("test-puuid");
+
+    await waitFor(() => expect(runButton()).toBeTruthy());
+    await user.click(runButton());
+    await waitFor(() => expect(settle.resolve).not.toBeNull());
+
+    unmount();
+    settle.resolve?.();
+
+    // The response still reaches the cache, so switching back to this player
+    // shows the result -- it is only the announcement that is withheld.
+    await waitFor(() =>
+      expect(
+        queryClient.getQueryData(["smurf-boost-detection", "test-puuid"]),
+      ).toBeTruthy(),
+    );
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  it("offers no run at all until a player is chosen", async () => {
+    // The empty state renders this card rather than a "select a player" one,
+    // so the search inside it stays reachable. With no player there is
+    // nothing to read and nothing to run.
+    renderCard(null);
+
+    await waitFor(() => expect(runButton()).toBeTruthy());
+    expect(runButton().hasAttribute("disabled")).toBe(true);
+    expect(screen.getByLabelText("Choose player for comparison")).toBeTruthy();
+    expect(getLatestSmurfBoostDetection).not.toHaveBeenCalled();
   });
 
   it("marks a result as outdated once newer games exist", async () => {

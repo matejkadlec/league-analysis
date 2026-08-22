@@ -46,6 +46,7 @@ export function ChampionStatsCard({
   if (stats.champions.length === 0) {
     return (
       <ProfileCardEmptyState
+        id="top-champions"
         icon={Swords}
         title="Top Champions"
         message="Not enough match data to analyze champion performance."

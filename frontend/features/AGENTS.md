@@ -81,7 +81,7 @@ public API via `index.ts`.
   `error_code=RIOT_API_KEY_INVALID` must activate the shared API-key header
   refresh signal; accepting, polling, or completing a run must not mark the key
   valid. Only backend-observed direct Riot responses own that decision.
-- Smurf & Boost Detection takes every string the specification fixes — bands,
+- Rank Manipulation takes every string the specification fixes — bands,
   family titles, confidence labels, note readings, disclaimer — from
   `smurf-boost/smurf-boost-vocabulary.ts`; never write one of those inline.
   Present one band per family and never a combined verdict, a percentage, a
@@ -99,7 +99,7 @@ public API via `index.ts`.
   guarded against the backend by `tests/smurf-boost-settings.test.ts`; strip the
   card's fixed settings before a write, and leave a server rejection to the
   shared error normalization rather than parsing its raw body.
-- Smurf & Boost Detection renders every measurement twice: stacked blocks below
+- Rank Manipulation renders every measurement twice: stacked blocks below
   the `sm` breakpoint and the table from `sm` up. Both must render from the same
   `SignalOutcome`, `formatValue`, and `noteLabel`, so the two can never disagree
   about what a value means. The stacked list carries `role="list"`, because the

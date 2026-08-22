@@ -9,11 +9,8 @@ import {
   type SectionQuickNavigationItem,
 } from "@/components/section-quick-navigation";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  PlayerSelector,
-  SelectPlayerCard,
-  useAnalyzedPlayer,
-} from "@/features/players";
+import { PlayerSelector, useAnalyzedPlayer } from "@/features/players";
+import { Label } from "@/components/ui/label";
 import {
   SmurfBoostDetection,
   SmurfBoostExplanationCard,
@@ -24,11 +21,15 @@ import {
 // keeps only the entries whose section is actually on the page, so the item
 // appears with the result card and not before it.
 const RANK_MANIPULATION_NAV_ITEMS: SectionQuickNavigationItem[] = [
-  { label: "What This Does", anchor: "#smurf-boost-explanation" },
+  { label: "What This Page Does", anchor: "#smurf-boost-explanation" },
   { label: "Detection Settings", anchor: "#smurf-boost-settings" },
   { label: "Games Comparison", anchor: "#smurf-boost-run" },
   { label: "Result", anchor: "#smurf-boost-result" },
 ];
+
+// One place, because the label's `htmlFor` and the control's `id` are only a
+// pair if they are written together.
+const PLAYER_SEARCH_ID = "rank-manipulation-player-search";
 
 function RankManipulationSkeleton() {
   return (
@@ -59,29 +60,36 @@ function RankManipulationContent() {
 
           {isLoading ? (
             <RankManipulationSkeleton />
-          ) : analyzedPlayer ? (
+          ) : (
             <>
               <SmurfBoostSettingsCard />
-              {/* Keyed by player so a transient failure from one player never
-                  survives into another. */}
+              {/* Rendered with no player too, rather than swapped for a
+                  "select a player" card. That card sends people to the sidebar
+                  search, which is a current-player surface: on a route that is
+                  no longer player-centric it navigates away to Player
+                  Overview, so the one page that needs a local target had no
+                  way to set one. Reachable with no player two ways -- an
+                  account that has never chosen one, and a `?puuid=` that will
+                  not load. Keyed by player so a transient failure from one
+                  never survives into another. */}
               <SmurfBoostDetection
-                key={analyzedPlayer.puuid}
-                puuid={analyzedPlayer.puuid}
+                key={analyzedPlayer?.puuid ?? "no-player"}
+                puuid={analyzedPlayer?.puuid ?? null}
                 playerSelector={
-                  <PlayerSelector
-                    id="rank-manipulation-player-search"
-                    ariaLabel="Choose player for comparison"
-                    placeholder="Search for player"
-                    onPlayerSelected={selectAnalyzedPlayer}
-                  />
+                  <div className="space-y-1.5">
+                    <Label htmlFor={PLAYER_SEARCH_ID}>
+                      Choose player for comparison
+                    </Label>
+                    <PlayerSelector
+                      id={PLAYER_SEARCH_ID}
+                      ariaLabel="Choose player for comparison"
+                      placeholder="Search for player"
+                      onPlayerSelected={selectAnalyzedPlayer}
+                    />
+                  </div>
                 }
               />
             </>
-          ) : (
-            // Reached only by an account with no current player at all: the
-            // local scope falls back to it, so there is nothing to compare and
-            // nothing to search from yet.
-            <SelectPlayerCard />
           )}
         </div>
       </div>

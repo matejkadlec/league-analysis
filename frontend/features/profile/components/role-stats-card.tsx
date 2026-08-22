@@ -31,6 +31,7 @@ export function RoleStatsCard({ stats, lastUpdated }: RoleStatsCardProps) {
   if (stats.lanes.length === 0) {
     return (
       <ProfileCardEmptyState
+        id="role-performance"
         icon={Map}
         title="Role Performance"
         message="Not enough match data to analyze role performance."

@@ -8,7 +8,6 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { startSmurfBoostDetection } from "../smurf-boost-api";
 import { apiErrorMessage } from "@/lib/core/api-error";
@@ -39,13 +38,25 @@ function isActive(analysis: SmurfBoostAnalysisResponse | null): boolean {
 }
 
 interface SmurfBoostDetectionProps {
-  puuid: string;
   /**
-   * The page's local player search, rendered inside this card.
+   * The player being compared, or `null` when none is chosen yet.
+   *
+   * Nullable so the card -- and the search inside it -- render before there
+   * is a target. The alternative was a separate empty-state card, which would
+   * have meant a second copy of the approved wording and a second place to
+   * forget the search.
+   */
+  puuid: string | null;
+  /**
+   * The page's local player search, label and all, rendered inside this card
+   * above the run action.
    *
    * The card takes it as a node rather than reaching for the scope itself:
    * choosing the analysed player is the page's business, and passing the
    * control in keeps this component driven by the one `puuid` it compares.
+   * The label comes with it because the page owns the control's `id` -- a
+   * `htmlFor` hardcoded here would silently orphan itself the first time a
+   * second caller passed a differently identified control.
    */
   playerSelector: ReactNode;
 }
@@ -106,40 +117,61 @@ export function SmurfBoostDetection({
         queryKey: smurfBoostQueryKey(targetPuuid),
       });
     },
+    // Cache only. Anything the viewer sees belongs to the `mutate` call
+    // below: these options-level callbacks live on the mutation, not on this
+    // component, so they still run after it unmounts -- and switching player
+    // in the card's own search unmounts it. The `data.puuid !== puuid` guard
+    // that used to sit here read the *unmounted* closure's player, matched,
+    // and toasted "Comparison complete" over whoever was on screen by then.
     onSuccess: (data) => {
       // The response is stored under the player it describes, never under
       // whichever player happens to be selected when it arrives.
       queryClient.setQueryData(smurfBoostQueryKey(data.puuid), data);
-      if (data.puuid !== puuid) {
-        return;
-      }
-      if (data.status === "failed") {
-        const message =
-          data.error_message ??
-          "The comparison did not finish. Please try again.";
-        setFailure(message);
-        toast.error("Comparison did not finish", { description: message });
-        return;
-      }
-      if (isActive(data)) {
-        toast.info("Comparison already running", {
-          description:
-            "This player is already being compared. The result appears here when it finishes.",
-        });
-        return;
-      }
-      toast.success("Comparison complete", {
-        description:
-          "The recent games have been compared with the earlier ones.",
-      });
-    },
-    onError: (mutationError: Error) => {
-      setFailure(mutationError.message);
-      toast.error("Comparison did not run", {
-        description: mutationError.message,
-      });
     },
   });
+
+  // Feedback for the run this card started, skipped by react-query once the
+  // card is gone. A run whose player was switched away from still lands in the
+  // cache above, so switching back shows its outcome.
+  const runComparison = (targetPuuid: string) => {
+    runMutation.mutate(targetPuuid, {
+      onSuccess: (data) => {
+        // Compared against the player this run asked about, not against the
+        // card's current one: these callbacks already stop firing once the
+        // card is gone, so what is left to catch is a server answering about
+        // somebody else. Saying "comparison complete" over a result that
+        // describes another player would be a lie either way.
+        if (data.puuid !== targetPuuid) {
+          return;
+        }
+        if (data.status === "failed") {
+          const message =
+            data.error_message ??
+            "The comparison did not finish. Please try again.";
+          setFailure(message);
+          toast.error("Comparison did not finish", { description: message });
+          return;
+        }
+        if (isActive(data)) {
+          toast.info("Comparison already running", {
+            description:
+              "This player is already being compared. The result appears here when it finishes.",
+          });
+          return;
+        }
+        toast.success("Comparison complete", {
+          description:
+            "The recent games have been compared with the earlier ones.",
+        });
+      },
+      onError: (mutationError: Error) => {
+        setFailure(mutationError.message);
+        toast.error("Comparison did not run", {
+          description: mutationError.message,
+        });
+      },
+    });
+  };
 
   if (isLoading) {
     return <RunCardSkeleton />;
@@ -188,12 +220,7 @@ export function SmurfBoostDetection({
               external service, so it finishes in one step.
             </p>
 
-            <div className="space-y-1.5">
-              <Label htmlFor="rank-manipulation-player-search">
-                Choose player for comparison
-              </Label>
-              {playerSelector}
-            </div>
+            {playerSelector}
 
             {error && (
               <Alert variant="destructive">
@@ -224,8 +251,8 @@ export function SmurfBoostDetection({
 
             <Button
               className="button-full"
-              onClick={() => runMutation.mutate(puuid)}
-              disabled={running}
+              onClick={() => puuid && runComparison(puuid)}
+              disabled={running || !puuid}
             >
               {running ? (
                 <>

@@ -25,15 +25,25 @@ window, and `MatchmakingAnalysisService` calls `upsert_match` on the request
 path. Match writes outside a recorded execution are the normal case here, not
 a missing audit row.
 
-- 2026-08-22 frontend/components/toast-host.tsx: sonner's `richColors`
-  description text fails WCAG AA contrast. Found by the axe scan added for
-  Rank Manipulation, which reported
-  `color-contrast: Elements must meet minimum color contrast ratio thresholds`
-  against `<div data-description="">The recent games have been compared with
-  the earlier ones.</div>` on the success toast. It is a shared-component
-  defect on every page that raises a toast, not anything Rank Manipulation
-  renders, so that scan excludes `[data-sonner-toaster]` rather than carrying
-  the finding. Fixing it means overriding sonner's `[data-description]`
-  treatment in `globals.css`; check all four variants (success, warning,
-  error, info), because `richColors` gives each its own background, and drop
-  the exclusion in `e2e/smurf-boost-detection.spec.ts` once they pass.
+The 2026-08-22 toast-contrast entry that stood here was wrong and has been
+withdrawn. Sonner's `richColors` description is `#00091a` on a pale tint --
+around 19:1. Axe was measuring the toast mid-fade-in at `opacity: 0.0257`,
+which fails any threshold. `e2e/smurf-boost-detection.spec.ts` now waits for
+the toast to reach `opacity: 1` and scans it instead of excluding the toaster.
+Worth remembering before trusting the next `color-contrast` finding against an
+animated element.
+
+- 2026-08-22 frontend/features/players/use-analyzed-player.ts: every visit to
+  Rank Manipulation fetches `GET /players/{puuid}` for a player the page
+  already has. `usePlayerContext()` returns `current_player` in full, and the
+  default analyzed player *is* that player, so the extra request only pays off
+  for an explicit `?puuid=` naming somebody else. Seeding the player query
+  cache from the context response, or reading the context player directly when
+  `analyzedPuuid === referencePlayer.puuid`, removes it.
+
+- 2026-08-22 frontend/components/section-quick-navigation.tsx: the expanded
+  panel is a fixed `h-[242px]`, sized for the longest nav list. Rank
+  Manipulation shows three entries before a comparison has run, so roughly
+  half the panel is empty. Sizing to content and keeping the fixed height only
+  as a `max-h` would fix it; check the rail's hover geometry first, since the
+  collapse trigger sits on the same box.
