@@ -253,7 +253,11 @@ describe("SmurfBoostDetection", () => {
         "How much this comparison can be relied on, separate from what it found.",
       ),
     ).toBeTruthy();
-    expect(screen.getByText("smurf-boost/v1")).toBeTruthy();
+    // The version identifies the formulas; the module name in front of it is
+    // the retired product name, and this was the last place it reached a
+    // reader on the page.
+    expect(screen.getByText("Model v1")).toBeTruthy();
+    expect(screen.queryByText(/smurf-boost/i)).toBeNull();
   });
 
   it("shows an unavailable area with its reason rather than hiding it", async () => {

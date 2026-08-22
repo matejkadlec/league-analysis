@@ -24,7 +24,7 @@ export function SmurfBoostSettingsThresholds({
 }: SmurfBoostSettingsThresholdsProps) {
   return (
     <div className="space-y-3">
-      <h3 className="text-base font-semibold">Thresholds</h3>
+      <h4 className="text-base font-semibold">Thresholds</h4>
       <div
         id="smurf-boost-thresholds-grid"
         className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"

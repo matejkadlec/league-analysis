@@ -5,7 +5,15 @@ issue, newest last:
 
 `- <YYYY-MM-DD> <path from repo root>: one or two sentences.`
 
-The queue is empty. What follows is the handful of findings worth not
+- 2026-08-22 frontend/features/matchmaking/components/matchmaking-analysis-history.tsx:123:
+  the figure labels are `text-[0.6875rem]` (11px), the same 11px that was just
+  raised to 14px on the Rank Manipulation result card. Left alone because
+  Matchmaking Analysis has had no user QA on its typography and the change is
+  visible; the size floor in `tests/rank-manipulation-surface.test.ts` now
+  catches arbitrary sizes under 14px but only scans the Rank Manipulation
+  surface, so nothing will flag this one.
+
+What follows is the handful of findings worth not
 rediscovering — two that were wrong, and one that was right about the symptom
 and wrong about the cause. Everything else logged here has been fixed and its
 detail lives in the commit that fixed it.

@@ -53,16 +53,58 @@ describe("the Rank Manipulation surface", () => {
     }
   });
 
-  it("has no 12px text left anywhere on it", () => {
-    // LGA-101 exists because 12px muted copy is hard to read against this
+  it("has no text under 14px left anywhere on it", () => {
+    // LGA-101 exists because small muted copy is hard to read against this
     // background, and it asks for the whole page rather than the one example
-    // it names. `text-xs` is the only way to reach 12px here -- the design
-    // tokens are Tailwind's defaults. A browser test can only measure the
-    // nodes it thinks to sample; this sees every line, including the ones a
-    // shared control brings with it.
-    const offenders = SURFACE_FILES.filter((path) =>
-      /\btext-xs\b/.test(readFileSync(path, "utf8")),
-    );
+    // it names. A browser test can only measure the nodes it thinks to
+    // sample; this sees every line, including the ones a shared control
+    // brings with it.
+    //
+    // Banning `text-xs` alone was not enough. It is the only *token* below
+    // 14px -- the scale is Tailwind's default -- but an arbitrary value slips
+    // straight past it, and `text-[0.6875rem]` on the result card's figure
+    // labels did exactly that: 11px, smaller than anything the ticket
+    // complained about, and green here the whole time. So arbitrary sizes are
+    // read and compared rather than pattern-matched away.
+    const offenders: string[] = [];
+
+    for (const path of SURFACE_FILES) {
+      const source = readFileSync(path, "utf8");
+
+      if (/\btext-xs\b/.test(source)) {
+        offenders.push(`${path}: text-xs`);
+      }
+
+      for (const [, value, unit] of source.matchAll(
+        /\btext-\[([\d.]+)(rem|px)\]/g,
+      )) {
+        const pixels = unit === "rem" ? Number(value) * 16 : Number(value);
+        if (pixels < 14) {
+          offenders.push(`${path}: text-[${value}${unit}] is ${pixels}px`);
+        }
+      }
+    }
+
+    expect(offenders).toEqual([]);
+  });
+
+  it("keeps every heading below the card title that holds it", () => {
+    // `CardTitle` renders an `h3`, so a subsection inside a card is an `h4`.
+    // The result card had its two family headings as `h2` -- an outline that
+    // read h1, h3, h2 and put the page's only `h2`s underneath an `h3`.
+    // Nothing caught it: axe's `heading-order` is a best-practice rule and is
+    // not in the tag set the e2e scan runs.
+    const offenders: string[] = [];
+
+    for (const path of SURFACE_FILES) {
+      for (const [, level] of readFileSync(path, "utf8").matchAll(
+        /<h([1-6])[\s>]/g,
+      )) {
+        if (Number(level) < 4) {
+          offenders.push(`${path}: h${level}`);
+        }
+      }
+    }
 
     expect(offenders).toEqual([]);
   });

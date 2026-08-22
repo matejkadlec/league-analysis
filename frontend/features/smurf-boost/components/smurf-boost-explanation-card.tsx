@@ -28,9 +28,9 @@ export function SmurfBoostExplanationCard() {
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="rounded-md border border-border/60 p-3">
-            <h3 className="text-sm font-semibold">
+            <h4 className="text-sm font-semibold">
               {FAMILY_TITLES.rapid_improvement}
-            </h3>
+            </h4>
             <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
               Whether the recent games look stronger than the earlier ones, in
               performance, win rate, results on rarely played champions, and
@@ -38,9 +38,9 @@ export function SmurfBoostExplanationCard() {
             </p>
           </div>
           <div className="rounded-md border border-border/60 p-3">
-            <h3 className="text-sm font-semibold">
+            <h4 className="text-sm font-semibold">
               {FAMILY_TITLES.playing_pattern_change}
-            </h3>
+            </h4>
             <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
               Whether the recent games look different in shape: wins and losses
               that no longer track performance, a change in consistency, strong
