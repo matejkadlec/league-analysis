@@ -17,7 +17,15 @@ describe("player routes", () => {
     ).toBe("/match-history?queue=420&puuid=new%2Fplayer");
     expect(isPlayerCentricPath("/player-overview")).toBe(true);
     expect(isPlayerCentricPath("/match-history")).toBe(true);
-    expect(isPlayerCentricPath("/smurf-boost-detection")).toBe(true);
+  });
+
+  it("leaves the locally scoped analysis pages out", () => {
+    // Both carry `?puuid=`, and on both it names a page-local analysis target.
+    // Treating either as player-centric would let `playerNavigationRoute` hand
+    // that target to a route the player provider persists from, promoting a
+    // local choice to the account's current player.
+    expect(isPlayerCentricPath("/rank-manipulation")).toBe(false);
+    expect(isPlayerCentricPath("/matchmaking-analysis")).toBe(false);
   });
 
   it("uses Player Overview outside a player page", () => {
@@ -33,8 +41,8 @@ describe("player routes", () => {
     expect(playerNavigationRoute("/match-history", "player/1")).toBe(
       "/match-history?puuid=player%2F1",
     );
-    expect(playerNavigationRoute("/smurf-boost-detection", "player/1")).toBe(
-      "/smurf-boost-detection?puuid=player%2F1",
+    expect(playerNavigationRoute("/rank-manipulation", "player/1")).toBe(
+      "/rank-manipulation",
     );
     expect(playerNavigationRoute("/matchmaking-analysis", "player/1")).toBe(
       "/matchmaking-analysis",

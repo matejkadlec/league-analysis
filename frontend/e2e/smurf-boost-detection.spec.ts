@@ -1,3 +1,4 @@
+import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
 import { acceptCookieBanner } from "./support/auth";
@@ -26,17 +27,16 @@ test("runs a comparison and reports both families without accusing anyone", asyn
   await page.goto("/player-overview");
   await acceptCookieBanner(page);
 
-  // The sidebar entry keeps the selected player, like the other player pages.
-  const navigationLink = page.getByRole("link", {
-    name: "Smurf & Boost Detection",
-  });
-  await expect(navigationLink).toHaveAttribute(
-    "href",
-    `/smurf-boost-detection?puuid=${PUUID}`,
-  );
+  // The sidebar entry carries no player, unlike the other player pages: this
+  // page's `?puuid=` is a local analysis target, and a link that handed it the
+  // account's current player would make every visit overwrite that target.
+  const navigationLink = page.getByRole("link", { name: "Rank Manipulation" });
+  await expect(navigationLink).toHaveAttribute("href", "/rank-manipulation");
   await navigationLink.click();
+
+  // The page seeds its own local target from the current player instead.
   await expect(page).toHaveURL(
-    new RegExp(`/smurf-boost-detection\\?puuid=${PUUID}`),
+    new RegExp(`/rank-manipulation\\?puuid=${PUUID}`),
   );
 
   await expect(page.locator("#smurf-boost-explanation")).toBeVisible();
@@ -78,8 +78,27 @@ test("runs a comparison and reports both families without accusing anyone", asyn
   await expect(settingsCard.getByText("Shipped defaults")).toBeVisible();
   await expect(page.getByLabel("Recent games compared")).toHaveValue("20");
 
-  await expect(page.locator("#smurf-boost-run")).toBeVisible();
+  const runCard = page.locator("#smurf-boost-run");
+  await expect(runCard).toBeVisible();
+  await expect(
+    runCard.getByRole("heading", { name: "Games Comparison" }),
+  ).toBeVisible();
+  // The target is chosen here, in the card, rather than in the left sidebar.
+  await expect(
+    runCard.getByLabel("Choose player for comparison"),
+  ).toBeVisible();
   await expect(page.locator("#smurf-boost-result")).toHaveCount(0);
+
+  // Quick navigation offers only what is on the page: before a comparison
+  // there is no result section, so there is no entry pointing at one.
+  const quickNavigation = page.getByTestId("section-quick-navigation");
+  await quickNavigation.hover();
+  await expect(
+    quickNavigation.getByRole("button", { name: "Games Comparison" }),
+  ).toBeVisible();
+  await expect(
+    quickNavigation.getByRole("button", { name: "Result" }),
+  ).toHaveCount(0);
 
   await page.getByRole("button", { name: "Run the comparison" }).click();
 
@@ -87,10 +106,15 @@ test("runs a comparison and reports both families without accusing anyone", asyn
   await expect(result).toBeVisible();
   expect(api.analyzeCalls).toBe(1);
 
+  await quickNavigation.hover();
+  await expect(
+    quickNavigation.getByRole("button", { name: "Result" }),
+  ).toBeVisible();
+
   // Each family carries its own band, and neither is summarised as a number.
-  await expect(result.getByText("Rapid improvement pattern")).toBeVisible();
+  await expect(result.getByText("Rapid Improvement Pattern")).toBeVisible();
   await expect(result.getByText("Notable indicators")).toBeVisible();
-  await expect(result.getByText("Playing pattern change")).toBeVisible();
+  await expect(result.getByText("Playing Pattern Change")).toBeVisible();
   await expect(result.getByText("No unusual pattern")).toBeVisible();
   await expect(result.getByText("High confidence")).toBeVisible();
 
@@ -136,4 +160,126 @@ test("runs a comparison and reports both families without accusing anyone", asyn
   await expect(
     page.getByRole("button", { name: "Run the comparison again" }),
   ).toBeVisible();
+});
+
+test("renders the page at the sizes the layout was specified in", async ({
+  page,
+}) => {
+  test.setTimeout(60_000);
+  await page.setViewportSize({ width: 1440, height: 1000 });
+
+  await installSmurfBoostMocks(page);
+
+  // The retired route still resolves rather than 404ing, so a bookmark or an
+  // old link keeps working.
+  await page.goto(`/smurf-boost-detection?puuid=${PUUID}`);
+  await acceptCookieBanner(page);
+  await expect(page).toHaveURL(
+    new RegExp(`/rank-manipulation\\?puuid=${PUUID}`),
+  );
+
+  const fontSize = (locator: ReturnType<typeof page.locator>) =>
+    locator.evaluate((element) => getComputedStyle(element).fontSize);
+
+  // Muted helper copy was 12px against a dark background, which is the whole
+  // complaint the readability ticket opens with. These are measured rather
+  // than asserted as class names: a utility that stops resolving still leaves
+  // the class in the markup.
+  const helper = page.locator("#smurf-boost-recentWindowSize-help");
+  await expect(helper).toBeVisible();
+  expect(await fontSize(helper)).toBe("14px");
+
+  const presetDescription = page
+    .getByTestId("smurf-boost-preset-conservative")
+    .locator("span")
+    .last();
+  expect(await fontSize(presetDescription)).toBe("14px");
+
+  // Section headers inside Detection Settings carry the shared 16px title
+  // treatment, so they read as sections rather than as another field label.
+  for (const heading of ["Presets", "Thresholds"]) {
+    const section = page
+      .locator("#smurf-boost-settings")
+      .getByRole("heading", { name: heading, exact: true });
+    expect(await fontSize(section), heading).toBe("16px");
+  }
+
+  // Three threshold columns at desktop width. Counting the resolved template
+  // catches a breakpoint that never applies, which a class-name check cannot.
+  const columns = await page
+    .locator("#smurf-boost-thresholds-grid")
+    .evaluate(
+      (element) =>
+        getComputedStyle(element).gridTemplateColumns.split(" ").length,
+    );
+  expect(columns).toBe(3);
+
+  // Games Comparison takes half the content width, and the other half is left
+  // empty on purpose.
+  const runCard = page.locator("#smurf-boost-run");
+  const row = page.locator("#smurf-boost-comparison-row");
+  // Counted before it is measured: `boundingBox()` on a locator that matches
+  // nothing waits out the whole timeout instead of saying what is missing.
+  await expect(row).toHaveCount(1);
+  const runBox = await runCard.boundingBox();
+  const rowBox = await row.boundingBox();
+  expect(runBox).not.toBeNull();
+  expect(rowBox).not.toBeNull();
+  expect(runBox!.width / rowBox!.width).toBeGreaterThan(0.4);
+  expect(runBox!.width / rowBox!.width).toBeLessThan(0.55);
+
+  // The sidebar label is short enough to stay on one line at desktop width.
+  const label = page
+    .getByRole("link", { name: "Rank Manipulation" })
+    .locator("span");
+  const labelBox = await label.boundingBox();
+  const lineHeight = await label.evaluate(
+    (element) => Number.parseFloat(getComputedStyle(element).lineHeight) || 24,
+  );
+  expect(labelBox).not.toBeNull();
+  expect(labelBox!.height).toBeLessThanOrEqual(lineHeight + 1);
+});
+
+/**
+ * `accessibility.spec.ts` scans the three routes the populated-player harness
+ * serves; Rank Manipulation runs on its own fixtures, so its scan lives here.
+ * The result card is included on purpose -- it is the widest, densest markup
+ * in the feature and the part a scan of an unrun page would never reach.
+ */
+test("has no WCAG A/AA violations, before or after a comparison", async ({
+  page,
+}) => {
+  test.setTimeout(60_000);
+  await page.setViewportSize({ width: 1440, height: 1000 });
+
+  await installSmurfBoostMocks(page);
+  await page.goto(`/rank-manipulation?puuid=${PUUID}`);
+  await acceptCookieBanner(page);
+  await expect(page.locator("#smurf-boost-run")).toBeVisible();
+
+  const scan = async (stage: string) => {
+    const results = await new AxeBuilder({ page })
+      // The toast host is excluded, not passed: sonner's `richColors` success
+      // description fails contrast in every variant on every page that raises
+      // one, which is a shared-component defect rather than anything this page
+      // renders. It is recorded in `.claude/IMPROVEMENTS.md`; scanning it here
+      // would only ever report the same finding from whichever page toasts
+      // first.
+      .exclude("[data-sonner-toaster]")
+      .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
+      .analyze();
+    const readable = results.violations.flatMap((violation) =>
+      violation.nodes.map(
+        (node) => `${violation.id}: ${violation.help} -> ${node.html}`,
+      ),
+    );
+    expect(readable, stage).toEqual([]);
+  };
+
+  await scan("before the comparison");
+
+  await page.getByRole("button", { name: "Run the comparison" }).click();
+  await expect(page.locator("#smurf-boost-result")).toBeVisible();
+
+  await scan("with a result on screen");
 });

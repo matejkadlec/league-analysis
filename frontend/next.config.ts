@@ -1,7 +1,6 @@
 import type { NextConfig } from "next";
 
-const publicApiUrl =
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const publicApiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const internalApiUrl = process.env.API_INTERNAL_URL || publicApiUrl;
 
 const nextConfig: NextConfig = {
@@ -34,6 +33,11 @@ const nextConfig: NextConfig = {
       {
         source: "/tracked-players",
         destination: "/player-overview",
+        permanent: false,
+      },
+      {
+        source: "/smurf-boost-detection",
+        destination: "/rank-manipulation",
         permanent: false,
       },
     ];

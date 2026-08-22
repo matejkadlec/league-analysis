@@ -30,7 +30,7 @@ export function SmurfBoostSettingsPresets({
 
   return (
     <div className="space-y-3">
-      <h3 className="text-sm font-medium">Presets</h3>
+      <h3 className="text-base font-semibold">Presets</h3>
       {isError ? (
         <p className="text-sm text-muted-foreground">
           The presets could not be loaded. You can still edit each threshold
@@ -58,7 +58,7 @@ export function SmurfBoostSettingsPresets({
                   {presetLabel(preset.name)}
                   {active && " — in use"}
                 </span>
-                <span className="mt-1 block text-xs text-muted-foreground">
+                <span className="mt-1 block text-sm text-muted-foreground">
                   {presetDescription(preset.name)}
                 </span>
               </button>
@@ -67,7 +67,7 @@ export function SmurfBoostSettingsPresets({
         </div>
       )}
       {presets.length > 0 && !activePreset && (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-sm text-muted-foreground">
           Your thresholds do not match any preset. Choosing one replaces every
           value below.
         </p>

@@ -2,12 +2,13 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, Loader2, PlayCircle, Search } from "lucide-react";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { startSmurfBoostDetection } from "../smurf-boost-api";
 import { apiErrorMessage } from "@/lib/core/api-error";
@@ -39,6 +40,14 @@ function isActive(analysis: SmurfBoostAnalysisResponse | null): boolean {
 
 interface SmurfBoostDetectionProps {
   puuid: string;
+  /**
+   * The page's local player search, rendered inside this card.
+   *
+   * The card takes it as a node rather than reaching for the scope itself:
+   * choosing the analysed player is the page's business, and passing the
+   * control in keeps this component driven by the one `puuid` it compares.
+   */
+  playerSelector: ReactNode;
 }
 
 function RunCardSkeleton() {
@@ -55,7 +64,10 @@ function RunCardSkeleton() {
   );
 }
 
-export function SmurfBoostDetection({ puuid }: SmurfBoostDetectionProps) {
+export function SmurfBoostDetection({
+  puuid,
+  playerSelector,
+}: SmurfBoostDetectionProps) {
   const queryClient = useQueryClient();
   const toast = useToast();
   // A transient failure belongs to the interaction that produced it. The page
@@ -143,77 +155,93 @@ export function SmurfBoostDetection({ puuid }: SmurfBoostDetectionProps) {
 
   return (
     <div className="space-y-6">
-      <Card id="smurf-boost-run">
-        <CardHeader className="pb-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <CardTitle className="flex items-center gap-2">
-              <Search className="h-5 w-5 text-primary" />
-              Compare recent games with earlier games
-            </CardTitle>
-            {latest?.is_stale && (
-              <Badge variant="outline" className="ml-auto">
-                New games since this comparison
-              </Badge>
+      {/* Half the content width on desktop, with the second column left empty
+          on purpose -- the comparison is one button and a search, and filling
+          the space would mean inventing a card nobody asked for. */}
+      <div
+        id="smurf-boost-comparison-row"
+        className="grid grid-cols-1 gap-6 lg:grid-cols-2"
+      >
+        <Card id="smurf-boost-run">
+          <CardHeader className="pb-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <CardTitle className="flex items-center gap-2">
+                <Search className="h-5 w-5 text-primary" />
+                Games Comparison
+              </CardTitle>
+              {latest?.is_stale && (
+                <Badge variant="outline" className="ml-auto">
+                  New games since this comparison
+                </Badge>
+              )}
+            </div>
+            <UpdatedStamp
+              lastUpdated={completedAt}
+              label="Last run"
+              className="mt-2 text-sm text-muted-foreground"
+            />
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Compare recent games with earlier games. This reads only ranked
+              solo/duo games already stored for this player. It contacts no
+              external service, so it finishes in one step.
+            </p>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="rank-manipulation-player-search">
+                Choose player for comparison
+              </Label>
+              {playerSelector}
+            </div>
+
+            {error && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  The previous comparison could not be loaded. You can still run
+                  a new one.
+                </AlertDescription>
+              </Alert>
             )}
-          </div>
-          <UpdatedStamp
-            lastUpdated={completedAt}
-            label="Last run"
-            className="mt-2 text-xs text-muted-foreground"
-          />
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <p className="text-sm text-muted-foreground">
-            This reads only ranked solo/duo games already stored for this
-            player. It contacts no external service, so it finishes in one step.
-          </p>
 
-          {error && (
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>
-                The previous comparison could not be loaded. You can still run a
-                new one.
-              </AlertDescription>
-            </Alert>
-          )}
-
-          {(failure ?? storedFailure) && (
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>{failure ?? storedFailure}</AlertDescription>
-            </Alert>
-          )}
-
-          {isActive(latest ?? null) && (
-            <Alert>
-              <Loader2 className="h-4 w-4 animate-spin" />
-              <AlertDescription>
-                A comparison for this player is running. The result appears here
-                as soon as it finishes.
-              </AlertDescription>
-            </Alert>
-          )}
-
-          <Button
-            className="button-full"
-            onClick={() => runMutation.mutate(puuid)}
-            disabled={running}
-          >
-            {running ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Comparing games...
-              </>
-            ) : (
-              <>
-                <PlayCircle className="mr-2 h-4 w-4" />
-                {results ? "Run the comparison again" : "Run the comparison"}
-              </>
+            {(failure ?? storedFailure) && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{failure ?? storedFailure}</AlertDescription>
+              </Alert>
             )}
-          </Button>
-        </CardContent>
-      </Card>
+
+            {isActive(latest ?? null) && (
+              <Alert>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <AlertDescription>
+                  A comparison for this player is running. The result appears
+                  here as soon as it finishes.
+                </AlertDescription>
+              </Alert>
+            )}
+
+            <Button
+              className="button-full"
+              onClick={() => runMutation.mutate(puuid)}
+              disabled={running}
+            >
+              {running ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Comparing games...
+                </>
+              ) : (
+                <>
+                  <PlayCircle className="mr-2 h-4 w-4" />
+                  {results ? "Run the comparison again" : "Run the comparison"}
+                </>
+              )}
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
 
       {results && latest && (
         <SmurfBoostResultCard

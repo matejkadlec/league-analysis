@@ -17,10 +17,23 @@ mistaken for a reader; and the home page header card states its own
 `text-white`, with `branded-style-contract.test.ts` holding every header card
 to it.
 
-Nothing open. One loose end from the `queue_id = 0` investigation was chased
+One loose end from the `queue_id = 0` investigation was chased
 and closed rather than logged: `EUN1_3990695865` was written at
 2026-08-16 00:16:59.942Z with no `jobs.job_executions` row covering the
 instant, but 2,776 of production's 3,778 matches sit outside every execution
 window, and `MatchmakingAnalysisService` calls `upsert_match` on the request
 path. Match writes outside a recorded execution are the normal case here, not
 a missing audit row.
+
+- 2026-08-22 frontend/components/toast-host.tsx: sonner's `richColors`
+  description text fails WCAG AA contrast. Found by the axe scan added for
+  Rank Manipulation, which reported
+  `color-contrast: Elements must meet minimum color contrast ratio thresholds`
+  against `<div data-description="">The recent games have been compared with
+  the earlier ones.</div>` on the success toast. It is a shared-component
+  defect on every page that raises a toast, not anything Rank Manipulation
+  renders, so that scan excludes `[data-sonner-toaster]` rather than carrying
+  the finding. Fixing it means overriding sonner's `[data-description]`
+  treatment in `globals.css`; check all four variants (success, warning,
+  error, info), because `richColors` gives each its own background, and drop
+  the exclusion in `e2e/smurf-boost-detection.spec.ts` once they pass.

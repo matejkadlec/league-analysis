@@ -37,11 +37,7 @@ describe("wording for a result this build has not seen", () => {
     // The fallbacks must not be reachable for known keys, or the whole
     // vocabulary silently becomes pass-through and every label on the page
     // turns into a snake_case identifier.
-    expect(familyTitle("rapid_improvement")).toBe(
-      "Rapid improvement pattern",
-    );
-    expect(familyDescription("rapid_improvement")).toContain(
-      "earlier games",
-    );
+    expect(familyTitle("rapid_improvement")).toBe("Rapid Improvement Pattern");
+    expect(familyDescription("rapid_improvement")).toContain("earlier games");
   });
 });

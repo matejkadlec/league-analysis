@@ -123,7 +123,7 @@ function SignalOutcome({ signal }: { signal: SmurfBoostSignal }) {
   return (
     // Each family sizes its own table, so this column can end up narrower in
     // one than the other and split a two-word outcome across lines.
-    <span className="whitespace-nowrap text-xs text-muted-foreground">
+    <span className="whitespace-nowrap text-sm text-muted-foreground">
       {signalOutcome(signal)}
     </span>
   );
@@ -132,13 +132,13 @@ function SignalOutcome({ signal }: { signal: SmurfBoostSignal }) {
 function SignalRow({ signal }: { signal: SmurfBoostSignal }) {
   return (
     <TableRow>
-      <TableCell className="font-mono text-xs align-top">{signal.id}</TableCell>
+      <TableCell className="font-mono text-sm align-top">{signal.id}</TableCell>
       <TableCell className="align-top">
         <p className="text-sm">{signal.reason}</p>
         {signal.notes.length > 0 && (
           <ul className="mt-1 space-y-0.5">
             {signal.notes.map((note) => (
-              <li key={note} className="text-xs text-muted-foreground">
+              <li key={note} className="text-sm text-muted-foreground">
                 {noteLabel(note)}
               </li>
             ))}
@@ -179,14 +179,14 @@ function SignalBlock({ signal }: { signal: SmurfBoostSignal }) {
   return (
     <li className="rounded-md border border-border/60 bg-muted/20 p-3">
       <div className="flex items-center justify-between gap-2">
-        <span className="font-mono text-xs text-primary">{signal.id}</span>
+        <span className="font-mono text-sm text-primary">{signal.id}</span>
         <SignalOutcome signal={signal} />
       </div>
       <p className="mt-2 text-sm">{signal.reason}</p>
       {signal.notes.length > 0 && (
         <ul className="mt-1 space-y-0.5">
           {signal.notes.map((note) => (
-            <li key={note} className="text-xs text-muted-foreground">
+            <li key={note} className="text-sm text-muted-foreground">
               {noteLabel(note)}
             </li>
           ))}
@@ -253,7 +253,7 @@ function SignalTable({ family }: { family: SmurfBoostFamily }) {
         </Table>
       </div>
 
-      <p className="mt-2 text-xs text-muted-foreground">
+      <p className="mt-2 text-sm text-muted-foreground">
         Each value is in the unit named in its own description: standardized
         units, a win rate, or doublings of spread.
       </p>
@@ -292,9 +292,7 @@ function FamilySection({
     // Each family is read on its own and never combined, so each gets its own
     // card. The tint separates it from the run card holding it, which shares
     // the same `bg-card`.
-    <Card
-      className={`border-l-4 bg-muted/20 shadow-none ${bandStyle.accent}`}
-    >
+    <Card className={`border-l-4 bg-muted/20 shadow-none ${bandStyle.accent}`}>
       <CardHeader className="pb-3">
         {/* The band is the reading. Beside the title there is room for it on
             the right, but once the row wraps on a phone `justify-between`
@@ -310,7 +308,7 @@ function FamilySection({
             >
               {BAND_LABELS[family.band]}
             </span>
-            <span className="block text-xs text-muted-foreground">
+            <span className="block text-sm text-muted-foreground">
               {bandMeaning(family.band)}
             </span>
           </span>
@@ -376,11 +374,11 @@ export function SmurfBoostResultCard({
             <Gauge className="h-3 w-3" />
             {CONFIDENCE_LABELS[results.confidence_band]}
           </Badge>
-          <span className="text-xs text-muted-foreground">
+          <span className="text-sm text-muted-foreground">
             How much this comparison can be relied on, separate from what it
             found.
           </span>
-          <span className="ml-auto font-mono text-xs text-muted-foreground">
+          <span className="ml-auto font-mono text-sm text-muted-foreground">
             {results.model_version}
           </span>
         </div>
@@ -409,7 +407,7 @@ export function SmurfBoostResultCard({
             </h3>
             <ul className="space-y-1">
               {results.notes.map((note) => (
-                <li key={note} className="text-xs text-muted-foreground">
+                <li key={note} className="text-sm text-muted-foreground">
                   {noteLabel(note)}
                 </li>
               ))}
@@ -419,7 +417,7 @@ export function SmurfBoostResultCard({
 
         <div className="flex gap-2 rounded-md border border-border/60 bg-muted/40 p-3">
           <CircleHelp className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-          <p className="text-xs leading-relaxed text-muted-foreground">
+          <p className="text-sm leading-relaxed text-muted-foreground">
             {results.disclaimer}
           </p>
         </div>

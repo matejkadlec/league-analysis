@@ -16,8 +16,8 @@ import type {
  */
 
 export const FAMILY_TITLES: Record<string, string> = {
-  rapid_improvement: "Rapid improvement pattern",
-  playing_pattern_change: "Playing pattern change",
+  rapid_improvement: "Rapid Improvement Pattern",
+  playing_pattern_change: "Playing Pattern Change",
 };
 
 export const FAMILY_DESCRIPTIONS: Record<string, string> = {
