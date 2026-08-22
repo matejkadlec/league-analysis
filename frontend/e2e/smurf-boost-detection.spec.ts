@@ -191,13 +191,8 @@ test("renders the page at the sizes the layout was specified in", async ({
 
   await installSmurfBoostMocks(page);
 
-  // The retired route still resolves rather than 404ing, so a bookmark or an
-  // old link keeps working.
-  await page.goto(`/smurf-boost-detection?puuid=${PUUID}`);
+  await page.goto(`/rank-manipulation?puuid=${PUUID}`);
   await acceptCookieBanner(page);
-  await expect(page).toHaveURL(
-    new RegExp(`/rank-manipulation\\?puuid=${PUUID}`),
-  );
 
   const fontSize = (locator: ReturnType<typeof page.locator>) =>
     locator.evaluate((element) => getComputedStyle(element).fontSize);

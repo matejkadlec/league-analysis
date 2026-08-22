@@ -94,7 +94,9 @@ function holdThePut() {
 
 function renderContext() {
   return renderHookWithQueryClient(() => usePlayerContext(), {
-    wrap: (children) => <PlayerContextProvider>{children}</PlayerContextProvider>,
+    wrap: (children) => (
+      <PlayerContextProvider>{children}</PlayerContextProvider>
+    ),
   });
 }
 
@@ -118,7 +120,6 @@ beforeEach(() => {
     isLoading: false,
   });
 });
-
 
 describe("which player the app thinks you are looking at", () => {
   it("lets the URL win over the saved player", async () => {
@@ -155,11 +156,10 @@ describe("which player the app thinks you are looking at", () => {
   });
 
   it("treats an empty `?puuid=` as no player rather than as nobody", async () => {
-    // A legacy link that carries the parameter with nothing after it. Before
-    // the retired routes became `next.config.ts` redirects, the redirect page
-    // dropped an empty value; Next forwards the query verbatim, so the empty
-    // string reached the context and read as "the URL names a player" -- the
-    // account's saved player vanished and the page asked them to pick one.
+    // A link that carries the parameter with nothing after it. The empty
+    // string reaches the context and reads as "the URL names a player", so
+    // the account's saved player vanished and the page asked them to pick
+    // one.
     search.current = "puuid=";
     const { result } = renderContext();
 

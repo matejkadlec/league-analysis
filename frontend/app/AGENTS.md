@@ -18,9 +18,10 @@ frontend rules from [`../AGENTS.md`](../AGENTS.md).
   they must not restore duplicated large Player Search cards. Preserve
   `?puuid=` for deep links, history, and independent browser tabs — the
   explicit URL PUUID is authoritative for the current tab.
-- Tracked-player management lives in the sidebar dialog. The retired
-  `/my-profile`, `/playstyle-analysis` and `/tracked-players` routes stay
-  reachable as `redirects()` entries in `next.config.ts`, not as pages.
+- Tracked-player management lives in the sidebar dialog.
+- Retired routes are deleted, not redirected: `next.config.ts` has no
+  `redirects()`. The app has never been published, so there is no old link to
+  keep working. Revisit if that changes.
 - `/jobs` is admin-only. Public routes (`/license`, `/privacy-policy`,
   `/cookie-policy`) serve signed-in and signed-out layouts at the same URL;
   signed-in users are redirected away from `/sign-in`.
