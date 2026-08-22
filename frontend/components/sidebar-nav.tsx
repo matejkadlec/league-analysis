@@ -5,7 +5,8 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import { Menu, X, User, LogOut, Settings, Users, Wrench } from "lucide-react";
-import { LegalNotice } from "@/components/legal-notice";
+import { CookieSettingsTrigger } from "@/components/cookie-settings-trigger";
+import { LEGAL_LINK_CLASS, LegalNotice } from "@/components/legal-notice";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/features/auth";
 import {
@@ -217,7 +218,13 @@ export function SidebarNav() {
 
           {/* Footer */}
           <div className="border-t border-white/10 p-6">
-            <LegalNotice />
+            {/* The cookie policy tells every reader they can reopen the
+                dialog "using the Cookie settings link in the page footer".
+                Only the public footer carried one, so for a signed-in reader
+                that sentence named a control this shell did not render. */}
+            <LegalNotice>
+              <CookieSettingsTrigger className={LEGAL_LINK_CLASS} />
+            </LegalNotice>
           </div>
         </div>
       </aside>
