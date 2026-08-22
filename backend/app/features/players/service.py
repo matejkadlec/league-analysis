@@ -152,25 +152,7 @@ class PlayerService:
                 operation="get_player_by_puuid",
             )
 
-        # Count total matches for this player
-        # Get total matches count
-        count_result = await self.db.execute(
-            select(func.count())
-            .select_from(MatchParticipant)
-            .where(MatchParticipant.puuid == puuid)
-        )
-        total_matches = count_result.scalar() or 0
-
-        # Get count of fully analyzed matches
-        analyzed_count_result = await self.db.execute(
-            select(func.count(Match.match_id))
-            .join(MatchParticipant, Match.match_id == MatchParticipant.match_id)
-            .where(
-                MatchParticipant.puuid == puuid,
-                Match.fully_analyzed.is_(True),
-            )
-        )
-        analyzed_matches = analyzed_count_result.scalar() or 0
+        total_matches, analyzed_matches = await self._match_counts(puuid)
 
         logger.info(
             "Player data retrieved by PUUID from database",
@@ -180,12 +162,44 @@ class PlayerService:
             analyzed_matches=analyzed_matches,
         )
 
+        return await self._one_player(player, user_id)
+
+    async def _match_counts(self, puuid: str) -> tuple[int, int]:
+        """How many matches are stored for a player, and how many are analyzed."""
+        count_result = await self.db.execute(
+            select(func.count())
+            .select_from(MatchParticipant)
+            .where(MatchParticipant.puuid == puuid)
+        )
+        analyzed_count_result = await self.db.execute(
+            select(func.count(Match.match_id))
+            .join(MatchParticipant, Match.match_id == MatchParticipant.match_id)
+            .where(
+                MatchParticipant.puuid == puuid,
+                Match.fully_analyzed.is_(True),
+            )
+        )
+        return count_result.scalar() or 0, analyzed_count_result.scalar() or 0
+
+    async def _one_player(self, player: Player, user_id: int) -> PlayerResponse:
+        """One complete player, however the caller reached it.
+
+        Both `/players/{puuid}` and the `current_player` on `/players/context`
+        answer with a `PlayerResponse` for the same row, so they have to build
+        it the same way. They did not: only the first filled the two match
+        counts, and `PlayerResponse` defaults them to 0, so the context
+        endpoint reported every player as having no matches. That was
+        invisible while nothing read the counts off a context player -- and
+        stopped being invisible the moment the frontend started seeding its
+        player cache from that response.
+        """
         response = self._to_response(
             player,
-            is_tracked=await self._is_player_tracked_by_user(puuid, user_id),
+            is_tracked=await self._is_player_tracked_by_user(player.puuid, user_id),
         )
-        response.total_matches = total_matches
-        response.analyzed_matches = analyzed_matches
+        response.total_matches, response.analyzed_matches = await self._match_counts(
+            player.puuid
+        )
         return response
 
     @staticmethod
@@ -668,12 +682,7 @@ class PlayerService:
             if current_model is None:
                 settings.current_player_puuid = None
             else:
-                current_player = self._to_response(
-                    current_model,
-                    is_tracked=await self._is_player_tracked_by_user(
-                        current_model.puuid, user_id
-                    ),
-                )
+                current_player = await self._one_player(current_model, user_id)
 
         await self.db.commit()
         return PlayerContextResponse(current_player=current_player)

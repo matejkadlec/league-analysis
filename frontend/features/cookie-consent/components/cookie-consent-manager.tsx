@@ -14,7 +14,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useAuth } from "@/features/auth";
-import { unwrap, validatedPut } from "@/lib/core/api";
+import { unwrap, validatedGet, validatedPut } from "@/lib/core/api";
 import {
   UserCookieConsentResponseSchema,
   type UserCookieConsentUpdate,
@@ -22,6 +22,7 @@ import {
 import { cn } from "@/lib/core/utils";
 import {
   COOKIE_CONSENT_OPEN_PREFERENCES_EVENT,
+  COOKIE_CONSENT_VERSION,
   CookieConsentLevel,
   CookieConsentState,
   canUseOptionalStorage,
@@ -40,6 +41,20 @@ export function CookieConsentManager() {
   const [isSaving, setIsSaving] = useState(false);
 
   const lastSyncedKeyRef = useRef<string | null>(null);
+  // Who answered the banner in this page session, if anyone: the account id
+  // at the time, or `null` for a visitor who was not signed in. Answering as
+  // a visitor and then signing in is an ordinary path and that choice really
+  // is theirs, which is what tells it apart from a cookie left behind by
+  // whoever used the browser before. (There is no self-service registration:
+  // `/join-us` redirects, so this is a sign-in, not a sign-up.)
+  //
+  // The id matters, not merely the fact of a choice. `logout` navigates with
+  // `router.push`, and this component is mounted in the root layout, so it is
+  // never remounted across a sign-out: a bare boolean set by account A would
+  // still be set when account B signed in on the next screen, and B would get
+  // A's level written to its audit trail -- the very record this reconcile
+  // exists to prevent.
+  const choiceOwnerRef = useRef<{ userId: number | null } | null>(null);
 
   const syncConsentForUser = useCallback(
     async (userId: number, value: CookieConsentState): Promise<void> => {
@@ -99,19 +114,89 @@ export function CookieConsentManager() {
     };
   }, []);
 
+  // Reconcile the browser cookie against the account that is actually signed
+  // in.
+  //
+  // Browser-level is right for a visitor -- the banner has to work before
+  // anyone signs in, and the storage it gates is this browser's. It stops
+  // being right the moment a second account signs in on the same browser: the
+  // cookie jar is shared, so that account inherited the first one's choice
+  // without ever being asked, and this effect used to write the inherited
+  // choice into its own audit trail as `consent_source: "banner"` -- a record
+  // that somebody clicked a banner they never saw. Consent is a statement by
+  // a person, so the server's per-account record is the only thing that holds
+  // one, and it wins here.
   useEffect(() => {
     if (!isAuthenticated || !user?.id) {
       return;
     }
 
-    const storedConsent = readCookieConsentFromBrowser();
-    if (!storedConsent || !isCurrentCookieConsent(storedConsent)) {
-      return;
-    }
+    const userId = user.id;
+    let cancelled = false;
 
-    void syncConsentForUser(user.id, storedConsent).catch(() => {
-      // Best-effort persistence for authenticated user audit trail.
-    });
+    const reconcile = async () => {
+      const result = await validatedGet(
+        UserCookieConsentResponseSchema.nullable(),
+        "/settings/user/cookie-consent",
+      );
+      if (cancelled) {
+        return;
+      }
+      // A failed read is not evidence of anything. Leaving the browser state
+      // alone beats both alternatives: re-asking someone who already decided,
+      // and silently keeping a choice that may not be theirs.
+      if (!result.success) {
+        return;
+      }
+
+      const stored = result.data;
+      if (stored && stored.consent_version === COOKIE_CONSENT_VERSION) {
+        // This account has decided before, so its record is the answer
+        // whatever the browser is carrying. `writeCookieConsent` restamps the
+        // cookie's own timestamp; the true `consented_at` lives on the record
+        // this just read, which is what the audit trail is.
+        const adopted = writeCookieConsent(stored.consent_level);
+        if (stored.consent_level !== "all") {
+          clearOptionalBrowserStorage();
+        }
+        setConsent(adopted);
+        setIsBannerOpen(false);
+        notifyCookieConsentUpdated(adopted);
+        return;
+      }
+
+      // Nothing on record for this account -- either it has never answered,
+      // or the policy version moved and its answer no longer covers it.
+      const browserConsent = readCookieConsentFromBrowser();
+      const chooser = choiceOwnerRef.current;
+      const theyChoseItThemselves =
+        chooser !== null &&
+        (chooser.userId === null || chooser.userId === userId);
+      if (
+        theyChoseItThemselves &&
+        browserConsent &&
+        isCurrentCookieConsent(browserConsent)
+      ) {
+        await syncConsentForUser(userId, browserConsent).catch(() => {
+          // Best-effort persistence for authenticated user audit trail.
+        });
+        return;
+      }
+
+      // Ask, rather than inherit. Nothing is written to this account's audit
+      // trail until it answers, and the optional storage the previous consent
+      // permitted is cleared in the meantime.
+      clearOptionalBrowserStorage();
+      setConsent(null);
+      setIsBannerOpen(true);
+      notifyCookieConsentUpdated(null);
+    };
+
+    void reconcile();
+
+    return () => {
+      cancelled = true;
+    };
   }, [isAuthenticated, syncConsentForUser, user?.id]);
 
   const isBlockingConsentDecision = consent === null;
@@ -121,6 +206,7 @@ export function CookieConsentManager() {
 
     try {
       const nextConsent = writeCookieConsent(level);
+      choiceOwnerRef.current = { userId: user?.id ?? null };
 
       if (level !== "all") {
         clearOptionalBrowserStorage();
