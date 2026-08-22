@@ -48,15 +48,33 @@ export function PlayerContextProvider({
   // truthy enough to reach the URL branch below and suppress the account's
   // saved player. Treat it as absent, as the retired `/my-profile` redirect
   // used to before Next started forwarding the query verbatim.
-  const urlPuuid =
-    (isPlayerRoute ? searchParams.get("puuid") : null) || null;
+  const urlPuuid = (isPlayerRoute ? searchParams.get("puuid") : null) || null;
 
   const contextQuery = useQuery({
     queryKey: [...PLAYER_CONTEXT_QUERY_KEY, user?.id],
     queryFn: async () => {
-      return unwrap(
+      const context = unwrap(
         await validatedGet(PlayerContextSchema, "/players/context"),
       );
+      // This response carries the whole current player, and every route then
+      // asks `/players/{puuid}` for that same row -- the player-centric ones
+      // through a `?puuid=` this provider puts in the URL from this very
+      // response, Rank Manipulation and Matchmaking Analysis through
+      // `useAnalyzedPlayer`, whose default target *is* this player. Seeding
+      // the player cache turns that second request into a cache hit; only an
+      // explicit `?puuid=` naming somebody else still costs a round trip.
+      //
+      // Here rather than in an effect because an effect is too late: the
+      // children re-render the moment this resolves and their queries fire
+      // during that render, before any effect commits. Written from the
+      // `queryFn` it lands with the data.
+      if (context.current_player) {
+        queryClient.setQueryData(
+          playerQueryKey(context.current_player.puuid),
+          context.current_player,
+        );
+      }
+      return context;
     },
     enabled: isAuthenticated && !!user?.id,
   });

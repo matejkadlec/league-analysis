@@ -70,11 +70,43 @@ Implementation:
 Implementation:
 - `/cookie-policy` includes key name, purpose, category, duration, and provider.
 
+### 7) Consent belongs to the person, not to the browser
+
+- GDPR Art. 4(11): consent is a statement *by the data subject*. A cookie jar
+  is shared by everyone who uses the browser, so a cookie alone cannot say who
+  agreed.
+
+Implementation:
+- While nobody is signed in, the browser cookie is the decision — correctly,
+  since there is no person on record to attribute it to and the storage being
+  gated is this browser's.
+- Once an account signs in, **its own record in `auth.user_cookie_consents` is
+  the authority** and overrules whatever the jar carries, including a choice
+  made on another device.
+- An account with no record at the current version is **asked**, never assumed.
+  The one exception is answering the banner as a visitor and then signing in
+  during the same page session, where the person at the keyboard demonstrably
+  made the choice seconds earlier. `CookieConsentManager` tracks *who* made it
+  (`choiceOwnerRef`), not merely that somebody did: `logout` navigates with
+  `router.push` and the manager is mounted in the root layout, so a bare flag
+  set by one account would survive a sign-out and be spent on the next.
+- Until that account answers, **nothing is written to its audit trail**.
+  Previously the inherited cookie was persisted under
+  `consent_source: "banner"`, which recorded that somebody clicked a banner
+  they had never been shown — the audit trail asserting a consent that never
+  happened.
+- Adopting a `necessary` record clears optional browser storage, so one
+  account's permitted storage does not outlive its session on a shared browser.
+
+`tests/cookie-consent-account-change.test.tsx` holds all of this.
+
 ## Data Model / Technical Notes
 
-- Browser decision key: `league_analysis_cookie_consent` (source of truth for display)
+- Browser decision key: `league_analysis_cookie_consent` — the gate for
+  optional storage, and the whole decision while signed out
+- Account decision of record: `auth.user_cookie_consents` — authoritative once
+  signed in, and the only audit trail
 - Consent versioning: `v1`
-- Authenticated audit persistence: `auth.user_cookie_consents`
 - API:
   - `GET /api/v1/settings/user/cookie-consent`
   - `PUT /api/v1/settings/user/cookie-consent`

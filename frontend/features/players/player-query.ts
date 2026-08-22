@@ -39,8 +39,21 @@ export function playerQueryOptions(puuid: string | null) {
     // exactly that, and only re-establishes it by coincidence. On `queryFn`
     // the guard cannot be spread away.
     queryFn: puuid
-      ? async () => unwrap(await validatedGet(PlayerSchema, `/players/${puuid}`))
+      ? async () =>
+          unwrap(await validatedGet(PlayerSchema, `/players/${puuid}`))
       : skipToken,
+    // The copy `player-context.tsx` seeds from `/players/context` is only
+    // worth seeding while it counts as fresh: at `staleTime: 0` the seeded row
+    // is stale the instant it lands and every route refetches a player it was
+    // just handed. `components/providers.tsx` already defaults queries to a
+    // minute, so this changes nothing today -- it is here because that default
+    // is now load-bearing for a behaviour two files away, and lowering it
+    // would quietly reintroduce the request without failing anything.
+    //
+    // Correctness does not depend on the window: a sync invalidates and
+    // refetches every key carrying the PUUID, and tracking changes invalidate
+    // this key by name. Invalidation beats `staleTime`.
+    staleTime: 60_000,
     retry: false,
   });
 }

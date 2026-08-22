@@ -73,8 +73,14 @@ export function SectionQuickNavigation({ items }: SectionQuickNavigationProps) {
       onMouseLeave={() => setIsHovered(false)}
       onBlurCapture={handleBlur}
     >
-      <div className="flex h-[242px] items-stretch">
-        <div className="vertical-gradient flex w-10 items-center justify-center rounded-l-lg border-l border-y border-r-0 border-[#2f3640]">
+      {/* The rail's height belongs to the tab, not to the panel. The tab is the
+          grab target and it must not move or resize as sections mount, so it
+          keeps the fixed height; `items-center` then lets the panel take its
+          own content height and sit centred against it. Stretching the panel
+          to match left roughly 100px empty even on the longest list here --
+          four entries need about 144px. */}
+      <div className="flex h-[242px] items-center">
+        <div className="vertical-gradient flex h-full w-10 items-center justify-center rounded-l-lg border-l border-y border-r-0 border-[#2f3640]">
           <button
             type="button"
             aria-controls={navigationId}
@@ -104,8 +110,8 @@ export function SectionQuickNavigation({ items }: SectionQuickNavigationProps) {
               : "w-0 translate-x-full opacity-0",
           )}
         >
-          <nav aria-label="Page sections" className="h-auto w-[180px] py-2">
-            <ul className="flex h-full flex-col justify-center">
+          <nav aria-label="Page sections" className="w-[180px] py-2">
+            <ul className="flex flex-col">
               {visibleItems.map((item) => (
                 <li key={item.anchor}>
                   <button

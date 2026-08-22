@@ -104,6 +104,23 @@ test("runs a comparison and reports both families without accusing anyone", asyn
     quickNavigation.getByRole("button", { name: "Result" }),
   ).toHaveCount(0);
 
+  // The panel is sized by its entries, while the tab that opens it keeps the
+  // fixed rail height. Stretching the panel to the rail left about 100px of
+  // empty card under a three-entry list. Measured rather than asserted on a
+  // class, so a future height lands here rather than passing silently.
+  const panel = quickNavigation.getByRole("navigation", {
+    name: "Page sections",
+  });
+  const panelBox = await panel.boundingBox();
+  // Scoped to the panel: the rail's own open/close control is a button too,
+  // and counting it would loosen the bound below by a whole entry.
+  const entryCount = await panel.getByRole("button").count();
+  // Measured: three entries render 132px, against the 242px the fixed rail
+  // height used to force. ~40px an entry plus the nav's `py-2`, with a little
+  // slack -- loose enough to survive a font change, tight enough that a
+  // return to 242px lands here.
+  expect(panelBox!.height).toBeLessThanOrEqual(entryCount * 40 + 16 + 8);
+
   await page.getByRole("button", { name: "Run the comparison" }).click();
 
   const result = page.locator("#smurf-boost-result");
