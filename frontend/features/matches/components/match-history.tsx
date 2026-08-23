@@ -4,11 +4,11 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 
+import { normalizeApiError } from "@/lib/core/api";
 import {
-  MatchListWithPlayerDataResponseSchema,
-  MatchStatsResponseSchema,
-} from "@/lib/core/schemas";
-import { normalizeApiError, unwrap, validatedGet } from "@/lib/core/api";
+  matchHistoryDetailedQueryOptions,
+  matchHistoryStatsQueryOptions,
+} from "../matches-query";
 import { useDebouncedValue } from "@/lib/core/use-debounced-value";
 import { LG_BREAKPOINT_QUERY, useMediaQuery } from "@/lib/core/use-media-query";
 import { usePlayerSyncRun } from "@/features/players";
@@ -83,15 +83,7 @@ export function MatchHistory({ puuid, lastUpdated }: MatchHistoryProps) {
   /* eslint-enable react-hooks/set-state-in-effect */
 
   const { data: stats = null } = useQuery({
-    queryKey: ["match-history-stats", puuid, queueQueryParam],
-    queryFn: async () =>
-      unwrap(
-        await validatedGet(
-          MatchStatsResponseSchema,
-          `/matches/player/${puuid}/stats`,
-          { queues: queueQueryParam },
-        ),
-      ),
+    ...matchHistoryStatsQueryOptions(puuid, queueQueryParam),
     enabled: !!puuid && preferencesReady,
     // Not silenced: MatchHistoryErrorCard renders off the detailed query, so a
     // stats-only failure would otherwise show 0W/0L with nothing said.
@@ -106,27 +98,13 @@ export function MatchHistory({ puuid, lastUpdated }: MatchHistoryProps) {
     isPlaceholderData,
     refetch,
   } = useQuery({
-    queryKey: [
-      "matchHistoryDetailed",
+    ...matchHistoryDetailedQueryOptions({
       puuid,
       queueQueryParam,
-      debouncedMatchSearch,
-      currentPage,
+      search: debouncedMatchSearch,
+      page: currentPage,
       pageSize,
-    ],
-    queryFn: async () =>
-      unwrap(
-        await validatedGet(
-          MatchListWithPlayerDataResponseSchema,
-          `/matches/player/${puuid}/detailed`,
-          {
-            queues: queueQueryParam,
-            search: debouncedMatchSearch || undefined,
-            start: (currentPage - 1) * pageSize,
-            count: pageSize,
-          },
-        ),
-      ),
+    }),
     enabled: !!puuid && preferencesReady,
     // MatchHistoryErrorCard below reports this failure inline.
     meta: { silenceErrorToast: true },
