@@ -194,7 +194,7 @@ export function SmurfBoostSettingsDialog() {
     const presets: SmurfBoostPreset[] = presetsQuery.data?.presets ?? [];
 
     body = (
-      <div className="space-y-5">
+      <div className="space-y-4">
         {failure && (
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
@@ -281,7 +281,7 @@ export function SmurfBoostSettingsDialog() {
           not a layout the content is expected to reach. */}
       <DialogContent
         id="smurf-boost-settings"
-        className="max-h-[92vh] max-w-6xl overflow-y-auto"
+        className="max-h-[92vh] max-w-6xl overflow-y-auto p-5"
       >
         <DialogHeader>
           <div className="flex flex-wrap items-center gap-2">

@@ -88,73 +88,83 @@ export function SmurfBoostSettingsThresholds({
             </TabsTrigger>
           ))}
         </TabsList>
-        {GROUPS.map((group, index) => (
-          <TabsContent
-            key={group.value}
-            value={group.value}
-            forceMount
-            className="mt-3 rounded-lg border border-border/60 bg-card/40 p-4 data-[state=inactive]:hidden"
-          >
-            <div
-              id={index === 0 ? "smurf-boost-thresholds-grid" : undefined}
-              data-testid={`smurf-boost-thresholds-${group.value}`}
-              className={`grid gap-x-6 gap-y-4 ${group.columns}`}
+        {/* From `sm` up every group occupies the same grid cell, so the
+            dialog always stands at the tallest group's height: switching
+            tabs must not resize the dialog and move the tab row out from
+            under the pointer. `sm:...block` overrides the `hidden`
+            attribute Radix puts on an inactive panel; `invisible` then
+            hides it while its layout keeps holding the height. On a phone
+            the dialog scrolls anyway, so an inactive group stays fully
+            hidden rather than padding every tab to the tallest one. */}
+        <div className="sm:grid">
+          {GROUPS.map((group, index) => (
+            <TabsContent
+              key={group.value}
+              value={group.value}
+              forceMount
+              className="mt-2 block rounded-lg border border-border/60 bg-card/40 p-3 data-[state=inactive]:hidden sm:col-start-1 sm:row-start-1 sm:data-[state=inactive]:block sm:data-[state=inactive]:invisible"
             >
-              {THRESHOLD_FIELDS.filter((field) =>
-                group.match.test(field.name),
-              ).map((field) => (
-                <div key={field.name} className="space-y-1">
-                  <Label htmlFor={`smurf-boost-${field.name}`}>
-                    {field.label}
-                  </Label>
-                  <Input
-                    id={`smurf-boost-${field.name}`}
-                    type="number"
-                    inputMode="decimal"
-                    step={field.integer ? 1 : 0.01}
-                    min={field.min}
-                    max={field.max}
-                    disabled={busy}
-                    aria-invalid={Boolean(
-                      errors[field.name] ??
-                      (crossError && CROSS_FIELD_NAMES.includes(field.name)),
-                    )}
-                    aria-describedby={[
-                      `smurf-boost-${field.name}-help`,
-                      errors[field.name]
-                        ? `smurf-boost-${field.name}-error`
-                        : "",
-                      crossError && CROSS_FIELD_NAMES.includes(field.name)
-                        ? "smurf-boost-cross-error"
-                        : "",
-                    ]
-                      .filter(Boolean)
-                      .join(" ")}
-                    value={values[field.name]}
-                    onChange={(event) =>
-                      onChange(field.name, event.target.value)
-                    }
-                  />
-                  <p
-                    id={`smurf-boost-${field.name}-help`}
-                    className="text-sm leading-snug text-muted-foreground"
-                  >
-                    {field.explanation} Allowed: {field.min} to {field.max}.
-                  </p>
-                  {errors[field.name] && (
+              <div
+                id={index === 0 ? "smurf-boost-thresholds-grid" : undefined}
+                data-testid={`smurf-boost-thresholds-${group.value}`}
+                className={`grid gap-x-6 gap-y-3 ${group.columns}`}
+              >
+                {THRESHOLD_FIELDS.filter((field) =>
+                  group.match.test(field.name),
+                ).map((field) => (
+                  <div key={field.name} className="space-y-1">
+                    <Label htmlFor={`smurf-boost-${field.name}`}>
+                      {field.label}
+                    </Label>
+                    <Input
+                      id={`smurf-boost-${field.name}`}
+                      type="number"
+                      inputMode="decimal"
+                      step={field.integer ? 1 : 0.01}
+                      min={field.min}
+                      max={field.max}
+                      disabled={busy}
+                      aria-invalid={Boolean(
+                        errors[field.name] ??
+                        (crossError && CROSS_FIELD_NAMES.includes(field.name)),
+                      )}
+                      aria-describedby={[
+                        `smurf-boost-${field.name}-help`,
+                        errors[field.name]
+                          ? `smurf-boost-${field.name}-error`
+                          : "",
+                        crossError && CROSS_FIELD_NAMES.includes(field.name)
+                          ? "smurf-boost-cross-error"
+                          : "",
+                      ]
+                        .filter(Boolean)
+                        .join(" ")}
+                      value={values[field.name]}
+                      onChange={(event) =>
+                        onChange(field.name, event.target.value)
+                      }
+                    />
                     <p
-                      id={`smurf-boost-${field.name}-error`}
-                      role="alert"
-                      className="text-sm text-destructive"
+                      id={`smurf-boost-${field.name}-help`}
+                      className="text-sm leading-snug text-muted-foreground"
                     >
-                      {errors[field.name]}
+                      {field.explanation} Allowed: {field.min} to {field.max}.
                     </p>
-                  )}
-                </div>
-              ))}
-            </div>
-          </TabsContent>
-        ))}
+                    {errors[field.name] && (
+                      <p
+                        id={`smurf-boost-${field.name}-error`}
+                        role="alert"
+                        className="text-sm text-destructive"
+                      >
+                        {errors[field.name]}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </TabsContent>
+          ))}
+        </div>
       </Tabs>
       {crossError && (
         <p

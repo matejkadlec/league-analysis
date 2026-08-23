@@ -58,7 +58,7 @@ export function SmurfBoostSettingsPresets({
                   {presetLabel(preset.name)}
                   {active && " — in use"}
                 </span>
-                <span className="mt-1 block text-sm text-muted-foreground">
+                <span className="mt-1 block text-sm leading-snug text-muted-foreground">
                   {presetDescription(preset.name)}
                 </span>
               </button>

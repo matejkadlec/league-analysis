@@ -266,6 +266,15 @@ test("renders the page at the sizes the layout was specified in", async ({
     dialogScroll.clientHeight,
   );
 
+  // And that height is the same on every tab: all three groups occupy one
+  // grid cell, so a shorter group must not shrink the dialog and move the
+  // tab row out from under the pointer between clicks.
+  const dialogHeight = async () =>
+    (await page.locator("#smurf-boost-settings").boundingBox())!.height;
+  const tallestTabHeight = await dialogHeight();
+  await page.getByRole("tab", { name: "Games Compared" }).click();
+  expect(await dialogHeight()).toBe(tallestTabHeight);
+
   await page.keyboard.press("Escape");
   await expect(page.locator("#smurf-boost-settings")).toHaveCount(0);
 
