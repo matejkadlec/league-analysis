@@ -22,12 +22,9 @@ import {
   ChampionStatsCard,
   RecentPerformanceCard,
   RoleStatsCard,
+  championStatsQueryOptions,
+  laneStatsQueryOptions,
 } from "@/features/profile";
-import { unwrap, validatedGet } from "@/lib/core/api";
-import {
-  ChampionStatsResponseSchema,
-  LaneStatsResponseSchema,
-} from "@/lib/core/schemas";
 
 const PLAYER_OVERVIEW_NAV_ITEMS: SectionQuickNavigationItem[] = [
   { label: "Player Summary", anchor: "#player-summary" },
@@ -58,29 +55,11 @@ function PlayerOverviewContent({ puuid }: { puuid: string }) {
     error: playerError,
   } = useQuery(playerQueryOptions(puuid));
   const { data: championStats = null, isLoading: isChampionLoading } = useQuery(
-    {
-      queryKey: ["champion-stats", puuid, RANKED_SOLO_QUEUE_ID],
-      queryFn: async () =>
-        unwrap(
-          await validatedGet(
-            ChampionStatsResponseSchema,
-            `/matches/player/${puuid}/champion-stats`,
-            { queues: String(RANKED_SOLO_QUEUE_ID) },
-          ),
-        ),
-    },
+    championStatsQueryOptions(puuid),
   );
-  const { data: laneStats = null, isLoading: isLaneLoading } = useQuery({
-    queryKey: ["lane-stats", puuid, RANKED_SOLO_QUEUE_ID],
-    queryFn: async () =>
-      unwrap(
-        await validatedGet(
-          LaneStatsResponseSchema,
-          `/matches/player/${puuid}/lane-stats`,
-          { queues: String(RANKED_SOLO_QUEUE_ID) },
-        ),
-      ),
-  });
+  const { data: laneStats = null, isLoading: isLaneLoading } = useQuery(
+    laneStatsQueryOptions(puuid),
+  );
 
   if (playerError) {
     return (
