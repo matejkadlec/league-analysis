@@ -553,11 +553,16 @@ class MatchmakingAnalysisService:
     async def _ensure_spine_matches_ready(
         self, puuid: str, created_at: datetime, spine_match_ids: list[str]
     ) -> bool:
-        spine_in_db_count = 0
+        # One batch read answers "already fully analyzed" for the whole
+        # spine; only the misses cost a rate-limited API fetch.
+        already_analyzed = await fully_analyzed_match_ids(self.db, spine_match_ids)
+        spine_in_db_count = len(already_analyzed)
         for mid in spine_match_ids:
-            was_in_db = await self._ensure_match_in_db(mid)
-            if was_in_db:
-                spine_in_db_count += 1
+            if mid in already_analyzed:
+                continue
+            dto = await self._api_fetch_match(mid)
+            if dto:
+                await self._store_fetched_match(dto)
 
         first_participants = await self._get_match_participants(spine_match_ids[0])
         if not any(p == puuid for p, _ in first_participants):
@@ -923,25 +928,6 @@ class MatchmakingAnalysisService:
             )
         )
         return result.scalar_one_or_none()
-
-    async def _ensure_match_in_db(self, match_id: str) -> bool:
-        """Ensure match exists in DB with fully_analyzed=True.
-
-        - Already fully analyzed → skip (no API call)
-        - Exists but not fully analyzed → re-fetch and update
-        - Not in DB → fetch and insert
-
-        Returns True if match was already in DB, False if API call was needed.
-        """
-
-        if match_id in await fully_analyzed_match_ids(self.db, [match_id]):
-            return True
-
-        # Need API call — use rate limiter
-        dto = await self._api_fetch_match(match_id)
-        if dto:
-            await self._store_fetched_match(dto)
-        return False
 
     async def _store_fetched_match(self, match_dto: MatchDTO) -> None:
         """Persist an API-fetched match only while cleanup is inactive."""
