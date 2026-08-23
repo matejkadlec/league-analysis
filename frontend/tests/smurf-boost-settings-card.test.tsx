@@ -34,7 +34,7 @@ vi.mock("@/features/smurf-boost/smurf-boost-api", () => ({
 
 vi.mock("sonner", () => ({ toast }));
 
-import { SmurfBoostSettingsCard } from "../features/smurf-boost/components/smurf-boost-settings-card";
+import { SmurfBoostSettingsDialog } from "../features/smurf-boost/components/smurf-boost-settings-card";
 import { THRESHOLD_FIELDS } from "../features/smurf-boost/smurf-boost-settings";
 
 /** The Conservative preset exactly as the live API emits it. */
@@ -91,9 +91,12 @@ function preferences(overrides: Record<string, unknown> = {}) {
   ];
 }
 
-function renderCard() {
-  const { queryClient } = renderWithQueryClient(
-    <SmurfBoostSettingsCard />,
+/** Renders the trigger and opens the dialog, where every setting now lives. */
+async function renderCard() {
+  const { queryClient } = renderWithQueryClient(<SmurfBoostSettingsDialog />);
+  const user = userEvent.setup();
+  await user.click(
+    screen.getByRole("button", { name: /Detection Settings/ }),
   );
   return queryClient;
 }
@@ -136,7 +139,7 @@ describe("SmurfBoostSettingsCard", () => {
 
 
   it("offers every configurable threshold with its allowed range", async () => {
-    renderCard();
+    await renderCard();
 
     await waitFor(() =>
       expect(screen.getByLabelText("Recent games compared")).toBeTruthy(),
@@ -160,7 +163,7 @@ describe("SmurfBoostSettingsCard", () => {
   });
 
   it("marks the preset the stored settings match", async () => {
-    renderCard();
+    await renderCard();
 
     await waitFor(() =>
       expect(screen.getByTestId("smurf-boost-preset-conservative")).toBeTruthy(),
@@ -191,7 +194,7 @@ describe("SmurfBoostSettingsCard", () => {
       },
     });
     const user = userEvent.setup();
-    renderCard();
+    await renderCard();
 
     await waitFor(() =>
       expect(screen.getByTestId("smurf-boost-preset-sensitive")).toBeTruthy(),
@@ -215,7 +218,7 @@ describe("SmurfBoostSettingsCard", () => {
 
   it("refuses a value outside the range the backend enforces", async () => {
     const user = userEvent.setup();
-    renderCard();
+    await renderCard();
 
     await waitFor(() =>
       expect(screen.getByLabelText("B3 share counted as a tail")).toBeTruthy(),
@@ -239,7 +242,7 @@ describe("SmurfBoostSettingsCard", () => {
 
   it("refuses a set the backend's cross-field rule would reject", async () => {
     const user = userEvent.setup();
-    renderCard();
+    await renderCard();
 
     await waitFor(() =>
       expect(screen.getByLabelText("Recent games compared")).toBeTruthy(),
@@ -276,7 +279,7 @@ describe("SmurfBoostSettingsCard", () => {
       },
     });
     const user = userEvent.setup();
-    renderCard();
+    await renderCard();
 
     await waitFor(() =>
       expect(screen.getByLabelText("A1 performance step")).toBeTruthy(),
@@ -301,7 +304,7 @@ describe("SmurfBoostSettingsCard", () => {
     // One threshold legitimately allows zero, so `Number("")` would make an
     // empty field look like a valid setting and save it.
     const user = userEvent.setup();
-    renderCard();
+    await renderCard();
 
     await waitFor(() =>
       expect(screen.getByLabelText("B1 performance treated as flat")).toBeTruthy(),
@@ -325,7 +328,7 @@ describe("SmurfBoostSettingsCard", () => {
 
   it("does not write an override for an edit that changes nothing", async () => {
     const user = userEvent.setup();
-    renderCard();
+    await renderCard();
 
     await waitFor(() =>
       expect(screen.getByLabelText("Recent games compared")).toBeTruthy(),
@@ -357,7 +360,7 @@ describe("SmurfBoostSettingsCard", () => {
 
   it("points assistive technology at both sides of the cross-field rule", async () => {
     const user = userEvent.setup();
-    renderCard();
+    await renderCard();
 
     await waitFor(() =>
       expect(screen.getByLabelText("Recent games compared")).toBeTruthy(),
@@ -390,7 +393,7 @@ describe("SmurfBoostSettingsCard", () => {
       },
     });
     const user = userEvent.setup();
-    renderCard();
+    await renderCard();
 
     await waitFor(() =>
       expect(screen.getByLabelText("Recent games compared")).toBeTruthy(),
@@ -420,7 +423,7 @@ describe("SmurfBoostSettingsCard", () => {
       success: false,
       error: { message: "boom", kind: "server", status: 500 },
     });
-    renderCard();
+    await renderCard();
 
     await waitFor(() =>
       expect(
@@ -436,7 +439,7 @@ describe("SmurfBoostSettingsCard", () => {
       success: false,
       error: { message: "boom", kind: "server", status: 500 },
     });
-    renderCard();
+    await renderCard();
 
     await waitFor(() =>
       expect(

@@ -44,11 +44,17 @@ test("runs a comparison and reports both families without accusing anyone", asyn
   );
 
   await expect(page.locator("#smurf-boost-explanation")).toBeVisible();
-  await expect(page.locator("#smurf-boost-settings")).toBeVisible();
+
+  // The settings live behind a button now, not in the page flow.
+  await expect(page.locator("#smurf-boost-settings")).toHaveCount(0);
+  await page
+    .getByRole("button", { name: "Detection Settings", exact: true })
+    .click();
 
   // The stored settings match the shipped preset, and every threshold is
   // offered with the range the backend enforces.
   const settingsCard = page.locator("#smurf-boost-settings");
+  await expect(settingsCard).toBeVisible();
   await expect(settingsCard.getByText("Shipped defaults")).toBeVisible();
   await expect(
     page.getByTestId("smurf-boost-preset-conservative"),
@@ -81,6 +87,10 @@ test("runs a comparison and reports both families without accusing anyone", asyn
   await page.getByRole("button", { name: "Reset to defaults" }).click();
   await expect(settingsCard.getByText("Shipped defaults")).toBeVisible();
   await expect(page.getByLabel("Recent games compared")).toHaveValue("20");
+
+  // Closing the dialog removes the settings from the page entirely.
+  await page.keyboard.press("Escape");
+  await expect(settingsCard).toHaveCount(0);
 
   const runCard = page.locator("#smurf-boost-run");
   await expect(runCard).toBeVisible();
@@ -197,6 +207,11 @@ test("renders the page at the sizes the layout was specified in", async ({
   const fontSize = (locator: ReturnType<typeof page.locator>) =>
     locator.evaluate((element) => getComputedStyle(element).fontSize);
 
+  // The settings live in a dialog; open it before measuring anything inside.
+  await page
+    .getByRole("button", { name: "Detection Settings", exact: true })
+    .click();
+
   // Muted helper copy was 12px against a dark background, which is the whole
   // complaint the readability ticket opens with. These are measured rather
   // than asserted as class names: a utility that stops resolving still leaves
@@ -229,6 +244,9 @@ test("renders the page at the sizes the layout was specified in", async ({
         getComputedStyle(element).gridTemplateColumns.split(" ").length,
     );
   expect(columns).toBe(3);
+
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#smurf-boost-settings")).toHaveCount(0);
 
   // Games Comparison takes half the content width, and the other half is left
   // empty on purpose.
@@ -345,6 +363,16 @@ test("has no WCAG A/AA violations, before or after a comparison", async ({
   };
 
   await scan("before the comparison");
+
+  // The settings form moved into a dialog, so it needs its own pass -- a
+  // scan of the closed page never reaches it.
+  await page
+    .getByRole("button", { name: "Detection Settings", exact: true })
+    .click();
+  await expect(page.locator("#smurf-boost-settings")).toBeVisible();
+  await scan("with the settings dialog open");
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#smurf-boost-settings")).toHaveCount(0);
 
   await page.getByRole("button", { name: "Run the comparison" }).click();
   await expect(page.locator("#smurf-boost-result")).toBeVisible();
