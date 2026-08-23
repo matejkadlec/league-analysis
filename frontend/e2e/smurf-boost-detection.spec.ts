@@ -44,11 +44,17 @@ test("runs a comparison and reports both families without accusing anyone", asyn
   );
 
   await expect(page.locator("#smurf-boost-explanation")).toBeVisible();
-  await expect(page.locator("#smurf-boost-settings")).toBeVisible();
+
+  // The settings live behind a button now, not in the page flow.
+  await expect(page.locator("#smurf-boost-settings")).toHaveCount(0);
+  await page
+    .getByRole("button", { name: "Detection Settings", exact: true })
+    .click();
 
   // The stored settings match the shipped preset, and every threshold is
   // offered with the range the backend enforces.
   const settingsCard = page.locator("#smurf-boost-settings");
+  await expect(settingsCard).toBeVisible();
   await expect(settingsCard.getByText("Shipped defaults")).toBeVisible();
   await expect(
     page.getByTestId("smurf-boost-preset-conservative"),
@@ -56,7 +62,9 @@ test("runs a comparison and reports both families without accusing anyone", asyn
   await expect(page.getByLabel("Recent games compared")).toHaveValue("20");
   await expect(page.getByText("Allowed: 10 to 50.")).toBeVisible();
 
-  // A value the backend would reject never reaches it.
+  // A value the backend would reject never reaches it. The field lives in
+  // the Playing Pattern Change tab, so reaching it means opening that tab.
+  await page.getByRole("tab", { name: "Playing Pattern Change" }).click();
   await page.getByLabel("B3 share counted as a tail").fill("0.9");
   await expect(
     page.getByText("B3 share counted as a tail must be between 0.15 and 0.4."),
@@ -81,6 +89,10 @@ test("runs a comparison and reports both families without accusing anyone", asyn
   await page.getByRole("button", { name: "Reset to defaults" }).click();
   await expect(settingsCard.getByText("Shipped defaults")).toBeVisible();
   await expect(page.getByLabel("Recent games compared")).toHaveValue("20");
+
+  // Closing the dialog removes the settings from the page entirely.
+  await page.keyboard.press("Escape");
+  await expect(settingsCard).toHaveCount(0);
 
   const runCard = page.locator("#smurf-boost-run");
   await expect(runCard).toBeVisible();
@@ -197,6 +209,11 @@ test("renders the page at the sizes the layout was specified in", async ({
   const fontSize = (locator: ReturnType<typeof page.locator>) =>
     locator.evaluate((element) => getComputedStyle(element).fontSize);
 
+  // The settings live in a dialog; open it before measuring anything inside.
+  await page
+    .getByRole("button", { name: "Detection Settings", exact: true })
+    .click();
+
   // Muted helper copy was 12px against a dark background, which is the whole
   // complaint the readability ticket opens with. These are measured rather
   // than asserted as class names: a utility that stops resolving still leaves
@@ -220,15 +237,46 @@ test("renders the page at the sizes the layout was specified in", async ({
     expect(await fontSize(section), heading).toBe("16px");
   }
 
-  // Three threshold columns at desktop width. Counting the resolved template
-  // catches a breakpoint that never applies, which a class-name check cannot.
-  const columns = await page
-    .locator("#smurf-boost-thresholds-grid")
-    .evaluate(
-      (element) =>
-        getComputedStyle(element).gridTemplateColumns.split(" ").length,
-    );
-  expect(columns).toBe(3);
+  // Counting the resolved template catches a breakpoint that never applies,
+  // which a class-name check cannot. Each threshold group sizes its own grid
+  // so every tab fits without scrolling the dialog: the two window fields
+  // sit side by side, and the seven-field Playing Pattern group spreads
+  // across four columns at this width.
+  const columnsOf = (testId: string) =>
+    page
+      .getByTestId(testId)
+      .evaluate(
+        (element) =>
+          getComputedStyle(element).gridTemplateColumns.split(" ").length,
+      );
+  expect(await columnsOf("smurf-boost-thresholds-windows")).toBe(2);
+  await page.getByRole("tab", { name: "Playing Pattern Change" }).click();
+  expect(await columnsOf("smurf-boost-thresholds-pattern")).toBe(4);
+
+  // The point of the grouped layout: with its tallest tab open, the dialog
+  // holds everything at desktop size without scrolling itself. Measured on
+  // the scroll container, not asserted from a class.
+  const dialogScroll = await page
+    .locator("#smurf-boost-settings")
+    .evaluate((element) => ({
+      scrollHeight: element.scrollHeight,
+      clientHeight: element.clientHeight,
+    }));
+  expect(dialogScroll.scrollHeight).toBeLessThanOrEqual(
+    dialogScroll.clientHeight,
+  );
+
+  // And that height is the same on every tab: all three groups occupy one
+  // grid cell, so a shorter group must not shrink the dialog and move the
+  // tab row out from under the pointer between clicks.
+  const dialogHeight = async () =>
+    (await page.locator("#smurf-boost-settings").boundingBox())!.height;
+  const tallestTabHeight = await dialogHeight();
+  await page.getByRole("tab", { name: "Games Compared" }).click();
+  expect(await dialogHeight()).toBe(tallestTabHeight);
+
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#smurf-boost-settings")).toHaveCount(0);
 
   // Games Comparison takes half the content width, and the other half is left
   // empty on purpose.
@@ -345,6 +393,16 @@ test("has no WCAG A/AA violations, before or after a comparison", async ({
   };
 
   await scan("before the comparison");
+
+  // The settings form moved into a dialog, so it needs its own pass -- a
+  // scan of the closed page never reaches it.
+  await page
+    .getByRole("button", { name: "Detection Settings", exact: true })
+    .click();
+  await expect(page.locator("#smurf-boost-settings")).toBeVisible();
+  await scan("with the settings dialog open");
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#smurf-boost-settings")).toHaveCount(0);
 
   await page.getByRole("button", { name: "Run the comparison" }).click();
   await expect(page.locator("#smurf-boost-result")).toBeVisible();

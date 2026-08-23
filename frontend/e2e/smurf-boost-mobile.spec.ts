@@ -106,6 +106,11 @@ test.describe("smurf and boost detection on a phone", () => {
     await page.goto(`/rank-manipulation?puuid=${PUUID}`);
     await acceptCookieBanner(page);
 
+    // The settings live in a dialog, so the phone check opens it first.
+    await page
+      .getByRole("button", { name: "Detection Settings", exact: true })
+      .click();
+
     const field = page.getByLabel("Recent games compared");
     await expect(field).toBeVisible();
 

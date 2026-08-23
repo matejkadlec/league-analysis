@@ -48,7 +48,7 @@ export function SmurfBoostSettingsPresets({
                 aria-pressed={active}
                 disabled={busy || active}
                 onClick={() => onSelect(writableSettings(preset.thresholds))}
-                className={`rounded-md border p-3 text-left transition-colors ${
+                className={`flex flex-col gap-1 rounded-md border p-3 text-left transition-colors ${
                   active
                     ? "border-primary bg-primary/10"
                     : "border-border/60 hover:border-primary/60"
@@ -58,7 +58,7 @@ export function SmurfBoostSettingsPresets({
                   {presetLabel(preset.name)}
                   {active && " — in use"}
                 </span>
-                <span className="mt-1 block text-sm text-muted-foreground">
+                <span className="mt-1 block text-sm leading-snug text-muted-foreground">
                   {presetDescription(preset.name)}
                 </span>
               </button>

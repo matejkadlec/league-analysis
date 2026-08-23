@@ -14,15 +14,15 @@ import { Label } from "@/components/ui/label";
 import {
   SmurfBoostDetection,
   SmurfBoostExplanationCard,
-  SmurfBoostSettingsCard,
+  SmurfBoostSettingsDialog,
 } from "@/features/smurf-boost";
 
 // `Result` is listed unconditionally on purpose: `SectionQuickNavigation`
 // keeps only the entries whose section is actually on the page, so the item
-// appears with the result card and not before it.
+// appears with the result card and not before it. Detection Settings is not
+// here because it is a dialog now, not a section to scroll to.
 const RANK_MANIPULATION_NAV_ITEMS: SectionQuickNavigationItem[] = [
   { label: "What This Page Does", anchor: "#smurf-boost-explanation" },
-  { label: "Detection Settings", anchor: "#smurf-boost-settings" },
   { label: "Games Comparison", anchor: "#smurf-boost-run" },
   { label: "Result", anchor: "#smurf-boost-result" },
 ];
@@ -34,8 +34,8 @@ const PLAYER_SEARCH_ID = "rank-manipulation-player-search";
 function RankManipulationSkeleton() {
   return (
     <div className="space-y-6">
+      <Skeleton className="h-9 w-44" />
       <Skeleton className="h-72" />
-      <Skeleton className="h-56" />
     </div>
   );
 }
@@ -62,7 +62,14 @@ function RankManipulationContent() {
             <RankManipulationSkeleton />
           ) : (
             <>
-              <SmurfBoostSettingsCard />
+              {/* The settings live in a dialog, so the page flow is header,
+                  explanation, comparison -- with the trigger sitting right
+                  above the run card it configures. Left-aligned on purpose:
+                  the run card takes the left half, and the right edge is
+                  where the quick-navigation rail floats. */}
+              <div>
+                <SmurfBoostSettingsDialog />
+              </div>
               {/* Rendered with no player too, rather than swapped for a
                   "select a player" card. That card sends people to the sidebar
                   search, which is a current-player surface: on a route that is
