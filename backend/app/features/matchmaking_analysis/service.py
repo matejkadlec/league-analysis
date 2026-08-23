@@ -81,6 +81,18 @@ ACTIVE_ANALYSIS_STATUSES = ("pending", "in_progress", "waiting_rate_limit")
 
 MATCHES_TO_ANALYZE = 10
 MATCHES_FOR_WINRATE = 10
+MIN_MATCHES_REQUIRED = 10
+
+# Theoretical request maximum with an empty database: 1 call for the current
+# player's spine IDs, one match-ID list per other player, one match detail per
+# spine match, and each other player's remaining match details (1 of each
+# player's matches is the already-known spine match).
+_OTHER_PLAYERS = MATCHES_TO_ANALYZE * 9
+THEORETICAL_MAX_REQUESTS = (
+    (1 + _OTHER_PLAYERS)
+    + MATCHES_TO_ANALYZE
+    + _OTHER_PLAYERS * max(1, MATCHES_FOR_WINRATE - 1)
+)
 
 
 @dataclass(frozen=True)
@@ -120,53 +132,19 @@ def _team_id_for_player(
     return None
 
 
-def _append_side_winrate(
-    team_wrs: list[float],
-    enemy_wrs: list[float],
-    wr: float | None,
-    team_id: int,
-    target_team: int,
-) -> None:
-    if wr is None:
-        return
-    if team_id == target_team:
-        team_wrs.append(wr)
-    else:
-        enemy_wrs.append(wr)
-
-
-def _append_match_side_averages(
-    team_avgs: list[float],
-    enemy_avgs: list[float],
-    result: dict[str, list[float]],
-) -> None:
-    if result["team"]:
-        team_avgs.append(fmean(result["team"]))
-    if result["enemy"]:
-        enemy_avgs.append(fmean(result["enemy"]))
-
-
 def _build_completion_results(
     team_avgs: list[float],
     enemy_avgs: list[float],
     *,
-    api_calls_made: int = 0,
-    matches_analyzed: int = 0,
-) -> tuple[MatchmakingAnalysisResultsJSON, int]:
+    matches_analyzed: int,
+) -> MatchmakingAnalysisResultsJSON:
     """Summarise a finished run, or refuse to call an empty one finished.
 
-    Both averages used to fall back to 0.0, and the two counts were the
-    constants the run *would* have reached had everything loaded. So a run
-    that measured nothing -- every spine match failing to load returns
-    `None` from `_api_fetch_match` for any non-auth Riot error -- still
-    wrote `completed`, stamped `last_matchmaking_analysis`, and rendered
-    "0.0% vs 0.0%, based on 910 ranked matches" as a fair-matchmaking
-    verdict. `_run_analysis_task` already persists a `failed` row for a
-    raised error, which is what an unmeasured run is.
-
-    Returns the results payload and the request-savings estimate; the
-    estimate used to be written to service state from inside this function,
-    which hid a side effect in what is otherwise plain arithmetic.
+    A run that measured nothing is a failure, not a 0.0%-vs-0.0% verdict:
+    `_run_analysis_task` already persists a `failed` row for a raised error.
+    `matches_analyzed` is required and measured, not expected -- the UI prints
+    it as the basis of the verdict, and a shallow database reaches nothing
+    like the theoretical maximum.
     """
     if not team_avgs or not enemy_avgs:
         raise MatchmakingAnalysisRuntimeError(
@@ -174,34 +152,11 @@ def _build_completion_results(
             "No ranked match history could be read for this lobby. "
             "Please try again later.",
         )
-    team_avg = fmean(team_avgs)
-    enemy_avg = fmean(enemy_avgs)
-
-    expected_other_players = MATCHES_TO_ANALYZE * 9
-    expected_match_details_per_other = max(1, MATCHES_FOR_WINRATE - 1)
-
-    # Theoretical maximum without DB:
-    #   - 1 call for current player's spine IDs
-    #   - expected_other_players calls for other players' match IDs
-    #   - MATCHES_TO_ANALYZE match details for spine matches
-    #   - expected_other_players * (MATCHES_FOR_WINRATE - 1) additional
-    #     match details (1 of each player's 10 matches is the already-known
-    #     spine match)
-    match_list_calls = 1 + expected_other_players
-    match_detail_calls = MATCHES_TO_ANALYZE + (
-        expected_other_players * expected_match_details_per_other
-    )
-    theoretical_max = match_list_calls + match_detail_calls
-    requests_saved = max(theoretical_max - api_calls_made, 0)
-
-    results: MatchmakingAnalysisResultsJSON = {
-        "team_avg_winrate": round(team_avg, 4),
-        "enemy_avg_winrate": round(enemy_avg, 4),
-        # Measured, not expected: the UI prints these as the basis of the
-        # verdict, and a shallow database reaches nothing like 910.
+    return {
+        "team_avg_winrate": round(fmean(team_avgs), 4),
+        "enemy_avg_winrate": round(fmean(enemy_avgs), 4),
         "matches_analyzed": matches_analyzed,
     }
-    return results, requests_saved
 
 
 class MatchmakingAnalysisService:
@@ -249,8 +204,6 @@ class MatchmakingAnalysisService:
         )
 
     MAX_RATE_LIMIT_ATTEMPTS = 10
-
-    MIN_MATCHES_REQUIRED = 10
 
     def __init__(self, db: AsyncSession, riot_client: RiotAPIClient, user_id: int):
         self.db = db
@@ -637,13 +590,13 @@ class MatchmakingAnalysisService:
             required=True,
         )
         found = len(spine_match_ids) if spine_match_ids else 0
-        if found < self.MIN_MATCHES_REQUIRED:
+        if found < MIN_MATCHES_REQUIRED:
             await self._complete_with_error(
                 puuid,
                 created_at,
                 "Player doesn't have enough ranked matches for this analysis. "
                 f"Found {found}, "
-                f"need {self.MIN_MATCHES_REQUIRED}.",
+                f"need {MIN_MATCHES_REQUIRED}.",
                 error_code="not_enough_matches",
             )
             return None
@@ -723,7 +676,10 @@ class MatchmakingAnalysisService:
                 puuid, created_at, match_id, match_anchor_seconds
             )
             if result:
-                _append_match_side_averages(team_avgs, enemy_avgs, result)
+                if result["team"]:
+                    team_avgs.append(fmean(result["team"]))
+                if result["enemy"]:
+                    enemy_avgs.append(fmean(result["enemy"]))
 
         return team_avgs, enemy_avgs
 
@@ -734,12 +690,10 @@ class MatchmakingAnalysisService:
         team_avgs: list[float],
         enemy_avgs: list[float],
     ) -> None:
-        results, self.requests_saved = _build_completion_results(
-            team_avgs,
-            enemy_avgs,
-            api_calls_made=self.api_calls_made,
-            matches_analyzed=self.matches_analyzed,
+        results = _build_completion_results(
+            team_avgs, enemy_avgs, matches_analyzed=self.matches_analyzed
         )
+        self.requests_saved = max(THEORETICAL_MAX_REQUESTS - self.api_calls_made, 0)
         now = datetime.now(UTC)
         await ensure_riot_writer_maintenance_is_inactive(self.db)
         await self.db.execute(
@@ -807,7 +761,8 @@ class MatchmakingAnalysisService:
             wr = await self._cached_player_winrate(
                 p_puuid, end_time_seconds, analysis_puuid, analysis_created_at
             )
-            _append_side_winrate(team_wrs, enemy_wrs, wr, team_id, target_team)
+            if wr is not None:
+                (team_wrs if team_id == target_team else enemy_wrs).append(wr)
 
         return {"team": team_wrs, "enemy": enemy_wrs}
 
