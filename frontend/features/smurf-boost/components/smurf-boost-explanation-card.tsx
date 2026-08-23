@@ -52,7 +52,10 @@ export function SmurfBoostExplanationCard() {
       <CardContent className="space-y-4">
         {/* The whole idea in one glance: two windows of the same player's
             games, older set against newer set. */}
-        <div className="rounded-lg border border-border/60 bg-muted/20 p-4">
+        {/* `muted-foreground` strokes, not the border token: these boxes sit
+            on the card surface the token is tuned against, so the token
+            itself all but disappears here. */}
+        <div className="rounded-lg border border-muted-foreground/35 bg-muted/20 p-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-6">
             <div className="space-y-1.5">
               <p className="text-sm font-medium text-muted-foreground">
@@ -82,7 +85,7 @@ export function SmurfBoostExplanationCard() {
             (family) => (
               <div
                 key={family}
-                className="rounded-md border border-border/60 p-3"
+                className="rounded-md border border-muted-foreground/35 bg-muted/20 p-3"
               >
                 <h4 className="text-sm font-semibold">
                   {FAMILY_TITLES[family]}
