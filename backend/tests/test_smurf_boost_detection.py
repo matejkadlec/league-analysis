@@ -800,6 +800,22 @@ def test_conservative_is_the_shipped_default() -> None:
     assert resolve_thresholds(None) == CONSERVATIVE
 
 
+def test_schema_defaults_are_the_default_preset() -> None:
+    """A fresh account starts exactly on the preset the dropdown calls default.
+
+    The settings write schema repeats the fifteen threshold numbers as field
+    defaults; nothing else ties the two copies together, so a preset tweak in
+    `config.py` without the matching schema edit would silently split what
+    "Conservative" means from what a new account actually gets.
+    """
+    from app.features.settings.schemas import SmurfBoostDetectionMutableSettingsWriteV1
+
+    defaults = SmurfBoostDetectionMutableSettingsWriteV1().model_dump()
+    assert {
+        key: float(defaults[key]) for key in PRESETS[DEFAULT_PRESET]
+    } == CONSERVATIVE
+
+
 def test_stored_settings_override_only_known_numeric_keys() -> None:
     """A malformed stored value must fall back to the default, not propagate."""
     resolved = resolve_thresholds(
