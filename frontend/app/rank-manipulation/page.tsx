@@ -9,12 +9,15 @@ import {
   type SectionQuickNavigationItem,
 } from "@/components/section-quick-navigation";
 import { Skeleton } from "@/components/ui/skeleton";
-import { PlayerSelector, useAnalyzedPlayer } from "@/features/players";
+import {
+  formatRiotId,
+  PlayerSelector,
+  useAnalyzedPlayer,
+} from "@/features/players";
 import { Label } from "@/components/ui/label";
 import {
   SmurfBoostDetection,
   SmurfBoostExplanationCard,
-  SmurfBoostSettingsDialog,
 } from "@/features/smurf-boost";
 
 // `Result` is listed unconditionally on purpose: `SectionQuickNavigation`
@@ -22,9 +25,9 @@ import {
 // appears with the result card and not before it. Detection Settings is not
 // here because it is a dialog now, not a section to scroll to.
 const RANK_MANIPULATION_NAV_ITEMS: SectionQuickNavigationItem[] = [
-  { label: "What This Page Does", anchor: "#smurf-boost-explanation" },
   { label: "Games Comparison", anchor: "#smurf-boost-run" },
   { label: "Result", anchor: "#smurf-boost-result" },
+  { label: "What This Page Does", anchor: "#smurf-boost-explanation" },
 ];
 
 // One place, because the label's `htmlFor` and the control's `id` are only a
@@ -34,7 +37,6 @@ const PLAYER_SEARCH_ID = "rank-manipulation-player-search";
 function RankManipulationSkeleton() {
   return (
     <div className="space-y-6">
-      <Skeleton className="h-9 w-44" />
       <Skeleton className="h-72" />
     </div>
   );
@@ -56,20 +58,10 @@ function RankManipulationContent() {
             </p>
           </PageHeader>
 
-          <SmurfBoostExplanationCard />
-
           {isLoading ? (
             <RankManipulationSkeleton />
           ) : (
             <>
-              {/* The settings live in a dialog, so the page flow is header,
-                  explanation, comparison -- with the trigger sitting right
-                  above the run card it configures. Left-aligned on purpose:
-                  the run card takes the left half, and the right edge is
-                  where the quick-navigation rail floats. */}
-              <div>
-                <SmurfBoostSettingsDialog />
-              </div>
               {/* Rendered with no player too, rather than swapped for a
                   "select a player" card. That card sends people to the sidebar
                   search, which is a current-player surface: on a route that is
@@ -82,6 +74,7 @@ function RankManipulationContent() {
               <SmurfBoostDetection
                 key={analyzedPlayer?.puuid ?? "no-player"}
                 puuid={analyzedPlayer?.puuid ?? null}
+                playerName={analyzedPlayer ? formatRiotId(analyzedPlayer) : null}
                 playerSelector={
                   <div className="space-y-1.5">
                     <Label htmlFor={PLAYER_SEARCH_ID}>
@@ -98,6 +91,11 @@ function RankManipulationContent() {
               />
             </>
           )}
+
+          {/* The action first, the reference last: someone who lands here
+              runs a comparison; the explanation waits below for whoever
+              wants the model spelled out. */}
+          <SmurfBoostExplanationCard />
         </div>
       </div>
     </>

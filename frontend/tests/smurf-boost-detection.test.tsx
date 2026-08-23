@@ -162,6 +162,7 @@ function renderCard(puuid: string | null = "test-puuid") {
   const { queryClient } = renderWithQueryClient(
     <SmurfBoostDetection
       puuid={puuid}
+      playerName="Tested Player#EUW"
       playerSelector={<input aria-label="Choose player for comparison" />}
     />,
   );
@@ -172,34 +173,22 @@ function renderCardWithUnmount(puuid = "test-puuid") {
   const { queryClient, unmount } = renderWithQueryClient(
     <SmurfBoostDetection
       puuid={puuid}
+      playerName="Tested Player#EUW"
       playerSelector={<input aria-label="Choose player for comparison" />}
     />,
   );
   return { queryClient, unmount };
 }
 
-/**
- * Every measurement is rendered twice: a table from `sm` up, and stacked blocks
- * below it. There is no CSS here, so both are in the DOM and an unscoped query
- * matches two elements. Assertions about a single measurement name the layout
- * they are checking; `mobileMeasurements` covers the other one.
- */
-function tableMeasurements() {
-  const table = document.querySelector("#smurf-boost-result table");
-  if (!table) {
-    throw new Error("the result card rendered no measurement table");
-  }
-  return within(table as HTMLElement);
-}
-
-function mobileMeasurements() {
+/** The one measurement layout, scoped so page copy cannot satisfy a query. */
+function measurements() {
   const list = document.querySelector(
-    "#smurf-boost-result [data-testid^='smurf-boost-measurements-stacked-']",
+    "#smurf-boost-result [data-testid^='smurf-boost-measurements-']",
   );
   if (!list) {
-    throw new Error("the result card rendered no stacked measurements");
+    throw new Error("the result card rendered no measurements");
   }
-  return within(list as HTMLElement);
+  return within(list.parentElement as HTMLElement);
 }
 
 function runButton() {
@@ -221,9 +210,11 @@ describe("SmurfBoostDetection", () => {
     renderCard();
 
     await waitFor(() =>
-      expect(screen.getByText("Rapid Improvement Pattern")).toBeTruthy(),
+      // Each family title appears twice: on its tab and again as its
+      // panel's heading.
+      expect(screen.getAllByText("Rapid Improvement Pattern").length).toBe(2),
     );
-    expect(screen.getByText("Playing Pattern Change")).toBeTruthy();
+    expect(screen.getAllByText("Playing Pattern Change").length).toBe(2);
 
     // A family reading is one of the five fixed words and nothing else. A digit
     // here would mean the internal weighted sum had reached the screen. A raw
@@ -267,21 +258,18 @@ describe("SmurfBoostDetection", () => {
     });
     renderCard();
 
-    await waitFor(() =>
-      expect(tableMeasurements().getByText("A3")).toBeTruthy(),
-    );
+    await waitFor(() => expect(measurements().getByText("A3")).toBeTruthy());
 
-    for (const layout of [tableMeasurements(), mobileMeasurements()]) {
-      expect(layout.getAllByText("Not available").length).toBe(1);
-      expect(
-        layout.getByText("Only 0 of the recent games were on new champions."),
-      ).toBeTruthy();
-      expect(
-        layout.getByText(
-          "Too few recent games were on champions with little stored history.",
-        ),
-      ).toBeTruthy();
-    }
+    const layout = measurements();
+    expect(layout.getAllByText("Not available").length).toBe(1);
+    expect(
+      layout.getByText("Only 0 of the recent games were on new champions."),
+    ).toBeTruthy();
+    expect(
+      layout.getByText(
+        "Too few recent games were on champions with little stored history.",
+      ),
+    ).toBeTruthy();
   });
 
   it("renders the exact mandated disclaimer", async () => {
@@ -342,8 +330,8 @@ describe("SmurfBoostDetection", () => {
     await waitFor(() =>
       expect(screen.getAllByText("Not enough data").length).toBe(2),
     );
-    expect(screen.getByText("Rapid Improvement Pattern")).toBeTruthy();
-    expect(screen.getByText("Playing Pattern Change")).toBeTruthy();
+    expect(screen.getAllByText("Rapid Improvement Pattern").length).toBe(2);
+    expect(screen.getAllByText("Playing Pattern Change").length).toBe(2);
     expect(screen.getByText("Low confidence")).toBeTruthy();
     expect(screen.getByText(DISCLAIMER)).toBeTruthy();
     // 20 recent plus a 15-game baseline floor is 35, not the 25 the two
@@ -385,17 +373,12 @@ describe("SmurfBoostDetection", () => {
     renderCard();
 
     await waitFor(() =>
-      expect(
-        tableMeasurements().getByText("Other conditions not met"),
-      ).toBeTruthy(),
+      expect(measurements().getByText("Other conditions not met")).toBeTruthy(),
     );
 
-    // Both presentations must reach the same verdict; a stacked block that
-    // still said "Below threshold" would be just as untrue on a phone.
-    for (const layout of [tableMeasurements(), mobileMeasurements()]) {
-      expect(layout.getAllByText("Other conditions not met").length).toBe(1);
-      expect(layout.getAllByText("Below threshold").length).toBe(1);
-    }
+    const layout = measurements();
+    expect(layout.getAllByText("Other conditions not met").length).toBe(1);
+    expect(layout.getAllByText("Below threshold").length).toBe(1);
   });
 
   it("says what each band means, not only what it is called", async () => {

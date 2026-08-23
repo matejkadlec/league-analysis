@@ -144,30 +144,44 @@ test("runs a comparison and reports both families without accusing anyone", asyn
     quickNavigation.getByRole("button", { name: "Result" }),
   ).toBeVisible();
 
-  // Each family carries its own band, and neither is summarised as a number.
-  await expect(result.getByText("Rapid Improvement Pattern")).toBeVisible();
-  await expect(result.getByText("Notable indicators")).toBeVisible();
-  await expect(result.getByText("Playing Pattern Change")).toBeVisible();
-  await expect(result.getByText("No unusual pattern")).toBeVisible();
+  // Each family carries its own band, worded on its tab so both verdicts
+  // stay visible whichever tab is chosen -- and neither is a number. The
+  // accessible name pairs the family with its own reading.
+  await expect(
+    result.getByRole("tab", {
+      name: "Rapid Improvement Pattern Notable indicators",
+    }),
+  ).toBeVisible();
+  await expect(
+    result.getByRole("tab", {
+      name: "Playing Pattern Change No unusual pattern",
+    }),
+  ).toBeVisible();
   await expect(result.getByText("High confidence")).toBeVisible();
 
-  // An area that could not be measured stays visible with its reason. Each
-  // measurement is rendered twice — a table at this width and stacked blocks
-  // below `sm` — so a signal-level assertion names the layout it is checking.
-  const measurements = result.locator("table");
+  // A stored result always says who it describes.
+  await expect(
+    result.getByTestId("smurf-boost-result-player"),
+  ).toHaveText("Comparison#ONE");
+
+  // An area that could not be measured stays visible with its reason, and a
+  // measured area shows its figures beside the drawn meter.
+  const measurements = result.locator(
+    "[data-testid^='smurf-boost-measurements-']",
+  );
+  await expect(measurements).toHaveCount(2);
   await expect(measurements.getByText("Not available")).toBeVisible();
   await expect(
     measurements.getByText("No recent game was on a rarely played champion."),
   ).toBeVisible();
-  // The stacked layout carries the same measurement and stays hidden here.
-  // `toBeHidden` also passes on a locator that matches nothing, so the count
-  // is asserted first — otherwise deleting the stacked layout would read as a
-  // pass.
-  const stacked = result.locator(
-    "[data-testid^='smurf-boost-measurements-stacked-']",
-  );
-  await expect(stacked).toHaveCount(2);
-  await expect(stacked.getByText("Not available")).toBeHidden();
+  await expect(measurements.first().getByText("1.45 / 1.20")).toBeVisible();
+
+  // The other family's measurements sit behind its tab, not lost.
+  await expect(measurements.last().getByText("B1")).toBeHidden();
+  await result
+    .getByRole("tab", { name: "Playing Pattern Change No unusual pattern" })
+    .click();
+  await expect(measurements.last().getByText("B1")).toBeVisible();
 
   await expect(
     result.getByText("Do not use it to accuse anyone.", { exact: false }),

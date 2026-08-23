@@ -21,6 +21,7 @@ import {
 } from "../smurf-boost-query";
 import { MINIMUM_BASELINE_GAMES } from "../smurf-boost-settings";
 import { SmurfBoostResultCard } from "./smurf-boost-result-card";
+import { SmurfBoostSettingsDialog } from "./smurf-boost-settings-card";
 
 // The two statuses the backend uses for a run that has not reached a terminal
 // state. A run is owned by the account that asked for it, so a start returns
@@ -47,6 +48,14 @@ interface SmurfBoostDetectionProps {
    * forget the search.
    */
   puuid: string | null;
+  /**
+   * The analyzed player's `Name#Tag`, or `null` while there is none. The
+   * analysis response carries only a PUUID, and this card is remounted per
+   * player, so the page's analyzed player is the result's player by
+   * construction. Shown on the result so a stored reading always says who
+   * it describes.
+   */
+  playerName: string | null;
   /**
    * The page's local player search, label and all, rendered inside this card
    * above the run action.
@@ -77,6 +86,7 @@ function RunCardSkeleton() {
 
 export function SmurfBoostDetection({
   puuid,
+  playerName,
   playerSelector,
 }: SmurfBoostDetectionProps) {
   const queryClient = useQueryClient();
@@ -201,11 +211,17 @@ export function SmurfBoostDetection({
                 <Search className="h-5 w-5 text-primary" />
                 Games Comparison
               </CardTitle>
-              {latest?.is_stale && (
-                <Badge variant="outline" className="ml-auto">
-                  New games since this comparison
-                </Badge>
-              )}
+              {/* The settings tune the thresholds this run applies, so their
+                  trigger lives on the run card rather than floating on the
+                  page. */}
+              <div className="ml-auto flex items-center gap-2">
+                {latest?.is_stale && (
+                  <Badge variant="outline">
+                    New games since this comparison
+                  </Badge>
+                )}
+                <SmurfBoostSettingsDialog />
+              </div>
             </div>
             <UpdatedStamp
               lastUpdated={completedAt}
@@ -273,6 +289,7 @@ export function SmurfBoostDetection({
       {results && latest && (
         <SmurfBoostResultCard
           results={results}
+          playerName={playerName}
           thresholds={latest.thresholds}
           minimumBaselineGames={MINIMUM_BASELINE_GAMES}
         />
