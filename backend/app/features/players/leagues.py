@@ -1,5 +1,6 @@
-"""Player league model for storing ranked information."""
+"""The League domain primitive: the snapshot table and the rules for taking one."""
 
+from collections.abc import Sequence
 from datetime import datetime
 
 from sqlalchemy import (
@@ -15,6 +16,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
 from app.core.models import Base
+from app.core.riot_api.models import LeagueEntryDTO
 
 
 class PlayerLeague(Base):
@@ -104,3 +106,39 @@ Index("idx_leagues_tier_lp", PlayerLeague.tier, PlayerLeague.league_points)
 
 # `idx_leagues_puuid_created` used to sit here: the primary key spelled again
 # with DESC, which a btree already serves by scanning backwards.
+
+
+def solo_duo_league_entry(
+    league_entries: Sequence[LeagueEntryDTO],
+) -> LeagueEntryDTO | None:
+    """Return the Solo/Duo league entry from a LEAGUE-V4 payload."""
+    return next(
+        (entry for entry in league_entries if entry.queue_type == "RANKED_SOLO_5x5"),
+        None,
+    )
+
+
+def league_snapshot_matches(
+    current_league: PlayerLeague, solo_entry: LeagueEntryDTO
+) -> bool:
+    """Return True when the stored snapshot matches the live Solo/Duo entry."""
+    return (
+        current_league.tier == solo_entry.tier
+        and current_league.rank == solo_entry.rank
+        and current_league.league_points == solo_entry.league_points
+        and current_league.wins == solo_entry.wins
+        and current_league.losses == solo_entry.losses
+    )
+
+
+def player_league_from_entry(puuid: str, solo_entry: LeagueEntryDTO) -> PlayerLeague:
+    """Build an immutable league snapshot from a live Solo/Duo entry."""
+    return PlayerLeague(
+        puuid=puuid,
+        queue_type=solo_entry.queue_type,
+        tier=solo_entry.tier,
+        rank=solo_entry.rank,
+        league_points=solo_entry.league_points,
+        wins=solo_entry.wins,
+        losses=solo_entry.losses,
+    )
