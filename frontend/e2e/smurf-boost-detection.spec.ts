@@ -144,11 +144,19 @@ test("runs a comparison and reports both families without accusing anyone", asyn
     quickNavigation.getByRole("button", { name: "Result" }),
   ).toBeVisible();
 
-  // Each family carries its own band, and neither is summarised as a number.
-  await expect(result.getByText("Rapid Improvement Pattern")).toBeVisible();
-  await expect(result.getByText("Notable indicators")).toBeVisible();
-  await expect(result.getByText("Playing Pattern Change")).toBeVisible();
-  await expect(result.getByText("No unusual pattern")).toBeVisible();
+  // Each family carries its own band, worded on its tab so both verdicts
+  // stay visible whichever tab is chosen -- and neither is a number. The
+  // accessible name pairs the family with its own reading.
+  await expect(
+    result.getByRole("tab", {
+      name: "Rapid Improvement Pattern Notable indicators",
+    }),
+  ).toBeVisible();
+  await expect(
+    result.getByRole("tab", {
+      name: "Playing Pattern Change No unusual pattern",
+    }),
+  ).toBeVisible();
   await expect(result.getByText("High confidence")).toBeVisible();
 
   // An area that could not be measured stays visible with its reason, and a
@@ -162,6 +170,13 @@ test("runs a comparison and reports both families without accusing anyone", asyn
     measurements.getByText("No recent game was on a rarely played champion."),
   ).toBeVisible();
   await expect(measurements.first().getByText("1.45 / 1.20")).toBeVisible();
+
+  // The other family's measurements sit behind its tab, not lost.
+  await expect(measurements.last().getByText("B1")).toBeHidden();
+  await result
+    .getByRole("tab", { name: "Playing Pattern Change No unusual pattern" })
+    .click();
+  await expect(measurements.last().getByText("B1")).toBeVisible();
 
   await expect(
     result.getByText("Do not use it to accuse anyone.", { exact: false }),

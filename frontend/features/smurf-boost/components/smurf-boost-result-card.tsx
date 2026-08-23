@@ -4,6 +4,7 @@ import { CircleAlert, CircleHelp, Gauge, ShieldQuestion } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type {
   SmurfBoostFamily,
   SmurfBoostResults,
@@ -279,29 +280,17 @@ function FamilySection({
 
   return (
     // Each family is read on its own and never combined, so each gets its own
-    // card. The tint separates it from the run card holding it, which shares
-    // the same `bg-card`.
+    // panel. The tint separates it from the run card holding it, which shares
+    // the same `bg-card`; the accent edge repeats the colour whose worded
+    // reading sits in the tab directly above.
     <Card className={`border-l-4 bg-muted/20 shadow-none ${bandStyle.accent}`}>
       <CardHeader className="pb-3">
-        {/* The band is the reading. Beside the title there is room for it on
-            the right, but once the row wraps on a phone `justify-between`
-            leaves it stranded mid-line, so below `sm` the two simply stack. */}
-        <div className="flex flex-col gap-1 sm:flex-row sm:flex-wrap sm:items-baseline sm:justify-between sm:gap-2">
-          <h4 className="text-base font-semibold">
-            {familyTitle(family.family)}
-          </h4>
-          <span className="sm:text-right">
-            <span
-              data-testid={`smurf-boost-band-${family.family}`}
-              className={`block text-lg font-bold ${bandStyle.text}`}
-            >
-              {BAND_LABELS[family.band]}
-            </span>
-            <span className="block text-sm text-muted-foreground">
-              {bandMeaning(family.band)}
-            </span>
-          </span>
-        </div>
+        <h4 className="text-base font-semibold">
+          {familyTitle(family.family)}
+        </h4>
+        <p className="text-sm text-muted-foreground">
+          {bandMeaning(family.band)}
+        </p>
         <p className="text-sm text-muted-foreground">
           {familyDescription(family.family)}
         </p>
@@ -330,8 +319,10 @@ export function SmurfBoostResultCard({
     thresholds,
     minimumBaselineGames,
   );
-  // An empty family list is a result that says nothing. Reporting a game
-  // shortfall for it would invent a reason the model never gave.
+  // An empty family list is a result that says nothing, and gets no tabs.
+  const firstFamily = results.families[0];
+  // Reporting a game shortfall for an empty family list would invent a
+  // reason the model never gave.
   const insufficient =
     results.families.length > 0 &&
     results.families.some((family) => family.band === "not_enough_data");
@@ -377,13 +368,48 @@ export function SmurfBoostResultCard({
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        {results.families.map((family) => (
-          <FamilySection
-            key={family.family}
-            family={family}
-            shortfall={shortfall}
-          />
-        ))}
+        {/* One tab per family. Both readings stay on screen at all times --
+            the trigger carries its family's worded band in the band's own
+            colour, so choosing a tab never hides a verdict, only the
+            measurements behind it. Panels stay mounted so both exist for
+            the tests and for find-in-page; `hidden` does the switching. */}
+        {firstFamily && (
+          <Tabs defaultValue={firstFamily.family}>
+            <TabsList className="h-auto flex-wrap justify-start">
+              {results.families.map((family) => {
+                const bandStyle =
+                  BAND_STYLES[family.band] ?? UNREADABLE_BAND_STYLE;
+                return (
+                  <TabsTrigger
+                    key={family.family}
+                    value={family.family}
+                    className="h-auto flex-col items-start gap-0.5 px-3 py-1.5"
+                  >
+                    <span className="text-sm font-medium">
+                      {familyTitle(family.family)}
+                    </span>
+                    <span
+                      data-testid={`smurf-boost-band-${family.family}`}
+                      className={`text-sm font-bold ${bandStyle.text}`}
+                    >
+                      {BAND_LABELS[family.band]}
+                    </span>
+                  </TabsTrigger>
+                );
+              })}
+            </TabsList>
+            {results.families.map((family) => (
+              <TabsContent
+                key={family.family}
+                value={family.family}
+                forceMount
+                className="mt-3 data-[state=inactive]:hidden"
+              >
+                <FamilySection family={family} shortfall={shortfall} />
+              </TabsContent>
+            ))}
+          </Tabs>
+        )}
 
         {insufficient && (
           <p className="text-sm text-muted-foreground">
