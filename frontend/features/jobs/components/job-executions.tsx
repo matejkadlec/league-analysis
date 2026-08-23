@@ -2,17 +2,12 @@
 
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { unwrap, validatedGet } from "@/lib/core/api";
-import {
-  JobExecution,
-  JobExecutionListResponseSchema,
-  JobConfiguration,
-} from "@/lib/core/schemas";
+import { JobExecution, JobConfiguration } from "@/lib/core/schemas";
 import { Card, CardContent } from "@/components/ui/card";
 import { AlertTriangle, FileText, Loader2 } from "lucide-react";
 
 import { JobExecutionDetailsDialog } from "./job-execution-details-dialog";
-import { JOBS_REFRESH_INTERVAL_MS } from "../refresh-interval";
+import { jobExecutionsInfiniteQueryOptions } from "../jobs-query";
 import { JobExecutionsTable } from "./job-executions-table";
 
 interface JobExecutionsProps {
@@ -28,7 +23,6 @@ export function JobExecutions({
 }: JobExecutionsProps) {
   const [selectedExecutionState, setSelectedExecutionState] =
     useState<JobExecution | null>(null);
-  const PAGE_SIZE = 20;
   const loadMoreRef = useRef<HTMLDivElement>(null);
 
   const jobNameMap = useMemo(
@@ -36,42 +30,8 @@ export function JobExecutions({
     [jobs],
   );
 
-  // Fixed-size pages, not one growing request: the backend caps `size` at
-  // 100, so the old growing-`size` query 422'd on the sixth load-more.
-  // Tradeoff accepted with the switch: `refetchInterval` refreshes every
-  // loaded page each tick (N small requests instead of one big one).
-  //
-  // The failure envelope is deliberately re-thrown: returned as data, a
-  // single failed 15-second poll would *replace* every loaded page and
-  // truncate the list to page 1 until someone scrolls it back in. Thrown,
-  // React Query keeps the previous pages (and their pageParams) stale and
-  // retries on the next tick. It throws through `unwrap` rather than a bare
-  // `Error` so the toast keeps the curated message -- see `ApiRequestError`.
   const { data, isError, isLoading, isFetching, hasNextPage, fetchNextPage } =
-    useInfiniteQuery({
-      queryKey: ["job-executions-infinite"],
-      queryFn: async ({ pageParam }) => {
-        return unwrap(
-          await validatedGet(
-            JobExecutionListResponseSchema,
-            "/jobs/executions/all",
-            { page: pageParam, size: PAGE_SIZE },
-          ),
-        );
-      },
-      initialPageParam: 1,
-      getNextPageParam: (lastPage, allPages) => {
-        const loaded = allPages.reduce(
-          (sum, page) => sum + page.executions.length,
-          0,
-        );
-        return loaded < lastPage.total ? allPages.length + 1 : undefined;
-      },
-      refetchInterval: JOBS_REFRESH_INTERVAL_MS,
-      refetchOnWindowFocus: false,
-      refetchOnMount: false,
-      refetchOnReconnect: false,
-    });
+    useInfiniteQuery(jobExecutionsInfiniteQueryOptions());
 
   // A failed poll must not empty a table someone is reading: the queryFn
   // re-throws rather than returning a failure envelope, so React Query keeps

@@ -2,20 +2,20 @@
 
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { unwrap, validatedGet } from "@/lib/core/api";
+import { JobConfiguration } from "@/lib/core/schemas";
 import {
-  JobConfigurationSchema,
-  JobConfiguration,
-  JobStatusResponseSchema,
-} from "@/lib/core/schemas";
-import { JobCard, JobExecutions, SystemStatus } from "@/features/jobs";
+  JobCard,
+  JobExecutions,
+  SystemStatus,
+  jobsQueryOptions,
+  jobStatusQueryOptions,
+} from "@/features/jobs";
 import { ProtectedRoute } from "@/features/auth";
 
 import { PageHeader } from "@/components/page-header";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2, AlertCircle, Clock } from "lucide-react";
-import { z } from "zod";
 
 import { JOBS_REFRESH_INTERVAL_MS } from "@/features/jobs";
 
@@ -68,34 +68,18 @@ function JobsPageContent() {
     setActiveTab("executions");
   };
 
-  // Fetch all job configurations
   const {
     data: jobsResult,
     isLoading: isLoadingJobs,
     error: jobsError,
     dataUpdatedAt: jobsUpdatedAt,
-  } = useQuery({
-    queryKey: ["jobs"],
-    queryFn: async () =>
-      unwrap(
-        await validatedGet(z.array(JobConfigurationSchema), "/jobs/", {
-          active_only: false,
-        }),
-      ),
-    refetchInterval: JOBS_REFRESH_INTERVAL_MS,
-  });
+  } = useQuery(jobsQueryOptions());
 
-  // Fetch system status
   const {
     data: statusResult,
     isLoading: isLoadingStatus,
     dataUpdatedAt: statusUpdatedAt,
-  } = useQuery({
-    queryKey: ["job-status"],
-    queryFn: async () =>
-      unwrap(await validatedGet(JobStatusResponseSchema, "/jobs/status/overview")),
-    refetchInterval: JOBS_REFRESH_INTERVAL_MS,
-  });
+  } = useQuery(jobStatusQueryOptions());
 
   const jobs = jobsResult ?? [];
   const status = statusResult ?? null;
