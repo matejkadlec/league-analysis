@@ -2,11 +2,10 @@
 
 from collections.abc import Sequence
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Final, Literal, TypedDict
+from typing import TYPE_CHECKING, Final
 
 import structlog
-from rapidfuzz.distance.Levenshtein import distance as levenshtein_distance
-from sqlalchemy import Select, and_, delete, func, or_, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -24,6 +23,7 @@ from app.features.jobs.maintenance import ensure_riot_writer_maintenance_is_inac
 from app.features.matches.models import Match
 from app.features.matches.participants import MatchParticipant
 
+from . import player_search
 from .leagues import PlayerLeague
 from .models import Player
 from .schemas import PlayerResponse
@@ -34,10 +34,6 @@ if TYPE_CHECKING:
 logger = structlog.get_logger(__name__)
 
 MAX_TRACKED_PLAYERS_PER_USER: Final = 10
-
-# What `_parse_search_query` read out of the raw query string; every
-# scoring branch below switches on it.
-SearchType = Literal["full_id", "tag", "name", "all"]
 
 
 class PlayerNotFoundError(ValueError):
@@ -51,18 +47,6 @@ class PlayerNotFoundError(ValueError):
 
 class TrackingLimitReachedError(ValueError):
     """The user already tracks `MAX_TRACKED_PLAYERS_PER_USER` players."""
-
-
-class ScoredPlayer(TypedDict):
-    """A fuzzy-search candidate together with the keys it is ranked by.
-
-    ``name`` is the sort tiebreaker and is the empty string when the row has
-    no game name, so it stays a plain ``str`` rather than an optional.
-    """
-
-    player: Player
-    score: float
-    name: str
 
 
 class PlayerService:
@@ -215,197 +199,6 @@ class PlayerService:
         response.is_tracked = is_tracked
         return response
 
-    @staticmethod
-    def _parse_search_query(query: str) -> tuple[SearchType, str | None, str | None]:
-        """
-        Parse search query to detect search type and extract components.
-
-        Returns:
-            Tuple of (search_type, game_name, tag_line)
-        """
-        if query.startswith("#"):
-            # Tag-only search: "#EUNE"
-            return "tag", None, query[1:].strip()
-
-        if "#" in query:
-            # Full ID search: "John Doe#EUNE"
-            if query.count("#") == 1:
-                game_name, tag_line = query.split("#", 1)
-                return "full_id", game_name.strip(), tag_line.strip()
-            # Multiple # - treat as invalid, search everything
-            return "all", None, None
-
-        # Name search: "John Doe"
-        return "name", query.strip(), None
-
-    @staticmethod
-    def _build_player_search_query(
-        platform: Platform | None,
-        search_type: SearchType,
-        query_lower: str,
-        game_name: str | None,
-        tag_line: str | None,
-    ) -> Select[tuple[Player]]:
-        """Build SQLAlchemy query based on search type."""
-        # `platform` arrives as the enum, whose values are the one spelling the
-        # column is allowed to hold (`ck_players_platform_is_lowercase`), so
-        # this compares rather than `ilike`-ing around a casing question that
-        # the database already settled.
-        platform_filter = [Player.platform == platform.value] if platform else []
-
-        if search_type == "full_id" and game_name and tag_line:
-            # Search for exact or partial Full ID (GameName # TagLine)
-            return select(Player).where(
-                *platform_filter,
-                or_(
-                    # Exact match
-                    and_(
-                        Player.game_name.ilike(game_name),
-                        Player.tag_line.ilike(tag_line),
-                    ),
-                    # Partial matches
-                    Player.game_name.ilike(f"%{game_name}%"),
-                    Player.tag_line.ilike(f"%{tag_line}%"),
-                ),
-            )
-
-        if search_type == "tag" and tag_line:
-            # Search tags only
-            return select(Player).where(
-                *platform_filter,
-                Player.tag_line.ilike(f"%{tag_line}%"),
-            )
-
-        # name or all - search game names
-        search_term = game_name if game_name else query_lower
-        return select(Player).where(
-            *platform_filter,
-            Player.game_name.ilike(f"%{search_term}%"),
-        )
-
-    @staticmethod
-    def _score_player_match(
-        player: Player,
-        search_type: SearchType,
-        query_lower: str,
-        game_name: str | None,
-        tag_line: str | None,
-    ) -> float:
-        """
-        Calculate relevance score for a player match.
-
-        Returns:
-            Score where 1000.0 = exact match, 0.0-1.0 = fuzzy match quality
-        """
-        # Exact match = highest priority
-        if (
-            search_type == "full_id"
-            and game_name
-            and tag_line
-            and player.game_name.lower() == game_name.lower()
-            and player.tag_line.lower() == tag_line.lower()
-        ):
-            return 1000.0
-
-        distance = PlayerService._closest_field_distance(
-            player, search_type, query_lower, tag_line
-        )
-        # Convert to score: 1 / (1 + distance)
-        return 1.0 / (1.0 + distance) if distance is not None else 0.0
-
-    @staticmethod
-    def _closest_field_distance(
-        player: Player,
-        search_type: SearchType,
-        query_lower: str,
-        tag_line: str | None,
-    ) -> int | None:
-        """Smallest edit distance over the fields this search type compares.
-
-        None when the search type compares nothing on this player. The field
-        sets are deliberately different: a tag search only ever looks at the
-        tag, and a game-name search sees the tag only inside the full Riot ID.
-
-        Split out from the caller only because the two together rank C on the
-        complexity gate; the four one-caller helpers this replaced did the
-        same work through four more frames.
-        """
-        composite = (
-            f"{player.game_name}#{player.tag_line}".lower()
-            if player.tag_line
-            else player.game_name.lower()
-        )
-        # (applies?, query, target)
-        candidates = [
-            (
-                bool(player.game_name) and search_type in ("name", "all"),
-                query_lower,
-                player.game_name.lower(),
-            ),
-            (
-                bool(player.game_name) and search_type in ("name", "full_id", "all"),
-                query_lower,
-                composite,
-            ),
-            (
-                bool(player.tag_line) and search_type in ("tag", "full_id"),
-                tag_line.lower() if tag_line else query_lower,
-                player.tag_line.lower(),
-            ),
-        ]
-        distances = [
-            levenshtein_distance(query, target)
-            for applies, query, target in candidates
-            if applies
-        ]
-        return min(distances) if distances else None
-
-    def _validate_search_query(
-        self,
-        query: str,
-        search_type: SearchType,
-        game_name: str | None,
-        tag_line: str | None,
-    ) -> bool:
-        """Validate search query and return False if invalid."""
-        if len(query.strip()) < 1:
-            logger.warning("Query too short", query=query)
-            return False
-
-        if search_type == "full_id" and (not game_name or not tag_line):
-            logger.warning(
-                "Invalid Full ID search: empty game_name or tag_line",
-                query=query,
-                search_type=search_type,
-            )
-            return False
-
-        return True
-
-    def _score_and_sort_players(
-        self,
-        players: Sequence[Player],
-        search_type: SearchType,
-        query_lower: str,
-        game_name: str | None,
-        tag_line: str | None,
-        limit: int,
-    ) -> list[ScoredPlayer]:
-        """Score players by relevance and return top matches."""
-        scored_players: list[ScoredPlayer] = [
-            {
-                "player": player,
-                "score": self._score_player_match(
-                    player, search_type, query_lower, game_name, tag_line
-                ),
-                "name": player.game_name or "",
-            }
-            for player in players
-        ]
-
-        scored_players.sort(key=lambda x: (-x["score"], x["name"].lower()))
-        return scored_players[:limit]
-
     async def fuzzy_search_players(
         self,
         query: str,
@@ -413,38 +206,21 @@ class PlayerService:
         user_id: int,
         limit: int = 10,
     ) -> list[PlayerResponse]:
+        """Search stored players and answer with per-user tracking flags.
+
+        The search algorithm itself — parsing, SQL shape, scoring, ranking —
+        lives in `player_search`; this method owns the database round trip
+        and the per-user response assembly.
         """
-        Search for players using fuzzy matching with Levenshtein distance.
+        search_type, game_name, tag_line = player_search.parse_search_query(query)
 
-        Auto-detects search type:
-        - Contains '#' → Search Riot ID (game_name#tag_line)
-        - Starts with '#' → Search tags only
-        - Otherwise → Search game_name
-
-        Returns up to `limit` results sorted by relevance:
-        1. Exact Riot ID match (highest priority)
-        2. Best game name matches (by Levenshtein distance)
-        3. Best tag matches (by Levenshtein distance)
-        4. Alphabetical as tiebreaker
-
-        Args:
-            query: Search query string
-            platform: Platform code
-            limit: Maximum results to return (default: 10)
-
-        Returns:
-            List of PlayerResponse sorted by relevance
-        """
-        # Parse search query
-        search_type, game_name, tag_line = self._parse_search_query(query)
-
-        # Validate search query
-        if not self._validate_search_query(query, search_type, game_name, tag_line):
+        if not player_search.validate_search_query(
+            query, search_type, game_name, tag_line
+        ):
             return []
 
-        # Build and execute database query
         query_lower = query.lower().strip()
-        stmt = self._build_player_search_query(
+        stmt = player_search.build_player_search_query(
             platform, search_type, query_lower, game_name, tag_line
         )
         stmt = stmt.limit(100)  # Prevent excessive result sets
@@ -452,8 +228,7 @@ class PlayerService:
         result = await self.db.execute(stmt)
         players = result.scalars().all()
 
-        # Score and sort results
-        top_players = self._score_and_sort_players(
+        top_players = player_search.score_and_sort_players(
             players, search_type, query_lower, game_name, tag_line, limit
         )
 

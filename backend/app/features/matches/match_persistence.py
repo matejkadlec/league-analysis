@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 
 import structlog
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db_session import rollback_quietly
@@ -18,6 +19,26 @@ from .participants import MatchParticipant
 from .timeline import replace_match_timeline_rows
 
 logger = structlog.get_logger(__name__)
+
+
+async def fully_analyzed_match_ids(
+    session: AsyncSession, match_ids: Iterable[str]
+) -> set[str]:
+    """Which of `match_ids` are already stored with `fully_analyzed=True`.
+
+    The one read both sync planning and the matchmaking analysis make of the
+    invariant `upsert_match` writes; keeping it beside the writer keeps the
+    two sides of the contract in one file.
+    """
+    ids_list = list(match_ids)
+    if not ids_list:
+        return set()
+    result = await session.execute(
+        select(Match.match_id).where(
+            Match.match_id.in_(ids_list), Match.fully_analyzed.is_(True)
+        )
+    )
+    return set(result.scalars().all())
 
 
 def match_end_flags(participants: Iterable[ParticipantDTO]) -> tuple[bool, bool]:

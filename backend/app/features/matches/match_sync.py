@@ -22,6 +22,7 @@ from app.features.jobs.maintenance import (
     ensure_riot_writer_maintenance_is_inactive,
 )
 
+from .match_persistence import fully_analyzed_match_ids
 from .models import Match
 from .participants import MatchParticipant
 from .timeline import MatchTimeline, replace_match_timeline_rows
@@ -121,12 +122,7 @@ async def load_queue_sync_completion_ids(
     ids_list: list[str],
 ) -> tuple[set[str], set[str]]:
     """Load fully-analyzed IDs and IDs whose timeline rows are already complete."""
-    analyzed_result = await session.execute(
-        select(Match.match_id).where(
-            Match.match_id.in_(ids_list), Match.fully_analyzed.is_(True)
-        )
-    )
-    analyzed_ids = set(analyzed_result.scalars().all())
+    analyzed_ids = await fully_analyzed_match_ids(session, ids_list)
     timeline_counts_result = await session.execute(
         select(MatchTimeline.match_id, func.count(MatchTimeline.puuid))
         .where(MatchTimeline.match_id.in_(ids_list))

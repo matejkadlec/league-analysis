@@ -2,11 +2,7 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { unwrap, validatedGet } from "@/lib/core/api";
-import {
-  JobConfiguration,
-  JobExecutionListResponseSchema,
-} from "@/lib/core/schemas";
+import { JobConfiguration } from "@/lib/core/schemas";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -31,7 +27,7 @@ import {
   formatScheduleInterval,
 } from "./job-card-format";
 import { formatDuration } from "./job-execution-format";
-import { JOBS_REFRESH_INTERVAL_MS } from "../refresh-interval";
+import { jobRecentExecutionsQueryOptions } from "../jobs-query";
 import { useJobCardControls } from "./use-job-card-controls";
 
 interface JobCardProps {
@@ -42,19 +38,9 @@ interface JobCardProps {
 export function JobCard({ job, onExecutionClick }: JobCardProps) {
   const [showHistory, setShowHistory] = useState(false);
 
-  const { data: executionsResult } = useQuery({
-    queryKey: ["job-executions", job.id],
-    queryFn: async () =>
-      unwrap(
-        await validatedGet(
-          JobExecutionListResponseSchema,
-          `/jobs/${job.id}/executions`,
-          { page: 1, size: 5, execution_type: "REGULAR" },
-        ),
-      ),
-    enabled: !!job.id,
-    refetchInterval: JOBS_REFRESH_INTERVAL_MS,
-  });
+  const { data: executionsResult } = useQuery(
+    jobRecentExecutionsQueryOptions(job.id),
+  );
 
   const recentExecutions = executionsResult?.executions ?? [];
   const lastExecution =

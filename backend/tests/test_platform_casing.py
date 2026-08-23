@@ -20,7 +20,7 @@ from sqlalchemy import Select
 
 from app.core.riot_api.constants import Platform, normalize_platform
 from app.features.players.models import Player
-from app.features.players.service import PlayerService
+from app.features.players.player_search import build_player_search_query
 
 
 def _bound_platform(statement: Select[tuple[Player]]) -> str | None:
@@ -87,9 +87,7 @@ def test_the_player_lookup_compares_against_canonical_casing() -> None:
     is both correct and index-usable -- but only while the value being bound
     is the enum's own.
     """
-    statement = PlayerService._build_player_search_query(
-        Platform.EUN1, "name", "faker", "faker", None
-    )
+    statement = build_player_search_query(Platform.EUN1, "name", "faker", "faker", None)
 
     assert _bound_platform(statement) == "eun1"
     assert "core.players.platform = " in str(statement.whereclause)
@@ -97,8 +95,6 @@ def test_the_player_lookup_compares_against_canonical_casing() -> None:
 
 def test_a_search_without_a_platform_filters_on_no_platform_at_all() -> None:
     """`None` means every region, not the default one."""
-    statement = PlayerService._build_player_search_query(
-        None, "name", "faker", "faker", None
-    )
+    statement = build_player_search_query(None, "name", "faker", "faker", None)
 
     assert "core.players.platform" not in str(statement.whereclause)

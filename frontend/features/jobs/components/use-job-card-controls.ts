@@ -11,6 +11,8 @@ import {
   JobTriggerResponseSchema,
 } from "@/lib/core/schemas";
 
+import { invalidateJobsData } from "../jobs-query";
+
 export function useJobCardControls(
   job: JobConfiguration,
   lastExecutionId: number | null,
@@ -54,15 +56,7 @@ export function useJobCardControls(
     (isRunning && job.is_force_stopping) ||
     (isTestRunning && job.is_test_force_stopping);
 
-  const refreshJobsData = () => {
-    void queryClient.invalidateQueries({ queryKey: ["jobs"] });
-    void queryClient.invalidateQueries({ queryKey: ["job-status"] });
-    void queryClient.invalidateQueries({ queryKey: ["job-executions"] });
-    void queryClient.invalidateQueries({
-      queryKey: ["job-executions-infinite"],
-    });
-    void queryClient.refetchQueries({ queryKey: ["jobs"], type: "active" });
-  };
+  const refreshJobsData = () => invalidateJobsData(queryClient);
 
   useEffect(() => {
     if (!awaitingManualRunRef.current) {

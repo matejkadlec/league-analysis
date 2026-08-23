@@ -59,7 +59,10 @@ from app.core.runs import (
     guarded_run_update,
 )
 from app.features.jobs.maintenance import ensure_riot_writer_maintenance_is_inactive
-from app.features.matches.match_persistence import upsert_match
+from app.features.matches.match_persistence import (
+    fully_analyzed_match_ids,
+    upsert_match,
+)
 from app.features.matches.models import Match
 from app.features.matches.participants import MatchParticipant
 from app.features.players.models import Player
@@ -550,11 +553,16 @@ class MatchmakingAnalysisService:
     async def _ensure_spine_matches_ready(
         self, puuid: str, created_at: datetime, spine_match_ids: list[str]
     ) -> bool:
-        spine_in_db_count = 0
+        # One batch read answers "already fully analyzed" for the whole
+        # spine; only the misses cost a rate-limited API fetch.
+        already_analyzed = await fully_analyzed_match_ids(self.db, spine_match_ids)
+        spine_in_db_count = len(already_analyzed)
         for mid in spine_match_ids:
-            was_in_db = await self._ensure_match_in_db(mid)
-            if was_in_db:
-                spine_in_db_count += 1
+            if mid in already_analyzed:
+                continue
+            dto = await self._api_fetch_match(mid)
+            if dto:
+                await self._store_fetched_match(dto)
 
         first_participants = await self._get_match_participants(spine_match_ids[0])
         if not any(p == puuid for p, _ in first_participants):
@@ -920,31 +928,6 @@ class MatchmakingAnalysisService:
             )
         )
         return result.scalar_one_or_none()
-
-    async def _ensure_match_in_db(self, match_id: str) -> bool:
-        """Ensure match exists in DB with fully_analyzed=True.
-
-        - Already fully analyzed → skip (no API call)
-        - Exists but not fully analyzed → re-fetch and update
-        - Not in DB → fetch and insert
-
-        Returns True if match was already in DB, False if API call was needed.
-        """
-
-        result = await self.db.execute(
-            select(Match.match_id, Match.fully_analyzed).where(
-                Match.match_id == match_id
-            )
-        )
-        row = result.one_or_none()
-        if row is not None and row.fully_analyzed:
-            return True
-
-        # Need API call — use rate limiter
-        dto = await self._api_fetch_match(match_id)
-        if dto:
-            await self._store_fetched_match(dto)
-        return False
 
     async def _store_fetched_match(self, match_dto: MatchDTO) -> None:
         """Persist an API-fetched match only while cleanup is inactive."""
