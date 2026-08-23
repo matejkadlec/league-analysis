@@ -214,13 +214,15 @@ export function PasswordChangeSection() {
               className="w-full pr-10"
               disabled={changePasswordMutation.isPending}
             />
-            <div className="pointer-events-none absolute inset-y-0 right-0 flex w-10 items-center justify-center">
-              {canChangePassword ? (
-                <CircleCheck className="h-4 w-4 text-green-500" />
-              ) : (
-                <CircleX className="h-4 w-4 text-red-500" />
-              )}
-            </div>
+            {repeatPassword.length > 0 && (
+              <div className="pointer-events-none absolute inset-y-0 right-0 flex w-10 items-center justify-center">
+                {canChangePassword ? (
+                  <CircleCheck className="h-4 w-4 text-green-500" />
+                ) : (
+                  <CircleX className="h-4 w-4 text-red-500" />
+                )}
+              </div>
+            )}
           </div>
           <div className="flex items-center justify-end">
             <button
