@@ -22,6 +22,8 @@ import {
 
 interface SmurfBoostResultCardProps {
   results: SmurfBoostResults;
+  /** The analyzed player's `Name#Tag`; the result says who it describes. */
+  playerName: string | null;
   /** The exact threshold set the run was computed with. */
   thresholds: Record<string, number>;
   minimumBaselineGames: number;
@@ -311,6 +313,7 @@ function FamilySection({
 
 export function SmurfBoostResultCard({
   results,
+  playerName,
   thresholds,
   minimumBaselineGames,
 }: SmurfBoostResultCardProps) {
@@ -344,6 +347,16 @@ export function SmurfBoostResultCard({
             <ShieldQuestion className="h-5 w-5 text-primary" />
             Comparison Result
           </CardTitle>
+          {/* Beside the heading, not inside it: `CardTitle` is a heading
+              element and carries only its own text. */}
+          {playerName && (
+            <span
+              data-testid="smurf-boost-result-player"
+              className="text-base font-semibold text-primary"
+            >
+              {playerName}
+            </span>
+          )}
           <Badge variant="secondary" className="ml-auto">
             Recent {results.recent_games} games against the previous{" "}
             {results.baseline_games}

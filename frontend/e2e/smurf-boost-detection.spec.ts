@@ -159,6 +159,11 @@ test("runs a comparison and reports both families without accusing anyone", asyn
   ).toBeVisible();
   await expect(result.getByText("High confidence")).toBeVisible();
 
+  // A stored result always says who it describes.
+  await expect(
+    result.getByTestId("smurf-boost-result-player"),
+  ).toHaveText("Comparison#ONE");
+
   // An area that could not be measured stays visible with its reason, and a
   // measured area shows its figures beside the drawn meter.
   const measurements = result.locator(

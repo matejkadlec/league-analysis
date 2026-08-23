@@ -9,7 +9,11 @@ import {
   type SectionQuickNavigationItem,
 } from "@/components/section-quick-navigation";
 import { Skeleton } from "@/components/ui/skeleton";
-import { PlayerSelector, useAnalyzedPlayer } from "@/features/players";
+import {
+  formatRiotId,
+  PlayerSelector,
+  useAnalyzedPlayer,
+} from "@/features/players";
 import { Label } from "@/components/ui/label";
 import {
   SmurfBoostDetection,
@@ -70,6 +74,7 @@ function RankManipulationContent() {
               <SmurfBoostDetection
                 key={analyzedPlayer?.puuid ?? "no-player"}
                 puuid={analyzedPlayer?.puuid ?? null}
+                playerName={analyzedPlayer ? formatRiotId(analyzedPlayer) : null}
                 playerSelector={
                   <div className="space-y-1.5">
                     <Label htmlFor={PLAYER_SEARCH_ID}>

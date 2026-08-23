@@ -49,6 +49,14 @@ interface SmurfBoostDetectionProps {
    */
   puuid: string | null;
   /**
+   * The analyzed player's `Name#Tag`, or `null` while there is none. The
+   * analysis response carries only a PUUID, and this card is remounted per
+   * player, so the page's analyzed player is the result's player by
+   * construction. Shown on the result so a stored reading always says who
+   * it describes.
+   */
+  playerName: string | null;
+  /**
    * The page's local player search, label and all, rendered inside this card
    * above the run action.
    *
@@ -78,6 +86,7 @@ function RunCardSkeleton() {
 
 export function SmurfBoostDetection({
   puuid,
+  playerName,
   playerSelector,
 }: SmurfBoostDetectionProps) {
   const queryClient = useQueryClient();
@@ -280,6 +289,7 @@ export function SmurfBoostDetection({
       {results && latest && (
         <SmurfBoostResultCard
           results={results}
+          playerName={playerName}
           thresholds={latest.thresholds}
           minimumBaselineGames={MINIMUM_BASELINE_GAMES}
         />

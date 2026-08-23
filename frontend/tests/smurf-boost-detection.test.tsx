@@ -162,6 +162,7 @@ function renderCard(puuid: string | null = "test-puuid") {
   const { queryClient } = renderWithQueryClient(
     <SmurfBoostDetection
       puuid={puuid}
+      playerName="Tested Player#EUW"
       playerSelector={<input aria-label="Choose player for comparison" />}
     />,
   );
@@ -172,6 +173,7 @@ function renderCardWithUnmount(puuid = "test-puuid") {
   const { queryClient, unmount } = renderWithQueryClient(
     <SmurfBoostDetection
       puuid={puuid}
+      playerName="Tested Player#EUW"
       playerSelector={<input aria-label="Choose player for comparison" />}
     />,
   );
