@@ -8,9 +8,10 @@ Two declared interfaces; nothing else is public.
 - Shared domain primitives other features import directly: `models` and
   `participants` (the `Match`/`MatchParticipant` rows and lane helpers),
   `lane`, `match_lp` (LP observations, `RANKED_SOLO_QUEUE_ID`), and
-  `match_persistence.upsert_match` — which does NOT check the Riot writer
+  `match_persistence` — `upsert_match`, which does NOT check the Riot writer
   maintenance interlock itself; every caller rechecks it before each write
-  (`MatchService._reprocess_match` is the pattern to copy).
+  (`MatchService._reprocess_match` is the pattern to copy) — plus
+  `fully_analyzed_match_ids`, the read side of the invariant it writes.
   Readers of participants follow the
   DB-first rules in [`docs/matchmaking-analysis.md`](../../../../docs/matchmaking-analysis.md)
   (`queue_id` and `fully_analyzed` filtering).

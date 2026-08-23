@@ -59,7 +59,10 @@ from app.core.runs import (
     guarded_run_update,
 )
 from app.features.jobs.maintenance import ensure_riot_writer_maintenance_is_inactive
-from app.features.matches.match_persistence import upsert_match
+from app.features.matches.match_persistence import (
+    fully_analyzed_match_ids,
+    upsert_match,
+)
 from app.features.matches.models import Match
 from app.features.matches.participants import MatchParticipant
 from app.features.players.models import Player
@@ -931,13 +934,7 @@ class MatchmakingAnalysisService:
         Returns True if match was already in DB, False if API call was needed.
         """
 
-        result = await self.db.execute(
-            select(Match.match_id, Match.fully_analyzed).where(
-                Match.match_id == match_id
-            )
-        )
-        row = result.one_or_none()
-        if row is not None and row.fully_analyzed:
+        if match_id in await fully_analyzed_match_ids(self.db, [match_id]):
             return True
 
         # Need API call — use rate limiter
