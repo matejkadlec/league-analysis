@@ -14,7 +14,6 @@ import { Label } from "@/components/ui/label";
 import {
   SmurfBoostDetection,
   SmurfBoostExplanationCard,
-  SmurfBoostSettingsDialog,
 } from "@/features/smurf-boost";
 
 // `Result` is listed unconditionally on purpose: `SectionQuickNavigation`
@@ -34,7 +33,6 @@ const PLAYER_SEARCH_ID = "rank-manipulation-player-search";
 function RankManipulationSkeleton() {
   return (
     <div className="space-y-6">
-      <Skeleton className="h-9 w-44" />
       <Skeleton className="h-72" />
     </div>
   );
@@ -62,14 +60,6 @@ function RankManipulationContent() {
             <RankManipulationSkeleton />
           ) : (
             <>
-              {/* The settings live in a dialog, so the page flow is header,
-                  explanation, comparison -- with the trigger sitting right
-                  above the run card it configures. Left-aligned on purpose:
-                  the run card takes the left half, and the right edge is
-                  where the quick-navigation rail floats. */}
-              <div>
-                <SmurfBoostSettingsDialog />
-              </div>
               {/* Rendered with no player too, rather than swapped for a
                   "select a player" card. That card sends people to the sidebar
                   search, which is a current-player surface: on a route that is

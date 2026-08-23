@@ -21,6 +21,7 @@ import {
 } from "../smurf-boost-query";
 import { MINIMUM_BASELINE_GAMES } from "../smurf-boost-settings";
 import { SmurfBoostResultCard } from "./smurf-boost-result-card";
+import { SmurfBoostSettingsDialog } from "./smurf-boost-settings-card";
 
 // The two statuses the backend uses for a run that has not reached a terminal
 // state. A run is owned by the account that asked for it, so a start returns
@@ -201,11 +202,17 @@ export function SmurfBoostDetection({
                 <Search className="h-5 w-5 text-primary" />
                 Games Comparison
               </CardTitle>
-              {latest?.is_stale && (
-                <Badge variant="outline" className="ml-auto">
-                  New games since this comparison
-                </Badge>
-              )}
+              {/* The settings tune the thresholds this run applies, so their
+                  trigger lives on the run card rather than floating on the
+                  page. */}
+              <div className="ml-auto flex items-center gap-2">
+                {latest?.is_stale && (
+                  <Badge variant="outline">
+                    New games since this comparison
+                  </Badge>
+                )}
+                <SmurfBoostSettingsDialog />
+              </div>
             </div>
             <UpdatedStamp
               lastUpdated={completedAt}

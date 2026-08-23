@@ -271,7 +271,8 @@ export function SmurfBoostSettingsDialog() {
       }}
     >
       <DialogTrigger asChild>
-        <Button variant="outline">
+        {/* `sm`, because the trigger sits in the run card's header row. */}
+        <Button variant="outline" size="sm">
           <SlidersHorizontal className="mr-2 h-4 w-4" />
           Detection Settings
         </Button>
