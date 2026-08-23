@@ -40,6 +40,7 @@ vi.mock("@/features/smurf-boost/smurf-boost-api", () => ({
 vi.mock("sonner", () => ({ toast }));
 
 import { SmurfBoostSettingsDialog } from "../features/smurf-boost/components/smurf-boost-settings-dialog";
+import { thresholdGroupTitle } from "../features/smurf-boost/components/smurf-boost-settings-thresholds";
 import { THRESHOLD_FIELDS } from "../features/smurf-boost/smurf-boost-settings";
 
 /** The Conservative preset exactly as the live API emits it. */
@@ -110,25 +111,18 @@ async function renderCard() {
 
 /**
  * The thresholds are grouped into tabs, so typing into a field first opens
- * the tab that holds it. Every group stays mounted while inactive, so the
- * querySelector below finds the input either way.
+ * the tab that holds it, via the component's own `thresholdGroupTitle` map.
+ * Every group stays mounted while inactive, so the querySelector below finds
+ * the input either way; only the interaction needs the tab visible.
  */
-function tabFor(name: string): string {
-  if (/^a\d/.test(name)) {
-    return "Rapid Improvement Pattern";
-  }
-  if (/^b\d/.test(name)) {
-    return "Playing Pattern Change";
-  }
-  return "Games Compared";
-}
-
 async function typeValue(
   user: ReturnType<typeof userEvent.setup>,
   name: string,
   value: string,
 ) {
-  await user.click(screen.getByRole("tab", { name: tabFor(name) }));
+  await user.click(
+    screen.getByRole("tab", { name: thresholdGroupTitle(name) }),
+  );
   const input = document.querySelector(
     `#smurf-boost-${name}`,
   ) as HTMLInputElement;
@@ -136,7 +130,7 @@ async function typeValue(
   await user.type(input, value);
 }
 
-describe("SmurfBoostSettingsCard", () => {
+describe("SmurfBoostSettingsDialog", () => {
   beforeEach(() => {
     getCardPreferences.mockReset();
     getSmurfBoostPresets.mockReset();

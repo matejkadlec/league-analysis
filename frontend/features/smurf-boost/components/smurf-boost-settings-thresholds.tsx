@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import { THRESHOLD_FIELDS, type ThresholdName } from "../smurf-boost-settings";
-import { FAMILY_TITLES } from "../smurf-boost-vocabulary";
+import { familyTitle } from "../smurf-boost-vocabulary";
 import { cn } from "@/lib/core/utils";
 
 const CROSS_FIELD_NAMES = ["recentWindowSize", "a3MinimumNovelGames"];
@@ -27,17 +27,29 @@ const GROUPS = [
   },
   {
     value: "rapid",
-    title: FAMILY_TITLES.rapid_improvement,
+    title: familyTitle("rapid_improvement"),
     match: /^a\d/,
     columns: "sm:grid-cols-2 lg:grid-cols-3",
   },
   {
     value: "pattern",
-    title: FAMILY_TITLES.playing_pattern_change,
+    title: familyTitle("playing_pattern_change"),
     match: /^b\d/,
     columns: "sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4",
   },
 ];
+
+/**
+ * The tab that holds a threshold field. The unit test drives typing through
+ * this so the field-to-tab mapping lives here once, not re-implemented there.
+ */
+export function thresholdGroupTitle(name: string): string {
+  const group = GROUPS.find((entry) => entry.match.test(name));
+  if (!group) {
+    throw new Error(`No threshold group matches ${name}`);
+  }
+  return group.title;
+}
 
 interface SmurfBoostSettingsThresholdsProps {
   values: Partial<Record<ThresholdName, string>>;
@@ -88,7 +100,7 @@ export function SmurfBoostSettingsThresholds({
             tabs cannot move the tab row out from under the pointer. On a phone
             the dialog scrolls, so an inactive group stays fully hidden. */}
         <div className="sm:grid">
-          {GROUPS.map((group, index) => (
+          {GROUPS.map((group) => (
             <TabsContent
               key={group.value}
               value={group.value}
@@ -96,7 +108,6 @@ export function SmurfBoostSettingsThresholds({
               className="mt-2 block rounded-lg border border-border/60 bg-card/40 p-3 data-[state=inactive]:hidden sm:col-start-1 sm:row-start-1 sm:data-[state=inactive]:block sm:data-[state=inactive]:invisible"
             >
               <div
-                id={index === 0 ? "smurf-boost-thresholds-grid" : undefined}
                 data-testid={`smurf-boost-thresholds-${group.value}`}
                 className={cn("grid gap-x-6 gap-y-3", group.columns)}
               >

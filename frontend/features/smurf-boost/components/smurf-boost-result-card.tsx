@@ -70,7 +70,7 @@ function signalOutcome(signal: SmurfBoostSignal): string {
   return met ? "Other conditions not met" : "Below threshold";
 }
 
-/** The outcome pill, identical in both the table and the stacked layout. */
+/** The outcome pill beside each measurement. */
 function SignalOutcome({ signal }: { signal: SmurfBoostSignal }) {
   if (!signal.available) {
     return <Badge variant="outline">Not available</Badge>;
@@ -79,8 +79,8 @@ function SignalOutcome({ signal }: { signal: SmurfBoostSignal }) {
     return <Badge variant="secondary">Above threshold</Badge>;
   }
   return (
-    // Each family sizes its own table, so this column can end up narrower in
-    // one than the other and split a two-word outcome across lines.
+    // The flex row tightens around a long reason, and a two-word outcome
+    // split across lines reads as two outcomes.
     <span className="whitespace-nowrap text-sm text-muted-foreground">
       {signalOutcome(signal)}
     </span>
