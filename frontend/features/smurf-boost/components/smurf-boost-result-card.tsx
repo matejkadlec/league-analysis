@@ -4,14 +4,6 @@ import { CircleAlert, CircleHelp, Gauge, ShieldQuestion } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import type {
   SmurfBoostFamily,
   SmurfBoostResults,
@@ -143,60 +135,67 @@ function SignalOutcome({ signal }: { signal: SmurfBoostSignal }) {
   );
 }
 
-function SignalRow({ signal }: { signal: SmurfBoostSignal }) {
+/**
+ * The measured value drawn against its threshold.
+ *
+ * The tick sits at a fixed fraction of the track, so "how close is this value
+ * to mattering" reads the same in every row even though the rows' units
+ * differ. Length carries the number and the outcome stays worded in the pill
+ * beside it — colour encodes nothing, per the specification. Decorative on
+ * purpose: the figures beside the bar are the accessible reading.
+ */
+const METER_TICK_PERCENT = 62;
+
+function SignalMeter({ signal }: { signal: SmurfBoostSignal }) {
+  const value = signal.raw_value;
+  const threshold = signal.threshold;
+  // A missing figure or a non-positive threshold has no meaningful ratio to
+  // draw; the row then simply shows its figures.
+  if (
+    value === null ||
+    value === undefined ||
+    threshold === null ||
+    threshold === undefined ||
+    threshold <= 0
+  ) {
+    return null;
+  }
+  const fill = Math.min(
+    100,
+    Math.max(0, (value / threshold) * METER_TICK_PERCENT),
+  );
   return (
-    <TableRow>
-      <TableCell className="font-mono text-sm align-top">{signal.id}</TableCell>
-      <TableCell className="align-top">
-        <p className="text-sm">{signal.reason}</p>
-        {signal.notes.length > 0 && (
-          <ul className="mt-1 space-y-0.5">
-            {signal.notes.map((note) => (
-              <li key={note} className="text-sm text-muted-foreground">
-                {noteLabel(note)}
-              </li>
-            ))}
-          </ul>
-        )}
-      </TableCell>
-      <TableCell className="text-right font-mono align-top">
-        {formatValue(signal.raw_value)}
-      </TableCell>
-      <TableCell className="text-right font-mono align-top">
-        {formatValue(signal.threshold)}
-      </TableCell>
-      <TableCell className="text-right font-mono align-top">
-        {signal.sample_size}
-      </TableCell>
-      <TableCell className="text-right align-top">
-        <SignalOutcome signal={signal} />
-      </TableCell>
-    </TableRow>
+    <div
+      aria-hidden="true"
+      className="relative h-2 min-w-24 flex-1 overflow-hidden rounded-full bg-muted/60"
+    >
+      <div
+        className="absolute inset-y-0 left-0 rounded-full bg-primary/70"
+        style={{ width: `${fill}%` }}
+      />
+      <div
+        className="absolute inset-y-0 w-0.5 bg-foreground/60"
+        style={{ left: `${METER_TICK_PERCENT}%` }}
+      />
+    </div>
   );
 }
 
 /**
- * The same measurement stacked for a narrow screen.
- *
- * The table needs roughly 450px of intrinsic width before it starts truncating,
- * which is wider than a phone. Scrolling it sideways would hide the threshold
- * and the outcome — the two columns that decide what the row means — behind a
- * gesture, so below `sm` each measurement becomes its own block instead.
+ * One measurement: what it asked, how it came out, and the value drawn
+ * against its threshold. One layout at every width — the meter needs no
+ * columns, so nothing has to hide behind a sideways gesture on a phone.
  */
-function SignalBlock({ signal }: { signal: SmurfBoostSignal }) {
-  const figures: { label: string; value: string }[] = [
-    { label: "Value", value: formatValue(signal.raw_value) },
-    { label: "Threshold", value: formatValue(signal.threshold) },
-    { label: "Games", value: String(signal.sample_size) },
-  ];
-
+function SignalItem({ signal }: { signal: SmurfBoostSignal }) {
   return (
     <li className="rounded-md border border-border/60 bg-muted/20 p-3">
-      <div className="flex items-center justify-between gap-2">
-        <span className="font-mono text-sm text-primary">{signal.id}</span>
+      <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
+        <p className="min-w-0 flex-1 basis-52 text-sm">
+          <span className="mr-2 font-mono text-primary">{signal.id}</span>
+          {signal.reason}
+        </p>
         <SignalOutcome signal={signal} />
       </div>
-      <p className="mt-2 text-sm">{signal.reason}</p>
       {signal.notes.length > 0 && (
         <ul className="mt-1 space-y-0.5">
           {signal.notes.map((note) => (
@@ -206,21 +205,26 @@ function SignalBlock({ signal }: { signal: SmurfBoostSignal }) {
           ))}
         </ul>
       )}
-      <dl className="mt-3 grid grid-cols-3 gap-2 border-t border-border/40 pt-2">
-        {figures.map((figure) => (
-          <div key={figure.label}>
-            <dt className="text-sm uppercase tracking-wide text-muted-foreground">
-              {figure.label}
-            </dt>
-            <dd className="font-mono text-sm">{figure.value}</dd>
-          </div>
-        ))}
-      </dl>
+      {signal.available && (
+        <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+          <SignalMeter signal={signal} />
+          <span className="whitespace-nowrap font-mono text-sm">
+            {formatValue(signal.raw_value)}
+            <span className="text-muted-foreground">
+              {" / "}
+              {formatValue(signal.threshold)}
+            </span>
+          </span>
+          <span className="whitespace-nowrap text-sm text-muted-foreground">
+            {signal.sample_size} {signal.sample_size === 1 ? "game" : "games"}
+          </span>
+        </div>
+      )}
     </li>
   );
 }
 
-function SignalTable({ family }: { family: SmurfBoostFamily }) {
+function SignalList({ family }: { family: SmurfBoostFamily }) {
   return (
     <div>
       {/* Tailwind's reset removes the list marker, and WebKit then drops the
@@ -229,47 +233,18 @@ function SignalTable({ family }: { family: SmurfBoostFamily }) {
       <ul
         role="list"
         aria-label={`${familyTitle(family.family)} measurements`}
-        data-testid={`smurf-boost-measurements-stacked-${family.family}`}
-        className="space-y-3 sm:hidden"
+        data-testid={`smurf-boost-measurements-${family.family}`}
+        className="space-y-3"
       >
         {family.signals.map((signal) => (
-          <SignalBlock key={signal.id} signal={signal} />
+          <SignalItem key={signal.id} signal={signal} />
         ))}
       </ul>
 
-      {/* The shadcn `Table` supplies its own `overflow-auto` wrapper, so this
-          element only decides which layout is on show. */}
-      <div className="hidden sm:block">
-        <Table aria-label={`${familyTitle(family.family)} measurements`}>
-          <TableHeader>
-            <TableRow className="h-11 border-b border-border/50">
-              <TableHead scope="col">Area</TableHead>
-              <TableHead scope="col">What was measured</TableHead>
-              <TableHead scope="col" className="text-right">
-                Value
-              </TableHead>
-              <TableHead scope="col" className="text-right">
-                Threshold
-              </TableHead>
-              <TableHead scope="col" className="text-right">
-                Games
-              </TableHead>
-              <TableHead scope="col" className="text-right">
-                Outcome
-              </TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {family.signals.map((signal) => (
-              <SignalRow key={signal.id} signal={signal} />
-            ))}
-          </TableBody>
-        </Table>
-      </div>
-
       <p className="mt-2 text-sm text-muted-foreground">
-        Each value is in the unit named in its own description: standardized
-        units, a win rate, or doublings of spread.
+        Each bar reaches toward the tick that marks its threshold; the figures
+        beside it read value / threshold. Units are named in each description:
+        standardized units, a win rate, or doublings of spread.
       </p>
     </div>
   );
@@ -337,7 +312,7 @@ function FamilySection({
         ) : (
           <>
             <FamilySummary family={family} />
-            {family.signals.length > 0 && <SignalTable family={family} />}
+            {family.signals.length > 0 && <SignalList family={family} />}
           </>
         )}
       </CardContent>

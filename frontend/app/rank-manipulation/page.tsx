@@ -21,9 +21,9 @@ import {
 // appears with the result card and not before it. Detection Settings is not
 // here because it is a dialog now, not a section to scroll to.
 const RANK_MANIPULATION_NAV_ITEMS: SectionQuickNavigationItem[] = [
-  { label: "What This Page Does", anchor: "#smurf-boost-explanation" },
   { label: "Games Comparison", anchor: "#smurf-boost-run" },
   { label: "Result", anchor: "#smurf-boost-result" },
+  { label: "What This Page Does", anchor: "#smurf-boost-explanation" },
 ];
 
 // One place, because the label's `htmlFor` and the control's `id` are only a
@@ -53,8 +53,6 @@ function RankManipulationContent() {
               earlier games, and see exactly which areas moved and by how much.
             </p>
           </PageHeader>
-
-          <SmurfBoostExplanationCard />
 
           {isLoading ? (
             <RankManipulationSkeleton />
@@ -88,6 +86,11 @@ function RankManipulationContent() {
               />
             </>
           )}
+
+          {/* The action first, the reference last: someone who lands here
+              runs a comparison; the explanation waits below for whoever
+              wants the model spelled out. */}
+          <SmurfBoostExplanationCard />
         </div>
       </div>
     </>

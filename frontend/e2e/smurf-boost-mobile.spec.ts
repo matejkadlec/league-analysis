@@ -49,7 +49,7 @@ test.describe("smurf and boost detection on a phone", () => {
     );
   });
 
-  test("stacks each measurement instead of hiding columns behind a swipe", async ({
+  test("keeps every measurement readable without a sideways gesture", async ({
     page,
   }) => {
     test.setTimeout(60_000);
@@ -62,16 +62,8 @@ test.describe("smurf and boost detection on a phone", () => {
     const result = page.locator("#smurf-boost-result");
     await expect(result).toBeVisible();
 
-    // The table is the desktop presentation and must not be the one on show.
-    // There is one per family, and neither may be visible here.
-    const tables = result.locator("table");
-    await expect(tables).toHaveCount(2);
-    for (const table of await tables.all()) {
-      await expect(table).toBeHidden();
-    }
-
     const blocks = result.locator(
-      "[data-testid^='smurf-boost-measurements-stacked-'] > li",
+      "[data-testid^='smurf-boost-measurements-'] > li",
     );
     await expect(blocks).toHaveCount(6);
 
@@ -80,16 +72,10 @@ test.describe("smurf and boost detection on a phone", () => {
     const first = blocks.first();
     await expect(first).toBeVisible();
     await expect(first.getByText("Above threshold")).toBeVisible();
-    // The figure labels are exact, because "Threshold" is also a substring of
-    // the outcome badge sitting directly above them.
-    await expect(first.locator("dt")).toHaveText([
-      "Value",
-      "Threshold",
-      "Games",
-    ]);
-    await expect(first.locator("dd")).toHaveText(["1.45", "1.20", "20"]);
+    await expect(first.getByText("1.45 / 1.20")).toBeVisible();
+    await expect(first.getByText("20 games")).toBeVisible();
 
-    // An unmeasurable area keeps its reason in the stacked layout too.
+    // An unmeasurable area keeps its reason on a phone too.
     await expect(
       blocks
         .filter({ hasText: "Not available" })
