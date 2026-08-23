@@ -101,11 +101,28 @@ async function renderCard() {
   return queryClient;
 }
 
+/**
+ * The thresholds are grouped into tabs, so typing into a field first opens
+ * the tab that holds it -- exactly what a person has to do. Every group stays
+ * mounted while inactive, which is why the querySelector below finds the
+ * input either way; only the interaction needs the tab visible.
+ */
+function tabFor(name: string): string {
+  if (/^a\d/.test(name)) {
+    return "Rapid Improvement Pattern";
+  }
+  if (/^b\d/.test(name)) {
+    return "Playing Pattern Change";
+  }
+  return "Games Compared";
+}
+
 async function typeValue(
   user: ReturnType<typeof userEvent.setup>,
   name: string,
   value: string,
 ) {
+  await user.click(screen.getByRole("tab", { name: tabFor(name) }));
   const input = document.querySelector(
     `#smurf-boost-${name}`,
   ) as HTMLInputElement;
@@ -308,6 +325,9 @@ describe("SmurfBoostSettingsCard", () => {
 
     await waitFor(() =>
       expect(screen.getByLabelText("B1 performance treated as flat")).toBeTruthy(),
+    );
+    await user.click(
+      screen.getByRole("tab", { name: "Playing Pattern Change" }),
     );
     const input = document.querySelector(
       "#smurf-boost-b1CompositeFlatCeiling",

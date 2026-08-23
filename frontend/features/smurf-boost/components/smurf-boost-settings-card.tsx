@@ -194,7 +194,7 @@ export function SmurfBoostSettingsDialog() {
     const presets: SmurfBoostPreset[] = presetsQuery.data?.presets ?? [];
 
     body = (
-      <div className="space-y-6">
+      <div className="space-y-5">
         {failure && (
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
@@ -276,9 +276,12 @@ export function SmurfBoostSettingsDialog() {
           Detection Settings
         </Button>
       </DialogTrigger>
+      {/* Wide enough that the grouped thresholds fit without the dialog
+          scrolling; the max-h/overflow pair is a guard for short viewports,
+          not a layout the content is expected to reach. */}
       <DialogContent
         id="smurf-boost-settings"
-        className="max-h-[85vh] max-w-3xl overflow-y-auto"
+        className="max-h-[92vh] max-w-6xl overflow-y-auto"
       >
         <DialogHeader>
           <div className="flex flex-wrap items-center gap-2">

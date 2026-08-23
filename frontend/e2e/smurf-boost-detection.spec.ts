@@ -62,7 +62,9 @@ test("runs a comparison and reports both families without accusing anyone", asyn
   await expect(page.getByLabel("Recent games compared")).toHaveValue("20");
   await expect(page.getByText("Allowed: 10 to 50.")).toBeVisible();
 
-  // A value the backend would reject never reaches it.
+  // A value the backend would reject never reaches it. The field lives in
+  // the Playing Pattern Change tab, so reaching it means opening that tab.
+  await page.getByRole("tab", { name: "Playing Pattern Change" }).click();
   await page.getByLabel("B3 share counted as a tail").fill("0.9");
   await expect(
     page.getByText("B3 share counted as a tail must be between 0.15 and 0.4."),
@@ -235,15 +237,34 @@ test("renders the page at the sizes the layout was specified in", async ({
     expect(await fontSize(section), heading).toBe("16px");
   }
 
-  // Three threshold columns at desktop width. Counting the resolved template
-  // catches a breakpoint that never applies, which a class-name check cannot.
-  const columns = await page
-    .locator("#smurf-boost-thresholds-grid")
-    .evaluate(
-      (element) =>
-        getComputedStyle(element).gridTemplateColumns.split(" ").length,
-    );
-  expect(columns).toBe(3);
+  // Counting the resolved template catches a breakpoint that never applies,
+  // which a class-name check cannot. Each threshold group sizes its own grid
+  // so every tab fits without scrolling the dialog: the two window fields
+  // sit side by side, and the seven-field Playing Pattern group spreads
+  // across four columns at this width.
+  const columnsOf = (testId: string) =>
+    page
+      .getByTestId(testId)
+      .evaluate(
+        (element) =>
+          getComputedStyle(element).gridTemplateColumns.split(" ").length,
+      );
+  expect(await columnsOf("smurf-boost-thresholds-windows")).toBe(2);
+  await page.getByRole("tab", { name: "Playing Pattern Change" }).click();
+  expect(await columnsOf("smurf-boost-thresholds-pattern")).toBe(4);
+
+  // The point of the grouped layout: with its tallest tab open, the dialog
+  // holds everything at desktop size without scrolling itself. Measured on
+  // the scroll container, not asserted from a class.
+  const dialogScroll = await page
+    .locator("#smurf-boost-settings")
+    .evaluate((element) => ({
+      scrollHeight: element.scrollHeight,
+      clientHeight: element.clientHeight,
+    }));
+  expect(dialogScroll.scrollHeight).toBeLessThanOrEqual(
+    dialogScroll.clientHeight,
+  );
 
   await page.keyboard.press("Escape");
   await expect(page.locator("#smurf-boost-settings")).toHaveCount(0);
