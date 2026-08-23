@@ -58,7 +58,13 @@ const BAND_STYLES: Record<
 const UNREADABLE_BAND_STYLE = BAND_STYLES.not_enough_data;
 
 function formatValue(value: number | null | undefined): string {
-  return value === null || value === undefined ? "—" : value.toFixed(2);
+  if (value === null || value === undefined) {
+    return "—";
+  }
+  const text = value.toFixed(2);
+  // A hair below zero rounds to "-0.00", which reads as a glitch, not a
+  // figure.
+  return text === "-0.00" ? "0.00" : text;
 }
 
 /**
@@ -194,6 +200,12 @@ function SignalMeter({ signal }: { signal: SmurfBoostSignal }) {
       <div
         className="absolute inset-y-0 w-0.5 bg-foreground/60"
         style={{ left: `${METER_TICK_PERCENT}%` }}
+      />
+      {/* The value's endpoint, drawn even when the bar has no length: a
+          value sitting at zero must still show up on its own meter. */}
+      <div
+        className="absolute inset-y-0 w-1 -translate-x-1/2 rounded-full bg-primary"
+        style={{ left: `${position}%` }}
       />
     </div>
   );
