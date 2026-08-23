@@ -141,13 +141,18 @@ function SignalOutcome({ signal }: { signal: SmurfBoostSignal }) {
 /**
  * The measured value drawn against its threshold.
  *
- * The tick sits at a fixed fraction of the track, so "how close is this value
+ * The marks sit at fixed fractions of the track, so "how close is this value
  * to mattering" reads the same in every row even though the rows' units
- * differ. Length carries the number and the outcome stays worded in the pill
- * beside it — colour encodes nothing, per the specification. Decorative on
- * purpose: the figures beside the bar are the accessible reading.
+ * differ. The bar grows from the zero notch toward the threshold tick —
+ * leftward when the value is negative, because a standardized score sits
+ * below the player's own baseline as easily as above it, and clamping a
+ * negative to an empty bar read as a rendering bug rather than a reading.
+ * Length carries the number and the outcome stays worded in the pill beside
+ * it — colour encodes nothing, per the specification. Decorative on purpose:
+ * the figures beside the bar are the accessible reading.
  */
-const METER_TICK_PERCENT = 62;
+const METER_ZERO_PERCENT = 25;
+const METER_TICK_PERCENT = 70;
 
 function SignalMeter({ signal }: { signal: SmurfBoostSignal }) {
   const value = signal.raw_value;
@@ -163,18 +168,28 @@ function SignalMeter({ signal }: { signal: SmurfBoostSignal }) {
   ) {
     return null;
   }
-  const fill = Math.min(
+  const position = Math.min(
     100,
-    Math.max(0, (value / threshold) * METER_TICK_PERCENT),
+    Math.max(
+      0,
+      METER_ZERO_PERCENT +
+        (value / threshold) * (METER_TICK_PERCENT - METER_ZERO_PERCENT),
+    ),
   );
+  const left = Math.min(METER_ZERO_PERCENT, position);
+  const width = Math.abs(position - METER_ZERO_PERCENT);
   return (
     <div
       aria-hidden="true"
       className="relative h-2 min-w-24 flex-1 overflow-hidden rounded-full bg-muted/60"
     >
       <div
-        className="absolute inset-y-0 left-0 rounded-full bg-primary/70"
-        style={{ width: `${fill}%` }}
+        className="absolute inset-y-0 rounded-full bg-primary/70"
+        style={{ left: `${left}%`, width: `${width}%` }}
+      />
+      <div
+        className="absolute inset-y-0 w-0.5 bg-muted-foreground/50"
+        style={{ left: `${METER_ZERO_PERCENT}%` }}
       />
       <div
         className="absolute inset-y-0 w-0.5 bg-foreground/60"
@@ -245,7 +260,8 @@ function SignalList({ family }: { family: SmurfBoostFamily }) {
       </ul>
 
       <p className="mt-2 text-sm text-muted-foreground">
-        Each bar reaches toward the tick that marks its threshold; the figures
+        Each bar grows from its zero notch toward the bright tick that marks
+        the threshold — leftward when the value is negative; the figures
         beside it read value / threshold. Units are named in each description:
         standardized units, a win rate, or doublings of spread.
       </p>
