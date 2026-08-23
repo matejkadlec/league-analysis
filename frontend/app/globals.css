@@ -48,7 +48,7 @@
     color-scheme: dark;
     --color-background: #00091a;
     --color-foreground: oklch(98% 0 0);
-    --color-card: #0a1428;
+    --color-card: #0e1c38;
     --color-card-foreground: oklch(98% 0 0);
     --color-popover: oklch(9.8% 0.038 285.88);
     --color-popover-foreground: oklch(98% 0 0);
@@ -62,7 +62,7 @@
     --color-accent-foreground: oklch(98% 0 0);
     --color-destructive: oklch(59.993% 0.2355 29.756);
     --color-destructive-foreground: oklch(98% 0 0);
-    --color-border: oklch(17.5% 0.035 265.99);
+    --color-border: oklch(28% 0.045 265.99);
     --color-input: oklch(17.5% 0.035 265.99);
     --color-ring: oklch(48% 0.188 275.75);
   }
@@ -101,7 +101,7 @@
   #content {
     position: relative;
     background-image:
-      linear-gradient(rgba(0, 9, 26, 0.6), rgba(0, 9, 26, 0.6)),
+      linear-gradient(rgba(0, 9, 26, 0.72), rgba(0, 9, 26, 0.72)),
       url(/background.jpg);
     background-size: cover;
     background-position: center;
