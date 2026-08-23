@@ -280,6 +280,19 @@ export function SmurfBoostSettingsDialog() {
       <DialogContent
         id="smurf-boost-settings"
         className="max-h-[92vh] max-w-6xl overflow-y-auto p-5"
+        // A stray click on the dimmed page or a reflexive Escape must not
+        // throw away an edited draft: fifteen fields are a lot to retype.
+        // The X and the Discard button remain the deliberate ways out.
+        onInteractOutside={(event) => {
+          if (draft !== null) {
+            event.preventDefault();
+          }
+        }}
+        onEscapeKeyDown={(event) => {
+          if (draft !== null) {
+            event.preventDefault();
+          }
+        }}
       >
         <DialogHeader>
           <div className="flex flex-wrap items-center gap-2">

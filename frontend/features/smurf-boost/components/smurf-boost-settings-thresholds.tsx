@@ -64,7 +64,9 @@ export function SmurfBoostSettingsThresholds({
 
   return (
     <div className="space-y-3">
-      <h4 className="text-base font-semibold">Thresholds</h4>
+      {/* `h3`: these sections sit directly under the `DialogTitle`'s `h2`,
+          not under a CardTitle's `h3`. */}
+      <h3 className="text-base font-semibold">Thresholds</h3>
       <Tabs defaultValue="windows">
         <TabsList className="h-auto flex-wrap justify-start">
           {GROUPS.map((group) => (

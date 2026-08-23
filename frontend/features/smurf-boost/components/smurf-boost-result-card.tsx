@@ -173,7 +173,17 @@ function SignalItem({ signal }: { signal: SmurfBoostSignal }) {
       {signal.available && (
         <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1">
           <SignalMeter signal={signal} />
-          <span className="whitespace-nowrap font-mono text-sm">
+          {/* The visible figures lean on the meter and the footnote for
+              their meaning; a screen reader gets the words instead of two
+              bare numbers. */}
+          <span className="sr-only">
+            Measured {formatValue(signal.raw_value)} against threshold{" "}
+            {formatValue(signal.threshold)}.
+          </span>
+          <span
+            aria-hidden="true"
+            className="whitespace-nowrap font-mono text-sm"
+          >
             {formatValue(signal.raw_value)}
             <span className="text-muted-foreground">
               {" / "}
