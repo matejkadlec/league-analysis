@@ -130,9 +130,11 @@ export function SmurfBoostExplanationCard() {
           the comparison can be relied on, never what it found.
         </p>
 
-        <div className="rounded-md border-l-2 border-l-[#cfa93a] bg-muted/40 p-3">
-          <p className="text-sm leading-relaxed">{DISCLAIMER}</p>
-        </div>
+        {/* Permanent and plain per the specification -- never a tooltip,
+            never collapsed -- so quiet means a muted footnote, not less. */}
+        <p className="border-t border-border/40 pt-3 text-sm leading-snug text-muted-foreground">
+          {DISCLAIMER}
+        </p>
       </CardContent>
     </Card>
   );

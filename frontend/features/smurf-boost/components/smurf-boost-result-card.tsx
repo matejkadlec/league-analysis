@@ -1,6 +1,6 @@
 "use client";
 
-import { CircleAlert, CircleHelp, Gauge, ShieldQuestion } from "lucide-react";
+import { Gauge, ShieldQuestion } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -418,25 +418,18 @@ export function SmurfBoostResultCard({
           </p>
         )}
 
-        {results.notes.length > 0 && (
-          <div className="space-y-2">
-            <h4 className="flex items-center gap-2 text-sm font-medium">
-              <CircleAlert className="h-4 w-4 text-muted-foreground" />
-              Limits of This Data
-            </h4>
-            <ul className="space-y-1">
-              {results.notes.map((note) => (
-                <li key={note} className="text-sm text-muted-foreground">
-                  {noteLabel(note)}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        <div className="flex gap-2 rounded-md border border-border/60 bg-muted/40 p-3">
-          <CircleHelp className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-          <p className="text-sm leading-relaxed text-muted-foreground">
+        {/* Footnotes, not callouts. The specification wants both permanent
+            and plain -- never a tooltip, never collapsed -- so quiet means
+            small muted prose at the bottom, not hidden behind a hover that
+            a phone does not have. */}
+        <div className="space-y-2 border-t border-border/40 pt-3">
+          {results.notes.length > 0 && (
+            <p className="text-sm leading-snug text-muted-foreground">
+              <span className="font-medium">Limits of This Data:</span>{" "}
+              {results.notes.map(noteLabel).join(" ")}
+            </p>
+          )}
+          <p className="text-sm leading-snug text-muted-foreground">
             {results.disclaimer}
           </p>
         </div>
