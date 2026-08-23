@@ -18,7 +18,7 @@ const SURFACE_FILES = [
   "features/smurf-boost/components/smurf-boost-detection.tsx",
   "features/smurf-boost/components/smurf-boost-explanation-card.tsx",
   "features/smurf-boost/components/smurf-boost-result-card.tsx",
-  "features/smurf-boost/components/smurf-boost-settings-card.tsx",
+  "features/smurf-boost/components/smurf-boost-settings-dialog.tsx",
   "features/smurf-boost/components/smurf-boost-settings-presets.tsx",
   "features/smurf-boost/components/smurf-boost-settings-thresholds.tsx",
 ];
@@ -87,7 +87,7 @@ describe("the Rank Manipulation surface", () => {
         "What This Page Does",
       ],
       [
-        "features/smurf-boost/components/smurf-boost-settings-card.tsx",
+        "features/smurf-boost/components/smurf-boost-settings-dialog.tsx",
         "Detection Settings",
       ],
       [

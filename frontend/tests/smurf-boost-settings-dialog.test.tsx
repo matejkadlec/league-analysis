@@ -39,7 +39,7 @@ vi.mock("@/features/smurf-boost/smurf-boost-api", () => ({
 
 vi.mock("sonner", () => ({ toast }));
 
-import { SmurfBoostSettingsDialog } from "../features/smurf-boost/components/smurf-boost-settings-card";
+import { SmurfBoostSettingsDialog } from "../features/smurf-boost/components/smurf-boost-settings-dialog";
 import { THRESHOLD_FIELDS } from "../features/smurf-boost/smurf-boost-settings";
 
 /** The Conservative preset exactly as the live API emits it. */

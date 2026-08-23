@@ -23,7 +23,7 @@ import {
 } from "../smurf-boost-query";
 import { gameShortfall } from "../smurf-boost-settings";
 import { SmurfBoostResultCard } from "./smurf-boost-result-card";
-import { SmurfBoostSettingsDialog } from "./smurf-boost-settings-card";
+import { SmurfBoostSettingsDialog } from "./smurf-boost-settings-dialog";
 
 // The two statuses for a run that has not reached a terminal state. A run is
 // owned by the account that asked for it, so a start returns one of these only

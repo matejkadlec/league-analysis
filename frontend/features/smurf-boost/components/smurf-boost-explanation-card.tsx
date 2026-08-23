@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 import {
   BAND_LABELS,
+  BAND_STYLES,
   DISCLAIMER,
   FAMILY_DESCRIPTIONS,
   FAMILY_TITLES,
@@ -18,13 +19,14 @@ import { cn } from "@/lib/core/utils";
  * readings wear the same colour ladder the result card uses.
  */
 
-// The readings a comparison can produce, in escalation order, wearing the
-// exact colours `smurf-boost-result-card.tsx` renders them in.
+// The readings a comparison can produce, in escalation order. Each wears its
+// band's own dot from the shared ladder, so this scale and the result card
+// cannot colour the same band differently.
 const READING_SCALE = [
-  { band: "no_unusual_pattern", dot: "bg-emerald-500" },
-  { band: "weak_indicators", dot: "bg-yellow-500" },
-  { band: "notable_indicators", dot: "bg-amber-500" },
-  { band: "strong_indicators", dot: "bg-rose-500" },
+  "no_unusual_pattern",
+  "weak_indicators",
+  "notable_indicators",
+  "strong_indicators",
 ] as const;
 
 function DotRow({ count, className }: { count: number; className: string }) {
@@ -98,7 +100,7 @@ export function SmurfBoostExplanationCard() {
         {/* Each area answers on this scale; the colours match the result
             card, so the reading is recognisable before it is read. */}
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
-          {READING_SCALE.map(({ band, dot }, index) => (
+          {READING_SCALE.map((band, index) => (
             <span key={band} className="flex items-center gap-2">
               {/* Hidden on a phone: the scale wraps there, and a chevron
                   stranded at a line start points at nothing. */}
@@ -110,7 +112,7 @@ export function SmurfBoostExplanationCard() {
               )}
               <span className="flex items-center gap-1.5 text-sm font-medium">
                 <span
-                  className={cn("h-2 w-2 rounded-full", dot)}
+                  className={cn("h-2 w-2 rounded-full", BAND_STYLES[band].dot)}
                   aria-hidden="true"
                 />
                 {BAND_LABELS[band]}

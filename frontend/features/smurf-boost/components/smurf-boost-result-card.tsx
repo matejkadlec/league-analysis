@@ -15,6 +15,7 @@ import { gameShortfall } from "../smurf-boost-settings";
 import { cn } from "@/lib/core/utils";
 import {
   BAND_LABELS,
+  BAND_STYLES,
   bandMeaning,
   CONFIDENCE_LABELS,
   familyDescription,
@@ -29,28 +30,6 @@ interface SmurfBoostResultCardProps {
   /** The exact threshold set the run was computed with. */
   thresholds: Record<string, number>;
 }
-
-/**
- * One colour ladder, read two ways: the band word takes the text colour and
- * the family's card takes the same step as a left edge. Colour never encodes
- * a number and never carries the reading alone; the band word is beside it.
- */
-const BAND_STYLES: Record<
-  SmurfBoostFamily["band"],
-  { text: string; accent: string }
-> = {
-  strong_indicators: { text: "text-rose-500", accent: "border-l-rose-500" },
-  notable_indicators: { text: "text-amber-500", accent: "border-l-amber-500" },
-  weak_indicators: { text: "text-yellow-500", accent: "border-l-yellow-500" },
-  no_unusual_pattern: {
-    text: "text-emerald-500",
-    accent: "border-l-emerald-500",
-  },
-  not_enough_data: {
-    text: "text-muted-foreground",
-    accent: "border-l-muted-foreground",
-  },
-};
 
 const UNREADABLE_BAND_STYLE = BAND_STYLES.not_enough_data;
 
