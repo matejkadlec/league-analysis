@@ -375,7 +375,6 @@ export function SmurfBoostDetection({
                 if (!puuid) {
                   return;
                 }
-                setStaleFetch(null);
                 setComparisonOwed(true);
                 startSync();
               }}

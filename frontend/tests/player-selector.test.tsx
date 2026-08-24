@@ -100,6 +100,24 @@ describe("PlayerSelector", () => {
     expect((box as HTMLInputElement).value).toBe("Search");
   });
 
+  it("still reaches discovery for a name typed over a seeded box", async () => {
+    // The other half of the Enter guard. It has to refuse only the value the
+    // box was seeded with -- narrow it any further and adding an untracked
+    // player, the whole point of the discover path, stops working.
+    searchPlayerSuggestions.mockResolvedValue({ success: true, data: [] });
+    const user = userEvent.setup();
+    renderSelector(vi.fn(), "Selected#TAG");
+
+    const box = screen.getByLabelText("Choose test player");
+    await user.click(box);
+    await user.keyboard("Target#NEW");
+    await user.keyboard("{Enter}");
+
+    expect(
+      await screen.findByRole("button", { name: /Select player/ }),
+    ).toBeTruthy();
+  });
+
   it("stops typing at what the suggestions query accepts", () => {
     // Past `q`'s bound the query 422s and the shared QueryCache toasts an
     // error, which is a worse answer to a long paste than no results.

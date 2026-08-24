@@ -762,6 +762,12 @@ describe("SmurfBoostDetection", () => {
     await waitFor(() =>
       expect(screen.getByText("Notable indicators")).toBeTruthy(),
     );
+    // A start that never happened has no run to quote, so the card falls back
+    // to its own sentence -- but it still says the games are not fresh.
+    expect(
+      screen.getByText(/newest games could not be fetched/),
+    ).toBeTruthy();
+    expect(toast.error).not.toHaveBeenCalled();
   });
 
   it("compares on stored games when the fetch does not finish", async () => {
@@ -792,6 +798,10 @@ describe("SmurfBoostDetection", () => {
       expect(screen.getByText("Notable indicators")).toBeTruthy(),
     );
     expect(validatedPost).toHaveBeenCalled();
+    // The hook's own warning for this run stays silent: two accounts of one
+    // click contradict each other, and its wording is written for the Player
+    // Card. This card's inline notice is the account that survives.
+    expect(toast.warning).not.toHaveBeenCalled();
     // Inline, not a toast that disappears: without it this reads exactly like
     // a run on games fetched a second ago. In the backend's own words, too --
     // a sentence of our own would promise a retry that a stale player id or
@@ -828,6 +838,12 @@ describe("SmurfBoostDetection", () => {
     });
     renderCard();
 
+    // No promise of a comparison for an update this card did not start.
+    await waitFor(() =>
+      expect(
+        screen.getByText(/Run the comparison once it has finished/),
+      ).toBeTruthy(),
+    );
     await waitFor(() =>
       expect(
         screen.getByText(/Another data update is already running\./),
@@ -905,6 +921,51 @@ describe("SmurfBoostDetection", () => {
     expect(startSmurfBoostDetection).not.toHaveBeenCalled();
   });
 
+  it("can be run a second time without a reload", async () => {
+    // The owed comparison has one path back to false. Lose it and the button
+    // stays disabled on "Comparing games..." for the life of the mount --
+    // which no test saw, because every other one runs the comparison once.
+    getLatestSmurfBoostDetection.mockResolvedValue({
+      success: true,
+      data: analysis(),
+    });
+    startSmurfBoostDetection.mockResolvedValue({
+      success: true,
+      data: analysis(),
+    });
+    // A fresh run id per start: the hook handles each terminal run once, so
+    // repeating an id would deadlock this on the mock rather than on the card.
+    let startedRuns = 0;
+    validatedGet.mockImplementation(async (_schema: unknown, path: string) => {
+      if (path.endsWith("/sync/active")) {
+        return { success: true, data: null };
+      }
+      return { success: true, data: syncRun({ id: startedRuns }) };
+    });
+    validatedPost.mockImplementation(async () => {
+      startedRuns += 1;
+      return {
+        success: true,
+        data: syncRun({ id: startedRuns, status: "pending" }),
+      };
+    });
+    const user = userEvent.setup();
+    renderCard();
+
+    await waitFor(() => expect(runButton()).toBeTruthy());
+    await user.click(runButton());
+    await waitFor(() =>
+      expect(startSmurfBoostDetection).toHaveBeenCalledTimes(1),
+    );
+
+    await waitFor(() => expect(runButton().hasAttribute("disabled")).toBe(false));
+    await user.click(runButton());
+    await waitFor(() =>
+      expect(startSmurfBoostDetection).toHaveBeenCalledTimes(2),
+    );
+    expect(validatedPost).toHaveBeenCalledTimes(2);
+  });
+
   it("keeps the button shut until the comparison it owes has started", async () => {
     // The hook reports the run finished and only then awaits its cache
     // refresh before calling back. A click landing in that gap would be
@@ -969,6 +1030,11 @@ describe("SmurfBoostDetection", () => {
           screen.getByText(/Fetching this player's games from Riot/),
         ).toBeTruthy(),
       );
+      // A fetch this card started: the alert may promise the comparison that
+      // follows it. The adopted-run test pins the other branch.
+      expect(
+        screen.getByText(/comparison runs on its own as soon as the fetch/),
+      ).toBeTruthy();
     }
 
     it("names it when the stored history is genuinely short", async () => {
