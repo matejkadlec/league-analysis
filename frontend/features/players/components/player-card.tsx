@@ -107,10 +107,7 @@ export function PlayerCard({ player, onRefreshAll }: PlayerCardProps) {
                   variant="outline"
                   size="sm"
                   className="button-small"
-                  // Wrapped: `startSync` now takes an optional PUUID, and
-                  // handed straight to `onClick` it would be given the click
-                  // event as the player to update.
-                  onClick={() => startSync()}
+                  onClick={startSync}
                   disabled={isUpdating}
                 >
                   {isUpdating ? (

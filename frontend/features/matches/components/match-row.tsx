@@ -134,11 +134,16 @@ function getMatchOutcome(match: MatchWithPlayerData): {
 }
 
 /**
- * Names a wordless icon on hover and on keyboard focus. `tabIndex` is what
- * buys the second half: `asChild` hands the trigger to a plain `div`, which
- * is not focusable on its own, so without it the name is mouse-only. The same
- * label goes on the image's `alt`, so a screen reader that never opens the
- * tooltip still gets it, and the two cannot drift apart.
+ * Names a wordless icon on hover and on keyboard focus.
+ *
+ * Focus is the caller's job, not this component's: `asChild` hands the trigger
+ * to whatever child it is given, and a plain `div` is not focusable, so the
+ * icon-only callers pass `tabIndex={0}` and the two button callers need
+ * nothing. Where the trigger is an icon and nothing else, the same string is
+ * also the image's `alt`, so a screen reader that never opens the tooltip
+ * still gets the name. The two participant triggers are buttons and do not
+ * work that way: their label is the Riot ID, their `alt` is the champion, and
+ * their accessible name is the `aria-label` that names both.
  */
 function IconTooltip({
   label,
@@ -165,8 +170,11 @@ function renderSummonerSpell(
 ) {
   if (!spellId) return <div className="h-5 w-5 bg-muted rounded" />;
   const url = getSummonerSpellIconUrlById(spellId, ddragonVersion);
-  if (!url) return <div className="h-5 w-5 bg-muted rounded" />;
-  const name = getSummonerSpellName(spellId) ?? "Summoner spell";
+  // Both or neither: art and name come out of the same entry, so an id this
+  // build does not know falls back to the placeholder rather than to an icon
+  // labelled "Summoner spell", which named nothing and read as a real answer.
+  const name = getSummonerSpellName(spellId);
+  if (!url || !name) return <div className="h-5 w-5 bg-muted rounded" />;
   return (
     <IconTooltip label={name}>
       <div

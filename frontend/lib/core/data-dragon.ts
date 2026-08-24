@@ -103,8 +103,10 @@ export function getChampionDisplayName(championName: string): string {
  *
  * The IDs come from the Riot API; `asset` builds the icon URL and `name` is
  * what the spell is called in game, both taken from `summoner.json` (en_US).
- * Kept in the same `{ name, asset }` shape as the rune maps below so a caller
- * never has to reach for a second, drifting table of names.
+ * Kept in the same one-entry-carries-both shape as the rune maps below — the
+ * second field is `iconPath` there and `asset` here because one is a path and
+ * the other a filename — so a caller never has to reach for a second, drifting
+ * table of names.
  */
 const SUMMONER_SPELL_MAP: Record<number, { name: string; asset: string }> = {
   1: { name: "Cleanse", asset: "SummonerBoost" },

@@ -146,12 +146,16 @@ export function PlayerContextProvider({
     ) {
       return;
     }
+    // The ref stays set on failure. Clearing it retried, and this effect
+    // depends on `updateCurrentMutation` — an object `useMutation` replaces on
+    // every state transition — so the failure that cleared the ref also re-ran
+    // the effect, which mutated again, which failed again: an unbounded PUT
+    // loop against a 500 or a dropped connection, with no toast, for as long
+    // as the page stayed open. One attempt per PUUID is enough; a choice that
+    // did not persist costs the viewer a default on their next visit, not the
+    // page they are on.
     persistedUrlPuuidRef.current = urlPuuid;
-    updateCurrentMutation.mutate(urlPuuid, {
-      onError: () => {
-        persistedUrlPuuidRef.current = null;
-      },
-    });
+    updateCurrentMutation.mutate(urlPuuid);
   }, [contextQuery.data, updateCurrentMutation, urlPlayerQuery.data, urlPuuid]);
 
   const { mutate: startProfileUpdate } = usePlayerProfileUpdate();
@@ -176,9 +180,10 @@ export function PlayerContextProvider({
 
   // `urlPuuid`, not `urlPlayerQuery.data?.puuid`: the row behind the URL is
   // still loading right after a switch, so reading the loaded player would
-  // leave this null for as long as the fetch takes — and a second click on the
-  // same icon in that window would pass the guard below and start the update
-  // twice. The URL is who was chosen whether or not their row has arrived.
+  // leave this on the *previous* player for as long as the fetch takes — and a
+  // second click on the same icon in that window would pass the guard below
+  // and start the update twice. The URL is who was chosen whether or not their
+  // row has arrived.
   const currentPuuid =
     urlPuuid ?? contextQuery.data?.current_player?.puuid ?? null;
 

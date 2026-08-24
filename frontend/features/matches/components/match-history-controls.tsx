@@ -58,8 +58,8 @@ interface MatchHistoryPaginationBarProps {
   apiTotalMatches: number;
   /**
    * The stored total is not the final one: an update run is still writing
-   * matches, so a range read off it would count down from a number that keeps
-   * moving.
+   * matches, so a range read off it would be measured against a denominator
+   * that keeps climbing.
    */
   isTotalPending: boolean;
   paginationItems: MatchHistoryPaginationItem[];

@@ -76,10 +76,14 @@ export function MatchHistory({
     // something else happened to refetch. The hook refreshes on a completed
     // run only. Scoped to this card's own two caches rather than everything
     // keyed by the PUUID: other cards decide for themselves what a failed
-    // fetch means for what they show, and Smurf Boost deliberately reports
-    // nothing about a fetch that did not finish.
+    // fetch means for what they show. Smurf Boost reports the failure itself
+    // but deliberately quotes no games-added count for it, and refreshing its
+    // stored-game count from here is what would put a number back.
     onSettled: (run) => {
-      if (!run || run.status === "completed") {
+      // `null` is a run whose status could not be read — a poll that gave up
+      // part-way through the writing. That is the case with the most rows
+      // stranded, not the one to skip.
+      if (run?.status === "completed") {
         return;
       }
       void queryClient.refetchQueries({
@@ -153,8 +157,9 @@ export function MatchHistory({
     placeholderData: (previousData) => previousData,
     staleTime: 60000,
     // While the player's own update run is storing matches, this is what makes
-    // them appear: the query is the only thing that knows the stored total, and
-    // the run writes rows the whole time it is going. 2s rather than the 5s
+    // them appear: it is the only query that carries the rows themselves and
+    // the total the pagination is built from, and the run writes rows the whole
+    // time it is going. 2s rather than the 5s
     // below because the empty-history case is waiting for a first row to exist
     // at all, while this one is a list visibly filling up.
     refetchInterval: (query) =>
@@ -258,7 +263,7 @@ export function MatchHistory({
       <MatchHistoryHeader
         lastUpdated={lastUpdated}
         isUpdating={isUpdating}
-        onUpdate={() => startSync()}
+        onUpdate={startSync}
         activeQueueFilters={activeQueueFilters}
         onQueueFilterSelect={handleQueueFilterSelect}
         matchSearch={matchSearch}

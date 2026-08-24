@@ -135,10 +135,12 @@ export function usePlayerProfileUpdate({
  * calls `startSync`; the options above are for a surface that reports the run
  * itself or has its own next step to take.
  *
- * `isUpdating` derives from run status rather than local state, so a failed
- * poll can never leave a surface stuck reporting an update that is not
- * happening. Poll errors themselves are reported by the global query-error
- * toast in `components/providers.tsx`.
+ * `isUpdating` derives from run status, but not from status alone: the last
+ * good status survives a failed poll, so reading it by itself left a surface
+ * reporting an update forever whenever the poll stopped answering. A run whose
+ * status can no longer be read is not an update in progress, and the caller
+ * has already been released. Poll errors themselves are reported by the global
+ * query-error toast in `components/providers.tsx`.
  */
 export function usePlayerSyncRun(
   puuid: string,
@@ -154,6 +156,16 @@ export function usePlayerSyncRun(
     id: number;
   } | null>(null);
   const handledTerminalSyncIds = useRef(new Set<number>());
+  // Deliberately not the same Set. "I gave up reading this run" and "this run
+  // reached a terminal status" are different facts: sharing one meant a poll
+  // that failed for a few seconds marked the run handled, and when the poll
+  // recovered and returned `completed` the terminal effect below skipped it —
+  // no cache invalidation, no `onCompleted`, no success toast, for a run that
+  // really did finish. A caller can therefore be released twice: once with
+  // `null` when the poll dies, and again with the run if it comes back. That
+  // is the right way round — the second call carries better news than the
+  // first, and both callers here re-read rather than accumulate.
+  const releasedUnreadableSyncIds = useRef(new Set<number>());
 
   const activeSyncQuery = useQuery({
     queryKey: playerSyncActiveQueryKey(puuid),
@@ -169,7 +181,8 @@ export function usePlayerSyncRun(
     // `/players//sync/active` is a 404 the global query-error toast would
     // report on every such mount.
     enabled: puuid !== "",
-    refetchInterval: (query) => (query.state.data ? 1_000 : false),
+    refetchInterval: (query) =>
+      query.state.data ? (query.state.fetchFailureCount > 0 ? 15_000 : 1_000) : false,
   });
 
   // Adopt whatever run `/sync/active` reports, during render: the guard is
@@ -191,21 +204,22 @@ export function usePlayerSyncRun(
       );
     },
     enabled: observedSyncId !== null,
+    // Backed off rather than stopped once the poll starts failing: `data`
+    // survives an error, so the status still reads `running` and this would
+    // otherwise retry every second, forever, against a dead endpoint. Still
+    // polling at all is what lets a recovered backend finish the run properly.
     refetchInterval: (query) =>
       query.state.data?.status === "pending" ||
       query.state.data?.status === "running"
-        ? 1_000
+        ? query.state.fetchFailureCount > 0
+          ? 15_000
+          : 1_000
         : false,
   });
 
   const profileUpdate = usePlayerProfileUpdate({
-    onStartRefused: (targetPuuid) => {
-      // Only this hook's own player. Starting somebody else's update is a
-      // player switch, and its failure is not this surface's next step to
-      // release.
-      if (targetPuuid === puuid) {
-        void onSettled?.(null);
-      }
+    onStartRefused: () => {
+      void onSettled?.(null);
     },
   });
 
@@ -299,11 +313,12 @@ export function usePlayerSyncRun(
     if (
       !pollFailed ||
       observedSyncId === null ||
-      handledTerminalSyncIds.current.has(observedSyncId)
+      handledTerminalSyncIds.current.has(observedSyncId) ||
+      releasedUnreadableSyncIds.current.has(observedSyncId)
     ) {
       return;
     }
-    handledTerminalSyncIds.current.add(observedSyncId);
+    releasedUnreadableSyncIds.current.add(observedSyncId);
     releaseUnreadableRun();
   }, [pollFailed, observedSyncId]);
 
@@ -311,8 +326,7 @@ export function usePlayerSyncRun(
   const syncStatus: PlayerSyncRun["status"] | undefined = observedRun?.status;
   const isUpdating =
     profileUpdate.isPending ||
-    syncStatus === "pending" ||
-    syncStatus === "running";
+    (!pollFailed && (syncStatus === "pending" || syncStatus === "running"));
 
   return {
     isUpdating,
@@ -327,23 +341,19 @@ export function usePlayerSyncRun(
      */
     isFetchingMatches: isUpdating && !observedRun?.match_execution_id,
     /**
-     * Start this player's update, or — given a PUUID — somebody else's.
+     * Start this player's update.
      *
-     * The cross-player form is for a surface that is switching player: it
-     * starts the incoming player's update from the outgoing player's mount.
-     * Only the same-player form adopts the run for polling here; the other
-     * player's own `usePlayerSyncRun` picks it up from the seeded
-     * `player-sync-active` entry once it mounts.
+     * Deliberately takes no target: a surface switching to somebody else calls
+     * `usePlayerProfileUpdate` directly, which is what `player-context` does.
+     * A defaulted PUUID parameter here read as an ordinary optional argument
+     * and meant every bare `onClick={startSync}` handed React's click event in
+     * as the player to update.
      */
-    startSync: (targetPuuid: string = puuid) =>
+    startSync: () =>
       profileUpdate.mutate(
-        { puuid: targetPuuid, quiet },
+        { puuid, quiet },
         {
-          onSuccess: (syncRun) => {
-            if (targetPuuid === puuid) {
-              setObservedSync({ puuid, id: syncRun.id });
-            }
-          },
+          onSuccess: (syncRun) => setObservedSync({ puuid, id: syncRun.id }),
         },
       ),
   };
