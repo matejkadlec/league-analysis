@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactElement } from "react";
 import Image from "next/image";
 import { Swords } from "lucide-react";
 
@@ -14,12 +15,14 @@ import {
   getChampionDisplayName,
   getSummonerSpellIconUrlById,
   getKeystoneIconUrlById,
+  getKeystoneName,
   getRuneStyleIconUrl,
   getRuneStyleName,
+  getSummonerSpellName,
 } from "@/lib/core/data-dragon";
 import { formatDateTime } from "@/lib/core/format";
 import { useDDragonVersion } from "@/lib/core/data-dragon-context";
-import { formatMatchLpChange } from "../utils/lp-change";
+import { formatRiotId } from "@/features/players";
 import {
   Tooltip,
   TooltipContent,
@@ -33,6 +36,8 @@ import { TeamObjectiveStats } from "./objective-icons";
 interface MatchRowProps {
   match: MatchWithPlayerData;
   playerPuuid: string;
+  /** Make this participant the application's current player. */
+  onSelectPlayer: (puuid: string) => void;
 }
 
 interface MatchSideParticipant {
@@ -44,6 +49,31 @@ interface MatchSideParticipant {
   summoner1_id?: number | null | undefined;
   summoner2_id?: number | null | undefined;
   runes?: ParticipantRunes | null | undefined;
+  // Optional because the two shapes this stands in for differ: the API
+  // identifies the lane opponent, but not the current player's own
+  // participant — that row's identity is the page you are already on. An
+  // unidentified side is therefore also an unswitchable one, which is exactly
+  // the rule the icons need.
+  puuid?: string | undefined;
+  game_name?: string | undefined;
+  tag_line?: string | undefined;
+}
+
+/**
+ * The Riot ID and PUUID of a participant it is possible to switch to, or
+ * `null` for one it is not.
+ */
+function switchTarget(
+  participant: MatchSideParticipant | null | undefined,
+): { puuid: string; riotId: string } | null {
+  if (!participant?.puuid || !participant.game_name) return null;
+  return {
+    puuid: participant.puuid,
+    riotId: formatRiotId({
+      game_name: participant.game_name,
+      tag_line: participant.tag_line ?? "",
+    }),
+  };
 }
 
 function formatDuration(seconds: number): string {
@@ -85,25 +115,48 @@ function getDaysAgo(timestamp: number): string {
  * colour is never the only carrier of meaning).
  *
  * The remake check comes before the win check on purpose: a remake is
- * annulled, so neither side won it. A missing participant is a data gap,
- * not a loss — neutral tint, no verdict word, and not a remake either
- * (`isRemake` also feeds the LP cell, which must not call a data gap a
- * played remake).
+ * annulled, so neither side won it. A missing participant is a data gap, not
+ * a loss — neutral tint and no verdict word, rather than a row that reads as
+ * a game the player lost.
  */
 function getMatchOutcome(match: MatchWithPlayerData): {
   label: string;
   bgClass: string;
-  isRemake: boolean;
 } {
   const participant = match.player_participant;
 
-  if (!participant)
-    return { label: "—", bgClass: "bg-muted/30", isRemake: false };
+  if (!participant) return { label: "—", bgClass: "bg-muted/30" };
   if (participant.remake || match.early_surrender)
-    return { label: "Remake", bgClass: "bg-gray-500/50", isRemake: true };
+    return { label: "Remake", bgClass: "bg-gray-500/50" };
   if (participant.win)
-    return { label: "Victory", bgClass: "bg-emerald-700/30", isRemake: false };
-  return { label: "Defeat", bgClass: "bg-rose-600/30", isRemake: false };
+    return { label: "Victory", bgClass: "bg-emerald-700/30" };
+  return { label: "Defeat", bgClass: "bg-rose-600/30" };
+}
+
+/**
+ * Names a wordless icon on hover and on keyboard focus. `tabIndex` is what
+ * buys the second half: `asChild` hands the trigger to a plain `div`, which
+ * is not focusable on its own, so without it the name is mouse-only. The same
+ * label goes on the image's `alt`, so a screen reader that never opens the
+ * tooltip still gets it, and the two cannot drift apart.
+ */
+function IconTooltip({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactElement;
+}) {
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>{children}</TooltipTrigger>
+        <TooltipContent>
+          <p>{label}</p>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
 }
 
 function renderSummonerSpell(
@@ -113,17 +166,23 @@ function renderSummonerSpell(
   if (!spellId) return <div className="h-5 w-5 bg-muted rounded" />;
   const url = getSummonerSpellIconUrlById(spellId, ddragonVersion);
   if (!url) return <div className="h-5 w-5 bg-muted rounded" />;
+  const name = getSummonerSpellName(spellId) ?? "Summoner spell";
   return (
-    <div className="relative rounded-sm h-5 w-5 overflow-hidden shrink-0 border border-black/30">
-      <Image
-        src={url}
-        alt="Summoner Spell"
-        fill
-        sizes="20px"
-        className="object-cover"
-        unoptimized
-      />
-    </div>
+    <IconTooltip label={name}>
+      <div
+        tabIndex={0}
+        className="relative rounded-sm h-5 w-5 overflow-hidden shrink-0 border border-black/30"
+      >
+        <Image
+          src={url}
+          alt={name}
+          fill
+          sizes="20px"
+          className="object-cover"
+          unoptimized
+        />
+      </div>
+    </IconTooltip>
   );
 }
 
@@ -157,50 +216,123 @@ function renderRunes(
   const subStyleIconUrl = runes.sub_style
     ? getRuneStyleIconUrl(runes.sub_style)
     : null;
+  const keystoneName = runes.keystone ? getKeystoneName(runes.keystone) : null;
   const primaryStyleName = runes.primary_style
     ? getRuneStyleName(runes.primary_style)
     : null;
   const subStyleName = runes.sub_style
     ? getRuneStyleName(runes.sub_style)
     : null;
+  // The top icon is the keystone whenever we have art for it, so its label
+  // has to be the keystone too — naming it "Precision" over a Conqueror icon
+  // is the bug this replaced. Both come out of the same keystone table, so
+  // the label falls back to the tree exactly when the icon does.
+  const primaryLabel = keystoneName || primaryStyleName || "Primary rune style";
+  // The bottom icon really is the secondary tree, and keeps saying so.
+  const subLabel = subStyleName || "Secondary rune style";
 
   return (
     <div className="flex flex-col gap-0.5 items-center">
-      <div
-        className="relative h-7 w-7 rounded-full overflow-hidden shrink-0 mb-1"
-        title={primaryStyleName || "Primary rune style"}
-      >
-        {primaryStyleIconUrl ? (
-          <Image
-            src={primaryStyleIconUrl}
-            alt={primaryStyleName || "Primary rune style"}
-            fill
-            sizes="28px"
-            className="object-contain"
-            unoptimized
-          />
-        ) : (
-          <div className="h-full w-full bg-muted" />
-        )}
-      </div>
-      <div
-        className="relative h-4 w-4 rounded overflow-hidden shrink-0"
-        title={subStyleName || "Secondary rune style"}
-      >
-        {subStyleIconUrl ? (
-          <Image
-            src={subStyleIconUrl}
-            alt={subStyleName || "Secondary rune style"}
-            fill
-            sizes="16px"
-            className="object-contain"
-            unoptimized
-          />
-        ) : (
-          <div className="h-full w-full bg-muted" />
-        )}
-      </div>
+      <IconTooltip label={primaryLabel}>
+        <div
+          tabIndex={0}
+          className="relative h-7 w-7 rounded-full overflow-hidden shrink-0 mb-1"
+        >
+          {primaryStyleIconUrl ? (
+            <Image
+              src={primaryStyleIconUrl}
+              alt={primaryLabel}
+              fill
+              sizes="28px"
+              className="object-contain"
+              unoptimized
+            />
+          ) : (
+            <div className="h-full w-full bg-muted" />
+          )}
+        </div>
+      </IconTooltip>
+      <IconTooltip label={subLabel}>
+        <div
+          tabIndex={0}
+          className="relative h-4 w-4 rounded overflow-hidden shrink-0"
+        >
+          {subStyleIconUrl ? (
+            <Image
+              src={subStyleIconUrl}
+              alt={subLabel}
+              fill
+              sizes="16px"
+              className="object-contain"
+              unoptimized
+            />
+          ) : (
+            <div className="h-full w-full bg-muted" />
+          )}
+        </div>
+      </IconTooltip>
     </div>
+  );
+}
+
+/**
+ * The 52px champion icon at the centre of the matchup.
+ *
+ * Switchable only for the lane opponent: the other side is the player whose
+ * page this is, whom the API does not identify here and who has nowhere to
+ * switch to anyway.
+ */
+function ChampionPortrait({
+  participant,
+  ddragonVersion,
+  emptyChampionFallback,
+  onSelectPlayer,
+}: {
+  participant: MatchSideParticipant | null | undefined;
+  ddragonVersion: string;
+  emptyChampionFallback: boolean;
+  onSelectPlayer: (puuid: string) => void;
+}) {
+  const shell = "relative h-[52px] w-[52px] rounded overflow-hidden shrink-0";
+
+  if (!participant) {
+    return emptyChampionFallback ? (
+      <div className={shell}>
+        <div className="h-full w-full bg-muted" />
+      </div>
+    ) : (
+      <div className={shell} />
+    );
+  }
+
+  const championName = getChampionDisplayName(participant.champion_name);
+  const icon = (
+    <Image
+      src={getChampionIconUrl(participant.champion_name, ddragonVersion)}
+      alt={championName}
+      fill
+      sizes="52px"
+      className="object-cover"
+      unoptimized
+    />
+  );
+  const target = switchTarget(participant);
+
+  if (!target) {
+    return <div className={shell}>{icon}</div>;
+  }
+
+  return (
+    <IconTooltip label={target.riotId}>
+      <button
+        type="button"
+        aria-label={`${championName} — view ${target.riotId}`}
+        onClick={() => onSelectPlayer(target.puuid)}
+        className={`${shell} cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#cfa93a]`}
+      >
+        {icon}
+      </button>
+    </IconTooltip>
   );
 }
 
@@ -214,29 +346,77 @@ function renderTeamChampIcon(
   isCurrentPlayer: boolean,
   teamColor: "blue" | "red",
   ddragonVersion: string,
+  onSelectPlayer: (puuid: string) => void,
 ) {
   const borderColor = isCurrentPlayer
     ? "ring-2 ring-yellow-400"
     : teamColor === "blue"
       ? "ring-1 ring-blue-500"
       : "ring-1 ring-red-500";
-
-  return (
-    <div
-      key={champ.puuid}
-      className={`relative h-6 w-6 rounded overflow-hidden shrink-0 ${borderColor}`}
-      title={getChampionDisplayName(champ.champion_name)}
-    >
-      <Image
-        src={getChampionIconUrl(champ.champion_name, ddragonVersion)}
-        alt={getChampionDisplayName(champ.champion_name)}
-        fill
-        sizes="24px"
-        className="object-cover"
-        unoptimized
-      />
-    </div>
+  const championName = getChampionDisplayName(champ.champion_name);
+  const riotId = formatRiotId(champ);
+  const shell = `relative h-6 w-6 rounded overflow-hidden shrink-0 ${borderColor}`;
+  const icon = (
+    <Image
+      src={getChampionIconUrl(champ.champion_name, ddragonVersion)}
+      alt={championName}
+      fill
+      sizes="24px"
+      className="object-cover"
+      unoptimized
+    />
   );
+
+  // The tooltip names the player, not the champion: the champion is what the
+  // icon already is, while whose game this was appeared nowhere in the row.
+  //
+  // The current player's own icon stays a plain div. It cannot switch
+  // anywhere — they are already here — and rendering it as a button would
+  // give it a pointer cursor, a focus stop and a promise none of which lead
+  // anywhere.
+  return isCurrentPlayer ? (
+    <IconTooltip key={champ.puuid} label={riotId}>
+      <div tabIndex={0} className={shell}>
+        {icon}
+      </div>
+    </IconTooltip>
+  ) : (
+    <IconTooltip key={champ.puuid} label={riotId}>
+      <button
+        type="button"
+        // Both halves on purpose: the ticket wants the target player in the
+        // accessible name, and dropping the champion would lose what the icon
+        // used to say.
+        aria-label={`${championName} — view ${riotId}`}
+        onClick={() => onSelectPlayer(champ.puuid)}
+        className={`${shell} cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#cfa93a]`}
+      >
+        {icon}
+      </button>
+    </IconTooltip>
+  );
+}
+
+/** Which of one side's four statistics beat the other side's. */
+interface SideStatHighlight {
+  kda: boolean;
+  cs: boolean;
+  vision: boolean;
+  killParticipation: boolean;
+}
+
+/**
+ * Whether this side wins one lane comparison. Compared on the canonical
+ * numbers, never on the rendered strings, so two values that round to the
+ * same text still separate. A value missing on either side — no lane
+ * opponent, or a kill participation with no team kills to divide by — and an
+ * exact tie both leave the pair unhighlighted.
+ */
+function winsStat(
+  mine: number | null | undefined,
+  theirs: number | null | undefined,
+): boolean {
+  return mine != null && theirs != null && mine > theirs;
 }
 
 function MatchSideStats({
@@ -245,25 +425,32 @@ function MatchSideStats({
   csPerMinute,
   visionScore,
   killParticipation,
+  highlight,
 }: {
   kda: number;
   totalCs: number;
   csPerMinute: string;
   visionScore: number;
   killParticipation: number | null;
+  highlight: SideStatHighlight;
 }) {
+  // Yellow marks the better side of the matchup; the other side keeps the
+  // normal foreground rather than being dimmed. Nothing is encoded in the
+  // colour that the numbers themselves do not say (WCAG 1.4.1) — it is a
+  // scan aid across two mirrored blocks, not a state.
+  const lead = (wins: boolean) => (wins ? " text-yellow-500" : "");
   return (
     <div className="flex w-[calc(50%-0.25rem)] flex-col justify-center text-xs lg:ml-2 lg:w-25 lg:shrink-0">
-      <span>
+      <span className={lead(highlight.kda).trim()}>
         <span className="font-medium">{kda.toFixed(2)}</span> KDA
       </span>
-      <span className="mt-0.5">
+      <span className={`mt-0.5${lead(highlight.cs)}`}>
         <span className="font-medium">{totalCs}</span> CS ({csPerMinute}/min)
       </span>
-      <span className="mt-0.5">
+      <span className={`mt-0.5${lead(highlight.vision)}`}>
         <span className="font-medium">{visionScore}</span> Vision Score
       </span>
-      <span className="mt-0.5">
+      <span className={`mt-0.5${lead(highlight.killParticipation)}`}>
         <span className="font-medium">
           {killParticipation !== null
             ? `${killParticipation.toFixed(0)}%`
@@ -280,36 +467,27 @@ function MatchSideColumn({
   ddragonVersion,
   emptyChampionFallback,
   emptyKdaFallback,
+  onSelectPlayer,
 }: {
   participant: MatchSideParticipant | null | undefined;
   ddragonVersion: string;
   emptyChampionFallback: boolean;
   emptyKdaFallback: boolean;
+  onSelectPlayer: (puuid: string) => void;
 }) {
   return (
-    <div className="flex min-w-0 flex-1 items-center gap-2 lg:w-40 lg:flex-none">
+    <div className="flex min-w-0 flex-1 items-center gap-2 lg:w-48 lg:flex-none">
       {/* Below `lg` the two sides split one phone width, and the rune icons
           are the detail worth trading for a readable champion name. */}
       <div className="hidden lg:block">{renderRunes(participant?.runes)}</div>
 
       <div className="flex flex-col items-center gap-0.5">
-        <div className="relative h-[52px] w-[52px] rounded overflow-hidden shrink-0">
-          {participant ? (
-            <Image
-              src={getChampionIconUrl(
-                participant.champion_name,
-                ddragonVersion,
-              )}
-              alt={participant.champion_name}
-              fill
-              sizes="52px"
-              className="object-cover"
-              unoptimized
-            />
-          ) : emptyChampionFallback ? (
-            <div className="h-full w-full bg-muted" />
-          ) : null}
-        </div>
+        <ChampionPortrait
+          participant={participant}
+          ddragonVersion={ddragonVersion}
+          emptyChampionFallback={emptyChampionFallback}
+          onSelectPlayer={onSelectPlayer}
+        />
         <div className="flex gap-0.5">
           {renderSummonerSpell(participant?.summoner1_id, ddragonVersion)}
           {renderSummonerSpell(participant?.summoner2_id, ddragonVersion)}
@@ -357,10 +535,12 @@ function MatchTeamCompositions({
   teamComps,
   playerPuuid,
   ddragonVersion,
+  onSelectPlayer,
 }: {
   teamComps: MatchWithPlayerData["team_compositions"];
   playerPuuid: string;
   ddragonVersion: string;
+  onSelectPlayer: (puuid: string) => void;
 }) {
   return (
     <div className="flex w-37 flex-col items-center justify-center gap-0.5 lg:mr-1">
@@ -374,6 +554,7 @@ function MatchTeamCompositions({
                   champ.puuid === playerPuuid,
                   "blue",
                   ddragonVersion,
+                  onSelectPlayer,
                 ),
               )}
             </div>
@@ -392,6 +573,7 @@ function MatchTeamCompositions({
                   champ.puuid === playerPuuid,
                   "red",
                   ddragonVersion,
+                  onSelectPlayer,
                 ),
               )}
             </div>
@@ -405,7 +587,11 @@ function MatchTeamCompositions({
   );
 }
 
-export function MatchRow({ match, playerPuuid }: MatchRowProps) {
+export function MatchRow({
+  match,
+  playerPuuid,
+  onSelectPlayer,
+}: MatchRowProps) {
   const ddragonVersion = useDDragonVersion();
   const participant = match.player_participant;
   const opponent = match.lane_opponent;
@@ -434,9 +620,6 @@ export function MatchRow({ match, playerPuuid }: MatchRowProps) {
       : participant?.team_id === 200
         ? blueTeamStats
         : null;
-  const isRemake = outcome.isRemake;
-  const displayedLpChange = match.lp_change;
-
   const killParticipation =
     participant && playerTeamStats && playerTeamStats.kills > 0
       ? ((participant.kills + participant.assists) / playerTeamStats.kills) *
@@ -446,6 +629,24 @@ export function MatchRow({ match, playerPuuid }: MatchRowProps) {
     opponent && enemyTeamStats && enemyTeamStats.kills > 0
       ? ((opponent.kills + opponent.assists) / enemyTeamStats.kills) * 100
       : null;
+
+  // Decided here because only the row sees both sides. CS compares the raw
+  // `total_cs` integers rather than the `/min` strings: both participants
+  // played the same `game_duration`, so the CS ordering is the CS/min
+  // ordering, and the parenthetical is highlighted with the total it came
+  // from.
+  const playerStatHighlight: SideStatHighlight = {
+    kda: winsStat(participant?.kda, opponent?.kda),
+    cs: winsStat(participant?.total_cs, opponent?.total_cs),
+    vision: winsStat(participant?.vision_score, opponent?.vision_score),
+    killParticipation: winsStat(killParticipation, enemyKillParticipation),
+  };
+  const opponentStatHighlight: SideStatHighlight = {
+    kda: winsStat(opponent?.kda, participant?.kda),
+    cs: winsStat(opponent?.total_cs, participant?.total_cs),
+    vision: winsStat(opponent?.vision_score, participant?.vision_score),
+    killParticipation: winsStat(enemyKillParticipation, killParticipation),
+  };
 
   return (
     <div
@@ -475,6 +676,19 @@ export function MatchRow({ match, playerPuuid }: MatchRowProps) {
           </span>
         </div>
 
+        {/* Full width below `lg`: every other stacked cell is a half, so a
+            half here would pair the duration with the player's stat block and
+            push the opponent's onto the next row, breaking the side-by-side
+            reading the wrap order above exists for. */}
+        <div className="w-full shrink-0 text-center flex flex-col justify-center lg:w-16">
+          {/* The row's tint is the only other outcome signal; colourblind
+              players need the word (WCAG 1.4.1: no colour-only meaning). */}
+          <span className="text-[10px] font-semibold uppercase text-foreground/75">
+            {outcome.label}
+          </span>
+          <span>{formatDuration(match.game_duration)}</span>
+        </div>
+
         {participant && (
           <MatchSideStats
             kda={participant.kda}
@@ -482,15 +696,23 @@ export function MatchRow({ match, playerPuuid }: MatchRowProps) {
             csPerMinute={csPerMinute}
             visionScore={participant.vision_score}
             killParticipation={killParticipation}
+            highlight={playerStatHighlight}
           />
         )}
 
-        <div className="order-first flex w-full items-center gap-0 lg:order-none lg:w-[420px]">
+        {/* 484px, not 420: the LP cell took `w-12` + `mr-2` + one of the
+            row's `gap-2` gaps with it (3 + 0.5 + 0.5rem = 4rem), and both
+            champion columns grew by half of that each (`lg:w-40` →
+            `lg:w-48`). The wrapper has to grow by the whole 4rem or the two
+            columns take the space out of the swords divider instead, and the
+            row's total desktop width is unchanged. */}
+        <div className="order-first flex w-full items-center gap-0 lg:order-none lg:w-[484px]">
           <MatchSideColumn
             participant={participant}
             ddragonVersion={ddragonVersion}
             emptyChampionFallback={false}
             emptyKdaFallback={false}
+            onSelectPlayer={onSelectPlayer}
           />
 
           <div className="w-10 flex items-center justify-center shrink-0">
@@ -502,6 +724,7 @@ export function MatchRow({ match, playerPuuid }: MatchRowProps) {
             ddragonVersion={ddragonVersion}
             emptyChampionFallback
             emptyKdaFallback
+            onSelectPlayer={onSelectPlayer}
           />
         </div>
 
@@ -512,48 +735,23 @@ export function MatchRow({ match, playerPuuid }: MatchRowProps) {
             csPerMinute={opponentCsPerMinute}
             visionScore={opponent.vision_score}
             killParticipation={enemyKillParticipation}
+            highlight={opponentStatHighlight}
           />
         )}
 
-        <div className="w-16 shrink-0 text-center flex flex-col justify-center">
-          {/* The row's tint is the only other outcome signal; colourblind
-              players need the word (WCAG 1.4.1: no colour-only meaning). */}
-          <span className="text-[10px] font-semibold uppercase text-foreground/75">
-            {outcome.label}
-          </span>
-          <span className="">{formatDuration(match.game_duration)}</span>
-        </div>
-
-        <div className="w-12 mr-2 shrink-0 text-center flex flex-col justify-center">
-          {displayedLpChange !== null && displayedLpChange !== undefined ? (
-            <span
-              className={`text-xs font-medium ${
-                displayedLpChange > 0
-                  ? "text-emerald-500"
-                  : displayedLpChange < 0
-                    ? "text-rose-500"
-                    : // A remake's LP change of exactly 0 is a real outcome,
-                      // rendered on the same tinted row - same contrast
-                      // reasoning as the Vs divider above.
-                      "text-foreground/75"
-              }`}
-            >
-              {formatMatchLpChange(displayedLpChange, isRemake)}
-            </span>
-          ) : (
-            <span
-              className="text-xs font-medium text-foreground/75"
-              aria-label="LP change unavailable"
-            >
-              {formatMatchLpChange(displayedLpChange, isRemake)}
-            </span>
-          )}
-        </div>
+        {/* No per-match LP column here any more: reliable historical
+            per-match LP is not obtainable under the current Riot
+            developer-key constraints, so the row was showing a number it
+            could not stand behind. `match.lp_change` and `formatMatchLpChange`
+            are kept — this is a UI hide pending a trustworthy source, not a
+            feature deletion. The width it held went to the two champion
+            columns in the matchup block above. */}
 
         <MatchTeamCompositions
           teamComps={teamComps}
           playerPuuid={playerPuuid}
           ddragonVersion={ddragonVersion}
+          onSelectPlayer={onSelectPlayer}
         />
 
         <div className="flex flex-col items-center justify-center gap-0.5">

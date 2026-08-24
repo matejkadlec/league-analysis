@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { cleanup, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { MatchRow } from "@/features/matches/components/match-row";
@@ -49,6 +50,9 @@ const PARTICIPANT: PlayerMatchParticipant = {
 };
 
 const OPPONENT: EnemyLaneOpponent = {
+  puuid: "opponent-puuid",
+  game_name: "Shadow",
+  tag_line: "EUN1",
   champion_id: 238,
   champion_name: "Zed",
   champion_level: 15,
@@ -65,7 +69,14 @@ const OPPONENT: EnemyLaneOpponent = {
 };
 
 function champ(name: string, puuid: string) {
-  return { champion_id: 1, champion_name: name, team_position: null, puuid };
+  return {
+    champion_id: 1,
+    champion_name: name,
+    team_position: null,
+    puuid,
+    game_name: name,
+    tag_line: "EUN1",
+  };
 }
 
 const MATCH: MatchWithPlayerData = {
@@ -117,9 +128,16 @@ const MATCH: MatchWithPlayerData = {
   },
 };
 
-function renderRow(overrides: Partial<MatchWithPlayerData> = {}) {
+function renderRow(
+  overrides: Partial<MatchWithPlayerData> = {},
+  onSelectPlayer: (puuid: string) => void = vi.fn(),
+) {
   return render(
-    <MatchRow match={{ ...MATCH, ...overrides }} playerPuuid={PLAYER_PUUID} />,
+    <MatchRow
+      match={{ ...MATCH, ...overrides }}
+      playerPuuid={PLAYER_PUUID}
+      onSelectPlayer={onSelectPlayer}
+    />,
   );
 }
 
@@ -237,41 +255,18 @@ describe("a match history row", () => {
     expect(container.textContent).not.toContain("Defeat");
   });
 
-  it("labels a remake's zero as +0 LP rather than a flat 0", () => {
-    // `formatMatchLpChange` distinguishes the two, and the row is what feeds
-    // it `isRemake`. Pass a constant there and a remake reads as a game that
-    // was played and won nothing, which is the thing the player is checking.
-    renderRow({
-      lp_change: 0,
-      early_surrender: true,
-      player_participant: { ...PARTICIPANT, remake: false },
-    });
+  it("shows the game length but never a per-match LP number", () => {
+    // Per-match LP is not obtainable reliably under the current Riot
+    // developer-key constraints, so the column is hidden rather than filled
+    // with a guess — `lp_change` still arrives on the match and must not
+    // reach the screen. The duration took its place beside the date, and it
+    // carries the outcome word, which is the row's only non-colour outcome
+    // signal (WCAG 1.4.1): losing the cell in the move would lose that too.
+    const { container } = renderRow({ lp_change: 18 });
 
-    expect(screen.getByText("+0 LP")).toBeTruthy();
-  });
-
-  it("does not call a data-gap row's zero a remake's +0", () => {
-    // With no participant the row is a data gap, not a played remake — the
-    // outcome cell shows a dash, and the LP cell must agree. Computing the
-    // remake flag outside getMatchOutcome is what let the two disagree:
-    // `early_surrender` alone made isRemake true while the outcome said "—".
-    renderRow({
-      lp_change: 0,
-      early_surrender: true,
-      player_participant: null,
-    });
-
-    expect(screen.getByText("0 LP")).toBeTruthy();
-    expect(screen.queryByText("+0 LP")).toBeNull();
-  });
-
-  it("marks an unavailable LP change as unavailable to a screen reader", () => {
-    // Sighted readers get a greyed em dash. Without the `aria-label` the
-    // accessible name is the dash character alone, which announces as
-    // punctuation or as nothing at all.
-    renderRow({ lp_change: null });
-
-    expect(screen.getByLabelText("LP change unavailable")).toBeTruthy();
+    expect(container.textContent).not.toContain("LP");
+    expect(screen.getByText("21:05")).toBeTruthy();
+    expect(container.textContent).toContain("Victory");
   });
 
   it("shows a zero KDA as 0.00, not as a perfect game", () => {
@@ -314,13 +309,21 @@ describe("a match history row", () => {
 
       const ringed = container.querySelectorAll(".ring-yellow-400");
       expect(ringed).toHaveLength(1);
-      expect(ringed[0]?.getAttribute("title")).toBe(expectedChampion);
+      // The champion now travels on the image's `alt` rather than a `title`
+      // on the wrapper: these icons carry a Riot ID tooltip, and the champion
+      // would otherwise be readable by neither sighted nor screen-reader
+      // users.
+      expect(ringed[0]?.querySelector("img")?.getAttribute("alt")).toBe(
+        expectedChampion,
+      );
       // The count above is only meaningful next to the total: without this, a
       // mutation that renders one icon per lineup instead of five would still
       // leave exactly one ringed.
-      expect(
-        container.querySelectorAll("[title][class*='ring-']"),
-      ).toHaveLength(10);
+      expect(container.querySelectorAll("[class*='ring-']")).toHaveLength(10);
+      // And exactly the viewer's own is inert; the other nine switch player.
+      expect(container.querySelectorAll("button[class*='ring-']")).toHaveLength(
+        9,
+      );
     },
   );
 
@@ -407,5 +410,123 @@ describe("a match history row", () => {
     renderRow({ queue_id: 420 });
 
     expect(screen.getByText("Ranked Solo/Duo")).toBeTruthy();
+  });
+
+  // The stat spans in document order: the player's block is rendered before
+  // the opponent's, so index 0 is the player's reading of that statistic.
+  // `selector` keeps the ancestor `div` -- whose text also ends in "Kill
+  // Particip." -- out of the match.
+  const statClasses = (pattern: RegExp) =>
+    screen
+      .getAllByText(pattern, { selector: "span" })
+      .map((span) => span.className);
+
+  it("colours the better side of each stat and neither side of a tie", () => {
+    // The comparison has to see both sides at once: derived from one side
+    // alone it would highlight whatever the player happened to have, and a
+    // tie -- both laners on 210 CS here -- would light up both blocks and
+    // tell the reader nothing. Equal values are the case the `>` is for.
+    renderRow({
+      lane_opponent: { ...OPPONENT, total_cs: PARTICIPANT.total_cs },
+    });
+
+    // KDA 5.00 against 1.60, vision 24 against 14, kill participation 50%
+    // against 20%: the player's side wins all three outright.
+    expect(statClasses(/KDA$/)).toEqual(["text-yellow-500", ""]);
+    expect(statClasses(/Vision Score$/)).toEqual([
+      "mt-0.5 text-yellow-500",
+      "mt-0.5",
+    ]);
+    expect(statClasses(/Kill Particip\.$/)).toEqual([
+      "mt-0.5 text-yellow-500",
+      "mt-0.5",
+    ]);
+    // Tied CS, so neither -- including the `/min` parenthetical, which is
+    // highlighted with the total it is derived from.
+    expect(statClasses(/min\)$/)).toEqual(["mt-0.5", "mt-0.5"]);
+  });
+
+  it("labels the rune icons with the keystone and the secondary tree", () => {
+    // The primary icon is the keystone, so labelling it with its tree put
+    // "Sorcery" on a Summon Aery icon -- a name for a rune the player did not
+    // take. The secondary icon really is a tree and must keep saying so, and
+    // the spells had no name at all beyond "Summoner Spell".
+    renderRow();
+
+    expect(screen.getByAltText("Summon Aery")).toBeTruthy();
+    expect(screen.getByAltText("Electrocute")).toBeTruthy();
+    expect(screen.queryByAltText("Sorcery")).toBeNull();
+    expect(screen.getByAltText("Inspiration")).toBeTruthy();
+    expect(screen.getByAltText("Precision")).toBeTruthy();
+    // Both laners took Flash; the player added Ignite, the opponent Teleport.
+    expect(screen.getAllByAltText("Flash")).toHaveLength(2);
+    expect(screen.getByAltText("Ignite")).toBeTruthy();
+    expect(screen.getByAltText("Teleport")).toBeTruthy();
+    expect(screen.queryByAltText("Summoner Spell")).toBeNull();
+  });
+
+  it("falls back to the tree when the keystone is one we have no name for", () => {
+    // The tooltip and the icon read the same keystone table, so an unknown
+    // keystone has to drop both back to the tree together -- a label naming a
+    // rune the icon beside it does not show is worse than a vaguer one.
+    renderRow({
+      player_participant: {
+        ...PARTICIPANT,
+        runes: { primary_style: 8200, sub_style: 8300, keystone: 999999 },
+      },
+    });
+
+    expect(screen.getByAltText("Sorcery")).toBeTruthy();
+  });
+
+  it("names participants by Riot ID and switches to the one clicked", async () => {
+    const onSelectPlayer = vi.fn();
+    const user = userEvent.setup();
+    renderRow({}, onSelectPlayer);
+
+    // The champion is what the icon already is; whose game it was is what the
+    // row never said.
+    const garen = screen.getByRole("button", {
+      name: "Garen \u2014 view Garen#EUN1",
+    });
+    await user.click(garen);
+
+    expect(onSelectPlayer).toHaveBeenCalledTimes(1);
+    expect(onSelectPlayer).toHaveBeenCalledWith("b2");
+  });
+
+  it("switches to the lane opponent from the matchup portrait", async () => {
+    const onSelectPlayer = vi.fn();
+    const user = userEvent.setup();
+    renderRow({}, onSelectPlayer);
+
+    await user.click(
+      screen.getByRole("button", { name: "Zed \u2014 view Shadow#EUN1" }),
+    );
+
+    expect(onSelectPlayer).toHaveBeenCalledWith("opponent-puuid");
+  });
+
+  it("leaves the current player's own icons inert", async () => {
+    const onSelectPlayer = vi.fn();
+    const user = userEvent.setup();
+    renderRow({}, onSelectPlayer);
+
+    // The team-composition icon for the player whose page this is: it carries
+    // the Riot ID like every other, but switching to the player already
+    // current is a redundant refresh, so it is not a control at all.
+    expect(
+      screen.queryByRole("button", { name: /view Ahri#EUN1/ }),
+    ).toBeNull();
+
+    // Their own matchup portrait likewise -- the API does not identify it, so
+    // there is nothing to switch to. Only the opponent's is a button.
+    const portraits = screen.getAllByAltText("Ahri");
+    for (const portrait of portraits) {
+      expect(portrait.closest("button")).toBeNull();
+    }
+    // Nothing above was clickable, so nothing could have fired.
+    await user.click(screen.getAllByAltText("Ahri")[0]!);
+    expect(onSelectPlayer).not.toHaveBeenCalled();
   });
 });

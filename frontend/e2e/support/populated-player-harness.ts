@@ -118,6 +118,8 @@ function teamChampion(index: number, teamId: number) {
     champion_name,
     team_position: LANES[index % LANES.length]!,
     puuid: `${teamId}-${index}`,
+    game_name: `Summoner${teamId}${index}`,
+    tag_line: "EUN1",
   };
 }
 
@@ -165,6 +167,9 @@ function match(index: number) {
       summoner2_id: 14,
     },
     lane_opponent: {
+      puuid: `opponent-${index}`,
+      game_name: `Opponent${index}`,
+      tag_line: "EUN1",
       champion_id: opponent_id,
       champion_name: opponent_name,
       champion_level: 17,

@@ -56,6 +56,12 @@ interface MatchHistoryHeaderProps {
 interface MatchHistoryPaginationBarProps {
   recordRange: MatchHistoryRecordRange;
   apiTotalMatches: number;
+  /**
+   * The stored total is not the final one: an update run is still writing
+   * matches, so a range read off it would count down from a number that keeps
+   * moving.
+   */
+  isTotalPending: boolean;
   paginationItems: MatchHistoryPaginationItem[];
   currentPage: number;
   totalPages: number;
@@ -94,6 +100,27 @@ export function MatchHistoryLoadingCard() {
         <Skeleton className="h-20 w-full" />
       </CardContent>
     </Card>
+  );
+}
+
+/**
+ * The row that stands in for the matches an update run has not stored yet.
+ *
+ * A row rather than a card-wide state on purpose: replacing the list with a
+ * loading panel hides matches that are already there and readable. It carries
+ * `role="status"` so the wait is announced once, and its text never changes as
+ * rows land in front of it, so it is not re-announced per arrival either.
+ */
+export function MatchHistoryLoadingRow() {
+  return (
+    <div
+      role="status"
+      data-testid="match-history-loading-row"
+      className="mb-1.5 flex items-center justify-center gap-2 rounded border-2 border-t-1 border-b-1 border-amber-400/20 bg-muted/30 px-3 py-3 text-sm last:mb-0"
+    >
+      <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />
+      Loading more matches...
+    </div>
   );
 }
 
@@ -289,6 +316,7 @@ export function MatchHistoryHeader({
 export function MatchHistoryPaginationBar({
   recordRange,
   apiTotalMatches,
+  isTotalPending,
   paginationItems,
   currentPage,
   totalPages,
@@ -302,8 +330,17 @@ export function MatchHistoryPaginationBar({
   return (
     <div className="mt-3 grid items-center gap-3 border-t pt-3 text-sm text-muted-foreground md:grid-cols-[1fr_auto_1fr]">
       <div className="justify-self-start" aria-live="polite">
-        Showing {recordRange.start} to {recordRange.end} of {apiTotalMatches}{" "}
-        matches
+        {isTotalPending ? (
+          // Not a range with a moving denominator: while the run is storing
+          // matches every one of those three numbers is provisional, and a
+          // total that keeps climbing reads as a bug rather than as progress.
+          "Loading matches count..."
+        ) : (
+          <>
+            Showing {recordRange.start} to {recordRange.end} of{" "}
+            {apiTotalMatches} matches
+          </>
+        )}
       </div>
 
       <nav

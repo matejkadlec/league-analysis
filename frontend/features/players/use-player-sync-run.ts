@@ -43,6 +43,88 @@ interface UsePlayerSyncRunOptions {
   quiet?: boolean;
 }
 
+// Not exported: both readers are in this file, and knip counts an export
+// nothing imports as dead code.
+function playerSyncActiveQueryKey(puuid: string) {
+  return ["player-sync-active", puuid] as const;
+}
+
+interface ProfileUpdateStart {
+  puuid: string;
+  quiet?: boolean | undefined;
+}
+
+/**
+ * Start one player's profile update, or attach to the run already going.
+ *
+ * Split out of `usePlayerSyncRun` because switching player has to start the
+ * *target* player's update from a surface mounted for somebody else, before any
+ * hook exists for that PUUID. Seeding `player-sync-active` here is what lets
+ * the destination's `usePlayerSyncRun` adopt the run on its first render
+ * instead of waiting out a poll — which is also what makes Match History show
+ * its progressive-loading state immediately after the switch rather than a
+ * second later.
+ */
+export function usePlayerProfileUpdate({
+  onStartRefused,
+}: {
+  /**
+   * The start was refused, so no run exists and nothing will ever poll to a
+   * terminal status — a caller waiting on the update has to be released here
+   * or not at all.
+   *
+   * An option on the mutation rather than a callback passed to `mutate()`:
+   * React Query re-reads these from the latest render, while the ones handed
+   * to `mutate()` are captured at the call. Smurf-boost sets the state its
+   * release branches on in the very click that starts the update, and a
+   * captured closure released it against the pre-click value.
+   */
+  onStartRefused?: ((puuid: string) => void) | undefined;
+} = {}) {
+  const queryClient = useQueryClient();
+  const toast = useToast();
+
+  return useMutation({
+    mutationFn: async ({ puuid }: ProfileUpdateStart) => {
+      return unwrap(
+        await validatedPost(PlayerSyncRunSchema, `/players/${puuid}/sync`),
+      );
+    },
+    onSuccess: (syncRun, { puuid, quiet }) => {
+      // The start endpoint attaches to an existing active run rather than
+      // erroring, so a second click (or a run started on another surface)
+      // returns a run this call did not start — say so instead of claiming a
+      // new update began. The cached active run is the record of what was
+      // already running, so it has to be read before being overwritten.
+      const attached =
+        queryClient.getQueryData<PlayerSyncRun | null>(
+          playerSyncActiveQueryKey(puuid),
+        )?.id === syncRun.id;
+      queryClient.setQueryData(playerSyncActiveQueryKey(puuid), syncRun);
+      if (quiet) {
+        return;
+      }
+      if (attached) {
+        toast.info("Player update already in progress", {
+          description: "Watching the update that is already running.",
+        });
+      } else {
+        toast.info("Player profile update started", {
+          description: "Player data is refreshing in the background.",
+        });
+      }
+    },
+    onError: (_error, { puuid, quiet }) => {
+      if (!quiet) {
+        toast.error("Player profile update could not start", {
+          description: "Please try again later.",
+        });
+      }
+      onStartRefused?.(puuid);
+    },
+  });
+}
+
 /**
  * Track one player's explicit update (`PlayerSyncRun`) from either surface.
  *
@@ -74,7 +156,7 @@ export function usePlayerSyncRun(
   const handledTerminalSyncIds = useRef(new Set<number>());
 
   const activeSyncQuery = useQuery({
-    queryKey: ["player-sync-active", puuid],
+    queryKey: playerSyncActiveQueryKey(puuid),
     queryFn: async () => {
       return unwrap(
         await validatedGet(
@@ -116,44 +198,14 @@ export function usePlayerSyncRun(
         : false,
   });
 
-  const startSyncMutation = useMutation({
-    mutationFn: async () => {
-      return unwrap(
-        await validatedPost(PlayerSyncRunSchema, `/players/${puuid}/sync`),
-      );
-    },
-    onSuccess: (syncRun) => {
-      // The start endpoint attaches to an existing active run rather than
-      // erroring, so a second click (or a run started on another surface)
-      // returns a run this hook did not start — say so instead of claiming
-      // a new update began.
-      const attached =
-        observedSyncId === syncRun.id ||
-        activeSyncQuery.data?.id === syncRun.id;
-      setObservedSync({ puuid, id: syncRun.id });
-      queryClient.setQueryData(["player-sync-active", puuid], syncRun);
-      if (quiet) {
-        return;
+  const profileUpdate = usePlayerProfileUpdate({
+    onStartRefused: (targetPuuid) => {
+      // Only this hook's own player. Starting somebody else's update is a
+      // player switch, and its failure is not this surface's next step to
+      // release.
+      if (targetPuuid === puuid) {
+        void onSettled?.(null);
       }
-      if (attached) {
-        toast.info("Player update already in progress", {
-          description: "Watching the update that is already running.",
-        });
-      } else {
-        toast.info("Player profile update started", {
-          description: "Player data is refreshing in the background.",
-        });
-      }
-    },
-    onError: () => {
-      if (!quiet) {
-        toast.error("Player profile update could not start", {
-          description: "Please try again later.",
-        });
-      }
-      // No run exists to reach `finishRun`, so this is the only place the
-      // caller's next step can be released after a refused start.
-      void onSettled?.(null);
     },
   });
 
@@ -258,12 +310,31 @@ export function usePlayerSyncRun(
   const syncStatus: PlayerSyncRun["status"] | undefined =
     exactSyncQuery.data?.status ?? activeSyncQuery.data?.status;
   const isUpdating =
-    startSyncMutation.isPending ||
+    profileUpdate.isPending ||
     syncStatus === "pending" ||
     syncStatus === "running";
 
   return {
     isUpdating,
-    startSync: () => startSyncMutation.mutate(),
+    /**
+     * Start this player's update, or — given a PUUID — somebody else's.
+     *
+     * The cross-player form is for a surface that is switching player: it
+     * starts the incoming player's update from the outgoing player's mount.
+     * Only the same-player form adopts the run for polling here; the other
+     * player's own `usePlayerSyncRun` picks it up from the seeded
+     * `player-sync-active` entry once it mounts.
+     */
+    startSync: (targetPuuid: string = puuid) =>
+      profileUpdate.mutate(
+        { puuid: targetPuuid, quiet },
+        {
+          onSuccess: (syncRun) => {
+            if (targetPuuid === puuid) {
+              setObservedSync({ puuid, id: syncRun.id });
+            }
+          },
+        },
+      ),
   };
 }

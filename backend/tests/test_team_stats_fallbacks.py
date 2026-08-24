@@ -24,6 +24,8 @@ def participant(
     return MatchParticipant(
         match_id="EUW1_1",
         puuid=f"p{team_id}-{kills}-{assists}",
+        game_name=f"Player{team_id}",
+        tag_line="EUW",
         champion_id=1,
         champion_name="Annie",
         team_position="MIDDLE",

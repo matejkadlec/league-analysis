@@ -99,26 +99,33 @@ export function getChampionDisplayName(championName: string): string {
 }
 
 /**
- * Summoner spell ID to name mapping for Data Dragon URLs.
- * These IDs come from the Riot API and need to be mapped to internal names.
+ * Summoner spell ID to Data Dragon asset and display name.
+ *
+ * The IDs come from the Riot API; `asset` builds the icon URL and `name` is
+ * what the spell is called in game, both taken from `summoner.json` (en_US).
+ * Kept in the same `{ name, asset }` shape as the rune maps below so a caller
+ * never has to reach for a second, drifting table of names.
  */
-const SUMMONER_SPELL_MAP: Record<number, string> = {
-  1: "SummonerBoost", // Cleanse
-  3: "SummonerExhaust", // Exhaust
-  4: "SummonerFlash", // Flash
-  6: "SummonerHaste", // Ghost
-  7: "SummonerHeal", // Heal
-  11: "SummonerSmite", // Smite
-  12: "SummonerTeleport", // Teleport
-  13: "SummonerMana", // Clarity
-  14: "SummonerDot", // Ignite
-  21: "SummonerBarrier", // Barrier
-  30: "SummonerPoroRecall", // To the King! (Poro King)
-  31: "SummonerPoroThrow", // Poro Toss (Poro King/ARAM)
-  32: "SummonerSnowball", // Mark (ARAM)
-  39: "SummonerSnowURFSnowball_Mark", // Mark (URF)
-  54: "Summoner_UltBookPlaceholder", // Placeholder
-  55: "Summoner_UltBookSmitePlaceholder", // Placeholder (Ultimate Spellbook)
+const SUMMONER_SPELL_MAP: Record<number, { name: string; asset: string }> = {
+  1: { name: "Cleanse", asset: "SummonerBoost" },
+  3: { name: "Exhaust", asset: "SummonerExhaust" },
+  4: { name: "Flash", asset: "SummonerFlash" },
+  6: { name: "Ghost", asset: "SummonerHaste" },
+  7: { name: "Heal", asset: "SummonerHeal" },
+  11: { name: "Smite", asset: "SummonerSmite" },
+  12: { name: "Teleport", asset: "SummonerTeleport" },
+  13: { name: "Clarity", asset: "SummonerMana" },
+  14: { name: "Ignite", asset: "SummonerDot" },
+  21: { name: "Barrier", asset: "SummonerBarrier" },
+  30: { name: "To the King!", asset: "SummonerPoroRecall" },
+  31: { name: "Poro Toss", asset: "SummonerPoroThrow" },
+  32: { name: "Mark", asset: "SummonerSnowball" },
+  39: { name: "Mark", asset: "SummonerSnowURFSnowball_Mark" },
+  54: { name: "Placeholder", asset: "Summoner_UltBookPlaceholder" },
+  55: {
+    name: "Placeholder and Attack-Smite",
+    asset: "Summoner_UltBookSmitePlaceholder",
+  },
 };
 
 /**
@@ -131,47 +138,123 @@ export function getSummonerSpellIconUrlById(
   spellId: number,
   version: string = DDRAGON_FALLBACK_VERSION,
 ): string | null {
-  const spellName = SUMMONER_SPELL_MAP[spellId];
-  if (!spellName) {
+  const asset = SUMMONER_SPELL_MAP[spellId]?.asset;
+  if (!asset) {
     return null;
   }
-  return `${getVersionedBaseUrl(version)}/img/spell/${spellName}.png`;
+  return `${getVersionedBaseUrl(version)}/img/spell/${asset}.png`;
 }
 
-// Keystone rune icon paths from Data Dragon runesReforged data.
-const KEYSTONE_ICON_MAP: Record<number, string> = {
+/**
+ * Get the in-game name of a summoner spell by ID.
+ *
+ * @returns The display name (e.g. "Flash"), or null if the ID is unknown
+ */
+export function getSummonerSpellName(spellId: number): string | null {
+  return SUMMONER_SPELL_MAP[spellId]?.name ?? null;
+}
+
+/**
+ * Keystone rune icons and display names from Data Dragon `runesReforged`
+ * (en_US). The two are one entry because a label that disagrees with the icon
+ * next to it is worse than no label: 8439's asset is still the old
+ * `VeteranAftershock`, while the rune has been called Aftershock in game for
+ * years, and 8008's is `LethalTempoTemp`.
+ */
+const KEYSTONE_MAP: Record<number, { name: string; iconPath: string }> = {
   // Domination
-  8112: "perk-images/Styles/Domination/Electrocute/Electrocute.png",
-  8128: "perk-images/Styles/Domination/DarkHarvest/DarkHarvest.png",
-  9923: "perk-images/Styles/Domination/HailOfBlades/HailOfBlades.png",
+  8112: {
+    name: "Electrocute",
+    iconPath: "perk-images/Styles/Domination/Electrocute/Electrocute.png",
+  },
+  8128: {
+    name: "Dark Harvest",
+    iconPath: "perk-images/Styles/Domination/DarkHarvest/DarkHarvest.png",
+  },
+  9923: {
+    name: "Hail of Blades",
+    iconPath: "perk-images/Styles/Domination/HailOfBlades/HailOfBlades.png",
+  },
   // Inspiration
-  8351: "perk-images/Styles/Inspiration/GlacialAugment/GlacialAugment.png",
-  8360: "perk-images/Styles/Inspiration/UnsealedSpellbook/UnsealedSpellbook.png",
-  8369: "perk-images/Styles/Inspiration/FirstStrike/FirstStrike.png",
+  8351: {
+    name: "Glacial Augment",
+    iconPath:
+      "perk-images/Styles/Inspiration/GlacialAugment/GlacialAugment.png",
+  },
+  8360: {
+    name: "Unsealed Spellbook",
+    iconPath:
+      "perk-images/Styles/Inspiration/UnsealedSpellbook/UnsealedSpellbook.png",
+  },
+  8369: {
+    name: "First Strike",
+    iconPath: "perk-images/Styles/Inspiration/FirstStrike/FirstStrike.png",
+  },
   // Precision
-  8005: "perk-images/Styles/Precision/PressTheAttack/PressTheAttack.png",
-  8008: "perk-images/Styles/Precision/LethalTempo/LethalTempoTemp.png",
-  8021: "perk-images/Styles/Precision/FleetFootwork/FleetFootwork.png",
-  8010: "perk-images/Styles/Precision/Conqueror/Conqueror.png",
+  8005: {
+    name: "Press the Attack",
+    iconPath: "perk-images/Styles/Precision/PressTheAttack/PressTheAttack.png",
+  },
+  8008: {
+    name: "Lethal Tempo",
+    iconPath: "perk-images/Styles/Precision/LethalTempo/LethalTempoTemp.png",
+  },
+  8021: {
+    name: "Fleet Footwork",
+    iconPath: "perk-images/Styles/Precision/FleetFootwork/FleetFootwork.png",
+  },
+  8010: {
+    name: "Conqueror",
+    iconPath: "perk-images/Styles/Precision/Conqueror/Conqueror.png",
+  },
   // Resolve
-  8437: "perk-images/Styles/Resolve/GraspOfTheUndying/GraspOfTheUndying.png",
-  8439: "perk-images/Styles/Resolve/VeteranAftershock/VeteranAftershock.png",
-  8465: "perk-images/Styles/Resolve/Guardian/Guardian.png",
+  8437: {
+    name: "Grasp of the Undying",
+    iconPath:
+      "perk-images/Styles/Resolve/GraspOfTheUndying/GraspOfTheUndying.png",
+  },
+  8439: {
+    name: "Aftershock",
+    iconPath:
+      "perk-images/Styles/Resolve/VeteranAftershock/VeteranAftershock.png",
+  },
+  8465: {
+    name: "Guardian",
+    iconPath: "perk-images/Styles/Resolve/Guardian/Guardian.png",
+  },
   // Sorcery
-  8214: "perk-images/Styles/Sorcery/SummonAery/SummonAery.png",
-  8229: "perk-images/Styles/Sorcery/ArcaneComet/ArcaneComet.png",
-  8230: "perk-images/Styles/Sorcery/PhaseRush/PhaseRush.png",
+  8214: {
+    name: "Summon Aery",
+    iconPath: "perk-images/Styles/Sorcery/SummonAery/SummonAery.png",
+  },
+  8229: {
+    name: "Arcane Comet",
+    iconPath: "perk-images/Styles/Sorcery/ArcaneComet/ArcaneComet.png",
+  },
+  8230: {
+    name: "Phase Rush",
+    iconPath: "perk-images/Styles/Sorcery/PhaseRush/PhaseRush.png",
+  },
 };
 
 /**
  * Get the URL for a keystone rune icon by keystone ID.
  */
 export function getKeystoneIconUrlById(keystoneId: number): string | null {
-  const iconPath = KEYSTONE_ICON_MAP[keystoneId];
+  const iconPath = KEYSTONE_MAP[keystoneId]?.iconPath;
   if (!iconPath) {
     return null;
   }
   return `${DDRAGON_IMAGE_BASE_URL}/${iconPath}`;
+}
+
+/**
+ * Get the in-game name of a keystone rune by ID.
+ *
+ * @returns The display name (e.g. "Conqueror"), or null if the ID is unknown
+ */
+export function getKeystoneName(keystoneId: number): string | null {
+  return KEYSTONE_MAP[keystoneId]?.name ?? null;
 }
 
 const RUNE_STYLE_MAP: Record<

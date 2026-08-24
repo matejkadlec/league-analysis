@@ -2,9 +2,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   DDRAGON_FALLBACK_VERSION,
   getChampionIconUrl,
+  getKeystoneIconUrlById,
+  getKeystoneName,
   getProfileIconFallbackUrl,
   getRuneStyleIconUrl,
   getSummonerSpellIconUrlById,
+  getSummonerSpellName,
 } from "@/lib/core/data-dragon";
 import { resolveDDragonVersion } from "@/lib/core/data-dragon-version";
 
@@ -151,5 +154,28 @@ describe("Data Dragon asset URLs", () => {
   it("keeps unknown spell and rune IDs non-renderable", () => {
     expect(getSummonerSpellIconUrlById(999999, "99.1.2")).toBeNull();
     expect(getRuneStyleIconUrl(999999)).toBeNull();
+  });
+});
+
+describe("Data Dragon display names", () => {
+  it("names runes and spells the way the game does, not the way the CDN does", () => {
+    // The asset filename is not the name: 8439 still ships as
+    // `VeteranAftershock` and 8008 as `LethalTempoTemp`, while the game calls
+    // them Aftershock and Lethal Tempo. A tooltip built from the path would
+    // put a decade-old codename in front of the player.
+    expect(getKeystoneName(8439)).toBe("Aftershock");
+    expect(getKeystoneName(8008)).toBe("Lethal Tempo");
+    expect(getKeystoneName(8005)).toBe("Press the Attack");
+    expect(getSummonerSpellName(4)).toBe("Flash");
+    expect(getSummonerSpellName(14)).toBe("Ignite");
+  });
+
+  it("has no name for an ID it has no icon for", () => {
+    // The caller falls back on null, and the icon does too — an ID that
+    // names a rune it cannot draw is how a label ends up disagreeing with the
+    // picture next to it.
+    expect(getKeystoneName(999999)).toBeNull();
+    expect(getKeystoneIconUrlById(999999)).toBeNull();
+    expect(getSummonerSpellName(999999)).toBeNull();
   });
 });

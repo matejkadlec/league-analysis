@@ -36,6 +36,7 @@ import {
   MatchHistoryErrorCard,
   MatchHistoryHeader,
   MatchHistoryLoadingCard,
+  MatchHistoryLoadingRow,
   MatchHistoryPaginationBar,
 } from "./match-history-controls";
 import { MatchRow } from "./match-row";
@@ -43,11 +44,24 @@ import { MatchRow } from "./match-row";
 interface MatchHistoryProps {
   puuid: string;
   lastUpdated?: string | null | undefined;
+  /**
+   * Make a participant of one of these matches the current player.
+   *
+   * Passed in rather than read from `usePlayerContext` here so this card stays
+   * renderable without the provider — the page above already holds the
+   * context, and taking it twice would only add a second place for the two to
+   * disagree about who is selected.
+   */
+  onSelectPlayer: (puuid: string) => void;
 }
 
 const MATCH_HISTORY_SEARCH_DEBOUNCE_MS = 300;
 
-export function MatchHistory({ puuid, lastUpdated }: MatchHistoryProps) {
+export function MatchHistory({
+  puuid,
+  lastUpdated,
+  onSelectPlayer,
+}: MatchHistoryProps) {
   const router = useRouter();
   const isDesktopLayout = useMediaQuery(LG_BREAKPOINT_QUERY);
   const { isUpdating, startSync } = usePlayerSyncRun(puuid, {
@@ -115,8 +129,13 @@ export function MatchHistory({ puuid, lastUpdated }: MatchHistoryProps) {
     refetchOnReconnect: false,
     placeholderData: (previousData) => previousData,
     staleTime: 60000,
+    // While the player's own update run is storing matches, this is what makes
+    // them appear: the query is the only thing that knows the stored total, and
+    // the run writes rows the whole time it is going. 2s rather than the 5s
+    // below because the empty-history case is waiting for a first row to exist
+    // at all, while this one is a list visibly filling up.
     refetchInterval: (query) =>
-      query.state.data?.matches.length === 0 ? 5000 : false,
+      isUpdating ? 2000 : query.state.data?.matches.length === 0 ? 5000 : false,
   });
 
   const handleQueueFilterSelect = (
@@ -166,6 +185,18 @@ export function MatchHistory({ puuid, lastUpdated }: MatchHistoryProps) {
     apiTotalMatches,
   );
   const hasActiveSearch = debouncedMatchSearch.length > 0;
+  // An update run is storing this player's matches, so the stored total is not
+  // the real one yet and neither is the last page. Everything progressive about
+  // this card hangs off exactly this: the run is authoritative about whether
+  // more records are still coming, and `usePlayerSyncRun` reports it whoever
+  // started it — the Update button here, or the switch that brought us to this
+  // player.
+  const isLoadingMoreMatches = isUpdating;
+  // Only after the last record there is. Earlier pages are complete and must
+  // not claim to be still filling; page 1 carries it while nothing is stored
+  // yet, which is the case where it is the only row in the list.
+  const showLoadingRow =
+    isLoadingMoreMatches && currentPage >= Math.max(1, totalPages);
 
   useEffect(() => {
     if (isPlaceholderData) {
@@ -210,7 +241,10 @@ export function MatchHistory({ puuid, lastUpdated }: MatchHistoryProps) {
         winRate={winRate}
       />
       <CardContent>
-        {matches.length === 0 ? (
+        {matches.length === 0 && !showLoadingRow ? (
+          // Not while an update is running: "no matches" is a verdict, and the
+          // run that would produce the first one has not finished. The list
+          // below renders with the loading row as its only body row instead.
           <MatchHistoryEmptyAlert
             hasActiveSearch={hasActiveSearch}
             debouncedMatchSearch={debouncedMatchSearch}
@@ -245,8 +279,10 @@ export function MatchHistory({ puuid, lastUpdated }: MatchHistoryProps) {
                   key={match.match_id}
                   match={match}
                   playerPuuid={puuid}
+                  onSelectPlayer={onSelectPlayer}
                 />
               ))}
+              {showLoadingRow && <MatchHistoryLoadingRow />}
             </div>
           </div>
         )}
@@ -254,6 +290,7 @@ export function MatchHistory({ puuid, lastUpdated }: MatchHistoryProps) {
         <MatchHistoryPaginationBar
           recordRange={recordRange}
           apiTotalMatches={apiTotalMatches}
+          isTotalPending={isLoadingMoreMatches}
           paginationItems={paginationItems}
           currentPage={currentPage}
           totalPages={totalPages}
