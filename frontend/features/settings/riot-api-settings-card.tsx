@@ -30,7 +30,7 @@ import { useToast } from "@/lib/core/hooks";
 import { notifyRiotCredentialHealthUpdated } from "@/lib/core/riot-credential-health-events";
 import { Check, FlaskConical, Loader2, Save, ShieldCheck, X } from "lucide-react";
 
-const RIOT_API_KEY_QUERY_KEY = ["settings", "riot_api_key"] as const;
+import { RIOT_API_KEY_QUERY_KEY } from "./settings-helpers";
 
 export function RiotApiSettingsCard() {
   const toast = useToast();

@@ -29,8 +29,10 @@ export const JobConfigurationSchema = z.object({
   description: z.string().nullable().optional(),
   schedule: z.string(),
   // Resolved server-side (config_json overrides schedule); the card renders
-  // this and never re-parses the schedule string.
-  interval_seconds: z.number().int(),
+  // this and never re-parses the schedule string. Null means the stored row
+  // cannot name its interval; optional so a not-yet-redeployed backend
+  // degrades to the schedule fallback instead of failing validation.
+  interval_seconds: z.number().int().nullable().optional(),
   is_active: z.boolean(),
   is_paused: z.boolean().default(false),
   is_running: z.boolean().default(false),

@@ -18,7 +18,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.models import Base, created_at_column
-from app.core.runs import status_in_sql
+from app.core.runs import values_in_sql
 from app.features.auth.user_reference import user_id_column
 from app.features.matchmaking_analysis.schemas import (
     ACTIVE_ANALYSIS_STATUSES,
@@ -129,7 +129,7 @@ class MatchmakingAnalysis(Base):
     __table_args__ = (
         PrimaryKeyConstraint("puuid", "created_at", name="pk_matchmaking_analyses"),
         CheckConstraint(
-            status_in_sql(get_args(MatchmakingAnalysisStatus)),
+            values_in_sql("status", get_args(MatchmakingAnalysisStatus)),
             name="status_valid",
         ),
         # Per account, not per player -- see the matching index on
@@ -141,7 +141,7 @@ class MatchmakingAnalysis(Base):
             "user_id",
             "puuid",
             unique=True,
-            postgresql_where=text(status_in_sql(ACTIVE_ANALYSIS_STATUSES)),
+            postgresql_where=text(values_in_sql("status", ACTIVE_ANALYSIS_STATUSES)),
         ),
         # No index on `puuid` alone -- it leads the primary key -- and none
         # on `created_at`, which the key does NOT cover: every query that

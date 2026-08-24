@@ -380,6 +380,12 @@ def test_job_response_carries_the_resolved_interval() -> None:
         == 60
     )
 
+    # A hand-edited row that cannot name its interval answers None rather
+    # than 500ing the whole Jobs page; the card falls back to the raw string.
+    unresolvable = double(None)
+    unresolvable.schedule = "0 0 * * *"
+    assert JobService._to_job_response(unresolvable).interval_seconds is None
+
 
 @pytest.mark.parametrize(
     "error",

@@ -125,7 +125,12 @@ export function JobCard({ job, onExecutionClick }: JobCardProps) {
               <div className="flex-1">
                 <p className="font-medium">Schedule</p>
                 <p className="text-muted-foreground">
-                  {formatRunInterval(job.interval_seconds)}
+                  {job.interval_seconds != null
+                    ? formatRunInterval(job.interval_seconds)
+                    : // A row that cannot name its interval (or a response
+                      // from a backend that predates the field) shows the
+                      // raw stored string rather than hiding the state.
+                      job.schedule}
                 </p>
               </div>
             </div>

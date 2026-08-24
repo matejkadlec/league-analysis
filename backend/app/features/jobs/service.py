@@ -52,14 +52,9 @@ class JobService:
     @staticmethod
     def _to_job_response(job: JobConfiguration) -> JobConfigurationResponse:
         """Convert ORM model to response with normalized Match Fetcher config."""
+        # `interval_seconds` resolves inside the schema's own validator, so
+        # every construction site -- not just this one -- carries the number.
         response = JobConfigurationResponse.model_validate(job)
-
-        # Resolved here so the card never re-implements the precedence rule
-        # (config_json overrides schedule). Every persisted row resolves:
-        # `update_job_configuration` refuses unresolvable values pre-commit.
-        response.interval_seconds = resolve_interval_seconds(
-            name=job.name, schedule=job.schedule, config_json=job.config_json
-        )
 
         if response.job_type == JobType.MATCH_FETCHER:
             response.config_json = normalize_match_fetcher_config(response.config_json)

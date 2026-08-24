@@ -2,7 +2,7 @@
 
 from datetime import datetime
 from enum import Enum as PyEnum
-from typing import Any, Final
+from typing import Any, Final, Literal, get_args
 
 from sqlalchemy import (
     Boolean,
@@ -24,7 +24,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
 from app.core.models import Base, created_at_column, id_column, updated_at_column
-from app.core.runs import status_in_sql
+from app.core.runs import values_in_sql
 from app.features.auth.user_reference import user_id_column
 
 
@@ -243,16 +243,19 @@ class JobExecution(Base):
 
 # The sync-run status vocabulary and its active subset; the CHECK constraint
 # and the one-active-run partial unique index below are rendered from these,
-# so extending either is a schema change, not just a query change.
-PLAYER_SYNC_STATUSES = (
+# and `PlayerSyncRunResponse` types its status field from the same Literal --
+# so extending the vocabulary is a schema change, not just a query change,
+# and cannot leave the API contract stale.
+PlayerSyncStatus = Literal[
     "pending",
     "running",
     "completed",
     "failed",
     "cancelled",
     "rate_limited",
-)
-ACTIVE_SYNC_STATUSES = ("pending", "running")
+]
+PLAYER_SYNC_STATUSES: tuple[PlayerSyncStatus, ...] = get_args(PlayerSyncStatus)
+ACTIVE_SYNC_STATUSES: tuple[PlayerSyncStatus, ...] = ("pending", "running")
 
 
 class PlayerSyncRun(Base):
@@ -261,14 +264,14 @@ class PlayerSyncRun(Base):
     __tablename__ = "player_sync_runs"
     __table_args__ = (
         CheckConstraint(
-            status_in_sql(PLAYER_SYNC_STATUSES),
+            values_in_sql("status", PLAYER_SYNC_STATUSES),
             name="status_valid",
         ),
         Index(
             "uq_player_sync_runs_active_puuid",
             "puuid",
             unique=True,
-            postgresql_where=sa_text(status_in_sql(ACTIVE_SYNC_STATUSES)),
+            postgresql_where=sa_text(values_in_sql("status", ACTIVE_SYNC_STATUSES)),
         ),
         Index("ix_player_sync_runs_user_created", "user_id", "created_at"),
         {"schema": "jobs"},

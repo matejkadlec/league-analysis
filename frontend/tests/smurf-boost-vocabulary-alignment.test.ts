@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -30,10 +30,13 @@ const ENGINE_DIR = join(here, "../../backend/app/features/smurf_boost_detection"
  */
 function backendIdentifiers(prefix: "NOTE_" | "FAMILY_"): string[] {
   const ids: string[] = [];
-  for (const file of ["engine.py", "composite.py", "signals.py"]) {
+  // Every module in the feature, not a hardcoded list, so a new engine file
+  // cannot carry identifiers this sweep never reads. The pattern tolerates a
+  // type annotation (`NOTE_X: Final = "..."`) for the same reason.
+  for (const file of readdirSync(ENGINE_DIR).filter((f) => f.endsWith(".py"))) {
     const source = readFileSync(join(ENGINE_DIR, file), "utf8");
     for (const [, value] of source.matchAll(
-      new RegExp(`^${prefix}[A-Z0-9_]+ = "([a-z0-9_]+)"$`, "gm"),
+      new RegExp(`^${prefix}[A-Z0-9_]+(?::[^=]*)? = "([a-z0-9_]+)"$`, "gm"),
     )) {
       if (value !== undefined) ids.push(value);
     }

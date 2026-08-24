@@ -22,6 +22,12 @@ export function playerContextQueryKey(userId: number | null | undefined) {
   return ["player-context", userId] as const;
 }
 
+/** The suggestion caches `player-selector.tsx` reads; it keys full searches
+ * on this prefix and invalidates the whole family by it after a selection.
+ * An array, not a bare string, so query-key-scope-contract.test.ts can read
+ * the namespace here. */
+export const PLAYER_SUGGESTIONS_QUERY_KEY = ["player-suggestions"] as const;
+
 /** Invalidate everything that reflects whether a player is tracked. Track and
  * untrack both touch the same four caches; this names that set once. */
 export function invalidateTrackingQueries(

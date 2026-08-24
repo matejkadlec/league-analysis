@@ -35,7 +35,10 @@ import type { Player } from "@/lib/core/schemas";
 import { useDebouncedValue } from "@/lib/core/use-debounced-value";
 import { cn } from "@/lib/core/utils";
 
-import { playerQueryKey } from "../player-query";
+import {
+  PLAYER_SUGGESTIONS_QUERY_KEY,
+  playerQueryKey,
+} from "../player-query";
 import {
   formatRiotId,
   parseRiotId,
@@ -47,10 +50,6 @@ import {
 // that the list still feels attached to the keyboard.
 const PLAYER_SEARCH_DEBOUNCE_MS = 250;
 
-// Spelled once: the suggestions query below keys on it and the post-selection
-// cleanup invalidates the whole family by this prefix. An array, not a bare
-// string, so query-key-scope-contract.test.ts can read the namespace here.
-const PLAYER_SUGGESTIONS_QUERY_KEY = ["player-suggestions"] as const;
 
 interface DiscoverAttempt {
   riotId: RiotIdParts;

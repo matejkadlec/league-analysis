@@ -20,18 +20,20 @@ from sqlalchemy.sql import ColumnElement
 from .db_session import rollback_quietly
 
 
-def status_in_sql(statuses: Sequence[str]) -> str:
-    """The ``status IN (...)`` text a status vocabulary renders to in SQL.
+def values_in_sql(column: str, values: Sequence[str]) -> str:
+    """The ``<column> IN (...)`` text a Python vocabulary renders to in SQL.
 
-    Every run table spells its vocabulary twice in DDL -- the CHECK
+    Every run table spells its status vocabulary twice in DDL -- the CHECK
     constraint over all statuses and the partial unique index over the
-    active ones. Rendering both from the Python tuples means adding a status
-    cannot silently leave a constraint behind; `validate_migrations.py`
-    compares the rendered text against the database, so a rendering change
-    is caught before it masquerades as schema drift.
+    active ones -- and the credential-health table does the same for its two
+    enums. Rendering the SQL from the Python values means extending a
+    vocabulary cannot silently leave a constraint behind;
+    `validate_migrations.py` compares the rendered text against the
+    database, so a rendering change is caught before it masquerades as
+    schema drift.
     """
-    joined = ", ".join(f"'{status}'" for status in statuses)
-    return f"status IN ({joined})"
+    joined = ", ".join(f"'{value}'" for value in values)
+    return f"{column} IN ({joined})"
 
 
 def active_run_filter(

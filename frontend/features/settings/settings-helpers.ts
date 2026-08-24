@@ -15,6 +15,7 @@ export const PASSWORD_REQUIREMENTS_TEXT =
 export const ACCOUNT_ACTION_BUTTON_CLASS =
   "button-medium no-rotation !h-9 !px-3 !py-2 w-36 justify-center";
 export const USER_QUERY_KEY = ["user"] as const;
+export const RIOT_API_KEY_QUERY_KEY = ["settings", "riot_api_key"] as const;
 
 export function isPasswordStrong(password: string): boolean {
   if (password.length < 8) {

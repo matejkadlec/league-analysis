@@ -1,11 +1,11 @@
 """Pydantic schemas for Player model."""
 
 from datetime import datetime
-from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.core.riot_api.constants import Platform
+from app.features.jobs.models import PlayerSyncStatus
 
 
 class PlayerBase(BaseModel):
@@ -79,14 +79,7 @@ class PlayerSyncRunResponse(BaseModel):
 
     id: int
     puuid: str
-    status: Literal[
-        "pending",
-        "running",
-        "completed",
-        "failed",
-        "cancelled",
-        "rate_limited",
-    ]
+    status: PlayerSyncStatus
     match_execution_id: int | None = None
     profile_execution_id: int | None = None
     error_code: str | None = None
