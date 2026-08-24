@@ -227,11 +227,11 @@ describe("Match History progressive loading", () => {
     await waitFor(() =>
       expect(screen.getByTestId("match-history-loading-row")).toBeTruthy(),
     );
+    expect(screen.queryByRole("button", { name: "2" })).toBeNull();
     expect(
-      screen.queryByRole("button", { name: "2" }),
-    ).toBeNull();
-    expect(
-      screen.getByRole("button", { name: "Next page" }).hasAttribute("disabled"),
+      screen
+        .getByRole("button", { name: "Next page" })
+        .hasAttribute("disabled"),
     ).toBe(true);
   });
 
@@ -262,6 +262,113 @@ describe("Match History progressive loading", () => {
       ).length;
 
     await waitFor(() => expect(detailedCalls()).toBeGreaterThan(1));
+  });
+
+  it("keeps the fetched rows when a poll of the list fails", async () => {
+    // The 2s poll only exists while rows are arriving, so its failures land
+    // exactly when the card has rows worth keeping. Replacing them with an
+    // error card throws away readable matches over a blip — the same mistake
+    // `MatchHistoryLoadingRow` exists to avoid.
+    mockHistory(3, "running");
+    renderHistory();
+    await waitFor(() =>
+      expect(screen.getAllByText("Mordekaiser").length).toBeGreaterThan(0),
+    );
+
+    // Only the list fails. The run keeps reporting itself, which is what keeps
+    // the 2s poll alive — the failure has to happen while the card still
+    // believes more rows are coming.
+    const stillRunning = {
+      id: 7,
+      puuid: PUUID,
+      status: "running",
+      match_execution_id: null,
+      ...RUN_TIMESTAMPS,
+    };
+    validatedGet.mockImplementation(async (_schema: unknown, path: string) => {
+      if (path.includes("/detailed")) {
+        throw Object.assign(new Error("offline"), { isAxiosError: true });
+      }
+      if (path.includes("/sync")) {
+        return { success: true, data: stillRunning };
+      }
+      return {
+        success: true,
+        data: {
+          puuid: PUUID,
+          total_matches: 3,
+          wins: 3,
+          losses: 0,
+          win_rate: 1,
+        },
+      };
+    });
+
+    await waitFor(() =>
+      expect(screen.getByTestId("match-history-load-failed-row")).toBeTruthy(),
+    );
+    expect(screen.getAllByText("Mordekaiser").length).toBeGreaterThan(0);
+    // The spinner promised progress; the poll behind it is dead.
+    expect(screen.queryByTestId("match-history-loading-row")).toBeNull();
+  });
+
+  it("still shows the error card when the failure left nothing to read", async () => {
+    validatedGet.mockImplementation(async (_schema: unknown, path: string) => {
+      if (path.includes("/detailed")) {
+        throw Object.assign(new Error("offline"), { isAxiosError: true });
+      }
+      if (path.endsWith("/sync/active")) return { success: true, data: null };
+      return { success: true, data: null };
+    });
+    renderHistory();
+
+    await waitFor(() =>
+      expect(
+        screen.getByText(/Unable to reach the League Analysis/),
+      ).toBeTruthy(),
+    );
+  });
+
+  it("does not call an empty list a verdict when the request failed", async () => {
+    // Nothing stored yet and the poll fails: "No matches found" would be a
+    // conclusion drawn from a request that never answered, and the query is
+    // opted out of the global error toast, so this row is the only report.
+    mockHistory(0, "running");
+    renderHistory();
+    await waitFor(() =>
+      expect(screen.getByTestId("match-history-loading-row")).toBeTruthy(),
+    );
+
+    const stillRunning = {
+      id: 7,
+      puuid: PUUID,
+      status: "running",
+      match_execution_id: null,
+      ...RUN_TIMESTAMPS,
+    };
+    validatedGet.mockImplementation(async (_schema: unknown, path: string) => {
+      if (path.includes("/detailed")) {
+        throw Object.assign(new Error("offline"), { isAxiosError: true });
+      }
+      if (path.includes("/sync")) {
+        return { success: true, data: stillRunning };
+      }
+      return {
+        success: true,
+        data: {
+          puuid: PUUID,
+          total_matches: 0,
+          wins: 0,
+          losses: 0,
+          win_rate: 0,
+        },
+      };
+    });
+
+    await waitFor(() =>
+      expect(screen.getByTestId("match-history-load-failed-row")).toBeTruthy(),
+    );
+    expect(screen.queryByText(/No matches found/i)).toBeNull();
   });
 
   it("exposes the next page once fetched rows spill onto it", async () => {

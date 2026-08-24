@@ -37,6 +37,7 @@ import {
   MatchHistoryErrorCard,
   MatchHistoryHeader,
   MatchHistoryLoadingCard,
+  MatchHistoryLoadFailedRow,
   MatchHistoryLoadingRow,
   MatchHistoryPaginationBar,
 } from "./match-history-controls";
@@ -147,7 +148,9 @@ export function MatchHistory({
       pageSize,
     }),
     enabled: !!puuid && preferencesReady,
-    // MatchHistoryErrorCard below reports this failure inline.
+    // Reported inline rather than by the global toast: MatchHistoryErrorCard
+    // when the failure left nothing to show, MatchHistoryLoadFailedRow when
+    // there are already rows worth keeping.
     meta: { silenceErrorToast: true },
     retry: (failureCount, error) =>
       normalizeApiError(error).kind === "network" ? false : failureCount < 2,
@@ -228,8 +231,15 @@ export function MatchHistory({
   // Only after the last record there is. Earlier pages are complete and must
   // not claim to be still filling; page 1 carries it while nothing is stored
   // yet, which is the case where it is the only row in the list.
-  const showLoadingRow =
-    isLoadingMoreMatches && currentPage >= Math.max(1, totalPages);
+  // Not while the query behind it is failing: a spinner saying more rows are
+  // on the way, over a poll that just errored, is the wrong half of the story.
+  const isLastPage = currentPage >= Math.max(1, totalPages);
+  const showLoadingRow = isLoadingMoreMatches && isLastPage && !error;
+  // Deliberately not gated on `isLoadingMoreMatches`. The outage that fails
+  // this query also fails the sync poll, which drops `isFetchingMatches` to
+  // false — so hanging the failure row off it would hide it exactly when it is
+  // needed.
+  const showLoadFailedRow = !!error && !!data && isLastPage;
 
   useEffect(() => {
     if (isPlaceholderData) {
@@ -246,7 +256,12 @@ export function MatchHistory({
     return <MatchHistoryLoadingCard />;
   }
 
-  if (!isFetching && error) {
+  // Only when there is nothing to fall back to. React Query keeps cached data
+  // through an error, and the 2s poll this card runs while rows are arriving
+  // fails precisely when there are rows on screen — a card-wide error there
+  // would throw away readable matches over one bad request. That case renders
+  // MatchHistoryLoadFailedRow in the list instead.
+  if (!isFetching && error && !data) {
     const apiError = normalizeApiError(error);
 
     return (
@@ -274,10 +289,11 @@ export function MatchHistory({
         winRate={winRate}
       />
       <CardContent>
-        {matches.length === 0 && !showLoadingRow ? (
-          // Not while an update is running: "no matches" is a verdict, and the
-          // run that would produce the first one has not finished. The list
-          // below renders with the loading row as its only body row instead.
+        {matches.length === 0 && !showLoadingRow && !showLoadFailedRow ? (
+          // Not while an update is running, and not when the list failed to
+          // load: "no matches" is a verdict, and neither a run still going nor
+          // a request that never answered has earned it. The list below
+          // renders with that row as its only body row instead.
           <MatchHistoryEmptyAlert
             hasActiveSearch={hasActiveSearch}
             debouncedMatchSearch={debouncedMatchSearch}
@@ -316,6 +332,9 @@ export function MatchHistory({
                 />
               ))}
               {showLoadingRow && <MatchHistoryLoadingRow />}
+              {showLoadFailedRow && (
+                <MatchHistoryLoadFailedRow onRetry={() => void refetch()} />
+              )}
             </div>
           </div>
         )}

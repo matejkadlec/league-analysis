@@ -791,9 +791,7 @@ describe("SmurfBoostDetection", () => {
     );
     // A start that never happened has no run to quote, so the card falls back
     // to its own sentence -- but it still says the games are not fresh.
-    expect(
-      screen.getByText(/newest games could not be fetched/),
-    ).toBeTruthy();
+    expect(screen.getByText(/newest games could not be fetched/)).toBeTruthy();
     expect(toast.error).not.toHaveBeenCalled();
   });
 
@@ -880,10 +878,13 @@ describe("SmurfBoostDetection", () => {
     expect(startSmurfBoostDetection).not.toHaveBeenCalled();
   });
 
-  it("compares on stored games when the run can no longer be read", async () => {
-    // The poll stops on error -- its interval reads data that never arrived --
-    // so no terminal status will ever land. A click gated on that callback
-    // would leave the button spinning on a comparison that never runs.
+  it("does not compare on a poll blip mid-fetch", async () => {
+    // A failing poll is not a finished fetch. The poll backs off and keeps
+    // going, so comparing here would use whatever was stored mid-fetch --
+    // and the card would then drop its stale-fetch warning when the run
+    // finally reported `completed`, presenting that partial comparison as a
+    // fresh one. `tests/player-sync-poll-recovery.test.tsx` covers the other
+    // half: the run settles once, with its real status, after recovery.
     getLatestSmurfBoostDetection.mockResolvedValue({
       success: false,
       error: { message: "Not found", kind: "not-found", status: 404 },
@@ -892,10 +893,12 @@ describe("SmurfBoostDetection", () => {
       success: true,
       data: analysis(),
     });
+    let exactPolls = 0;
     validatedGet.mockImplementation(async (_schema: unknown, path: string) => {
       if (path.endsWith("/sync/active")) {
         return { success: true, data: null };
       }
+      exactPolls += 1;
       throw new Error("the run could not be read");
     });
     validatedPost.mockResolvedValue({
@@ -908,9 +911,10 @@ describe("SmurfBoostDetection", () => {
     await waitFor(() => expect(runButton()).toBeTruthy());
     await user.click(runButton());
 
-    await waitFor(() =>
-      expect(screen.getByText("Notable indicators")).toBeTruthy(),
-    );
+    await waitFor(() => expect(exactPolls).toBeGreaterThan(0));
+    expect(startSmurfBoostDetection).not.toHaveBeenCalled();
+    expect(screen.queryByText("Notable indicators")).toBeNull();
+    expect(screen.queryByText(/newest games could not be fetched/)).toBeNull();
   });
 
   it("runs no comparison for an update started somewhere else", async () => {
@@ -985,7 +989,9 @@ describe("SmurfBoostDetection", () => {
       expect(startSmurfBoostDetection).toHaveBeenCalledTimes(1),
     );
 
-    await waitFor(() => expect(runButton().hasAttribute("disabled")).toBe(false));
+    await waitFor(() =>
+      expect(runButton().hasAttribute("disabled")).toBe(false),
+    );
     await user.click(runButton());
     await waitFor(() =>
       expect(startSmurfBoostDetection).toHaveBeenCalledTimes(2),
@@ -1007,8 +1013,7 @@ describe("SmurfBoostDetection", () => {
       .mockImplementationOnce(
         () =>
           new Promise((resolve) => {
-            releaseRefetch = () =>
-              resolve({ success: true, data: analysis() });
+            releaseRefetch = () => resolve({ success: true, data: analysis() });
           }),
       );
     startSmurfBoostDetection.mockResolvedValue({
@@ -1276,7 +1281,9 @@ describe("SmurfBoostDetection", () => {
     await user.click(runButton());
 
     await waitFor(() =>
-      expect(screen.getByText(/The last fetch found no new ones\./)).toBeTruthy(),
+      expect(
+        screen.getByText(/The last fetch found no new ones\./),
+      ).toBeTruthy(),
     );
   });
 

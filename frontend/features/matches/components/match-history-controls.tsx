@@ -124,6 +124,37 @@ export function MatchHistoryLoadingRow() {
   );
 }
 
+/**
+ * The same slot as the loading row, for when the poll behind it is failing.
+ *
+ * A card-wide error here would throw away the matches already on screen over
+ * a blip in a background refetch — the mistake the loading row exists to
+ * avoid, in its error form. The rows keep rendering; this says the list
+ * stopped growing and offers the retry, so the failure is still reported
+ * (`match-history.tsx` silences the global toast for this query on the
+ * grounds that the card reports it inline, and this is that report whenever
+ * there are rows to keep).
+ */
+export function MatchHistoryLoadFailedRow({
+  onRetry,
+}: {
+  onRetry: () => void;
+}) {
+  return (
+    <div
+      role="status"
+      data-testid="match-history-load-failed-row"
+      className="mb-1.5 flex items-center justify-center gap-3 rounded border-2 border-t-1 border-b-1 border-destructive/30 bg-muted/30 px-3 py-3 text-sm last:mb-0"
+    >
+      <AlertCircle aria-hidden="true" className="h-4 w-4 text-destructive" />
+      Could not load more matches.
+      <Button variant="outline" size="sm" onClick={onRetry}>
+        Try again
+      </Button>
+    </div>
+  );
+}
+
 export function MatchHistoryErrorCard({
   isNotFound,
   errorMessage,

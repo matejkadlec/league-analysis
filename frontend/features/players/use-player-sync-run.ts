@@ -26,8 +26,9 @@ interface UsePlayerSyncRunOptions {
    * so rather than presenting stale data as fresh -- and can quote the
    * backend's own reviewed sentence for the failure instead of inventing a
    * generic one, which for a stale player id or an expired key would promise
-   * a retry that cannot work. `null` is a run there is nothing to read: a
-   * start the backend refused outright, or a poll that gave up.
+   * a retry that cannot work. `null` is a start the backend refused outright,
+   * so no run exists to report on. A run that started always settles with
+   * itself, however long its status takes to become readable.
    */
   onSettled?: ((run: PlayerSyncRun | null) => void | Promise<void>) | undefined;
   /**
@@ -137,9 +138,10 @@ export function usePlayerProfileUpdate({
  *
  * `isUpdating` derives from run status, but not from status alone: the last
  * good status survives a failed poll, so reading it by itself left a surface
- * reporting an update forever whenever the poll stopped answering. A run whose
- * status can no longer be read is not an update in progress, and the caller
- * has already been released. Poll errors themselves are reported by the global
+ * reporting an update forever whenever the poll stopped answering. While the
+ * poll is failing the honest answer is "not known to be updating" -- the run
+ * may well still be going, and if it is, the backed-off poll will say so and
+ * this flips back. Poll errors themselves are reported by the global
  * query-error toast in `components/providers.tsx`.
  */
 export function usePlayerSyncRun(
@@ -155,17 +157,12 @@ export function usePlayerSyncRun(
     puuid: string;
     id: number;
   } | null>(null);
+  // Only "this run reached a terminal status" is tracked. A failing poll used
+  // to be tracked too, and settled the caller with `null` -- but the poll does
+  // not stop on an error (see `refetchInterval` below), so that fired on every
+  // blip and settled runs that were still going. `tests/
+  // player-sync-poll-recovery.test.tsx` pins both halves.
   const handledTerminalSyncIds = useRef(new Set<number>());
-  // Deliberately not the same Set. "I gave up reading this run" and "this run
-  // reached a terminal status" are different facts: sharing one meant a poll
-  // that failed for a few seconds marked the run handled, and when the poll
-  // recovered and returned `completed` the terminal effect below skipped it —
-  // no cache invalidation, no `onCompleted`, no success toast, for a run that
-  // really did finish. A caller can therefore be released twice: once with
-  // `null` when the poll dies, and again with the run if it comes back. That
-  // is the right way round — the second call carries better news than the
-  // first, and both callers here re-read rather than accumulate.
-  const releasedUnreadableSyncIds = useRef(new Set<number>());
 
   const activeSyncQuery = useQuery({
     queryKey: playerSyncActiveQueryKey(puuid),
@@ -182,7 +179,11 @@ export function usePlayerSyncRun(
     // report on every such mount.
     enabled: puuid !== "",
     refetchInterval: (query) =>
-      query.state.data ? (query.state.fetchFailureCount > 0 ? 15_000 : 1_000) : false,
+      query.state.data
+        ? query.state.fetchFailureCount > 0
+          ? 15_000
+          : 1_000
+        : false,
   });
 
   // Adopt whatever run `/sync/active` reports, during render: the guard is
@@ -204,17 +205,26 @@ export function usePlayerSyncRun(
       );
     },
     enabled: observedSyncId !== null,
-    // Backed off rather than stopped once the poll starts failing: `data`
-    // survives an error, so the status still reads `running` and this would
-    // otherwise retry every second, forever, against a dead endpoint. Still
-    // polling at all is what lets a recovered backend finish the run properly.
-    refetchInterval: (query) =>
-      query.state.data?.status === "pending" ||
-      query.state.data?.status === "running"
-        ? query.state.fetchFailureCount > 0
-          ? 15_000
-          : 1_000
-        : false,
+    // Polls until a terminal status is actually *read*, backing off rather
+    // than stopping once it starts failing. Two things depend on that.
+    //
+    // Backed off, because `data` survives an error: the status still reads
+    // `running`, and without the backoff this would retry every second
+    // forever against a dead endpoint.
+    //
+    // Not stopped, because this is the only thing that ever settles the run.
+    // Keying on the last payload alone stopped the poll dead when the *first*
+    // read failed -- there is no `data` then, so no status, and a run whose
+    // opening poll blipped was never spoken of again.
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      const readTerminalStatus =
+        status !== undefined && status !== "pending" && status !== "running";
+      if (readTerminalStatus) {
+        return false;
+      }
+      return query.state.fetchFailureCount > 0 ? 15_000 : 1_000;
+    },
   });
 
   const profileUpdate = usePlayerProfileUpdate({
@@ -228,62 +238,58 @@ export function usePlayerSyncRun(
   // are stable, so as a dependency list they re-ran this effect on every
   // render and only the Set below stopped it acting twice.
   const finishRun = useEffectEvent(async (syncRun: PlayerSyncRun) => {
-    if (syncRun.status !== "completed") {
-      const rateLimited = syncRun.status === "rate_limited";
-      if (!quiet) {
-        toast[rateLimited ? "warning" : "error"](
-          "Player update did not finish",
-          {
-            description: rateLimited
-              ? "Riot temporarily limited requests. Please try the update again later."
-              : "Please try the update again later.",
-          },
-        );
+    // The refetch and the settle are in the `finally` below rather than at
+    // each exit, so a caller waiting on `onSettled` is released exactly once
+    // however this ends -- including a throw from the refresh work.
+    try {
+      if (syncRun.status !== "completed") {
+        const rateLimited = syncRun.status === "rate_limited";
+        if (!quiet) {
+          toast[rateLimited ? "warning" : "error"](
+            "Player update did not finish",
+            {
+              description: rateLimited
+                ? "Riot temporarily limited requests. Please try the update again later."
+                : "Please try the update again later.",
+            },
+          );
+        }
+        return;
       }
+
+      // Scoped to this player. Prefix matches without the PUUID would
+      // invalidate every cached player, so switching to someone else
+      // afterwards would refetch their data too.
+      const exactPlayerQuery = (query: { queryKey: readonly unknown[] }) =>
+        query.queryKey.includes(puuid);
+      try {
+        await queryClient.invalidateQueries({
+          predicate: exactPlayerQuery,
+          refetchType: "none",
+        });
+        await onCompleted?.();
+        await queryClient.refetchQueries(
+          { predicate: exactPlayerQuery, type: "active" },
+          { throwOnError: true },
+        );
+        if (!quiet) {
+          toast.success("Update finished", {
+            description: "All cards were successfully updated.",
+          });
+        }
+      } catch {
+        if (!quiet) {
+          toast.error("Player data could not refresh", {
+            description: "Please try again before relying on the card data.",
+          });
+        }
+      }
+    } finally {
       await activeSyncQuery.refetch();
       await onSettled?.(syncRun);
-      return;
     }
-
-    // Scoped to this player. Prefix matches without the PUUID would
-    // invalidate every cached player, so switching to someone else
-    // afterwards would refetch their data too.
-    const exactPlayerQuery = (query: { queryKey: readonly unknown[] }) =>
-      query.queryKey.includes(puuid);
-    try {
-      await queryClient.invalidateQueries({
-        predicate: exactPlayerQuery,
-        refetchType: "none",
-      });
-      await onCompleted?.();
-      await queryClient.refetchQueries(
-        { predicate: exactPlayerQuery, type: "active" },
-        { throwOnError: true },
-      );
-      if (!quiet) {
-        toast.success("Update finished", {
-          description: "All cards were successfully updated.",
-        });
-      }
-    } catch {
-      if (!quiet) {
-        toast.error("Player data could not refresh", {
-          description: "Please try again before relying on the card data.",
-        });
-      }
-    }
-    await activeSyncQuery.refetch();
-    await onSettled?.(syncRun);
   });
 
-  // A run whose status cannot be read is settled as far as any caller is
-  // concerned. `refetchInterval` above reads data that never arrived, so an
-  // errored poll stops polling and no terminal status will ever land -- a
-  // caller gated on the callback would wait on it for the life of the mount.
-  // The failure itself is already reported by the global query-error toast.
-  const releaseUnreadableRun = useEffectEvent(() => {
-    void onSettled?.(null);
-  });
   const syncRun = exactSyncQuery.data;
   useEffect(() => {
     if (
@@ -301,26 +307,14 @@ export function usePlayerSyncRun(
       return;
     }
     handledTerminalSyncIds.current.add(syncRun.id);
-    // Released on rejection too. `activeSyncQuery.refetch()` and the caller's
-    // own callback sit outside the body's try, so without this a throw there
-    // is an unhandled rejection that also leaves the caller waiting forever
-    // on a step that will never come.
-    void finishRun(syncRun).catch(() => releaseUnreadableRun());
+    // Swallowed rather than released: the `finally` inside `finishRun` has
+    // already settled the caller by the time anything can reject here, so the
+    // only thing left to do with a rejection is keep it from surfacing as an
+    // unhandled one.
+    void finishRun(syncRun).catch(() => {});
   }, [syncRun]);
 
   const pollFailed = exactSyncQuery.isError;
-  useEffect(() => {
-    if (
-      !pollFailed ||
-      observedSyncId === null ||
-      handledTerminalSyncIds.current.has(observedSyncId) ||
-      releasedUnreadableSyncIds.current.has(observedSyncId)
-    ) {
-      return;
-    }
-    releasedUnreadableSyncIds.current.add(observedSyncId);
-    releaseUnreadableRun();
-  }, [pollFailed, observedSyncId]);
 
   const observedRun = exactSyncQuery.data ?? activeSyncQuery.data;
   const syncStatus: PlayerSyncRun["status"] | undefined = observedRun?.status;
