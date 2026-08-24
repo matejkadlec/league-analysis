@@ -12,7 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { startSmurfBoostDetection } from "../smurf-boost-api";
 import { apiErrorMessage } from "@/lib/core/api-error";
 import { UpdatedStamp } from "@/features/profile";
-import { usePlayerSyncRun } from "@/features/players";
+import { playerStatsQueryOptions, usePlayerSyncRun } from "@/features/players";
 import { useToast } from "@/lib/core/hooks";
 import type { SmurfBoostAnalysisResponse } from "@/lib/core/schemas";
 
@@ -104,6 +104,18 @@ export function SmurfBoostDetection({
     ...smurfBoostQueryOptions(puuid),
     refetchInterval: (query) =>
       isActive(query.state.data ?? null) ? ACTIVE_POLL_MS : false,
+  });
+
+  // The pool the comparison draws from, and the only count that exists
+  // before a first run. Deliberately not the player row's `total_matches`:
+  // that counts all six synced queues, so it would advertise a pool several
+  // times larger than a ranked-solo-only comparison can ever read.
+  const { data: rankedStats, dataUpdatedAt: rankedStatsReadAt } = useQuery({
+    ...playerStatsQueryOptions(puuid ?? ""),
+    // Required, not decorative: unlike `playerQueryOptions` this one has no
+    // `skipToken` guard, and `/matches/player//stats` is a 404 the global
+    // query-error toast would report on every player-less mount.
+    enabled: puuid !== null,
   });
 
   const completedAt = latest?.completed_at ?? null;
@@ -206,6 +218,21 @@ export function SmurfBoostDetection({
   // own it would promise a retry that a stale player id or an expired key
   // cannot honour.
   const [staleFetch, setStaleFetch] = useState<string | null>(null);
+  // Stored ranked games as they stood when this card asked for a fetch, so
+  // the line below can say what the fetch actually added. Nothing can say
+  // beforehand how many games are missing -- that is Riot's match list, which
+  // only arrives during the fetch -- so what was added afterwards is the only
+  // honest number on offer.
+  //
+  // With the reading's own timestamp, because the count alone cannot say
+  // whether it has been re-read since, and the whole subtraction rests on
+  // that. Nothing else moves it: the shared client refetches on neither focus
+  // nor an interval, so the only thing that advances it mid-fetch is the sync
+  // hook refreshing this player's caches.
+  const [fetchBaseline, setFetchBaseline] = useState<{
+    games: number;
+    readAt: number;
+  } | null>(null);
   // The click fetches this player's games from Riot before comparing them, so
   // a player the scheduled Match Fetcher has not reached yet is compared on
   // what Riot holds now instead of on whatever happened to be stored.
@@ -260,6 +287,19 @@ export function SmurfBoostDetection({
   const shortfall =
     shortfallReading && shortfallReading.missing > 0
       ? shortfallReading.sentence
+      : null;
+  const storedRankedGames = rankedStats?.total_matches ?? null;
+  // Only against a count re-read since the click, never against `isUpdating`:
+  // that goes false the moment the poll reads a completed run, a render and a
+  // round trip before the hook has refreshed this query -- so a fetch that
+  // added twelve games announces "no new ones" first and corrects itself
+  // after. A refresh that fails outright never corrects itself at all: the
+  // hook swallows it, and this card is deliberately too quiet to report it.
+  const fetchedGames =
+    fetchBaseline !== null &&
+    storedRankedGames !== null &&
+    rankedStatsReadAt > fetchBaseline.readAt
+      ? storedRankedGames - fetchBaseline.games
       : null;
   const storedFailure =
     latest && latest.status === "failed"
@@ -369,12 +409,31 @@ export function SmurfBoostDetection({
               </Alert>
             )}
 
+            {/* What there is to compare, before anything has been compared.
+                A label and a number rather than a sentence: the plural of a
+                count nobody has measured yet is a branch to get wrong, and
+                zero reads correctly here without a case of its own. */}
+            {storedRankedGames !== null && (
+              <p className="text-sm text-muted-foreground">
+                Ranked solo games stored: {storedRankedGames}.
+                {fetchedGames !== null &&
+                  (fetchedGames > 0
+                    ? ` The last fetch added ${fetchedGames}.`
+                    : " The last fetch found no new ones.")}
+              </p>
+            )}
+
             <Button
               className="button-full"
               onClick={() => {
                 if (!puuid) {
                   return;
                 }
+                setFetchBaseline(
+                  storedRankedGames === null
+                    ? null
+                    : { games: storedRankedGames, readAt: rankedStatsReadAt },
+                );
                 setComparisonOwed(true);
                 startSync();
               }}
@@ -394,6 +453,21 @@ export function SmurfBoostDetection({
                 </>
               )}
             </Button>
+
+            {/* Motion for a wait nothing can measure. `Progress` takes a
+                `value`, and there is no denominator to give it: how many games
+                Riot will return is unknown until the fetch has ended, and the
+                comparison finishes inside its own request. `aria-hidden`
+                because the button above already names the state, and a second
+                announcement of it would be noise. */}
+            {(isFetchingGames || comparisonOwed || running) && (
+              <div
+                aria-hidden="true"
+                className="relative h-1 w-full overflow-hidden rounded-full bg-secondary motion-reduce:hidden"
+              >
+                <div className="absolute inset-y-0 w-1/5 animate-[indeterminate-sweep_1.6s_ease-in-out_infinite] rounded-full bg-primary" />
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
