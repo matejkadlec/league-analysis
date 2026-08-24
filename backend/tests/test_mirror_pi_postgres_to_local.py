@@ -74,6 +74,42 @@ def test_non_loopback_addresses_are_rejected(mirror: ModuleType, value: str) -> 
     assert not mirror.is_loopback_address(value)
 
 
+@pytest.mark.parametrize(
+    "value",
+    [
+        # The forms the two case lists above already cover, plus the ones a
+        # divergence has actually slipped through before (127.0.0.2) and the
+        # spellings only one side used to accept.
+        "localhost",
+        "LOCALHOST ",
+        "127.0.0.1",
+        "127.0.0.2",
+        "127.0.0.1/32",
+        "::1",
+        "::1/128",
+        "[::1]",
+        "::ffff:127.0.0.1",
+        "0.0.0.0",
+        "0.0.0.0/0",
+        "10.0.0.8",
+        "192.168.1.2",
+        "db.internal",
+        "*",
+        "",
+    ],
+)
+def test_the_private_copy_agrees_with_local_target(
+    mirror: ModuleType, value: str
+) -> None:
+    """The mirror keeps its own `is_loopback_address` on purpose -- the
+    installer ships this one file with no repository on `sys.path` -- and both
+    copies guard a destructive operation. 'Keep the two in step' was prose
+    until now; this holds their verdicts equal over every reviewed form."""
+    from scripts.local_target import is_loopback_address
+
+    assert mirror.is_loopback_address(value) == is_loopback_address(value)
+
+
 def test_dotenv_parser_preserves_secret_characters(mirror: ModuleType) -> None:
     values = mirror.parse_dotenv_lines(
         [
