@@ -107,10 +107,13 @@ async def test_test_run_pause_and_resume_flip_the_runs_own_flag(
     cast(AsyncMock, job_service.db.commit).assert_not_awaited()
 
 
-async def test_test_run_pause_without_an_active_run_changes_nothing(
+async def test_test_run_pause_without_an_active_run_is_409(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """No active test run: report failure and touch no state."""
+    """No active test run: a refusal (409), same as the regular control trio,
+    and no state touched. test_jobs_control_routes.py pins the shared shape."""
+    from fastapi import HTTPException
+
     from app.features.jobs import control as control_module
     from app.features.jobs import router as jobs_router
 
@@ -119,10 +122,10 @@ async def test_test_run_pause_without_an_active_run_changes_nothing(
     job_model = SimpleNamespace(id=7, name="Match Fetcher")
     job_service = _job_service_double(job_model)
 
-    response = await jobs_router.pause_test_run(7, job_service)
+    with pytest.raises(HTTPException) as caught:
+        await jobs_router.pause_test_run(7, job_service)
 
-    assert response.success is False
-    assert response.is_paused is False
+    assert caught.value.status_code == 409
     cast(AsyncMock, job_service.db.commit).assert_not_awaited()
 
 

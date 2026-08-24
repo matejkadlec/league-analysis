@@ -1,10 +1,12 @@
 """What the pause/resume/stop routes answer, per outcome of the service call.
 
-The three routes share one shape: ask the service and turn its answer into a
-404/409/200. Nothing pinned that shape before this file, so a refactor could
-quietly have collapsed "this job does not exist" and "this job refused" into
-the generic server error -- which is the one distinction the Jobs page acts
-on.
+The six control routes -- the regular trio and the test-run trio -- share one
+shape: ask the service and turn its answer into a 404/409/200. Nothing pinned
+that shape before this file, so a refactor could quietly have collapsed "this
+job does not exist" and "this job refused" into the generic server error --
+which is the one distinction the Jobs page acts on. (The test-run trio used
+to answer a refusal as 200-with-success:false; the frontend already collapsed
+both shapes into one toast, so unifying on 409 changed no UI.)
 """
 
 from collections.abc import Awaitable, Callable
@@ -17,8 +19,11 @@ from app.features.jobs import scheduler as scheduler_module
 from app.features.jobs.router import (
     _set_scheduled_job_suspended,
     pause_job,
+    pause_test_run,
     resume_job,
+    resume_test_run,
     stop_job,
+    stop_test_run,
 )
 from app.features.jobs.schemas import JobControlActionResponse
 from app.features.jobs.service import JobService
@@ -57,12 +62,12 @@ class _ServiceDouble:
         return self.result
 
     async def set_job_paused(
-        self, job_id: int, paused: bool
+        self, job_id: int, paused: bool, test_run: bool = False
     ) -> JobControlActionResponse | None:
         return self._answer("set_job_paused", job_id=job_id, paused=paused)
 
     async def request_job_stop_action(
-        self, job_id: int, force: bool
+        self, job_id: int, force: bool, test_run: bool = False
     ) -> JobControlActionResponse | None:
         return self._answer("request_job_stop_action", job_id=job_id, force=force)
 
@@ -71,11 +76,14 @@ def _service(result: JobControlActionResponse | Exception | None) -> JobService:
     return cast(JobService, _ServiceDouble(result))
 
 
-# Each route reduced to "given a service, call me" so one body covers all three.
+# Each route reduced to "given a service, call me" so one body covers all six.
 ROUTES: dict[str, ControlRoute] = {
     "pause": lambda svc: pause_job(JOB_ID, svc),
     "resume": lambda svc: resume_job(JOB_ID, svc),
     "stop": lambda svc: stop_job(JOB_ID, svc, force=False),
+    "test-pause": lambda svc: pause_test_run(JOB_ID, svc),
+    "test-resume": lambda svc: resume_test_run(JOB_ID, svc),
+    "test-stop": lambda svc: stop_test_run(JOB_ID, svc, force=False),
 }
 
 

@@ -456,12 +456,10 @@ async def stop_test_run(
     force: Annotated[bool, Query(description="Force stop immediately")] = False,
 ) -> JobControlActionResponse:
     """Stop a running test for a job."""
-    state = await job_service.request_job_stop_action(
-        job_id, force=force, test_run=True
+    return _require_control_state(
+        await job_service.request_job_stop_action(job_id, force=force, test_run=True),
+        job_id,
     )
-    if state is None:
-        _raise_job_not_found(job_id)
-    return state
 
 
 async def _set_test_run_paused(
@@ -471,10 +469,9 @@ async def _set_test_run_paused(
     paused: bool,
 ) -> JobControlActionResponse:
     """Flip the pause flag for an active test run; the two routes share this."""
-    state = await job_service.set_job_paused(job_id, paused, test_run=True)
-    if state is None:
-        _raise_job_not_found(job_id)
-    return state
+    return _require_control_state(
+        await job_service.set_job_paused(job_id, paused, test_run=True), job_id
+    )
 
 
 @router.post("/{job_id}/test/pause")
