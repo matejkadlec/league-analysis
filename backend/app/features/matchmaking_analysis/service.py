@@ -95,6 +95,27 @@ THEORETICAL_MAX_REQUESTS = (
 )
 
 
+# The retry policy `_api_call_with_retries` runs under, as plain rules --
+# none of it reads run state, like the completion math above it.
+
+
+def _rate_limit_retry_after(error: RateLimitError) -> int:
+    return int(error.retry_after or 120)
+
+
+def _should_reraise_riot_error(error: RiotAPIError, *, required: bool) -> bool:
+    return isinstance(error, (AuthenticationError, ForbiddenError)) or required
+
+
+def _raise_if_retries_exhausted(*, required: bool) -> None:
+    if required:
+        raise MatchmakingAnalysisRuntimeError(
+            "rate_limit_wait_exhausted",
+            "The analysis could not resume within the allowed Riot rate-limit "
+            "wait. Please try again later.",
+        )
+
+
 @dataclass(frozen=True)
 class RunningAnalysis:
     """Process-local handle for one persisted analysis run."""
@@ -958,7 +979,7 @@ class MatchmakingAnalysisService:
                 return result
 
             except RateLimitError as e:
-                retry_after = self._rate_limit_retry_after(e)
+                retry_after = _rate_limit_retry_after(e)
                 logger.info(
                     "Rate limit during Riot call",
                     operation=operation,
@@ -977,13 +998,13 @@ class MatchmakingAnalysisService:
                     error_type=type(e).__name__,
                     **log_fields,
                 )
-                if self._should_reraise_riot_error(e, required=required):
+                if _should_reraise_riot_error(e, required=required):
                     raise
                 return None
 
         logger.warning("Riot call retries exhausted", operation=operation, **log_fields)
         await self._clear_rate_limit_wait_if_active()
-        self._raise_if_retries_exhausted(required=required)
+        _raise_if_retries_exhausted(required=required)
         return None
 
     async def _api_fetch_match_ids(
@@ -1025,22 +1046,6 @@ class MatchmakingAnalysisService:
     async def _record_successful_api_call(self) -> None:
         self.api_calls_made += 1
         await self._clear_rate_limit_wait_if_active()
-
-    @staticmethod
-    def _rate_limit_retry_after(error: RateLimitError) -> int:
-        return int(error.retry_after or 120)
-
-    @staticmethod
-    def _should_reraise_riot_error(error: RiotAPIError, *, required: bool) -> bool:
-        return isinstance(error, (AuthenticationError, ForbiddenError)) or required
-
-    def _raise_if_retries_exhausted(self, *, required: bool) -> None:
-        if required:
-            raise MatchmakingAnalysisRuntimeError(
-                "rate_limit_wait_exhausted",
-                "The analysis could not resume within the allowed Riot rate-limit "
-                "wait. Please try again later.",
-            )
 
     # ================================================================
     # Rate Limit Waiting
