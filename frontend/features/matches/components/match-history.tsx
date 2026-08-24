@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { normalizeApiError } from "@/lib/core/api";
 import {
+  isMatchHistoryQuery,
   matchHistoryDetailedQueryOptions,
   matchHistoryStatsQueryOptions,
 } from "../matches-query";
@@ -64,10 +65,28 @@ export function MatchHistory({
 }: MatchHistoryProps) {
   const router = useRouter();
   const isDesktopLayout = useMediaQuery(LG_BREAKPOINT_QUERY);
-  const { isUpdating, startSync } = usePlayerSyncRun(puuid, {
+  const queryClient = useQueryClient();
+  const { isUpdating, isFetchingMatches, startSync } = usePlayerSyncRun(puuid, {
     // Queries keyed by the PUUID are refreshed by the hook; the server
     // components behind this page need their own refresh.
     onCompleted: () => router.refresh(),
+    // A run that stopped early still stored whatever it got through before it
+    // stopped, and the poll below ends the moment the status leaves `running`
+    // — so rows written since its last tick would stay invisible until
+    // something else happened to refetch. The hook refreshes on a completed
+    // run only. Scoped to this card's own two caches rather than everything
+    // keyed by the PUUID: other cards decide for themselves what a failed
+    // fetch means for what they show, and Smurf Boost deliberately reports
+    // nothing about a fetch that did not finish.
+    onSettled: (run) => {
+      if (!run || run.status === "completed") {
+        return;
+      }
+      void queryClient.refetchQueries({
+        predicate: (query) => isMatchHistoryQuery(query.queryKey, puuid),
+        type: "active",
+      });
+    },
   });
 
   const [activeQueueFilters, setActiveQueueFilters] = useState<
@@ -102,6 +121,10 @@ export function MatchHistory({
     // Not silenced: MatchHistoryErrorCard renders off the detailed query, so a
     // stats-only failure would otherwise show 0W/0L with nothing said.
     meta: { errorTitle: "Match statistics" },
+    // In step with the list below. These are the header's totals, wins, losses
+    // and win rate; leaving them unpolled while rows visibly arrive had the
+    // header claiming "3 total matches" over a list already showing more.
+    refetchInterval: isFetchingMatches ? 2000 : false,
   });
 
   const {
@@ -135,7 +158,11 @@ export function MatchHistory({
     // below because the empty-history case is waiting for a first row to exist
     // at all, while this one is a list visibly filling up.
     refetchInterval: (query) =>
-      isUpdating ? 2000 : query.state.data?.matches.length === 0 ? 5000 : false,
+      isFetchingMatches
+        ? 2000
+        : query.state.data?.matches.length === 0
+          ? 5000
+          : false,
   });
 
   const handleQueueFilterSelect = (
@@ -190,8 +217,9 @@ export function MatchHistory({
   // this card hangs off exactly this: the run is authoritative about whether
   // more records are still coming, and `usePlayerSyncRun` reports it whoever
   // started it — the Update button here, or the switch that brought us to this
-  // player.
-  const isLoadingMoreMatches = isUpdating;
+  // player. The match half only: the Player Updater that follows it writes no
+  // matches, so counting it would keep promising rows that are not coming.
+  const isLoadingMoreMatches = isFetchingMatches;
   // Only after the last record there is. Earlier pages are complete and must
   // not claim to be still filling; page 1 carries it while nothing is stored
   // yet, which is the case where it is the only row in the list.

@@ -12,6 +12,18 @@ import {
  * The two literals this replaced had already drifted onto different casing
  * conventions.
  */
+/** Either cache above, for one player, whatever its filters or page. */
+export function isMatchHistoryQuery(
+  queryKey: readonly unknown[],
+  puuid: string,
+): boolean {
+  return (
+    (queryKey[0] === "match-history-stats" ||
+      queryKey[0] === "match-history-detailed") &&
+    queryKey[1] === puuid
+  );
+}
+
 export function matchHistoryStatsQueryOptions(
   puuid: string,
   queueQueryParam: string | undefined,

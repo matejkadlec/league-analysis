@@ -742,9 +742,9 @@ export function MatchRow({
         {/* No per-match LP column here any more: reliable historical
             per-match LP is not obtainable under the current Riot
             developer-key constraints, so the row was showing a number it
-            could not stand behind. `match.lp_change` and `formatMatchLpChange`
-            are kept — this is a UI hide pending a trustworthy source, not a
-            feature deletion. The width it held went to the two champion
+            could not stand behind. `match.lp_change` is still stored and
+            still served — this is a UI hide pending a trustworthy source, not
+            a feature deletion. The width it held went to the two champion
             columns in the matchup block above. */}
 
         <MatchTeamCompositions

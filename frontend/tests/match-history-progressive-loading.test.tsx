@@ -109,11 +109,21 @@ const RUN_TIMESTAMPS = {
  * @param storedMatches how many rows the backend has persisted so far
  * @param runStatus `running` while the update is still storing matches
  */
-function mockHistory(storedMatches: number, runStatus: string | null): void {
+function mockHistory(
+  storedMatches: number,
+  runStatus: string | null,
+  matchExecutionId: number | null = null,
+): void {
   const run =
     runStatus === null
       ? null
-      : { id: 7, puuid: PUUID, status: runStatus, ...RUN_TIMESTAMPS };
+      : {
+          id: 7,
+          puuid: PUUID,
+          status: runStatus,
+          match_execution_id: matchExecutionId,
+          ...RUN_TIMESTAMPS,
+        };
   validatedGet.mockImplementation(async (_schema: unknown, path: string) => {
     if (path.endsWith("/sync/active")) {
       return { success: true, data: run };
@@ -223,6 +233,35 @@ describe("Match History progressive loading", () => {
     expect(
       screen.getByRole("button", { name: "Next page" }).hasAttribute("disabled"),
     ).toBe(true);
+  });
+
+  it("stops claiming more matches once the match half of the run is done", async () => {
+    // Still `running` -- but the backend stamps `match_execution_id` between
+    // the Match Fetcher and the Player Updater, and the profile half that
+    // follows writes no matches. Promising more through it is a lie the row
+    // and the footer both tell.
+    mockHistory(3, "running", 41);
+    renderHistory();
+
+    await waitFor(() =>
+      expect(screen.getByText(/Showing 1 to 3 of 3 matches/)).toBeTruthy(),
+    );
+    expect(screen.queryByTestId("match-history-loading-row")).toBeNull();
+  });
+
+  it("re-reads the list once a run that stopped early settles", async () => {
+    // A rate-limited run still stored whatever it got through before Riot cut
+    // it off, and the 2s poll ends the moment the status leaves `running` —
+    // so without this the rows written since its last tick stay invisible.
+    mockHistory(3, "rate_limited");
+    renderHistory();
+
+    const detailedCalls = () =>
+      validatedGet.mock.calls.filter((call) =>
+        String(call[1]).includes("/detailed"),
+      ).length;
+
+    await waitFor(() => expect(detailedCalls()).toBeGreaterThan(1));
   });
 
   it("exposes the next page once fetched rows spill onto it", async () => {

@@ -307,8 +307,8 @@ export function usePlayerSyncRun(
     releaseUnreadableRun();
   }, [pollFailed, observedSyncId]);
 
-  const syncStatus: PlayerSyncRun["status"] | undefined =
-    exactSyncQuery.data?.status ?? activeSyncQuery.data?.status;
+  const observedRun = exactSyncQuery.data ?? activeSyncQuery.data;
+  const syncStatus: PlayerSyncRun["status"] | undefined = observedRun?.status;
   const isUpdating =
     profileUpdate.isPending ||
     syncStatus === "pending" ||
@@ -316,6 +316,16 @@ export function usePlayerSyncRun(
 
   return {
     isUpdating,
+    /**
+     * The run is still in the half that writes matches.
+     *
+     * A run is Match Fetcher then Player Updater, and the backend stamps
+     * `match_execution_id` onto it between the two (`jobs/player_sync.py`), so
+     * its arrival means every match this run will store is stored. A surface
+     * showing "loading more matches" off `isUpdating` alone would keep saying
+     * so through the profile half, which writes none.
+     */
+    isFetchingMatches: isUpdating && !observedRun?.match_execution_id,
     /**
      * Start this player's update, or — given a PUUID — somebody else's.
      *
