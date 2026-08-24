@@ -354,6 +354,30 @@ def test_match_fetcher_uses_every_canonical_queue_and_strips_legacy_config() -> 
     ) == {"interval_seconds": 3600}
 
 
+def test_job_response_carries_the_resolved_interval() -> None:
+    """The card renders `interval_seconds`; the response must resolve the
+    precedence rule (config_json wins over schedule), not echo the column."""
+
+    def double(config_json: dict[str, object] | None) -> JobConfiguration:
+        return _job_configuration_double(
+            id=1,
+            job_type=JobType.MATCH_FETCHER,
+            name="Match Fetcher",
+            description=None,
+            schedule="900",
+            is_active=True,
+            config_json=config_json,
+            created_at=datetime(2026, 1, 1, tzinfo=UTC),
+            updated_at=datetime(2026, 1, 1, tzinfo=UTC),
+        )
+
+    assert JobService._to_job_response(double(None)).interval_seconds == 900
+    assert (
+        JobService._to_job_response(double({"interval_seconds": 60})).interval_seconds
+        == 60
+    )
+
+
 @pytest.mark.parametrize(
     "error",
     [

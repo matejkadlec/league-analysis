@@ -24,7 +24,7 @@ import { JobCardHistory } from "./job-card-history";
 import { JobCardTestDialog } from "./job-card-test-dialog";
 import {
   formatLastRun,
-  formatScheduleInterval,
+  formatRunInterval,
 } from "./job-card-format";
 import { formatDuration } from "./job-execution-format";
 import { jobRecentExecutionsQueryOptions } from "../jobs-query";
@@ -125,7 +125,7 @@ export function JobCard({ job, onExecutionClick }: JobCardProps) {
               <div className="flex-1">
                 <p className="font-medium">Schedule</p>
                 <p className="text-muted-foreground">
-                  {formatScheduleInterval(job.schedule)}
+                  {formatRunInterval(job.interval_seconds)}
                 </p>
               </div>
             </div>

@@ -60,6 +60,7 @@ const MATCH_FETCHER: JobConfiguration = {
   job_type: "MATCH_FETCHER",
   name: "Match Fetcher",
   schedule: "900",
+  interval_seconds: 900,
   is_active: true,
   is_paused: false,
   is_running: false,

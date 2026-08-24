@@ -28,6 +28,9 @@ export const JobConfigurationSchema = z.object({
   name: z.string(),
   description: z.string().nullable().optional(),
   schedule: z.string(),
+  // Resolved server-side (config_json overrides schedule); the card renders
+  // this and never re-parses the schedule string.
+  interval_seconds: z.number().int(),
   is_active: z.boolean(),
   is_paused: z.boolean().default(false),
   is_running: z.boolean().default(false),

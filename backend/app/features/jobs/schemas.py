@@ -21,7 +21,10 @@ class JobConfigurationBase(BaseModel):
         default=None, description="Description of what the job does"
     )
     schedule: str = Field(
-        ..., min_length=1, max_length=256, description="Job schedule (cron or interval)"
+        ...,
+        min_length=1,
+        max_length=256,
+        description="Run interval, spelled '900', 'interval:900' or '900s'",
     )
     is_active: bool = Field(default=True, description="Whether the job is active")
     is_paused: bool = Field(
@@ -50,6 +53,15 @@ class JobConfigurationResponse(JobConfigurationBase):
     id: int = Field(..., description="Unique identifier")
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
+    # Defaulted like the runtime flags below and always overwritten in
+    # `JobService._to_job_response`, the one place responses are built.
+    interval_seconds: int = Field(
+        default=0,
+        description="The interval the scheduler runs this job on, resolved "
+        "from config_json['interval_seconds'] (which wins) or the schedule "
+        "string. The card renders this; nothing client-side re-parses "
+        "schedule.",
+    )
     is_running: bool = Field(
         default=False,
         description="Whether this job currently has a running execution",
