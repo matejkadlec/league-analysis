@@ -147,18 +147,35 @@ def normalize_platform(platform: Platform | str) -> str:
     return Platform(value.strip().lower()).value
 
 
+# Keyed by the enum so a platform added above cannot silently miss its
+# route: test_riot_api_boundaries.py walks every Platform member through
+# `get_region_by_platform`.
+PLATFORM_REGIONS: Final[dict[Platform, Region]] = {
+    Platform.NA1: Region.AMERICAS,
+    Platform.BR1: Region.AMERICAS,
+    Platform.LA1: Region.AMERICAS,
+    Platform.LA2: Region.AMERICAS,
+    Platform.KR: Region.ASIA,
+    Platform.JP1: Region.ASIA,
+    Platform.EUN1: Region.EUROPE,
+    Platform.EUW1: Region.EUROPE,
+    Platform.RU: Region.EUROPE,
+    Platform.TR1: Region.EUROPE,
+    Platform.OC1: Region.SEA,
+    Platform.PH2: Region.SEA,
+    Platform.SG2: Region.SEA,
+    Platform.TH2: Region.SEA,
+    Platform.TW2: Region.SEA,
+    Platform.VN2: Region.SEA,
+}
+
+
 def get_region_by_platform(platform: Platform | str) -> Region:
     """Map a supported platform to its regional route or fail closed."""
-    p = platform.value if isinstance(platform, Platform) else platform.lower()
-    if p in ["na1", "br1", "la1", "la2"]:
-        return Region.AMERICAS
-    if p in ["kr", "jp1"]:
-        return Region.ASIA
-    if p in ["eun1", "euw1", "ru", "tr1"]:
-        return Region.EUROPE
-    if p in ["oc1", "ph2", "sg2", "th2", "tw2", "vn2"]:
-        return Region.SEA
-    raise ValueError(f"Unsupported Riot platform: {platform}")
+    try:
+        return PLATFORM_REGIONS[Platform(normalize_platform(platform))]
+    except ValueError:
+        raise ValueError(f"Unsupported Riot platform: {platform}") from None
 
 
 def enum_str(value: Region | Platform | str) -> str:

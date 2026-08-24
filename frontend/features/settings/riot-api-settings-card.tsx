@@ -30,6 +30,8 @@ import { useToast } from "@/lib/core/hooks";
 import { notifyRiotCredentialHealthUpdated } from "@/lib/core/riot-credential-health-events";
 import { Check, FlaskConical, Loader2, Save, ShieldCheck, X } from "lucide-react";
 
+import { RIOT_API_KEY_QUERY_KEY } from "./settings-helpers";
+
 export function RiotApiSettingsCard() {
   const toast = useToast();
   const [apiKey, setApiKey] = useState("");
@@ -42,7 +44,7 @@ export function RiotApiSettingsCard() {
   const queryClient = useQueryClient();
 
   const { data: setting = null, isLoading } = useQuery({
-    queryKey: ["settings", "riot_api_key"],
+    queryKey: RIOT_API_KEY_QUERY_KEY,
     queryFn: async () => {
       // No key saved yet is an ordinary state: the panel below prompts for one.
       return unwrapOr404(
@@ -66,7 +68,7 @@ export function RiotApiSettingsCard() {
         description: "The new key is active; no server restart is required.",
       });
       void queryClient.invalidateQueries({
-        queryKey: ["settings", "riot_api_key"],
+        queryKey: RIOT_API_KEY_QUERY_KEY,
       });
       notifyRiotCredentialHealthUpdated();
       void queryClient.invalidateQueries({

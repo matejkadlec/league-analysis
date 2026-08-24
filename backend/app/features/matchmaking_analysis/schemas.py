@@ -14,6 +14,15 @@ MatchmakingAnalysisStatus = Literal[
     "cancelled",
 ]
 
+# The statuses the one-active-run interlock holds over; the partial unique
+# index on `matchmaking_analyses` is rendered from this tuple, so extending
+# it is a schema change, not just a query change.
+ACTIVE_ANALYSIS_STATUSES: tuple[MatchmakingAnalysisStatus, ...] = (
+    "pending",
+    "in_progress",
+    "waiting_rate_limit",
+)
+
 
 class MatchmakingAnalysisRequest(BaseModel):
     """Request to start a matchmaking analysis."""

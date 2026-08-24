@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, get_args
 
 from sqlalchemy import (
     CheckConstraint,
@@ -20,8 +20,12 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.models import Base, created_at_column
+from app.core.runs import values_in_sql
 from app.features.auth.user_reference import user_id_column
-from app.features.smurf_boost_detection.schemas import SmurfBoostStatus
+from app.features.smurf_boost_detection.schemas import (
+    ACTIVE_STATUSES,
+    SmurfBoostStatus,
+)
 
 
 class SmurfBoostAnalysis(Base):
@@ -105,7 +109,7 @@ class SmurfBoostAnalysis(Base):
     __table_args__ = (
         PrimaryKeyConstraint("puuid", "created_at", name="pk_smurf_boost_analyses"),
         CheckConstraint(
-            "status IN ('pending', 'in_progress', 'completed', 'failed')",
+            values_in_sql("status", get_args(SmurfBoostStatus)),
             name="status_valid",
         ),
         # Per account, not per player: the interlock exists so one viewer
@@ -117,7 +121,7 @@ class SmurfBoostAnalysis(Base):
             "user_id",
             "puuid",
             unique=True,
-            postgresql_where=text("status IN ('pending', 'in_progress')"),
+            postgresql_where=text(values_in_sql("status", ACTIVE_STATUSES)),
         ),
         # The primary key already covers (puuid, created_at), so the
         # newest-run lookup needs no second index.

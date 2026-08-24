@@ -69,6 +69,7 @@ from app.features.players.models import Player
 
 from .models import MatchmakingAnalysis, MatchmakingAnalysisResultsJSON
 from .schemas import (
+    ACTIVE_ANALYSIS_STATUSES,
     MatchmakingAnalysisHistoryItem,
     MatchmakingAnalysisHistoryResponse,
     MatchmakingAnalysisResponse,
@@ -77,7 +78,42 @@ from .schemas import (
 logger = structlog.get_logger(__name__)
 
 MAX_RATE_LIMIT_WAIT = 120
-ACTIVE_ANALYSIS_STATUSES = ("pending", "in_progress", "waiting_rate_limit")
+
+MATCHES_TO_ANALYZE = 10
+MATCHES_FOR_WINRATE = 10
+MIN_MATCHES_REQUIRED = 10
+
+# Theoretical request maximum with an empty database: 1 call for the current
+# player's spine IDs, one match-ID list per other player, one match detail per
+# spine match, and each other player's remaining match details (1 of each
+# player's matches is the already-known spine match).
+_OTHER_PLAYERS = MATCHES_TO_ANALYZE * 9
+THEORETICAL_MAX_REQUESTS = (
+    (1 + _OTHER_PLAYERS)
+    + MATCHES_TO_ANALYZE
+    + _OTHER_PLAYERS * max(1, MATCHES_FOR_WINRATE - 1)
+)
+
+
+# The retry policy `_api_call_with_retries` runs under, as plain rules --
+# none of it reads run state, like the completion math above it.
+
+
+def _rate_limit_retry_after(error: RateLimitError) -> int:
+    return int(error.retry_after or 120)
+
+
+def _should_reraise_riot_error(error: RiotAPIError, *, required: bool) -> bool:
+    return isinstance(error, (AuthenticationError, ForbiddenError)) or required
+
+
+def _raise_if_retries_exhausted(*, required: bool) -> None:
+    if required:
+        raise MatchmakingAnalysisRuntimeError(
+            "rate_limit_wait_exhausted",
+            "The analysis could not resume within the allowed Riot rate-limit "
+            "wait. Please try again later.",
+        )
 
 
 @dataclass(frozen=True)
@@ -101,6 +137,47 @@ class MatchmakingAnalysisRuntimeError(Exception):
         super().__init__(code)
         self.code = code
         self.client_message = message
+
+
+# The pure completion model. Everything below is arithmetic over already
+# fetched winrates -- no session, no client, no service state -- so it can be
+# read and tested without constructing a `MatchmakingAnalysisService`.
+
+
+def _team_id_for_player(
+    participants: list[tuple[str, int]], analysis_puuid: str
+) -> int | None:
+    for p_puuid, team_id in participants:
+        if p_puuid == analysis_puuid:
+            return team_id
+    return None
+
+
+def _build_completion_results(
+    team_avgs: list[float],
+    enemy_avgs: list[float],
+    *,
+    matches_analyzed: int,
+) -> MatchmakingAnalysisResultsJSON:
+    """Summarise a finished run, or refuse to call an empty one finished.
+
+    A run that measured nothing is a failure, not a 0.0%-vs-0.0% verdict:
+    `_run_analysis_task` already persists a `failed` row for a raised error.
+    `matches_analyzed` is required and measured, not expected -- the UI prints
+    it as the basis of the verdict, and a shallow database reaches nothing
+    like the theoretical maximum.
+    """
+    if not team_avgs or not enemy_avgs:
+        raise MatchmakingAnalysisRuntimeError(
+            "no_matches_analyzed",
+            "No ranked match history could be read for this lobby. "
+            "Please try again later.",
+        )
+    return {
+        "team_avg_winrate": round(fmean(team_avgs), 4),
+        "enemy_avg_winrate": round(fmean(enemy_avgs), 4),
+        "matches_analyzed": matches_analyzed,
+    }
 
 
 class MatchmakingAnalysisService:
@@ -148,10 +225,6 @@ class MatchmakingAnalysisService:
         )
 
     MAX_RATE_LIMIT_ATTEMPTS = 10
-
-    MATCHES_TO_ANALYZE = 10
-    MATCHES_FOR_WINRATE = 10
-    MIN_MATCHES_REQUIRED = 10
 
     def __init__(self, db: AsyncSession, riot_client: RiotAPIClient, user_id: int):
         self.db = db
@@ -534,17 +607,17 @@ class MatchmakingAnalysisService:
         # No endTime — actual latest matches. This call cannot be skipped.
         spine_match_ids = await self._api_fetch_match_ids(
             puuid,
-            count=self.MATCHES_TO_ANALYZE,
+            count=MATCHES_TO_ANALYZE,
             required=True,
         )
         found = len(spine_match_ids) if spine_match_ids else 0
-        if found < self.MIN_MATCHES_REQUIRED:
+        if found < MIN_MATCHES_REQUIRED:
             await self._complete_with_error(
                 puuid,
                 created_at,
                 "Player doesn't have enough ranked matches for this analysis. "
                 f"Found {found}, "
-                f"need {self.MIN_MATCHES_REQUIRED}.",
+                f"need {MIN_MATCHES_REQUIRED}.",
                 error_code="not_enough_matches",
             )
             return None
@@ -624,68 +697,12 @@ class MatchmakingAnalysisService:
                 puuid, created_at, match_id, match_anchor_seconds
             )
             if result:
-                self._append_match_side_averages(team_avgs, enemy_avgs, result)
+                if result["team"]:
+                    team_avgs.append(fmean(result["team"]))
+                if result["enemy"]:
+                    enemy_avgs.append(fmean(result["enemy"]))
 
         return team_avgs, enemy_avgs
-
-    @staticmethod
-    def _append_match_side_averages(
-        team_avgs: list[float],
-        enemy_avgs: list[float],
-        result: dict[str, list[float]],
-    ) -> None:
-        if result["team"]:
-            team_avgs.append(fmean(result["team"]))
-        if result["enemy"]:
-            enemy_avgs.append(fmean(result["enemy"]))
-
-    def _build_completion_results(
-        self, team_avgs: list[float], enemy_avgs: list[float]
-    ) -> MatchmakingAnalysisResultsJSON:
-        """Summarise a finished run, or refuse to call an empty one finished.
-
-        Both averages used to fall back to 0.0, and the two counts were the
-        constants the run *would* have reached had everything loaded. So a run
-        that measured nothing -- every spine match failing to load returns
-        `None` from `_api_fetch_match` for any non-auth Riot error -- still
-        wrote `completed`, stamped `last_matchmaking_analysis`, and rendered
-        "0.0% vs 0.0%, based on 910 ranked matches" as a fair-matchmaking
-        verdict. `_run_analysis_task` already persists a `failed` row for a
-        raised error, which is what an unmeasured run is.
-        """
-        if not team_avgs or not enemy_avgs:
-            raise MatchmakingAnalysisRuntimeError(
-                "no_matches_analyzed",
-                "No ranked match history could be read for this lobby. "
-                "Please try again later.",
-            )
-        team_avg = fmean(team_avgs)
-        enemy_avg = fmean(enemy_avgs)
-
-        expected_other_players = self.MATCHES_TO_ANALYZE * 9
-        expected_match_details_per_other = max(1, self.MATCHES_FOR_WINRATE - 1)
-
-        # Theoretical maximum without DB:
-        #   - 1 call for current player's spine IDs
-        #   - expected_other_players calls for other players' match IDs
-        #   - MATCHES_TO_ANALYZE match details for spine matches
-        #   - expected_other_players * (MATCHES_FOR_WINRATE - 1) additional
-        #     match details (1 of each player's 10 matches is the already-known
-        #     spine match)
-        match_list_calls = 1 + expected_other_players
-        match_detail_calls = self.MATCHES_TO_ANALYZE + (
-            expected_other_players * expected_match_details_per_other
-        )
-        theoretical_max = match_list_calls + match_detail_calls
-        self.requests_saved = max(theoretical_max - self.api_calls_made, 0)
-
-        return {
-            "team_avg_winrate": round(team_avg, 4),
-            "enemy_avg_winrate": round(enemy_avg, 4),
-            # Measured, not expected: the UI prints these as the basis of the
-            # verdict, and a shallow database reaches nothing like 910.
-            "matches_analyzed": self.matches_analyzed,
-        }
 
     async def _finalize_completed_analysis(
         self,
@@ -694,7 +711,10 @@ class MatchmakingAnalysisService:
         team_avgs: list[float],
         enemy_avgs: list[float],
     ) -> None:
-        results = self._build_completion_results(team_avgs, enemy_avgs)
+        results = _build_completion_results(
+            team_avgs, enemy_avgs, matches_analyzed=self.matches_analyzed
+        )
+        self.requests_saved = max(THEORETICAL_MAX_REQUESTS - self.api_calls_made, 0)
         now = datetime.now(UTC)
         await ensure_riot_writer_maintenance_is_inactive(self.db)
         await self.db.execute(
@@ -750,7 +770,7 @@ class MatchmakingAnalysisService:
         if not participants:
             return None
 
-        target_team = self._team_id_for_player(participants, analysis_puuid)
+        target_team = _team_id_for_player(participants, analysis_puuid)
         if target_team is None:
             logger.warning("Current player not in match", match_id=match_id)
             return None
@@ -762,18 +782,10 @@ class MatchmakingAnalysisService:
             wr = await self._cached_player_winrate(
                 p_puuid, end_time_seconds, analysis_puuid, analysis_created_at
             )
-            self._append_side_winrate(team_wrs, enemy_wrs, wr, team_id, target_team)
+            if wr is not None:
+                (team_wrs if team_id == target_team else enemy_wrs).append(wr)
 
         return {"team": team_wrs, "enemy": enemy_wrs}
-
-    @staticmethod
-    def _team_id_for_player(
-        participants: list[tuple[str, int]], analysis_puuid: str
-    ) -> int | None:
-        for p_puuid, team_id in participants:
-            if p_puuid == analysis_puuid:
-                return team_id
-        return None
 
     async def _cached_player_winrate(
         self,
@@ -802,21 +814,6 @@ class MatchmakingAnalysisService:
                 progress[key] = True
         await self._update_progress(analysis_puuid, analysis_created_at, progress)
 
-    @staticmethod
-    def _append_side_winrate(
-        team_wrs: list[float],
-        enemy_wrs: list[float],
-        wr: float | None,
-        team_id: int,
-        target_team: int,
-    ) -> None:
-        if wr is None:
-            return
-        if team_id == target_team:
-            team_wrs.append(wr)
-        else:
-            enemy_wrs.append(wr)
-
     async def _calculate_player_winrate(
         self,
         puuid: str,
@@ -843,14 +840,14 @@ class MatchmakingAnalysisService:
                 Match.fully_analyzed.is_(True),
             )
             .order_by(Match.game_start_timestamp.desc())
-            .limit(self.MATCHES_FOR_WINRATE)
+            .limit(MATCHES_FOR_WINRATE)
         )
         # `.scalars()`, not `.all()`: SQLAlchemy types a single-column select as
         # `Result[Tuple[bool]]`, and taking the rows threw that away into
         # `Sequence[Any]` -- so `if w` would have accepted a row of any shape.
         db_wins = result.scalars().all()
 
-        if len(db_wins) >= self.MATCHES_FOR_WINRATE:
+        if len(db_wins) >= MATCHES_FOR_WINRATE:
             return self._winrate_from_rows(db_wins)
 
         match_ids = await self._get_match_ids_for_player(puuid, end_time_seconds)
@@ -949,7 +946,7 @@ class MatchmakingAnalysisService:
         """Get a player's ranked match IDs with endTime from API."""
         return await self._api_fetch_match_ids(
             puuid,
-            count=self.MATCHES_FOR_WINRATE,
+            count=MATCHES_FOR_WINRATE,
             end_time=end_time_seconds,
         )
 
@@ -982,7 +979,7 @@ class MatchmakingAnalysisService:
                 return result
 
             except RateLimitError as e:
-                retry_after = self._rate_limit_retry_after(e)
+                retry_after = _rate_limit_retry_after(e)
                 logger.info(
                     "Rate limit during Riot call",
                     operation=operation,
@@ -1001,13 +998,13 @@ class MatchmakingAnalysisService:
                     error_type=type(e).__name__,
                     **log_fields,
                 )
-                if self._should_reraise_riot_error(e, required=required):
+                if _should_reraise_riot_error(e, required=required):
                     raise
                 return None
 
         logger.warning("Riot call retries exhausted", operation=operation, **log_fields)
         await self._clear_rate_limit_wait_if_active()
-        self._raise_if_retries_exhausted(required=required)
+        _raise_if_retries_exhausted(required=required)
         return None
 
     async def _api_fetch_match_ids(
@@ -1049,22 +1046,6 @@ class MatchmakingAnalysisService:
     async def _record_successful_api_call(self) -> None:
         self.api_calls_made += 1
         await self._clear_rate_limit_wait_if_active()
-
-    @staticmethod
-    def _rate_limit_retry_after(error: RateLimitError) -> int:
-        return int(error.retry_after or 120)
-
-    @staticmethod
-    def _should_reraise_riot_error(error: RiotAPIError, *, required: bool) -> bool:
-        return isinstance(error, (AuthenticationError, ForbiddenError)) or required
-
-    def _raise_if_retries_exhausted(self, *, required: bool) -> None:
-        if required:
-            raise MatchmakingAnalysisRuntimeError(
-                "rate_limit_wait_exhausted",
-                "The analysis could not resume within the allowed Riot rate-limit "
-                "wait. Please try again later.",
-            )
 
     # ================================================================
     # Rate Limit Waiting

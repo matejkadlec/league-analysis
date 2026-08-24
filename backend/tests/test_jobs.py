@@ -107,10 +107,13 @@ async def test_test_run_pause_and_resume_flip_the_runs_own_flag(
     cast(AsyncMock, job_service.db.commit).assert_not_awaited()
 
 
-async def test_test_run_pause_without_an_active_run_changes_nothing(
+async def test_test_run_pause_without_an_active_run_is_409(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """No active test run: report failure and touch no state."""
+    """No active test run: a refusal (409), same as the regular control trio,
+    and no state touched. test_jobs_control_routes.py pins the shared shape."""
+    from fastapi import HTTPException
+
     from app.features.jobs import control as control_module
     from app.features.jobs import router as jobs_router
 
@@ -119,10 +122,10 @@ async def test_test_run_pause_without_an_active_run_changes_nothing(
     job_model = SimpleNamespace(id=7, name="Match Fetcher")
     job_service = _job_service_double(job_model)
 
-    response = await jobs_router.pause_test_run(7, job_service)
+    with pytest.raises(HTTPException) as caught:
+        await jobs_router.pause_test_run(7, job_service)
 
-    assert response.success is False
-    assert response.is_paused is False
+    assert caught.value.status_code == 409
     cast(AsyncMock, job_service.db.commit).assert_not_awaited()
 
 
@@ -352,6 +355,36 @@ def test_match_fetcher_uses_every_canonical_queue_and_strips_legacy_config() -> 
     assert normalize_match_fetcher_config(
         {"enabled_queue_ids": [], "interval_seconds": 3600}
     ) == {"interval_seconds": 3600}
+
+
+def test_job_response_carries_the_resolved_interval() -> None:
+    """The card renders `interval_seconds`; the response must resolve the
+    precedence rule (config_json wins over schedule), not echo the column."""
+
+    def double(config_json: dict[str, object] | None) -> JobConfiguration:
+        return _job_configuration_double(
+            id=1,
+            job_type=JobType.MATCH_FETCHER,
+            name="Match Fetcher",
+            description=None,
+            schedule="900",
+            is_active=True,
+            config_json=config_json,
+            created_at=datetime(2026, 1, 1, tzinfo=UTC),
+            updated_at=datetime(2026, 1, 1, tzinfo=UTC),
+        )
+
+    assert JobService._to_job_response(double(None)).interval_seconds == 900
+    assert (
+        JobService._to_job_response(double({"interval_seconds": 60})).interval_seconds
+        == 60
+    )
+
+    # A hand-edited row that cannot name its interval answers None rather
+    # than 500ing the whole Jobs page; the card falls back to the raw string.
+    unresolvable = double(None)
+    unresolvable.schedule = "0 0 * * *"
+    assert JobService._to_job_response(unresolvable).interval_seconds is None
 
 
 @pytest.mark.parametrize(

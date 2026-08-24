@@ -33,6 +33,7 @@ const job: JobConfiguration = {
   description:
     "Fetches new matches and updates player's match history and rank progression",
   schedule: "3600",
+  interval_seconds: 3600,
   is_active: true,
   is_paused: false,
   is_running: false,

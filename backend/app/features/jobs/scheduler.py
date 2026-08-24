@@ -213,8 +213,7 @@ async def _cancel_orphaned_player_syncs(db: AsyncSession) -> None:
 
     from sqlalchemy import update
 
-    from .models import PlayerSyncRun
-    from .player_sync import ACTIVE_SYNC_STATUSES
+    from .models import ACTIVE_SYNC_STATUSES, PlayerSyncRun
 
     try:
         now = datetime.now(UTC)

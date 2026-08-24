@@ -13,6 +13,20 @@ issue, newest last:
   catches arbitrary sizes under 14px but only scans the Rank Manipulation
   surface, so nothing will flag this one.
 
+- 2026-08-24 backend/app/features/jobs/queue_config.py: a 19-line module whose
+  whole job is popping the obsolete `enabled_queue_ids` key that the initial
+  schema seed (20260803_0001, line ~746) still writes. Deleting the module
+  passes the deletion test only if a data migration also strips the key from
+  existing prod rows — verified present on prod row 1 via the mirror
+  (2026-08-24). A decision about historical rows, not a refactor.
+
+- 2026-08-24 backend/tests/test_unhandled_error_response.py: fails on a dev
+  machine whose root `.env` sets `DEBUG=true` — Starlette's debug error page
+  (a plaintext traceback) replaces the JSON `SERVICE_ERROR_DETAIL` body the
+  test pins. Passes with `DEBUG=false` and in CI. The test could pin the
+  setting itself (monkeypatch the settings dependency) instead of inheriting
+  whatever the machine's `.env` says.
+
 What follows is the handful of findings worth not
 rediscovering — two that were wrong, and one that was right about the symptom
 and wrong about the cause. Everything else logged here has been fixed and its

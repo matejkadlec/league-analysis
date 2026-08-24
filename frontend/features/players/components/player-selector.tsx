@@ -35,7 +35,10 @@ import type { Player } from "@/lib/core/schemas";
 import { useDebouncedValue } from "@/lib/core/use-debounced-value";
 import { cn } from "@/lib/core/utils";
 
-import { playerQueryKey } from "../player-query";
+import {
+  PLAYER_SUGGESTIONS_QUERY_KEY,
+  playerQueryKey,
+} from "../player-query";
 import {
   formatRiotId,
   parseRiotId,
@@ -46,6 +49,7 @@ import {
 // Long enough that a typed Riot ID is one suggestion request, short enough
 // that the list still feels attached to the keyboard.
 const PLAYER_SEARCH_DEBOUNCE_MS = 250;
+
 
 interface DiscoverAttempt {
   riotId: RiotIdParts;
@@ -103,7 +107,7 @@ export function PlayerSelector({
   );
 
   const suggestionsQuery = useQuery({
-    queryKey: ["player-suggestions", debouncedSearch, "all-platforms"],
+    queryKey: [...PLAYER_SUGGESTIONS_QUERY_KEY, debouncedSearch, "all-platforms"],
     queryFn: async () => {
       return unwrap(
         await searchPlayerSuggestions({
@@ -152,7 +156,9 @@ export function PlayerSelector({
     },
     onSuccess: async (player) => {
       setPendingRiotId(null);
-      void queryClient.invalidateQueries({ queryKey: ["player-suggestions"] });
+      void queryClient.invalidateQueries({
+        queryKey: PLAYER_SUGGESTIONS_QUERY_KEY,
+      });
       void queryClient.invalidateQueries({
         queryKey: playerQueryKey(player.puuid),
       });

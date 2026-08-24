@@ -269,14 +269,6 @@ async def test_optional_fetch_does_not_swallow_invalid_key_failure() -> None:
         await service._api_fetch_match_ids(_PUUID)
 
 
-def _empty_service() -> MatchmakingAnalysisService:
-    return MatchmakingAnalysisService(
-        cast(AsyncSession, SimpleNamespace()),
-        cast(RiotAPIClient, SimpleNamespace()),
-        _USER_ID,
-    )
-
-
 @pytest.mark.parametrize(
     ("team_avgs", "enemy_avgs"),
     [([], []), ([0.5], []), ([], [0.5])],
@@ -293,7 +285,9 @@ def test_a_run_that_measured_nothing_is_not_a_completed_run(
     persists a terminal diagnostic; an unmeasured run belongs on it.
     """
     with pytest.raises(analysis_service_module.MatchmakingAnalysisRuntimeError):
-        _empty_service()._build_completion_results(team_avgs, enemy_avgs)
+        analysis_service_module._build_completion_results(
+            team_avgs, enemy_avgs, matches_analyzed=0
+        )
 
 
 def test_the_basis_reported_to_the_viewer_is_the_one_that_was_read() -> None:
@@ -302,9 +296,8 @@ def test_the_basis_reported_to_the_viewer_is_the_one_that_was_read() -> None:
     Nearly every player in this database has fewer than ten ranked games, so
     the number under the verdict was never the number of matches behind it.
     """
-    service = _empty_service()
-    service.matches_analyzed = 37
-
-    results = service._build_completion_results([0.5], [0.6])
+    results = analysis_service_module._build_completion_results(
+        [0.5], [0.6], matches_analyzed=37
+    )
 
     assert results["matches_analyzed"] == 37

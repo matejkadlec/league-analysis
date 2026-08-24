@@ -31,6 +31,7 @@ from app.core.riot_api.credential_vocabulary import (
     RiotCredentialEvidence,
     RiotCredentialStatus,
 )
+from app.core.runs import values_in_sql
 
 logger = structlog.get_logger(__name__)
 
@@ -81,12 +82,11 @@ class RiotCredentialHealth(Base):
     __table_args__ = (
         CheckConstraint("id = 1", name="singleton_id"),
         CheckConstraint(
-            "status IN ('missing', 'unknown', 'valid', 'invalid')",
+            values_in_sql("status", [s.value for s in RiotCredentialStatus]),
             name="valid_status",
         ),
         CheckConstraint(
-            "evidence IN ('missing', 'configured', 'settings_validation', "
-            "'provider_success', 'credential_rejected')",
+            values_in_sql("evidence", [e.value for e in RiotCredentialEvidence]),
             name="valid_evidence",
         ),
         CheckConstraint("revision > 0", name="positive_revision"),

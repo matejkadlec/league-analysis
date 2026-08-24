@@ -52,6 +52,8 @@ class JobService:
     @staticmethod
     def _to_job_response(job: JobConfiguration) -> JobConfigurationResponse:
         """Convert ORM model to response with normalized Match Fetcher config."""
+        # `interval_seconds` resolves inside the schema's own validator, so
+        # every construction site -- not just this one -- carries the number.
         response = JobConfigurationResponse.model_validate(job)
 
         if response.job_type == JobType.MATCH_FETCHER:

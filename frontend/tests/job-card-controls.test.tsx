@@ -28,6 +28,7 @@ const JOB: JobConfiguration = {
   name: "Match Fetcher",
   description: null,
   schedule: "900",
+  interval_seconds: 900,
   is_active: true,
   is_paused: false,
   is_running: false,

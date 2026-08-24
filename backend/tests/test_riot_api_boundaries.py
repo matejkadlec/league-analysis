@@ -171,6 +171,11 @@ def test_platform_mapping_and_endpoint_parameters_fail_closed() -> None:
     with pytest.raises(ValueError, match="Unsupported Riot platform"):
         get_region_by_platform("made-up")
 
+    # Every platform routes. A 17th enum member without a PLATFORM_REGIONS
+    # entry used to surface only as a runtime ValueError; now it fails here.
+    for platform in Platform:
+        assert isinstance(get_region_by_platform(platform), Region)
+
     endpoints = RiotAPIEndpoints()
     url = endpoints.match_list_by_puuid(
         "safe/value",

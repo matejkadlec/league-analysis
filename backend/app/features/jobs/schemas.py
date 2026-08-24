@@ -3,10 +3,11 @@
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.core.schemas import PaginatedResponse
 
+from .intervals import JobIntervalError, resolve_interval_seconds
 from .models import ExecutionType, JobStatus, JobType
 
 
@@ -21,7 +22,10 @@ class JobConfigurationBase(BaseModel):
         default=None, description="Description of what the job does"
     )
     schedule: str = Field(
-        ..., min_length=1, max_length=256, description="Job schedule (cron or interval)"
+        ...,
+        min_length=1,
+        max_length=256,
+        description="Run interval, spelled '900', 'interval:900' or '900s'",
     )
     is_active: bool = Field(default=True, description="Whether the job is active")
     is_paused: bool = Field(
@@ -50,6 +54,20 @@ class JobConfigurationResponse(JobConfigurationBase):
     id: int = Field(..., description="Unique identifier")
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
+    # Computed by the validator below at every construction site, so a
+    # response built anywhere ships the real number, never a default.
+    interval_seconds: int | None = Field(
+        default=None,
+        description="The interval the scheduler runs this job on, resolved "
+        "from config_json['interval_seconds'] (which wins) or the schedule "
+        "string. The card renders this; nothing client-side re-parses "
+        "schedule. None means the stored row cannot name its interval -- "
+        "nullable rather than raising for the same reason "
+        "UserResponse.display_name is looser than UserBase: a hand-edited "
+        "legacy row must not 500 the one page an operator would use to see "
+        "and fix it. The card falls back to the raw schedule string.",
+    )
+
     is_running: bool = Field(
         default=False,
         description="Whether this job currently has a running execution",
@@ -80,6 +98,16 @@ class JobConfigurationResponse(JobConfigurationBase):
     )
 
     model_config = ConfigDict(from_attributes=True)
+
+    @model_validator(mode="after")
+    def _resolve_interval(self) -> JobConfigurationResponse:
+        try:
+            self.interval_seconds = resolve_interval_seconds(
+                name=self.name, schedule=self.schedule, config_json=self.config_json
+            )
+        except JobIntervalError:
+            self.interval_seconds = None
+        return self
 
 
 class JobExecutionApiCall(BaseModel):

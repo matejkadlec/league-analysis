@@ -1,6 +1,5 @@
 """Player service for handling player data operations."""
 
-from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Final
 
@@ -15,7 +14,6 @@ from app.core.riot_api.constants import (
     Platform,
     get_region_by_platform,
 )
-from app.core.riot_api.models import LeagueEntryDTO
 from app.features.auth.models import User
 from app.features.auth.user_settings import ensure_user_settings
 from app.features.auth.user_tracked_player import UserTrackedPlayer
@@ -24,7 +22,12 @@ from app.features.matches.models import Match
 from app.features.matches.participants import MatchParticipant
 
 from . import player_search
-from .leagues import PlayerLeague
+from .leagues import (
+    PlayerLeague,
+    league_snapshot_matches,
+    player_league_from_entry,
+    solo_duo_league_entry,
+)
 from .models import Player
 from .schemas import PlayerResponse
 
@@ -516,10 +519,6 @@ class PlayerService:
         Raises:
             ValueError: If player has invalid platform
         """
-        from datetime import datetime
-
-        from app.core.riot_api.constants import Platform, get_region_by_platform
-
         await ensure_riot_writer_maintenance_is_inactive(self.db)
         logger.debug("Updating player profile", puuid=player.puuid)
 
@@ -564,48 +563,6 @@ class PlayerService:
         logger.debug("Player profile unchanged", puuid=player.puuid)
         return False
 
-    @staticmethod
-    def _solo_duo_league_entry(
-        league_entries: Sequence[LeagueEntryDTO],
-    ) -> LeagueEntryDTO | None:
-        """Return the Solo/Duo league entry from a LEAGUE-V4 payload."""
-        return next(
-            (
-                entry
-                for entry in league_entries
-                if entry.queue_type == "RANKED_SOLO_5x5"
-            ),
-            None,
-        )
-
-    @staticmethod
-    def _league_snapshot_matches(
-        current_league: PlayerLeague, solo_entry: LeagueEntryDTO
-    ) -> bool:
-        """Return True when the stored snapshot matches the live Solo/Duo entry."""
-        return (
-            current_league.tier == solo_entry.tier
-            and current_league.rank == solo_entry.rank
-            and current_league.league_points == solo_entry.league_points
-            and current_league.wins == solo_entry.wins
-            and current_league.losses == solo_entry.losses
-        )
-
-    @staticmethod
-    def _player_league_from_entry(
-        puuid: str, solo_entry: LeagueEntryDTO
-    ) -> PlayerLeague:
-        """Build an immutable league snapshot from a live Solo/Duo entry."""
-        return PlayerLeague(
-            puuid=puuid,
-            queue_type=solo_entry.queue_type,
-            tier=solo_entry.tier,
-            rank=solo_entry.rank,
-            league_points=solo_entry.league_points,
-            wins=solo_entry.wins,
-            losses=solo_entry.losses,
-        )
-
     async def update_player_league(
         self, player: Player, riot_api_client: RiotAPIClient
     ) -> bool:
@@ -624,8 +581,6 @@ class PlayerService:
         Raises:
             ValueError: If player has invalid platform
         """
-        from app.core.riot_api.constants import Platform
-
         await ensure_riot_writer_maintenance_is_inactive(self.db)
         logger.debug("Updating player league", puuid=player.puuid)
 
@@ -637,13 +592,13 @@ class PlayerService:
             logger.debug("No ranked data found for player", puuid=player.puuid)
             return False
 
-        solo_entry = self._solo_duo_league_entry(league_entries)
+        solo_entry = solo_duo_league_entry(league_entries)
         if not solo_entry:
             logger.debug("No Solo/Duo league found for player", puuid=player.puuid)
             return False
 
         current_league = await self.get_player_league(player.puuid)
-        if current_league and self._league_snapshot_matches(current_league, solo_entry):
+        if current_league and league_snapshot_matches(current_league, solo_entry):
             logger.debug(
                 "Player league unchanged, skipping insert",
                 puuid=player.puuid,
@@ -651,7 +606,7 @@ class PlayerService:
             )
             return False
 
-        self.db.add(self._player_league_from_entry(player.puuid, solo_entry))
+        self.db.add(player_league_from_entry(player.puuid, solo_entry))
         logger.info(
             "Updated player league",
             puuid=player.puuid,
@@ -673,8 +628,6 @@ class PlayerService:
         Returns:
             Most recent PlayerLeague or None if no league data exists
         """
-        from sqlalchemy import select
-
         stmt = (
             select(PlayerLeague)
             .where(PlayerLeague.puuid == puuid)

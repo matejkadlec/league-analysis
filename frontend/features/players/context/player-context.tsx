@@ -18,10 +18,12 @@ import {
   type CurrentPlayerUpdate,
   type Player,
 } from "@/lib/core/schemas";
-import { playerQueryKey, playerQueryOptions } from "../player-query";
+import {
+  playerContextQueryKey,
+  playerQueryKey,
+  playerQueryOptions,
+} from "../player-query";
 import { isPlayerCentricPath, playerRoute } from "../player-routes";
-
-const PLAYER_CONTEXT_QUERY_KEY = ["player-context"] as const;
 
 interface PlayerContextValue {
   currentPlayer: Player | null;
@@ -50,7 +52,7 @@ export function PlayerContextProvider({
   const urlPuuid = (isPlayerRoute ? searchParams.get("puuid") : null) || null;
 
   const contextQuery = useQuery({
-    queryKey: [...PLAYER_CONTEXT_QUERY_KEY, user?.id],
+    queryKey: playerContextQueryKey(user?.id),
     queryFn: async () => {
       const context = unwrap(
         await validatedGet(PlayerContextSchema, "/players/context"),
@@ -96,7 +98,7 @@ export function PlayerContextProvider({
       );
     },
     onSuccess: (data) => {
-      queryClient.setQueryData([...PLAYER_CONTEXT_QUERY_KEY, user?.id], data);
+      queryClient.setQueryData(playerContextQueryKey(user?.id), data);
     },
   });
 

@@ -1,7 +1,7 @@
 """Persisted matchmaking analysis lifecycle and immutable results."""
 
 from datetime import datetime
-from typing import TypedDict
+from typing import TypedDict, get_args
 
 from sqlalchemy import (
     CheckConstraint,
@@ -18,8 +18,12 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.models import Base, created_at_column
+from app.core.runs import values_in_sql
 from app.features.auth.user_reference import user_id_column
-from app.features.matchmaking_analysis.schemas import MatchmakingAnalysisStatus
+from app.features.matchmaking_analysis.schemas import (
+    ACTIVE_ANALYSIS_STATUSES,
+    MatchmakingAnalysisStatus,
+)
 
 
 class MatchmakingAnalysisResultsJSON(TypedDict):
@@ -125,8 +129,7 @@ class MatchmakingAnalysis(Base):
     __table_args__ = (
         PrimaryKeyConstraint("puuid", "created_at", name="pk_matchmaking_analyses"),
         CheckConstraint(
-            "status IN ('pending', 'in_progress', 'waiting_rate_limit', "
-            "'completed', 'failed', 'cancelled')",
+            values_in_sql("status", get_args(MatchmakingAnalysisStatus)),
             name="status_valid",
         ),
         # Per account, not per player -- see the matching index on
@@ -138,9 +141,7 @@ class MatchmakingAnalysis(Base):
             "user_id",
             "puuid",
             unique=True,
-            postgresql_where=text(
-                "status IN ('pending', 'in_progress', 'waiting_rate_limit')"
-            ),
+            postgresql_where=text(values_in_sql("status", ACTIVE_ANALYSIS_STATUSES)),
         ),
         # No index on `puuid` alone -- it leads the primary key -- and none
         # on `created_at`, which the key does NOT cover: every query that
