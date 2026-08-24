@@ -392,6 +392,69 @@ test("compares a player the account has never tracked, and stays itself", async 
   expect(box!.height).toBeLessThanOrEqual(lineHeight * 2 + 16 + 1);
 });
 
+test("does not carry one player's fetch report onto another", async ({
+  page,
+}) => {
+  test.setTimeout(60_000);
+  await page.setViewportSize({ width: 1440, height: 1000 });
+
+  await installSmurfBoostMocks(page);
+  await page.goto("/rank-manipulation");
+  await acceptCookieBanner(page);
+
+  const runCard = page.locator("#smurf-boost-run");
+  await page.getByRole("button", { name: "Run the comparison" }).click();
+  await expect(page.locator("#smurf-boost-result")).toBeVisible();
+  await expect(runCard).toContainText("The last fetch");
+
+  // Pointing the card at somebody else must leave that sentence behind: it
+  // reports a fetch made for the previous player, and the card holds it in
+  // its own state where no query key can invalidate it. The `key` on this
+  // card is the whole mechanism -- without it React keeps the same instance
+  // across the switch and the stranger inherits a fetch nobody ran for them.
+  const search = runCard.getByLabel("Choose player for comparison");
+  await search.fill("Stranger");
+  await page.getByRole("option", { name: /Stranger#TWO/ }).click();
+  await expect(page).toHaveURL(
+    new RegExp(`/rank-manipulation\\?puuid=${OTHER_PUUID}`),
+  );
+
+  await expect(runCard).toContainText("Ranked solo games stored:");
+  await expect(runCard).not.toContainText("The last fetch");
+});
+
+test("seeds the card's search with the first player an empty account picks", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+
+  // The account that has never chosen a player. `useAnalyzedPlayer` resolves
+  // to none here -- no `?puuid=`, and no current player to seed one from --
+  // which is the one state in which the card's `key` does real work. Under it
+  // `PlayerSelector` starts with an empty `initialSearchValue`, so choosing a
+  // player empties the box rather than keeping the name; only the remount the
+  // changed key forces re-seeds it with who was chosen. Un-key the card, or
+  // stop passing the name in, and the box is left blank next to a result that
+  // is about somebody.
+  await installSmurfBoostMocks(page, { currentPlayer: null });
+
+  await page.goto("/rank-manipulation");
+  await acceptCookieBanner(page);
+
+  const search = page
+    .locator("#smurf-boost-run")
+    .getByLabel("Choose player for comparison");
+  await expect(search).toHaveValue("");
+
+  await search.fill("Stranger");
+  await page.getByRole("option", { name: /Stranger#TWO/ }).click();
+
+  await expect(page).toHaveURL(
+    new RegExp(`/rank-manipulation\\?puuid=${OTHER_PUUID}`),
+  );
+  await expect(search).toHaveValue("Stranger#TWO");
+});
+
 /**
  * `accessibility.spec.ts` scans the three routes the populated-player harness
  * serves; Rank Manipulation runs on its own fixtures, so its scan lives here.

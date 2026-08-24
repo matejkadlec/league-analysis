@@ -120,7 +120,7 @@ function AnalysisBlock({
       <dl className="mt-3 grid grid-cols-3 gap-2 border-t border-border/40 pt-2">
         {historyFigures(item).map((figure) => (
           <div key={figure.label}>
-            <dt className="text-[0.6875rem] uppercase tracking-wide text-muted-foreground">
+            <dt className="text-sm uppercase tracking-wide text-muted-foreground">
               {figure.label}
             </dt>
             <dd className={`tabular-nums text-sm ${figure.colorClass}`}>

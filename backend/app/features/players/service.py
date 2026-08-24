@@ -139,17 +139,19 @@ class PlayerService:
                 operation="get_player_by_puuid",
             )
 
-        total_matches, analyzed_matches = await self._match_counts(puuid)
+        response = await self._one_player(player, user_id)
 
+        # Logged off the response rather than from a second `_match_counts`:
+        # `_one_player` has already run those two COUNTs to fill it.
         logger.info(
             "Player data retrieved by PUUID from database",
             puuid=puuid,
             platform=player.platform,
-            total_matches=total_matches,
-            analyzed_matches=analyzed_matches,
+            total_matches=response.total_matches,
+            analyzed_matches=response.analyzed_matches,
         )
 
-        return await self._one_player(player, user_id)
+        return response
 
     async def _match_counts(self, puuid: str) -> tuple[int, int]:
         """How many matches are stored for a player, and how many are analyzed."""

@@ -5,32 +5,10 @@ issue, newest last:
 
 `- <YYYY-MM-DD> <path from repo root>: one or two sentences.`
 
-- 2026-08-22 frontend/features/matchmaking/components/matchmaking-analysis-history.tsx:123:
-  the figure labels are `text-[0.6875rem]` (11px), the same 11px that was just
-  raised to 14px on the Rank Manipulation result card. Left alone because
-  Matchmaking Analysis has had no user QA on its typography and the change is
-  visible; the size floor in `tests/rank-manipulation-surface.test.ts` now
-  catches arbitrary sizes under 14px but only scans the Rank Manipulation
-  surface, so nothing will flag this one.
-
-- 2026-08-24 backend/app/features/jobs/queue_config.py: a 19-line module whose
-  whole job is popping the obsolete `enabled_queue_ids` key that the initial
-  schema seed (20260803_0001, line ~746) still writes. Deleting the module
-  passes the deletion test only if a data migration also strips the key from
-  existing prod rows — verified present on prod row 1 via the mirror
-  (2026-08-24). A decision about historical rows, not a refactor.
-
-- 2026-08-24 backend/tests/test_unhandled_error_response.py: fails on a dev
-  machine whose root `.env` sets `DEBUG=true` — Starlette's debug error page
-  (a plaintext traceback) replaces the JSON `SERVICE_ERROR_DETAIL` body the
-  test pins. Passes with `DEBUG=false` and in CI. The test could pin the
-  setting itself (monkeypatch the settings dependency) instead of inheriting
-  whatever the machine's `.env` says.
-
-What follows is the handful of findings worth not
-rediscovering — two that were wrong, and one that was right about the symptom
-and wrong about the cause. Everything else logged here has been fixed and its
-detail lives in the commit that fixed it.
+Nothing is open. What follows is the handful of findings worth not
+rediscovering — the ones that were wrong, or right about the symptom and wrong
+about the cause. Everything else logged here has been fixed and its detail
+lives in the commit that fixed it.
 
 ## Findings that did not survive measurement
 
@@ -51,6 +29,29 @@ proposed: the fixed height stayed on the collapse tab, which must not move as
 sections mount, and only the panel became content-sized. Three entries now
 measure 132px, asserted in `e2e/smurf-boost-detection.spec.ts`.
 
+**The `key` on the detection card (2026-08-24, cause was wrong).** The entry
+claimed `key={analyzedPlayer?.puuid ?? "no-player"}` was load-bearing because
+"the player search only keeps the chosen name because the card remounts".
+Measured with a mount probe: the prop *is* load-bearing — without it the card
+keeps the same React instance across a player switch — but not for that reason.
+Deleting the key left the search box seeding correctly and every existing test
+green. What it actually protects is the card's own state, and the visible
+casualty is the fetch report from #217: un-keyed, "The last fetch added 12."
+follows you onto the next player, who nobody fetched anything for. That is what
+`e2e/smurf-boost-detection.spec.ts` now pins.
+
+**"Neither prop is covered" (2026-08-24, half wrong).** The same entry paired
+that key with `initialSearchValue` on the same page. Removing the prop failed
+the pre-existing "compares a player the account has never tracked" e2e
+immediately — it had been covered all along. Only the matchmaking page's copy
+was genuinely untested, and it now has `tests/matchmaking-analysis-page.test.tsx`.
+
+**"Four unmocked routes" (2026-08-24, one already fixed).** The harness entry
+named `/players/{puuid}/league` and three `/matches/player/{puuid}/*-stats`
+routes. Logging the catch-all and running the suite found three: `/stats` had
+been mocked by #217 before the entry was read. Counting from the source rather
+than from a run would have added a fourth mock nobody needed.
+
 **The orphaned match write (2026-08-16, not a defect).** `EUN1_3990695865` was
 written with no `jobs.job_executions` row covering the instant, but 2,776 of
 production's 3,778 matches sit outside every execution window, and
@@ -60,11 +61,16 @@ writes outside a recorded execution are the normal case here.
 ## Standing lesson
 
 Measure before believing an entry in this file, including one you wrote
-yourself. Two of the three above were written confidently and were wrong about
-either the finding or its cause, and in both cases a single measurement — the
-computed opacity, the rendered height — was enough to tell.
+yourself. Five of the six above were written confidently and were wrong about
+either the finding, its cause, or its size, and in every case one measurement —
+the computed opacity, the rendered height, a mount probe, a logged catch-all,
+one deleted prop — was enough to tell. The 2026-08-24 batch is the sharpest
+example: three entries, and the fix that followed matched what the entry asked
+for in exactly one of them.
 
-- 2026-08-24 frontend/app/rank-manipulation/page.tsx: `key={analyzedPlayer?.puuid ?? "no-player"}` on the detection card is load-bearing (the player search only keeps the chosen name because the card remounts) but deleting it passes both suites. Only reachable for an account with no current player, which no harness sets up. Same for `initialSearchValue` on frontend/app/matchmaking-analysis/page.tsx, which has no page-level test at all.
-
-- 2026-08-24 frontend/e2e/support/smurf-boost-harness.ts: the harness 404s `/players/{puuid}/league` and the three `/matches/player/{puuid}/*-stats` routes, which the first detection spec hits because it starts on `/player-overview` before navigating. Each 404 raises a global "Could not load this data" toast that can sit beside whatever a later step asserts — the same class of flake that broke CI on PR #216 via the unmocked `/settings/service-status` poll. Mock the four, or route the spec so it never loads that page.
-- 2026-08-24 backend/app/features/players/service.py: `get_player_by_puuid` runs `_match_counts` at line 142 only to log the two numbers, then returns `_one_player`, which runs the same two COUNT queries again. Four count queries per player fetch where two would do; delete the first call and log the counts off the response.
+The corollary is about tests, not entries. A fix that makes its own check pass
+is not yet evidence: the `DEBUG` pin in `test_unhandled_error_response.py`
+passed alone and failed in the suite, because Starlette reads that flag when
+the middleware stack is built and an earlier test had already built it. Run the
+whole suite before believing a fix, and mutate the line to watch the test
+fail.

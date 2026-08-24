@@ -165,9 +165,7 @@ async def test_match_fetcher_keeps_going_after_a_rolled_back_player(
     )
 
     job = MatchFetcherJob(job_config_id=7)
-    job.job_config = cast(
-        JobConfiguration, SimpleNamespace(config_json={"enabled_queue_ids": []})
-    )
+    job.job_config = cast(JobConfiguration, SimpleNamespace(config_json={}))
     job.check_control_state = AsyncMock()
 
     await job.execute(cast(AsyncSession, session))
@@ -233,9 +231,7 @@ async def test_match_fetcher_survives_a_rollback_inside_the_match_sync(
     )
 
     job = MatchFetcherJob(job_config_id=7)
-    job.job_config = cast(
-        JobConfiguration, SimpleNamespace(config_json={"enabled_queue_ids": []})
-    )
+    job.job_config = cast(JobConfiguration, SimpleNamespace(config_json={}))
     job.check_control_state = AsyncMock()
 
     await job.execute(cast(AsyncSession, session))

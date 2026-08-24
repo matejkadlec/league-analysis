@@ -120,7 +120,7 @@ export function MatchmakingAnalysisActiveCard({
             value={progressPercentage}
             className={ANALYSIS_PROGRESS_TRANSITION}
           />
-          <p className="text-xs text-muted-foreground text-center">
+          <p className="text-sm text-muted-foreground text-center">
             {Math.round(progressPercentage)}% complete
           </p>
         </div>
