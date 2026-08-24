@@ -143,9 +143,10 @@ export function PlayerSelector({
   // box would empty for that one case and the name would look lost.
   const keepsSelection = initialSearchValue !== "";
   // What the box reads when it is showing a selection rather than a query.
-  // Enter on it is a no-op: the value parses as a Riot ID, so without this
-  // it was read as an unknown player and opened the server dialog for the
-  // player already chosen.
+  // Enter on it before its suggestions arrive does nothing: the value parses
+  // as a Riot ID, so without this it was read as an unknown player and
+  // opened the server dialog for the player already chosen. Once the list is
+  // there, Enter re-picks that same player, which is harmless.
   const [selectedLabel, setSelectedLabel] = useState(initialSearchValue);
 
   const choosePlayer = async (player: Player) => {
@@ -278,11 +279,11 @@ export function PlayerSelector({
         }}
         onFocus={(event) => {
           setIsSearchFocused(true);
-          // A seeded box holds a name with no visible way to clear it, so
-          // typing would append to it and match nothing. Selecting the text
-          // makes the first keystroke replace it, and costs nothing until
-          // one is pressed.
-          event.target.select();
+          // Only where the box is seeded. There it holds a name with no
+          // visible way to clear it, so typing would append to it and match
+          // nothing; on the sidebar switcher, which starts empty, selecting
+          // a half-typed query would arm the next keystroke to wipe it.
+          if (keepsSelection) event.target.select();
         }}
         onBlur={() => setIsSearchFocused(false)}
         onKeyDown={onSearchKeyDown}

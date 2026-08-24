@@ -190,9 +190,9 @@ export interface HarnessState {
   /**
    * How many times the run started by the last fetch has been polled.
    *
-   * The first poll answers `running` so the fetching state is on screen long
-   * enough to assert; the next answers `completed`. A mock that finished
-   * immediately would let a card that never shows the fetch at all pass.
+   * The first three polls answer `running`; the fourth answers `completed`.
+   * A mock that finished immediately would let a card that never shows the
+   * fetch at all pass, and the slack is explained at the handler.
    */
   syncPolls: number;
   currentPlayer: typeof player;

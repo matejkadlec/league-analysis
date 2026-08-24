@@ -184,13 +184,6 @@ export function SmurfBoostDetection({
     });
   };
 
-  // The click fetches this player's games from Riot before comparing them, so
-  // a player the scheduled Match Fetcher has not reached yet is compared on
-  // what Riot holds now instead of on whatever happened to be stored.
-  //
-  // `onSettled`, not `onCompleted`: a busy or rate-limited update is a reason
-  // to compare the games already stored, not to leave the click that asked
-  // for a comparison with nothing but an error toast.
   // A comparison this card still owes for a fetch it asked for itself.
   //
   // The hook adopts whatever update is already in flight for the player --
@@ -208,9 +201,14 @@ export function SmurfBoostDetection({
   // it. Persisting the intent across a reload buys too little for what it
   // would cost.
   const [comparisonOwed, setComparisonOwed] = useState(false);
-  // A fetch that did not finish, so the comparison below it read stored games
-  // only. Without this the card would look identical to a fully fresh run.
-  const [staleFetch, setStaleFetch] = useState(false);
+  // Why a fetch did not finish, in the backend's own reviewed words. Without
+  // it the card looks identical to a fully fresh run; with a sentence of our
+  // own it would promise a retry that a stale player id or an expired key
+  // cannot honour.
+  const [staleFetch, setStaleFetch] = useState<string | null>(null);
+  // The click fetches this player's games from Riot before comparing them, so
+  // a player the scheduled Match Fetcher has not reached yet is compared on
+  // what Riot holds now instead of on whatever happened to be stored.
   const { isUpdating: isFetchingGames, startSync } = usePlayerSyncRun(
     puuid ?? "",
     {
@@ -218,12 +216,21 @@ export function SmurfBoostDetection({
       // alert below it, and the stale-fetch notice. The hook's own wording is
       // written for the Player Card and would contradict it here.
       quiet: true,
-      onSettled: (outcome) => {
+      onSettled: (run) => {
+        // Reported before the gate, not after it: this card renders the fetch
+        // whoever started it, having just told the viewer to run the
+        // comparison once it finished. Staying silent when that fetch failed
+        // would leave them comparing stored games believing otherwise.
+        setStaleFetch(
+          run?.status === "completed"
+            ? null
+            : (run?.error_message ??
+                "This player's newest games could not be fetched."),
+        );
         if (!comparisonOwed) {
           return;
         }
         setComparisonOwed(false);
-        setStaleFetch(outcome !== "completed");
         if (puuid) runComparison(puuid);
       },
     },
@@ -238,9 +245,8 @@ export function SmurfBoostDetection({
   // As of the last run, which is the only count anything has measured: no
   // eligible-game total exists for a player who has never been compared, and
   // the comparison that follows this fetch reports the corrected figure
-  // itself.
-  // Only when something is actually lacking. Quoted for a player with games
-  // to spare it reads as a warning about a requirement 600 games clear it.
+  // itself. A failed run stores none either -- the column defaults to zero,
+  // which would read as a player with no games at all.
   const shortfallReading =
     latest && latest.status === "completed"
       ? gameShortfall(
@@ -249,6 +255,8 @@ export function SmurfBoostDetection({
           results?.recent_games ?? 0,
         )
       : null;
+  // Only when something is actually lacking: quoted at a player whose history
+  // clears both windows, a requirements notice reads as a warning.
   const shortfall =
     shortfallReading && shortfallReading.missing > 0
       ? shortfallReading.sentence
@@ -355,9 +363,8 @@ export function SmurfBoostDetection({
               <Alert>
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription>
-                  This player&apos;s newest games could not be fetched from
-                  Riot, so the comparison below reads only the games already
-                  stored. Running it again later picks up the rest.
+                  {staleFetch} Only the games already stored are available to
+                  compare.
                 </AlertDescription>
               </Alert>
             )}
@@ -368,7 +375,7 @@ export function SmurfBoostDetection({
                 if (!puuid) {
                   return;
                 }
-                setStaleFetch(false);
+                setStaleFetch(null);
                 setComparisonOwed(true);
                 startSync();
               }}

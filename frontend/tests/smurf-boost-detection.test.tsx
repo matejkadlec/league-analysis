@@ -775,7 +775,13 @@ describe("SmurfBoostDetection", () => {
       success: true,
       data: analysis(),
     });
-    noActiveSync(syncRun({ status: "rate_limited" }));
+    noActiveSync(
+      syncRun({
+        status: "rate_limited",
+        error_code: "RIOT_RATE_LIMITED",
+        error_message: "The update reached Riot's rate limit.",
+      }),
+    );
     const user = userEvent.setup();
     renderCard();
 
@@ -787,10 +793,81 @@ describe("SmurfBoostDetection", () => {
     );
     expect(validatedPost).toHaveBeenCalled();
     // Inline, not a toast that disappears: without it this reads exactly like
-    // a run on games fetched a second ago.
+    // a run on games fetched a second ago. In the backend's own words, too --
+    // a sentence of our own would promise a retry that a stale player id or
+    // an expired key cannot honour.
     expect(
-      screen.getByText(/newest games could not be fetched from Riot/),
+      screen.getByText(/The update reached Riot's rate limit\./),
     ).toBeTruthy();
+    expect(
+      screen.getByText(/Only the games already stored are available/),
+    ).toBeTruthy();
+  });
+
+  it("reports a fetch that failed even when nobody here started it", async () => {
+    // The card renders an adopted update and tells the viewer to run the
+    // comparison once it finishes. Saying nothing when it fails leaves them
+    // clicking Run believing they are reading freshly fetched history.
+    getLatestSmurfBoostDetection.mockResolvedValue({
+      success: true,
+      data: analysis(),
+    });
+    validatedGet.mockImplementation(async (_schema: unknown, path: string) => {
+      if (path.endsWith("/sync/active")) {
+        return { success: true, data: syncRun({ id: 42, status: "running" }) };
+      }
+      return {
+        success: true,
+        data: syncRun({
+          id: 42,
+          status: "failed",
+          error_code: "SYNC_BUSY",
+          error_message: "Another data update is already running.",
+        }),
+      };
+    });
+    renderCard();
+
+    await waitFor(() =>
+      expect(
+        screen.getByText(/Another data update is already running\./),
+      ).toBeTruthy(),
+    );
+    // Reported, but still not compared -- nobody asked this card for one.
+    expect(startSmurfBoostDetection).not.toHaveBeenCalled();
+  });
+
+  it("compares on stored games when the run can no longer be read", async () => {
+    // The poll stops on error -- its interval reads data that never arrived --
+    // so no terminal status will ever land. A click gated on that callback
+    // would leave the button spinning on a comparison that never runs.
+    getLatestSmurfBoostDetection.mockResolvedValue({
+      success: false,
+      error: { message: "Not found", kind: "not-found", status: 404 },
+    });
+    startSmurfBoostDetection.mockResolvedValue({
+      success: true,
+      data: analysis(),
+    });
+    validatedGet.mockImplementation(async (_schema: unknown, path: string) => {
+      if (path.endsWith("/sync/active")) {
+        return { success: true, data: null };
+      }
+      throw new Error("the run could not be read");
+    });
+    validatedPost.mockResolvedValue({
+      success: true,
+      data: syncRun({ status: "pending" }),
+    });
+    const user = userEvent.setup();
+    renderCard();
+
+    await waitFor(() => expect(runButton()).toBeTruthy());
+    await user.click(runButton());
+
+    await waitFor(() =>
+      expect(screen.getByText("Notable indicators")).toBeTruthy(),
+    );
   });
 
   it("runs no comparison for an update started somewhere else", async () => {

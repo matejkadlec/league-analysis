@@ -22,24 +22,23 @@ interface UsePlayerSyncRunOptions {
    * an analysis over whatever is stored beats leaving the click that asked
    * for it with nothing but an error toast.
    *
-   * The outcome comes with it, so a caller acting on a half-failed update can
-   * say so rather than presenting stale data as fresh. `"not_started"` is the
-   * start the backend refused outright, which has no run and so no status.
+   * The run comes with it, so a caller acting on a half-failed update can say
+   * so rather than presenting stale data as fresh -- and can quote the
+   * backend's own reviewed sentence for the failure instead of inventing a
+   * generic one, which for a stale player id or an expired key would promise
+   * a retry that cannot work. `null` is a run there is nothing to read: a
+   * start the backend refused outright, or a poll that gave up.
    */
-  onSettled?:
-    | ((
-        outcome: PlayerSyncRun["status"] | "not_started",
-      ) => void | Promise<void>)
-    | undefined;
+  onSettled?: ((run: PlayerSyncRun | null) => void | Promise<void>) | undefined;
   /**
-   * Say nothing at all: this surface reports the run itself.
+   * Raise none of this hook's own toasts: the surface reports the run itself.
    *
    * Not only the started/finished pair. A surface quiet enough to need this
-   * renders the run inline, failures included, and the hook's own wording is
-   * written for the Player Card -- telling a Rank Manipulation viewer to
-   * "try the update again later" names a control that page does not have,
-   * and on a failed fetch it arrived directly before a success toast for the
-   * comparison that ran anyway.
+   * renders the run inline, failures included, and two accounts of one click
+   * contradict each other -- on a failed fetch the hook's warning arrived
+   * directly before the card's success toast for the comparison that ran
+   * anyway. Poll failures are not covered: those come from the queries, and
+   * the global query-error toast still reports them.
    */
   quiet?: boolean;
 }
@@ -50,8 +49,9 @@ interface UsePlayerSyncRunOptions {
  * Owns the whole lifecycle: adopting an in-flight run after navigation or
  * reload via `/sync/active`, polling the exact run to its terminal status,
  * starting a new run, lifecycle toasts, and invalidating every cached query
- * for the player once the run completes. Callers render `isUpdating` and call
- * `startSync` — nothing more.
+ * for the player once the run completes. A caller renders `isUpdating` and
+ * calls `startSync`; the options above are for a surface that reports the run
+ * itself or has its own next step to take.
  *
  * `isUpdating` derives from run status rather than local state, so a failed
  * poll can never leave a surface stuck reporting an update that is not
@@ -153,7 +153,7 @@ export function usePlayerSyncRun(
       }
       // No run exists to reach `finishRun`, so this is the only place the
       // caller's next step can be released after a refused start.
-      void onSettled?.("not_started");
+      void onSettled?.(null);
     },
   });
 
@@ -175,7 +175,7 @@ export function usePlayerSyncRun(
         );
       }
       await activeSyncQuery.refetch();
-      await onSettled?.(syncRun.status);
+      await onSettled?.(syncRun);
       return;
     }
 
@@ -207,9 +207,17 @@ export function usePlayerSyncRun(
       }
     }
     await activeSyncQuery.refetch();
-    await onSettled?.(syncRun.status);
+    await onSettled?.(syncRun);
   });
 
+  // A run whose status cannot be read is settled as far as any caller is
+  // concerned. `refetchInterval` above reads data that never arrived, so an
+  // errored poll stops polling and no terminal status will ever land -- a
+  // caller gated on the callback would wait on it for the life of the mount.
+  // The failure itself is already reported by the global query-error toast.
+  const releaseUnreadableRun = useEffectEvent(() => {
+    void onSettled?.(null);
+  });
   const syncRun = exactSyncQuery.data;
   useEffect(() => {
     if (
@@ -227,8 +235,25 @@ export function usePlayerSyncRun(
       return;
     }
     handledTerminalSyncIds.current.add(syncRun.id);
-    void finishRun(syncRun);
+    // Released on rejection too. `activeSyncQuery.refetch()` and the caller's
+    // own callback sit outside the body's try, so without this a throw there
+    // is an unhandled rejection that also leaves the caller waiting forever
+    // on a step that will never come.
+    void finishRun(syncRun).catch(() => releaseUnreadableRun());
   }, [syncRun]);
+
+  const pollFailed = exactSyncQuery.isError;
+  useEffect(() => {
+    if (
+      !pollFailed ||
+      observedSyncId === null ||
+      handledTerminalSyncIds.current.has(observedSyncId)
+    ) {
+      return;
+    }
+    handledTerminalSyncIds.current.add(observedSyncId);
+    releaseUnreadableRun();
+  }, [pollFailed, observedSyncId]);
 
   const syncStatus: PlayerSyncRun["status"] | undefined =
     exactSyncQuery.data?.status ?? activeSyncQuery.data?.status;
@@ -239,7 +264,6 @@ export function usePlayerSyncRun(
 
   return {
     isUpdating,
-    syncStatus,
     startSync: () => startSyncMutation.mutate(),
   };
 }

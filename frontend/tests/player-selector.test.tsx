@@ -83,6 +83,23 @@ describe("PlayerSelector", () => {
     expect(screen.queryByText(/server/i)).toBeNull();
   });
 
+  it("leaves an unseeded box's half-typed query alone on refocus", async () => {
+    // The sidebar switcher is never seeded. Selecting its text on focus would
+    // arm the next keystroke to wipe a query the user is still building.
+    searchPlayerSuggestions.mockResolvedValue({ success: true, data: [] });
+    const user = userEvent.setup();
+    renderSelector();
+
+    const box = screen.getByLabelText("Choose test player");
+    await user.click(box);
+    await user.keyboard("Sear");
+    await user.tab();
+    await user.click(box);
+    await user.keyboard("ch");
+
+    expect((box as HTMLInputElement).value).toBe("Search");
+  });
+
   it("stops typing at what the suggestions query accepts", () => {
     // Past `q`'s bound the query 422s and the shared QueryCache toasts an
     // error, which is a worse answer to a long paste than no results.
