@@ -423,6 +423,30 @@ export async function installSmurfBoostMocks(
       return;
     }
 
+    // The stored ranked-solo pool the run card names above its button. Left
+    // unanswered it is one more 404 on the global error toast, sitting beside
+    // whatever this suite asserts -- the failure mode `/settings/service-status`
+    // below already caused once.
+    if (path.includes("/matches/player/") && path.endsWith("/stats")) {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          puuid: PUUID,
+          total_matches: 84,
+          wins: 44,
+          losses: 40,
+          win_rate: 0.524,
+          avg_kills: 6.1,
+          avg_deaths: 5.2,
+          avg_assists: 8.4,
+          avg_kda: 2.8,
+          avg_cs: 178.5,
+          avg_vision_score: 21.3,
+        }),
+      });
+      return;
+    }
+
     if (path.endsWith("/settings/user/cookie-consent")) {
       await route.fulfill({ contentType: "application/json", body: "{}" });
       return;

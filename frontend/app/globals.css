@@ -435,6 +435,24 @@
   }
 }
 
+/*
+  Indeterminate progress sweep.
+
+  For a wait whose length nothing can measure: the sweeping element is a fifth
+  of its track, so it enters at the left edge and leaves at the right one. A
+  bar carrying a `value` would have to invent the denominator -- see the
+  Rank Manipulation fetch, where how many games Riot will return is unknown
+  until the fetch has already ended.
+*/
+@keyframes indeterminate-sweep {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(400%);
+  }
+}
+
 /* Components */
 @layer components {
   /*

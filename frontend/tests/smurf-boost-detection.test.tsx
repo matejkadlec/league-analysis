@@ -226,11 +226,37 @@ function syncRun(overrides: Record<string, unknown> = {}) {
 }
 
 /**
+ * Ranked solo games the stats endpoint reports as stored. Mutable so a test
+ * can raise it between the render and the fetch, which is what a fetch that
+ * finds new games looks like from this card.
+ */
+let storedRankedGames = 84;
+
+function rankedStats(total: number) {
+  return {
+    puuid: "test-puuid",
+    total_matches: total,
+    wins: 44,
+    losses: 40,
+    win_rate: 0.524,
+    avg_kills: 6.1,
+    avg_deaths: 5.2,
+    avg_assists: 8.4,
+    avg_kda: 2.8,
+    avg_cs: 178.5,
+    avg_vision_score: 21.3,
+  };
+}
+
+/**
  * Answer the player-sync transport as the backend would for a player with no
  * update in flight: nothing active, and any run this card starts finishes.
  */
 function noActiveSync(run: ReturnType<typeof syncRun> = syncRun()) {
   validatedGet.mockImplementation(async (_schema: unknown, path: string) => {
+    if (path.endsWith("/stats")) {
+      return { success: true, data: rankedStats(storedRankedGames) };
+    }
     if (path.endsWith("/sync/active")) {
       return { success: true, data: null };
     }
@@ -249,6 +275,7 @@ describe("SmurfBoostDetection", () => {
     validatedGet.mockReset();
     validatedPost.mockReset();
     Object.values(toast).forEach((mock) => mock.mockReset());
+    storedRankedGames = 84;
     noActiveSync();
   });
 
@@ -1070,6 +1097,216 @@ describe("SmurfBoostDetection", () => {
 
       expect(runCard().queryByText(/eligible ranked solo\/duo/)).toBeNull();
     });
+  });
+
+  it("names the pool the comparison draws from before any run", async () => {
+    // Without it the page asks for a fetch and a comparison while saying
+    // nothing about how much of this player's history it actually holds.
+    getLatestSmurfBoostDetection.mockResolvedValue({
+      success: false,
+      error: { message: "Not found", kind: "not-found", status: 404 },
+    });
+    renderCard();
+
+    await waitFor(() =>
+      expect(screen.getByText(/Ranked solo games stored: 84\./)).toBeTruthy(),
+    );
+  });
+
+  it("names no pool before a player is chosen", async () => {
+    // The card renders with no player, and `/matches/player//stats` is a 404
+    // -- so the count has to be absent rather than empty or zero.
+    getLatestSmurfBoostDetection.mockResolvedValue({
+      success: false,
+      error: { message: "Not found", kind: "not-found", status: 404 },
+    });
+    renderCard(null);
+
+    await waitFor(() => expect(runButton()).toBeTruthy());
+    expect(screen.queryByText(/Ranked solo games stored/)).toBeNull();
+  });
+
+  it("reports what the fetch added once it has finished", async () => {
+    // The closest thing to progress this card can honestly show: how many
+    // games are missing is Riot's match list, which arrives only during the
+    // fetch, so what the fetch added afterwards is the only real number.
+    getLatestSmurfBoostDetection.mockResolvedValue({
+      success: true,
+      data: analysis(),
+    });
+    startSmurfBoostDetection.mockResolvedValue({
+      success: true,
+      data: analysis(),
+    });
+    const user = userEvent.setup();
+    renderCard();
+
+    await waitFor(() =>
+      expect(screen.getByText(/Ranked solo games stored: 84\./)).toBeTruthy(),
+    );
+    storedRankedGames = 96;
+    await user.click(runButton());
+
+    await waitFor(() =>
+      expect(screen.getByText(/The last fetch added 12\./)).toBeTruthy(),
+    );
+  });
+
+  it("quotes no fetch total while the fetch is still running", async () => {
+    // Mid-fetch the stored count is still the pre-fetch one, so an ungated
+    // reading of it announces "no new games" directly under an alert saying
+    // the games are being fetched right now.
+    getLatestSmurfBoostDetection.mockResolvedValue({
+      success: true,
+      data: analysis(),
+    });
+    noActiveSync(syncRun({ status: "running" }));
+    const user = userEvent.setup();
+    renderCard();
+
+    await waitFor(() => expect(runButton()).toBeTruthy());
+    await user.click(runButton());
+
+    await waitFor(() =>
+      expect(screen.getByText(/Fetching this player/)).toBeTruthy(),
+    );
+    expect(screen.queryByText(/The last fetch/)).toBeNull();
+  });
+
+  it("claims no fetch total when the stored count could not be re-read", async () => {
+    // The hook refreshes this player's caches before handing the card back
+    // its callback, and swallows a refresh that fails. The count is then the
+    // pre-fetch one for good -- so subtracting it announces "no new games"
+    // for a fetch that may well have added a dozen, and never corrects.
+    getLatestSmurfBoostDetection.mockResolvedValue({
+      success: true,
+      data: analysis(),
+    });
+    startSmurfBoostDetection.mockResolvedValue({
+      success: true,
+      data: analysis(),
+    });
+    let statsReads = 0;
+    validatedGet.mockImplementation(async (_schema: unknown, path: string) => {
+      if (path.endsWith("/stats")) {
+        statsReads += 1;
+        if (statsReads > 1) {
+          throw new Error("the stored count could not be re-read");
+        }
+        return { success: true, data: rankedStats(storedRankedGames) };
+      }
+      if (path.endsWith("/sync/active")) {
+        return { success: true, data: null };
+      }
+      return { success: true, data: syncRun() };
+    });
+    const user = userEvent.setup();
+    renderCard();
+
+    await waitFor(() =>
+      expect(screen.getByText(/Ranked solo games stored: 84\./)).toBeTruthy(),
+    );
+    await user.click(runButton());
+
+    // Anchored on the comparison the failed refresh does not stop, so the
+    // negative below is not merely early.
+    await waitFor(() =>
+      expect(startSmurfBoostDetection).toHaveBeenCalledTimes(1),
+    );
+    expect(screen.queryByText(/The last fetch/)).toBeNull();
+  });
+
+  it("subtracts from no baseline when the count was unread at the click", async () => {
+    // Clicked before the stored count arrived -- a slow or briefly failing
+    // stats read -- there is nothing to subtract from. Treating the unknown
+    // as zero would credit the fetch with the player's entire ranked history
+    // the moment the count does arrive.
+    getLatestSmurfBoostDetection.mockResolvedValue({
+      success: true,
+      data: analysis(),
+    });
+    startSmurfBoostDetection.mockResolvedValue({
+      success: true,
+      data: analysis(),
+    });
+    let statsReads = 0;
+    validatedGet.mockImplementation(async (_schema: unknown, path: string) => {
+      if (path.endsWith("/stats")) {
+        statsReads += 1;
+        if (statsReads === 1) {
+          throw new Error("the stored count could not be read");
+        }
+        return { success: true, data: rankedStats(96) };
+      }
+      if (path.endsWith("/sync/active")) {
+        return { success: true, data: null };
+      }
+      return { success: true, data: syncRun() };
+    });
+    const user = userEvent.setup();
+    renderCard();
+
+    await waitFor(() => expect(runButton()).toBeTruthy());
+    expect(screen.queryByText(/Ranked solo games stored/)).toBeNull();
+    await user.click(runButton());
+
+    // The count lands with the post-fetch refresh, so the card can finally
+    // name the pool -- but not how much of it this fetch brought.
+    await waitFor(() =>
+      expect(screen.getByText(/Ranked solo games stored: 96\./)).toBeTruthy(),
+    );
+    expect(screen.queryByText(/The last fetch/)).toBeNull();
+  });
+
+  it("says so when a finished fetch found nothing new", async () => {
+    // Silence here is indistinguishable from a fetch that never ran, and the
+    // comparison that follows reads the same games as the one before it.
+    getLatestSmurfBoostDetection.mockResolvedValue({
+      success: true,
+      data: analysis(),
+    });
+    startSmurfBoostDetection.mockResolvedValue({
+      success: true,
+      data: analysis(),
+    });
+    const user = userEvent.setup();
+    renderCard();
+
+    await waitFor(() => expect(runButton()).toBeTruthy());
+    await user.click(runButton());
+
+    await waitFor(() =>
+      expect(screen.getByText(/The last fetch found no new ones\./)).toBeTruthy(),
+    );
+  });
+
+  it("counts nothing fetched for a fetch that did not finish", async () => {
+    // A rate-limited update asked Riot for nothing it can account for.
+    // Reporting "no new games" for it would present a failed fetch as an
+    // up-to-date history.
+    getLatestSmurfBoostDetection.mockResolvedValue({
+      success: true,
+      data: analysis(),
+    });
+    startSmurfBoostDetection.mockResolvedValue({
+      success: true,
+      data: analysis(),
+    });
+    noActiveSync(syncRun({ status: "rate_limited" }));
+    const user = userEvent.setup();
+    renderCard();
+
+    await waitFor(() => expect(runButton()).toBeTruthy());
+    await user.click(runButton());
+
+    // Anchored on the card reacting to the failed run, so the negative below
+    // is not merely early.
+    await waitFor(() =>
+      expect(
+        screen.getByText(/newest games could not be fetched/),
+      ).toBeTruthy(),
+    );
+    expect(screen.queryByText(/The last fetch/)).toBeNull();
   });
 
   it("marks a result as outdated once newer games exist", async () => {
