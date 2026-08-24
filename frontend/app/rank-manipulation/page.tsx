@@ -85,6 +85,9 @@ function RankManipulationContent() {
                       ariaLabel="Choose player for comparison"
                       placeholder="Search for player"
                       onPlayerSelected={selectAnalyzedPlayer}
+                      initialSearchValue={
+                        analyzedPlayer ? formatRiotId(analyzedPlayer) : ""
+                      }
                     />
                   </div>
                 }

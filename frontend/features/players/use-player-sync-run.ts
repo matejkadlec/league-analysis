@@ -14,6 +14,34 @@ interface UsePlayerSyncRunOptions {
    * already invalidated and refetched by the hook itself.
    */
   onCompleted?: (() => void | Promise<void>) | undefined;
+  /**
+   * Work that has to happen once the run stops, whatever it stopped as.
+   *
+   * `onCompleted` is the success half; this is for a caller whose own next
+   * step is worth taking even after a rate-limited or busy update -- running
+   * an analysis over whatever is stored beats leaving the click that asked
+   * for it with nothing but an error toast.
+   *
+   * The outcome comes with it, so a caller acting on a half-failed update can
+   * say so rather than presenting stale data as fresh. `"not_started"` is the
+   * start the backend refused outright, which has no run and so no status.
+   */
+  onSettled?:
+    | ((
+        outcome: PlayerSyncRun["status"] | "not_started",
+      ) => void | Promise<void>)
+    | undefined;
+  /**
+   * Say nothing at all: this surface reports the run itself.
+   *
+   * Not only the started/finished pair. A surface quiet enough to need this
+   * renders the run inline, failures included, and the hook's own wording is
+   * written for the Player Card -- telling a Rank Manipulation viewer to
+   * "try the update again later" names a control that page does not have,
+   * and on a failed fetch it arrived directly before a success toast for the
+   * comparison that ran anyway.
+   */
+  quiet?: boolean;
 }
 
 /**
@@ -32,7 +60,7 @@ interface UsePlayerSyncRunOptions {
  */
 export function usePlayerSyncRun(
   puuid: string,
-  { onCompleted }: UsePlayerSyncRunOptions = {},
+  { onCompleted, onSettled, quiet = false }: UsePlayerSyncRunOptions = {},
 ) {
   const queryClient = useQueryClient();
   const toast = useToast();
@@ -55,6 +83,10 @@ export function usePlayerSyncRun(
         ),
       );
     },
+    // The card on Rank Manipulation renders before a player is chosen, and
+    // `/players//sync/active` is a 404 the global query-error toast would
+    // report on every such mount.
+    enabled: puuid !== "",
     refetchInterval: (query) => (query.state.data ? 1_000 : false),
   });
 
@@ -100,6 +132,9 @@ export function usePlayerSyncRun(
         activeSyncQuery.data?.id === syncRun.id;
       setObservedSync({ puuid, id: syncRun.id });
       queryClient.setQueryData(["player-sync-active", puuid], syncRun);
+      if (quiet) {
+        return;
+      }
       if (attached) {
         toast.info("Player update already in progress", {
           description: "Watching the update that is already running.",
@@ -111,9 +146,14 @@ export function usePlayerSyncRun(
       }
     },
     onError: () => {
-      toast.error("Player profile update could not start", {
-        description: "Please try again later.",
-      });
+      if (!quiet) {
+        toast.error("Player profile update could not start", {
+          description: "Please try again later.",
+        });
+      }
+      // No run exists to reach `finishRun`, so this is the only place the
+      // caller's next step can be released after a refused start.
+      void onSettled?.("not_started");
     },
   });
 
@@ -124,12 +164,18 @@ export function usePlayerSyncRun(
   const finishRun = useEffectEvent(async (syncRun: PlayerSyncRun) => {
     if (syncRun.status !== "completed") {
       const rateLimited = syncRun.status === "rate_limited";
-      toast[rateLimited ? "warning" : "error"]("Player update did not finish", {
-        description: rateLimited
-          ? "Riot temporarily limited requests. Please try the update again later."
-          : "Please try the update again later.",
-      });
+      if (!quiet) {
+        toast[rateLimited ? "warning" : "error"](
+          "Player update did not finish",
+          {
+            description: rateLimited
+              ? "Riot temporarily limited requests. Please try the update again later."
+              : "Please try the update again later.",
+          },
+        );
+      }
       await activeSyncQuery.refetch();
+      await onSettled?.(syncRun.status);
       return;
     }
 
@@ -148,15 +194,20 @@ export function usePlayerSyncRun(
         { predicate: exactPlayerQuery, type: "active" },
         { throwOnError: true },
       );
-      toast.success("Update finished", {
-        description: "All cards were successfully updated.",
-      });
+      if (!quiet) {
+        toast.success("Update finished", {
+          description: "All cards were successfully updated.",
+        });
+      }
     } catch {
-      toast.error("Player data could not refresh", {
-        description: "Please try again before relying on the card data.",
-      });
+      if (!quiet) {
+        toast.error("Player data could not refresh", {
+          description: "Please try again before relying on the card data.",
+        });
+      }
     }
     await activeSyncQuery.refetch();
+    await onSettled?.(syncRun.status);
   });
 
   const syncRun = exactSyncQuery.data;

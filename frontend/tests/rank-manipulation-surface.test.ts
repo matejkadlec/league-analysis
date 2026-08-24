@@ -112,15 +112,20 @@ describe("the Rank Manipulation surface", () => {
   it("keeps the approved Games Comparison wording word for word", () => {
     // LGA-100 fixed this sentence exactly. Nothing else pins it: the e2e
     // asserts the card's title and that a search is inside it, never the copy.
+    //
+    // Rewritten when the run button started fetching from Riot: the approved
+    // sentence promised the opposite ("contacts no external service"), and a
+    // pinned sentence that has become false is worse than no pin at all.
     const source = readFileSync(
       "features/smurf-boost/components/smurf-boost-detection.tsx",
       "utf8",
     );
 
     expect(renderedText(source)).toContain(
-      "Compare recent games with earlier games. This reads only ranked " +
-        "solo/duo games already stored for this player. It contacts no " +
-        "external service, so it finishes in one step.",
+      "Compare recent games with earlier games, using ranked solo/duo " +
+        "games only. Running it fetches this player&apos;s newest games " +
+        "from Riot first, so the comparison reads current history rather " +
+        "than waiting for the next scheduled update.",
     );
   });
 

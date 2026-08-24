@@ -82,6 +82,16 @@ interface PlayerSelectorProps {
   placeholder?: string;
   className?: string;
   inputClassName?: string;
+  /**
+   * What the box reads on mount, for a surface that keeps a chosen player
+   * rather than switching away from one.
+   *
+   * Read once, as the initial state: after that the box belongs to whoever is
+   * typing in it. The analysis pages get a fresh value because they key their
+   * card by PUUID, so choosing a player remounts this control -- un-key that
+   * card and the name here goes stale.
+   */
+  initialSearchValue?: string;
 }
 
 export function PlayerSelector({
@@ -91,10 +101,11 @@ export function PlayerSelector({
   placeholder = "Search for player",
   className,
   inputClassName,
+  initialSearchValue = "",
 }: PlayerSelectorProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [searchValue, setSearchValue] = useState("");
+  const [searchValue, setSearchValue] = useState(initialSearchValue);
   const [activeSuggestion, setActiveSuggestion] = useState(0);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [isSelecting, setIsSelecting] = useState(false);
@@ -116,18 +127,33 @@ export function PlayerSelector({
         }),
       );
     },
-    enabled: debouncedSearch.length >= 2,
+    // Focus, not just length: a seeded box already holds a Riot ID, and
+    // without this every mount of a surface that keeps its selection would
+    // spend a suggestions request on a list nothing can show -- the results
+    // only render while the box has focus.
+    enabled: debouncedSearch.length >= 2 && isSearchFocused,
     staleTime: 30_000,
   });
 
   const suggestions = suggestionsQuery.data ?? [];
   const listboxId = `${id}-suggestions`;
 
+  // A surface that seeds the box keeps its selection in it. Re-picking the
+  // player already chosen does not remount this control, so without this the
+  // box would empty for that one case and the name would look lost.
+  const keepsSelection = initialSearchValue !== "";
+  // What the box reads when it is showing a selection rather than a query.
+  // Enter on it is a no-op: the value parses as a Riot ID, so without this
+  // it was read as an unknown player and opened the server dialog for the
+  // player already chosen.
+  const [selectedLabel, setSelectedLabel] = useState(initialSearchValue);
+
   const choosePlayer = async (player: Player) => {
     setIsSelecting(true);
     try {
       await onPlayerSelected(player);
-      setSearchValue("");
+      setSearchValue(keepsSelection ? formatRiotId(player) : "");
+      setSelectedLabel(keepsSelection ? formatRiotId(player) : "");
       setIsSearchFocused(false);
     } catch {
       toast({
@@ -226,7 +252,10 @@ export function PlayerSelector({
       event.preventDefault();
       const suggestion = suggestions[activeSuggestion];
       if (suggestion) void choosePlayer(suggestion);
-      else submitUnknownPlayer();
+      // Anything but the selection already in the box. Typing a name and
+      // pressing Enter before the suggestions arrive must still reach the
+      // discover path -- that is how an untracked player is added.
+      else if (searchValue.trim() !== selectedLabel) submitUnknownPlayer();
     } else if (event.key === "Escape") {
       setSearchValue("");
       setIsSearchFocused(false);
@@ -247,7 +276,14 @@ export function PlayerSelector({
           setSearchValue(event.target.value);
           setActiveSuggestion(0);
         }}
-        onFocus={() => setIsSearchFocused(true)}
+        onFocus={(event) => {
+          setIsSearchFocused(true);
+          // A seeded box holds a name with no visible way to clear it, so
+          // typing would append to it and match nothing. Selecting the text
+          // makes the first keystroke replace it, and costs nothing until
+          // one is pressed.
+          event.target.select();
+        }}
         onBlur={() => setIsSearchFocused(false)}
         onKeyDown={onSearchKeyDown}
         placeholder={placeholder}

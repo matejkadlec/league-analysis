@@ -242,6 +242,46 @@ export function writableSettings(
  */
 export const MINIMUM_BASELINE_GAMES = 15;
 
+/**
+ * What a comparison still needs, said in one sentence.
+ *
+ * The recent window is taken first, so the earlier games the comparison needs
+ * sit behind a full recent window. Reporting only the two sample floors would
+ * understate the requirement whenever the recent window is the larger of them.
+ *
+ * One copy, because two surfaces say it: the run card while games are being
+ * fetched, and the result card on a "Not enough data" reading. Two copies
+ * would eventually quote two different numbers for the same shortfall.
+ *
+ * `fallbackRecentWindow` covers a run stored under an older threshold
+ * contract, which may not carry the window at all; the caller's own recent
+ * count is then the only honest stand-in.
+ */
+export function gameShortfall(
+  eligibleGames: number,
+  thresholds: Record<string, number>,
+  fallbackRecentWindow: number,
+): { missing: number; sentence: string } {
+  const stored = thresholds.recent_window_size;
+  const recentWindow =
+    stored !== undefined && Number.isFinite(stored)
+      ? stored
+      : fallbackRecentWindow;
+  const required = recentWindow + MINIMUM_BASELINE_GAMES;
+  const missing = Math.max(0, required - eligibleGames);
+  return {
+    missing,
+    sentence:
+      `This player has ${eligibleGames} eligible ranked solo/duo ` +
+      `${eligibleGames === 1 ? "game" : "games"} stored. The comparison ` +
+      `reads the most recent ${recentWindow} and needs at least ` +
+      `${MINIMUM_BASELINE_GAMES} earlier games behind them, so at least ` +
+      `${required} in total` +
+      (missing > 0 ? `, which is ${missing} more than are stored` : "") +
+      ".",
+  };
+}
+
 /** Preset names as shown to a reader, rather than as stored identifiers. */
 const PRESET_LABELS: Record<string, string> = {
   conservative: "Conservative",

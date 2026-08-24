@@ -185,6 +185,16 @@ export interface HarnessState {
   analyzeCalls: number;
   /** Every PUUID an analyze request asked about, in order. */
   analyzed: string[];
+  /** Every PUUID an explicit game fetch was started for, in order. */
+  synced: string[];
+  /**
+   * How many times the run started by the last fetch has been polled.
+   *
+   * The first poll answers `running` so the fetching state is on screen long
+   * enough to assert; the next answers `completed`. A mock that finished
+   * immediately would let a card that never shows the fetch at all pass.
+   */
+  syncPolls: number;
   currentPlayer: typeof player;
   thresholds: Record<string, number>;
   isDefaultSettings: boolean;
@@ -203,6 +213,8 @@ export async function installSmurfBoostMocks(
   const state: HarnessState = {
     analyzeCalls: 0,
     analyzed: [],
+    synced: [],
+    syncPolls: 0,
     currentPlayer: player,
     thresholds: CONSERVATIVE,
     isDefaultSettings: true,
@@ -326,6 +338,46 @@ export async function installSmurfBoostMocks(
       await route.fulfill({
         contentType: "application/json",
         body: JSON.stringify(catalog[1]),
+      });
+      return;
+    }
+
+    // The explicit per-player game fetch the run button starts. The
+    // `/players/{puuid}` handlers above match on `endsWith`, so a longer sync
+    // path falls through to here regardless of order; the whole lifecycle is
+    // kept together so it reads in one place.
+    const syncMatch = /\/players\/([^/]+)\/sync(\/active|\/(\d+))?$/.exec(path);
+    if (syncMatch) {
+      const target = syncMatch[1]!;
+      const run = (status: string) => ({
+        id: 7,
+        puuid: target,
+        status,
+        created_at: NOW,
+        updated_at: NOW,
+        completed_at: status === "completed" ? NOW : null,
+      });
+      if (syncMatch[2] === "/active") {
+        await route.fulfill({ contentType: "application/json", body: "null" });
+        return;
+      }
+      if (syncMatch[3] !== undefined) {
+        state.syncPolls += 1;
+        await route.fulfill({
+          contentType: "application/json",
+          // Several polls of slack before the run ends. The assertion that no
+          // comparison has started yet is a plain, non-retrying one, and one
+          // poll of room on a starved shared runner is how that turns into a
+          // flake nobody can reproduce.
+          body: JSON.stringify(run(state.syncPolls > 3 ? "completed" : "running")),
+        });
+        return;
+      }
+      state.synced.push(target);
+      state.syncPolls = 0;
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify(run("pending")),
       });
       return;
     }
