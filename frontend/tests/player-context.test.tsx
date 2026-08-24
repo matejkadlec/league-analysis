@@ -39,6 +39,7 @@ import {
   PlayerContextProvider,
   usePlayerContext,
 } from "@/features/players/context/player-context";
+import { playerContextQueryKey } from "@/features/players/player-query";
 import type { Player, PlayerContext } from "@/lib/core/schemas";
 import { renderHookWithQueryClient } from "./render-support";
 
@@ -142,7 +143,7 @@ describe("which player the app thinks you are looking at", () => {
     // read from the context query's own cache entry, because the hook
     // deliberately exposes only the resolved current player.
     expect(
-      queryClient.getQueryData<PlayerContext>(["player-context", 1])
+      queryClient.getQueryData<PlayerContext>(playerContextQueryKey(1))
         ?.current_player?.puuid,
     ).toBe("saved-puuid");
   });

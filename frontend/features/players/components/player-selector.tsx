@@ -47,6 +47,11 @@ import {
 // that the list still feels attached to the keyboard.
 const PLAYER_SEARCH_DEBOUNCE_MS = 250;
 
+// Spelled once: the suggestions query below keys on it and the post-selection
+// cleanup invalidates the whole family by this prefix. An array, not a bare
+// string, so query-key-scope-contract.test.ts can read the namespace here.
+const PLAYER_SUGGESTIONS_QUERY_KEY = ["player-suggestions"] as const;
+
 interface DiscoverAttempt {
   riotId: RiotIdParts;
   platform: Platform;
@@ -103,7 +108,7 @@ export function PlayerSelector({
   );
 
   const suggestionsQuery = useQuery({
-    queryKey: ["player-suggestions", debouncedSearch, "all-platforms"],
+    queryKey: [...PLAYER_SUGGESTIONS_QUERY_KEY, debouncedSearch, "all-platforms"],
     queryFn: async () => {
       return unwrap(
         await searchPlayerSuggestions({
@@ -152,7 +157,9 @@ export function PlayerSelector({
     },
     onSuccess: async (player) => {
       setPendingRiotId(null);
-      void queryClient.invalidateQueries({ queryKey: ["player-suggestions"] });
+      void queryClient.invalidateQueries({
+        queryKey: PLAYER_SUGGESTIONS_QUERY_KEY,
+      });
       void queryClient.invalidateQueries({
         queryKey: playerQueryKey(player.puuid),
       });

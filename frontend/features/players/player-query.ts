@@ -16,6 +16,12 @@ export function trackedPlayersQueryKey(userId: number | null | undefined) {
   return ["tracked-players", userId] as const;
 }
 
+/** The account's player-context cache (`/players/context`), owned by
+ * `player-context.tsx`; named here so every write spells it from one place. */
+export function playerContextQueryKey(userId: number | null | undefined) {
+  return ["player-context", userId] as const;
+}
+
 /** Invalidate everything that reflects whether a player is tracked. Track and
  * untrack both touch the same four caches; this names that set once. */
 export function invalidateTrackingQueries(
@@ -26,7 +32,9 @@ export function invalidateTrackingQueries(
   void queryClient.invalidateQueries({
     queryKey: trackedPlayersQueryKey(userId),
   });
-  void queryClient.invalidateQueries({ queryKey: ["player-context", userId] });
+  void queryClient.invalidateQueries({
+    queryKey: playerContextQueryKey(userId),
+  });
   void queryClient.invalidateQueries({ queryKey: playerQueryKey(puuid) });
 }
 
