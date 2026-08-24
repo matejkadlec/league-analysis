@@ -20,6 +20,20 @@ from sqlalchemy.sql import ColumnElement
 from .db_session import rollback_quietly
 
 
+def status_in_sql(statuses: Sequence[str]) -> str:
+    """The ``status IN (...)`` text a status vocabulary renders to in SQL.
+
+    Every run table spells its vocabulary twice in DDL -- the CHECK
+    constraint over all statuses and the partial unique index over the
+    active ones. Rendering both from the Python tuples means adding a status
+    cannot silently leave a constraint behind; `validate_migrations.py`
+    compares the rendered text against the database, so a rendering change
+    is caught before it masquerades as schema drift.
+    """
+    joined = ", ".join(f"'{status}'" for status in statuses)
+    return f"status IN ({joined})"
+
+
 def active_run_filter(
     model: type[Any],
     statuses: Sequence[str],

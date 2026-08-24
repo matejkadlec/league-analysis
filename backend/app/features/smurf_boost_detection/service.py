@@ -39,6 +39,7 @@ from .config import (
 from .engine import AnalysisRequest, DetectionResult, analyze
 from .models import SmurfBoostAnalysis
 from .schemas import (
+    ACTIVE_STATUSES,
     FamilyPayload,
     SignalPayload,
     SmurfBoostAnalysisResponse,
@@ -47,7 +48,6 @@ from .schemas import (
 
 logger = structlog.get_logger(__name__)
 
-ACTIVE_STATUSES = ("pending", "in_progress")
 RANKED_SOLO_QUEUE = "RANKED_SOLO_5x5"
 
 # The engine never needs more than the largest configurable windows combined.

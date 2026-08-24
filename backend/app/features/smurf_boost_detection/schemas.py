@@ -9,6 +9,11 @@ from pydantic import BaseModel, ConfigDict, Field
 
 SmurfBoostStatus = Literal["pending", "in_progress", "completed", "failed"]
 
+# The statuses the one-active-run interlock holds over; the partial unique
+# index on `smurf_boost_analyses` is rendered from this tuple, so extending
+# it is a schema change, not just a query change.
+ACTIVE_STATUSES: tuple[SmurfBoostStatus, ...] = ("pending", "in_progress")
+
 SmurfBoostBand = Literal[
     "not_enough_data",
     "no_unusual_pattern",

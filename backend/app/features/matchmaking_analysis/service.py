@@ -69,6 +69,7 @@ from app.features.players.models import Player
 
 from .models import MatchmakingAnalysis, MatchmakingAnalysisResultsJSON
 from .schemas import (
+    ACTIVE_ANALYSIS_STATUSES,
     MatchmakingAnalysisHistoryItem,
     MatchmakingAnalysisHistoryResponse,
     MatchmakingAnalysisResponse,
@@ -77,7 +78,6 @@ from .schemas import (
 logger = structlog.get_logger(__name__)
 
 MAX_RATE_LIMIT_WAIT = 120
-ACTIVE_ANALYSIS_STATUSES = ("pending", "in_progress", "waiting_rate_limit")
 
 MATCHES_TO_ANALYZE = 10
 MATCHES_FOR_WINRATE = 10

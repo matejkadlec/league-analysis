@@ -13,6 +13,7 @@ from app.features.jobs.base import BaseJob
 from app.features.jobs.implementations.match_fetcher import MatchFetcherJob
 from app.features.jobs.implementations.player_updater import PlayerUpdaterJob
 from app.features.jobs.models import (
+    ACTIVE_SYNC_STATUSES,
     JobConfiguration,
     JobStatus,
     JobType,
@@ -21,8 +22,6 @@ from app.features.jobs.models import (
 from app.features.players.models import Player
 
 logger = structlog.get_logger(__name__)
-
-ACTIVE_SYNC_STATUSES = ("pending", "running")
 
 
 async def create_or_get_player_sync(
