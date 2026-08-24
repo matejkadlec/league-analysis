@@ -423,11 +423,28 @@ export async function installSmurfBoostMocks(
       return;
     }
 
-    if (
-      path.endsWith("/settings/user/cookie-consent") &&
-      request.method() === "PUT"
-    ) {
+    if (path.endsWith("/settings/user/cookie-consent")) {
       await route.fulfill({ contentType: "application/json", body: "{}" });
+      return;
+    }
+
+    // Polled every 15s by `serviceStatusQueryOptions`. Unanswered it 404s on
+    // that loop, and the global query-error toast it raises then sits beside
+    // whatever this suite is asserting -- which is how the a11y scan came to
+    // find two toasts where it expects one, on the slow shared runner only.
+    if (path.endsWith("/settings/service-status")) {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          is_under_maintenance: false,
+          reason: "ok",
+          credential_status: "valid",
+          health_revision: 3,
+          observed_at: NOW,
+          has_recent_recovery: false,
+          recovery_notice_key: null,
+        }),
+      });
       return;
     }
 
