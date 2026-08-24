@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { renderWithQueryClient } from "./render-support";
@@ -369,6 +370,47 @@ describe("Match History progressive loading", () => {
       expect(screen.getByTestId("match-history-load-failed-row")).toBeTruthy(),
     );
     expect(screen.queryByText(/No matches found/i)).toBeNull();
+  });
+
+  it("reports a failed page change instead of leaving the old page up", async () => {
+    // Placeholder data keeps the previous page's rows on screen through the
+    // failed fetch, and this query is opted out of the global error toast --
+    // so without a report here the viewer reads page 1's matches under a
+    // pagination bar pointing at page 2, with nothing saying anything failed.
+    mockHistory(30, null);
+    renderHistory();
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "2" })).toBeTruthy(),
+    );
+
+    validatedGet.mockImplementation(async (_schema: unknown, path: string) => {
+      if (path.includes("/detailed")) {
+        throw Object.assign(new Error("offline"), { isAxiosError: true });
+      }
+      if (path.includes("/sync")) return { success: true, data: null };
+      return {
+        success: true,
+        data: {
+          puuid: PUUID,
+          total_matches: 30,
+          wins: 30,
+          losses: 0,
+          win_rate: 1,
+        },
+      };
+    });
+    await userEvent.click(screen.getByRole("button", { name: "2" }));
+
+    // Reported, rather than silently reverted. The failed page-2 fetch carries
+    // no data, so the error card is the right shape here -- what must not
+    // happen is the card quietly returning to page 1 as though nothing was
+    // asked for.
+    await waitFor(() =>
+      expect(
+        screen.getByText(/Unable to reach the League Analysis/),
+      ).toBeTruthy(),
+    );
+    expect(screen.queryByText(/Showing 1 to 25 of 30/)).toBeNull();
   });
 
   it("exposes the next page once fetched rows spill onto it", async () => {

@@ -11,25 +11,26 @@ issue, newest last:
   after a player update that did not finish, the card shows "Ranked solo games
   stored: N" from before the click and never re-reads it, so a rate-limited run
   that did store some games reports the old count. `fetchedGames` deliberately
-  stays silent there (`tests/smurf-boost-detection.test.tsx` asserts it), but
-  the stored count itself is not part of that contract and is simply stale.
-  Match History fixed its half of this in commit 485e2ca by refetching its own
-  two caches on a non-completed run; the same treatment scoped to
-  `playerStatsQueryOptions` would fix this one. Do not fix it inside
-  `usePlayerSyncRun` — its predicate matches every query keyed by the PUUID and
-  that is what breaks the two tests above.
-
-What follows is the handful of findings worth not
-rediscovering — the ones that were wrong, or right about the symptom and wrong
-about the cause. Everything else logged here has been fixed and its detail
-lives in the commit that fixed it.
+  stays silent there, but the stored count itself is not part of that contract
+  and is simply stale. Match History fixed its half of this in commit 485e2ca
+  by refetching its own two caches on a non-completed run; the same treatment
+  scoped to `playerStatsQueryOptions` would fix this one. Do not fix it inside
+  `usePlayerSyncRun` — its predicate matches every query keyed by the PUUID,
+  which re-reads the stored count and so breaks the two tests in
+  `frontend/tests/smurf-boost-detection.test.tsx` that pin the silence:
+  "quotes no fetch total while the fetch is still running" and "claims no fetch
+  total when the stored count could not be re-read".
 
 ## Findings that did not survive measurement
+
+The findings worth not rediscovering — the ones that were wrong, or right
+about the symptom and wrong about the cause. Everything else logged here has
+been fixed and its detail lives in the commit that fixed it.
 
 **Toast contrast (2026-08-22, withdrawn).** Sonner's `richColors` description
 is `#00091a` on a pale tint — around 19:1. Axe was measuring the toast
 mid-fade-in at `opacity: 0.0257`, which fails any threshold.
-`e2e/smurf-boost-detection.spec.ts` now waits for the toast to reach
+`frontend/e2e/smurf-boost-detection.spec.ts` now waits for the toast to reach
 `opacity: 1` and scans it instead of excluding the toaster. Worth remembering
 before trusting the next `color-contrast` finding against an animated element.
 
@@ -41,7 +42,7 @@ and 242px was an arbitrary rail height rather than a fit to anything. The fix
 that followed from the corrected cause was different from the one the entry
 proposed: the fixed height stayed on the collapse tab, which must not move as
 sections mount, and only the panel became content-sized. Three entries now
-measure 132px, asserted in `e2e/smurf-boost-detection.spec.ts`.
+measure 132px, asserted in `frontend/e2e/smurf-boost-detection.spec.ts`.
 
 **The `key` on the detection card (2026-08-24, cause was wrong).** The entry
 claimed `key={analyzedPlayer?.puuid ?? "no-player"}` was load-bearing because
@@ -52,13 +53,13 @@ Deleting the key left the search box seeding correctly and every existing test
 green. What it actually protects is the card's own state, and the visible
 casualty is the fetch report from #217: un-keyed, "The last fetch added 12."
 follows you onto the next player, who nobody fetched anything for. That is what
-`e2e/smurf-boost-detection.spec.ts` now pins.
+`frontend/e2e/smurf-boost-detection.spec.ts` now pins.
 
 **"Neither prop is covered" (2026-08-24, half wrong).** The same entry paired
 that key with `initialSearchValue` on the same page. Removing the prop failed
 the pre-existing "compares a player the account has never tracked" e2e
 immediately — it had been covered all along. Only the matchmaking page's copy
-was genuinely untested, and it now has `tests/matchmaking-analysis-page.test.tsx`.
+was genuinely untested, and it now has `frontend/tests/matchmaking-analysis-page.test.tsx`.
 
 **"Four unmocked routes" (2026-08-24, one already fixed).** The harness entry
 named `/players/{puuid}/league` and three `/matches/player/{puuid}/*-stats`
@@ -83,7 +84,7 @@ example: three entries, and the fix that followed matched what the entry asked
 for in exactly one of them.
 
 The corollary is about tests, not entries. A fix that makes its own check pass
-is not yet evidence: the `DEBUG` pin in `test_unhandled_error_response.py`
+is not yet evidence: the `DEBUG` pin in `backend/tests/test_unhandled_error_response.py`
 passed alone and failed in the suite, because Starlette reads that flag when
 the middleware stack is built and an earlier test had already built it. Run the
 whole suite before believing a fix, and mutate the line to watch the test

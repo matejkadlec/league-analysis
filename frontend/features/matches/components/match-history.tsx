@@ -235,14 +235,24 @@ export function MatchHistory({
   // on the way, over a poll that just errored, is the wrong half of the story.
   const isLastPage = currentPage >= Math.max(1, totalPages);
   const showLoadingRow = isLoadingMoreMatches && isLastPage && !error;
-  // Deliberately not gated on `isLoadingMoreMatches`. The outage that fails
-  // this query also fails the sync poll, which drops `isFetchingMatches` to
-  // false — so hanging the failure row off it would hide it exactly when it is
-  // needed.
-  const showLoadFailedRow = !!error && !!data && isLastPage;
+  // Gated on neither `isLoadingMoreMatches` nor `isLastPage`, unlike the
+  // loading row. The outage that fails this query also fails the sync poll,
+  // which drops `isFetchingMatches` to false, so hanging this off it would
+  // hide the row exactly when it is needed. A failed page change is the other
+  // way in: placeholder data keeps the previous page's rows up while the
+  // pagination bar points at the new one, and this query is opted out of the
+  // global error toast, so without this row nothing at all reports it. The
+  // last-page rule belongs to the loading row, which claims progress — "this
+  // failed, retry" is true on any page.
+  const showLoadFailedRow = !!error && !!data;
 
   useEffect(() => {
-    if (isPlaceholderData) {
+    // Not on an error. A failed request carries no `data`, which reads here as
+    // a server total of zero and so as "the page you asked for is gone" -- so
+    // a page change whose fetch failed silently put the viewer back on page 1,
+    // with the error card suppressed by the fallback rows and this query opted
+    // out of the global toast. An error is not a statement about the total.
+    if (isPlaceholderData || error) {
       return;
     }
     const lastAvailablePage = Math.max(1, totalPages);
@@ -250,7 +260,7 @@ export function MatchHistory({
       // eslint-disable-next-line react-hooks/set-state-in-effect -- The server total is authoritative when refreshed data removes the requested page.
       setCurrentPage(lastAvailablePage);
     }
-  }, [currentPage, isPlaceholderData, totalPages]);
+  }, [currentPage, error, isPlaceholderData, totalPages]);
 
   if (!preferencesReady || isLoading) {
     return <MatchHistoryLoadingCard />;
