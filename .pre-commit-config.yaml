@@ -112,13 +112,16 @@ repos:
       # Same rule as the axios hook, other half: data fetching goes through
       # TanStack Query over the validated client. features/auth is excluded
       # because token bootstrapping sits *below* that client — it cannot call
-      # the thing whose token it is refreshing.
+      # the thing whose token it is refreshing. global-error.tsx replaces the
+      # whole document and must not import the application graph that threw;
+      # its beacon is a same-origin POST of a capped JSON body, not product
+      # data fetching.
       - id: forbid-direct-fetch
         name: No raw fetch() in UI code (use the validated client)
         entry: '^(?!\s*(?://|\*|/\*))(?=.*(?:(?<![.\w])fetch\s*\(|(?:globalThis|window|self)\.fetch\s*\())'
         language: pygrep
         files: '^frontend/(app|components|features)/.*\.(?:ts|tsx)$'
-        exclude: '^frontend/features/auth/'
+        exclude: '^frontend/(features/auth/|app/global-error\.tsx$)'
 
       # The Data Dragon version is resolved once through the cached manifest
       # helper. A hardcoded CDN URL elsewhere pins a version that then rots.

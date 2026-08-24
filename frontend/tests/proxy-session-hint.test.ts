@@ -209,6 +209,16 @@ describe("the edge and the session hint", () => {
       headers: [["x-middleware-next", "1"]],
     },
     {
+      // The client-error beacon is not a page. Without this branch a signed-
+      // out crash on /sign-in would 307 the report to /sign-in and the
+      // frontend container would never see it.
+      what: "a visitor with no hint posting a client error report",
+      path: "/client-error-report",
+      hint: false,
+      status: 200,
+      headers: [["x-middleware-next", "1"]],
+    },
+    {
       what: "a hinted visitor on an API path",
       path: "/api/v1/auth/me",
       hint: true,

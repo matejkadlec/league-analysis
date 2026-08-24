@@ -11,6 +11,7 @@ function isStaticOrInternal(pathname: string): boolean {
   return (
     pathname.startsWith("/_next") ||
     pathname.startsWith("/api") ||
+    pathname === "/client-error-report" ||
     pathname.includes(".") ||
     pathname === "/favicon.ico"
   );

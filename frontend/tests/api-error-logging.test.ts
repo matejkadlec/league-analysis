@@ -1,3 +1,5 @@
+// @vitest-environment jsdom
+
 import axios, { type AxiosError } from "axios";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
@@ -36,10 +38,15 @@ describe("reportApiError", () => {
 
   beforeEach(() => {
     consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response(null, { status: 204 })),
+    );
   });
 
   afterEach(() => {
     consoleError.mockRestore();
+    vi.unstubAllGlobals();
   });
 
   it.each([
@@ -127,6 +134,25 @@ describe("reportApiError", () => {
     expect(JSON.stringify(payload)).not.toMatch(
       /psycopg|postgres|rgapi|OperationalError/i,
     );
+  });
+
+  it("beacons a copy to the container without the query key", () => {
+    const fetchMock = vi.mocked(fetch);
+    reportApiError(normalizedError(new Error("transport died")), {
+      source: "query",
+      key: '["lane-stats","PNm-92VrUvdu-cj0KFhqs0_8dNV2g9DsQ2pObEKsJZum-3uISPmVr2xn2eI1ztzq10TJb9M-ZpdbdQ",420]',
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    const body = String(init.body);
+    expect(body).not.toMatch(/PNm-|lane-stats/);
+    expect(JSON.parse(body)).toEqual({
+      kind: "api",
+      message: "The request could not be completed. Please try again later.",
+      source: "query",
+      code: "UNKNOWN_ERROR",
+    });
   });
 
   it("omits optional fields instead of recording undefined values", () => {

@@ -133,11 +133,14 @@ services:
         NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:?set NEXT_PUBLIC_SITE_URL in the private deployment environment}
         NEXT_PUBLIC_ALLOW_INDEXING: ${NEXT_PUBLIC_ALLOW_INDEXING:-false}
         NEXT_PUBLIC_TURNSTILE_SITE_KEY: ${NEXT_PUBLIC_TURNSTILE_SITE_KEY:-}
+        NEXT_DEPLOYMENT_ID: ${LGA_IMAGE_TAG:-production}
     image: league-analysis-frontend:${LGA_IMAGE_TAG:-production}
     container_name: ${LGA_FRONTEND_CONTAINER_NAME:-league-analysis-frontend}
     init: true
     restart: unless-stopped
     stop_grace_period: 20s
+    environment:
+      NEXT_DEPLOYMENT_ID: ${LGA_IMAGE_TAG:-production}
     read_only: true
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=64m

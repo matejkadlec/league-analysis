@@ -193,7 +193,11 @@ run_frontend_build() {
   # value and no runtime environment can change it. Keep this in step with the
   # DDRAGON_VERSION in frontend/playwright.config.ts, which covers the routes
   # that stay dynamic.
-  DDRAGON_VERSION=16.15.1 npm run build
+  # `NEXT_DEPLOYMENT_ID` must match `playwright.config.ts` `webServer.env`.
+  # The standalone server Playwright starts reads the id at runtime; a build
+  # that baked a different one (or none) treats every client navigation as
+  # version skew and full-reloads in a loop.
+  DDRAGON_VERSION=16.15.1 NEXT_DEPLOYMENT_ID=gate-local npm run build
 }
 
 run_api_contract_alignment() {

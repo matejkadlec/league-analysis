@@ -80,9 +80,22 @@ A migration or health failure therefore fails the deployment rather than
 publishing an apparently running but unusable stack.
 
 The frontend image bakes the public browser API origin from
-`NEXT_PUBLIC_API_URL`. Its server-side `/api/*` rewrite uses the private
-`http://backend:8000` Compose route, so internal traffic does not loop through
-the Pi host port.
+`NEXT_PUBLIC_API_URL` and a `deploymentId` from `LGA_IMAGE_TAG` (the commit
+SHA in production). Next.js then appends `?dpl=<id>` to hashed `/_next/static`
+URLs and, on a client navigation whose `x-deployment-id` does not match the
+running image, does a full reload instead of mixing the old tab's chunk graph
+with the new origin. That is the version-skew path that 404s a deleted
+`/_next/static/chunks/*.js`, after which React mounts `undefined` (minified
+error #130). `NEXT_DEPLOYMENT_ID` is a public build argument, not a secret.
+Documents and RSC send `Cache-Control: private, no-cache, no-store`; hashed
+static files stay `immutable`. Next.js `logging` in `next.config` is
+development-only and does not appear in production `docker logs`. Server
+render failures go through `instrumentation.ts` (`event: next_request_error`).
+Browser React errors, missing `/_next/static/chunks` loads, and unexpected
+API query failures POST a scrubbed JSON body to `/client-error-report`, which
+writes `event: client_error` to the frontend container stdout. Its
+server-side `/api/*` rewrite uses the private `http://backend:8000` Compose
+route, so internal traffic does not loop through the Pi host port.
 
 ## Edge maintenance fallback (Cloudflare)
 
@@ -132,7 +145,8 @@ chat, Jira, logs, a pull request, or a command whose output echoes values. The
 deploy script refuses a missing file, symlink, or mode other than `0600`.
 Database/JWT/SMTP/Turnstile/Riot secrets remain runtime environment values and
 are never Docker build arguments or image layers. The only frontend build
-arguments are intentionally public browser configuration.
+arguments are intentionally public browser configuration (API/site origin,
+indexing, Turnstile site key, and the deployment id).
 
 The GitHub repository also needs a self-hosted runner registered on that host
 with the custom label `pi5ram16`. Runner registration credentials are an owner
