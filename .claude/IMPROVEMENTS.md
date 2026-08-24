@@ -5,7 +5,21 @@ issue, newest last:
 
 `- <YYYY-MM-DD> <path from repo root>: one or two sentences.`
 
-Nothing is open. What follows is the handful of findings worth not
+## Open
+
+- 2026-08-24 frontend/features/smurf-boost/components/smurf-boost-detection.tsx:
+  after a player update that did not finish, the card shows "Ranked solo games
+  stored: N" from before the click and never re-reads it, so a rate-limited run
+  that did store some games reports the old count. `fetchedGames` deliberately
+  stays silent there (`tests/smurf-boost-detection.test.tsx` asserts it), but
+  the stored count itself is not part of that contract and is simply stale.
+  Match History fixed its half of this in commit 485e2ca by refetching its own
+  two caches on a non-completed run; the same treatment scoped to
+  `playerStatsQueryOptions` would fix this one. Do not fix it inside
+  `usePlayerSyncRun` — its predicate matches every query keyed by the PUUID and
+  that is what breaks the two tests above.
+
+What follows is the handful of findings worth not
 rediscovering — the ones that were wrong, or right about the symptom and wrong
 about the cause. Everything else logged here has been fixed and its detail
 lives in the commit that fixed it.
