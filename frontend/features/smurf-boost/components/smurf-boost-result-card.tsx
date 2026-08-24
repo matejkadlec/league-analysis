@@ -11,6 +11,7 @@ import type {
   SmurfBoostSignal,
 } from "@/lib/core/schemas";
 
+import { gameShortfall } from "../smurf-boost-settings";
 import {
   BAND_LABELS,
   bandMeaning,
@@ -26,7 +27,6 @@ interface SmurfBoostResultCardProps {
   playerName: string | null;
   /** The exact threshold set the run was computed with. */
   thresholds: Record<string, number>;
-  minimumBaselineGames: number;
 }
 
 /**
@@ -79,31 +79,6 @@ function formatValue(value: number | null | undefined): string {
 function modelVersionLabel(modelVersion: string): string {
   const separator = modelVersion.lastIndexOf("/");
   return separator === -1 ? modelVersion : modelVersion.slice(separator + 1);
-}
-
-/**
- * The recent window is taken first, so the earlier games the comparison needs
- * sit behind a full recent window. Reporting only the two sample floors would
- * understate the requirement whenever the recent window is the larger of them.
- */
-function requiredGames(
-  results: SmurfBoostResults,
-  thresholds: Record<string, number>,
-  minimumBaselineGames: number,
-): { recentWindow: number; required: number; missing: number } {
-  const stored = thresholds.recent_window_size;
-  // A run stored under an older threshold contract may not carry the window at
-  // all; its own recent count is then the only honest stand-in.
-  const recentWindow =
-    stored !== undefined && Number.isFinite(stored)
-      ? stored
-      : results.recent_games;
-  const required = recentWindow + minimumBaselineGames;
-  return {
-    recentWindow,
-    required,
-    missing: Math.max(0, required - results.eligible_games),
-  };
 }
 
 /**
@@ -343,12 +318,11 @@ export function SmurfBoostResultCard({
   results,
   playerName,
   thresholds,
-  minimumBaselineGames,
 }: SmurfBoostResultCardProps) {
-  const { recentWindow, required, missing } = requiredGames(
-    results,
+  const { sentence: shortfall } = gameShortfall(
+    results.eligible_games,
     thresholds,
-    minimumBaselineGames,
+    results.recent_games,
   );
   // An empty family list is a result that says nothing, and gets no tabs.
   const firstFamily = results.families[0];
@@ -357,15 +331,6 @@ export function SmurfBoostResultCard({
   const insufficient =
     results.families.length > 0 &&
     results.families.some((family) => family.band === "not_enough_data");
-
-  const shortfall =
-    `This player has ${results.eligible_games} eligible ranked solo/duo ` +
-    `${results.eligible_games === 1 ? "game" : "games"} stored. The comparison ` +
-    `reads the most recent ${recentWindow} and needs at least ` +
-    `${minimumBaselineGames} earlier games behind them, so at least ` +
-    `${required} in total` +
-    (missing > 0 ? `, which is ${missing} more than are stored` : "") +
-    ".";
 
   return (
     <Card id="smurf-boost-result">

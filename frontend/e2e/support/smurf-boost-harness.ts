@@ -185,6 +185,16 @@ export interface HarnessState {
   analyzeCalls: number;
   /** Every PUUID an analyze request asked about, in order. */
   analyzed: string[];
+  /** Every PUUID an explicit game fetch was started for, in order. */
+  synced: string[];
+  /**
+   * How many times the run started by the last fetch has been polled.
+   *
+   * The first three polls answer `running`; the fourth answers `completed`.
+   * A mock that finished immediately would let a card that never shows the
+   * fetch at all pass, and the slack is explained at the handler.
+   */
+  syncPolls: number;
   currentPlayer: typeof player;
   thresholds: Record<string, number>;
   isDefaultSettings: boolean;
@@ -203,6 +213,8 @@ export async function installSmurfBoostMocks(
   const state: HarnessState = {
     analyzeCalls: 0,
     analyzed: [],
+    synced: [],
+    syncPolls: 0,
     currentPlayer: player,
     thresholds: CONSERVATIVE,
     isDefaultSettings: true,
@@ -330,6 +342,46 @@ export async function installSmurfBoostMocks(
       return;
     }
 
+    // The explicit per-player game fetch the run button starts. The
+    // `/players/{puuid}` handlers above match on `endsWith`, so a longer sync
+    // path falls through to here regardless of order; the whole lifecycle is
+    // kept together so it reads in one place.
+    const syncMatch = /\/players\/([^/]+)\/sync(\/active|\/(\d+))?$/.exec(path);
+    if (syncMatch) {
+      const target = syncMatch[1]!;
+      const run = (status: string) => ({
+        id: 7,
+        puuid: target,
+        status,
+        created_at: NOW,
+        updated_at: NOW,
+        completed_at: status === "completed" ? NOW : null,
+      });
+      if (syncMatch[2] === "/active") {
+        await route.fulfill({ contentType: "application/json", body: "null" });
+        return;
+      }
+      if (syncMatch[3] !== undefined) {
+        state.syncPolls += 1;
+        await route.fulfill({
+          contentType: "application/json",
+          // Several polls of slack before the run ends. The assertion that no
+          // comparison has started yet is a plain, non-retrying one, and one
+          // poll of room on a starved shared runner is how that turns into a
+          // flake nobody can reproduce.
+          body: JSON.stringify(run(state.syncPolls > 3 ? "completed" : "running")),
+        });
+        return;
+      }
+      state.synced.push(target);
+      state.syncPolls = 0;
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify(run("pending")),
+      });
+      return;
+    }
+
     if (path.endsWith("/smurf-boost-detection/analyze")) {
       // Answers about the player the request named. A handler that always
       // said `PUUID` would make a run aimed at anybody else look like it
@@ -371,11 +423,28 @@ export async function installSmurfBoostMocks(
       return;
     }
 
-    if (
-      path.endsWith("/settings/user/cookie-consent") &&
-      request.method() === "PUT"
-    ) {
+    if (path.endsWith("/settings/user/cookie-consent")) {
       await route.fulfill({ contentType: "application/json", body: "{}" });
+      return;
+    }
+
+    // Polled every 15s by `serviceStatusQueryOptions`. Unanswered it 404s on
+    // that loop, and the global query-error toast it raises then sits beside
+    // whatever this suite is asserting -- which is how the a11y scan came to
+    // find two toasts where it expects one, on the slow shared runner only.
+    if (path.endsWith("/settings/service-status")) {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          is_under_maintenance: false,
+          reason: "ok",
+          credential_status: "valid",
+          health_revision: 3,
+          observed_at: NOW,
+          has_recent_recovery: false,
+          recovery_notice_key: null,
+        }),
+      });
       return;
     }
 

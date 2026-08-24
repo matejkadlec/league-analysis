@@ -135,9 +135,18 @@ test("runs a comparison and reports both families without accusing anyone", asyn
 
   await page.getByRole("button", { name: "Run the comparison" }).click();
 
+  // The click fetches this player's games from Riot before comparing them,
+  // so a player the scheduled Match Fetcher has not reached yet is not
+  // compared on a stale history. The comparison waits for the fetch.
+  await expect(
+    page.getByText("Fetching this player's games from Riot", { exact: false }),
+  ).toBeVisible();
+  expect(api.analyzeCalls).toBe(0);
+
   const result = page.locator("#smurf-boost-result");
   await expect(result).toBeVisible();
   expect(api.analyzeCalls).toBe(1);
+  expect(api.synced).toEqual([PUUID]);
 
   await quickNavigation.hover();
   await expect(
@@ -355,8 +364,14 @@ test("compares a player the account has never tracked, and stays itself", async 
 
   await page.getByRole("button", { name: "Run the comparison" }).click();
   await expect(page.locator("#smurf-boost-result")).toBeVisible();
-  // Aimed at the stranger, not at whoever the sidebar holds.
+  // Aimed at the stranger, not at whoever the sidebar holds -- and the games
+  // fetched are the stranger's too.
   expect(api.analyzed).toEqual([OTHER_PUUID]);
+  expect(api.synced).toEqual([OTHER_PUUID]);
+
+  // The search keeps the chosen player rather than emptying itself, so the
+  // box still says who the result on screen is about.
+  await expect(search).toHaveValue("Stranger#TWO");
 
   // And the account is untouched. Picking in the sidebar would have written
   // this player in as the current one; picking in the card must not.

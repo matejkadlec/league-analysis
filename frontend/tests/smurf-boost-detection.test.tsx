@@ -10,21 +10,36 @@ import { renderWithQueryClient } from "./render-support";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { getLatestSmurfBoostDetection, startSmurfBoostDetection, toast } =
-  vi.hoisted(() => ({
-    getLatestSmurfBoostDetection: vi.fn(),
-    startSmurfBoostDetection: vi.fn(),
-    toast: {
-      error: vi.fn(),
-      info: vi.fn(),
-      success: vi.fn(),
-      warning: vi.fn(),
-    },
-  }));
+const {
+  getLatestSmurfBoostDetection,
+  startSmurfBoostDetection,
+  toast,
+  validatedGet,
+  validatedPost,
+} = vi.hoisted(() => ({
+  getLatestSmurfBoostDetection: vi.fn(),
+  startSmurfBoostDetection: vi.fn(),
+  toast: {
+    error: vi.fn(),
+    info: vi.fn(),
+    success: vi.fn(),
+    warning: vi.fn(),
+  },
+  validatedGet: vi.fn(),
+  validatedPost: vi.fn(),
+}));
 
 vi.mock("@/features/smurf-boost/smurf-boost-api", () => ({
   getLatestSmurfBoostDetection,
   startSmurfBoostDetection,
+}));
+
+// The run button fetches this player's games before comparing them, so the
+// player-sync transport is part of this card's behaviour now.
+vi.mock("@/lib/core/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/core/api")>()),
+  validatedGet,
+  validatedPost,
 }));
 
 vi.mock("sonner", () => ({ toast }));
@@ -195,11 +210,46 @@ function runButton() {
   return screen.getByRole("button", { name: /Run the comparison/ });
 }
 
+const RUN_TIMESTAMPS = {
+  created_at: "2026-08-24T10:00:00Z",
+  updated_at: "2026-08-24T10:00:00Z",
+};
+
+function syncRun(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 1,
+    puuid: "test-puuid",
+    status: "completed",
+    ...RUN_TIMESTAMPS,
+    ...overrides,
+  };
+}
+
+/**
+ * Answer the player-sync transport as the backend would for a player with no
+ * update in flight: nothing active, and any run this card starts finishes.
+ */
+function noActiveSync(run: ReturnType<typeof syncRun> = syncRun()) {
+  validatedGet.mockImplementation(async (_schema: unknown, path: string) => {
+    if (path.endsWith("/sync/active")) {
+      return { success: true, data: null };
+    }
+    return { success: true, data: run };
+  });
+  validatedPost.mockResolvedValue({
+    success: true,
+    data: syncRun({ status: "pending" }),
+  });
+}
+
 describe("SmurfBoostDetection", () => {
   beforeEach(() => {
     getLatestSmurfBoostDetection.mockReset();
     startSmurfBoostDetection.mockReset();
+    validatedGet.mockReset();
+    validatedPost.mockReset();
     Object.values(toast).forEach((mock) => mock.mockReset());
+    noActiveSync();
   });
 
   it("shows both families with their own band and never a number", async () => {
@@ -648,6 +698,378 @@ describe("SmurfBoostDetection", () => {
     expect(runButton().hasAttribute("disabled")).toBe(true);
     expect(screen.getByLabelText("Choose player for comparison")).toBeTruthy();
     expect(getLatestSmurfBoostDetection).not.toHaveBeenCalled();
+    // `/players//sync/active` is a 404 the global query-error toast would
+    // report on every mount of the empty state.
+    expect(validatedGet).not.toHaveBeenCalled();
+  });
+
+  it("fetches this player's games before comparing them", async () => {
+    getLatestSmurfBoostDetection.mockResolvedValue({
+      success: false,
+      error: { message: "Not found", kind: "not-found", status: 404 },
+    });
+    startSmurfBoostDetection.mockResolvedValue({
+      success: true,
+      data: analysis(),
+    });
+    const user = userEvent.setup();
+    renderCard();
+
+    await waitFor(() => expect(runButton()).toBeTruthy());
+    await user.click(runButton());
+
+    // The point of the change: the comparison reads games fetched now, not
+    // whatever the scheduled Match Fetcher last happened to store.
+    await waitFor(() => expect(validatedPost).toHaveBeenCalled());
+    expect(validatedPost).toHaveBeenCalledWith(
+      expect.anything(),
+      "/players/test-puuid/sync",
+    );
+    await waitFor(() => expect(startSmurfBoostDetection).toHaveBeenCalled());
+    // Before, not merely also: two calls in either order would satisfy a bare
+    // "both happened" assertion, and comparing in parallel with the fetch is
+    // exactly the stale reading this change exists to stop.
+    expect(validatedPost.mock.invocationCallOrder[0]).toBeLessThan(
+      startSmurfBoostDetection.mock.invocationCallOrder[0]!,
+    );
+    // `quiet`: the card says "Fetching games..." on its own button, so the
+    // hook's own started/finished pair would be a second copy of it.
+    expect(toast.info).not.toHaveBeenCalled();
+  });
+
+  it("compares on stored games when the fetch is refused outright", async () => {
+    // A 404 for a player the backend has not persisted, or the router's own
+    // 10/minute limit. No run exists, so nothing will ever poll terminal --
+    // the refused start is the only place the comparison can be released.
+    getLatestSmurfBoostDetection.mockResolvedValue({
+      success: false,
+      error: { message: "Not found", kind: "not-found", status: 404 },
+    });
+    startSmurfBoostDetection.mockResolvedValue({
+      success: true,
+      data: analysis(),
+    });
+    validatedPost.mockResolvedValue({
+      success: false,
+      error: { message: "Player not found", kind: "not-found", status: 404 },
+    });
+    const user = userEvent.setup();
+    renderCard();
+
+    await waitFor(() => expect(runButton()).toBeTruthy());
+    await user.click(runButton());
+
+    await waitFor(() =>
+      expect(screen.getByText("Notable indicators")).toBeTruthy(),
+    );
+    // A start that never happened has no run to quote, so the card falls back
+    // to its own sentence -- but it still says the games are not fresh.
+    expect(
+      screen.getByText(/newest games could not be fetched/),
+    ).toBeTruthy();
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it("compares on stored games when the fetch does not finish", async () => {
+    // A busy or rate-limited update is a reason to compare what is stored,
+    // not to leave the click that asked for a comparison with nothing.
+    getLatestSmurfBoostDetection.mockResolvedValue({
+      success: false,
+      error: { message: "Not found", kind: "not-found", status: 404 },
+    });
+    startSmurfBoostDetection.mockResolvedValue({
+      success: true,
+      data: analysis(),
+    });
+    noActiveSync(
+      syncRun({
+        status: "rate_limited",
+        error_code: "RIOT_RATE_LIMITED",
+        error_message: "The update reached Riot's rate limit.",
+      }),
+    );
+    const user = userEvent.setup();
+    renderCard();
+
+    await waitFor(() => expect(runButton()).toBeTruthy());
+    await user.click(runButton());
+
+    await waitFor(() =>
+      expect(screen.getByText("Notable indicators")).toBeTruthy(),
+    );
+    expect(validatedPost).toHaveBeenCalled();
+    // The hook's own warning for this run stays silent: two accounts of one
+    // click contradict each other, and its wording is written for the Player
+    // Card. This card's inline notice is the account that survives.
+    expect(toast.warning).not.toHaveBeenCalled();
+    // Inline, not a toast that disappears: without it this reads exactly like
+    // a run on games fetched a second ago. In the backend's own words, too --
+    // a sentence of our own would promise a retry that a stale player id or
+    // an expired key cannot honour.
+    expect(
+      screen.getByText(/The update reached Riot's rate limit\./),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(/Only the games already stored are available/),
+    ).toBeTruthy();
+  });
+
+  it("reports a fetch that failed even when nobody here started it", async () => {
+    // The card renders an adopted update and tells the viewer to run the
+    // comparison once it finishes. Saying nothing when it fails leaves them
+    // clicking Run believing they are reading freshly fetched history.
+    getLatestSmurfBoostDetection.mockResolvedValue({
+      success: true,
+      data: analysis(),
+    });
+    validatedGet.mockImplementation(async (_schema: unknown, path: string) => {
+      if (path.endsWith("/sync/active")) {
+        return { success: true, data: syncRun({ id: 42, status: "running" }) };
+      }
+      return {
+        success: true,
+        data: syncRun({
+          id: 42,
+          status: "failed",
+          error_code: "SYNC_BUSY",
+          error_message: "Another data update is already running.",
+        }),
+      };
+    });
+    renderCard();
+
+    // No promise of a comparison for an update this card did not start.
+    await waitFor(() =>
+      expect(
+        screen.getByText(/Run the comparison once it has finished/),
+      ).toBeTruthy(),
+    );
+    await waitFor(() =>
+      expect(
+        screen.getByText(/Another data update is already running\./),
+      ).toBeTruthy(),
+    );
+    // Reported, but still not compared -- nobody asked this card for one.
+    expect(startSmurfBoostDetection).not.toHaveBeenCalled();
+  });
+
+  it("compares on stored games when the run can no longer be read", async () => {
+    // The poll stops on error -- its interval reads data that never arrived --
+    // so no terminal status will ever land. A click gated on that callback
+    // would leave the button spinning on a comparison that never runs.
+    getLatestSmurfBoostDetection.mockResolvedValue({
+      success: false,
+      error: { message: "Not found", kind: "not-found", status: 404 },
+    });
+    startSmurfBoostDetection.mockResolvedValue({
+      success: true,
+      data: analysis(),
+    });
+    validatedGet.mockImplementation(async (_schema: unknown, path: string) => {
+      if (path.endsWith("/sync/active")) {
+        return { success: true, data: null };
+      }
+      throw new Error("the run could not be read");
+    });
+    validatedPost.mockResolvedValue({
+      success: true,
+      data: syncRun({ status: "pending" }),
+    });
+    const user = userEvent.setup();
+    renderCard();
+
+    await waitFor(() => expect(runButton()).toBeTruthy());
+    await user.click(runButton());
+
+    await waitFor(() =>
+      expect(screen.getByText("Notable indicators")).toBeTruthy(),
+    );
+  });
+
+  it("runs no comparison for an update started somewhere else", async () => {
+    // The sync hook adopts whatever run is already in flight for the player
+    // -- the Player Card's own Update button starts one. Comparing on the
+    // back of that would announce a result for a click nobody made.
+    getLatestSmurfBoostDetection.mockResolvedValue({
+      success: true,
+      data: analysis(),
+    });
+    validatedGet.mockImplementation(async (_schema: unknown, path: string) => {
+      if (path.endsWith("/sync/active")) {
+        return { success: true, data: syncRun({ id: 42, status: "running" }) };
+      }
+      // The adopted run is already over by the time the card reads it, so the
+      // hook's terminal handling -- and its `onSettled` -- runs at once.
+      return { success: true, data: syncRun({ id: 42, status: "completed" }) };
+    });
+    renderCard();
+
+    // Adoption happened: the card is watching a run it never started.
+    await waitFor(() =>
+      expect(
+        validatedGet.mock.calls.some(
+          (call) => String(call[1]) === "/players/test-puuid/sync/42",
+        ),
+      ).toBe(true),
+    );
+    await waitFor(() => expect(runButton()).toBeTruthy());
+    // The comparison would fire from behind four awaits in the hook's
+    // completion handling, all of them after the render that re-enables the
+    // button -- so the button alone is too early an anchor for a negative.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(validatedPost).not.toHaveBeenCalled();
+    expect(startSmurfBoostDetection).not.toHaveBeenCalled();
+  });
+
+  it("can be run a second time without a reload", async () => {
+    // The owed comparison has one path back to false. Lose it and the button
+    // stays disabled on "Comparing games..." for the life of the mount --
+    // which no test saw, because every other one runs the comparison once.
+    getLatestSmurfBoostDetection.mockResolvedValue({
+      success: true,
+      data: analysis(),
+    });
+    startSmurfBoostDetection.mockResolvedValue({
+      success: true,
+      data: analysis(),
+    });
+    // A fresh run id per start: the hook handles each terminal run once, so
+    // repeating an id would deadlock this on the mock rather than on the card.
+    let startedRuns = 0;
+    validatedGet.mockImplementation(async (_schema: unknown, path: string) => {
+      if (path.endsWith("/sync/active")) {
+        return { success: true, data: null };
+      }
+      return { success: true, data: syncRun({ id: startedRuns }) };
+    });
+    validatedPost.mockImplementation(async () => {
+      startedRuns += 1;
+      return {
+        success: true,
+        data: syncRun({ id: startedRuns, status: "pending" }),
+      };
+    });
+    const user = userEvent.setup();
+    renderCard();
+
+    await waitFor(() => expect(runButton()).toBeTruthy());
+    await user.click(runButton());
+    await waitFor(() =>
+      expect(startSmurfBoostDetection).toHaveBeenCalledTimes(1),
+    );
+
+    await waitFor(() => expect(runButton().hasAttribute("disabled")).toBe(false));
+    await user.click(runButton());
+    await waitFor(() =>
+      expect(startSmurfBoostDetection).toHaveBeenCalledTimes(2),
+    );
+    expect(validatedPost).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps the button shut until the comparison it owes has started", async () => {
+    // The hook reports the run finished and only then awaits its cache
+    // refresh before calling back. A click landing in that gap would be
+    // answered by the *previous* fetch's callback, and its own fetch would
+    // never be compared at all.
+    let releaseRefetch = () => {};
+    getLatestSmurfBoostDetection
+      .mockResolvedValueOnce({
+        success: false,
+        error: { message: "Not found", kind: "not-found", status: 404 },
+      })
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            releaseRefetch = () =>
+              resolve({ success: true, data: analysis() });
+          }),
+      );
+    startSmurfBoostDetection.mockResolvedValue({
+      success: true,
+      data: analysis(),
+    });
+    const user = userEvent.setup();
+    renderCard();
+
+    await waitFor(() => expect(runButton()).toBeTruthy());
+    await user.click(runButton());
+
+    // The run is terminal -- the fetch is over -- but the refresh behind it
+    // has not returned, so the callback that runs the comparison has not
+    // fired yet.
+    await waitFor(() =>
+      expect(getLatestSmurfBoostDetection).toHaveBeenCalledTimes(2),
+    );
+    const busy = screen.getByRole("button", { name: /Comparing games/ });
+    expect(busy.hasAttribute("disabled")).toBe(true);
+
+    releaseRefetch();
+    await waitFor(() => expect(startSmurfBoostDetection).toHaveBeenCalled());
+  });
+
+  describe("the shortfall the fetching alert quotes", () => {
+    /** The run card alone -- the result card says the same sentence. */
+    function runCard() {
+      return within(document.querySelector("#smurf-boost-run") as HTMLElement);
+    }
+
+    /** Click Run and hold the fetch open, so the alert stays on screen. */
+    async function fetchInProgress(latest: Record<string, unknown>) {
+      getLatestSmurfBoostDetection.mockResolvedValue({
+        success: true,
+        data: latest,
+      });
+      noActiveSync(syncRun({ status: "running" }));
+      const user = userEvent.setup();
+      renderCard();
+
+      await waitFor(() => expect(runButton()).toBeTruthy());
+      await user.click(runButton());
+      await waitFor(() =>
+        expect(
+          screen.getByText(/Fetching this player's games from Riot/),
+        ).toBeTruthy(),
+      );
+      // A fetch this card started: the alert may promise the comparison that
+      // follows it. The adopted-run test pins the other branch.
+      expect(
+        screen.getByText(/comparison runs on its own as soon as the fetch/),
+      ).toBeTruthy();
+    }
+
+    it("names it when the stored history is genuinely short", async () => {
+      await fetchInProgress(shortHistory());
+
+      expect(
+        runCard().getByText(/27 eligible ranked solo\/duo games stored/),
+      ).toBeTruthy();
+      expect(runCard().getByText(/8 more than are stored/)).toBeTruthy();
+    });
+
+    it("says nothing when the history already covers both windows", async () => {
+      // 629 games against a 35-game requirement. Quoted anyway it reads as a
+      // warning about a floor the player cleared 594 games ago.
+      await fetchInProgress(analysis());
+
+      expect(runCard().queryByText(/eligible ranked solo\/duo/)).toBeNull();
+    });
+
+    it("quotes no count from a run that failed", async () => {
+      // A failed run writes no eligible-game total, so the column reads 0 --
+      // and "this player has 0 games stored" is simply false for a player
+      // with a full history.
+      await fetchInProgress(
+        analysis({
+          status: "failed",
+          eligible_games: 0,
+          results: null,
+          error_message: "The comparison did not finish.",
+          completed_at: null,
+        }),
+      );
+
+      expect(runCard().queryByText(/eligible ranked solo\/duo/)).toBeNull();
+    });
   });
 
   it("marks a result as outdated once newer games exist", async () => {

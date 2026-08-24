@@ -27,15 +27,16 @@ function MatchmakingAnalysisContent() {
     selectAnalyzedPlayer,
   } = useAnalyzedPlayer();
 
+  const analyzedPlayerLabel = analyzedPlayer ? formatRiotId(analyzedPlayer) : "";
   const selector = (
     <PlayerSelector
       id="matchmaking-player-search"
       ariaLabel="Choose player for analysis"
       placeholder="Search for player"
       onPlayerSelected={selectAnalyzedPlayer}
+      initialSearchValue={analyzedPlayerLabel}
     />
   );
-  const analyzedPlayerLabel = analyzedPlayer ? formatRiotId(analyzedPlayer) : "";
 
   return (
     <>

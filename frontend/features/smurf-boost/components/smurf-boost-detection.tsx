@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertCircle, Loader2, PlayCircle, Search } from "lucide-react";
+import { AlertCircle, Download, Loader2, PlayCircle, Search } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -12,6 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { startSmurfBoostDetection } from "../smurf-boost-api";
 import { apiErrorMessage } from "@/lib/core/api-error";
 import { UpdatedStamp } from "@/features/profile";
+import { usePlayerSyncRun } from "@/features/players";
 import { useToast } from "@/lib/core/hooks";
 import type { SmurfBoostAnalysisResponse } from "@/lib/core/schemas";
 
@@ -19,7 +20,7 @@ import {
   smurfBoostQueryKey,
   smurfBoostQueryOptions,
 } from "../smurf-boost-query";
-import { MINIMUM_BASELINE_GAMES } from "../smurf-boost-settings";
+import { gameShortfall } from "../smurf-boost-settings";
 import { SmurfBoostResultCard } from "./smurf-boost-result-card";
 import { SmurfBoostSettingsDialog } from "./smurf-boost-settings-card";
 
@@ -183,12 +184,83 @@ export function SmurfBoostDetection({
     });
   };
 
+  // A comparison this card still owes for a fetch it asked for itself.
+  //
+  // The hook adopts whatever update is already in flight for the player --
+  // one started from the Player Card, or by another viewer -- so without this
+  // the card would compare on the back of somebody else's update and announce
+  // a result for a click that never happened.
+  //
+  // State rather than a ref, because it also has to disable the button: the
+  // hook reports the run as finished and only then awaits its cache refresh
+  // before calling back, and a click landing in that gap would be answered by
+  // the *previous* fetch's callback and its own fetch never compared.
+  //
+  // It lives only as long as the mount, so a reload mid-fetch drops the
+  // pending comparison -- the fetch still lands, and clicking again compares
+  // it. Persisting the intent across a reload buys too little for what it
+  // would cost.
+  const [comparisonOwed, setComparisonOwed] = useState(false);
+  // Why a fetch did not finish, in the backend's own reviewed words. Without
+  // it the card looks identical to a fully fresh run; with a sentence of our
+  // own it would promise a retry that a stale player id or an expired key
+  // cannot honour.
+  const [staleFetch, setStaleFetch] = useState<string | null>(null);
+  // The click fetches this player's games from Riot before comparing them, so
+  // a player the scheduled Match Fetcher has not reached yet is compared on
+  // what Riot holds now instead of on whatever happened to be stored.
+  const { isUpdating: isFetchingGames, startSync } = usePlayerSyncRun(
+    puuid ?? "",
+    {
+      // Everything about the fetch is on this card already -- the button, the
+      // alert below it, and the stale-fetch notice. The hook's own wording is
+      // written for the Player Card and would contradict it here.
+      quiet: true,
+      onSettled: (run) => {
+        // Reported before the gate, not after it: this card renders the fetch
+        // whoever started it, having just told the viewer to run the
+        // comparison once it finished. Staying silent when that fetch failed
+        // would leave them comparing stored games believing otherwise.
+        setStaleFetch(
+          run?.status === "completed"
+            ? null
+            : (run?.error_message ??
+                "This player's newest games could not be fetched."),
+        );
+        if (!comparisonOwed) {
+          return;
+        }
+        setComparisonOwed(false);
+        if (puuid) runComparison(puuid);
+      },
+    },
+  );
+
   if (isLoading) {
     return <RunCardSkeleton />;
   }
 
   const running = runMutation.isPending || isActive(latest ?? null);
   const results = latest?.status === "completed" ? latest.results : null;
+  // As of the last run, which is the only count anything has measured: no
+  // eligible-game total exists for a player who has never been compared, and
+  // the comparison that follows this fetch reports the corrected figure
+  // itself. A failed run stores none either -- the column defaults to zero,
+  // which would read as a player with no games at all.
+  const shortfallReading =
+    latest && latest.status === "completed"
+      ? gameShortfall(
+          latest.eligible_games,
+          latest.thresholds,
+          results?.recent_games ?? 0,
+        )
+      : null;
+  // Only when something is actually lacking: quoted at a player whose history
+  // clears both windows, a requirements notice reads as a warning.
+  const shortfall =
+    shortfallReading && shortfallReading.missing > 0
+      ? shortfallReading.sentence
+      : null;
   const storedFailure =
     latest && latest.status === "failed"
       ? (latest.error_message ??
@@ -231,9 +303,10 @@ export function SmurfBoostDetection({
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Compare recent games with earlier games. This reads only ranked
-              solo/duo games already stored for this player. It contacts no
-              external service, so it finishes in one step.
+              Compare recent games with earlier games, using ranked solo/duo
+              games only. Running it fetches this player&apos;s newest games
+              from Riot first, so the comparison reads current history rather
+              than waiting for the next scheduled update.
             </p>
 
             {playerSelector}
@@ -255,6 +328,27 @@ export function SmurfBoostDetection({
               </Alert>
             )}
 
+            {isFetchingGames && (
+              <Alert>
+                <Download className="h-4 w-4 animate-pulse" />
+                <AlertDescription className="space-y-1">
+                  <p>
+                    Fetching this player&apos;s games from Riot.{" "}
+                    {/* An update started elsewhere -- the Player Card's own
+                        button -- shows here too, and promising a comparison
+                        for it would be a promise this card never keeps. */}
+                    {comparisonOwed
+                      ? "The comparison runs on its own as soon as the fetch finishes."
+                      : "Run the comparison once it has finished to read the new games."}{" "}
+                    How long that takes depends on how many games are missing
+                    and on Riot&apos;s rate limit, so there is no honest
+                    estimate to show.
+                  </p>
+                  {shortfall && <p>{shortfall}</p>}
+                </AlertDescription>
+              </Alert>
+            )}
+
             {isActive(latest ?? null) && (
               <Alert>
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -265,15 +359,33 @@ export function SmurfBoostDetection({
               </Alert>
             )}
 
+            {staleFetch && !isFetchingGames && (
+              <Alert>
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  {staleFetch} Only the games already stored are available to
+                  compare.
+                </AlertDescription>
+              </Alert>
+            )}
+
             <Button
               className="button-full"
-              onClick={() => puuid && runComparison(puuid)}
-              disabled={running || !puuid}
+              onClick={() => {
+                if (!puuid) {
+                  return;
+                }
+                setComparisonOwed(true);
+                startSync();
+              }}
+              disabled={
+                isFetchingGames || comparisonOwed || running || !puuid
+              }
             >
-              {running ? (
+              {isFetchingGames || comparisonOwed || running ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Comparing games...
+                  {isFetchingGames ? "Fetching games..." : "Comparing games..."}
                 </>
               ) : (
                 <>
@@ -291,7 +403,6 @@ export function SmurfBoostDetection({
           results={results}
           playerName={playerName}
           thresholds={latest.thresholds}
-          minimumBaselineGames={MINIMUM_BASELINE_GAMES}
         />
       )}
     </div>

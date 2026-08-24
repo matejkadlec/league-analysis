@@ -63,3 +63,7 @@ Measure before believing an entry in this file, including one you wrote
 yourself. Two of the three above were written confidently and were wrong about
 either the finding or its cause, and in both cases a single measurement — the
 computed opacity, the rendered height — was enough to tell.
+
+- 2026-08-24 frontend/app/rank-manipulation/page.tsx: `key={analyzedPlayer?.puuid ?? "no-player"}` on the detection card is load-bearing (the player search only keeps the chosen name because the card remounts) but deleting it passes both suites. Only reachable for an account with no current player, which no harness sets up. Same for `initialSearchValue` on frontend/app/matchmaking-analysis/page.tsx, which has no page-level test at all.
+
+- 2026-08-24 frontend/e2e/support/smurf-boost-harness.ts: the harness 404s `/players/{puuid}/league` and the three `/matches/player/{puuid}/*-stats` routes, which the first detection spec hits because it starts on `/player-overview` before navigating. Each 404 raises a global "Could not load this data" toast that can sit beside whatever a later step asserts — the same class of flake that broke CI on PR #216 via the unmocked `/settings/service-status` poll. Mock the four, or route the spec so it never loads that page.

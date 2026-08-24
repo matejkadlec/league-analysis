@@ -33,12 +33,13 @@ const player = {
   updated_at: "2026-08-13T00:00:00Z",
 };
 
-function renderSelector(onPlayerSelected = vi.fn()) {
+function renderSelector(onPlayerSelected = vi.fn(), initialSearchValue = "") {
   renderWithQueryClient(
     <PlayerSelector
       id="test-player-selector"
       ariaLabel="Choose test player"
       onPlayerSelected={onPlayerSelected}
+      initialSearchValue={initialSearchValue}
     />,
   );
   return onPlayerSelected;
@@ -52,6 +53,71 @@ describe("PlayerSelector", () => {
   });
 
 
+  it("lets a seeded box be typed over rather than appended to", async () => {
+    // The box keeps the chosen player's name and offers no clear button, so
+    // without selecting the text on focus the next search reads
+    // "Selected#TAGnewname" and matches nothing.
+    const user = userEvent.setup();
+    renderSelector(vi.fn(), "Selected#TAG");
+
+    const box = screen.getByLabelText("Choose test player");
+    await user.click(box);
+    await user.keyboard("Other#TWO");
+
+    expect((box as HTMLInputElement).value).toBe("Other#TWO");
+  });
+
+  it("does not read Enter on a seeded box as an unknown Riot ID", async () => {
+    // The seeded value parses as a Riot ID, and its suggestions request only
+    // starts on focus -- so Enter pressed straight away used to open the
+    // "which server?" dialog for the player already selected.
+    searchPlayerSuggestions.mockResolvedValue({ success: true, data: [] });
+    const user = userEvent.setup();
+    renderSelector(vi.fn(), "Selected#TAG");
+
+    const box = screen.getByLabelText("Choose test player");
+    await user.click(box);
+    await user.keyboard("{Enter}");
+
+    expect(discoverPlayer).not.toHaveBeenCalled();
+    expect(screen.queryByText(/server/i)).toBeNull();
+  });
+
+  it("leaves an unseeded box's half-typed query alone on refocus", async () => {
+    // The sidebar switcher is never seeded. Selecting its text on focus would
+    // arm the next keystroke to wipe a query the user is still building.
+    searchPlayerSuggestions.mockResolvedValue({ success: true, data: [] });
+    const user = userEvent.setup();
+    renderSelector();
+
+    const box = screen.getByLabelText("Choose test player");
+    await user.click(box);
+    await user.keyboard("Sear");
+    await user.tab();
+    await user.click(box);
+    await user.keyboard("ch");
+
+    expect((box as HTMLInputElement).value).toBe("Search");
+  });
+
+  it("still reaches discovery for a name typed over a seeded box", async () => {
+    // The other half of the Enter guard. It has to refuse only the value the
+    // box was seeded with -- narrow it any further and adding an untracked
+    // player, the whole point of the discover path, stops working.
+    searchPlayerSuggestions.mockResolvedValue({ success: true, data: [] });
+    const user = userEvent.setup();
+    renderSelector(vi.fn(), "Selected#TAG");
+
+    const box = screen.getByLabelText("Choose test player");
+    await user.click(box);
+    await user.keyboard("Target#NEW");
+    await user.keyboard("{Enter}");
+
+    expect(
+      await screen.findByRole("button", { name: /Select player/ }),
+    ).toBeTruthy();
+  });
+
   it("stops typing at what the suggestions query accepts", () => {
     // Past `q`'s bound the query 422s and the shared QueryCache toasts an
     // error, which is a worse answer to a long paste than no results.
@@ -61,6 +127,61 @@ describe("PlayerSelector", () => {
       (screen.getByLabelText("Choose test player") as HTMLInputElement)
         .maxLength,
     ).toBe(RIOT_ID_SEARCH_MAX_LENGTH);
+  });
+
+  it("keeps the chosen player in a box that was seeded with one", async () => {
+    // Rank Manipulation and Matchmaking Analysis analyse the player named in
+    // the box, so emptying it on selection leaves the page describing a
+    // result whose subject is nowhere on screen. A box nobody seeded -- the
+    // sidebar switcher, which switches away from what it finds -- still
+    // clears.
+    searchPlayerSuggestions.mockResolvedValue({ success: true, data: [player] });
+    renderSelector(vi.fn(), "Previous#ONE");
+    const user = userEvent.setup();
+
+    const box = screen.getByLabelText("Choose test player");
+    expect((box as HTMLInputElement).value).toBe("Previous#ONE");
+
+    await user.clear(box);
+    await user.type(box, "Selected");
+    await user.click(
+      await screen.findByRole("option", { name: "Selected#TAG (EUW)" }),
+    );
+
+    await waitFor(() =>
+      expect((box as HTMLInputElement).value).toBe("Selected#TAG"),
+    );
+  });
+
+  it("empties an unseeded box on selection", async () => {
+    searchPlayerSuggestions.mockResolvedValue({ success: true, data: [player] });
+    renderSelector();
+    const user = userEvent.setup();
+
+    const box = screen.getByLabelText("Choose test player");
+    await user.type(box, "Selected");
+    await user.click(
+      await screen.findByRole("option", { name: "Selected#TAG (EUW)" }),
+    );
+
+    await waitFor(() => expect((box as HTMLInputElement).value).toBe(""));
+  });
+
+  it("asks for no suggestions until the box has focus", async () => {
+    // A seeded box holds a Riot ID from its first render, and the list it
+    // would populate only renders while the box is focused -- so an ungated
+    // query spends a request per mount on results nothing can show.
+    searchPlayerSuggestions.mockResolvedValue({ success: true, data: [player] });
+    renderSelector(vi.fn(), "Previous#ONE");
+    const user = userEvent.setup();
+
+    // Past the 250ms search debounce: before it elapses an ungated query has
+    // not fired either, so an immediate assertion would pass either way.
+    await new Promise((resolve) => setTimeout(resolve, 350));
+    expect(searchPlayerSuggestions).not.toHaveBeenCalled();
+
+    await user.click(screen.getByLabelText("Choose test player"));
+    await waitFor(() => expect(searchPlayerSuggestions).toHaveBeenCalled());
   });
 
   it("selects a saved suggestion through the shared non-tracking contract", async () => {
