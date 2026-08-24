@@ -63,3 +63,5 @@ Measure before believing an entry in this file, including one you wrote
 yourself. Two of the three above were written confidently and were wrong about
 either the finding or its cause, and in both cases a single measurement — the
 computed opacity, the rendered height — was enough to tell.
+
+- 2026-08-24 frontend/app/rank-manipulation/page.tsx: `key={analyzedPlayer?.puuid ?? "no-player"}` on the detection card is load-bearing (the player search only keeps the chosen name because the card remounts) but deleting it passes both suites. Only reachable for an account with no current player, which no harness sets up. Same for `initialSearchValue` on frontend/app/matchmaking-analysis/page.tsx, which has no page-level test at all.
