@@ -172,9 +172,8 @@ PLATFORM_REGIONS: Final[dict[Platform, Region]] = {
 
 def get_region_by_platform(platform: Platform | str) -> Region:
     """Map a supported platform to its regional route or fail closed."""
-    p = platform.value if isinstance(platform, Platform) else platform.lower()
     try:
-        return PLATFORM_REGIONS[Platform(p)]
+        return PLATFORM_REGIONS[Platform(normalize_platform(platform))]
     except ValueError:
         raise ValueError(f"Unsupported Riot platform: {platform}") from None
 
