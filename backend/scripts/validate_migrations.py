@@ -633,6 +633,51 @@ def validate_revision_0030_owns_every_analysis(database: str) -> None:
         engine.dispose()
 
 
+def validate_revision_0031_dropped_the_legacy_queue_ids(database: str) -> None:
+    """Assert no job configuration still carries `enabled_queue_ids`.
+
+    pytest cannot reach this: the suite has no database, and the key's only
+    remaining source is the seed in the initial schema, which this database
+    has just replayed. So the fixture is free -- upgrading to head writes the
+    key at 0001 and revision 0031 has to have taken it off again by the time
+    the run finishes. Production carried the same row (mirror, 2026-08-24).
+
+    Worth checking rather than assuming: the strip is a `-` operator against
+    `jsonb`, and run against a `json` column or a NULL it silently does
+    nothing at all.
+    """
+    url = administration_url().set(database=database)
+    engine = create_engine(url)
+    try:
+        with engine.connect() as connection:
+            left = connection.execute(
+                text(
+                    "SELECT count(*) FROM jobs.job_configurations "
+                    "WHERE config_json ? 'enabled_queue_ids'"
+                )
+            ).scalar_one()
+            if left:
+                raise RuntimeError(
+                    f"revision 0031 left enabled_queue_ids on {left} "
+                    "job configuration(s)"
+                )
+
+            # The seeded row is the one that had it, and it must still be a
+            # Match Fetcher configuration afterwards rather than a casualty.
+            seeded = connection.execute(
+                text(
+                    "SELECT count(*) FROM jobs.job_configurations "
+                    "WHERE job_type = 'MATCH_FETCHER'"
+                )
+            ).scalar_one()
+            if seeded != 1:
+                raise RuntimeError(
+                    f"expected one Match Fetcher configuration, found {seeded}"
+                )
+    finally:
+        engine.dispose()
+
+
 def _python_default_literal(column: object) -> object | None:
     """Render a column's Python-side default, or None when it has none."""
     default = getattr(column, "default", None)
@@ -1029,6 +1074,7 @@ def main() -> int:
         validate_revision_0019_kept_one_bound_key(database)
         validate_revision_0022_retired_the_absent_stand_ins(database)
         validate_revision_0030_owns_every_analysis(database)
+        validate_revision_0031_dropped_the_legacy_queue_ids(database)
         asyncio.run(verify_application_database_access(database))
         asyncio.run(verify_expired_key_turns_health_missing(database))
         with tempfile.TemporaryDirectory(

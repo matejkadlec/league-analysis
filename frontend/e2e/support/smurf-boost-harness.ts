@@ -195,7 +195,7 @@ export interface HarnessState {
    * fetch at all pass, and the slack is explained at the handler.
    */
   syncPolls: number;
-  currentPlayer: typeof player;
+  currentPlayer: typeof player | null;
   thresholds: Record<string, number>;
   isDefaultSettings: boolean;
   written: Record<string, unknown> | null;
@@ -209,13 +209,17 @@ export interface HarnessState {
  */
 export async function installSmurfBoostMocks(
   page: Page,
+  // A fresh account has never chosen a player, and `useAnalyzedPlayer` then
+  // resolves to none: no `?puuid=`, and nothing to seed one from. Optional so
+  // the specs that want the ordinary account do not have to say so.
+  { currentPlayer = player }: { currentPlayer?: typeof player | null } = {},
 ): Promise<HarnessState> {
   const state: HarnessState = {
     analyzeCalls: 0,
     analyzed: [],
     synced: [],
     syncPolls: 0,
-    currentPlayer: player,
+    currentPlayer,
     thresholds: CONSERVATIVE,
     isDefaultSettings: true,
     written: null,
@@ -443,6 +447,37 @@ export async function installSmurfBoostMocks(
           avg_cs: 178.5,
           avg_vision_score: 21.3,
         }),
+      });
+      return;
+    }
+
+    // The three remaining `/player-overview` reads, which the first detection
+    // spec loads on its way to the Rank Manipulation page. Same reason as the
+    // `/stats` mock above: each is otherwise a catch-all 404 raising its own
+    // global error toast beside whatever a later step asserts. The specs assert
+    // nothing about these cards, so empty is the whole requirement -- and
+    // `/league` is nullable by design, an unranked player being a 200 of `null`.
+    if (path.endsWith("/league")) {
+      await route.fulfill({ contentType: "application/json", body: "null" });
+      return;
+    }
+
+    if (path.endsWith("/champion-stats")) {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          puuid: PUUID,
+          total_champions: 0,
+          champions: [],
+        }),
+      });
+      return;
+    }
+
+    if (path.endsWith("/lane-stats")) {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({ puuid: PUUID, total_lanes: 0, lanes: [] }),
       });
       return;
     }

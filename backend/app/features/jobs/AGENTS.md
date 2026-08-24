@@ -51,9 +51,10 @@ changes. Module responsibilities live in the code under this directory.
 - A regular manual trigger may force-stop its active test run before starting.
 - Match Fetcher always processes the complete central product allowlist (420,
   440, 480, 400, 450, 2400). Never reintroduce per-queue configuration.
-  Historical `config_json.enabled_queue_ids` values are ignored at runtime and
-  stripped from API responses/ordinary configuration updates; active state and
-  scheduling remain independent job-level controls.
+  Revision `20260824_0031` removed the last `config_json.enabled_queue_ids`
+  values, so nothing strips the key any more -- a config that holds one again
+  means someone wrote it back. Active state and scheduling remain independent
+  job-level controls.
 - Match Fetcher owns per-match Solo/Duo LP observation. Capture league state
   before match ingestion and after the league refresh, persist a delta only for
   one counter-proven progression match, keep remakes at zero, and leave every

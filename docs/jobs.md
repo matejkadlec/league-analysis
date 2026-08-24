@@ -126,10 +126,11 @@ finish `SUCCESS` without recoverable warnings.
 - Always processes the **full product allowlist** — 420, 440, 480, 400, 450,
   2400 (`PRODUCT_SUPPORTED_QUEUE_IDS`,
   `backend/app/core/riot_api/constants.py`). Per-queue configuration must
-  never return; historical `enabled_queue_ids` values are ignored and stripped
-  by ordinary configuration updates so stale stored values cannot restrict
-  future runs. A newly approved queue is enabled by adding it to that single
-  allowlist.
+  never return. `enabled_queue_ids` was tolerated by a normalizer that popped
+  it out of every response and update; revision `20260824_0031` deleted the
+  last stored values instead, so a config holding one again means
+  something wrote it back rather than that a historical row survived. A newly
+  approved queue is enabled by adding it to that single allowlist.
 - Sleeps 1.2 s between match-detail requests to respect the development-key
   100-requests/2-minutes budget, on top of the client's own
   response-reported window adaptation. Do not change throttling outside an

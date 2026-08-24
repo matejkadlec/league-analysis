@@ -6,10 +6,10 @@ import { describe, expect, it } from "vitest";
  * The parts of Rank Manipulation that a ticket fixed in writing.
  *
  * These are checked as source text rather than through a render because what
- * they pin is a decision, not a behaviour: a size floor that must hold for
- * *every* line rather than the two a browser test happens to sample, copy that
- * was approved word for word, and heading capitalisation that Playwright's
- * `getByRole({ name })` cannot pin because it matches case-insensitively.
+ * they pin is a decision, not a behaviour: copy that was approved word for
+ * word, and heading capitalisation that Playwright's `getByRole({ name })`
+ * cannot pin because it matches case-insensitively. LGA-101's size floor left
+ * for `text-size-floor.test.ts` once a second surface was held to it.
  *
  * The counterpart e2e (`e2e/smurf-boost-detection.spec.ts`) measures the
  * rendered result. Neither replaces the other: this one is exhaustive and
@@ -20,9 +20,8 @@ import { describe, expect, it } from "vitest";
  * Every file that renders part of the page.
  *
  * `player-selector.tsx` is on the list because LGA-100 put it inside the
- * Games Comparison card. It is shared, so a violation there is not local to
- * this page -- which is the point: the size floor is a property of the
- * surface, and the surface now includes the search.
+ * Games Comparison card, and a heading or a stray `text-xs` there lands on
+ * this page like any other.
  */
 const SURFACE_FILES = [
   "app/rank-manipulation/page.tsx",
@@ -51,41 +50,6 @@ describe("the Rank Manipulation surface", () => {
     for (const path of SURFACE_FILES) {
       expect(() => readFileSync(path, "utf8"), path).not.toThrow();
     }
-  });
-
-  it("has no text under 14px left anywhere on it", () => {
-    // LGA-101 exists because small muted copy is hard to read against this
-    // background, and it asks for the whole page rather than the one example
-    // it names. A browser test can only measure the nodes it thinks to
-    // sample; this sees every line, including the ones a shared control
-    // brings with it.
-    //
-    // Banning `text-xs` alone was not enough. It is the only *token* below
-    // 14px -- the scale is Tailwind's default -- but an arbitrary value slips
-    // straight past it, and `text-[0.6875rem]` on the result card's figure
-    // labels did exactly that: 11px, smaller than anything the ticket
-    // complained about, and green here the whole time. So arbitrary sizes are
-    // read and compared rather than pattern-matched away.
-    const offenders: string[] = [];
-
-    for (const path of SURFACE_FILES) {
-      const source = readFileSync(path, "utf8");
-
-      if (/\btext-xs\b/.test(source)) {
-        offenders.push(`${path}: text-xs`);
-      }
-
-      for (const [, value, unit] of source.matchAll(
-        /\btext-\[([\d.]+)(rem|px)\]/g,
-      )) {
-        const pixels = unit === "rem" ? Number(value) * 16 : Number(value);
-        if (pixels < 14) {
-          offenders.push(`${path}: text-[${value}${unit}] is ${pixels}px`);
-        }
-      }
-    }
-
-    expect(offenders).toEqual([]);
   });
 
   it("keeps every heading below the card title that holds it", () => {

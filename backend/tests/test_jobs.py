@@ -42,7 +42,6 @@ from app.features.jobs.models import (
     JobStatus,
     JobType,
 )
-from app.features.jobs.queue_config import normalize_match_fetcher_config
 from app.features.jobs.schemas import (
     JobConfigurationResponse,
     JobConfigurationUpdate,
@@ -349,12 +348,8 @@ def test_api_call_storage_groups_to_one_entry_per_endpoint() -> None:
     assert match_entry["region"] == "europe, americas"
 
 
-def test_match_fetcher_uses_every_canonical_queue_and_strips_legacy_config() -> None:
+def test_match_fetcher_uses_every_canonical_queue() -> None:
     assert list(PRODUCT_SUPPORTED_QUEUE_IDS) == [420, 440, 480, 400, 450, 2400]
-    assert normalize_match_fetcher_config(None) == {}
-    assert normalize_match_fetcher_config(
-        {"enabled_queue_ids": [], "interval_seconds": 3600}
-    ) == {"interval_seconds": 3600}
 
 
 def test_job_response_carries_the_resolved_interval() -> None:
@@ -439,11 +434,11 @@ def test_job_configuration_updates_preserve_an_active_maintenance_interlock() ->
     """The jobs API cannot accidentally restart an emptied local database."""
     assert preserve_riot_writer_maintenance_mode(
         JobType.MATCH_FETCHER,
-        {RIOT_MAINTENANCE_MODE_KEY: True, "enabled_queue_ids": [420]},
-        {"enabled_queue_ids": [440]},
+        {RIOT_MAINTENANCE_MODE_KEY: True, "batch_size": 20},
+        {"batch_size": 40},
     ) == {
         RIOT_MAINTENANCE_MODE_KEY: True,
-        "enabled_queue_ids": [440],
+        "batch_size": 40,
     }
     assert preserve_riot_writer_maintenance_mode(
         JobType.PLAYER_UPDATER,
@@ -453,15 +448,15 @@ def test_job_configuration_updates_preserve_an_active_maintenance_interlock() ->
     assert preserve_riot_writer_maintenance_mode(
         JobType.MATCH_FETCHER,
         {},
-        {"enabled_queue_ids": []},
-    ) == {"enabled_queue_ids": []}
+        {"batch_size": 40},
+    ) == {"batch_size": 40}
 
     with pytest.raises(RiotWriterMaintenanceConfigurationError):
         preserve_riot_writer_maintenance_mode(
             JobType.MATCH_FETCHER,
-            {"enabled_queue_ids": [420]},
+            {"batch_size": 20},
             {
-                "enabled_queue_ids": [420],
+                "batch_size": 20,
                 RIOT_MAINTENANCE_MODE_KEY: True,
             },
         )
@@ -470,11 +465,11 @@ def test_job_configuration_updates_preserve_an_active_maintenance_interlock() ->
 async def test_job_configuration_update_locks_cleanup_tables_before_its_row(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A stale queue field cannot overwrite cleanup's interlock or active state."""
+    """A job-specific field cannot overwrite cleanup's interlock or active state."""
     job = _job_configuration_double(
         id=7,
         job_type=JobType.MATCH_FETCHER,
-        config_json={RIOT_MAINTENANCE_MODE_KEY: True, "enabled_queue_ids": [420]},
+        config_json={RIOT_MAINTENANCE_MODE_KEY: True, "batch_size": 20},
         name="match fetcher",
         # NOT NULL on the real column, and the update path now resolves the
         # interval before committing, so the double needs a real one.
@@ -515,7 +510,7 @@ async def test_job_configuration_update_locks_cleanup_tables_before_its_row(
 
     updated = await service.update_job_configuration(
         7,
-        JobConfigurationUpdate(config_json={"enabled_queue_ids": [440]}),
+        JobConfigurationUpdate(config_json={"batch_size": 40}),
     )
 
     assert str(session.statements[0]) == (
@@ -525,8 +520,11 @@ async def test_job_configuration_update_locks_cleanup_tables_before_its_row(
     assert isinstance(row_statement, Select)
     assert row_statement._for_update_arg is not None
     assert updated is not None
+    # Merged, not replaced: the interlock the update never mentioned is still
+    # on the row beside the field it did.
     assert updated.config_json == {
         RIOT_MAINTENANCE_MODE_KEY: True,
+        "batch_size": 40,
     }
     assert updated.is_active is True
 

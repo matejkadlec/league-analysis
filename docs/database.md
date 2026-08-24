@@ -54,8 +54,9 @@ used.
 
 `PRODUCT_SUPPORTED_QUEUE_IDS` in `backend/app/core/riot_api/constants.py` is
 the single definition of the supported queue set. Match Fetcher queue selection
-is not configurable: historical `enabled_queue_ids` config values are ignored
-and stripped (see [`jobs.md`](jobs.md)).
+is not configurable, and revision `20260824_0031` removed the last stored
+`enabled_queue_ids` values, so nothing normalizes the key away any more (see
+[`jobs.md`](jobs.md)).
 
 ### Versioned user card preferences coexist
 

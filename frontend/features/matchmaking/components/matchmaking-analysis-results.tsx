@@ -139,7 +139,7 @@ export function MatchmakingAnalysisResults({
         </Table>
 
         <div className="space-y-2">
-          <p className="text-xs text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             Based on {matches_analyzed} ranked matches
           </p>
 

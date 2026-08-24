@@ -87,9 +87,10 @@ interface PlayerSelectorProps {
    * rather than switching away from one.
    *
    * Read once, as the initial state: after that the box belongs to whoever is
-   * typing in it. The analysis pages get a fresh value because they key their
-   * card by PUUID, so choosing a player remounts this control -- un-key that
-   * card and the name here goes stale.
+   * typing in it. The analysis pages key their card by PUUID, so choosing a
+   * player remounts this control; what that key is there to protect is the
+   * card's own state, not this box (pinned by the fetch-report case in
+   * `e2e/smurf-boost-detection.spec.ts`).
    */
   initialSearchValue?: string;
 }

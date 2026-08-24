@@ -20,7 +20,6 @@ from .maintenance import (
     preserve_riot_writer_maintenance_mode,
 )
 from .models import ExecutionType, JobConfiguration, JobExecution, JobStatus, JobType
-from .queue_config import normalize_match_fetcher_config
 from .schemas import (
     JobConfigurationResponse,
     JobConfigurationUpdate,
@@ -55,9 +54,6 @@ class JobService:
         # `interval_seconds` resolves inside the schema's own validator, so
         # every construction site -- not just this one -- carries the number.
         response = JobConfigurationResponse.model_validate(job)
-
-        if response.job_type == JobType.MATCH_FETCHER:
-            response.config_json = normalize_match_fetcher_config(response.config_json)
 
         runtime_state = get_runtime_control_snapshot(job.id)
         response.is_running = runtime_state["is_running"]
@@ -160,18 +156,14 @@ class JobService:
                 update_dict.get("config_json"),
             )
 
-        # Per-queue Match Fetcher configuration is obsolete. Merge other
-        # job-specific fields, then strip the legacy key so it cannot restrict
-        # the canonical supported queue set or leak back through the API.
-        if job.job_type == JobType.MATCH_FETCHER and "config_json" in update_dict:
-            merged_config: dict[str, Any] = {
-                **(job.config_json or {}),
-                **incoming_config,
-            }
-            normalized_config = normalize_match_fetcher_config(merged_config)
-            update_dict["config_json"] = normalized_config
-        elif "config_json" in update_dict:
-            update_dict["config_json"] = incoming_config
+        # Merged rather than replaced: an update names the job-specific
+        # fields it changes, and the rest of the row's config has to survive it.
+        if "config_json" in update_dict:
+            update_dict["config_json"] = (
+                {**(job.config_json or {}), **incoming_config}
+                if job.job_type == JobType.MATCH_FETCHER
+                else incoming_config
+            )
 
         update_dict["updated_at"] = datetime.now(UTC)
 
