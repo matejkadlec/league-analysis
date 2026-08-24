@@ -84,9 +84,12 @@ These are product design decisions, not suggestions:
   kinds) are recorded to the developer console by
   `lib/core/api-error-logging.ts` through the shared `QueryCache` and
   `MutationCache` handlers in `components/providers.tsx`; do not add
-  per-caller console calls. The `no-console` ESLint rule bans console usage
-  everywhere except a reviewed allowlist (api validation mismatch, Data
-  Dragon fallback, the error reporter, and dev-gated auth warns).
+  per-caller console calls. The same reporter also posts a scrubbed record
+  to `/client-error-report`, which is what makes those failures visible in
+  `docker logs league-analysis-frontend`. The `no-console` ESLint rule bans
+  console usage everywhere except a reviewed allowlist (api validation
+  mismatch, Data Dragon fallback, the error reporter, server instrumentation,
+  the client-error route, and dev-gated auth warns).
 
 ## Commands
 

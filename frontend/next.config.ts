@@ -3,8 +3,26 @@ import type { NextConfig } from "next";
 const publicApiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const internalApiUrl = process.env.API_INTERNAL_URL || publicApiUrl;
 
+/**
+ * Documents and RSC must not be stored at the edge or in the browser. A
+ * hashed `/_next/static` file can live forever because its name changes when
+ * its contents do; HTML still names those hashes, so a cached document after
+ * a deploy asks for chunks the new origin no longer has.
+ */
+export const DOCUMENT_CACHE_CONTROL =
+  "private, no-cache, no-store, max-age=0, must-revalidate";
+
+/** Content-addressed webpack/turbopack output. The query `?dpl=` from
+ * `deploymentId` still cache-busts when a filename happens to stay the same
+ * across two images (the turbopack runtime did). */
+export const HASHED_STATIC_CACHE_CONTROL =
+  "public, max-age=31536000, immutable";
+
+const deploymentId = process.env.NEXT_DEPLOYMENT_ID;
+
 const nextConfig: NextConfig = {
   output: "standalone",
+  ...(deploymentId ? { deploymentId } : {}),
   experimental: {
     useTypeScriptCli: false,
   },
@@ -16,6 +34,28 @@ const nextConfig: NextConfig = {
         pathname: "/cdn/**",
       },
     ],
+  },
+  async headers() {
+    return [
+      {
+        source: "/",
+        headers: [
+          { key: "Cache-Control", value: DOCUMENT_CACHE_CONTROL },
+        ],
+      },
+      {
+        source: "/:path*",
+        headers: [
+          { key: "Cache-Control", value: DOCUMENT_CACHE_CONTROL },
+        ],
+      },
+      {
+        source: "/_next/static/:path*",
+        headers: [
+          { key: "Cache-Control", value: HASHED_STATIC_CACHE_CONTROL },
+        ],
+      },
+    ];
   },
   async rewrites() {
     return [

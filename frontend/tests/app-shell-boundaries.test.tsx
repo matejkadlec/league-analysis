@@ -2,7 +2,7 @@
 
 import { render, screen } from "@testing-library/react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
  * The four files this branch exists for, and nothing was watching them.
@@ -31,6 +31,17 @@ const thrown = new Error("render failed");
 // test's "Try again" button is still there and the query finds two.
 
 describe("the shells shown when there is no page to show", () => {
+  beforeEach(() => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response(null, { status: 204 })),
+    );
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it("names a 404 and offers the way back, signed out", () => {
     render(<NotFound />);
 

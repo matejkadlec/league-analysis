@@ -1,4 +1,5 @@
 import type { ApiError, ApiErrorKind } from "./api-error";
+import { reportClientError } from "./client-error-report";
 
 export interface ApiErrorReportContext {
   source: "query" | "mutation";
@@ -46,5 +47,11 @@ export function reportApiError(
     message: error.message,
     source: context.source,
     ...(context.key !== undefined && { key: context.key }),
+  });
+  reportClientError({
+    kind: "api",
+    message: error.message,
+    source: context.source,
+    ...(error.code !== undefined && { code: error.code }),
   });
 }

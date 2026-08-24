@@ -30,6 +30,8 @@ export default defineConfig({
       // the suite. `blockUpstreamRequests` cannot stop it: the fetch is
       // server-side.
       DDRAGON_VERSION: "16.15.1",
+      // Keep in step with `run_frontend_build` in test.sh.
+      NEXT_DEPLOYMENT_ID: "gate-local",
       HOSTNAME: "127.0.0.1",
       PORT: "3100",
     },

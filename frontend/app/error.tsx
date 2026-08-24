@@ -1,5 +1,9 @@
 "use client";
 
+import { useEffect } from "react";
+
+import { reportClientError } from "@/lib/core/client-error-report";
+
 /**
  * Rendered for signed-out visitors too.
  *
@@ -13,11 +17,20 @@
  * `global-error.tsx`.
  */
 export default function Error({
+  error,
   reset,
 }: {
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  useEffect(() => {
+    reportClientError({
+      kind: "react",
+      message: error.message,
+      source: "boundary",
+    });
+  }, [error]);
+
   return (
     <div className="flex min-h-screen items-center justify-center">
       <div className="text-center">

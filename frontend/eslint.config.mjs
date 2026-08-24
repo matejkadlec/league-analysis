@@ -184,7 +184,10 @@ const eslintConfig = [
       "features/auth/context/auth-context.tsx",
       "lib/core/api-error-logging.ts",
       "lib/core/api.ts",
+      "lib/core/client-error-report.ts",
       "lib/core/data-dragon-version.ts",
+      "instrumentation.ts",
+      "app/client-error-report/route.ts",
     ],
     rules: {
       "no-console": "off",

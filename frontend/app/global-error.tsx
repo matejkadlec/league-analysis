@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect } from "react";
+
 /**
  * The boundary of last resort, above the layout itself.
  *
@@ -15,11 +17,28 @@
  * theme tokens, no stylesheet. The styles here are inline for that reason.
  */
 export default function GlobalError({
+  error,
   reset,
 }: {
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  useEffect(() => {
+    // Inlined: this file replaces the whole document and must not import the
+    // application graph that just threw. `/client-error-report` is the same
+    // beacon `reportClientError` uses.
+    void fetch("/client-error-report", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        kind: "react",
+        message: error.message.slice(0, 240),
+        source: "boundary",
+      }),
+
+    }).catch(() => undefined);
+  }, [error]);
+
   return (
     <html lang="en">
       <body
