@@ -35,7 +35,7 @@ export default function GlobalError({
         message: error.message.slice(0, 240),
         source: "boundary",
       }),
-      keepalive: true,
+
     }).catch(() => undefined);
   }, [error]);
 

@@ -8,15 +8,27 @@ import { reportClientError } from "@/lib/core/client-error-report";
  * A missing `/_next/static/chunks/*.js` shows up here as a script `error`
  * with that filename — the 404 itself is not logged by `next start`.
  */
+function isChunkFilename(filename: string | undefined): boolean {
+  return filename !== undefined && filename.includes("/_next/static/chunks/");
+}
+
+function isChunkMessage(message: string): boolean {
+  return (
+    message.includes("Loading chunk") ||
+    message.includes("Failed to fetch dynamically imported module") ||
+    message.includes("ChunkLoadError")
+  );
+}
+
 window.addEventListener("error", (event) => {
   const filename = event.filename || undefined;
-  const kind =
-    filename !== undefined && filename.includes("/_next/static/chunks/")
-      ? "chunk"
-      : "window";
+  const message = event.message || "window error";
+  if (!isChunkFilename(filename) && !isChunkMessage(message)) {
+    return;
+  }
   reportClientError({
-    kind,
-    message: event.message || "window error",
+    kind: "chunk",
+    message,
     source: "window",
     ...(filename !== undefined && { filename }),
   });
@@ -31,8 +43,11 @@ window.addEventListener("unhandledrejection", (event) => {
         ? reason
         : "unhandled rejection";
   const name = reason instanceof Error ? reason.name : "";
+  if (name !== "ChunkLoadError" && !isChunkMessage(message)) {
+    return;
+  }
   reportClientError({
-    kind: name === "ChunkLoadError" ? "chunk" : "unhandled-rejection",
+    kind: "chunk",
     message,
     source: "window",
   });

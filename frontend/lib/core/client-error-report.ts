@@ -51,7 +51,6 @@ export function reportClientError(payload: ClientErrorReport): void {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(parsed.data),
-    keepalive: true,
   }).catch(() => undefined);
 }
 
