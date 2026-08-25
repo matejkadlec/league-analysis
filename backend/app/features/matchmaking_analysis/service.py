@@ -226,8 +226,13 @@ class MatchmakingAnalysisService:
 
     MAX_RATE_LIMIT_ATTEMPTS = 10
 
-    def __init__(self, db: AsyncSession, riot_client: RiotAPIClient, user_id: int):
+    def __init__(
+        self, db: AsyncSession, riot_client: RiotAPIClient | None, user_id: int
+    ):
         self.db = db
+        # None on the request-scoped instance (see `get_matchmaking_service`):
+        # only the background instance, built with its own tracked client,
+        # ever reaches Riot.
         self.riot_client = riot_client
         # The account this service answers for. See the identical note on
         # `SmurfBoostDetectionService`: these were module-level WHERE helpers
@@ -1007,6 +1012,15 @@ class MatchmakingAnalysisService:
         _raise_if_retries_exhausted(required=required)
         return None
 
+    @property
+    def _riot(self) -> RiotAPIClient:
+        """The Riot client, which only the background instance carries."""
+        if self.riot_client is None:
+            raise AuthenticationError(
+                "Riot API calls are not available on the request-scoped service"
+            )
+        return self.riot_client
+
     async def _api_fetch_match_ids(
         self,
         puuid: str,
@@ -1017,7 +1031,7 @@ class MatchmakingAnalysisService:
     ) -> list[str]:
         """Fetch match IDs from Riot API with rate limit handling."""
         match_list = await self._api_call_with_retries(
-            lambda: self.riot_client.get_match_list_by_puuid(
+            lambda: self._riot.get_match_list_by_puuid(
                 puuid=puuid,
                 start=0,
                 count=count,
@@ -1037,7 +1051,7 @@ class MatchmakingAnalysisService:
     ) -> MatchDTO | None:
         """Fetch a single match from API. Returns MatchDTO or None."""
         return await self._api_call_with_retries(
-            lambda: self.riot_client.get_match(match_id),
+            lambda: self._riot.get_match(match_id),
             required=required,
             operation="match fetch",
             match_id=match_id,

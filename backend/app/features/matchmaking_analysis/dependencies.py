@@ -6,8 +6,6 @@ from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.dependencies import get_riot_client
-from app.core.riot_api.client import RiotAPIClient
 from app.features.auth.dependencies import CurrentUserDep
 
 from .service import MatchmakingAnalysisService
@@ -15,7 +13,6 @@ from .service import MatchmakingAnalysisService
 
 async def get_matchmaking_service(
     db: Annotated[AsyncSession, Depends(get_db)],
-    riot_client: Annotated[RiotAPIClient, Depends(get_riot_client)],
     current_user: CurrentUserDep,
 ) -> MatchmakingAnalysisService:
     """Get matchmaking analysis service instance.
@@ -25,8 +22,14 @@ async def get_matchmaking_service(
     by the status and history endpoints. Cancel and delete were reachable
     across accounts as a result. Resolving the owner here fixes every route at
     once and leaves none to be remembered.
+
+    Deliberately built without a Riot client. Every Riot call in this feature
+    happens on the background instance, which opens its own tracked client --
+    while `get_riot_client` refuses the whole request when no key is active.
+    Injected here, that refusal took down the pure DB reads too, so a lapsed
+    key made even *stored* analyses unreadable (2026-08-25 prod outage).
     """
-    return MatchmakingAnalysisService(db, riot_client, current_user.id)
+    return MatchmakingAnalysisService(db, None, current_user.id)
 
 
 # Type alias for cleaner dependency injection

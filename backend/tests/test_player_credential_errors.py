@@ -96,3 +96,27 @@ async def test_riot_lookup_failures_keep_their_own_status(
 
     assert error.value.status_code == expected_status
     assert error.value.detail == expected_detail
+
+
+async def test_missing_key_maps_to_structured_detail(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`get_riot_client` refuses with the structured detail, not a prose string.
+
+    A plain-sentence detail rendered on the frontend as the generic "try again
+    later", which misleads twice: retrying cannot help, and the actual remedy
+    (an administrator adding a key) went unsaid.
+    """
+    from app.core import dependencies
+
+    async def _no_key(*args: object, **kwargs: object) -> object:
+        raise AuthenticationError("No active Riot API key configured")
+
+    monkeypatch.setattr(dependencies, "open_tracked_riot_client", _no_key)
+
+    with pytest.raises(HTTPException) as error:
+        async for _ in dependencies.get_riot_client(db=MagicMock()):
+            pass
+
+    assert error.value.status_code == 503
+    assert error.value.detail == RIOT_API_KEY_INVALID_DETAIL

@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from .database import get_db
 from .riot_api.client import RiotAPIClient
 from .riot_api.constants import Platform, Region
-from .riot_api.errors import AuthenticationError
+from .riot_api.errors import RIOT_API_KEY_INVALID_DETAIL, AuthenticationError
 from .riot_api.scoped_client import open_tracked_riot_client
 
 logger = structlog.get_logger(__name__)
@@ -31,9 +31,14 @@ async def get_riot_client(
             "riot_api_key_not_configured",
             hint="Get your key from https://developer.riotgames.com",
         )
+        # The structured detail, not a prose string: the frontend's
+        # `normalizeApiError` only surfaces a 5xx message it can trust by
+        # code, so a plain sentence here rendered as the generic "try again
+        # later" -- wrong twice over, because retrying cannot help until an
+        # administrator adds a key.
         raise HTTPException(
             status_code=503,
-            detail="Riot data is unavailable because no Riot API key is configured. An administrator can add one on the Settings page.",
+            detail=RIOT_API_KEY_INVALID_DETAIL,
         ) from error
 
     await client.start_session()
