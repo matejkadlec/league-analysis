@@ -57,6 +57,18 @@ export function PlayerContextProvider({
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const persistedUrlPuuidRef = useRef<string | null>(null);
+  // The player an explicit `selectPlayer` call is currently switching to.
+  //
+  // `selectPlayer` persists first and navigates second, so there is a commit
+  // where the context already names the chosen player while the URL still
+  // names the previous one. The persist effect below reads that stale URL as
+  // "a link named somebody else" and PUT the *previous* player straight back
+  // — the dialog choice was silently reverted. (Historically a third PUT
+  // re-corrected it once the URL caught up, which is why the ping-pong went
+  // unnoticed; the untracked gate removed that accidental correction for
+  // untracked players and surfaced the revert.) While this ref names a
+  // player, the effect stands down until the URL catches up to them.
+  const pendingExplicitSelectionRef = useRef<string | null>(null);
   const isPlayerRoute = isPlayerCentricPath(pathname);
   // `?puuid=` with nothing after it is not a selection, it is a malformed
   // link -- `searchParams.get` answers `""` for it, and an empty string is
@@ -138,9 +150,26 @@ export function PlayerContextProvider({
   ]);
 
   useEffect(() => {
+    // Mid explicit switch: the URL is behind the choice, not ahead of it.
+    // Persisting from it here is what reverted the choice. Cleared once the
+    // URL names the chosen player (who is already persisted, so nothing else
+    // to do); until then every URL value is stale by construction.
+    if (pendingExplicitSelectionRef.current !== null) {
+      if (urlPuuid === pendingExplicitSelectionRef.current) {
+        pendingExplicitSelectionRef.current = null;
+      }
+      return;
+    }
     if (
       !urlPuuid ||
       !urlPlayerQuery.data ||
+      // Untracked players are a visit, not a choice: clicking an enemy laner
+      // (or following a shared link to one) must not make a stranger every
+      // page's default until the next explicit switch — they are not in the
+      // sidebar, so there is nowhere to switch back from. `is_tracked` is
+      // per-user, and the schema defaults it to false, so an endpoint that
+      // omits the field fails safe by not persisting.
+      !urlPlayerQuery.data.is_tracked ||
       contextQuery.data?.current_player?.puuid === urlPuuid ||
       persistedUrlPuuidRef.current === urlPuuid
     ) {
@@ -168,7 +197,16 @@ export function PlayerContextProvider({
   // exception.
   const selectPlayer = useCallback(
     async (player: Player) => {
-      await updateCurrentMutation.mutateAsync(player.puuid);
+      pendingExplicitSelectionRef.current = player.puuid;
+      try {
+        await updateCurrentMutation.mutateAsync(player.puuid);
+      } catch (error) {
+        // A failed persist never navigates, so the URL will not catch up and
+        // clear the ref — clear it here or every later link-persist would be
+        // suppressed for the rest of the session.
+        pendingExplicitSelectionRef.current = null;
+        throw error;
+      }
       queryClient.setQueryData(playerQueryKey(player.puuid), player);
       router.push(
         playerRoute(pathname, new URLSearchParams(searchParams), player.puuid),

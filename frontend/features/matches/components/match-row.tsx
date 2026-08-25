@@ -138,9 +138,9 @@ function getMatchOutcome(match: MatchWithPlayerData): {
  *
  * Focus is the caller's job, not this component's: `asChild` hands the trigger
  * to whatever child it is given, and a plain `div` is not focusable, so the
- * icon-only callers pass `tabIndex={0}` and the two button callers need
- * nothing. Where the trigger is an icon and nothing else, the same string is
- * also the image's `alt`, so a screen reader that never opens the tooltip
+ * icon-group callers pass `tabIndex={0}` — one stop per rune or spell group,
+ * not per icon — and the two button callers need nothing. Each icon's name is
+ * also its image's `alt`, so a screen reader that never opens the tooltip
  * still gets the name. The two participant triggers are buttons and do not
  * work that way: their label is the Riot ID, their `alt` is the champion, and
  * their accessible name is the `aria-label` that names both.
@@ -164,31 +164,49 @@ function IconTooltip({
   );
 }
 
-function renderSummonerSpell(
-  spellId: number | null | undefined,
+function renderSummonerSpells(
+  spellIds: (number | null | undefined)[],
   ddragonVersion: string,
 ) {
-  if (!spellId) return <div className="h-5 w-5 bg-muted rounded" />;
-  const url = getSummonerSpellIconUrlById(spellId, ddragonVersion);
-  // Both or neither: art and name come out of the same entry, so an id this
-  // build does not know falls back to the placeholder rather than to an icon
-  // labelled "Summoner spell", which named nothing and read as a real answer.
-  const name = getSummonerSpellName(spellId);
-  if (!url || !name) return <div className="h-5 w-5 bg-muted rounded" />;
-  return (
-    <IconTooltip label={name}>
+  const spells = spellIds.map((spellId) => {
+    if (!spellId) return null;
+    const url = getSummonerSpellIconUrlById(spellId, ddragonVersion);
+    // Both or neither: art and name come out of the same entry, so an id this
+    // build does not know falls back to the placeholder rather than to an icon
+    // labelled "Summoner spell", which named nothing and read as a real answer.
+    const name = getSummonerSpellName(spellId);
+    return url && name ? { url, name } : null;
+  });
+  const icons = spells.map((spell, index) =>
+    spell ? (
       <div
-        tabIndex={0}
+        key={index}
         className="relative rounded-sm h-5 w-5 overflow-hidden shrink-0 border border-black/30"
       >
         <Image
-          src={url}
-          alt={name}
+          src={spell.url}
+          alt={spell.name}
           fill
           sizes="20px"
           className="object-cover"
           unoptimized
         />
+      </div>
+    ) : (
+      <div key={index} className="h-5 w-5 bg-muted rounded" />
+    ),
+  );
+  const names = spells.filter((spell) => spell !== null);
+  // One focus stop and one tooltip for the pair, not one per icon: a page of
+  // rows is tabbed through, and per-icon stops made the tab order mostly
+  // decoration (LGA-91 review). Each icon keeps its own `alt`.
+  if (names.length === 0) {
+    return <div className="flex gap-0.5">{icons}</div>;
+  }
+  return (
+    <IconTooltip label={names.map((spell) => spell.name).join(" — ")}>
+      <div tabIndex={0} className="flex gap-0.5">
+        {icons}
       </div>
     </IconTooltip>
   );
@@ -239,13 +257,12 @@ function renderRunes(
   // The bottom icon really is the secondary tree, and keeps saying so.
   const subLabel = subStyleName || "Secondary rune style";
 
+  // One focus stop and one tooltip for the pair — same reasoning as the
+  // summoner spells: keyboard reachability per row group, not per icon.
   return (
-    <div className="flex flex-col gap-0.5 items-center">
-      <IconTooltip label={primaryLabel}>
-        <div
-          tabIndex={0}
-          className="relative h-7 w-7 rounded-full overflow-hidden shrink-0 mb-1"
-        >
+    <IconTooltip label={`${primaryLabel} — ${subLabel}`}>
+      <div tabIndex={0} className="flex flex-col gap-0.5 items-center">
+        <div className="relative h-7 w-7 rounded-full overflow-hidden shrink-0 mb-1">
           {primaryStyleIconUrl ? (
             <Image
               src={primaryStyleIconUrl}
@@ -259,12 +276,7 @@ function renderRunes(
             <div className="h-full w-full bg-muted" />
           )}
         </div>
-      </IconTooltip>
-      <IconTooltip label={subLabel}>
-        <div
-          tabIndex={0}
-          className="relative h-4 w-4 rounded overflow-hidden shrink-0"
-        >
+        <div className="relative h-4 w-4 rounded overflow-hidden shrink-0">
           {subStyleIconUrl ? (
             <Image
               src={subStyleIconUrl}
@@ -278,8 +290,8 @@ function renderRunes(
             <div className="h-full w-full bg-muted" />
           )}
         </div>
-      </IconTooltip>
-    </div>
+      </div>
+    </IconTooltip>
   );
 }
 
@@ -378,15 +390,13 @@ function renderTeamChampIcon(
   // The tooltip names the player, not the champion: the champion is what the
   // icon already is, while whose game this was appeared nowhere in the row.
   //
-  // The current player's own icon stays a plain div. It cannot switch
-  // anywhere — they are already here — and rendering it as a button would
-  // give it a pointer cursor, a focus stop and a promise none of which lead
-  // anywhere.
+  // The current player's own icon stays a plain div with no focus stop. It
+  // cannot switch anywhere — they are already here — and its tooltip only
+  // names the viewer themselves, which is not worth a tab stop on every row
+  // (the hover tooltip and the champion `alt` remain).
   return isCurrentPlayer ? (
     <IconTooltip key={champ.puuid} label={riotId}>
-      <div tabIndex={0} className={shell}>
-        {icon}
-      </div>
+      <div className={shell}>{icon}</div>
     </IconTooltip>
   ) : (
     <IconTooltip key={champ.puuid} label={riotId}>
@@ -496,10 +506,10 @@ function MatchSideColumn({
           emptyChampionFallback={emptyChampionFallback}
           onSelectPlayer={onSelectPlayer}
         />
-        <div className="flex gap-0.5">
-          {renderSummonerSpell(participant?.summoner1_id, ddragonVersion)}
-          {renderSummonerSpell(participant?.summoner2_id, ddragonVersion)}
-        </div>
+        {renderSummonerSpells(
+          [participant?.summoner1_id, participant?.summoner2_id],
+          ddragonVersion,
+        )}
       </div>
 
       <div className="flex flex-col flex-1 min-w-0">

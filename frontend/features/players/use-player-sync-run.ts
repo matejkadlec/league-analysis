@@ -3,7 +3,12 @@
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { unwrap, validatedGet, validatedPost } from "@/lib/core/api";
+import {
+  normalizeApiError,
+  unwrap,
+  validatedGet,
+  validatedPost,
+} from "@/lib/core/api";
 import { useToast } from "@/lib/core/hooks";
 import { PlayerSyncRun, PlayerSyncRunSchema } from "@/lib/core/schemas";
 
@@ -115,11 +120,21 @@ export function usePlayerProfileUpdate({
         });
       }
     },
-    onError: (_error, { puuid, quiet }) => {
+    onError: (error, { puuid, quiet }) => {
       if (!quiet) {
-        toast.error("Player profile update could not start", {
-          description: "Please try again later.",
-        });
+        const apiError = normalizeApiError(error);
+        if (apiError.code === "SYNC_BUSY") {
+          // A refusal, not a failure: the pipeline is busy with another
+          // update, no run was created, and the backend's sentence names
+          // who is running. The click still lands on stored data.
+          toast.info("Player update not started", {
+            description: apiError.message,
+          });
+        } else {
+          toast.error("Player profile update could not start", {
+            description: "Please try again later.",
+          });
+        }
       }
       onStartRefused?.(puuid);
     },
@@ -245,12 +260,17 @@ export function usePlayerSyncRun(
       if (syncRun.status !== "completed") {
         const rateLimited = syncRun.status === "rate_limited";
         if (!quiet) {
+          // The backend's sentence is the reviewed, client-safe reason
+          // (`_failure_from_job`) — "Another data update is already
+          // running" beats a generic retry prompt that hides why.
           toast[rateLimited ? "warning" : "error"](
             "Player update did not finish",
             {
-              description: rateLimited
-                ? "Riot temporarily limited requests. Please try the update again later."
-                : "Please try the update again later.",
+              description:
+                syncRun.error_message ??
+                (rateLimited
+                  ? "Riot temporarily limited requests. Please try the update again later."
+                  : "Please try the update again later."),
             },
           );
         }
