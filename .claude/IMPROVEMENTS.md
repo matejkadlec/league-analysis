@@ -20,6 +20,11 @@ issue, newest last:
   `frontend/tests/smurf-boost-detection.test.tsx` that pin the silence:
   "quotes no fetch total while the fetch is still running" and "claims no fetch
   total when the stored count could not be re-read".
+- 2026-08-25 frontend (admin service-status banner): "No active Riot API Key
+  found! System cannot function. Please configure it in settings immediately."
+  overstates the outage now that stored-data reads survive a lapsed key —
+  only Riot-fetching actions fail. Soften to name what actually stops working
+  (fetching new data), and drop the exclamation marks.
 
 ## Findings that did not survive measurement
 

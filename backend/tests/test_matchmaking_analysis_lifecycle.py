@@ -301,3 +301,27 @@ def test_the_basis_reported_to_the_viewer_is_the_one_that_was_read() -> None:
     )
 
     assert results["matches_analyzed"] == 37
+
+
+async def test_request_scoped_service_is_built_without_a_riot_client() -> None:
+    """A lapsed Riot key must never block the pure DB reads.
+
+    `get_riot_client` refuses the whole request when no key is active, and
+    injected into this feature's service it took down `latest-completed`,
+    `history` and `status` with it -- stored analyses became unreadable during
+    the 2026-08-25 prod key outage. Only the background instance talks to
+    Riot, with its own tracked client.
+    """
+    from app.features.auth.models import User
+    from app.features.matchmaking_analysis.dependencies import (
+        get_matchmaking_service,
+    )
+
+    service = await get_matchmaking_service(
+        db=MagicMock(spec=AsyncSession),
+        current_user=cast(User, SimpleNamespace(id=_USER_ID)),
+    )
+
+    assert service.riot_client is None
+    with pytest.raises(AuthenticationError):
+        _ = service._riot
