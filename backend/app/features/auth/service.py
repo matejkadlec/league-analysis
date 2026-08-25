@@ -151,12 +151,10 @@ class AuthService:
         code: str,
     ) -> None:
         """Send email-change verification code."""
-        # Same guard as `join_us.send_contact_email`, and now the same answer.
-        # This used to log the code in plaintext and return as if the mail had
-        # gone out: the caller then wrote `pending_email` and the hash and
-        # committed, so an unconfigured deployment was indistinguishable from a
-        # working one -- while `LOG_LEVEL=INFO` and the `local` log driver put
-        # the verification code on disk.
+        # Same guard as `join_us.send_contact_email`. Logging the code and
+        # returning as if the mail had gone out made an unconfigured deployment
+        # indistinguishable from a working one -- and put the verification code
+        # on disk wherever `LOG_LEVEL=INFO` met the `local` log driver.
         if not smtp_configured():
             raise EmailChangeEmailNotConfiguredError
 
@@ -441,16 +439,10 @@ class AuthService:
         session, which is the truth, and the client keeps it.
         """
         token_hash = self._hash_refresh_token(raw_refresh_token)
-        # `FOR UPDATE`: this reads `revoked_at` and then writes it, and two
-        # requests carrying one cookie -- two tabs restored together, both
-        # 401ing on a 30-minute-old access token -- both used to read NULL and
-        # both rotate. That forks one token into two independently valid
-        # 30-day families, records only the second replacement, and skips the
-        # reuse alarm entirely; an attacker replaying a stolen cookie against
-        # a live client got a valid pair with nothing logged and nothing
-        # revoked. Serialising the pair sends the loser down the reuse branch,
-        # where `_answer_reused_refresh_token` decides between healing an
-        # innocent race and revoking a compromised family.
+        # `FOR UPDATE`: this reads `revoked_at` and then writes it, so two
+        # requests carrying one cookie both read NULL and both rotate, forking
+        # one token into two valid 30-day families with the reuse alarm
+        # skipped.
         result = await self.db.execute(
             select(RefreshToken)
             .where(RefreshToken.token_hash == token_hash)
@@ -682,27 +674,9 @@ class AuthService:
         result = await self.db.execute(
             select(RefreshToken).where(
                 RefreshToken.token_hash == self._hash_refresh_token(raw_refresh_token),
-                # A revoked token must not authorise revoking everything else.
-                # Expiry is still allowed through: an old-but-unrevoked token
-                # is the ordinary way to log out of a session left idle, which
-                # is the case this method exists for.
-                #
-                # One revoked token is allowed through: one this server rotated
-                # out itself. The browser composes a request from the jar as it
-                # stands, so a Sign Out clicked while a refresh is in flight --
-                # or after a refresh whose response never arrived, or in a
-                # second tab -- carries the token the replacement supersedes.
-                # Refusing to name its owner there answers "Successfully logged
-                # out" having revoked nothing, and the replacement stays live
-                # for its full 30 days with no browser left holding it to ever
-                # trip reuse detection. That is the state this route exists to
-                # remove. What it grants is small and holder-scoped: replaying
-                # the same token at /refresh already kills its whole descendant
-                # chain through reuse detection, so honouring it here extends
-                # that to the user's other sessions only for a logout the
-                # holder of a just-superseded cookie asked for. A token revoked
-                # by a logout or by the reuse path's descendant walk has no
-                # replacement recorded, so it still names nobody.
+                # A revoked token must not authorise revoking everything else,
+                # except one this server rotated out itself, which a Sign Out
+                # racing a refresh still carries.
                 or_(
                     RefreshToken.revoked_at.is_(None),
                     RefreshToken.replaced_by_token_id.is_not(None),
@@ -748,9 +722,8 @@ class AuthService:
 
         # Two logouts can carry the same token -- two tabs, or the context's
         # logout racing the one token-manager sends after a rotation it could
-        # not keep. `token_id` is unique, so let the database settle it: the
-        # loser is asking for work the winner already did, and this route's
-        # whole point is that it always succeeds.
+        # not keep. `token_id` is unique, so let the database settle it; the
+        # loser is asking for work the winner already did.
         await self.db.execute(
             insert(RevokedAccessToken)
             .values(

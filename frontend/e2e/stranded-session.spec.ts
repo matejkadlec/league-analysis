@@ -4,22 +4,10 @@ import { acceptCookieBanner, seedAuthenticatedSession } from "./support/auth";
 import { blockUpstreamRequests } from "./support/offline";
 
 /**
- * The reported bug, end to end: a black screen on a site that was working.
- *
- * The session hint cookie outlives the session it stands for -- it is written
- * for the refresh token's lifetime, but that token can be revoked or lost with
- * the row it lived in. `proxy.ts` routes on the hint alone, so it admitted the
- * visitor to a protected route, the client's probe then failed, and the gate
- * rendered null. Everything lives inside that gate, so the result was a page
- * with no sidebar, no toast host, no message and nothing to click.
- *
- * Every other spec in this suite seeds the same stranded cookie and then mocks
- * /auth/me into a 200, which is precisely why none of them ever saw this. Here
- * the API refuses, as it did in production.
- *
- * Both halves of each assertion matter. Checking only the URL would repeat the
- * mistake the unit tests made: a blank page that happens to sit at the right
- * address still tells the visitor nothing.
+ * The reported bug end to end: the hint cookie outlives the session it stands
+ * for, `proxy.ts` routes on the hint alone, and the gate then rendered null --
+ * no sidebar, no toast host, nothing to click. Every other spec mocks /auth/me
+ * into a 200, which is why none of them saw it.
  */
 test.describe("a session the API no longer honours", () => {
   test.beforeEach(async ({ page }) => {
@@ -86,12 +74,9 @@ test.describe("a session the API no longer honours", () => {
   test("says something rather than nothing while a hung backend is probed", async ({
     page,
   }) => {
-    // The variant with no coverage until now, and the one closest to the
-    // original report: the server accepts the connection and then never
-    // answers. The probe runs to its full ten-second deadline, and because
-    // this gate wraps the whole layout, every second of that used to be an
-    // empty white page -- indistinguishable from the bug for anyone who does
-    // not wait it out.
+    // The variant closest to the original report: the server accepts the
+    // connection and then never answers, so the probe runs its full ten-second
+    // deadline. Every second of that used to be an empty white page.
     await page.route("**/api/v1/auth/**", async () => {
       // Deliberately never fulfilled.
       await new Promise(() => {});

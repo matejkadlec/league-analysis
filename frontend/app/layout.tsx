@@ -10,6 +10,7 @@ import { CookieConsentManager } from "@/features/cookie-consent";
 import { ToastHost } from "@/components/toast-host";
 import { resolveDDragonVersion } from "@/lib/core/data-dragon-version";
 import { SHOULD_ALLOW_INDEXING, SITE_URL } from "@/lib/core/site-url";
+import { cn } from "@/lib/core/utils";
 
 const montserrat = Montserrat({
   subsets: ["latin"],
@@ -58,17 +59,18 @@ export default async function RootLayout({
 }>) {
   const ddragonVersion = await resolveDDragonVersion();
 
-  // `dark` is written on the element rather than chosen at runtime. There is
-  // no light design: `#content` paints the League splash unconditionally, the
-  // sidebar hardcodes `#0a1428`, and every branded class -- the gold, red and
-  // blue gradients and the submit button -- is defined only under `.dark`.
-  // With `defaultTheme="system" enableSystem` and no toggle anywhere in the
-  // UI, a viewer whose OS was set to light got white shadcn cards on that dark
-  // splash and unbranded grey buttons, and no way to correct it.
+  // `dark` is written on the element, not chosen at runtime: there is no light
+  // design. The splash, the sidebar's `#0a1428` and every branded gradient are
+  // defined only under `.dark`, so a viewer whose OS said light used to get
+  // white cards on a dark splash with no toggle to correct it.
   return (
     <html lang="en" className="dark">
       <body
-        className={`${montserrat.variable} ${leagueFont.variable} font-sans antialiased`}
+        className={cn(
+          montserrat.variable,
+          leagueFont.variable,
+          "font-sans antialiased",
+        )}
       >
         <Providers ddragonVersion={ddragonVersion}>
           <HeaderMessages />

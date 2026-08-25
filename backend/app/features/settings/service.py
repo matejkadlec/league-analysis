@@ -134,14 +134,9 @@ class SettingsService:
             await self.db.flush()
 
         # Delete before binding, so this takes its key-row locks before the
-        # health-row lock -- the order `synchronize_riot_credential_health`
-        # already uses. Binding first would lock health then wait on a key row
-        # that a concurrent request holds, and the two would deadlock.
-        #
-        # `db_key_id` is `ON DELETE SET NULL`, so this may blank the binding on
-        # its way past; `mark_database_credential_valid` re-binds it in the
-        # same transaction, and reads the NULL as an identity change, which is
-        # exactly right for a key that just got replaced.
+        # health-row lock -- the order `synchronize_riot_credential_health` uses.
+        # Binding first would lock health and then wait on a key row a concurrent
+        # request holds, and the two would deadlock.
         await self.db.execute(delete(RiotAPIKey).where(RiotAPIKey.id != target_key.id))
         await mark_database_credential_valid(
             self.db,

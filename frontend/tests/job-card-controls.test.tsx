@@ -223,11 +223,10 @@ describe("the one button that does five different things", () => {
     await waitFor(() => expect(requestedPaths()).toEqual([path]));
   });
 
-  // Each control has three endings: it worked, the server refused, the
-  // request never landed. Only the first changes the card, because the job
-  // flags come from a refetch — so on either failure the card looks exactly
-  // as it did before the press, and the toast is the only thing that says the
-  // press did nothing. Without it the admin believes the job is paused.
+  // Each control has three endings and only success changes the card, because
+  // the job flags come from a refetch. On either failure the card looks exactly
+  // as it did before the press, so the toast is the only thing that says the
+  // press did nothing.
   const REFUSED = {
     success: true,
     data: {

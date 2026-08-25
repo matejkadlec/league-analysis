@@ -1,7 +1,7 @@
 # Pitfalls
 
 Known ways this codebase breaks at runtime while every gate passes — ruff,
-pyright, ESLint, tsc, and the test suite all go green and the bug still ships.
+pyright, oxlint, tsc, and the test suite all go green and the bug still ships.
 
 Rules that a type, a test, or a hook can enforce do **not** belong here. Those
 go into the enforcing mechanism, and the entry gets deleted. This file is only
@@ -171,6 +171,23 @@ the `pitfall-check` agent.
   fails if that flush is removed or moved after the rows are staged — it
   cannot see a deleted relationship, so this entry is the only guard for that
   half.
+
+- **`cn()` deletes a class a template literal kept.**
+  `house/require-cn-for-classname-composition` routes every composed
+  `className` through `twMerge`, which drops the earlier of two conflicting
+  Tailwind utilities and resolves the tie by *last listed* rather than by the
+  generated stylesheet's order. So a mechanical `` `${a} ${b}` `` → `cn(a, b)`
+  conversion can change what renders, with no type, test or lint signal. Both
+  directions bit during the oxlint migration on 2026-08-25:
+  `frontend/components/sidebar-nav.tsx` had a static `text-white` colliding
+  with the active `text-[#cfa93a]`, and
+  `frontend/features/matchmaking/components/matchmaking-analysis-history.tsx`
+  had a static `h-11` that had *already* been beating a conditional `h-0` under
+  the old literal, so the row never collapsed. When converting, state each
+  conflicting class per branch rather than leaving a static base to be merged
+  away. Partly enforceable: the plugin could run `twMerge` over
+  statically-known string arguments and report a drop, which would leave only
+  the dynamic-value cases here.
 
 - **A same-length constant edit can be masked by a stale `.pyc`.** CPython
   invalidates cached bytecode on source `(mtime, size)`. `min_length=1` →

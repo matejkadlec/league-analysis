@@ -891,14 +891,10 @@ def test_detection_settings_reject_an_unsatisfiable_novel_gate() -> None:
         validate_card_preference_update(CardId.SMURF_BOOST_DETECTION, unsatisfiable)
 
 
-# ---------------------------------------------------------------------------
-# Service orchestration
-#
-# The engine above is pure, but the defects that actually reach a viewer live
-# in how the service loads history, claims a run and shapes its output. These
-# cases drive the service directly with a stub session, which is how the
-# matchmaking analysis lifecycle is covered in this suite.
-# ---------------------------------------------------------------------------
+# Service orchestration. The engine above is pure, but the defects that reach a
+# viewer live in how the service loads history, claims a run and shapes its
+# output. These cases drive the service directly with a stub session, matching
+# how the matchmaking analysis lifecycle is covered in this suite.
 
 
 def _completed_run(**overrides: Any) -> SmurfBoostAnalysis:

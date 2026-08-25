@@ -69,16 +69,10 @@ def _validate_smurf_boost_cross_fields(
         raise ValueError("a3MinimumNovelGames must not exceed recentWindowSize")
 
 
-# Each card declares its fields once, on the write model, and the tolerant read
-# model below is that same model with the policy relaxed. The two used to be
-# written out separately -- same names, same defaults, same bounds, 24 fields
-# and two validators kept in step by hand -- so a bound tightened for writers
-# and forgotten for readers would have split the contract silently, and nothing
-# compared the two lists.
-#
-# `strict=True` sits on the model rather than on every field. `included_roles`
-# opts its *items* back out: strict mode wants a `CardRole` instance, and this
-# value arrives from JSON as the string `"TOP"`.
+# Each card declares its fields once, on the write model; the read model below is
+# that same model with the policy relaxed, so a bound cannot be tightened for
+# writers and forgotten for readers. `strict=True` sits on the model, and
+# `included_roles` opts its *items* out because JSON sends the string `"TOP"`.
 class TopChampionsMutableSettingsWriteV1(_CardSettingsWriteBase):
     """Strict write-only contract for the approved version 1 Top Champions card."""
 
@@ -181,13 +175,10 @@ class SmurfBoostDetectionMutableSettingsWriteV1(_CardSettingsWriteBase):
         return self
 
 
-# The read contract is the write contract with two rules dropped: a stored
-# value may be spelled with the canonical field name, and it may need coercing
-# -- both are true of rows written under an older contract. The bounds and the
-# validators are inherited, so a legacy value that no longer fits is still
-# refused. `validate_by_name` rather than `populate_by_name`: the write base
-# already resolved that setting, and Pydantic will not let a subclass reverse
-# it through the deprecated spelling.
+# The read contract is the write contract with two rules dropped: a stored value
+# may be spelled with the canonical field name, and it may need coercing. Bounds
+# and validators are inherited, so a stored value that no longer fits is still
+# refused. `validate_by_name`: a subclass cannot reverse the write base's choice.
 _READ_POLICY = ConfigDict(validate_by_name=True, validate_by_alias=True, strict=False)
 
 

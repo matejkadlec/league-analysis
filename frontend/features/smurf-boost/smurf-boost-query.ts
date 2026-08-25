@@ -7,12 +7,10 @@ export function smurfBoostQueryKey(puuid: string | null) {
   return ["smurf-boost-detection", puuid] as const;
 }
 
-// Nullable again, because the card outlives its player: the page renders it
-// with no analysed player so the local search inside it stays reachable, and
-// an account with none yet -- or a `?puuid=` that will not load -- has nothing
-// to read. `skipToken` rather than `enabled`, as `playerQueryOptions` does:
-// `enabled` is an ordinary option a spreading caller can drop, and
-// `SmurfBoostDetection` spreads these options to add its poll interval.
+// Nullable, because the card outlives its player: the page renders it with no
+// analysed player so the local search stays reachable. `skipToken` rather than
+// `enabled`, as `playerQueryOptions` does: `enabled` is an ordinary option a
+// spreading caller can drop, and `SmurfBoostDetection` spreads these.
 export function smurfBoostQueryOptions(puuid: string | null) {
   return queryOptions({
     queryKey: smurfBoostQueryKey(puuid),

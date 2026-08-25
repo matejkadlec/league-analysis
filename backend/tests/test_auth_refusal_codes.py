@@ -112,10 +112,9 @@ async def test_the_refusal_survives_the_app_as_json_the_browser_can_read() -> No
 
     assert response.status_code == 401
     # The same rule the client applies (`namesTheEndOfTheSession`): any JSON
-    # media type, because an RFC 9457 envelope is a fine thing to add and the
-    # client handles it -- but a body the browser cannot read as JSON, or one
-    # that no longer carries `detail.code`, silently ends every genuine
-    # sign-out.
+    # media type, because an RFC 9457 envelope is a fine thing to add -- but a
+    # body the browser cannot read as JSON, or one that no longer carries
+    # `detail.code`, silently ends every genuine sign-out.
     assert re.match(r"^application/([\w.+-]+\+)?json", response.headers["content-type"])
     assert response.json()["detail"]["code"] == "INVALID_REFRESH_TOKEN"
 
@@ -151,9 +150,8 @@ async def test_a_database_fault_is_not_laundered_into_a_refusal() -> None:
 
     # 2. The user lookup, driven through `rotate_refresh_token` rather than
     #    called directly -- the call site is what matters. Swallowing there
-    #    lands in the unknown-user branch, which revokes the still-valid row
-    #    on its way out, so a transient SELECT fault does not merely mint a
-    #    refusal: it makes one true.
+    #    lands in the unknown-user branch, which revokes the still-valid row, so
+    #    a transient SELECT fault does not merely mint a refusal: it makes one.
     now = datetime.now(UTC)
     record = MagicMock()
     record.revoked_at = None

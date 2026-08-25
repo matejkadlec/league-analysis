@@ -130,11 +130,9 @@ describe("SectionQuickNavigation", () => {
   });
 
   it("notices a section that arrives from outside React", async () => {
-    // The test above re-renders, and a re-render re-runs the effect on its
-    // own -- which is why it passed with the observer deleted. Production
-    // passes a module-level `items`, so its identity never churns and the
-    // observer is the only thing that can deliver a late section. This adds
-    // the node without React's help so nothing else can explain the update.
+    // The test above re-renders, and a re-render re-runs the effect on its own --
+    // which is why it passed with the observer deleted. This adds the node without
+    // React's help, so nothing else can explain the update.
     const user = userEvent.setup();
     render(<Page withResult={false} />);
     await user.hover(screen.getByTestId("section-quick-navigation"));

@@ -91,15 +91,15 @@ describe("the client-error beacon", () => {
   });
 
   it("rejects a query key or other undeclared field rather than logging it", () => {
-    const parsed = ClientErrorReportSchema.safeParse({
+    const parsed = ClientErrorReportSchema.parse({
       kind: "api",
       message: "The request could not be completed. Please try again later.",
       key: '["lane-stats","PNm-92VrUvdu-cj0KFhqs0_8dNV2g9DsQ2pObEKsJZum-3uISPmVr2xn2eI1ztzq10TJb9M-ZpdbdQ",420]',
     });
-    expect(parsed.success).toBe(true);
-    if (parsed.success) {
-      expect("key" in parsed.data).toBe(false);
-    }
+    expect(parsed).toEqual({
+      kind: "api",
+      message: "The request could not be completed. Please try again later.",
+    });
   });
 });
 

@@ -1,20 +1,8 @@
 /**
- * Splits a parsed run into `completed` — the only variant that owns `results`
- * — and everything else, which has no `results` property at all. Reading
- * `run.results` without first narrowing on `run.status === "completed"` is
- * therefore a compile error, not a silent render of a failed run as a
- * successful one.
- *
- * The wire format is parsed permissively rather than rejected. Both backends
- * write `status` and `results` in a single UPDATE, but a row persisted before
- * that guarantee could still be `completed` with no results, and failing the
- * parse would break the page instead of degrading it. Such a run is reported
- * as `failed`, which is what it is: it finished without producing a result.
- *
- * The status and results fields are destructured out rather than left to the
- * rest spread. If a variant inherited the wire `status`, its discriminant
- * would be an intersection with the full enum instead of a bare literal, and
- * TypeScript would not discriminate the union on it.
+ * Splits a parsed run so only `completed` owns `results`: reading
+ * `run.results` without narrowing on `status` is a compile error rather than a
+ * failed run rendered as a successful one. A `completed` row with no results
+ * degrades to `failed` rather than failing the parse.
  */
 type RunLifecycleSplit<TWire extends { status: string }, TResults> =
   | (Omit<TWire, "status" | "results"> & {
@@ -31,16 +19,9 @@ type RunLifecycleSplit<TWire extends { status: string }, TResults> =
 
 /**
  * Split a parsed run into a union where only `completed` carries `results`.
- *
- * `status` must be destructured out alongside `results`: if the rest spread
- * retains it, each variant's discriminant becomes an intersection with the
- * full status enum and TypeScript refuses to discriminate on it.
- *
- * `TResults` is constrained against the wire's own `results` so a caller
- * cannot ask for a type the payload does not carry. `undefined` is spelled out
- * in that constraint because `exactOptionalPropertyTypes` reads a bare
- * `results?: T | null` as "absent, or present and non-undefined", which no
- * Zod `.nullable().optional()` field satisfies.
+ * `status` must be destructured out, or each variant's discriminant becomes an
+ * intersection with the full enum and TypeScript refuses to discriminate on
+ * it.
  */
 export function splitRunOnLifecycle<
   TWire extends { status: string; results?: TResults | null | undefined },

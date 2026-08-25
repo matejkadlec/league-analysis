@@ -6,20 +6,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import { THRESHOLD_FIELDS } from "../smurf-boost-settings";
 import { FAMILY_TITLES } from "../smurf-boost-vocabulary";
+import { cn } from "@/lib/core/utils";
 
 const CROSS_FIELD_NAMES = ["recentWindowSize", "a3MinimumNovelGames"];
 
 /**
- * The fifteen thresholds shown as one flat grid were a wall: nothing said
- * which area a value belonged to, and the dialog needed a scrollbar to hold
- * them. They group naturally by what they tune -- the two window sizes, the
- * A-family and the B-family -- so each group gets a tab, named with the same
- * family titles the rest of the page already uses.
- *
- * Every group stays mounted (`forceMount`) and is only visually hidden when
- * inactive: the values live in one draft, the cross-field rule spans two
- * groups, and an `aria-describedby` must never point at an element that has
- * been unmounted from under it.
+ * The fifteen thresholds grouped by what they tune, one tab each. Every group
+ * stays mounted (`forceMount`) and is only visually hidden: the values live
+ * in one draft, the cross-field rule spans two groups, and an
+ * `aria-describedby` must never point at an unmounted element.
  */
 const GROUPS = [
   {
@@ -89,13 +84,9 @@ export function SmurfBoostSettingsThresholds({
           ))}
         </TabsList>
         {/* From `sm` up every group occupies the same grid cell, so the
-            dialog always stands at the tallest group's height: switching
-            tabs must not resize the dialog and move the tab row out from
-            under the pointer. `sm:...block` overrides the `hidden`
-            attribute Radix puts on an inactive panel; `invisible` then
-            hides it while its layout keeps holding the height. On a phone
-            the dialog scrolls anyway, so an inactive group stays fully
-            hidden rather than padding every tab to the tallest one. */}
+            dialog stands at the tallest group's height and switching tabs
+            cannot move the tab row out from under the pointer. On a phone the
+            dialog scrolls, so an inactive group stays fully hidden. */}
         <div className="sm:grid">
           {GROUPS.map((group, index) => (
             <TabsContent
@@ -107,7 +98,7 @@ export function SmurfBoostSettingsThresholds({
               <div
                 id={index === 0 ? "smurf-boost-thresholds-grid" : undefined}
                 data-testid={`smurf-boost-thresholds-${group.value}`}
-                className={`grid gap-x-6 gap-y-3 ${group.columns}`}
+                className={cn("grid gap-x-6 gap-y-3", group.columns)}
               >
                 {THRESHOLD_FIELDS.filter((field) =>
                   group.match.test(field.name),

@@ -8,10 +8,8 @@ const GLOBAL_STYLESHEET = "app/globals.css";
 
 /**
  * The branded classes that carry a product decision about what an element
- * means: primary, destructive, neutral, and the shared dialog/icon shapes.
- * Each must keep existing in `globals.css` — renaming one without updating
- * its callers leaves them styled by nothing at all, which typechecks, lints,
- * and renders as an unstyled element.
+ * means. Renaming one without updating its callers leaves them styled by
+ * nothing at all, which typechecks, lints, and renders as an unstyled element.
  */
 const BRANDED_CLASSES = [
   "gold-gradient",
@@ -78,12 +76,9 @@ describe("branded style contract", () => {
   });
 
   /**
-   * `globals.css` paints `#header-card` with `background: ... !important`, in
-   * both themes. A `bg-*` utility on that element therefore renders nothing --
-   * measured in Chrome, where the utility's own `background-color` computes to
-   * `rgba(0, 0, 0, 0)` because the winning shorthand resets it. Three pages
-   * carried `bg-[#152b56] ... dark:bg-[#0a1428]`, a hand-copied pair of the
-   * hexes the stylesheet already owns, doing nothing on any of them.
+   * `globals.css` paints `#header-card` with `background: ... !important`, so a
+   * `bg-*` utility on that element renders nothing -- measured in Chrome. Three
+   * pages carried a hand-copied hex pair doing nothing on any of them.
    */
   it("leaves the header card's background to the stylesheet that owns it", () => {
     const background =
@@ -92,12 +87,8 @@ describe("branded style contract", () => {
       code(path).includes('id="header-card"'),
     );
     // Signal first: a scan that stopped finding header cards would pass by
-    // finding nothing wrong with them. Every primary page now renders the
-    // card through components/page-header.tsx, but two surfaces still spell
-    // it themselves because their title is a different thing -- the home
-    // hero and the legal shell both use the League display font at their own
-    // size in a `py-2` card, which the shared header would have to grow
-    // knobs for. Pin all three, so converting one of them has to come here.
+    // finding nothing wrong with them. Two surfaces still spell the card
+    // themselves, so pin all three and converting one has to come here.
     expect(
       headerCards.map((path) => relative(process.cwd(), path)).sort(),
     ).toEqual([
@@ -122,15 +113,9 @@ describe("branded style contract", () => {
   });
 
   /**
-   * The header card names its own text colour.
-   *
-   * Measured in Chromium: without `text-white` the shadcn `Card`'s
-   * `text-card-foreground` wins, which `globals.css` defines as
-   * `oklch(98% 0 0)` -- `lab(97.68 ...)`, not `#ffffff`. The home page carried
-   * exactly that while the card directly beneath it, which does say
-   * `text-white`, rendered `rgb(255, 255, 255)`: two adjacent cards, two
-   * whites. It was legible only because f4d0bef forces `.dark`, so a theme
-   * toggle would have taken the colour with it.
+   * The header card names its own text colour. Without `text-white` the shadcn
+   * `Card`'s `text-card-foreground` wins, which is `oklch(98% 0 0)` rather than
+   * `#ffffff` -- two adjacent cards, two whites, measured in Chromium.
    */
   it("gives every header card its own white", () => {
     // The element, not a window around it: a slice of surrounding characters
@@ -151,14 +136,8 @@ describe("branded style contract", () => {
 
   /**
    * The branded classes are defined under `.dark` and nowhere else, so the
-   * document has to carry that class unconditionally or they style nothing.
-   *
-   * It used to be chosen at runtime -- `defaultTheme="system" enableSystem`,
-   * with no toggle in the UI -- so a viewer whose OS was set to light got
-   * white shadcn cards on the dark League splash `#content` paints
-   * unconditionally, and grey buttons where the gold, red and blue gradients
-   * belong. Nothing failed: the classes were all still present in the
-   * stylesheet, which is all the rule above checks.
+   * document has to carry that class unconditionally. Chosen at runtime it gave
+   * a light-OS viewer white cards on the dark splash, and nothing failed.
    */
   it("forces the theme the branded classes are written for", () => {
     const stylesheet = readFileSync(GLOBAL_STYLESHEET, "utf8");
@@ -187,16 +166,9 @@ describe("branded style contract", () => {
 
   /**
    * A class from a plugin that is not installed styles nothing.
-   *
-   * `app/page.tsx` and `components/legal-page-shell.tsx` both carried
-   * `prose prose-lg`, and `.claude/IMPROVEMENTS.md` carried an open question
-   * about whether that typography was overriding the card's text colour. It
-   * was not overriding anything: `@tailwindcss/typography` is not a
-   * dependency and no `@plugin` line registers it, so both were inert names
-   * that read as deliberate styling to everyone who saw them.
-   *
-   * Either half is fine on its own. Using the classes without the plugin is
-   * what is not.
+   * `@tailwindcss/typography` is not a dependency, so `prose prose-lg` on two
+   * pages were inert names that read as deliberate styling. Either half is fine
+   * on its own; the classes without the plugin are not.
    */
   it("does not use plugin classes the build cannot generate", () => {
     const manifest = readFileSync("package.json", "utf8");

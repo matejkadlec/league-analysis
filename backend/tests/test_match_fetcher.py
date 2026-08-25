@@ -372,10 +372,9 @@ def test_job_error_diagnostics_exclude_raw_error_text_and_unreviewed_context() -
 def test_job_diagnostics_retain_wrapped_validation_fields() -> None:
     job = _NoopJob(job_config_id=7)
     # The fixture is malformed on purpose: `queueType` is missing, which is what
-    # produces the wrapped ValidationError under test. It goes through
-    # `model_validate` rather than the constructor because a provider payload is
-    # untyped data at that boundary, and a direct call would be a static error
-    # for exactly the reason the test is asserting at runtime.
+    # produces the wrapped ValidationError under test. `model_validate` rather
+    # than the constructor because a provider payload is untyped data at that
+    # boundary, and a direct call would be a static error.
     with pytest.raises(ServiceException) as excinfo:
         try:
             LeagueEntryDTO.model_validate(

@@ -6,48 +6,18 @@ import { describe, expect, it } from "vitest";
 import { allSourceFiles, allTestFiles } from "./source-scan-support";
 
 /**
- * Every export of `lib/core/schemas/` is reached by something.
- *
- * `npm run deadcode` cannot answer this. `api-contract-alignment.test.ts`
- * imports the whole module namespace to pair schemas to OpenAPI components by
- * name, knip counts a namespace import as a use of every export, and the
- * `export *` barrel forwards that blindness to all nine modules behind it --
- * the largest export list in the repo, and the one place knip reports zero
- * unused exports no matter what is in it. Eleven type aliases were reachable
- * from nothing at all while it said so.
- *
- * So this counts references itself. A name is reached when it is mentioned
- * anywhere outside its own declaration and outside the `z.infer` alias that
- * pairs to it -- that pairing is the schema's own restatement, not a reader.
- *
- * Both exclusions are matched against whole file text rather than single
- * lines, because Prettier wraps the longer aliases:
- *
- *     export type UserCookieConsentUpdate = z.infer<
- *       typeof UserCookieConsentUpdateSchema
- *     >;
- *
- * A line-level rule sees `typeof UserCookieConsentUpdateSchema` sitting on a
- * line of its own, counts it as a reader, and reports the schema as reached --
- * which it did, for four schemas including one of the two that motivated this
- * check in the first place.
- *
- * Comments are stripped first, as `branded-style-contract.test.ts` does: the
- * files here name schemas in prose freely, and a doc comment mentioning one
- * would otherwise mark it read.
+ * Every export of `lib/core/schemas/` is reached by something -- which knip
+ * cannot answer, because a namespace import counts as a use of every export.
+ * Text is matched whole-file and comment-stripped: Prettier wraps the longer
+ * aliases, and prose naming a schema is not a reader.
  */
 const SCHEMA_DIRECTORY = "lib/core/schemas";
 
 /**
- * Request-body schemas whose only reader is the contract test, by design.
- *
- * `validatedPost` validates the *response* and takes the body as `unknown`,
- * so a request schema has no call site to be named at: the body is typed by
- * the `z.infer` alias instead, and the schema value exists to be paired
- * against the OpenAPI component the endpoint accepts. Deleting one would
- * silently drop that endpoint's body from the alignment check, which is the
- * failure this list is here to prevent -- a name leaves it by gaining a
- * reader, not by being added to it.
+ * Request-body schemas whose only reader is the contract test, by design:
+ * `validatedPost` takes the body as `unknown`, so a request schema has no call
+ * site to be named at. A name leaves this list by gaining a reader, not by
+ * being added to it.
  */
 const PAIRED_BY_THE_CONTRACT_TEST = new Set([
   "CardPreferenceUpdateSchema",
@@ -84,12 +54,9 @@ function exportedNames(): Map<string, string> {
 }
 
 /**
- * Every line a reader could live on, except this file's own.
- *
- * The allowance below names its schemas in order to exempt them, which is a
- * mention like any other -- `source-scan-support.ts` keeps `tests/` out of
- * `allSourceFiles` for exactly this reason, and a contract that scans itself
- * reports every name it discusses as reached.
+ * Every line a reader could live on, except this file's own: the allowance
+ * below names its schemas in order to exempt them, and a contract that scans
+ * itself reports every name it discusses as reached.
  */
 /** Source with comments removed, so prose about a schema is not a use. */
 function code(path: string): string {

@@ -4,15 +4,10 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 /**
- * Which PUUID the sidebar is allowed to carry onto a player link.
- *
- * `/matchmaking-analysis` also spells its analyzed player `?puuid=`, but that
- * one is page-local and deliberately not the account's reference player. The
- * sidebar reads the query string on whatever route it is rendered under, so
- * without a scope it would hand that local choice to `/player-overview` --
- * and the provider persists the PUUID it finds on a player-centric route, so
- * the next click would quietly make it the account's current player. The page
- * promises in so many words that it will not.
+ * Which PUUID the sidebar may carry onto a player link. `/matchmaking-analysis`
+ * spells its analyzed player `?puuid=` too, but that one is page-local; unscoped,
+ * the sidebar would hand it to `/player-overview`, where the provider persists
+ * it as the account's current player.
  */
 
 const nav = vi.hoisted(() => ({ pathname: "/", search: "" }));

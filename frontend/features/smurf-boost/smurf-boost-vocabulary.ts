@@ -4,15 +4,10 @@ import type {
 } from "@/lib/core/schemas";
 
 /**
- * The wording the model fixes. This module is its only copy in the frontend.
- *
- * That document fixes the band vocabulary, the family titles, the confidence
- * labels, the note readings and the disclaimer, and forbids words such as
- * "smurf detected", "suspicious" or "confirmed". Those strings live here so a
- * second copy cannot drift away from the specification. Ordinary page copy —
- * button labels, table headers, the threshold explanations — is written where
- * it is used, like every other feature here, and the browser test scans the
- * rendered page for the forbidden wording.
+ * The wording the model fixes -- band vocabulary, family titles, confidence
+ * labels, note readings, disclaimer -- in its only frontend copy, so nothing
+ * drifts from the specification or reaches for a forbidden word. Ordinary
+ * page copy is written where it is used.
  */
 
 export const FAMILY_TITLES: Record<string, string> = {
@@ -49,11 +44,9 @@ export const BAND_LABELS: Record<SmurfBoostBand, string> = {
 };
 
 /**
- * What each band means, in the specification's own words.
- *
- * A band name alone is a finding word. "Weak indicators" without "likely
- * ordinary variance" beside it reads as a small accusation rather than as the
- * caution it is meant to be.
+ * What each band means, in the specification's own words. A band name alone
+ * is a finding word: "Weak indicators" without "likely ordinary variance"
+ * beside it reads as a small accusation rather than the caution it is.
  */
 export const BAND_MEANINGS: Record<SmurfBoostBand, string> = {
   not_enough_data: "Fewer eligible ranked games than the model requires",

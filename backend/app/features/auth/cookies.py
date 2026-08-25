@@ -31,12 +31,10 @@ def set_auth_cookies(
 ) -> None:
     """Persist tokens as HttpOnly cookies so browser JS cannot read them."""
     secure = _cookie_secure()
-    # Measured once, not twice. `max_age_seconds` truncates against the clock
-    # of the moment it is called, so the refresh cookie and the hint below
-    # disagreed by a second whenever a whole-second boundary fell between the
-    # two calls -- rare, but it is the hint that would be the shorter one, and
-    # a hint that expires before the refresh token beside it is the stranded
-    # session this whole change exists to remove.
+    # Measured once, not twice. `max_age_seconds` truncates against the clock of
+    # the moment it is called, so the refresh cookie and the hint below could
+    # disagree by a second -- and it is the hint that would be the shorter one,
+    # which is exactly the stranded session this guards against.
     refresh_max_age = max_age_seconds(refresh_expires_at)
     response.set_cookie(
         ACCESS_TOKEN_COOKIE_NAME,
@@ -56,23 +54,17 @@ def set_auth_cookies(
         samesite="lax",
         path="/",
     )
-    # Deliberately readable by JavaScript, unlike the two above. It carries no
-    # secret — only the literal "1" — and its whole job is to answer "is there a
-    # session?" without a round trip. `proxy.ts` reads it server-side to route,
-    # and `AuthProvider` reads it client-side to decide whether probing
-    # /auth/me is worth doing: with it HttpOnly the client could not, so every
-    # signed-out visit spent two requests learning what this cookie's absence
-    # already says, and logged a browser-generated 401 for each.
+    # Deliberately readable by JavaScript, unlike the two above: it carries no
+    # secret — only the literal "1" — and answers "is there a session?" without a
+    # round trip. `proxy.ts` routes on it server-side; `AuthProvider` uses it to
+    # skip probing /auth/me, which cost every signed-out visit two requests.
     response.set_cookie(
         AUTH_STATE_COOKIE_NAME,
         AUTH_STATE_COOKIE_VALUE,
-        # The same lifetime as the refresh token beside it, taken from the
-        # same expiry rather than restated. A hardcoded 30 days silently
-        # became wrong the moment `jwt_refresh_token_expire_days` was set to
-        # anything longer: the hint expired first, `proxy.ts` reported the
-        # visitor signed out, and the refresh token stayed live and spendable
-        # for the remainder -- a stranded session with no server refusal
-        # anywhere in it.
+        # The same lifetime as the refresh token beside it, taken from the same
+        # expiry rather than restated. A hardcoded 30 days went wrong the moment
+        # `jwt_refresh_token_expire_days` grew past it: the hint expired first,
+        # so `proxy.ts` reported signed out while the token stayed spendable.
         max_age=refresh_max_age,
         httponly=False,
         secure=secure,

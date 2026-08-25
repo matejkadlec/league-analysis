@@ -5,14 +5,9 @@ import { describe, expect, it } from "vitest";
 import { allSourceFiles } from "./source-scan-support";
 
 /**
- * Query keys that are genuinely global — they describe the service, the
- * signed-in user, or an admin view, and are the same for every player. This
- * list is the contract: anything not on it is player-derived and must carry
- * the exact PUUID, in every occurrence including invalidations.
- *
- * Adding a name here is a claim that the data does not vary by player. A
- * prefix invalidation without the PUUID matches every cached player, so an
- * update to one of them refetches all the others.
+ * Query keys that are genuinely global: the same for every player. Anything
+ * not here is player-derived and must carry the exact PUUID everywhere,
+ * because a prefix invalidation without it refetches every cached player.
  */
 const PLAYER_INDEPENDENT_KEYS = new Set([
   "job-executions",
@@ -39,11 +34,9 @@ interface QueryKeyUse {
 
 /**
  * Every key array this codebase writes, with its leading namespace string.
- *
- * Two spellings count: the inline `queryKey: [...]` at a call site, and the
- * array a key factory returns. A key that moved into a factory is still a key
- * -- reading only the inline form would let the last call site move and quietly
- * drop the namespace from this contract's view.
+ * Both spellings count -- inline `queryKey: [...]` and the array a factory
+ * returns -- or the last call site could move into a factory and drop the
+ * namespace from this contract's view.
  */
 const KEY_ARRAY_PATTERNS = [
   // [^\]] already spans newlines, so no dotall flag is needed.

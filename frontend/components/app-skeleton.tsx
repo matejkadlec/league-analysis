@@ -2,15 +2,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 /**
  * The page-shaped placeholder shown whenever there is nothing to draw yet.
- *
- * It used to render nothing unless authenticated, on the reasoning that the
- * gate would redirect anyway — but the redirect needs the session probe to
- * finish first, so the wait it was meant to cover was exactly the wait it
- * left blank. A skeleton reveals nothing.
- *
- * It lives here rather than in `app/loading.tsx` because two callers need it:
- * that route convention, and the app-wide Suspense boundary in
- * `providers.tsx`, which is what actually renders during a static prerender.
+ * Rendered signed-out as well: the gate's redirect needs the session probe to
+ * finish, so the wait a gated skeleton left blank was the wait it was for.
+ * Lives here, not in `app/loading.tsx`, because `providers.tsx` needs it too.
  */
 export function AppSkeleton() {
   return (

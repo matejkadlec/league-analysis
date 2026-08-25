@@ -32,19 +32,10 @@ function userBody(overrides: Record<string, unknown> = {}) {
 }
 
 /**
- * Signing in successfully, which nothing in this repo covered.
- *
- * `login` raises `isLoading` on the way in and never lowers it on the success
- * path -- only the `checkAuth()` at the end does, in its `finally`. So that
- * one line carries the whole flow, and deleting it left all 320 tests green:
- * the other login tests mock the token manager and exercise timeouts, and
- * every Playwright spec seeds the hint cookie directly rather than submitting
- * the form.
- *
- * With it gone the visitor types the right password, the server answers 200
- * and sets all three cookies, and every route renders "Checking your
- * session..." for the rest of the tab's life, over a perfectly valid 30-day
- * session sitting in the jar.
+ * Signing in successfully, which nothing in this repo covered. `login` raises
+ * `isLoading` and only the `checkAuth()` in its `finally` lowers it, so
+ * deleting that one line left 320 tests green and every route reading
+ * "Checking your session..." for the rest of the tab's life.
  */
 
 const nav = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn() }));

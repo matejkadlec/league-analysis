@@ -84,11 +84,10 @@ def test_registry_lists_every_mapped_model() -> None:
         "app/model_registry.py does not import the module defining them, "
         "so Alembic cannot see them: " + ", ".join(sorted(missing))
     )
-    # The comparison above is only as good as the walk. If the walk ever stops
-    # finding models -- a renamed package, a changed `app.__path__` -- it yields
-    # nothing, `walked - registered` is trivially empty, and the assertion above
-    # passes while checking nothing. A table the registry reached that the walk
-    # did not is impossible unless the walk is broken.
+    # The comparison above is only as good as the walk: if it stops finding
+    # models -- a renamed package, a changed `app.__path__` -- it yields nothing,
+    # `walked - registered` is trivially empty, and the assertion passes while
+    # checking nothing. Only a broken walk can be outrun by the registry.
     unreachable = registered - walked
     assert not unreachable, (
         "the package walk did not find tables the registry did, so the walk is "

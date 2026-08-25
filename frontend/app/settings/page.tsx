@@ -3,6 +3,7 @@
 import { ProtectedRoute, useAuth } from "@/features/auth";
 import { PageHeader } from "@/components/page-header";
 import { AccountSettingsCard, RiotApiSettingsCard } from "@/features/settings";
+import { cn } from "@/lib/core/utils";
 
 export default function SettingsPage() {
   return (
@@ -29,7 +30,7 @@ function SettingsPageContent() {
 
         <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-5">
           <AccountSettingsCard
-            className={isAdmin ? "lg:col-span-2" : "lg:col-span-5"}
+            className={cn(isAdmin ? "lg:col-span-2" : "lg:col-span-5")}
           />
 
           {isAdmin && <RiotApiSettingsCard />}

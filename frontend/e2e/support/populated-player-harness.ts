@@ -5,13 +5,10 @@ import { qaUser, trackedPlayer } from "./fixtures";
 import { blockUpstreamRequests } from "./offline";
 
 /**
- * A player with enough stored data that every table, row and stat block on the
- * player-centric pages actually renders.
- *
- * The overflow these fixtures exist to catch is invisible against an empty
- * database: with no champions, lanes or matches, the wide descendants are
- * never mounted and the page measures exactly the viewport. So this harness
- * fills each surface rather than merely answering each request.
+ * A player with enough stored data that every table, row and stat block
+ * actually renders. Against an empty database the wide descendants never
+ * mount and the page measures exactly the viewport, so the overflow these
+ * fixtures exist to catch is invisible.
  */
 
 const NOW = "2026-08-14T10:00:00.000Z";
@@ -165,12 +162,9 @@ function match(index: number) {
       total_damage_dealt_to_champions: 34_812,
       summoner1_id: 4,
       summoner2_id: 14,
-      // Both rune branches, so the browser specs see each. Even rows carry a
-      // keystone this build has art and a name for; odd rows carry one it does
-      // not, which is the case where icon and label both fall back to the
-      // primary tree. Without these the rune block renders two grey
-      // placeholders, no tooltip trigger exists, and the axe scan never grades
-      // the focusable triggers at all.
+      // Both rune branches: even rows carry a keystone this build has art for, odd
+      // rows one it does not, which is the fallback path. Without these the block
+      // renders placeholders with no tooltip trigger for the axe scan to grade.
       runes:
         index % 2 === 0
           ? { primary_style: 8000, sub_style: 8400, keystone: 8010 }
@@ -351,13 +345,9 @@ async function installPopulatedPlayerMocks(page: Page): Promise<void> {
 }
 
 /**
- * The three data-rich player routes, each with a `ready` selector that only
- * its populated content renders and the surfaces the reflow spec measures.
- *
- * `ready` exists because the loading skeletons are textless `<Skeleton>`
- * pulses: a wait built on the word "Loading" disappearing passes while a
- * skeleton is still on screen, and a scan or measurement then grades an
- * empty page. Gate on content, never on the absence of a loading marker.
+ * The three data-rich player routes, each with a `ready` selector only its
+ * populated content renders. Gate on content, never on a loading marker
+ * disappearing: the skeletons are textless.
  */
 export const POPULATED_ROUTES = [
   {

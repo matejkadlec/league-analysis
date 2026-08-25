@@ -11,17 +11,10 @@ from typing import Any, NoReturn
 import structlog
 from fastapi import HTTPException
 
-# One sentence for every unexpected server error, matching what the web
-# client shows anyway.
-#
-# The routes used to carry ~25 distinct sentences, none of which reached a
-# viewer: `normalizeApiError` in the frontend only trusts a *structured*
-# `{code, message}` detail, and every one of these was a plain string, so its
-# `status >= 500` branch substituted exactly this text every time. What tells
-# the routes apart is the structured log event, which is not going anywhere.
-#
-# A route with something genuinely more useful to say still passes its own
-# detail; that is what the `detail` argument is for.
+# One sentence for every unexpected server error. `normalizeApiError` in the
+# frontend only trusts a *structured* `{code, message}` detail, so a plain
+# string never reaches a viewer -- its `status >= 500` branch substitutes this
+# text. What tells the routes apart is the structured log event.
 SERVICE_ERROR_DETAIL = (
     "The League Analysis service could not complete the request. "
     "Please try again later."

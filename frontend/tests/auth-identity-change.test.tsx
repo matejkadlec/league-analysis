@@ -109,12 +109,10 @@ describe("the cache when the signed-in account changes", () => {
   });
 
   it("drops the previous account's data when a different account answers", async () => {
-    // Cookies are jar-wide, so signing in as somebody else in a second tab
-    // changes who this tab is without `login` or `logout` running here. The
-    // next re-check -- a settings save, the auth gate's retry -- adopted the
-    // new account while `["card-preferences"]`, `["user"]`, `["player", puuid]`
-    // and both analysis features still held the previous one's answers, none
-    // of which carry an account in their key.
+    // Cookies are jar-wide, so signing in as somebody else in a second tab changes
+    // who this tab is without `login` or `logout` running here -- and the cached
+    // answers under `["user"]`, `["player", puuid]` and the rest carry no account
+    // in their key.
     const { queryClient, recheck } = await mountAs([1, 2]);
     queryClient.setQueryData(ACCOUNT_SCOPED_KEY, "account one's thresholds");
 

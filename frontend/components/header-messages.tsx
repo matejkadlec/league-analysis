@@ -10,7 +10,7 @@ import { HEADER_MESSAGES_CLOSED_STORAGE_KEY } from "@/features/cookie-consent";
 import { COOKIE_CONSENT_UPDATED_EVENT } from "@/features/cookie-consent";
 // Not through the barrel: `tests/header-messages-credential-health.test.tsx`
 // factory-mocks `@/features/cookie-consent` down to the event name.
-// eslint-disable-next-line no-restricted-imports -- see above: the test mocks the barrel
+// oxlint-disable-next-line no-restricted-imports -- see above: the test mocks the barrel
 import {
   readOptionalStorage,
   writeOptionalStorage,
@@ -24,7 +24,7 @@ import { RIOT_CREDENTIAL_HEALTH_UPDATED_EVENT } from "@/lib/core/riot-credential
 
 
 
-// Temporarily disabled while Riot production-key review is pending.
+// Hidden while Riot production-key review is pending.
 const SHOW_SIGNED_OUT_RECRUITMENT_BANNER = false;
 
 // Layout lives in the bases; tones carry only color, weight and shadow.
@@ -177,7 +177,7 @@ export function HeaderMessages() {
     return null;
   }
 
-  // Signed-out recruitment banner (temporarily hidden)
+  // Signed-out recruitment banner (hidden while Riot review is pending)
   if (
     SHOW_SIGNED_OUT_RECRUITMENT_BANNER &&
     !isAuthenticated &&

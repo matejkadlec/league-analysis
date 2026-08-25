@@ -3,12 +3,9 @@
 import type { UserResponse } from "@/lib/core/schemas";
 
 /**
- * The signed-in user record, as the API declares it.
- *
- * This used to be ten hand-written fields duplicating `UserResponseSchema`,
- * with nothing holding the two together -- and `GET /auth/me` was the one
- * response in the app that reached React state without a zod parse, so a
- * renamed backend field would have landed here as garbage in silence.
+ * The signed-in user record, as the API declares it. Hand-written fields here
+ * left `GET /auth/me` the one response reaching React state without a zod
+ * parse, so a renamed backend field landed as garbage in silence.
  */
 export type User = UserResponse;
 

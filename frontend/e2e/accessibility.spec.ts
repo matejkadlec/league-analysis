@@ -7,19 +7,10 @@ import {
 } from "./support/populated-player-harness";
 
 /**
- * axe-core over the data-rich player pages. The fixtures matter here for the
- * same reason they matter to the reflow specs: against an empty database the
- * match rows, stat tables and history cards never mount, and a scan of an
- * empty page proves nothing about the surfaces people actually read. The
- * readiness gate lives in `gotoPopulatedRoute`, which waits for populated
- * content — the skeletons are textless, so no wait on "Loading" can work.
- *
- * What axe can and cannot see: it catches missing labels, roles, names,
- * contrast and structural misuse automatically. It does NOT catch
- * use-of-color (WCAG 1.4.1) — the match rows conveying win/loss by tint
- * alone are a known open finding that no automated rule flags. It also only
- * grades what the fixtures put on screen: a fallback branch the fixtures
- * never render is invisible to this gate.
+ * axe over the data-rich player pages: against an empty database the rows and
+ * tables never mount and the scan proves nothing. axe does NOT catch
+ * use-of-color -- the win/loss tint is a known open finding -- and it grades
+ * only what the fixtures put on screen.
  */
 
 test.describe("axe scan of the populated player pages", () => {

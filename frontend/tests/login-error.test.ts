@@ -109,16 +109,10 @@ describe("sign-in error mapping", () => {
   });
 
   it("tells a locked-out account when it may try again", () => {
-    // The existing lockout case only passes an unparseable `locked_until`,
-    // so the branch that actually names a time had never run. Without it a
-    // lockout says "please try again later" and the person is left guessing
-    // between a minute and the rest of the day -- which is the whole reason
-    // the server sends the timestamp.
-    //
-    // The time renders through the shared formatDateTime, so its shape is
-    // locale-independent — but the UTC fixture still lands on different
-    // local hours on a Prague laptop and in the gate container, so the
-    // assertion pins the shape, not the exact instant.
+    // The existing lockout case passes an unparseable `locked_until`, so the branch
+    // that names a time had never run -- without it a lockout says "try again
+    // later" and the person guesses between a minute and a day. The assertion pins
+    // the shape, not the instant: the fixture is UTC and the gate is not.
     const message = getLoginErrorMessage(
       createAuthLoginError(
         {
@@ -140,11 +134,10 @@ describe("sign-in error mapping", () => {
   });
 
   it("does not treat a thrown non-Error as an authentication error", () => {
-    // Dropping the `instanceof Error` gate survived the whole suite: nothing
-    // ever handed `isAuthLoginError` anything but an Error. It is the gate in
-    // `getLoginRequestError`, which returns the value as-is when it passes --
-    // so a bare object thrown by the fetch layer would skip the NETWORK_ERROR
-    // fallback, and the visitor stops being told to check their connection.
+    // Dropping the `instanceof Error` gate survived the whole suite. It is the gate
+    // in `getLoginRequestError`, so a bare object thrown by the fetch layer would
+    // skip the NETWORK_ERROR fallback and stop telling the visitor to check their
+    // connection.
     expect(isAuthLoginError("boom")).toBe(false);
     expect(isAuthLoginError({ code: "ACCOUNT_LOCKED" })).toBe(false);
     expect(isAuthLoginError(null)).toBe(false);

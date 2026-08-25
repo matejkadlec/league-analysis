@@ -114,7 +114,7 @@ describe("provider cache error reporting", () => {
         queryFn: () => Promise.reject(httpError(401)),
         retry: false,
       }),
-    ).rejects.toThrow();
+    ).rejects.toThrow("Request failed with status code 401");
 
     // Whether an authentication kind is worth recording is the reporter's
     // call (covered in tests/api-error-logging.test.ts with the real module);

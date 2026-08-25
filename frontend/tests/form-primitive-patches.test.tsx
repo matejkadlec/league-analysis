@@ -83,11 +83,9 @@ describe("the patched form primitives", () => {
   });
 
   it("refuses a form primitive used outside a FormField", () => {
-    // Upstream guards on `!fieldContext`, which cannot be false — the context
-    // is created with `{}` as its default — and reads `fieldContext.name`
-    // through it one line earlier anyway. Without the patch this renders a
-    // label whose `htmlFor` is "undefined-form-item", pointing at nothing,
-    // and says nothing about why.
+    // Upstream guards on `!fieldContext`, which cannot be false, and reads
+    // `fieldContext.name` through it one line earlier anyway. Without the patch
+    // the label's `htmlFor` is "undefined-form-item", pointing at nothing.
     const consoleError = vi
       .spyOn(console, "error")
       .mockImplementation(() => {});

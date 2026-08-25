@@ -43,11 +43,9 @@ function run(status: string) {
 }
 
 /**
- * A backend that reports one running run, then fails the exact-status poll for
- * a while, then recovers with a terminal status.
- *
- * `/sync/active` keeps answering throughout: a transient failure of the exact
- * poll is the case under test, not a total outage.
+ * A backend that reports one running run, fails the exact-status poll for a
+ * while, then recovers with a terminal status. `/sync/active` keeps answering
+ * throughout: a transient failure is the case under test, not a total outage.
  */
 function mockPollThatFailsThenRecovers(recoversAs: string) {
   let exactCalls = 0;

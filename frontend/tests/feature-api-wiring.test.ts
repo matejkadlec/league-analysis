@@ -25,18 +25,10 @@ import {
 } from "@/features/players/player-api";
 import { api } from "@/lib/core/api";
 
-// What the delegation modules actually are: a wire shape per function. The
-// backend's test_frontend_api_paths.py already proves every (path, method)
-// pair here is a route the app serves, so a typo'd path fails over there.
-// What nothing else checks is the rest of the request: query parameter
-// *names* (a typo'd optional param is silently ignored by the server and the
-// caller gets the unfiltered answer), the request body, and which arguments
-// go on the URL versus in `params`. Every consumer test mocks these modules,
-// so this file is the only place the real wiring runs.
-//
-// Deliberately not checked: schema pairing. A function wired to the wrong
-// schema fails closed — validation rejects the real payload and the caller
-// sees `success: false` — and the schema-to-return-type link is held by tsc.
+// The wire shape per function. The backend's test_frontend_api_paths.py proves
+// every (path, method) pair; what nothing else checks is query parameter names,
+// the request body, and URL-versus-`params`. Schema pairing is deliberately not
+// checked -- it fails closed, and tsc holds the return type.
 
 const originalAdapter = api.defaults.adapter;
 

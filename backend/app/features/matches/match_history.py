@@ -88,10 +88,8 @@ def _enemy_lane_opponent(participant: MatchParticipant) -> EnemyLaneOpponent:
         summoner2_id=participant.summoner2_id,
         # The column holds `dict[str, Any] | None` but the field is declared
         # `RunesData | None`, and the raw dict is what the `mode="before"`
-        # validator `transform_runes` is there to convert. Pyright checks the
-        # call against the declared field type, which no pre-validator input
-        # ever matches, so this cast marks a validator boundary rather than
-        # silencing a real mismatch.
+        # validator `transform_runes` converts. Pyright checks against the
+        # declared type, so this cast marks a validator boundary, not a mismatch.
         runes=cast(Any, participant.runes),
     )
 

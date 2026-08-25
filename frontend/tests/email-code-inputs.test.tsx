@@ -114,16 +114,10 @@ describe("the six-slot email verification code", () => {
   });
 
   it("will not write past the last slot when digits arrive mid-code", () => {
-    // A multi-digit value dropped into slot five has more digits than there
-    // are slots left, and without the clip the extras are written to indexes
-    // that do not exist -- lengthening the array rather than overflowing
-    // anything visible.
-    //
-    // That is why the length is asserted and not just the boxes: nothing on
-    // screen changes, but the dialog above joins this array and refuses any
-    // result that is not exactly six characters. A seventh entry leaves all
-    // six boxes looking correctly filled under the message "Enter all 6
-    // digits", with nothing to click that fixes it.
+    // A multi-digit paste into slot five writes past the last index, lengthening
+    // the array rather than overflowing anything visible. That is why the length
+    // is asserted: the dialog above refuses anything not exactly six characters,
+    // under six boxes that look correctly filled.
     const { slots, onDigits } = renderInputs();
 
     fireEvent.change(slots[4]!, { target: { value: "789" } });

@@ -33,13 +33,10 @@ export type ApiResponse<T> =
   { success: true; data: T } | { success: false; error: ApiError };
 
 /**
- * Unwrap an `ApiResponse` inside a query or mutation function.
- *
- * The `validated*` helpers resolve with `{ success: false }` rather than
- * rejecting, so a caller reading only `.data` turns a failed request into a
- * silent empty state and never reaches the `QueryCache` error toast that
- * `frontend/CLAUDE.md` makes the floor. Throwing here keeps that contract and
- * carries the `ApiError` through, so the toast can name the failure.
+ * Unwrap an `ApiResponse` inside a query or mutation function. The `validated*`
+ * helpers resolve rather than reject, so a caller reading only `.data` renders
+ * a failure as a silent empty state and never reaches the `QueryCache` toast
+ * that `frontend/CLAUDE.md` makes the floor. Throwing keeps that contract.
  */
 export function unwrap<T>(result: ApiResponse<T>): T {
   if (!result.success) {
@@ -49,12 +46,10 @@ export function unwrap<T>(result: ApiResponse<T>): T {
 }
 
 /**
- * `unwrap`, except a 404 is an ordinary empty state rather than a failure.
- *
- * Several resources only exist once something has happened -- a player who has
- * never been analysed, a deployment with no key saved yet -- so their absence
- * is what the surface is there to render. Every other status still throws, so
- * a real failure keeps reaching the `QueryCache` toast.
+ * `unwrap`, except a 404 is an ordinary empty state: several resources exist
+ * only once something has happened -- an unanalysed player, a deployment with
+ * no key yet -- so their absence is what the surface renders. Every other
+ * status still throws, so a real failure keeps reaching the `QueryCache` toast.
  */
 export function unwrapOr404<T, F>(result: ApiResponse<T>, fallback: F): T | F {
   if (!result.success && result.error.status === 404) {
@@ -113,17 +108,10 @@ api.interceptors.response.use(
     originalRequest._retry = true;
     const refresh = await refreshAccessToken();
     if (refresh.outcome !== "refreshed") {
-      // Teardown belongs to the refresh call, which is the only thing that
-      // knows whether the server rejected the session or was simply
-      // unreachable. Clearing the hint from here left React still believing it
-      // was signed in, and that disagreement rendered as a blank page.
-      //
-      // What it reports is forwarded verbatim, because the original 401 is
-      // true of the expired access token and of nothing else. Passing it on
-      // regardless labelled a redeploy `kind: "authentication"`, and every
-      // reader believed it: `queryErrorToast` swallowed the toast because "the
-      // auth gate already redirects on these", while the gate did not redirect
-      // -- the hint was still standing. No message, no navigation, nothing.
+      // No teardown here, and no reuse of the original 401: only the refresh
+      // call can tell a rejected session from an unreachable server, and that
+      // 401 is true of the expired access token and of nothing else. Forward
+      // what the refresh reported, verbatim.
       if (refresh.outcome === "refused") {
         return Promise.reject(error);
       }
@@ -198,15 +186,9 @@ async function validatedRequest<T>(
 }
 
 /**
- * What can go in a query string.
- *
- * This was `Record<string, unknown>`, which let an object or an array through
- * to axios' serialiser. It matters more here than on a request body: a body
- * field the endpoint does not declare is a 422, but a *query* name it does not
- * declare is silently dropped and the parameter's default is used instead, so
- * the call succeeds and answers the wrong question.
- * `tests/api-contract-alignment.test.ts` checks the names against the
- * document; this bounds the values.
+ * What can go in a query string. Scalars only, never `unknown`: an undeclared
+ * query name is dropped in silence and its default used, so the call succeeds
+ * and answers the wrong question.
  */
 type QueryParams = Record<string, string | number | boolean | undefined>;
 

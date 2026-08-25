@@ -107,10 +107,9 @@ describe("the background jobs page", () => {
       expect(screen.getByText(/job card Match Fetcher/)).toBeTruthy(),
     );
     // The inactive panel must be absent, not merely hidden. This is the only
-    // assertion in the suite that touches `components/ui/tabs.tsx`, whose one
-    // consumer is this page: replace `TabsContent` with something that always
-    // renders and both panels stack on top of each other, which no assertion
-    // about the *active* tab can see.
+    // assertion touching `components/ui/tabs.tsx`: a `TabsContent` that always
+    // rendered would stack both panels, which no assertion about the active tab
+    // can see.
     expect(screen.queryByText(/executions list/)).toBeNull();
 
     fireEvent.click(screen.getByText(/job card Match Fetcher/));
@@ -188,11 +187,9 @@ describe("the background jobs page", () => {
         expect(screen.getByText(/job card Match Fetcher/)).toBeTruthy(),
       );
 
-      // The window is wide because `shouldAdvanceTime` lets real elapsed time
-      // add to the mocked clock, and the gate runs on a Pi that also runs
-      // deploys. It is still narrow enough to fail on a countdown that does
-      // not move (15) or one that has bottomed out (0), which is the whole
-      // claim.
+      // The window is wide because `shouldAdvanceTime` lets real elapsed time add to
+      // the mocked clock and the gate runs on a Pi that also runs deploys. Still
+      // narrow enough to fail on a countdown that does not move or has bottomed out.
       await vi.advanceTimersByTimeAsync(3000);
       await waitFor(() =>
         expect(

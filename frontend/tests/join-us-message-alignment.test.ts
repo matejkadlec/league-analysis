@@ -10,15 +10,9 @@ import {
 } from "@/features/auth/utils/join-us-message";
 
 /**
- * The Join Us message bounds are written on both sides, and the two halves of
- * the rule live in different places on the backend, so they are read from
- * different places here.
- *
- * The maximum is a `max_length` on the request schema, so it reaches the
- * OpenAPI document. The minimum is a plain module constant the service
- * compares against and reaches nothing -- the form's counter is the only
- * reason a user ever sees it before submitting, and a form that disagreed
- * would either block a message the API would take or invite a 422.
+ * The two halves of the rule live in different places on the backend, so they
+ * are read from different places here: the maximum is a `max_length` that
+ * reaches the OpenAPI document, the minimum a module constant reaching nothing.
  */
 const BACKEND_ROOT = join(
   dirname(fileURLToPath(import.meta.url)),

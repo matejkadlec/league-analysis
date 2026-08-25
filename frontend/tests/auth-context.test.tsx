@@ -233,15 +233,10 @@ describe("AuthProvider logout", () => {
   }
 
   it("changes nothing when an automatic logout cannot reach the server", async () => {
-    // The eighth escape, and the reason the unconditional teardown is now
-    // opt-in. An audit mounted a keep-alive that called `logout()` on a timer
-    // whenever a refresh failed -- reached through React context, so no import
-    // rule sees it, and every lint rule stayed green while it cleared the hint
-    // over an outage and stranded a live 30-day refresh token.
-    //
-    // A caller that writes plain `logout()`, which is what a machine will
-    // write, now sends the request and leaves everything alone if it never
-    // arrives.
+    // Why the unconditional teardown is opt-in: an audit called `logout()` on
+    // a timer whenever a refresh failed, reached through React context where
+    // no import rule sees it, and stranded a live 30-day refresh token behind
+    // a cleared hint.
     refreshAccessToken.mockResolvedValue({ outcome: "unreachable" });
     vi.stubGlobal(
       "fetch",
@@ -268,19 +263,10 @@ describe("AuthProvider logout", () => {
   });
 
   it("changes nothing when a beacon is queued instead of a request answered", async () => {
-    // The escape a later audit wrote, and it reads as an improvement: catch
-    // the offline case, hand the logout to `navigator.sendBeacon` so the
-    // browser retries it after the tab closes, and count that as the server
-    // having answered. It is not one. `sendBeacon` returns true for *queued*
-    // -- against a refused connection it still returns true -- so
-    // `serverAnswered` becomes true unconditionally, the opt-in above turns
-    // into dead code, and plain `logout()` is back to tearing the session
-    // down over every blip with the refresh token live and unrevoked.
-    //
-    // jsdom has no `sendBeacon`, which is why the whole suite stayed green
-    // for that edit. So the test supplies one: the invariant is about the
-    // effect, not the API -- queueing is not answering, whatever the return
-    // value says.
+    // `sendBeacon` returns true for *queued*, even against a refused
+    // connection, so counting it as the server having answered makes the
+    // opt-in above dead code. jsdom has no `sendBeacon`, so the test supplies
+    // one: queueing is not answering.
     refreshAccessToken.mockResolvedValue({ outcome: "unreachable" });
     const sendBeacon = vi.fn(() => true);
     Object.defineProperty(navigator, "sendBeacon", {
@@ -313,12 +299,10 @@ describe("AuthProvider logout", () => {
   });
 
   it("tears down without the flag when the server did answer", async () => {
-    // The default is "changed nothing" only when the request never arrived.
-    // A 200 means the server revoked the family, and stopping there would
-    // leave the visitor on a signed-in shell whose credentials are already
-    // dead -- the mirror-image failure, and a one-line hole: deleting
-    // `serverAnswered = response.ok` passed all 320 tests, because every
-    // caller today happens to pass the flag.
+    // The mirror-image failure: a 200 means the family is revoked, so stopping
+    // there leaves the visitor on a signed-in shell whose credentials are
+    // dead. Deleting `serverAnswered = response.ok` passed every test, because
+    // every caller today happens to pass the flag.
     refreshAccessToken.mockResolvedValue({ outcome: "unreachable" });
     vi.stubGlobal(
       "fetch",
@@ -341,11 +325,10 @@ describe("AuthProvider logout", () => {
   });
 
   it("changes nothing when an edge answers 401 for an automatic logout", async () => {
-    // A maintenance Worker sits in front of this route, and `/auth/logout`
-    // itself has no auth dependency and cannot answer 401. So a 401 here was
-    // minted by something that never reached the backend, and nothing was
-    // revoked -- treating it as "already signed out" would strand a live
-    // 30-day refresh token behind a retracted hint during a deploy.
+    // `/auth/logout` has no auth dependency and cannot answer 401, so a 401
+    // was minted by the maintenance Worker in front of it and nothing was
+    // revoked. Reading it as "already signed out" strands a live 30-day
+    // refresh token behind a retracted hint during a deploy.
     refreshAccessToken.mockResolvedValue({ outcome: "unreachable" });
     vi.stubGlobal(
       "fetch",
@@ -393,13 +376,10 @@ describe("AuthProvider logout", () => {
   });
 
   it("waits for the server before reporting the session over", async () => {
-    // Only the server can revoke; clearing cookies here merely hides the
-    // credential. Reverting this to fire-and-forget passes every other test
-    // in the suite, and it breaks two things at once: it reports "signed out"
-    // while a 30-day refresh token is still live and spendable in this
-    // browser -- on a shared machine, by the next person -- and it settles
-    // the promise both Sign Out buttons drive their pending state from, so
-    // the spinner vanishes while the request is still in flight.
+    // Only the server can revoke; clearing cookies here hides the credential.
+    // Fire-and-forget passes every other test and breaks two things: it says
+    // "signed out" while a 30-day token is still spendable in this browser,
+    // and it settles the promise both Sign Out buttons show a spinner from.
     vi.useFakeTimers();
     removeAuthTokens.mockReset();
     routerPush.mockReset();
@@ -434,14 +414,10 @@ describe("AuthProvider logout", () => {
       },
     );
 
-    // Real timers and a real wait, not one microtask. An audit gave up on the
-    // server after two seconds via `Promise.race` and this test stayed green,
-    // because it had already finished asserting -- restoring the exact failure
-    // its own comment names.
-    // Pinned to the request's own deadline rather than to a round number. An
-    // audit gave up after two seconds via `Promise.race` and an earlier
-    // version of this test, which waited 2.1s, would have caught that one and
-    // waved a three-second version through.
+    // A real wait, pinned to the request's own deadline rather than a round
+    // number. An audit gave up on the server after two seconds via
+    // `Promise.race`; a test that waited one microtask, or a fixed 2.1s, waves
+    // the next version of that through.
     await act(async () => {
       await vi.advanceTimersByTimeAsync(AUTH_PROBE_TIMEOUT_MS - 100);
     });

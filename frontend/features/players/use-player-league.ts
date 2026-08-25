@@ -7,12 +7,9 @@ import { PlayerLeagueSchema } from "@/lib/core/schemas";
 
 /**
  * The player's current ranked-solo standing, or `null` when they have none.
- *
- * `/players/{puuid}/league` never 404s: an unranked player is a 200 carrying
- * `null`, which is why the schema is nullable. So a failed response here is a
- * real failure and is left to reach the `QueryCache` toast rather than being
- * folded into the same `null` the unranked case uses -- the card would
- * otherwise label a database outage as "unranked".
+ * `/players/{puuid}/league` never 404s -- unranked is a 200 carrying `null` --
+ * so a failure is left to reach the `QueryCache` toast rather than folded
+ * into that same `null`, which would label an outage as "unranked".
  */
 export function usePlayerLeague(puuid: string) {
   return useQuery({

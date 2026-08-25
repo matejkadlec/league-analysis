@@ -6,11 +6,8 @@ import { blockUpstreamRequests } from "./offline";
 
 /**
  * The mocked API surface the smurf-and-boost page needs, shared by the
- * behavioural spec and the mobile-layout spec.
- *
- * Both specs drive the same page against the same fixtures, so a fixture that
- * drifts from the real contract fails in both places at once rather than
- * leaving one spec quietly testing a shape the server stopped returning.
+ * behavioural spec and the mobile-layout spec, so a fixture that drifts from
+ * the real contract fails in both places at once.
  */
 
 const NOW = "2026-08-14T10:00:00.000Z";
@@ -23,11 +20,9 @@ const player = trackedPlayer(NOW, {
 });
 
 /**
- * A second player, never tracked and never the account's current one.
- *
- * The whole point of the page's local search is that it can analyse somebody
- * the sidebar has never heard of, so the fixture has to be somebody the
- * sidebar has never heard of: `/players/context` returns only `player`.
+ * A second player, never tracked and never the account's current one: the
+ * page's local search exists to analyse somebody the sidebar has never heard
+ * of, so `/players/context` returns only `player`.
  */
 export const OTHER_PUUID = "rank-manipulation-other-puuid";
 
@@ -188,11 +183,9 @@ export interface HarnessState {
   /** Every PUUID an explicit game fetch was started for, in order. */
   synced: string[];
   /**
-   * How many times the run started by the last fetch has been polled.
-   *
-   * The first three polls answer `running`; the fourth answers `completed`.
-   * A mock that finished immediately would let a card that never shows the
-   * fetch at all pass, and the slack is explained at the handler.
+   * How many times the run started by the last fetch has been polled. The first
+   * three answer `running`, the fourth `completed`: a mock that finished
+   * immediately would let a card that never shows the fetch pass.
    */
   syncPolls: number;
   currentPlayer: typeof player | null;
@@ -451,12 +444,10 @@ export async function installSmurfBoostMocks(
       return;
     }
 
-    // The three remaining `/player-overview` reads, which the first detection
-    // spec loads on its way to the Rank Manipulation page. Same reason as the
-    // `/stats` mock above: each is otherwise a catch-all 404 raising its own
-    // global error toast beside whatever a later step asserts. The specs assert
-    // nothing about these cards, so empty is the whole requirement -- and
-    // `/league` is nullable by design, an unranked player being a 200 of `null`.
+    // The three remaining `/player-overview` reads the first detection spec loads
+    // on its way here. Each is otherwise a catch-all 404 raising its own global
+    // error toast; the specs assert nothing about these cards, and `/league` is
+    // nullable by design, an unranked player being a 200 of `null`.
     if (path.endsWith("/league")) {
       await route.fulfill({ contentType: "application/json", body: "null" });
       return;

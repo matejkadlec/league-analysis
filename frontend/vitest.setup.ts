@@ -3,20 +3,15 @@ import { cleanup } from "@testing-library/react";
 import { configure } from "@testing-library/dom";
 
 // Unmount between tests once, here, rather than in every file that renders.
-// Vitest runs without `globals`, so Testing Library's own auto-cleanup -- which
-// only engages when it finds a global `afterEach` -- never fires: this file is
-// what stands in for it. A suite that leaves its tree mounted leaks it into the
-// next test's queries, where the failure reads as a duplicate element rather
-// than as missing teardown.
+// Vitest runs without `globals`, so Testing Library's auto-cleanup -- which
+// engages only when it finds a global `afterEach` -- never fires. A leaked
+// tree reads as a duplicate element rather than as missing teardown.
 afterEach(cleanup);
 
-// jsdom implements no CSS engine and therefore no `window.matchMedia`, so any
-// component reading a breakpoint throws on render. Stub it once here rather
-// than in each suite: the default answer is "does not match", which is the
-// same server snapshot `useMediaQuery` takes, so components render their
-// baseline (mobile-first) branch unless a test says otherwise.
-//
-// To exercise the matched branch, override `window.matchMedia` in that test.
+// jsdom has no CSS engine and so no `window.matchMedia`, and a component
+// reading a breakpoint throws on render. The stub answers "does not match",
+// the same server snapshot `useMediaQuery` takes, so components render their
+// mobile-first branch; override `window.matchMedia` to exercise the other.
 if (typeof window !== "undefined" && !window.matchMedia) {
   window.matchMedia = ((query: string) => ({
     matches: false,
@@ -30,17 +25,8 @@ if (typeof window !== "undefined" && !window.matchMedia) {
   })) as unknown as typeof window.matchMedia;
 }
 
-// Testing Library retries `findBy*`/`waitFor` for 1000ms by default, which is
-// a statement about how fast the machine is rather than about the component.
-// The CI runner is a single shared aarch64 Pi that builds containers in the
-// same job, and there individual tests measured 1.8s where they take under
-// 100ms locally. A component that has to resolve a React Query fetch before it
-// can render its settled state loses that race, and the failure reads as a
-// missing element rather than as a timeout: `track-player-button` failed the
-// gate still showing its spinner, asserting against a button that was simply
-// not finished yet.
-//
-// Five seconds costs nothing when a test passes -- the timeout only bounds how
-// long a *failing* query waits -- and it removes the whole class of CI-only
-// flakes that a re-run would have papered over.
+// Five seconds, not Testing Library's 1000ms default: the CI runner is a
+// shared aarch64 Pi that builds containers in the same job, where tests
+// measured 1.8s against under 100ms locally. The timeout only bounds how long
+// a *failing* query waits, so it costs nothing.
 configure({ asyncUtilTimeout: 5000 });

@@ -261,10 +261,8 @@ test("renders the page at the sizes the layout was specified in", async ({
   }
 
   // Counting the resolved template catches a breakpoint that never applies,
-  // which a class-name check cannot. Each threshold group sizes its own grid
-  // so every tab fits without scrolling the dialog: the two window fields
-  // sit side by side, and the seven-field Playing Pattern group spreads
-  // across four columns at this width.
+  // which a class-name check cannot. Each threshold group sizes its own grid so
+  // every tab fits without scrolling the dialog.
   const columnsOf = (testId: string) =>
     page
       .getByTestId(testId)
@@ -329,11 +327,9 @@ test("renders the page at the sizes the layout was specified in", async ({
 
 /**
  * The reason the page has a search of its own: analysing somebody who is not
- * the account's player, without becoming that player.
- *
- * Nothing else covers it. The other spec asserts the control is on screen and
- * stops there, which passed just as well when choosing a player meant leaving
- * for Player Overview.
+ * the account's player, without becoming them. The other spec asserts only
+ * that the control is on screen, which passed just as well when choosing a
+ * player meant leaving for Player Overview.
  */
 test("compares a player the account has never tracked, and stays itself", async ({
   page,
@@ -407,11 +403,9 @@ test("does not carry one player's fetch report onto another", async ({
   await expect(page.locator("#smurf-boost-result")).toBeVisible();
   await expect(runCard).toContainText("The last fetch");
 
-  // Pointing the card at somebody else must leave that sentence behind: it
-  // reports a fetch made for the previous player, and the card holds it in
-  // its own state where no query key can invalidate it. The `key` on this
-  // card is the whole mechanism -- without it React keeps the same instance
-  // across the switch and the stranger inherits a fetch nobody ran for them.
+  // The card holds that sentence in its own state, where no query key can
+  // invalidate it, so the `key` on this card is the whole mechanism: without it
+  // React keeps the instance and the stranger inherits a fetch nobody ran.
   const search = runCard.getByLabel("Choose player for comparison");
   await search.fill("Stranger");
   await page.getByRole("option", { name: /Stranger#TWO/ }).click();
@@ -428,14 +422,10 @@ test("seeds the card's search with the first player an empty account picks", asy
 }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
 
-  // The account that has never chosen a player. `useAnalyzedPlayer` resolves
-  // to none here -- no `?puuid=`, and no current player to seed one from --
-  // which is the one state in which the card's `key` does real work. Under it
-  // `PlayerSelector` starts with an empty `initialSearchValue`, so choosing a
-  // player empties the box rather than keeping the name; only the remount the
-  // changed key forces re-seeds it with who was chosen. Un-key the card, or
-  // stop passing the name in, and the box is left blank next to a result that
-  // is about somebody.
+  // The account that has never chosen a player: the one state where the card's
+  // `key` does real work. `PlayerSelector` starts with an empty
+  // `initialSearchValue` here, so only the remount re-seeds the box with who was
+  // chosen.
   await installSmurfBoostMocks(page, { currentPlayer: null });
 
   await page.goto("/rank-manipulation");
@@ -499,11 +489,9 @@ test("has no WCAG A/AA violations, before or after a comparison", async ({
   await page.getByRole("button", { name: "Run the comparison" }).click();
   await expect(page.locator("#smurf-boost-result")).toBeVisible();
 
-  // The success toast is scanned rather than excluded, but only once it has
-  // finished fading in. Axe measures whatever opacity it finds, and the
-  // exclusion this replaces was hiding a `color-contrast` failure recorded at
-  // opacity 0.03 mid-animation -- the settled colours are near-black on a
-  // pale tint.
+  // The success toast is scanned once it has finished fading in: axe measures
+  // whatever opacity it finds, and the exclusion this replaces was hiding a
+  // `color-contrast` failure recorded at opacity 0.03 mid-animation.
   await expect(page.locator("[data-sonner-toast]")).toHaveCSS("opacity", "1");
 
   await scan("with a result on screen");

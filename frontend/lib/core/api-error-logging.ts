@@ -7,14 +7,10 @@ export interface ApiErrorReportContext {
   url?: string | undefined;
 }
 
-// Only kinds a developer must act on: the service or the transport failed in
-// a way no user input caused. The remaining kinds stay silent because they
-// are expected product flows, not defects:
-// - validation/authentication/authorization/not-found/conflict/rate-limit
-//   describe ordinary client behaviour the UI already handles, and
-// - invalid-response is already recorded by `logValidationError` in
-//   `lib/core/api.ts` at the point of detection, with the URL and the exact
-//   Zod issues a second record here would only duplicate.
+// Only kinds a developer must act on. The rest are expected product flows the
+// UI already handles -- except `invalid-response`, which `logValidationError`
+// in `lib/core/api.ts` already records at the point of detection with the URL
+// and the exact Zod issues.
 const REPORTED_ERROR_KINDS: ReadonlySet<ApiErrorKind> = new Set([
   "unexpected",
   "service",
@@ -23,13 +19,10 @@ const REPORTED_ERROR_KINDS: ReadonlySet<ApiErrorKind> = new Set([
 ]);
 
 /**
- * Record a normalized API failure for developer observability.
- *
- * The payload stays secret-safe by construction: `ApiError.message` is the
- * product message `normalizeApiError` already scrubbed of raw response
- * bodies, and `details` is deliberately excluded from the record. The
- * optional `url` and `key` come from the calling context, never from the
- * response.
+ * Record a normalized API failure for developer observability. Secret-safe by
+ * construction: `ApiError.message` is the scrubbed product message and
+ * `details` is excluded, while `url` and `key` come from the calling context
+ * rather than from the response.
  */
 export function reportApiError(
   error: ApiError,

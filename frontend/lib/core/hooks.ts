@@ -79,15 +79,10 @@ export function useToast() {
 }
 
 /**
- * The complete vocabulary of a query's `meta`.
- *
- * A type alias, not an interface, and the distinction is the whole point:
- * `QueryMeta` resolves to `Register["queryMeta"]` only when that type extends
- * `Record<string, unknown>`, which an alias does by implicit index signature
- * and an interface does not. Declare this as an interface and `QueryMeta`
- * silently falls back to `Record<string, unknown>` -- which is what `meta`
- * used to be, and why `meta: { silenceErrorToasts: true }` compiled, read as
- * an unknown key, and toasted anyway.
+ * The complete vocabulary of a query's `meta`. A type alias, not an interface,
+ * and that is the whole point: `QueryMeta` resolves to `Register["queryMeta"]`
+ * only when it extends `Record<string, unknown>`, which an alias satisfies by
+ * implicit index signature and an interface does not.
  */
 type AppQueryMeta = {
   /** Some other surface reports this failure; say which in a comment. */
@@ -103,11 +98,9 @@ declare module "@tanstack/react-query" {
 }
 
 /**
- * Decide what a failed query should announce, or `null` to stay silent.
- *
- * Kept pure and separate from the cache handler that calls it so the silence
- * rules are testable: a handler that decided inline could only be checked by
- * driving a real QueryClient and intercepting Sonner.
+ * Decide what a failed query should announce, or `null` to stay silent. Pure
+ * and separate from the cache handler that calls it, so the silence rules are
+ * testable without driving a real QueryClient and intercepting Sonner.
  */
 export function queryErrorToast(
   error: unknown,

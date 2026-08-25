@@ -3,25 +3,14 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 /**
- * The parts of Rank Manipulation that a ticket fixed in writing.
- *
- * These are checked as source text rather than through a render because what
- * they pin is a decision, not a behaviour: copy that was approved word for
- * word, and heading capitalisation that Playwright's `getByRole({ name })`
- * cannot pin because it matches case-insensitively. LGA-101's size floor left
- * for `text-size-floor.test.ts` once a second surface was held to it.
- *
- * The counterpart e2e (`e2e/smurf-boost-detection.spec.ts`) measures the
- * rendered result. Neither replaces the other: this one is exhaustive and
- * blind to whether a class resolves, that one is exact and samples.
+ * The parts of Rank Manipulation a ticket fixed in writing: approved copy and
+ * heading capitalisation, checked as source text because they pin a decision
+ * rather than a behaviour. The counterpart e2e measures the rendered result.
  */
 
 /**
- * Every file that renders part of the page.
- *
- * `player-selector.tsx` is on the list because LGA-100 put it inside the
- * Games Comparison card, and a heading or a stray `text-xs` there lands on
- * this page like any other.
+ * Every file that renders part of the page. `player-selector.tsx` is on the
+ * list because LGA-100 put it inside the Games Comparison card.
  */
 const SURFACE_FILES = [
   "app/rank-manipulation/page.tsx",
@@ -54,10 +43,8 @@ describe("the Rank Manipulation surface", () => {
 
   it("keeps every heading below the card title that holds it", () => {
     // `CardTitle` renders an `h3`, so a subsection inside a card is an `h4`.
-    // The result card had its two family headings as `h2` -- an outline that
-    // read h1, h3, h2 and put the page's only `h2`s underneath an `h3`.
-    // Nothing caught it: axe's `heading-order` is a best-practice rule and is
-    // not in the tag set the e2e scan runs.
+    // axe's `heading-order` is best-practice and not in the tag set the e2e scan
+    // runs, so nothing else catches an outline that reads h1, h3, h2.
     const offenders: string[] = [];
 
     for (const path of SURFACE_FILES) {
@@ -74,12 +61,9 @@ describe("the Rank Manipulation surface", () => {
   });
 
   it("keeps the approved Games Comparison wording word for word", () => {
-    // LGA-100 fixed this sentence exactly. Nothing else pins it: the e2e
-    // asserts the card's title and that a search is inside it, never the copy.
-    //
-    // Rewritten when the run button started fetching from Riot: the approved
-    // sentence promised the opposite ("contacts no external service"), and a
-    // pinned sentence that has become false is worse than no pin at all.
+    // LGA-100 fixed this sentence exactly and nothing else pins it. Rewritten
+    // once already: a pinned sentence that has become false is worse than no pin
+    // at all.
     const source = readFileSync(
       "features/smurf-boost/components/smurf-boost-detection.tsx",
       "utf8",

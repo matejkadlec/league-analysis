@@ -279,11 +279,10 @@ class MatchmakingAnalysisService:
         else:
             existing = await self._get_active_analysis(puuid)
             if not existing:
-                # `commit_new_run` returns the IntegrityError rather than
-                # raising it, so there is no exception in flight here: a bare
-                # `raise` reached this line as `RuntimeError: No active
-                # exception to reraise`, hiding the constraint that actually
-                # failed.
+                # `commit_new_run` returns the IntegrityError rather than raising
+                # it, so no exception is in flight here: a bare `raise` reached
+                # this line as `RuntimeError: No active exception to reraise`,
+                # hiding the constraint that actually failed.
                 raise conflict
             logger.info("Attached after concurrent start", puuid=puuid)
             self._ensure_background_task(puuid, existing.created_at)
@@ -462,12 +461,10 @@ class MatchmakingAnalysisService:
                 service = MatchmakingAnalysisService(db, riot_client, self.user_id)
                 await service._run_analysis(puuid, created_at)
         except asyncio.CancelledError:
-            # Deliberately leaves the persisted row active. This also fires when
-            # process shutdown cancels the task, and the documented contract is
-            # that a restart resumes the run with its completed progress intact;
-            # writing `cancelled` here would discard that work on every deploy.
-            # An explicit user cancellation is unaffected: `cancel_analysis`
-            # commits the terminal row before cancelling this task.
+            # Deliberately leaves the persisted row active: this also fires when
+            # process shutdown cancels the task, and a restart is contracted to
+            # resume with progress intact. Explicit user cancellation is
+            # unaffected -- `cancel_analysis` commits the terminal row first.
             logger.info("Background analysis task cancelled; persisted run left active")
             raise
         except Exception as e:
@@ -971,12 +968,13 @@ class MatchmakingAnalysisService:
 
         Returns None when capacity is unavailable, the error is recoverable,
         or retries are exhausted; `required=True` raises instead.
+
+        These attempts stack on the Riot client's own tenacity retry of 429/5xx:
+        the client may sleep through several server retry_afters inside one
+        `fetch()` before this loop waits again. That is the intended posture for
+        this long-running analysis — prefer eventually completing over failing
+        fast.
         """
-        # These attempts stack on the Riot client's own tenacity retry of
-        # 429/5xx: the client may sleep through several server retry_afters
-        # inside one `fetch()` before this loop waits again. That is the
-        # intended posture for this long-running analysis — prefer eventually
-        # completing over failing fast.
         for attempt in range(self.MAX_RATE_LIMIT_ATTEMPTS):
             try:
                 result = await fetch()

@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ChevronDown, GitBranch } from "lucide-react";
 import Image from "next/image";
+import { cn } from "@/lib/core/utils";
 
 export function MatchmakingExplanationCard() {
   const [isExpanded, setIsExpanded] = useState(true);
@@ -25,9 +26,10 @@ export function MatchmakingExplanationCard() {
           >
             {isExpanded ? "Collapse" : "Expand"}
             <ChevronDown
-              className={`ml-2 h-4 w-4 transition-transform duration-300 ${
-                isExpanded ? "rotate-180" : "rotate-0"
-              }`}
+              className={cn(
+                "ml-2 h-4 w-4 transition-transform duration-300",
+                isExpanded ? "rotate-180" : "rotate-0",
+              )}
             />
           </Button>
         </div>
@@ -39,11 +41,12 @@ export function MatchmakingExplanationCard() {
         </p>
 
         <div
-          className={`grid transition-all duration-500 ease-in-out ${
+          className={cn(
+            "grid transition-all duration-500 ease-in-out",
             isExpanded
               ? "grid-rows-[1fr] opacity-100"
-              : "grid-rows-[0fr] opacity-0"
-          }`}
+              : "grid-rows-[0fr] opacity-0",
+          )}
         >
           <div className="overflow-hidden">
             <div className="p-2">
@@ -52,9 +55,10 @@ export function MatchmakingExplanationCard() {
                 alt="Matchmaking Analysis Calculation Explanation"
                 width={1920}
                 height={1080}
-                className={`w-full h-auto transition-opacity duration-500 ${
-                  isExpanded ? "opacity-100" : "opacity-0"
-                }`}
+                className={cn(
+                  "w-full h-auto transition-opacity duration-500",
+                  isExpanded ? "opacity-100" : "opacity-0",
+                )}
               />
             </div>
           </div>

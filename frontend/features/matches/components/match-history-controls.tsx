@@ -12,6 +12,7 @@ import {
   Search,
 } from "lucide-react";
 
+import { cn } from "@/lib/core/utils";
 import {
   getMatchHistoryEmptyMessage,
   MATCH_HISTORY_QUEUE_FILTERS,
@@ -104,12 +105,10 @@ export function MatchHistoryLoadingCard() {
 }
 
 /**
- * The row that stands in for the matches an update run has not stored yet.
- *
- * A row rather than a card-wide state on purpose: replacing the list with a
- * loading panel hides matches that are already there and readable. It carries
- * `role="status"` so the wait is announced once, and its text never changes as
- * rows land in front of it, so it is not re-announced per arrival either.
+ * The row that stands in for matches an update run has not stored yet. A row,
+ * not a card-wide state: replacing the list hides matches already readable.
+ * `role="status"` announces the wait once, and its text never changes as rows
+ * land in front of it, so it is not re-announced per arrival.
  */
 export function MatchHistoryLoadingRow() {
   return (
@@ -125,15 +124,10 @@ export function MatchHistoryLoadingRow() {
 }
 
 /**
- * The same slot as the loading row, for when the poll behind it is failing.
- *
- * A card-wide error here would throw away the matches already on screen over
- * a blip in a background refetch — the mistake the loading row exists to
- * avoid, in its error form. The rows keep rendering; this says the list
- * stopped growing and offers the retry, so the failure is still reported
- * (`match-history.tsx` silences the global toast for this query on the
- * grounds that the card reports it inline, and this is that report whenever
- * there are rows to keep).
+ * The same slot as the loading row, for when the poll behind it is failing. A
+ * card-wide error would throw away the matches already on screen over a blip.
+ * `match-history.tsx` silences the global toast for this query because this
+ * row is the report of the failure whenever there are rows to keep.
  */
 export function MatchHistoryLoadFailedRow({
   onRetry,
@@ -254,14 +248,10 @@ export function MatchHistoryHeader({
           <p id="match-history-queue-instructions" className="sr-only">
             Select one queue, or hold Shift while selecting to combine queues.
           </p>
-          {/*
-            Below xl the strip wraps onto as many lines as the column allows;
-            the seven options measure ~770px together, which no phone column
-            can hold without a swipe. The per-option `widthClass` stays either
-            way — it is what stops the strip shifting when the selected label
-            goes bold — and `w-max min-w-full` is xl-only because that is where
-            it centres a single line instead of forcing one.
-          */}
+          {/* Below xl the strip wraps onto as many lines as the column
+              allows; the seven options measure ~770px, which no phone column
+              holds. The per-option `widthClass` stays either way: it is what
+              stops the strip shifting when the selected label goes bold. */}
           <div className="flex flex-wrap items-center justify-center gap-y-1 text-sm xl:w-max xl:min-w-full xl:flex-nowrap xl:gap-y-0">
             {MATCH_HISTORY_QUEUE_FILTERS.map((queueOption, index) => {
               const isSelected = activeQueueFilters.includes(queueOption.id);
@@ -275,11 +265,13 @@ export function MatchHistoryHeader({
                     }
                     aria-pressed={isSelected}
                     aria-describedby="match-history-queue-instructions"
-                    className={`${queueOption.widthClass} text-center transition-colors ${
+                    className={cn(
+                      queueOption.widthClass,
+                      "text-center transition-colors",
                       isSelected
                         ? "font-semibold text-foreground"
-                        : "text-[#aaa]"
-                    }`}
+                        : "text-[#aaa]",
+                    )}
                   >
                     {queueOption.label}
                   </button>

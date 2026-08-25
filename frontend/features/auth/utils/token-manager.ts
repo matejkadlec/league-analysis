@@ -9,21 +9,9 @@ import { clearAuthStateCookie } from "./auth-state-cookie";
 import { AUTH_PROBE_TIMEOUT_MS } from "./login-error";
 
 /**
- * What a refresh attempt found out, and the reason this is not a boolean.
+ * What a refresh attempt found out. Never a boolean: every variant is an
+ * object, so a stale `if (!result)` is dead code rather than a teardown.
  *
- * A guard saying "only `refreshAccessToken` may decide a session is over" has
- * now been walked past seven times by adversarial review. Six of those were
- * about the *shape* of the calling code, and were answered with better lint
- * rules and then with tests that assert the effect. The seventh was not: this
- * function returned a falsy value for a rejected session and for a server it
- * never reached, and it is the one import every file in the repo is allowed to
- * make. `if (!(await refreshAccessToken())) logout()` therefore reads as
- * correct code, is invisible to any import rule, and signs people out over a
- * redeploy. The signal was the hole, not the callers.
- *
- * So the distinction the whole design turns on is now in the return type, and
- * every variant is an object -- a stale `if (!result)` is dead code rather
- * than a teardown, which is the direction a mistake here should fail in.
  */
 export type SessionRefresh =
   /** The session is current; the cookies were rotated. */
@@ -39,27 +27,10 @@ export type SessionRefresh =
   | { outcome: "unreachable" };
 
 /**
- * The codes this API uses when it means "this session is over".
+ * The codes this API uses when it means "this session is over". A status
+ * alone is never evidence: an edge challenge and an authorization failure
+ * both answer 403, so a refusal has to name itself here.
  *
- * A status alone is not evidence of that, and treating it as evidence is a
- * live hazard rather than a theoretical one. Cloudflare fronts these routes:
- * a WAF rule, a bot-fight challenge, an access policy or "I'm Under Attack"
- * mode all answer a background request with 403 and an HTML body, and the
- * origin never sees it. `logout()` already refuses to trust an edge-minted
- * status for exactly this reason; the call the whole design rests on was
- * still trusting one.
- *
- * A 403 from our own API is not proof either. It means "not authorized for
- * this", which is not "your session is over" -- an audit added an
- * `email_verified` gate to the one dependency every protected route shares,
- * four ordinary lines completing a half-built feature, and every signed-in
- * visitor was signed out by it while their refresh token stayed live and
- * unrevoked. Signing in again worked, and stranded one more token each time.
- *
- * So a refusal has to name itself. Both refusals `/auth/refresh` can issue do
- * (`router.py`), and anything else -- an edge challenge, a new 403 about
- * something other than the session -- reports as nothing learned, which
- * leaves the session alone and shows the visitor a way forward.
  */
 const SESSION_ENDING_CODES = new Set([
   "INVALID_REFRESH_TOKEN",
@@ -69,11 +40,10 @@ const SESSION_ENDING_CODES = new Set([
 export async function namesTheEndOfTheSession(
   response: Response,
 ): Promise<boolean> {
-  // Any JSON media type, not the exact string: an audit answered errors as
-  // RFC 9457 `application/problem+json`, a change that keeps `detail.code`
-  // intact and reads as a tidy-up, and a strict match would have quietly
-  // stopped every genuine sign-out from working. A challenge page is not
-  // served as any flavour of JSON, which is the distinction that matters.
+  // Any JSON media type, not the exact string: an audit moved errors to RFC
+  // 9457 `application/problem+json`, which keeps `detail.code` intact, and a
+  // strict match would have stopped every genuine sign-out. A challenge page
+  // is no flavour of JSON, which is the distinction that matters.
   if (
     !/^application\/([\w.+-]+\+)?json/i.test(
       response.headers.get("content-type") ?? "",
@@ -142,65 +112,46 @@ export async function refreshAccessToken(): Promise<SessionRefresh> {
       });
 
       if (!response.ok) {
-        // Only the server refusing the token ends a session. A 502 or 503 is
-        // the API being restarted or redeployed, and treating that as a
-        // rejection signed people out mid-deploy while their refresh cookie
-        // was still perfectly valid. And a 401 or 403 only counts when the
-        // body names one of this API's session-ending codes: see
-        // `namesTheEndOfTheSession` for the two ways a status lies.
+        // Only the server refusing the token ends a session: a 502 is a
+        // redeploy, and reading that as a rejection signed people out with a
+        // valid refresh cookie. A 401 or 403 counts only when the body names
+        // a session-ending code -- see `namesTheEndOfTheSession`.
         const refused =
           (response.status === 401 || response.status === 403) &&
           (await namesTheEndOfTheSession(response));
         if (refused && epoch === sessionEpoch) {
-          // Only if this refresh still belongs to the session on screen. A
-          // rejection that arrives after a teardown is about the session that
-          // ended, and tearing down again would take out whoever signed in
-          // since -- on a shared machine, the next person, moments after they
-          // signed in successfully.
+          // Only if this refresh still belongs to the session on screen: a
+          // rejection landing after a teardown is about the session that
+          // ended, and acting on it would sign out whoever signed in since --
+          // on a shared machine, the next person.
           removeAuthTokens();
           return { outcome: "refused" };
         }
         if (refused) {
-          // A refusal aimed at a session that has already ended, so it says
-          // nothing about the one on screen. Reporting the status here would
-          // undo the distinction this type exists for: `api.ts` re-encodes it,
-          // `normalizeApiError` reads 401 as `kind: "authentication"`, and the
-          // caller is back to treating somebody else's refusal as its own.
+          // A refusal aimed at a session that already ended says nothing about
+          // the one on screen. Reporting its status would have
+          // `normalizeApiError` read 401 back as `kind: "authentication"`, and
+          // the caller would treat somebody else's refusal as its own.
           return { outcome: "unreachable" };
         }
         if (response.status === 401 || response.status === 403) {
-          // A status that named nothing. Whoever sent it, it was not this
-          // API's refusal path, so nothing was learned about the session --
-          // and reporting the status would have `normalizeApiError` read it
-          // back as `kind: "authentication"`, which is the same lie one layer
-          // down.
+          // A status that named nothing did not come from this API's refusal
+          // path, so nothing was learned. Reporting it would have
+          // `normalizeApiError` read it back as `kind: "authentication"`.
           return { outcome: "unreachable" };
         }
-        // Not a refusal at all. The status travels with it so a rate limit is
-        // not reported as an unreachable server -- `/auth/refresh` is rate
-        // limited into a single shared bucket, so a 429 here is ordinary, and
-        // "check that the backend is running" is the wrong thing to say about
-        // a backend that is running and answering.
+        // Not a refusal. The status travels with it so a rate limit is not
+        // reported as an unreachable server: `/auth/refresh` shares one rate
+        // bucket, so a 429 is ordinary and "check that the backend is
+        // running" is the wrong thing to say about one that is.
         return { outcome: "unavailable", status: response.status };
       }
 
       if (epoch !== sessionEpoch) {
-        // Torn down while this was in flight — a logout, or a probe that gave
-        // up. This refresh still succeeded, and rotation means the server has
-        // already issued and stored a *new* 30-day refresh token, which the
-        // response installed as an HttpOnly cookie. Clearing the hint would
-        // only hide it: JS cannot touch that cookie, and nothing has told the
-        // server to revoke it. So ask the server to end the session properly.
-        // Unconditional, even when somebody has signed in since the
-        // teardown. It is tempting to skip this to avoid ending their
-        // session -- but this response has already ended it: /auth/refresh
-        // answers 200 with Set-Cookie for all three cookies under the same
-        // names and path, so the browser committed them the moment the
-        // headers arrived, and the jar now holds the *rotated* session, not
-        // theirs. Their HttpOnly cookies are gone and JavaScript cannot put
-        // them back. Leaving it here would show them a signed-in shell with
-        // their own name on it while every request carried somebody else's
-        // credentials. Sending them back to sign in is the only sound exit.
+        // Torn down while in flight, but this refresh succeeded and the
+        // browser has already committed the rotated HttpOnly cookies over
+        // anyone who signed in since. Ending the session server-side is the
+        // only sound exit.
         clearAuthStateCookie();
         try {
           await fetch("/api/v1/auth/logout", {
@@ -225,14 +176,9 @@ export async function refreshAccessToken(): Promise<SessionRefresh> {
     }
   };
 
-  // Cleared here rather than in a `finally` inside `runRefresh`. A `finally`
-  // in there runs before this assignment does whenever the body settles
-  // synchronously, so the reset would land first and the assignment second,
-  // leaving a settled promise cached forever and every later refresh
-  // short-circuiting on it without touching the network: token refresh
-  // silently dead for the tab. Nothing in the current body can settle that
-  // early -- the whole thing is inside a `try` and awaits a fetch -- so this
-  // is about the next edit, not about a live bug.
+  // Cleared here, not in a `finally` inside `runRefresh`: that runs before
+  // this assignment whenever the body settles synchronously, caching a settled
+  // promise forever and killing refresh for the tab.
   const attempt = runRefresh();
   refreshInFlight = attempt;
   try {

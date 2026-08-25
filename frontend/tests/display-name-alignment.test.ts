@@ -10,19 +10,9 @@ import {
 
 /**
  * The display-name rule exists on both sides, so something has to hold it
- * equal -- the same problem `riot-id-alignment.test.ts` solves for Riot IDs.
- *
- * The settings form has always demanded three characters, a trim, and a
- * letters/marks/underscores/spaces pattern. `PATCH /auth/me` demanded one
- * character and nothing else, so the whole rule was browser-deep: any client
- * that was not the form set any 1-128 character string. The API now declares
- * all three, which puts them in the OpenAPI document -- and this reads them
- * back out.
- *
- * Needs `OPENAPI_JSON`, which `test.sh` produces for every `*-alignment` test;
- * without it there is nothing to compare against, so the check skips. What
- * keeps that skip honest is the convention check in
- * `api-contract-alignment.test.ts`, not this file.
+ * equal. Needs `OPENAPI_JSON`, which `test.sh` produces; without it the check
+ * skips, and what keeps that skip honest is the convention check in
+ * `api-contract-alignment.test.ts`.
  */
 const openapiPath = process.env.OPENAPI_JSON;
 const spec = openapiPath

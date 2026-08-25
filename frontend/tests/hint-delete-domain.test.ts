@@ -10,22 +10,10 @@ import {
 } from "@/features/auth/utils/auth-state-cookie";
 
 /**
- * The hint has to die under whatever domain it was born with.
- *
- * The backend writes this cookie in Python and the browser deletes it in
- * TypeScript, and nothing checks that the two agree. Three of the four
- * attributes are not part of a cookie's identity and Path is `/` on both
- * sides -- but Domain is, and today it is absent on both sides only by luck.
- * The day someone shares the session across `dev.` and `www.` -- a careful
- * change, symmetric on the backend, with its own tests -- a host-only delete
- * writes a cookie that expires instantly and matches nothing, while the real
- * hint sits there untouched. A refused refresh sends no Set-Cookie at all, so
- * this delete is the only thing that retracts the hint on the path that
- * matters, and one that survives leaves the visitor on "Can't reach the
- * server" forever with `proxy.ts` still admitting them.
- *
- * Run against a real cookie jar on a real host rather than against the
- * delete's text, because the claim is that the browser stops reporting it.
+ * The hint has to die under whatever domain it was born with. Domain is part
+ * of a cookie's identity and is absent on both sides only by luck; the day the
+ * session is shared across hosts, a host-only delete matches nothing and leaves
+ * the visitor stranded with `proxy.ts` still admitting them.
  */
 afterEach(() => {
   for (const entry of document.cookie.split("; ")) {

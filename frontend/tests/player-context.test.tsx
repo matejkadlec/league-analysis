@@ -97,13 +97,10 @@ function answer(url: string) {
 }
 
 /**
- * Leave the persist round-trip in flight for the rest of the test.
- *
- * Its `onSuccess` overwrites the saved player with the one from the URL, so
- * once it resolves the two agree and several of these assertions would pass
- * against any implementation. The window before it lands -- which is exactly
- * when someone opens a shared link -- is the one worth testing, and no test
- * here needs it to close.
+ * Leave the persist round-trip in flight: its `onSuccess` overwrites the saved
+ * player with the URL's, so once it resolves the two agree and the assertions
+ * pass against any implementation. The window before it lands is when someone
+ * opens a shared link.
  */
 function holdThePut() {
   validatedPut.mockImplementation(() => new Promise(() => {}));
@@ -152,11 +149,10 @@ beforeEach(() => {
 
 describe("which player the app thinks you are looking at", () => {
   it("lets the URL win over the saved player", async () => {
-    // A shared or bookmarked link carries `?puuid=`, and the saved player is
-    // whoever this account looked at last. Read the saved one while a URL is
-    // present and a link to someone's profile silently shows a different
-    // player's data under that person's name in the address bar.
-    //
+    // A shared link carries `?puuid=`; the saved player is whoever this
+    // account looked at last. Read the saved one while a URL is present and
+    // the link shows a different player's data under that name in the bar.
+
     // The persist round-trip is held open on purpose. Once it resolves the
     // saved player *becomes* the URL player and the two readings agree, so a
     // fixture that lets it settle passes against reading either one.
@@ -213,11 +209,10 @@ describe("which player the app thinks you are looking at", () => {
   });
 
   it("puts the saved player into the address bar through the router", async () => {
-    // Landing on a player page with no `?puuid=` restores the last player. It
-    // has to go through `router.replace` rather than
-    // `window.history.replaceState`: the latter changes the address bar
-    // without telling the router, so `useSearchParams` elsewhere keeps
-    // returning nothing and every sidebar link is built without the player.
+    // Restoring the last player has to go through `router.replace`:
+    // `history.replaceState` changes the address bar without telling the
+    // router, so `useSearchParams` elsewhere keeps returning nothing and every
+    // sidebar link is built without the player.
     const { result } = renderContext();
 
     await waitFor(() => expect(replace).toHaveBeenCalled());
@@ -235,13 +230,10 @@ describe("which player the app thinks you are looking at", () => {
     search.current = "puuid=url-puuid";
     const { result } = renderContext();
 
-    // Wait for both queries to have *landed*, not merely to have been
-    // issued: the effect cannot run before `savedPlayer` exists, so asserting
-    // on the first request only proves the test was quicker than the fetch.
-    // `isLoading` ORs in the context query's, so false is that proof. Not
-    // "the PUT was called" -- that fires as soon as the URL player resolves,
-    // while the context query is still undefined, which would be the race
-    // this wait exists to avoid.
+    // Wait for both queries to have *landed*: the effect cannot run before
+    // `savedPlayer` exists, and `isLoading` ORs in the context query's. Not
+    // "the PUT was called" -- that fires while the context query is still
+    // undefined, which is the race this wait exists to avoid.
     await waitFor(() => expect(result.current.isLoading).toBe(false));
     expect(replace).not.toHaveBeenCalled();
   });
@@ -267,14 +259,10 @@ describe("persisting the player named in the URL", () => {
   });
 
   it("writes the same player once rather than on every render", async () => {
-    // `persistedUrlPuuidRef` is the whole guard. Both effects depend on
+    // `persistedUrlPuuidRef` is the whole guard: both effects depend on
     // `contextQuery.data`, which this mutation's `onSuccess` rewrites, so
-    // without the ref each success schedules the next write -- a PUT loop
-    // against the account's own settings for as long as the page is open.
-    // The PUT is held open here for the same reason: once it resolves,
-    // `current_player` equals `urlPuuid` and the *other* guard stops the
-    // second write. The ref is what covers the window in between, so a
-    // fixture that lets the request settle cannot see it at all.
+    // without it each success schedules the next write -- a PUT loop for as
+    // long as the page is open. The ref covers the window before it settles.
     holdThePut();
     search.current = "puuid=url-puuid";
     const { rerender } = renderContext();
@@ -345,11 +333,9 @@ describe("whether the app says it is still loading", () => {
 
   it("does not probe a URL PUUID while nobody is signed in either", async () => {
     // The case above leaves `?puuid=` empty, so it passes whether or not the
-    // auth half of the URL query's `enabled` survives. This one does not: the
-    // PUUID guard moved onto `queryFn` as `skipToken`, and dropping
-    // `enabled: isAuthenticated` as newly redundant would send an
-    // unauthenticated `/players/{puuid}` on every signed-out visit to
-    // `/player-overview?puuid=...`.
+    // auth half of `enabled` survives. This one does not: the PUUID guard
+    // moved onto `queryFn` as `skipToken`, so dropping `enabled:
+    // isAuthenticated` sends an unauthenticated `/players/{puuid}`.
     search.current = `puuid=${FROM_URL.puuid}`;
     useAuth.mockReturnValue({
       user: null,
@@ -388,15 +374,10 @@ describe("choosing a player from the picker", () => {
   });
 
   it("does not let the stale URL revert an explicit choice", async () => {
-    // `selectPlayer` persists first and navigates second, so there is a
-    // commit where the context already names the chosen player while the URL
-    // still names the previous one. The persist effect used to read that
-    // stale URL as a link naming somebody else and PUT the previous player
-    // straight back — the dialog choice was silently reverted (and then
-    // accidentally re-corrected by a third PUT once the URL caught up, which
-    // is why three PUTs looked like success). The mocked URL never advances
-    // here, so the stale window lasts the whole test: exactly one PUT, for
-    // the chosen player, may happen.
+    // `selectPlayer` persists first and navigates second, so one commit has
+    // the context naming the chosen player while the URL still names the
+    // previous one; the persist effect used to PUT that one straight back.
+    // The mocked URL never advances, so the stale window lasts the test.
     search.current = "puuid=saved-puuid";
     validatedGet.mockImplementation((_schema: unknown, url: string) =>
       Promise.resolve(
@@ -433,11 +414,10 @@ describe("choosing a player from the picker", () => {
 
 describe("switching to a participant by PUUID", () => {
   it("starts the target's update and navigates, but never persists a stranger", async () => {
-    // The whole flow of clicking an enemy laner: the update starts so their
-    // history can fill, the page switches — and when the URL then names
-    // them, the persist effect skips an untracked player, so tomorrow's
-    // visit still defaults to the last *tracked* player, not to a stranger
-    // with no sidebar entry to switch back from.
+    // Clicking an enemy laner starts their update and switches the page, but
+    // the persist effect skips an untracked player -- so tomorrow's visit
+    // still defaults to the last *tracked* player, not to a stranger with no
+    // sidebar entry to switch back from.
     const { result, rerender } = renderContext();
     await waitFor(() =>
       expect(result.current.currentPlayer?.puuid).toBe("saved-puuid"),

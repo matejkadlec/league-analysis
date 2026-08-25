@@ -20,7 +20,7 @@ shared components under `components/`, utilities under `lib/core/`.
 The `typescript` package is an npm alias to the TypeScript 6 compatibility
 API while the native TypeScript 7 compiler supplies `tsc`; Next's TypeScript
 API mode remains explicitly enabled because the alias exposes the compiler API
-but not the `typescript/bin/tsc` CLI path ESLint tooling expects.
+but not the `typescript/bin/tsc` CLI path the Next.js toolchain expects.
 
 ## Rules
 
@@ -34,6 +34,10 @@ but not the `typescript/bin/tsc` CLI path ESLint tooling expects.
   assets. Keep the reviewed fallback and null behavior for unknown IDs.
 - Features expose public APIs via `index.ts`.
 - Use Next.js `proxy.ts` file convention (not `middleware.ts`).
+- A comment carries at most four lines of prose, and a run of `//` lines is
+  one comment. Say what the constraint is; drop the narration.
+- House lint rules live in `.oxlint-plugins/` — read its `AGENTS.md` before
+  adding one. Each rule states what it is for in its own report message.
 
 ## Design-System Contract
 
@@ -86,7 +90,7 @@ These are product design decisions, not suggestions:
   `MutationCache` handlers in `components/providers.tsx`; do not add
   per-caller console calls. The same reporter also posts a scrubbed record
   to `/client-error-report`, which is what makes those failures visible in
-  `docker logs league-analysis-frontend`. The `no-console` ESLint rule bans
+  `docker logs league-analysis-frontend`. The `no-console` oxlint rule bans
   console usage everywhere except a reviewed allowlist (api validation
   mismatch, Data Dragon fallback, the error reporter, server instrumentation,
   the client-error route, and dev-gated auth warns).
@@ -96,7 +100,7 @@ These are product design decisions, not suggestions:
 ```bash
 ../test.sh -f    # Repository tooling plus the complete frontend gate
 npm run dev      # Start dev server
-npm run lint     # ESLint
+npm run lint     # oxlint, house rules and type-aware rules included
 npm run typecheck
 npm test         # Deterministic Vitest regressions
 npm run test:e2e # Playwright pagination/browser regressions (after installing Chromium)
@@ -105,7 +109,7 @@ rm -rf .next     # Clear cache
 ```
 
 The authoritative gate selects the Node version from `../.nvmrc`, installs with
-`npm ci`, rejects ESLint warnings, and preserves tracked `next-env.d.ts` content
+`npm ci`, rejects oxlint warnings, and preserves tracked `next-env.d.ts` content
 across the production build. Install the matching browser once before the
 separate Playwright suite: `npx playwright install chromium`.
 

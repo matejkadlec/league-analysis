@@ -147,13 +147,10 @@ async def upsert_match(
         )
         await db.commit()
     except Exception as e:
-        # The three counts say which writer produced the failure and whether
-        # the player rows the participant and timeline foreign keys need were
-        # written for it. Production hit
-        # `fk_match_timelines_puuid_players` on four consecutive Match Fetcher
-        # runs on 2026-08-21 and the error text alone could not distinguish
-        # this path from `backfill_timeline_only_match`, by which time the
-        # container logs had rotated.
+        # The three counts say which writer produced the failure and whether the
+        # player rows the participant and timeline foreign keys need were written
+        # for it: `fk_match_timelines_puuid_players` broke four consecutive runs
+        # and the error text alone could not name which writer had raised it.
         logger.error(
             "Failed to upsert match",
             match_id=match_id,

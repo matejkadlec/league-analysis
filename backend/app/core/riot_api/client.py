@@ -339,12 +339,10 @@ class RiotAPIClient:
 
             response_data = response.json()
             if response_data is None:
-                # The old loop's `if result is not None` treated a null body
-                # as one more transient failure: retried, then logged and
-                # raised on exhaustion. Letting None through instead returns
-                # it to callers typed `dict | list`, which then crash on a
-                # subscript far from the HTTP layer. No status code — 200 on
-                # an error object would mislead every downstream branch.
+                # Letting None through returns it to callers typed
+                # `dict | list`, which then crash on a subscript far from the
+                # HTTP layer. No status code — 200 on an error object would
+                # mislead every downstream branch.
                 raise NullResponseBodyError("Request failed: response body was null")
             return response_data
         finally:

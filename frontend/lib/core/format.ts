@@ -13,11 +13,10 @@ export function formatFractionAsPercent(fraction: number): string {
   return percentFormatter.format(fraction);
 }
 
-// One copy of the win-rate verdict. This lived in three files with the same
-// names meaning two different units (fraction vs percent), and the one
-// call site that guessed its unit rendered a sub-1% ranked win rate as 100%.
-// The contract everywhere is a 0-1 fraction; the one percent-shaped API
-// field (league.win_rate) is normalized in its schema, at the boundary.
+// One copy of the win-rate verdict, and the contract everywhere is a
+// 0-1 fraction. Three files once shared these names for two different units,
+// and the call site that guessed rendered a sub-1% win rate as 100%. The one
+// percent-shaped API field (league.win_rate) is normalized in its schema.
 
 /** Text and bar colors for a 0-1 win-rate fraction: green ≥51%, yellow >49%, rose below. */
 export function winRateColors(fraction: number): { text: string; bar: string } {
@@ -54,11 +53,10 @@ export function formatSeconds(seconds: number): string {
   return `${Math.floor(minutes / 60)}h ${minutes % 60}m ${remainingSeconds}s`;
 }
 
-// One copy of the local-time timestamp. Four hand-rolled versions of this
-// clock existed, disagreeing only on the date separator; dots were the
-// majority and are now the app-wide shape. Hand-rolled rather than Intl
-// because recent ICU puts a narrow no-break space before AM/PM, which is
-// invisible in a diff and breaks exact-text assertions and copy-paste.
+// One copy of the local-time timestamp, dot-separated. Hand-rolled rather
+// than Intl because recent ICU puts a narrow no-break space before AM/PM,
+// which is invisible in a diff and breaks exact-text assertions and
+// copy-paste.
 
 /** Local-time "4.3.2026 2:07 PM"; pass { seconds: true } for "…2:07:09 PM". */
 export function formatDateTime(

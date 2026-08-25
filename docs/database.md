@@ -100,6 +100,13 @@ because these values drive staleness decisions.
   `game_start_timestamp` with a `game_start_timestamp_source` marker
   (`riot_game_start` vs `legacy_game_creation`), so the provenance of every
   ordering/analysis anchor is inspectable without a bulk provider refetch.
+- `core.players.platform` is lowercase, enforced by a CHECK rather than by
+  convention. Five write paths had disagreed about the casing while two lookups
+  compared it case-sensitively, so a player first seen through a match was
+  stored lowercase and then could not be found by name and tag. Normalising in
+  Python fixed the code; the constraint makes it the database's invariant, so a
+  future writer that forgets fails loudly instead of hiding rows. Lowercase is
+  canonical because it is Riot's own spelling.
 - `core.riot_api_keys` holds at most one row (revision `20260820_0019`). Past
   keys are secrets with no diagnostic value, and the surviving row's `id` is
   what `riot_credential_health.db_key_id` binds to, so replacing the key

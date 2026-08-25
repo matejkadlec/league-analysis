@@ -16,15 +16,6 @@ export const ANALYSIS_CARD_TRANSITION =
 export const ANALYSIS_PROGRESS_TRANSITION =
   "h-2 transition-[width,opacity] duration-700 ease-in-out";
 
-/**
- * State machine for the analysis UI:
- * - idle: No analysis running, show start button
- * - starting: User clicked start, waiting for backend
- * - running: Analysis is in_progress, show progress
- * - completing: Backend says completed, animating to 100%
- * - completed: Show results
- * - cancelling: User clicked cancel
- */
 export type UIPhase =
   | "idle"
   | "starting"

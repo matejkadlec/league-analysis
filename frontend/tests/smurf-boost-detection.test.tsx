@@ -675,12 +675,10 @@ describe("SmurfBoostDetection", () => {
   });
 
   it("says nothing about a run whose card is already gone", async () => {
-    // The card is remounted per player and its own search switches players,
-    // so a run can outlive the card that started it. A mutation's
-    // options-level callbacks keep running after unmount, and the guard that
-    // used to sit there compared against the unmounted closure's player --
-    // matching, and announcing "Comparison complete" over whoever the page
-    // was showing by then.
+    // A run can outlive the card that started it, and a mutation's options-level
+    // callbacks keep running after unmount. The guard that used to sit there
+    // compared against the unmounted closure's player, so it matched and announced
+    // over whoever the page was showing by then.
     getLatestSmurfBoostDetection.mockResolvedValue({
       success: false,
       error: { message: "Not found", kind: "not-found", status: 404 },
@@ -879,12 +877,9 @@ describe("SmurfBoostDetection", () => {
   });
 
   it("does not compare on a poll blip mid-fetch", async () => {
-    // A failing poll is not a finished fetch. The poll backs off and keeps
-    // going, so comparing here would use whatever was stored mid-fetch --
-    // and the card would then drop its stale-fetch warning when the run
-    // finally reported `completed`, presenting that partial comparison as a
-    // fresh one. `tests/player-sync-poll-recovery.test.tsx` covers the other
-    // half: the run settles once, with its real status, after recovery.
+    // A failing poll is not a finished fetch: it backs off and keeps going, so
+    // comparing here would use whatever was stored mid-fetch and then present that
+    // partial comparison as a fresh one.
     getLatestSmurfBoostDetection.mockResolvedValue({
       success: false,
       error: { message: "Not found", kind: "not-found", status: 404 },

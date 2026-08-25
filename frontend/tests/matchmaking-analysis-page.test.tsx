@@ -61,11 +61,10 @@ it("carries the chosen player's name into the search box", async () => {
   const emptyBox = await screen.findByLabelText("Choose player for analysis");
   expect((emptyBox as HTMLInputElement).value).toBe("");
 
-  // Choosing a player swaps the whole branch: the "choose someone" card gives
-  // way to the analysis cards, and the selector is mounted afresh inside them.
-  // `initialSearchValue` is the only thing that puts the name into that new
-  // instance -- drop it and the box comes up blank beside an analysis that is
-  // about somebody, with no way to tell who.
+  // Choosing a player swaps the whole branch and the selector is mounted afresh
+  // inside it, so `initialSearchValue` is the only thing that puts the name into
+  // the new instance -- without it the box comes up blank beside an analysis
+  // that is about somebody.
   useAnalyzedPlayer.mockReturnValue({
     analyzedPlayer: player,
     isLoading: false,

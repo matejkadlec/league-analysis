@@ -8,16 +8,9 @@ import {
 } from "@/features/auth/utils/token-manager";
 
 /**
- * The two ways a session can end that nothing was watching.
- *
- * Both were found by mutating `token-manager.ts` and running the whole suite:
- * 342 tests stayed green through each one, on the file the sign-out path
- * depends on. Coverage had already said as much -- lines 96 and 129 were the
- * only two it reported uncovered -- but a line that never runs is easy to read
- * as harmless. Making the code lie about the session is what shows it is not.
- *
- * Node environment on purpose: `namesTheEndOfTheSession` is pure, and the
- * second test needs `window` genuinely absent rather than deleted out of jsdom.
+ * The two ways a session can end that nothing was watching -- both found by
+ * mutating `token-manager.ts`, with 342 tests green through each. Node
+ * environment on purpose: the second test needs `window` genuinely absent.
  */
 
 describe("a refusal has to be readable to count", () => {

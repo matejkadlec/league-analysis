@@ -17,19 +17,10 @@ export const UserResponseSchema = z.object({
 export type UserResponse = z.infer<typeof UserResponseSchema>;
 
 /**
- * Request bodies.
- *
- * `validatedPost` and friends take the body as `unknown`, so a field the
- * backend renamed stayed a compile-time nothing and became a 422 at runtime.
- * Every body the frontend sends is declared here and applied at the call site
- * with `satisfies`, which makes an unknown or missing field a type error.
- *
- * These are never `.parse()`d: the server is the authority on the values and
- * rejects a bad one regardless, so lengths and patterns are left out rather
- * than restated. What is worth stating is the shape, and stating it here is
- * what puts it inside `tests/api-contract-alignment.test.ts` -- the pairing
- * there is by name over exported zod schemas, so a hand-written TS type (what
- * `UserProfileUpdate` was) is invisible to it and drifts silently.
+ * Request bodies, declared here and applied with `satisfies` so an unknown or
+ * missing field is a type error rather than a runtime 422. Never `.parse()`d:
+ * the server is the authority on values. Declaring them as zod is what puts
+ * them inside the contract test.
  */
 export const UserProfileUpdateSchema = z.object({
   display_name: z.string().nullable().optional(),

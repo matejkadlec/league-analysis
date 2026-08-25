@@ -12,6 +12,7 @@ import type {
 } from "@/lib/core/schemas";
 
 import { gameShortfall } from "../smurf-boost-settings";
+import { cn } from "@/lib/core/utils";
 import {
   BAND_LABELS,
   bandMeaning,
@@ -30,13 +31,10 @@ interface SmurfBoostResultCardProps {
 }
 
 /**
- * One colour ladder, read two ways. The band word takes the text colour and
- * the family's own card takes the same step as a left edge, so two readings
- * stay tellable apart at a glance while scrolling.
- *
- * Colour never encodes a number -- the specification forbids showing a
- * per-family score -- and never carries the reading alone; the band word is
- * always present beside it.
+ * One colour ladder, read two ways: the band word takes the text colour and
+ * the family's card takes the same step as a left edge. Colour never encodes
+ * a number -- the specification forbids a per-family score -- and never
+ * carries the reading alone; the band word is always beside it.
  */
 const BAND_STYLES: Record<
   SmurfBoostFamily["band"],
@@ -68,13 +66,10 @@ function formatValue(value: number | null | undefined): string {
 }
 
 /**
- * The version half of a `module/version` model identifier.
- *
- * The backend stores the module name alongside the version, and that module
- * is still called `smurf-boost` because renaming it would move the API
- * contract for nothing. Only the version tells a reader which formulas
- * produced the numbers beside it, so the module name is dropped rather than
- * shown. A value carrying no slash is passed through unchanged.
+ * The version half of a `module/version` model identifier. Only the version
+ * says which formulas produced the numbers beside it, so the module name --
+ * still `smurf-boost`, because renaming it would move the API contract for
+ * nothing -- is dropped. A value with no slash passes through unchanged.
  */
 function modelVersionLabel(modelVersion: string): string {
   const separator = modelVersion.lastIndexOf("/");
@@ -82,13 +77,10 @@ function modelVersionLabel(modelVersion: string): string {
 }
 
 /**
- * Why an available signal did not trigger.
- *
- * Four of the eight signals combine their threshold with a separate condition —
- * an account-level gate, a flat-composite ceiling, two tail fractions, a
- * sustained drop. Any of those can fail while the measured value sits above the
- * threshold printed beside it, and "Below threshold" on a row reading 1.50
- * against 1.20 is simply not true.
+ * Why an available signal did not trigger. Four of the eight combine their
+ * threshold with a separate condition, any of which can fail while the
+ * measured value sits above the threshold printed beside it -- and "Below
+ * threshold" on a row reading 1.50 against 1.20 is simply not true.
  */
 function signalOutcome(signal: SmurfBoostSignal): string {
   const value = signal.raw_value;
@@ -120,17 +112,10 @@ function SignalOutcome({ signal }: { signal: SmurfBoostSignal }) {
 }
 
 /**
- * The measured value drawn against its threshold.
- *
- * The marks sit at fixed fractions of the track, so "how close is this value
- * to mattering" reads the same in every row even though the rows' units
- * differ. The bar grows from the zero notch toward the threshold tick —
- * leftward when the value is negative, because a standardized score sits
- * below the player's own baseline as easily as above it, and clamping a
- * negative to an empty bar read as a rendering bug rather than a reading.
- * Length carries the number and the outcome stays worded in the pill beside
- * it — colour encodes nothing, per the specification. Decorative on purpose:
- * the figures beside the bar are the accessible reading.
+ * The measured value drawn against its threshold. The marks sit at fixed
+ * fractions of the track, and the bar grows from the zero notch, leftward for
+ * a negative score -- clamping one to an empty bar read as a rendering bug.
+ * Decorative: the figures beside the bar are the accessible reading.
  */
 const METER_ZERO_PERCENT = 25;
 const METER_TICK_PERCENT = 70;
@@ -288,7 +273,9 @@ function FamilySection({
     // panel. The tint separates it from the run card holding it, which shares
     // the same `bg-card`; the accent edge repeats the colour whose worded
     // reading sits in the tab directly above.
-    <Card className={`border-l-4 bg-muted/20 shadow-none ${bandStyle.accent}`}>
+    <Card
+      className={cn("border-l-4 bg-muted/20 shadow-none", bandStyle.accent)}
+    >
       <CardHeader className="pb-3">
         <h4 className="text-base font-semibold">
           {familyTitle(family.family)}
@@ -374,11 +361,10 @@ export function SmurfBoostResultCard({
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* One tab per family. Both readings stay on screen at all times --
-            the trigger carries its family's worded band in the band's own
-            colour, so choosing a tab never hides a verdict, only the
-            measurements behind it. Panels stay mounted so both exist for
-            the tests and for find-in-page; `hidden` does the switching. */}
+        {/* One tab per family. The trigger carries its family's worded band
+            in the band's own colour, so choosing a tab never hides a verdict,
+            only the measurements. Panels stay mounted so both exist for the
+            tests and for find-in-page; `hidden` does the switching. */}
         {firstFamily && (
           <Tabs defaultValue={firstFamily.family}>
             <TabsList className="h-auto flex-wrap justify-start">
@@ -396,7 +382,7 @@ export function SmurfBoostResultCard({
                     </span>
                     <span
                       data-testid={`smurf-boost-band-${family.family}`}
-                      className={`text-sm font-bold ${bandStyle.text}`}
+                      className={cn("text-sm font-bold", bandStyle.text)}
                     >
                       {BAND_LABELS[family.band]}
                     </span>

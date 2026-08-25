@@ -18,22 +18,10 @@ async def test_an_unmapped_route_failure_answers_the_service_error_detail() -> N
     app.dependency_overrides[get_player_service] = lambda: SimpleNamespace(
         get_player_league=AsyncMock(side_effect=RuntimeError("boom"))
     )
-    # `ASGITransport` drives no lifespan, which is what this wants: entering it
-    # would demand a live Postgres. `raise_app_exceptions=False` is its spelling
-    # of the TestClient's `raise_server_exceptions=False`.
-    # Pinned rather than inherited: `app.main` builds the app with
-    # `debug=settings.debug`, and with it on Starlette's `ServerErrorMiddleware`
-    # answers a plaintext traceback instead of the JSON body below -- so this
-    # test failed on any dev machine whose root `.env` sets `DEBUG=true`, while
-    # passing in CI.
-    #
-    # The rebuild is the point. `Starlette.debug` is a plain attribute, not a
-    # property, and `ServerErrorMiddleware` is handed the flag's *value* when
-    # the stack is assembled. The stack is assembled lazily on the first
-    # request, so setting the attribute alone fixes this test when it runs by
-    # itself and does nothing when any earlier test has already driven the app
-    # -- which is the whole suite, and exactly the way a fix here would look
-    # green locally and stay broken.
+    # `ASGITransport` drives no lifespan, which is what this wants. Debug is
+    # pinned off and the stack rebuilt: `ServerErrorMiddleware` is handed the
+    # flag's *value* when the stack is assembled -- lazily, on first request --
+    # so setting `app.debug` alone only works when this test runs by itself.
     was_debug = app.debug
     app.debug = False
     app.middleware_stack = app.build_middleware_stack()

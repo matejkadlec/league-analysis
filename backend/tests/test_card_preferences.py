@@ -163,12 +163,12 @@ def test_card_preference_defaults_and_legacy_normalization_are_safe() -> None:
     assert normalized["queue_id"] == 420
     assert set(warnings) == {"minimum_win_rate", "removed_setting"}
 
-    legacy_normalized, legacy_warnings = normalize_stored_card_preference(
+    coerced_normalized, coerced_warnings = normalize_stored_card_preference(
         CardId.TOP_CHAMPIONS,
         {"minimum_games": "25"},
     )
-    assert legacy_normalized["minimum_games"] == 25
-    assert legacy_warnings == ()
+    assert coerced_normalized["minimum_games"] == 25
+    assert coerced_warnings == ()
 
 
 @pytest.mark.parametrize(

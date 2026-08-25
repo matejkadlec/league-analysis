@@ -194,11 +194,9 @@ describe("the jobs system status", () => {
   });
 
   it("leaves the active-jobs figure out of the summary when there are none", () => {
-    // "Active Jobs" appears twice when there is something to count: once as
-    // the dedicated card, once repeated in the summary row. With none, the
-    // summary drops its copy -- a "0" there reads as a fault, and the card
-    // above already carries the zero. Counting the label is what separates
-    // the two; asserting it is simply absent finds the card and fails.
+    // "Active Jobs" appears twice when there is something to count, and the summary
+    // drops its copy at zero -- a "0" there reads as a fault. Counting the label is
+    // what separates the two; asserting it is simply absent finds the card.
     render(<SystemStatus status={status({ active_jobs: 0 })} />);
     expect(screen.getAllByText("Active Jobs")).toHaveLength(1);
     cleanup();

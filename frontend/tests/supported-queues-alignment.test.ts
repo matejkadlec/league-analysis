@@ -13,17 +13,10 @@ const here = dirname(fileURLToPath(import.meta.url));
 const CONSTANTS = join(here, "../../backend/app/core/riot_api/constants.py");
 
 /**
- * Which queues the product supports is decided once, on the backend, and
- * copied by hand into the frontend twice: the match-history filter row and the
- * queue-name lookup.
- *
- * Nothing connected the three. `PRODUCT_SUPPORTED_QUEUE_IDS` is what the Match
- * Fetcher stores, so adding a queue there starts writing matches the filter
- * row cannot select and the lookup renders as "Queue 490" -- with a green
- * suite, because both sides typecheck against themselves. The direction that
- * matters is one-way: every queue the backend stores must be selectable and
- * nameable here. A name for a queue the backend does not store is allowed;
- * it costs one line and is what a future queue lands on.
+ * Supported queues are decided on the backend and copied by hand into the
+ * filter row and the queue-name lookup, with nothing connecting the three: a
+ * queue added there renders as "Queue 490" with a green suite. One-way -- a
+ * name for a queue the backend does not store is allowed.
  */
 function backendSupportedQueueIds(): number[] {
   const source = readFileSync(CONSTANTS, "utf8");

@@ -78,11 +78,10 @@ export const SmurfBoostResultsSchema = z.object({
 
 export type SmurfBoostResults = z.infer<typeof SmurfBoostResultsSchema>;
 
-// Smurf Boost Analysis Response Schema. Parsed permissively, then split on
-// the lifecycle the same way a matchmaking run is: only the `completed`
-// variant carries `results`, so rendering one without narrowing on `status`
-// does not compile. See `splitRunOnLifecycle` in ./run-lifecycle for why a
-// `completed` run with no results is reported as `failed` instead of rejected.
+// Smurf Boost Analysis Response Schema. Parsed permissively, then split on the
+// lifecycle the way a matchmaking run is: only the `completed` variant carries
+// `results`. See `splitRunOnLifecycle` in ./run-lifecycle for why a
+// `completed` run with no results is reported as `failed` rather than rejected.
 export const SmurfBoostAnalysisResponseSchema = z
   .object({
     puuid: z.string(),

@@ -69,11 +69,10 @@ export function MatchmakingAnalysisSession({
       if (!watchingCreatedAt) {
         return null;
       }
-      // A 404 is the ordinary end of a watch -- the record this poll names was
-      // deleted, or the stored `watchingCreatedAt` outlived it -- so it
-      // resolves to "nothing to report". Every other failure is left to throw
-      // and reach the toast; a status poll that quietly returned null would
-      // leave the card animating a run nobody is still tracking.
+      // A 404 is the ordinary end of a watch -- the record was deleted, or
+      // the stored `watchingCreatedAt` outlived it -- so it resolves to
+      // "nothing to report". Every other failure throws through to the toast;
+      // returning null would leave the card animating an untracked run.
       const status = unwrapOr404(
         await getMatchmakingAnalysisStatus(puuid, watchingCreatedAt),
         null,
@@ -242,7 +241,7 @@ export function MatchmakingAnalysisSession({
       return;
     }
     queryClient.setQueryData(
-      ["matchmaking-analysis", puuid],
+      matchmakingAnalysisQueryKey(puuid),
       validStatusUpdate ?? latestForCurrent,
     );
   }, [

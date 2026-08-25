@@ -127,6 +127,11 @@ run_backend_ruff_format() {
   uv run ruff format --check --exclude '*.md' app tests scripts
 }
 
+run_backend_comment_hygiene() {
+  cd "$repository_root/backend"
+  uv run python scripts/check_comments.py app tests scripts
+}
+
 run_backend_pyright() {
   cd "$repository_root/backend"
   uv run pyright
@@ -281,6 +286,7 @@ if [[ "$run_backend" == true ]]; then
   run_step 'Alembic migration validation' run_backend_migration_validation
   run_step 'Backend Ruff lint' run_backend_ruff_lint
   run_step 'Backend Ruff format' run_backend_ruff_format
+  run_step 'Backend comment hygiene' run_backend_comment_hygiene
   run_step 'Backend Pyright' run_backend_pyright
   run_step 'Backend Bandit medium-confidence scan' run_backend_bandit
   run_step 'Backend vulture dead-code scan' run_backend_vulture

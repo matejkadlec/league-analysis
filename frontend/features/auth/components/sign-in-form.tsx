@@ -209,11 +209,10 @@ export function SignInForm() {
 
                 {captchaRequired && (
                   <div className="space-y-2">
-                    {/* A heading over the widget, not a form field. Not a
-                        <label> either: there is no control to label, and a
-                        FormLabel here would point `htmlFor` at an id nothing
-                        renders. The widget is named through aria-labelledby
-                        below. */}
+                    {/* A heading over the widget, not a form field: there is
+                        no control to label, and a FormLabel would point
+                        `htmlFor` at an id nothing renders. The widget is
+                        named through aria-labelledby below. */}
                     <p
                       id="sign-in-captcha-heading"
                       className="text-sm font-medium leading-none text-gray-700"

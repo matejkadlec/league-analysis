@@ -4,18 +4,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 /**
  * What a profile card shows before there are enough matches to say anything.
- *
- * All three cards reach this state for the same reason and said so in the same
- * shape; only the icon, the heading and the tail of the sentence differ. The
- * wording is passed in whole rather than assembled from a template because
- * four unit tests and `e2e/player-context.spec.ts` match these strings exactly.
- *
- * `id` is not optional. The section is on the page either way -- same heading,
- * same position -- and `SectionQuickNavigation` registers a section by finding
- * its anchor in the DOM. An empty state that drops the id makes a visible
- * section vanish from the page navigation, which is the common case on this
- * data: nearly every tracked player has too few ranked games for these three
- * cards. Requiring it means a new caller cannot forget.
+ * `id` is not optional: `SectionQuickNavigation` registers a section by
+ * finding its anchor, so an empty state that drops the id makes a visible
+ * section vanish from the page navigation.
  */
 export function ProfileCardEmptyState({
   icon: Icon,

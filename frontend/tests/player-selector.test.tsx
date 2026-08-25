@@ -130,11 +130,9 @@ describe("PlayerSelector", () => {
   });
 
   it("keeps the chosen player in a box that was seeded with one", async () => {
-    // Rank Manipulation and Matchmaking Analysis analyse the player named in
-    // the box, so emptying it on selection leaves the page describing a
-    // result whose subject is nowhere on screen. A box nobody seeded -- the
-    // sidebar switcher, which switches away from what it finds -- still
-    // clears.
+    // Both analysis pages analyse the player named in the box, so emptying it on
+    // selection leaves the page describing a result whose subject is nowhere on
+    // screen. A box nobody seeded still clears.
     searchPlayerSuggestions.mockResolvedValue({ success: true, data: [player] });
     renderSelector(vi.fn(), "Previous#ONE");
     const user = userEvent.setup();

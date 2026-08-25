@@ -4,11 +4,9 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/core/utils";
 
 /**
- * Statuses the badge variants cannot express.
- *
- * `Badge` offers four variants and the job ladder has seven states, so the
- * three that would otherwise collapse into the same grey carry an explicit
- * colour. These win over `variant` because they set the same properties.
+ * Statuses the badge variants cannot express: `Badge` offers four and the job
+ * ladder has seven, so the three that would collapse into the same grey carry
+ * an explicit colour. These win over `variant` by setting the same properties.
  */
 const STATUS_CLASSES: Partial<Record<JobStatus, string>> = {
   RATE_LIMITED:
@@ -30,14 +28,10 @@ function statusVariant(status: JobStatus) {
 }
 
 /**
- * The status of one job execution, drawn the same way everywhere it appears.
- *
- * The three surfaces that show this -- the executions table, the details
- * dialog and the job card's history strip -- each wrote the ladder out in
- * full, and had drifted: the history strip had lost the CANCELLED and PAUSED
- * colours entirely, so a cancelled run there was indistinguishable from a
- * pending one. `className` carries per-surface sizing only; the colours are
- * not a caller's decision.
+ * The status of one job execution, drawn the same way everywhere. The three
+ * surfaces each wrote the ladder out and had drifted -- the history strip had
+ * lost CANCELLED and PAUSED entirely. `className` carries per-surface sizing
+ * only; the colours are not a caller's decision.
  */
 export function ExecutionStatusBadge({
   status,

@@ -3,11 +3,9 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const APP_DIRECTORY = join(process.cwd(), "app");
-// The sidebar plus the modules it renders its links out of. This is a text
-// search rather than an import so that a route deleted from the JSX fails
-// here even when it is still a valid string elsewhere; extracting a link list
-// into its own module is fine, but the module has to be listed here or the
-// guard silently stops covering those routes.
+// A text search, not an import: a route deleted from the JSX must fail here
+// even while it is still a valid string elsewhere. Extracting a link list
+// into its own module is fine only if the module is listed here.
 const SIDEBAR_SOURCES = [
   "components/sidebar-nav.tsx",
   "components/legal-notice.tsx",
@@ -55,15 +53,9 @@ describe("page navigation contract", () => {
   });
 
   it("keeps every page that is not public behind ProtectedRoute", () => {
-    // The admin flag on /jobs was guarded and the wrapper itself was not, so
-    // deleting `<ProtectedRoute>` from any of the other six pages typechecked,
-    // linted, and passed all 451 tests. What ships then is a page that renders
-    // its own chrome to a signed-out visitor and fills it with 401s -- the same
-    // shape as the stranded-session blank page, arrived at from the other side.
-    //
-    // This is asserted against the source text rather than by rendering,
-    // because the thing being pinned is the wrapper's presence in the tree, and
-    // a render test proves it only for whichever page it renders.
+    // Deleting `<ProtectedRoute>` from six pages typechecked, linted and passed
+    // every test. Asserted against source text because what is pinned is the
+    // wrapper's presence in the tree, which a render test proves for one page.
     const unprotected = pageRoutes(APP_DIRECTORY).filter((route) => {
       if (PUBLIC_ROUTES.has(route)) return false;
       const page = readFileSync(

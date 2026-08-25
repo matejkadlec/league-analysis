@@ -169,11 +169,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-# No endpoint accepts an upload; every body here is small JSON, so a mebibyte
-# is far above anything legitimate. Without a ceiling a request body is read
-# until it ends, so one client can stream arbitrarily much into memory.
-# Added before the logging middleware so that stays outermost and records the
-# 413 like any other response.
+# No endpoint accepts an upload, so a mebibyte is far above anything legitimate;
+# without a ceiling a body is read until it ends and one client can stream
+# arbitrarily much into memory. Added before the logging middleware so that
+# stays outermost and records the 413 like any other response.
 app.add_middleware(RequestBodyLimitMiddleware, max_body_size=1024 * 1024)
 
 # Added after CORS so it runs outermost of the user middlewares, just inside

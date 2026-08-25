@@ -257,11 +257,10 @@ async def read_player_sync(
 
 
 @router.post("/{puuid}/track")
-# Same ceiling as POST /{puuid}/sync, because this now starts the same run.
+# Same ceiling as POST /{puuid}/sync, because this starts the same run.
 # Deduplication in create_or_get_player_sync caps concurrency per PUUID, not
-# rate: tracking several players, or cycling untrack/track after each run
-# finishes, would otherwise spend Riot quota past the limit that endpoint was
-# deliberately given.
+# rate: tracking several players, or cycling untrack/track, would otherwise
+# spend Riot quota past the limit that endpoint was deliberately given.
 @rate_limit("10/minute")
 async def track_player(
     request: Request,
@@ -300,11 +299,10 @@ async def track_player(
     except TrackingLimitReachedError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
-    # The tracking row is committed by here, so claiming the run sits outside
-    # the block above on purpose. The sync only saves the viewer from waiting
-    # for the Match Fetcher; failing to claim it is no reason to answer that
-    # the tracking failed, when it did not and the scheduler will still pick
-    # the player up.
+    # The tracking row is committed by here, so claiming the run sits outside the
+    # block above on purpose: the sync only saves the viewer from waiting for the
+    # Match Fetcher, and failing to claim it is no reason to answer that tracking
+    # failed when it did not and the scheduler will still pick the player up.
     try:
         sync_run, created = await create_or_get_player_sync(
             player_service.db,

@@ -3,22 +3,10 @@ import { globSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 /**
- * The cookie policy makes a promise about the footer, and both shells have to keep it.
- *
- * `app/cookie-policy/page.tsx` tells every reader they can reopen the consent
- * dialog "using the **Cookie settings** link in the page footer". That
- * sentence is not scoped to signed-out visitors, and the page renders inside
- * whichever shell the reader is in.
- *
- * LGA-85 was raised because the copy named a control that did not exist, and
- * `8ac13a9` fixed it -- for the public footer only. The signed-in shell's
- * footer still rendered `LegalNotice` with no trigger, so an authenticated
- * reader was looking at a sentence naming a link that was not on their page.
- * A source read could not show this; it took loading the page with a session.
- *
- * `LegalNotice` takes the trigger as `children`, so "which footers offer it"
- * is decided at each call site. This asserts every call site decides the same
- * way, which is the only form the promise can take.
+ * The cookie policy promises a "Cookie settings" link in the footer, and both
+ * shells have to keep it. `LegalNotice` takes the trigger as `children`, so
+ * every call site decides separately -- which is the only form the promise
+ * can take.
  */
 
 /** Every file that renders the shared legal footer. */

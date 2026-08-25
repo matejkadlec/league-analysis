@@ -1,11 +1,9 @@
 import { z } from "zod";
 
 /**
- * Same-origin POST the browser uses so a client failure shows up in
- * `docker logs league-analysis-frontend`. `/api/*` is rewritten to the
- * backend, so this lives outside that prefix on purpose.
- *
- * Must stay identical to the literal in `proxy.ts` (`isStaticOrInternal`);
+ * Same-origin POST so a client failure shows up in the frontend container log.
+ * Outside the `/api/*` prefix on purpose, since that is rewritten to the
+ * backend. Must stay identical to the literal in `proxy.ts`;
  * `tests/client-error-report.test.ts` reads both.
  */
 export const CLIENT_ERROR_REPORT_PATH = "/client-error-report";
@@ -51,6 +49,10 @@ export function reportClientError(payload: ClientErrorReport): void {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(parsed.data),
+    // Nobody awaits this. Three seconds is long enough for a same-origin POST
+    // and short enough that a backend which accepts and never answers does not
+    // hold the socket for the life of the tab.
+    signal: AbortSignal.timeout(3000),
   }).catch(() => undefined);
 }
 

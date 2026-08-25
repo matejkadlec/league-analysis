@@ -174,14 +174,9 @@ describe("changing an account password", () => {
   });
 
   it("stops a second submit while the first is still in flight", async () => {
-    // Each attempt is checked against the current password server-side, so a
-    // double-fire spends a second attempt on an endpoint that has every reason
-    // to rate-limit them.
-    //
-    // What holds this shut is the button's `disabled` while the mutation is
-    // pending, not the matching check inside the handler: removing that check
-    // leaves this green, because a disabled button never delivers the click.
-    // The check is a second lock on a door with no other way in.
+    // The button's `disabled` is what holds this shut, not the handler's own
+    // pending check -- a disabled button never delivers the click, so this
+    // stays green with that check deleted.
     let release: (value: unknown) => void = () => {};
     validatedPost.mockImplementation(
       () =>

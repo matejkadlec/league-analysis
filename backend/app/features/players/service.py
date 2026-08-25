@@ -280,11 +280,10 @@ class PlayerService:
             raise PlayerNotFoundError("Player details were not found on this server.")
 
         now = datetime.now(UTC)
-        # A Riot ID whose stored row carries a different PUUID is left alone.
-        # Discovery cannot tell a re-encrypted PUUID apart from a Riot ID that
-        # was renamed away and reclaimed by another account, so merging the two
-        # rows would risk moving one player's history onto another. A duplicate
-        # row is the deliberate, visible, repairable outcome instead.
+        # A Riot ID whose stored row carries a different PUUID is left alone:
+        # discovery cannot tell a re-encrypted PUUID from a Riot ID renamed away
+        # and reclaimed by another account, so merging would risk moving one
+        # player's history onto another. A duplicate row is visible and fixable.
         player = await self.db.get(Player, account.puuid)
         if player is None:
             player = Player(

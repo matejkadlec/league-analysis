@@ -4,18 +4,10 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 /**
- * Every error code this UI branches on must be one the API can actually send.
- *
- * The auth and settings flows do not render the server's message; they switch
- * on `detail.code` and show their own copy -- a CAPTCHA panel, a lockout
- * countdown, a "that address is already registered" hint. A code renamed on
- * the backend leaves the matching branch permanently dead, and nothing fails:
- * the request still returns 4xx, the generic fallback still renders, and the
- * feature the branch existed for silently stops working.
- *
- * `EMAIL_CHANGE_LOCKED` and `EMAIL_CHANGE_TOO_MANY_ATTEMPTS` are the reason
- * this reads the whole backend rather than one route: the same exception
- * answers to different codes on two routes and the UI accepts either.
+ * Every error code this UI branches on must be one the API can actually send:
+ * the auth and settings flows switch on `detail.code` and render their own
+ * copy, so a code renamed on the backend leaves the branch permanently dead
+ * with nothing failing.
  */
 
 const here = dirname(fileURLToPath(import.meta.url));

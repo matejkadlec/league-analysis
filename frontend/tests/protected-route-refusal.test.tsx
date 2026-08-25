@@ -4,17 +4,9 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 /**
- * Being refused has to say so.
- *
- * This branch added `AccessDenied` for one reason: rendering `null` left a
- * signed-in non-admin who opened /jobs looking at the sidebar and an empty
- * pane -- no redirect, no message, and unlike a missing session, nothing they
- * could do would ever change it. That is the audited symptom, reached without
- * any session being stranded at all.
- *
- * Both returns could be replaced with `null` and every gate stayed green:
- * 324 tests, tsc and eslint clean. `page-navigation-contract.test.ts` pins
- * that /jobs *uses* `requireAdmin`, never that a refusal renders anything.
+ * Being refused has to say so: rendering `null` left a signed-in non-admin on
+ * /jobs looking at an empty pane with nothing they could do about it. Both
+ * returns could be replaced with `null` and every gate stayed green.
  */
 
 const auth = vi.hoisted(() => ({

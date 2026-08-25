@@ -6,12 +6,9 @@ import {
 } from "@/lib/core/schemas";
 
 /**
- * The backend answers a run poll with HTTP 200 whatever the outcome, so the
- * lifecycle field is the only thing that separates a result from a failure.
- * These schemas make that structural: only the `completed` variant carries
- * `results`, so a consumer cannot read one without narrowing first. That is a
- * compile-time guarantee; what is asserted here is the runtime half — that the
- * split puts each payload in the right variant.
+ * A run poll answers 200 whatever the outcome, so the lifecycle field is the
+ * only thing separating a result from a failure. Only the `completed` variant
+ * carries `results`; what is asserted here is the runtime half of that split.
  */
 
 const matchmakingResults = {

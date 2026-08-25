@@ -5,11 +5,9 @@ import { describe, expect, it } from "vitest";
 import { EMAIL_CODE_LENGTH } from "@/features/settings/settings-helpers";
 
 /**
- * The settings page renders one input per digit of the email-change code, and
- * the API accepts a fixed number of digits. Nothing held the two equal: the
- * form's count comes from `EMAIL_CODE_SLOTS.length`, and the API's comes from
- * a pattern on `EmailChangeVerifyRequest.code`. A backend that moved to eight
- * digits would leave six boxes on screen and 422 every code typed into them.
+ * The form's box count comes from `EMAIL_CODE_SLOTS.length` and the API's from
+ * a pattern on `EmailChangeVerifyRequest.code`, and nothing held them equal: a
+ * backend that moved to eight digits would 422 every code typed into six boxes.
  */
 const openapiPath = process.env.OPENAPI_JSON;
 const spec = openapiPath

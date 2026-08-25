@@ -12,15 +12,9 @@ import {
 
 /**
  * The Riot ID rules exist on both sides, so something has to hold them equal.
- *
- * `parseRiotId` rejects a bad ID before the request is made and
- * `GET /players/discover` rejects it again; the two used to be four constants
- * and two regexes each, with the API publishing none of them. Now the route
- * declares them as `Query(min_length=, max_length=, pattern=)`, which puts
- * them in the OpenAPI document -- and this reads them back out.
- *
- * Needs `OPENAPI_JSON`, which `test.sh` produces; without it there is nothing
- * to compare against, so the check skips rather than pretending to pass.
+ * The route declares them as `Query(min_length=, max_length=, pattern=)`, which
+ * puts them in the OpenAPI document, and this reads them back out. Needs
+ * `OPENAPI_JSON`; without it the check skips rather than pretending to pass.
  */
 const openapiPath = process.env.OPENAPI_JSON;
 const spec = openapiPath

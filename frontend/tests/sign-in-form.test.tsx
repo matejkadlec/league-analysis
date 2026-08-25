@@ -121,19 +121,10 @@ describe("SignInForm", () => {
   });
 
   it("shows a rejected field's message and points the input at it", async () => {
-    // Guards `components/ui/form.tsx`, through its only consumer. Every error
-    // path in those primitives was unexercised: no test in the suite had ever
-    // rendered a validation message, so `FormMessage` returning `null`
-    // unconditionally, `aria-invalid` pinned to `false`, and the message id
-    // dropped from `aria-describedby` each kept all 352 tests green. The first
-    // means nobody is ever told which field is wrong; the other two mean a
-    // screen reader is not told either.
-    // `a@b` on purpose. The input is `type="email"`, and the form does not set
-    // `noValidate`, so the browser's own constraint validation refuses to
-    // submit anything it considers malformed and React Hook Form never runs --
-    // "not-an-email" produces a native bubble and no `FormMessage` at all.
-    // `a@b` is valid to the browser and fails this form's pattern rule, which
-    // wants a TLD, so it is the shape that actually reaches these primitives.
+    // Guards `components/ui/form.tsx` through its only consumer: every error path
+    // there was unexercised, and `FormMessage` returning `null` kept 352 tests
+    // green. `a@b` on purpose -- the input is `type="email"` with no `noValidate`,
+    // so a malformed value never reaches these primitives at all.
     const user = userEvent.setup();
     render(<SignInForm />);
 
@@ -150,14 +141,10 @@ describe("SignInForm", () => {
   });
 
   it("hands the form back after a failure, without the last failure's message", async () => {
-    // Both halves of this were unguarded, and both strand the visitor on a
-    // form they cannot use. Dropping `setIsSubmitting(false)` from the
-    // `finally` leaves the button reading "Signing in..." and disabled forever
-    // after a rejected sign-in -- no retry, no way out, the same shape as the
-    // blank-page bug this app already shipped once. Dropping `setError(null)`
-    // at the start of a submission leaves the previous failure on screen while
-    // the next attempt is in flight, so a visitor who just fixed their
-    // password is still being told it was wrong.
+    // Both halves strand the visitor: without `setIsSubmitting(false)` the button
+    // reads "Signing in..." and stays disabled forever after a rejection, and
+    // without `setError(null)` the previous failure stays on screen while the next
+    // attempt is in flight.
     const user = userEvent.setup();
     login.mockRejectedValueOnce(new Error("Failed to fetch"));
     render(<SignInForm />);
@@ -190,11 +177,9 @@ describe("SignInForm", () => {
 
   describe("when the server escalates to a captcha", () => {
     it("shows the challenge, sends the token, and drops one the server rejects", async () => {
-      // Nothing reached this path: the site key is unset in tests, so every
-      // existing case took the "not configured" branch and `captchaRequired`
-      // was never true. The whole escalation -- widget, gated submit, token on
-      // the retry -- was 0% covered, and it is the only way back in for
-      // someone the backend has started challenging.
+      // Nothing reached this path: the site key is unset in tests, so every existing
+      // case took the "not configured" branch and the whole escalation was 0%
+      // covered -- and it is the only way back in for someone being challenged.
       vi.stubEnv("NEXT_PUBLIC_TURNSTILE_SITE_KEY", "test-site-key");
       const user = userEvent.setup();
       login.mockRejectedValueOnce(
@@ -233,13 +218,10 @@ describe("SignInForm", () => {
         ),
       );
 
-      // And a token the server rejected must not be sent again. Dropping
-      // `setCaptchaToken(null)` from that branch keeps the whole suite green
-      // while the form resubmits the same rejected token on every retry --
-      // a CAPTCHA_INVALID loop with no way out, which is worse than the
-      // challenge it is trying to satisfy. The stubbed widget ignores `ref`,
-      // so `turnstileRef.current?.reset()` does nothing here: this asserts
-      // the state the form owns, which is the half that has to be right.
+      // A token the server rejected must not be sent again: dropping
+      // `setCaptchaToken(null)` leaves the form resubmitting it on every retry. The
+      // stubbed widget ignores `ref`, so this asserts the state the form owns, which
+      // is the half that has to be right.
       await waitFor(() =>
         expect(
           screen.getByRole("button", { name: "Sign In" }),
@@ -248,11 +230,9 @@ describe("SignInForm", () => {
     });
 
     it("says so plainly when there is no widget to solve", async () => {
-      // The misconfiguration that fails closed: the server demands a captcha
-      // and the deployment has no site key, so no widget can render. Without
-      // the message the visitor gets a permanently disabled button and no
-      // reason -- and `NEXT_PUBLIC_TURNSTILE_SITE_KEY` is one unset variable
-      // away in any environment.
+      // The misconfiguration that fails closed: the server demands a captcha and the
+      // deployment has no site key, so no widget can render. Without the message the
+      // visitor gets a permanently disabled button and no reason.
       vi.stubEnv("NEXT_PUBLIC_TURNSTILE_SITE_KEY", "");
       const user = userEvent.setup();
       login.mockRejectedValueOnce(

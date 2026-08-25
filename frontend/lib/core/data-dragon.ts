@@ -5,8 +5,8 @@
  * item images, summoner spell icons, etc.
  */
 
-// Used only when Riot's version manifest is temporarily unavailable. The root
-// layout normally resolves the latest version and provides it to client code.
+// Used only when Riot's version manifest cannot be reached. The root layout
+// normally resolves the latest version and provides it to client code.
 export const DDRAGON_FALLBACK_VERSION = "16.15.1";
 
 const DDRAGON_IMAGE_BASE_URL = "https://ddragon.leagueoflegends.com/cdn/img";
@@ -15,24 +15,13 @@ function getVersionedBaseUrl(version: string): string {
   return `https://ddragon.leagueoflegends.com/cdn/${version}`;
 }
 
-/**
- * Get the URL for a champion's square icon.
- *
- * @param championName - The champion name (e.g., "Aatrox", "AurelionSol", "KSante")
- * @returns URL to the champion's square icon image
- *
- * @example
- * getChampionIconUrl("Aatrox", "16.15.1") // => current versioned champion icon
- */
 export function getChampionIconUrl(
   championName: string,
   version: string = DDRAGON_FALLBACK_VERSION,
 ): string {
-  // Champion names in Data Dragon use specific formatting:
-  // - Single word names: as-is (e.g., "Aatrox")
-  // - Multi-word names: camelCase without spaces (e.g., "AurelionSol", "TwistedFate")
-  // - Special characters removed (e.g., "Kai'Sa" -> "Kaisa", "K'Sante" -> "KSante")
-  // The backend should already provide the correct format from championName field
+  // `championName` must already be in Data Dragon's own spelling -- camelCase,
+  // no spaces, no punctuation ("AurelionSol", "Kaisa", "KSante") -- which is
+  // what the backend's `championName` field carries.
   return `${getVersionedBaseUrl(version)}/img/champion/${championName}.png`;
 }
 
@@ -87,26 +76,15 @@ const CHAMPION_DISPLAY_NAME_MAP: Record<string, string> = {
   XinZhao: "Xin Zhao",
 };
 
-/**
- * Get the proper display name for a champion.
- * Converts Data Dragon format (e.g., "MissFortune") to display name (e.g., "Miss Fortune").
- *
- * @param championName - The champion name from the API (Data Dragon format)
- * @returns The proper display name with spaces and apostrophes
- */
+/** Data Dragon spelling to in-game name: "MissFortune" -> "Miss Fortune". */
 export function getChampionDisplayName(championName: string): string {
   return CHAMPION_DISPLAY_NAME_MAP[championName] || championName;
 }
 
 /**
- * Summoner spell ID to Data Dragon asset and display name.
- *
- * The IDs come from the Riot API; `asset` builds the icon URL and `name` is
- * what the spell is called in game, both taken from `summoner.json` (en_US).
- * Kept in the same one-entry-carries-both shape as the rune maps below — the
- * second field is `iconPath` there and `asset` here because one is a path and
- * the other a filename — so a caller never has to reach for a second, drifting
- * table of names.
+ * Riot spell ID to `summoner.json` (en_US) asset and in-game name. One entry
+ * carries both, like the rune maps below, so no caller has to reach for a
+ * second table of names that can drift away from the icons.
  */
 const SUMMONER_SPELL_MAP: Record<number, { name: string; asset: string }> = {
   1: { name: "Cleanse", asset: "SummonerBoost" },
@@ -157,11 +135,9 @@ export function getSummonerSpellName(spellId: number): string | null {
 }
 
 /**
- * Keystone rune icons and display names from Data Dragon `runesReforged`
- * (en_US). The two are one entry because a label that disagrees with the icon
- * next to it is worse than no label: 8439's asset is still the old
- * `VeteranAftershock`, while the rune has been called Aftershock in game for
- * years, and 8008's is `LethalTempoTemp`.
+ * Keystone icons and names from `runesReforged` (en_US), one entry each: the
+ * asset filename is not the in-game name and cannot be derived from it (8439
+ * is still `VeteranAftershock`, 8008 is `LethalTempoTemp`).
  */
 const KEYSTONE_MAP: Record<number, { name: string; iconPath: string }> = {
   // Domination

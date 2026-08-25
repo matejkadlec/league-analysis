@@ -297,11 +297,9 @@ describe("what happens after the send", () => {
   });
 
   it("does not send twice while the first send is still going", async () => {
-    // The button is disabled during the send, but the guard is what covers a
-    // second submit event arriving before React has re-rendered -- a double
-    // click, or Enter held down in the textarea.
-    // A holder rather than a bare `let`: TypeScript narrows a variable only
-    // assigned inside a closure to `never` at the call site below.
+    // The button is disabled during the send; the guard covers a second submit
+    // arriving before React has re-rendered. A holder rather than a bare `let`:
+    // TypeScript narrows a closure-only assignment to `never` at the call site.
     const pending: { release: (() => void) | null } = { release: null };
     validatedPost.mockImplementation(
       () =>

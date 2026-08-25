@@ -1,11 +1,8 @@
 /**
- * Server-side observability for the standalone production process.
- *
- * Next.js `logging` in next.config is development-only — incoming requests
- * and `browserToTerminal` never reach `docker logs` in production. This file
- * is the supported production hook. `onRequestError` sees *server* failures
- * (RSC render, route handlers). Browser React errors and missing chunks are
- * posted by `instrumentation-client.ts` to `/client-error-report`.
+ * Server-side observability for the standalone production process. Next's
+ * `logging` config is development-only, so this is the supported production
+ * hook; it sees server failures only. Browser errors arrive through
+ * `instrumentation-client.ts`.
  */
 export function onRequestError(
   error: unknown,

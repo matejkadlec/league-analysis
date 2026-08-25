@@ -7,17 +7,10 @@ import { ServiceStatusSchema } from "@/lib/core/schemas";
 export const SERVICE_STATUS_QUERY_KEY = ["service-status"] as const;
 
 /**
- * The one credential-health read.
- *
- * The header banner and the settings card both need to know whether the Riot
- * key is usable. They used to ask two endpoints backed by the same
- * `synchronize_riot_credential_health` call, and only the banner's had a
- * refetch interval -- so when the development key aged out overnight the
- * banner flipped within fifteen seconds while the card below it went on
- * saying the key was fine until the page was reloaded.
- *
- * Sharing the options object also keeps the two observers from disagreeing
- * about staleness on one key.
+ * The one credential-health read. The header banner and the settings card used
+ * to ask two endpoints backed by the same call, only one of which refetched --
+ * so when the development key aged out overnight the banner flipped within
+ * fifteen seconds while the card below went on saying the key was fine.
  */
 export function serviceStatusQueryOptions(options?: { enabled?: boolean }) {
   return queryOptions({

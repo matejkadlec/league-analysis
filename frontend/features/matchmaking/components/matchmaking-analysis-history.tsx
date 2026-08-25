@@ -7,6 +7,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { History, X } from "lucide-react";
 import { formatDateTime, formatFractionAsPercent } from "@/lib/core/format";
 import { useToast } from "@/lib/core/hooks";
+import { cn } from "@/lib/core/utils";
 
 import {
   getMatchmakingAnalysisHistory,
@@ -38,10 +39,8 @@ const HISTORY_FETCH_LIMIT = 100;
 
 /**
  * The three win-rate figures a history row shows, with the colour each is
- * drawn in.
- *
- * Both layouts read this rather than recomputing it, so the stacked blocks
- * cannot drift from the table on which side of a gap counts as good news.
+ * drawn in. Both layouts read this rather than recomputing it, so the stacked
+ * blocks cannot drift from the table on which side of a gap is good news.
  */
 function historyFigures(item: MatchmakingAnalysisHistoryItem) {
   // A zero threshold, so every gap is coloured: more visually pleasing here
@@ -88,12 +87,9 @@ function DeleteAnalysisButton({
 }
 
 /**
- * One analysis stacked for a narrow screen.
- *
- * The table's five columns need roughly 430px before the three win-rate
- * headings start wrapping, which is wider than a phone. Scrolling it sideways
- * would put the gap — the number the whole card exists to show — behind a
- * gesture, so below `sm` each analysis becomes its own block instead.
+ * One analysis stacked for a narrow screen. The table's five columns need
+ * ~430px before the win-rate headings wrap, and scrolling sideways would put
+ * the gap -- the number the whole card exists to show -- behind a gesture.
  */
 function AnalysisBlock({
   item,
@@ -106,9 +102,10 @@ function AnalysisBlock({
 }) {
   return (
     <li
-      className={`rounded-md border border-border/60 bg-muted/20 p-3 transition-all duration-300 ${
-        isDeleting ? "opacity-0 scale-y-0" : "opacity-100 scale-y-100"
-      }`}
+      className={cn(
+        "rounded-md border border-border/60 bg-muted/20 p-3 transition-all duration-300",
+        isDeleting ? "opacity-0 scale-y-0" : "opacity-100 scale-y-100",
+      )}
     >
       <div className="flex items-center justify-between gap-2">
         <span className="text-sm">{formatDateTime(item.created_at)}</span>
@@ -123,7 +120,7 @@ function AnalysisBlock({
             <dt className="text-sm uppercase tracking-wide text-muted-foreground">
               {figure.label}
             </dt>
-            <dd className={`tabular-nums text-sm ${figure.colorClass}`}>
+            <dd className={cn("tabular-nums text-sm", figure.colorClass)}>
               {figure.value}
             </dd>
           </div>
@@ -273,7 +270,16 @@ export function MatchmakingAnalysisHistory({
                 return (
                   <TableRow
                     key={item.created_at}
-                    className={`h-11 border-b border-border/30 hover:bg-muted/50 transition-all duration-300 ${isDeleting ? "opacity-0 scale-y-0 h-0" : "opacity-100 scale-y-100"}`}
+                    // `h-0` on the deleting branch used to lose to the static
+                    // `h-11` and do nothing, so the row held its space while
+                    // scaling to nothing. Stated per branch it applies, and
+                    // the gap closes with the animation rather than after it.
+                    className={cn(
+                      "border-b border-border/30 hover:bg-muted/50 transition-all duration-300",
+                      isDeleting
+                        ? "h-0 opacity-0 scale-y-0"
+                        : "h-11 opacity-100 scale-y-100",
+                    )}
                   >
                     <TableCell className="text-left text-sm">
                       {formatDateTime(item.created_at)}

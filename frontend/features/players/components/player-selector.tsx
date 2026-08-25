@@ -84,13 +84,8 @@ interface PlayerSelectorProps {
   inputClassName?: string;
   /**
    * What the box reads on mount, for a surface that keeps a chosen player
-   * rather than switching away from one.
-   *
-   * Read once, as the initial state: after that the box belongs to whoever is
-   * typing in it. The analysis pages key their card by PUUID, so choosing a
-   * player remounts this control; what that key is there to protect is the
-   * card's own state, not this box (pinned by the fetch-report case in
-   * `e2e/smurf-boost-detection.spec.ts`).
+   * rather than switching away from one. Read once, as the initial state:
+   * after that the box belongs to whoever is typing in it.
    */
   initialSearchValue?: string;
 }
@@ -144,10 +139,9 @@ export function PlayerSelector({
   // box would empty for that one case and the name would look lost.
   const keepsSelection = initialSearchValue !== "";
   // What the box reads when it is showing a selection rather than a query.
-  // Enter on it before its suggestions arrive does nothing: the value parses
-  // as a Riot ID, so without this it was read as an unknown player and
-  // opened the server dialog for the player already chosen. Once the list is
-  // there, Enter re-picks that same player, which is harmless.
+  // Enter before its suggestions arrive does nothing: the value parses as a
+  // Riot ID, so without this it read as an unknown player and opened the
+  // server dialog for the player already chosen.
   const [selectedLabel, setSelectedLabel] = useState(initialSearchValue);
 
   const choosePlayer = async (player: Player) => {

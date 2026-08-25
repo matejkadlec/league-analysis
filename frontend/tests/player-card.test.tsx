@@ -103,10 +103,9 @@ const stats = {
 };
 
 // `/players/{puuid}/league` answers an unranked player with a 200 carrying
-// `null`, not with an error -- so `leagueData: null` is a *successful* empty
-// response here. Modelling it as a failure was what let the card render a
-// broken request as "unranked"; `failLeagueWith` covers the failure case
-// separately.
+// `null`, so `leagueData: null` is a *successful* empty response here.
+// Modelling it as a failure let the card render a broken request as
+// "unranked"; `failLeagueWith` covers the failure case separately.
 function answerWith({
   leagueData = league as typeof league | null,
   statsData = stats as typeof stats | null,

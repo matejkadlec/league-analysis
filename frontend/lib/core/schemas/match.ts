@@ -57,12 +57,10 @@ export const PlayerMatchParticipantSchema = z.object({
   runes: ParticipantRunesSchema.optional().nullable(),
 });
 
-// Enemy Lane Opponent Schema
 // The three identity fields live here and not on
-// `PlayerMatchParticipantSchema`: the backend only publishes them on the
-// opponent, and the player card already knows whose page it is. Adding them
-// to the omit base instead would have claimed a shape the player participant
-// never sends.
+// `PlayerMatchParticipantSchema`: the backend publishes them only on the
+// opponent, so adding them to the omit base would claim a shape the player
+// participant never sends.
 export const EnemyLaneOpponentSchema = PlayerMatchParticipantSchema.omit({
   team_position: true,
   team_id: true,

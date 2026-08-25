@@ -117,11 +117,10 @@ const MATCH: MatchWithPlayerData = {
       champ("Elise", "r5"),
     ],
   },
-  // The two sides carry different kill totals on purpose: every one of the
-  // four ways the two stat blocks could be wired to them produces a distinct
-  // percentage, so an assertion on the number says which team it was read
-  // from. Player 10 of blue's 20 = 50%; opponent 8 of red's 40 = 20%; the
-  // crossed wiring would read 25% and 40%.
+  // Different kill totals on purpose: each of the four ways the stat blocks
+  // could be wired gives a distinct percentage, so the number says which team
+  // it came from. 10 of blue's 20 = 50%, 8 of red's 40 = 20%; crossed reads
+  // 25% and 40%.
   team_stats: {
     blue_team: { ...TEAM_STATS, kills: 20 },
     red_team: { ...TEAM_STATS, kills: 40 },
@@ -148,11 +147,10 @@ afterEach(() => {
 
 describe("a match history row", () => {
   it("measures kill participation against the player's own team, not the enemy's", () => {
-    // `playerTeamStats` picks blue or red off `participant.team_id`, and the
-    // opponent's block reads the mirror. Cross the two and both numbers stay
-    // plausible — they are percentages in range, on the right screen — while
-    // telling the player they carried a fight they sat out of. There is
-    // nothing else on the row to notice it against.
+    // `playerTeamStats` picks blue or red off `participant.team_id` and the
+    // opponent's block reads the mirror. Crossed, both numbers stay plausible
+    // percentages while telling the player they carried a fight they sat out
+    // of, and nothing else on the row contradicts them.
     renderRow();
 
     expect(screen.getByText("50%")).toBeTruthy();
@@ -178,11 +176,10 @@ describe("a match history row", () => {
     expect(screen.getByText("20%")).toBeTruthy();
   });
 
-  // A Tailwind class is asserted here for the same reason the matchmaking
-  // history row asserts one: the tint carries the outcome for sighted
-  // players, and `getMatchOutcome` derives it and the text label from one
-  // branch — so the class and the word are pinned together, and a row whose
-  // tint and label disagree cannot pass.
+  // A Tailwind class is asserted because the tint carries the outcome for
+  // sighted players, and `getMatchOutcome` derives it and the label from one
+  // branch -- pinned together, a row whose tint and label disagree cannot
+  // pass.
   const tint = (container: HTMLElement) =>
     container.firstElementChild?.className ?? "";
 
@@ -256,12 +253,10 @@ describe("a match history row", () => {
   });
 
   it("shows the game length but never a per-match LP number", () => {
-    // Per-match LP is not obtainable reliably under the current Riot
-    // developer-key constraints, so the column is hidden rather than filled
-    // with a guess — `lp_change` still arrives on the match and must not
-    // reach the screen. The duration took its place beside the date, and it
-    // carries the outcome word, which is the row's only non-colour outcome
-    // signal (WCAG 1.4.1): losing the cell in the move would lose that too.
+    // Per-match LP is not reliably obtainable under a Riot developer key, so
+    // the column is hidden rather than guessed -- `lp_change` still arrives
+    // and must not reach the screen. The duration took its place and carries
+    // the outcome word, the row's only non-colour outcome signal (WCAG 1.4.1).
     const { container } = renderRow({ lp_change: 18 });
 
     expect(container.textContent).not.toContain("LP");
@@ -384,11 +379,10 @@ describe("a match history row", () => {
   ])(
     "puts a game played at %s in the band its own date is in",
     (playedAt, expected) => {
-      // The boundary the label used to get wrong. Counting elapsed 24-hour
-      // blocks from 10:00 made last night's 23:00 game "Today" — under a
-      // printed date reading the 9th — and pushed "Yesterday" into the 8th.
-      // The label and the date above it are two readings of one instant, so
-      // they change over at the same local midnight.
+      // The boundary the label got wrong: counting elapsed 24-hour blocks from
+      // 10:00 made last night's 23:00 game "Today" under a printed date
+      // reading the 9th. The label and that date are two readings of one
+      // instant, so they change over at the same local midnight.
       vi.useFakeTimers();
       vi.setSystemTime(new Date(2026, 2, 10, 10, 0));
       renderRow({ game_start_timestamp: playedAt.getTime() });
@@ -466,12 +460,10 @@ describe("a match history row", () => {
   });
 
   it("offers one keyboard stop per rune or spell group, not per icon", () => {
-    // Nine non-interactive stops per row made tabbing a page of rows mostly
-    // decoration (LGA-91 review), while LGA-93 wants the names keyboard-
-    // reachable. The middle: each side's rune pair and spell pair is one
-    // focusable group whose tooltip names both, so 2 sides x 2 groups. The
-    // champion portraits and other participants stay real buttons and are
-    // counted by the lineup test above; nothing else may grab a stop.
+    // Nine non-interactive stops per row made tabbing mostly decoration
+    // (LGA-91 review) while LGA-93 wants the names keyboard-reachable. The
+    // middle: each side's rune pair and spell pair is one focusable group
+    // whose tooltip names both, so 2 sides x 2 groups and nothing else.
     const { container } = renderRow();
 
     expect(container.querySelectorAll('[tabindex="0"]')).toHaveLength(4);

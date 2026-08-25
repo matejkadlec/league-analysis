@@ -62,15 +62,10 @@ function RankManipulationContent() {
             <RankManipulationSkeleton />
           ) : (
             <>
-              {/* Rendered with no player too, rather than swapped for a
-                  "select a player" card. That card sends people to the sidebar
-                  search, which is a current-player surface: on a route that is
-                  no longer player-centric it navigates away to Player
-                  Overview, so the one page that needs a local target had no
-                  way to set one. Reachable with no player two ways -- an
-                  account that has never chosen one, and a `?puuid=` that will
-                  not load. Keyed by player so a transient failure from one
-                  never survives into another. */}
+              {/* Rendered with no player too: a "select a player" card would
+                  send people to the sidebar search, which navigates away from
+                  this non-player-centric route. Keyed by player so one
+                  player's transient failure never survives into the next. */}
               <SmurfBoostDetection
                 key={analyzedPlayer?.puuid ?? "no-player"}
                 puuid={analyzedPlayer?.puuid ?? null}

@@ -160,22 +160,15 @@ class Match(Base):
     )
 
     # The one relationship this application reads: `playstyle_analysis`
-    # eager-loads it with `selectinload`. `lazy="raise"` is what SQLAlchemy's
-    # asyncio docs prescribe for a codebase without `AsyncAttrs` -- a lazy load
-    # from an async context is a MissingGreenlet, and this turns it into a
-    # loud error at the access instead. One-directional: nothing ever read
-    # `MatchParticipant.match`. No cascade either: the only ORM-level delete in
-    # the app is on a table with no relationships at all, and
+    # eager-loads it with `selectinload`. `lazy="raise"` because without
+    # `AsyncAttrs` a lazy load from async code is a MissingGreenlet. No cascade:
     # `match_participants.match_id` already cascades in the database.
     participants: Mapped[list[MatchParticipant]] = relationship(lazy="raise")
 
 
-# Create indexes for common queries.
-#
-# None of the columns below also carries `index=True`. A btree on (a, b) already
-# serves every lookup a btree on (a) would, so a single-column index on the
-# leading column of one of these is pure write cost -- and `match_id` is the
-# primary key, whose own index covers it. `game_mode` and `game_type` do carry
+# Indexes for common queries. None of these columns also carries `index=True`: a
+# btree on (a, b) already serves every lookup a btree on (a) would, so an index
+# on a leading column is pure write cost. `game_mode` and `game_type` do carry
 # `index=True`, because no composite here leads with either.
 Index("idx_matches_platform_timestamp", Match.platform, Match.game_start_timestamp)
 

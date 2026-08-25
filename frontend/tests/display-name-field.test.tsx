@@ -92,11 +92,9 @@ describe("the display name on the settings page", () => {
   });
 
   it("tells someone who cleared the box that it is empty", async () => {
-    // The message is what is asserted, not just that something was refused.
-    // Drop this guard and the blank field is still refused -- by the length
-    // check below it, which answers "Use at least 3 characters" to someone
-    // who typed nothing at all. Naming the message is the only way to hold
-    // the two apart.
+    // Drop the empty-name guard and the blank field is still refused -- by
+    // the length check below it, which answers "Use at least 3 characters"
+    // to someone who typed nothing. Only the message tells the two apart.
     const queryClient = renderField();
 
     type("     ");

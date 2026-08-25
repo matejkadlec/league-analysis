@@ -6,18 +6,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderWithQueryClient } from "./render-support";
 
 /**
- * Whose decision the cookie banner is recording.
- *
- * The consent cookie is jar-wide and the banner has to work before anyone
- * signs in, so a visitor's choice is necessarily browser-level. The bug was
- * what happened next: a second account signing in on the same browser
- * inherited that choice without ever being asked, and the manager wrote the
- * inherited choice to `/settings/user/cookie-consent` as
- * `consent_source: "banner"` -- a record saying somebody clicked a banner
- * they never saw.
- *
- * These assert against the account's own stored record, which is the only
- * thing that holds a statement by a person.
+ * Whose decision the banner is recording. A second account signing in on the
+ * same browser inherited the first one's choice, and that inherited choice was
+ * written to its record as `consent_source: "banner"`. These assert the
+ * account's own stored record.
  */
 
 const { validatedGet, validatedPut, useAuth } = vi.hoisted(() => ({
@@ -195,11 +187,9 @@ describe("the consent banner when the signed-in account changes", () => {
   });
 
   it("does not carry one account's choice through a sign-out into the next", async () => {
-    // `logout` is a `router.push` and this component lives in the root
-    // layout, so it is never remounted across a sign-out. A ref that recorded
-    // only *that* a choice was made -- rather than who made it -- would still
-    // be set when the next account signed in, and would write the previous
-    // account's level into theirs.
+    // This component lives in the root layout and `logout` is a `router.push`,
+    // so it is never remounted across a sign-out: a ref recording only *that* a
+    // choice was made would still be set when the next account signed in.
     signedInAs(4);
     serverAnswers(null);
     const { rerender } = await mount();

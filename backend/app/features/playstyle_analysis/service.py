@@ -142,20 +142,16 @@ class PlaystyleAnalysisService:
         player = result_player.scalar_one_or_none()
         if player:
             player.last_playstyle_analysis = current_time
-            # Also set fully_analyzed if matches_analyzed condition met?
-            # For now, we trust the caller/logic elsewhere or just set playstyle time
+            # Only the analysis timestamp is a player column; `fully_analyzed`
+            # belongs to `Match` and is set for this player's matches below.
             self.db.add(player)
         else:
             logger.warning("playstyle_analysis_player_row_missing", puuid=puuid)
 
-        # Update matches attached to analysis to be fully_analyzed
-        # Logic: We just analyzed specific matches. But here we don't have the list of match_ids easily available
-        # without passing it or re-querying.
-        # Ideally, we should update the matches that were used.
-        # The simplest approach is to fetch the latest 100 match IDs for the player (same as used in analysis)
-        # and update them.
-
-        # Re-fetch relevant match IDs for this player to update status
+        # Marks the player's newest 100 matches analysed. This re-queries by
+        # match ID rather than by the `game_start_timestamp` the analysis above
+        # ordered on, so at the boundary it can mark a match the analysis never
+        # read -- and `fully_analyzed` is also what stops a Riot re-fetch.
         subquery = (
             select(MatchParticipant.match_id)
             .where(MatchParticipant.puuid == puuid)

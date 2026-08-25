@@ -314,9 +314,8 @@ async def test_overdue_startup_job_is_queued_without_awaiting_execution(
 def test_api_call_storage_groups_to_one_entry_per_endpoint() -> None:
     # The frontend keys its API-call rows by the endpoint alone
     # (job-execution-api-calls.tsx), so this grouping is a cross-package
-    # contract: regroup by anything finer — region, batch, time window —
-    # and those React keys collide, freezing the first row's numbers on
-    # every later row.
+    # contract: regroup by anything finer — region, batch, time window — and
+    # those React keys collide, freezing the first row's numbers on every row.
     calls = [
         APICallRecord(
             endpoint="/lol/match/v5/matches/{matchId}",
@@ -769,11 +768,9 @@ class _WriterInterlockSession:
 
 async def test_writer_refusal_locks_first_and_raises_on_an_active_interlock() -> None:
     # The refusal exists to stop a Riot writer while cleanup owns the data
-    # tables. It only works if the lock comes *before* the read — read first
-    # and the answer can be stale by the time the writer proceeds, which is
-    # the lock inversion the table order in this module exists to prevent.
-    # Compiling the Select below configures every mapper, so the whole
-    # registry must be imported first (the same trap as test_transformers).
+    # tables, and only works if the lock comes *before* the read — read first and
+    # the answer can be stale by the time the writer proceeds. Compiling the
+    # Select below configures every mapper, so import the registry first.
     from app.model_registry import import_all_models
 
     import_all_models()
@@ -848,8 +845,10 @@ def test_detailed_logs_accepts_every_shape_production_stores() -> None:
     assert single.api_calls[0].params == {"puuid": "abc"}
     assert single.api_calls[0].param_key is None
 
-    # A legacy row parses to two empty lists, never to `None`: the response
-    # never puts a `null` where the frontend expects an array.
-    legacy = JobExecutionDetailedLogs.model_validate({"message": "no logs captured"})
-    assert legacy.logs == []
-    assert legacy.api_calls == []
+    # A row carrying only a message parses to two empty lists, never to `None`:
+    # the response never puts a `null` where the frontend expects an array.
+    message_only = JobExecutionDetailedLogs.model_validate(
+        {"message": "no logs captured"}
+    )
+    assert message_only.logs == []
+    assert message_only.api_calls == []

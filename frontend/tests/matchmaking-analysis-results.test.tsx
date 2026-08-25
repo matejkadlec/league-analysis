@@ -122,16 +122,9 @@ describe("the last matchmaking analysis result", () => {
   });
 
   it("calls a gap of exactly three points favourable, not fair", async () => {
-    // The card's own sentence says "within 3%", so 3.0 has to fall outside
-    // it. This is the whole verdict of the feature: one side of the boundary
-    // tells a player the matchmaking was skewed in their favour and the
-    // other tells them it was even.
-    //
-    // The pair has to be 0.03 and 0, not 0.53 and 0.5. The first draft used
-    // the latter and passed with `>=` mutated to `>`, because `0.53 - 0.5` is
-    // 0.030000000000000027 in binary floating point and was never on the
-    // boundary at all. `0.03 - 0` is the same double as the literal it is
-    // compared against, so this is the only pair that tests the `=`.
+    // The card says "within 3%", so 3.0 falls outside it. The pair has to be
+    // 0.03 and 0, not 0.53 and 0.5: `0.53 - 0.5` is 0.030000000000000027 and was
+    // never on the boundary, so that draft passed with `>=` mutated to `>`.
     getLatestCompletedMatchmakingAnalysis.mockResolvedValue(
       completed({
         team_avg_winrate: 0.03,
@@ -244,11 +237,8 @@ describe("the last matchmaking analysis result", () => {
   });
 
   it("reports the stored count without rewriting it", async () => {
-    // A render function used to substitute 910 for 820, because the backend
-    // once computed the basis as `10 + 90 * (MATCHES_FOR_WINRATE - 1)` and
-    // now computes `10 + 90 * MATCHES_FOR_WINRATE`. Migration 20260820_0017
-    // moved the stored rows instead, so the card shows what the database
-    // holds and the two no longer disagree about the same row.
+    // The basis is `10 + 90 * MATCHES_FOR_WINRATE`; migration 20260820_0017 moved
+    // the stored rows, so the card shows what the database holds.
     getLatestCompletedMatchmakingAnalysis.mockResolvedValue(
       completed({
         team_avg_winrate: 0.5,
@@ -292,11 +282,9 @@ describe("the last matchmaking analysis result", () => {
     [new Date(2026, 2, 4, 12, 30), "4.3.2026 12:30 PM"],
     [new Date(2026, 2, 4, 23, 59), "4.3.2026 11:59 PM"],
   ])("writes %s as %s", async (createdAt, expected) => {
-    // This card used to carry the one D/M/YYYY (slashes) copy of the clock;
-    // it now reads the shared dots-shaped formatDateTime, and these fixtures
-    // pin the three things every hand-rolled clock gets wrong: `07` minutes
-    // rather than `7`, midnight reading as 12 rather than 0, and noon being
-    // PM rather than AM.
+    // These fixtures pin the three things every hand-rolled clock gets wrong:
+    // `07` minutes rather than `7`, midnight reading as 12 rather than 0, and
+    // noon being PM rather than AM.
     getLatestCompletedMatchmakingAnalysis.mockResolvedValue(
       completed(EVEN, createdAt.toISOString()),
     );

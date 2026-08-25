@@ -13,12 +13,9 @@ LIMIT = 1024 * 1024
 @pytest.fixture
 async def client() -> AsyncIterator[httpx.AsyncClient]:
     # `ASGITransport`, not starlette's TestClient: the latter is annotated
-    # against httpx2, which this environment does not install, so every call
-    # through it came back `Unknown` and had to be cast. It also warns at
-    # import time, which the suite treats as an error.
-    #
-    # No lifespan is driven, which is what this test wants: the body limit runs
-    # before routing, so nothing here needs the lifespan's database.
+    # against httpx2, which this environment does not install, and it warns at
+    # import time, which the suite treats as an error. No lifespan is driven --
+    # the body limit runs before routing, so nothing here needs a database.
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(
         transport=transport, base_url="http://testserver"

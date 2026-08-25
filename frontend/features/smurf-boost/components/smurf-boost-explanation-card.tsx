@@ -10,15 +10,13 @@ import {
   FAMILY_DESCRIPTIONS,
   FAMILY_TITLES,
 } from "../smurf-boost-vocabulary";
+import { cn } from "@/lib/core/utils";
 
 /**
- * The always-visible explanation. The specification requires the disclaimer to
- * be plain and permanent, so it is never a tooltip and never collapsed.
- *
- * Everything above the disclaimer is drawn rather than narrated: the window
- * comparison as two dot rows, the possible readings as the same colour ladder
- * the result card uses. The prose this replaced said the same things in three
- * paragraphs nobody read.
+ * The always-visible explanation. The specification requires the disclaimer
+ * to be plain and permanent, so it is never a tooltip and never collapsed.
+ * Everything above it is drawn rather than narrated: the window comparison as
+ * dot rows, the readings as the same colour ladder the result card uses.
  */
 
 // The readings a comparison can produce, in escalation order, wearing the
@@ -34,7 +32,7 @@ function DotRow({ count, className }: { count: number; className: string }) {
   return (
     <div className="flex gap-1" aria-hidden="true">
       {Array.from({ length: count }, (_, i) => (
-        <span key={i} className={`h-2.5 w-2.5 rounded-full ${className}`} />
+        <span key={i} className={cn("h-2.5 w-2.5 rounded-full", className)} />
       ))}
     </div>
   );
@@ -113,7 +111,7 @@ export function SmurfBoostExplanationCard() {
               )}
               <span className="flex items-center gap-1.5 text-sm font-medium">
                 <span
-                  className={`h-2 w-2 rounded-full ${dot}`}
+                  className={cn("h-2 w-2 rounded-full", dot)}
                   aria-hidden="true"
                 />
                 {BAND_LABELS[band]}

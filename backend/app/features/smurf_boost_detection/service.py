@@ -90,9 +90,8 @@ class SmurfBoostDetectionService:
         self.db = db
         # The account every query in this service is answering for. Held on the
         # instance rather than threaded through a dozen private signatures: the
-        # service is constructed per request from the authenticated caller, so
-        # there is exactly one right value for its whole lifetime, and a
-        # parameter is a thing a future method can forget to accept.
+        # service is built per request from the authenticated caller, so there is
+        # exactly one right value for its whole lifetime.
         self.user_id = user_id
 
     async def viewer_thresholds(self) -> dict[str, float]:

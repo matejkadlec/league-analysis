@@ -38,9 +38,10 @@ repos:
         language: fail
         files: '(?i)(^|/)(?!\.env\.(?:example|template|sample)$)(?:\.env(?:\.[^/]+)?|[^/]+\.env|id_rsa|id_dsa|id_ecdsa|id_ed25519|credentials\.json)$|\.(pem|key|p12|pfx)$'
 
-      # ESLint has no filename rule and adding a plugin for one convention is
-      # not worth the dependency. The tree is fully kebab-case today, so this
-      # only ever fires on a new violation. Next.js dynamic segments and route
+      # No linter here has a filename rule, and a house plugin for one
+      # convention costs more than this line. The tree is fully kebab-case
+      # today, so this only ever fires on a new violation. Next.js dynamic
+      # segments and route
       # groups are lowercase already, so they pass. The check covers every
       # path segment, not just the basename — a PascalCase feature directory
       # is the same violation as a PascalCase file.
@@ -193,6 +194,18 @@ repos:
         pass_filenames: false
         always_run: true
 
+      # Ruff has no plugin API and no comment-length rule, so the Python half
+      # of the frontend's three comment rules is a stdlib script.
+      - id: backend-comment-hygiene
+        name: Comment hygiene (length, deferrals, compat shims)
+        entry: >
+          bash -c 'repository_root="$(git rev-parse --show-toplevel)" &&
+          cd "$repository_root/backend" &&
+          uv run --locked python scripts/check_comments.py app tests scripts'
+        language: system
+        pass_filenames: false
+        always_run: true
+
       - id: backend-pyright
         name: Pyright
         entry: >
@@ -230,11 +243,11 @@ repos:
         pass_filenames: false
         always_run: true
 
-  # Frontend linting with Next.js (local hook for better compatibility)
+  # Frontend linting with oxlint (local hook for better compatibility)
   - repo: local
     hooks:
       - id: frontend-lint
-        name: Frontend ESLint
+        name: Frontend oxlint
         entry: >
           bash -c 'export LC_ALL=C.UTF-8 &&
           repository_root="$(git rev-parse --show-toplevel)" &&
@@ -246,7 +259,9 @@ repos:
           npm run lint -- --max-warnings 0 ||
           (echo "❌ Frontend linting failed! Fix errors before committing." && exit 1)'
         language: system
-        files: ^frontend/.*\.(ts|tsx|js|jsx)$
+        # `.mts` is here for `oxlint.config.mts` and the house plugins: a rule
+        # or a scope changed there is exactly when this needs to run.
+        files: ^frontend/.*\.(ts|tsx|js|jsx|mts)$
         exclude: ^frontend/node_modules/
         pass_filenames: false
 

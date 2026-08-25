@@ -289,11 +289,10 @@ def seed_legacy_matchmaking_analyses(database: str) -> None:
         engine.dispose()
 
 
-# Three keys, because the row revision 0019 must keep is not the newest one.
-# The pre-0019 save path could reactivate an older row, so an inactive key can
-# carry a *later* `added_at` than the active one -- and the new lookup takes
-# the newest row outright. Seeding only an active key would let the revision
-# skip its DELETE and still pass.
+# Three keys, because the row revision 0019 must keep is not the newest one: the
+# pre-0019 save path could reactivate an older row, so an inactive key can carry
+# a *later* `added_at` than the active one. Seeding only an active key would let
+# the revision skip its DELETE and still pass.
 _VALIDATION_ACTIVE_KEY = "RGAPI-" + "validation-active".ljust(36, "0")
 _VALIDATION_STALE_KEYS = (
     ("RGAPI-" + "validation-older".ljust(36, "0"), "2026-08-01T00:00:00Z"),
@@ -975,8 +974,6 @@ async def verify_application_database_access(database: str) -> None:
         # Every job type needs a configuration row, seeded by an incremental
         # migration. Without one the type is declared, registered, runnable —
         # and never scheduled, because the scheduler iterates configurations.
-        # This replaced a hardcoded row count, which a new job type satisfied
-        # by simply being absent.
         from app.features.jobs.models import JobType
 
         unconfigured = {member.value for member in JobType} - configured_job_types

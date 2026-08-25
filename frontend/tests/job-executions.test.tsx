@@ -76,10 +76,9 @@ const MATCH_FETCHER: JobConfiguration = {
 
 /**
  * The component owns its query now, so a fixture is installed on the mocked
- * `validatedGet` rather than handed in as a prop. It used to take both -- a
- * seed prop from the page plus its own poll -- which meant two requests for
- * the identical first page and, when the seed failed, an infinite query that
- * never started behind a tidy "No job executions found".
+ * `validatedGet` rather than handed in as a prop -- taking both meant two
+ * requests for the identical first page, and a failed seed left an infinite
+ * query that never started behind a tidy "No job executions found".
  */
 function renderExecutions(props: {
   executions: JobExecutionListResponse | null;
@@ -116,11 +115,10 @@ describe("the executions table on the jobs page", () => {
   });
 
   it("keeps the rows on screen when the 15-second poll fails", async () => {
-    // This query re-runs every 15 seconds behind a table someone is reading.
-    // The queryFn re-throws rather than returning a failure envelope, so
-    // React Query keeps the pages it already has -- a single failed poll must
-    // not empty the table, or a working scheduler momentarily looks like one
-    // that has never run.
+    // This query re-runs every 15 seconds behind a table someone is reading, and
+    // the queryFn re-throws rather than returning a failure envelope, so React
+    // Query keeps the pages it already has. A single failed poll must not empty
+    // the table.
     const { queryClient } = renderExecutions({
       executions: listOf([execution({ id: 41 })]),
     });
@@ -193,11 +191,9 @@ describe("the executions table on the jobs page", () => {
   });
 
   it("lets a later deep link close a dialog the click opened", async () => {
-    // Clicking a row remembers it internally *and* reports it upwards, which
-    // is what puts the id in the URL. So once a `selectedExecutionId` arrives,
-    // it is the answer -- including when it resolves to nothing. Falling back
-    // to the remembered row instead would leave the previous execution's
-    // details on screen under a URL naming a different one.
+    // Clicking a row remembers it internally *and* reports it upwards, which is
+    // what puts the id in the URL. So once a `selectedExecutionId` arrives it is
+    // the answer, including when it resolves to nothing.
     const { queryClient, setSelectedExecutionId } = renderExecutions({
       executions: listOf([execution({ id: 42, job_config_id: 7 })]),
       selectedExecutionId: null,

@@ -9,24 +9,10 @@ import {
 } from "@/features/auth/utils/auth-state-cookie";
 
 /**
- * One refresh per tab, however many 401s arrive at once.
- *
- * The app fires many react-query calls in parallel, so the moment the
- * 30-minute access token expires several 401s land together and each reaches
- * the axios interceptor. Without the shared promise in `token-manager.ts`,
- * each one POSTs `/auth/refresh` carrying the *same* refresh cookie -- the
- * browser composed them all before any rotation landed. The first rotates;
- * every other is a replay of a token that is now revoked. The server heals
- * the first such replay (the replacement was never used), but the second
- * replay finds a used replacement, reads as reuse, and revokes the chain --
- * so three-plus unguarded refreshes still sign this browser out.
- *
- * The client is right to end the session at that point, because the server
- * really did refuse. That is what makes this so quiet: no guard here is
- * violated, nothing lies, and an ordinary page load after lunch signs the
- * visitor out with nothing they could have done differently.
- *
- * Deleting the guard left all 320 tests green.
+ * One refresh per tab, however many 401s arrive at once. Without the shared
+ * promise each parallel 401 replays the same refresh cookie; the server heals
+ * the first replay and reads the second as reuse, revoking the chain. Deleting
+ * the guard left all 320 tests green.
  */
 
 beforeEach(() => {
