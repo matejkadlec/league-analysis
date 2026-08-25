@@ -45,7 +45,7 @@ let triggerLogin: AuthContextType["login"] | null = null;
 function AuthStateProbe() {
   const { isLoading, isAuthenticated, checkAuth, logout, login } = useAuth();
   // Assigned in an effect, not during render: reassigning a module-level
-  // binding while rendering is a side effect, and eslint rejects it.
+  // binding while rendering is a side effect, and the linter rejects it.
   useEffect(() => {
     triggerRecheck = checkAuth;
     triggerLogout = logout;

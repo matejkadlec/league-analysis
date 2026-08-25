@@ -102,14 +102,14 @@ export function MatchHistory({
     MATCH_HISTORY_SEARCH_DEBOUNCE_MS,
   );
 
-  /* eslint-disable react-hooks/set-state-in-effect -- Optional browser preferences initialize after hydration to preserve a stable server snapshot. */
+  /* oxlint-disable react/set-state-in-effect -- Optional browser preferences initialize after hydration to preserve a stable server snapshot. */
   useEffect(() => {
     const preferences = readMatchHistoryPreferences();
     setActiveQueueFilters(preferences.queueFilters);
     setPageSize(preferences.pageSize);
     setPreferencesReady(true);
   }, []);
-  /* eslint-enable react-hooks/set-state-in-effect */
+  /* oxlint-enable react/set-state-in-effect */
 
   const { data: stats = null } = useQuery({
     ...matchHistoryStatsQueryOptions(puuid, queueQueryParam),
@@ -231,7 +231,7 @@ export function MatchHistory({
     }
     const lastAvailablePage = Math.max(1, totalPages);
     if (currentPage > lastAvailablePage) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- The server total is authoritative when refreshed data removes the requested page.
+      // oxlint-disable-next-line react/set-state-in-effect -- The server total is authoritative when refreshed data removes the requested page.
       setCurrentPage(lastAvailablePage);
     }
   }, [currentPage, error, isPlaceholderData, totalPages]);

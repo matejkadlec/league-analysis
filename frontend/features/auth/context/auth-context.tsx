@@ -164,7 +164,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Initialize auth state on mount
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- Authentication initializes from browser token state after hydration.
+    // oxlint-disable-next-line react/set-state-in-effect -- Authentication initializes from browser token state after hydration.
     void checkAuth();
   }, [checkAuth]);
 

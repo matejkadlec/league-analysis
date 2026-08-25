@@ -43,7 +43,7 @@ vi.mock("next/image", () => ({
     alt: string;
     onError?: () => void;
   }) => (
-    // eslint-disable-next-line @next/next/no-img-element
+    // oxlint-disable-next-line next/no-img-element
     <img src={src} alt={alt} onError={onError} />
   ),
 }));
