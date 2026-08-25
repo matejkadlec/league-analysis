@@ -53,7 +53,7 @@ const EMPTY_HISTORY = {
 
 function renderHistory(): void {
   renderWithQueryClient(
-    <MatchHistory puuid="player-puuid" />,
+    <MatchHistory puuid="player-puuid" onSelectPlayer={vi.fn()} />,
   );
 }
 

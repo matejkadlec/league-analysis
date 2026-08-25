@@ -58,11 +58,20 @@ export const PlayerMatchParticipantSchema = z.object({
 });
 
 // Enemy Lane Opponent Schema
+// The three identity fields live here and not on
+// `PlayerMatchParticipantSchema`: the backend only publishes them on the
+// opponent, and the player card already knows whose page it is. Adding them
+// to the omit base instead would have claimed a shape the player participant
+// never sends.
 export const EnemyLaneOpponentSchema = PlayerMatchParticipantSchema.omit({
   team_position: true,
   team_id: true,
   win: true,
   remake: true,
+}).extend({
+  puuid: z.string(),
+  game_name: z.string(),
+  tag_line: z.string(),
 });
 
 // Team Stats Schema
@@ -92,6 +101,8 @@ export const TeamChampionSchema = z.object({
   champion_name: z.string(),
   team_position: z.string().optional().nullable(),
   puuid: z.string(),
+  game_name: z.string(),
+  tag_line: z.string(),
 });
 
 // Team Composition Schema

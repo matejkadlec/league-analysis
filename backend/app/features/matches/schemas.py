@@ -118,6 +118,9 @@ class PlayerMatchParticipant(BaseModel):
 class EnemyLaneOpponent(BaseModel):
     """Schema for the enemy lane opponent."""
 
+    puuid: str = Field(..., description="Enemy PUUID")
+    game_name: str = Field(..., description="Enemy Riot ID game name")
+    tag_line: str = Field(..., description="Enemy Riot ID tag line")
     champion_id: int = Field(..., description="Enemy champion ID")
     champion_name: str = Field(..., description="Enemy champion name")
     champion_level: int = Field(..., description="Enemy champion level")
@@ -154,6 +157,8 @@ class TeamChampion(BaseModel):
     champion_name: str = Field(..., description="Champion name")
     team_position: str | None = Field(default=None, description="Lane position")
     puuid: str = Field(..., description="Player PUUID")
+    game_name: str = Field(..., description="Riot ID game name")
+    tag_line: str = Field(..., description="Riot ID tag line")
 
     model_config = ConfigDict(from_attributes=True)
 

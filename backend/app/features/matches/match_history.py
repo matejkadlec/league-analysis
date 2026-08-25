@@ -70,6 +70,9 @@ def find_lane_opponent(
 def _enemy_lane_opponent(participant: MatchParticipant) -> EnemyLaneOpponent:
     opponent_cs = participant.cs
     return EnemyLaneOpponent(
+        puuid=participant.puuid,
+        game_name=participant.game_name,
+        tag_line=participant.tag_line,
         champion_id=participant.champion_id,
         champion_name=participant.champion_name,
         champion_level=participant.champion_level,
@@ -175,6 +178,8 @@ def accumulate_team_participant(
         champion_name=participant.champion_name,
         team_position=participant.team_position,
         puuid=participant.puuid,
+        game_name=participant.game_name,
+        tag_line=participant.tag_line,
     )
     (
         team_baron_kills,

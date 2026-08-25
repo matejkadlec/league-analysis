@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { normalizeApiError } from "@/lib/core/api";
 import {
+  isMatchHistoryQuery,
   matchHistoryDetailedQueryOptions,
   matchHistoryStatsQueryOptions,
 } from "../matches-query";
@@ -36,6 +37,8 @@ import {
   MatchHistoryErrorCard,
   MatchHistoryHeader,
   MatchHistoryLoadingCard,
+  MatchHistoryLoadFailedRow,
+  MatchHistoryLoadingRow,
   MatchHistoryPaginationBar,
 } from "./match-history-controls";
 import { MatchRow } from "./match-row";
@@ -43,17 +46,52 @@ import { MatchRow } from "./match-row";
 interface MatchHistoryProps {
   puuid: string;
   lastUpdated?: string | null | undefined;
+  /**
+   * Make a participant of one of these matches the current player.
+   *
+   * Passed in rather than read from `usePlayerContext` here so this card stays
+   * renderable without the provider — the page above already holds the
+   * context, and taking it twice would only add a second place for the two to
+   * disagree about who is selected.
+   */
+  onSelectPlayer: (puuid: string) => void;
 }
 
 const MATCH_HISTORY_SEARCH_DEBOUNCE_MS = 300;
 
-export function MatchHistory({ puuid, lastUpdated }: MatchHistoryProps) {
+export function MatchHistory({
+  puuid,
+  lastUpdated,
+  onSelectPlayer,
+}: MatchHistoryProps) {
   const router = useRouter();
   const isDesktopLayout = useMediaQuery(LG_BREAKPOINT_QUERY);
-  const { isUpdating, startSync } = usePlayerSyncRun(puuid, {
+  const queryClient = useQueryClient();
+  const { isUpdating, isFetchingMatches, startSync } = usePlayerSyncRun(puuid, {
     // Queries keyed by the PUUID are refreshed by the hook; the server
     // components behind this page need their own refresh.
     onCompleted: () => router.refresh(),
+    // A run that stopped early still stored whatever it got through before it
+    // stopped, and the poll below ends the moment the status leaves `running`
+    // — so rows written since its last tick would stay invisible until
+    // something else happened to refetch. The hook refreshes on a completed
+    // run only. Scoped to this card's own two caches rather than everything
+    // keyed by the PUUID: other cards decide for themselves what a failed
+    // fetch means for what they show. Smurf Boost reports the failure itself
+    // but deliberately quotes no games-added count for it, and refreshing its
+    // stored-game count from here is what would put a number back.
+    onSettled: (run) => {
+      // `null` is a run whose status could not be read — a poll that gave up
+      // part-way through the writing. That is the case with the most rows
+      // stranded, not the one to skip.
+      if (run?.status === "completed") {
+        return;
+      }
+      void queryClient.refetchQueries({
+        predicate: (query) => isMatchHistoryQuery(query.queryKey, puuid),
+        type: "active",
+      });
+    },
   });
 
   const [activeQueueFilters, setActiveQueueFilters] = useState<
@@ -88,6 +126,10 @@ export function MatchHistory({ puuid, lastUpdated }: MatchHistoryProps) {
     // Not silenced: MatchHistoryErrorCard renders off the detailed query, so a
     // stats-only failure would otherwise show 0W/0L with nothing said.
     meta: { errorTitle: "Match statistics" },
+    // In step with the list below. These are the header's totals, wins, losses
+    // and win rate; leaving them unpolled while rows visibly arrive had the
+    // header claiming "3 total matches" over a list already showing more.
+    refetchInterval: isFetchingMatches ? 2000 : false,
   });
 
   const {
@@ -106,7 +148,9 @@ export function MatchHistory({ puuid, lastUpdated }: MatchHistoryProps) {
       pageSize,
     }),
     enabled: !!puuid && preferencesReady,
-    // MatchHistoryErrorCard below reports this failure inline.
+    // Reported inline rather than by the global toast: MatchHistoryErrorCard
+    // when the failure left nothing to show, MatchHistoryLoadFailedRow when
+    // there are already rows worth keeping.
     meta: { silenceErrorToast: true },
     retry: (failureCount, error) =>
       normalizeApiError(error).kind === "network" ? false : failureCount < 2,
@@ -115,8 +159,18 @@ export function MatchHistory({ puuid, lastUpdated }: MatchHistoryProps) {
     refetchOnReconnect: false,
     placeholderData: (previousData) => previousData,
     staleTime: 60000,
+    // While the player's own update run is storing matches, this is what makes
+    // them appear: it is the only query that carries the rows themselves and
+    // the total the pagination is built from, and the run writes rows the whole
+    // time it is going. 2s rather than the 5s
+    // below because the empty-history case is waiting for a first row to exist
+    // at all, while this one is a list visibly filling up.
     refetchInterval: (query) =>
-      query.state.data?.matches.length === 0 ? 5000 : false,
+      isFetchingMatches
+        ? 2000
+        : query.state.data?.matches.length === 0
+          ? 5000
+          : false,
   });
 
   const handleQueueFilterSelect = (
@@ -166,9 +220,39 @@ export function MatchHistory({ puuid, lastUpdated }: MatchHistoryProps) {
     apiTotalMatches,
   );
   const hasActiveSearch = debouncedMatchSearch.length > 0;
+  // An update run is storing this player's matches, so the stored total is not
+  // the real one yet and neither is the last page. Everything progressive about
+  // this card hangs off exactly this: the run is authoritative about whether
+  // more records are still coming, and `usePlayerSyncRun` reports it whoever
+  // started it — the Update button here, or the switch that brought us to this
+  // player. The match half only: the Player Updater that follows it writes no
+  // matches, so counting it would keep promising rows that are not coming.
+  const isLoadingMoreMatches = isFetchingMatches;
+  // Only after the last record there is. Earlier pages are complete and must
+  // not claim to be still filling; page 1 carries it while nothing is stored
+  // yet, which is the case where it is the only row in the list.
+  // Not while the query behind it is failing: a spinner saying more rows are
+  // on the way, over a poll that just errored, is the wrong half of the story.
+  const isLastPage = currentPage >= Math.max(1, totalPages);
+  const showLoadingRow = isLoadingMoreMatches && isLastPage && !error;
+  // Gated on neither `isLoadingMoreMatches` nor `isLastPage`, unlike the
+  // loading row. The outage that fails this query also fails the sync poll,
+  // which drops `isFetchingMatches` to false, so hanging this off it would
+  // hide the row exactly when it is needed. A failed page change is the other
+  // way in: placeholder data keeps the previous page's rows up while the
+  // pagination bar points at the new one, and this query is opted out of the
+  // global error toast, so without this row nothing at all reports it. The
+  // last-page rule belongs to the loading row, which claims progress — "this
+  // failed, retry" is true on any page.
+  const showLoadFailedRow = !!error && !!data;
 
   useEffect(() => {
-    if (isPlaceholderData) {
+    // Not on an error. A failed request carries no `data`, which reads here as
+    // a server total of zero and so as "the page you asked for is gone" -- so
+    // a page change whose fetch failed silently put the viewer back on page 1,
+    // with the error card suppressed by the fallback rows and this query opted
+    // out of the global toast. An error is not a statement about the total.
+    if (isPlaceholderData || error) {
       return;
     }
     const lastAvailablePage = Math.max(1, totalPages);
@@ -176,13 +260,18 @@ export function MatchHistory({ puuid, lastUpdated }: MatchHistoryProps) {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- The server total is authoritative when refreshed data removes the requested page.
       setCurrentPage(lastAvailablePage);
     }
-  }, [currentPage, isPlaceholderData, totalPages]);
+  }, [currentPage, error, isPlaceholderData, totalPages]);
 
   if (!preferencesReady || isLoading) {
     return <MatchHistoryLoadingCard />;
   }
 
-  if (!isFetching && error) {
+  // Only when there is nothing to fall back to. React Query keeps cached data
+  // through an error, and the 2s poll this card runs while rows are arriving
+  // fails precisely when there are rows on screen — a card-wide error there
+  // would throw away readable matches over one bad request. That case renders
+  // MatchHistoryLoadFailedRow in the list instead.
+  if (!isFetching && error && !data) {
     const apiError = normalizeApiError(error);
 
     return (
@@ -199,7 +288,7 @@ export function MatchHistory({ puuid, lastUpdated }: MatchHistoryProps) {
       <MatchHistoryHeader
         lastUpdated={lastUpdated}
         isUpdating={isUpdating}
-        onUpdate={() => startSync()}
+        onUpdate={startSync}
         activeQueueFilters={activeQueueFilters}
         onQueueFilterSelect={handleQueueFilterSelect}
         matchSearch={matchSearch}
@@ -210,7 +299,11 @@ export function MatchHistory({ puuid, lastUpdated }: MatchHistoryProps) {
         winRate={winRate}
       />
       <CardContent>
-        {matches.length === 0 ? (
+        {matches.length === 0 && !showLoadingRow && !showLoadFailedRow ? (
+          // Not while an update is running, and not when the list failed to
+          // load: "no matches" is a verdict, and neither a run still going nor
+          // a request that never answered has earned it. The list below
+          // renders with that row as its only body row instead.
           <MatchHistoryEmptyAlert
             hasActiveSearch={hasActiveSearch}
             debouncedMatchSearch={debouncedMatchSearch}
@@ -245,8 +338,13 @@ export function MatchHistory({ puuid, lastUpdated }: MatchHistoryProps) {
                   key={match.match_id}
                   match={match}
                   playerPuuid={puuid}
+                  onSelectPlayer={onSelectPlayer}
                 />
               ))}
+              {showLoadingRow && <MatchHistoryLoadingRow />}
+              {showLoadFailedRow && (
+                <MatchHistoryLoadFailedRow onRetry={() => void refetch()} />
+              )}
             </div>
           </div>
         )}
@@ -254,6 +352,7 @@ export function MatchHistory({ puuid, lastUpdated }: MatchHistoryProps) {
         <MatchHistoryPaginationBar
           recordRange={recordRange}
           apiTotalMatches={apiTotalMatches}
+          isTotalPending={isLoadingMoreMatches}
           paginationItems={paginationItems}
           currentPage={currentPage}
           totalPages={totalPages}

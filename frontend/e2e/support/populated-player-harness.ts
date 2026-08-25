@@ -118,6 +118,8 @@ function teamChampion(index: number, teamId: number) {
     champion_name,
     team_position: LANES[index % LANES.length]!,
     puuid: `${teamId}-${index}`,
+    game_name: `Summoner${teamId}${index}`,
+    tag_line: "EUN1",
   };
 }
 
@@ -163,8 +165,21 @@ function match(index: number) {
       total_damage_dealt_to_champions: 34_812,
       summoner1_id: 4,
       summoner2_id: 14,
+      // Both rune branches, so the browser specs see each. Even rows carry a
+      // keystone this build has art and a name for; odd rows carry one it does
+      // not, which is the case where icon and label both fall back to the
+      // primary tree. Without these the rune block renders two grey
+      // placeholders, no tooltip trigger exists, and the axe scan never grades
+      // the focusable triggers at all.
+      runes:
+        index % 2 === 0
+          ? { primary_style: 8000, sub_style: 8400, keystone: 8010 }
+          : { primary_style: 8100, sub_style: 8200, keystone: 9999 },
     },
     lane_opponent: {
+      puuid: `opponent-${index}`,
+      game_name: `Opponent${index}`,
+      tag_line: "EUN1",
       champion_id: opponent_id,
       champion_name: opponent_name,
       champion_level: 17,

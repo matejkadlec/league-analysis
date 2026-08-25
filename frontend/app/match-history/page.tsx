@@ -6,7 +6,7 @@ import { MatchHistory, MatchHistoryLoadingCard } from "@/features/matches";
 import { SelectPlayerCard, usePlayerContext } from "@/features/players";
 
 export default function MatchHistoryPage() {
-  const { currentPlayer, isLoading } = usePlayerContext();
+  const { currentPlayer, isLoading, selectPlayerByPuuid } = usePlayerContext();
 
   return (
     <ProtectedRoute>
@@ -25,10 +25,14 @@ export default function MatchHistoryPage() {
           {isLoading ? (
             <MatchHistoryLoadingCard />
           ) : currentPlayer ? (
+            // Keyed by PUUID: a switch remounts the card, so the previous
+            // player's rows, page number and in-flight query cannot survive
+            // into the new player's history.
             <MatchHistory
               key={currentPlayer.puuid}
               puuid={currentPlayer.puuid}
               lastUpdated={currentPlayer.match_synced_at}
+              onSelectPlayer={selectPlayerByPuuid}
             />
           ) : (
             <SelectPlayerCard />

@@ -67,7 +67,9 @@ function hasDetailedRequest(expectedParams: Record<string, unknown>): boolean {
 }
 
 function renderHistory() {
-  return renderWithQueryClient(<MatchHistory puuid="player-puuid" />).queryClient;
+  return renderWithQueryClient(
+    <MatchHistory puuid="player-puuid" onSelectPlayer={vi.fn()} />,
+  ).queryClient;
 }
 
 describe("Match History controls", () => {

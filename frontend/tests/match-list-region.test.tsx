@@ -74,7 +74,7 @@ function stubMatchMedia(matches: boolean): void {
 
 async function renderHistory(): Promise<void> {
   renderWithQueryClient(
-    <MatchHistory puuid="player-puuid" />,
+    <MatchHistory puuid="player-puuid" onSelectPlayer={vi.fn()} />,
   );
   await screen.findByTestId("match-list", undefined, { timeout: 4000 });
 }

@@ -6,6 +6,14 @@ import {
   MatchStatsResponseSchema,
 } from "@/lib/core/schemas";
 
+// The roots of the two caches below, as constants rather than literals: the
+// predicate at the bottom of this file has to recognise both, and a third
+// hand-written copy is how the pair drifted onto different casing the last
+// time. A rename is now a type error instead of a predicate that quietly
+// matches nothing.
+const MATCH_HISTORY_STATS_KEY = "match-history-stats";
+const MATCH_HISTORY_DETAILED_KEY = "match-history-detailed";
+
 /**
  * The two caches the Match History surface reads, named once — the same
  * arrangement every other data-bearing feature keeps in its `*-query.ts`.
@@ -17,7 +25,7 @@ export function matchHistoryStatsQueryOptions(
   queueQueryParam: string | undefined,
 ) {
   return queryOptions({
-    queryKey: ["match-history-stats", puuid, queueQueryParam] as const,
+    queryKey: [MATCH_HISTORY_STATS_KEY, puuid, queueQueryParam] as const,
     queryFn: async () =>
       unwrap(
         await validatedGet(
@@ -39,7 +47,7 @@ export function matchHistoryDetailedQueryOptions(args: {
   const { puuid, queueQueryParam, search, page, pageSize } = args;
   return queryOptions({
     queryKey: [
-      "match-history-detailed",
+      MATCH_HISTORY_DETAILED_KEY,
       puuid,
       queueQueryParam,
       search,
@@ -60,4 +68,22 @@ export function matchHistoryDetailedQueryOptions(args: {
         ),
       ),
   });
+}
+
+/**
+ * Either of the two caches above, for one player, whatever its queue filter,
+ * search, page or page size.
+ *
+ * A predicate rather than a key prefix because the two roots are siblings, not
+ * a shared prefix, and `refetchQueries` takes one predicate.
+ */
+export function isMatchHistoryQuery(
+  queryKey: readonly unknown[],
+  puuid: string,
+): boolean {
+  return (
+    (queryKey[0] === MATCH_HISTORY_STATS_KEY ||
+      queryKey[0] === MATCH_HISTORY_DETAILED_KEY) &&
+    queryKey[1] === puuid
+  );
 }

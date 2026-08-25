@@ -24,11 +24,24 @@ import {
   playerQueryOptions,
 } from "../player-query";
 import { isPlayerCentricPath, playerRoute } from "../player-routes";
+import { usePlayerProfileUpdate } from "../use-player-sync-run";
 
 interface PlayerContextValue {
   currentPlayer: Player | null;
   isLoading: boolean;
   selectPlayer: (player: Player) => Promise<void>;
+  /**
+   * Switch to a player known only by PUUID — a participant in somebody else's
+   * match, who has a `core.players` row but whose `Player` this surface has
+   * never fetched.
+   *
+   * Persisting the choice is left to the `?puuid=` effect below rather than
+   * done here, because that effect already has to handle a URL naming a player
+   * nobody clicked (a shared link) and it only persists once the row is known
+   * to load. Two places writing the current player would race on a switch to a
+   * PUUID whose row has since been deleted.
+   */
+  selectPlayerByPuuid: (puuid: string) => void;
 }
 
 const PlayerContext = createContext<PlayerContextValue | null>(null);
@@ -133,14 +146,26 @@ export function PlayerContextProvider({
     ) {
       return;
     }
+    // The ref stays set on failure. Clearing it retried, and this effect
+    // depends on `updateCurrentMutation` — an object `useMutation` replaces on
+    // every state transition — so the failure that cleared the ref also re-ran
+    // the effect, which mutated again, which failed again: an unbounded PUT
+    // loop against a 500 or a dropped connection, with no toast, for as long
+    // as the page stayed open. One attempt per PUUID is enough; a choice that
+    // did not persist costs the viewer a default on their next visit, not the
+    // page they are on.
     persistedUrlPuuidRef.current = urlPuuid;
-    updateCurrentMutation.mutate(urlPuuid, {
-      onError: () => {
-        persistedUrlPuuidRef.current = null;
-      },
-    });
+    updateCurrentMutation.mutate(urlPuuid);
   }, [contextQuery.data, updateCurrentMutation, urlPlayerQuery.data, urlPuuid]);
 
+  const { mutate: startProfileUpdate } = usePlayerProfileUpdate();
+
+  // No profile update here, on purpose. Picking a player from the sidebar or
+  // the tracked-players dialog is navigation, which is the contract this
+  // provider was built to: `e2e/player-context.spec.ts` asserts a "View" click
+  // starts zero sync runs, so that a browse through six tracked players cannot
+  // spend six Riot fetches. `selectPlayerByPuuid` below is the deliberate
+  // exception.
   const selectPlayer = useCallback(
     async (player: Player) => {
       await updateCurrentMutation.mutateAsync(player.puuid);
@@ -151,6 +176,35 @@ export function PlayerContextProvider({
       );
     },
     [pathname, queryClient, router, searchParams, updateCurrentMutation],
+  );
+
+  // `urlPuuid`, not `urlPlayerQuery.data?.puuid`: the row behind the URL is
+  // still loading right after a switch, so reading the loaded player would
+  // leave this on the *previous* player for as long as the fetch takes — and a
+  // second click on the same icon in that window would pass the guard below
+  // and start the update twice. The URL is who was chosen whether or not their
+  // row has arrived.
+  const currentPuuid =
+    urlPuuid ?? contextQuery.data?.current_player?.puuid ?? null;
+
+  const selectPlayerByPuuid = useCallback(
+    (puuid: string) => {
+      // Switching to the player already current would restart their update and
+      // push the URL they are already on.
+      if (puuid === currentPuuid) return;
+      // The exception to the rule above `selectPlayer`. This path is reached
+      // only by clicking a participant inside somebody else's match — a player
+      // the account very likely does not track and has no stored games for, so
+      // navigating without fetching lands on an empty history with nothing
+      // said. The run is also what Match History reads to render its
+      // progressive-loading state.
+      startProfileUpdate({ puuid });
+      router.push(
+        playerRoute(pathname, new URLSearchParams(searchParams), puuid),
+        { scroll: false },
+      );
+    },
+    [currentPuuid, pathname, router, searchParams, startProfileUpdate],
   );
 
   const value = useMemo<PlayerContextValue>(
@@ -164,12 +218,14 @@ export function PlayerContextProvider({
       isLoading:
         authLoading || contextQuery.isLoading || urlPlayerQuery.isLoading,
       selectPlayer,
+      selectPlayerByPuuid,
     }),
     [
       authLoading,
       contextQuery.data,
       contextQuery.isLoading,
       selectPlayer,
+      selectPlayerByPuuid,
       urlPlayerQuery.data,
       urlPlayerQuery.isLoading,
       urlPuuid,
